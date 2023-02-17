@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use expect_test::expect;
 use move_core_types::account_address::AccountAddress;
+use std::collections::HashMap;
 use std::io::Write;
 use std::{fs, io, path::Path};
 use std::{path::PathBuf, str};
@@ -14,7 +16,7 @@ use sui_types::{
 use test_utils::network::TestClusterBuilder;
 use test_utils::transaction::publish_package_with_wallet;
 
-use crate::{BytecodeSourceVerifier, SourceMode, SourceVerificationError};
+use crate::{BytecodeSourceVerifier, SourceMode};
 
 #[tokio::test]
 async fn successful_verification() -> anyhow::Result<()> {
@@ -139,12 +141,14 @@ async fn fail_verification_bad_address() -> anyhow::Result<()> {
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
-    assert!(matches!(
-        verifier
+    let expected = expect!["On-chain address cannot be zero"];
+    expected.assert_eq(
+        &verifier
             .verify_package_root_and_deps(&a_pkg.package, AccountAddress::ZERO)
-            .await,
-        Err(SourceVerificationError::ZeroOnChainAddresSpecifiedFailure),
-    ),);
+            .await
+            .unwrap_err()
+            .to_string(),
+    );
 
     Ok(())
 }
@@ -165,16 +169,18 @@ async fn fail_to_verify_unpublished_root() -> anyhow::Result<()> {
 
     // Trying to verify the root package, which hasn't been published -- this is going to fail
     // because there is no on-chain package to verify against.
-    assert!(matches!(
-        verifier
+    let expected = expect!["Invalid module b with error: Can't verify unpublished source"];
+    expected.assert_eq(
+        &verifier
             .verify_package(
                 &b_pkg.package,
                 /* verify_deps */ false,
-                SourceMode::Verify
+                SourceMode::Verify,
             )
-            .await,
-        Err(SourceVerificationError::InvalidModuleFailure { .. }),
-    ));
+            .await
+            .unwrap_err()
+            .to_string(),
+    );
 
     Ok(())
 }
@@ -240,10 +246,12 @@ async fn rpc_call_failed_during_verify() -> anyhow::Result<()> {
 async fn package_not_found() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await?;
     let context = &mut cluster.wallet;
+    let mut stable_addrs = HashMap::new();
 
     let a_pkg = {
         let fixtures = tempfile::tempdir()?;
         let b_id = SuiAddress::random_for_testing_only();
+        stable_addrs.insert(b_id, "<id>");
         copy_package(&fixtures, "b", [("b", b_id)]).await?;
         let a_src = copy_package(&fixtures, "a", [("a", SuiAddress::ZERO), ("b", b_id)]).await?;
         compile_package(a_src)
@@ -252,26 +260,38 @@ async fn package_not_found() -> anyhow::Result<()> {
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
-    assert!(matches!(
-        verifier.verify_package_deps(&a_pkg.package).await,
-        Err(SourceVerificationError::SuiObjectRefFailure(_)),
-    ),);
+    let Err(err) = verifier.verify_package_deps(&a_pkg.package).await else {
+        panic!("Expected verification to fail");
+    };
 
-    assert!(matches!(
-        // Subst address here doesnt matter
-        verifier
-            .verify_package_root_and_deps(&a_pkg.package, AccountAddress::random())
-            .await,
-        Err(SourceVerificationError::SuiObjectRefFailure(_)),
-    ),);
+    let expected = expect!["Dependency object does not exist or was deleted: ObjectNotFound { object_id: 0x<id>, version: None }"];
+    expected.assert_eq(&sanitize_id(err.to_string(), &stable_addrs));
 
-    assert!(matches!(
-        // Subst address here doesnt matter
-        verifier
-            .verify_package_root(&a_pkg.package, AccountAddress::random())
-            .await,
-        Err(SourceVerificationError::SuiObjectRefFailure(_)),
-    ),);
+    let package_root = AccountAddress::random();
+    stable_addrs.insert(SuiAddress::from(package_root), "<id>");
+    let Err(err) = verifier.verify_package_root_and_deps(
+	&a_pkg.package,
+	package_root,
+    ).await else {
+	panic!("Expected verification to fail");
+    };
+
+    // <id> below may refer to either the package_root or dependent package `b`
+    // (the check reports the first missing object nondeterministically)
+    let expected = expect!["Dependency object does not exist or was deleted: ObjectNotFound { object_id: 0x<id>, version: None }"];
+    expected.assert_eq(&sanitize_id(err.to_string(), &stable_addrs));
+
+    let package_root = AccountAddress::random();
+    stable_addrs.insert(SuiAddress::from(package_root), "<id>");
+    let Err(err) = verifier.verify_package_root(
+	&a_pkg.package,
+	package_root,
+    ).await else {
+	panic!("Expected verification to fail");
+    };
+
+    let expected = expect!["Dependency object does not exist or was deleted: ObjectNotFound { object_id: 0x<id>, version: None }"];
+    expected.assert_eq(&sanitize_id(err.to_string(), &stable_addrs));
 
     Ok(())
 }
@@ -291,13 +311,14 @@ async fn dependency_is_an_object() -> anyhow::Result<()> {
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
-    assert!(matches!(
-        verifier.verify_package_deps(&a_pkg.package).await,
-        Err(SourceVerificationError::ObjectFoundWhenPackageExpected(
-            SUI_SYSTEM_STATE_OBJECT_ID,
-            _,
-        )),
-    ),);
+    let expected = expect!["Dependency ID contains a Sui object, not a Move package: 0x0000000000000000000000000000000000000005"];
+    expected.assert_eq(
+        &verifier
+            .verify_package_deps(&a_pkg.package)
+            .await
+            .unwrap_err()
+            .to_string(),
+    );
 
     Ok(())
 }
@@ -329,12 +350,8 @@ async fn module_not_found_on_chain() -> anyhow::Result<()> {
         panic!("Expected verification to fail");
     };
 
-    let SourceVerificationError::OnChainDependencyNotFound { package, module } = err else {
-        panic!("Expected OnChainDependencyNotFound, got: {:?}", err);
-    };
-
-    assert_eq!(package, "b".into());
-    assert_eq!(module, "c".into());
+    let expected = expect!["On-chain version of dependency b::c was not found."];
+    expected.assert_eq(&err.to_string());
 
     Ok(())
 }
@@ -344,6 +361,7 @@ async fn module_not_found_locally() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await?;
     let sender = cluster.get_address_0();
     let context = &mut cluster.wallet;
+    let mut stable_addrs = HashMap::new();
 
     let b_ref = {
         let fixtures = tempfile::tempdir()?;
@@ -354,6 +372,7 @@ async fn module_not_found_locally() -> anyhow::Result<()> {
     let a_pkg = {
         let fixtures = tempfile::tempdir()?;
         let b_id = b_ref.0.into();
+        stable_addrs.insert(b_id, "b_id");
         let b_src = copy_package(&fixtures, "b", [("b", b_id)]).await?;
         let a_src = copy_package(&fixtures, "a", [("a", SuiAddress::ZERO), ("b", b_id)]).await?;
         tokio::fs::remove_file(b_src.join("sources").join("d.move")).await?;
@@ -367,12 +386,8 @@ async fn module_not_found_locally() -> anyhow::Result<()> {
         panic!("Expected verification to fail");
     };
 
-    let SourceVerificationError::LocalDependencyNotFound { address, module } = err else {
-        panic!("Expected LocalDependencyNotFound, got: {:?}", err);
-    };
-
-    assert_eq!(address, b_ref.0.into());
-    assert_eq!(module.as_ref(), "d");
+    let expected = expect!["Local version of dependency b_id::d was not found."];
+    expected.assert_eq(&sanitize_id(err.to_string(), &stable_addrs));
 
     Ok(())
 }
@@ -382,6 +397,7 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await?;
     let sender = cluster.get_address_0();
     let context = &mut cluster.wallet;
+    let mut stable_addrs = HashMap::new();
 
     let b_ref = {
         let fixtures = tempfile::tempdir()?;
@@ -400,6 +416,7 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
     let (a_pkg, a_ref) = {
         let fixtures = tempfile::tempdir()?;
         let b_id = b_ref.0.into();
+        stable_addrs.insert(b_id, "<b_id>");
         copy_package(&fixtures, "b", [("b", b_id)]).await?;
         let a_src = copy_package(&fixtures, "a", [("a", SuiAddress::ZERO), ("b", b_id)]).await?;
 
@@ -414,6 +431,7 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
         (compiled, publish_package(context, sender, a_src).await)
     };
     let a_addr: SuiAddress = a_ref.0.into();
+    stable_addrs.insert(a_addr, "<a_addr>");
 
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
@@ -422,32 +440,89 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
         panic!("Expected verification to fail");
     };
 
-    let SourceVerificationError::ModuleBytecodeMismatch { address, package, module } = err else {
-        panic!("Expected ModuleBytecodeMismatch, got: {:?}", err);
-    };
-
-    assert_eq!(address, b_ref.0.into());
-    assert_eq!(package, "b".into());
-    assert_eq!(module, "c".into());
+    let expected = expect!["Local dependency did not match its on-chain version at <b_id>::b::c"];
+    expected.assert_eq(&sanitize_id(err.to_string(), &stable_addrs));
 
     let Err(err) = verifier.verify_package_root(&a_pkg.package, a_addr.into()).await else {
         panic!("Expected verification to fail");
     };
 
-    let SourceVerificationError::ModuleBytecodeMismatch { address, package, module } = err else {
-        panic!("Expected ModuleBytecodeMismatch, got: {:?}", err);
+    let expected = expect!["Local dependency did not match its on-chain version at <a_addr>::a::a"];
+    expected.assert_eq(&sanitize_id(err.to_string(), &stable_addrs));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn multiple_failures() -> anyhow::Result<()> {
+    let mut cluster = TestClusterBuilder::new().build().await?;
+    let sender = cluster.get_address_0();
+    let context = &mut cluster.wallet;
+    let mut stable_addrs = HashMap::new();
+
+    // Publish package `b::b` on-chain without c.move.
+    let b_ref = {
+        let fixtures = tempfile::tempdir()?;
+        let b_src = copy_package(&fixtures, "b", [("b", SuiAddress::ZERO)]).await?;
+        tokio::fs::remove_file(b_src.join("sources").join("c.move")).await?;
+        publish_package(context, sender, b_src).await
     };
 
-    assert_eq!(address, a_addr.into());
-    assert_eq!(package, "a".into());
-    assert_eq!(module, "a".into());
+    // Publish package `c::c` on-chain, unmodified.
+    let c_ref = {
+        let fixtures = tempfile::tempdir()?;
+        let c_src = copy_package(&fixtures, "c", [("c", SuiAddress::ZERO)]).await?;
+        publish_package(context, sender, c_src).await
+    };
+
+    // Compile local package `d` that references:
+    // - `b::b` (c.move exists locally but not on chain => error)
+    // - `c::c` (d.move exists on-chain but we delete it locally before compiling => error)
+    let d_pkg = {
+        let fixtures = tempfile::tempdir()?;
+        let b_id = b_ref.0.into();
+        let c_id = c_ref.0.into();
+        stable_addrs.insert(b_id, "<b_id>");
+        stable_addrs.insert(c_id, "<c_id>");
+        copy_package(&fixtures, "b", [("b", b_id)]).await?;
+        let c_src = copy_package(&fixtures, "c", [("c", c_id)]).await?;
+        let d_src = copy_package(
+            &fixtures,
+            "d",
+            [("d", SuiAddress::ZERO), ("b", b_id), ("c", c_id)],
+        )
+        .await?;
+        tokio::fs::remove_file(c_src.join("sources").join("d.move")).await?; // delete local module in `c`
+        compile_package(d_src)
+    };
+
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
+
+    let Err(err) = verifier.verify_package_deps(&d_pkg.package).await else {
+        panic!("Expected verification to fail");
+    };
+
+    let expected = expect![[r#"
+        Multiple source verification errors found:
+
+        - On-chain version of dependency b::c was not found.
+        - Local version of dependency <c_id>::d was not found."#]];
+    expected.assert_eq(&sanitize_id(err.to_string(), &stable_addrs));
 
     Ok(())
 }
 
 /// Compile the package at absolute path `package`.
 fn compile_package(package: impl AsRef<Path>) -> CompiledPackage {
-    sui_framework::build_move_package(package.as_ref(), BuildConfig::default()).unwrap()
+    sui_framework::build_move_package(package.as_ref(), BuildConfig::new_for_testing()).unwrap()
+}
+
+fn sanitize_id(mut message: String, m: &HashMap<SuiAddress, &str>) -> String {
+    for (addr, label) in m {
+        message = message.replace(format!("{addr}").strip_prefix("0x").unwrap(), label);
+    }
+    message
 }
 
 /// Compile and publish package at absolute path `package` to chain.

@@ -44,8 +44,18 @@ export const SuiChangeEpoch = object({
   epoch: EpochId,
   storage_charge: number(),
   computation_charge: number(),
+  // TODO: Make non-optional after v0.26.0 lands everywhere
+  storage_rebate: optional(number()),
+  epoch_start_timestamp_ms: optional(number()),
 });
 export type SuiChangeEpoch = Infer<typeof SuiChangeEpoch>;
+
+export const SuiConsensusCommitPrologue = object({
+  checkpoint_start_timestamp_ms: number(),
+});
+export type SuiConsensusCommitPrologue = Infer<
+  typeof SuiConsensusCommitPrologue
+>;
 
 export const Pay = object({
   coins: array(SuiObjectRef),
@@ -68,13 +78,19 @@ export const PayAllSui = object({
 export type PayAllSui = Infer<typeof PayAllSui>;
 
 export const MoveCall = object({
-  package: SuiObjectRef,
+  // TODO: Simplify once 0.24.0 lands
+  package: union([string(), SuiObjectRef]),
   module: string(),
   function: string(),
   typeArguments: optional(array(string())),
   arguments: array(SuiJsonValue),
 });
 export type MoveCall = Infer<typeof MoveCall>;
+
+export const Genesis = object({
+  objects: array(ObjectId),
+});
+export type Genesis = Infer<typeof Genesis>;
 
 export type ExecuteTransactionRequestType =
   | 'WaitForEffectsCert'
@@ -86,9 +102,11 @@ export type TransactionKindName =
   | 'Call'
   | 'TransferSui'
   | 'ChangeEpoch'
+  | 'ConsensusCommitPrologue'
   | 'Pay'
   | 'PaySui'
-  | 'PayAllSui';
+  | 'PayAllSui'
+  | 'Genesis';
 
 export const SuiTransactionKind = union([
   object({ TransferObject: TransferObject }),
@@ -96,9 +114,11 @@ export const SuiTransactionKind = union([
   object({ Call: MoveCall }),
   object({ TransferSui: SuiTransferSui }),
   object({ ChangeEpoch: SuiChangeEpoch }),
+  object({ ConsensusCommitPrologue: SuiConsensusCommitPrologue }),
   object({ Pay: Pay }),
   object({ PaySui: PaySui }),
   object({ PayAllSui: PayAllSui }),
+  object({ Genesis: Genesis }),
 ]);
 export type SuiTransactionKind = Infer<typeof SuiTransactionKind>;
 
@@ -162,6 +182,11 @@ export type OwnedObjectRef = Infer<typeof OwnedObjectRef>;
 export const TransactionEffects = object({
   /** The status of the execution */
   status: ExecutionStatus,
+  /**
+   * The epoch when this transaction was executed
+   * TODO: Changed it to non-optional once this is stable.
+   * */
+  executedEpoch: optional(EpochId),
   gasUsed: GasCostSummary,
   /** The object references of the shared objects used in this transaction. Empty if no shared objects were used. */
   sharedObjects: optional(array(SuiObjectRef)),
@@ -226,14 +251,32 @@ export const SuiCertifiedTransactionEffects = object({
   effects: TransactionEffects,
 });
 
+export const SuiEffectsFinalityInfo = union([
+  object({ certified: AuthorityQuorumSignInfo }),
+  object({ checkpointed: tuple([number(), number()]) }),
+]);
+export type SuiEffectsFinalityInfo = Infer<typeof SuiEffectsFinalityInfo>;
+
+export const SuiFinalizedEffects = object({
+  transactionEffectsDigest: string(),
+  effects: TransactionEffects,
+  finalityInfo: SuiEffectsFinalityInfo,
+});
+export type SuiFinalizedEffects = Infer<typeof SuiFinalizedEffects>;
+
 export const SuiExecuteTransactionResponse = union([
-  object({ TxCert: object({ certificate: CertifiedTransaction }) }),
+  // TODO: remove after devnet 0.25.0(or 0.24.0) is released
   object({
     EffectsCert: object({
       certificate: CertifiedTransaction,
       effects: SuiCertifiedTransactionEffects,
       confirmed_local_execution: boolean(),
     }),
+  }),
+  object({
+    certificate: optional(CertifiedTransaction),
+    effects: SuiFinalizedEffects,
+    confirmed_local_execution: boolean(),
   }),
 ]);
 export type SuiExecuteTransactionResponse = Infer<
@@ -268,7 +311,8 @@ export type TransactionQuery =
   | { ToAddress: SuiAddress };
 
 export type EmptySignInfo = object;
-export type AuthorityName = string;
+export type AuthorityName = Infer<typeof AuthorityName>;
+export const AuthorityName = string();
 
 export const TransactionBytes = object({
   txBytes: string(),
@@ -331,12 +375,10 @@ export type SuiTransactionResponse = Infer<typeof SuiTransactionResponse>;
 /* ---------------------------------- CertifiedTransaction --------------------------------- */
 
 export function getCertifiedTransaction(
-  tx: SuiTransactionResponse | SuiExecuteTransactionResponse
+  tx: SuiTransactionResponse | SuiExecuteTransactionResponse,
 ): CertifiedTransaction | undefined {
   if ('certificate' in tx) {
     return tx.certificate;
-  } else if ('TxCert' in tx) {
-    return tx.TxCert.certificate;
   } else if ('EffectsCert' in tx) {
     return tx.EffectsCert.certificate;
   }
@@ -347,13 +389,13 @@ export function getTransactionDigest(
   tx:
     | CertifiedTransaction
     | SuiTransactionResponse
-    | SuiExecuteTransactionResponse
+    | SuiExecuteTransactionResponse,
 ): TransactionDigest {
   if ('transactionDigest' in tx) {
     return tx.transactionDigest;
   }
-  const ctxn = getCertifiedTransaction(tx)!;
-  return ctxn.transactionDigest;
+  const effects = getTransactionEffects(tx)!;
+  return effects.transactionDigest;
 }
 
 export function getTransactionSignature(tx: CertifiedTransaction): string {
@@ -361,13 +403,13 @@ export function getTransactionSignature(tx: CertifiedTransaction): string {
 }
 
 export function getTransactionAuthorityQuorumSignInfo(
-  tx: CertifiedTransaction
+  tx: CertifiedTransaction,
 ): AuthorityQuorumSignInfo {
   return tx.authSignInfo;
 }
 
 export function getTransactionData(
-  tx: CertifiedTransaction
+  tx: CertifiedTransaction,
 ): SuiTransactionData {
   return tx.data;
 }
@@ -379,7 +421,7 @@ export function getTransactionSender(tx: CertifiedTransaction): SuiAddress {
 }
 
 export function getTransactionGasObject(
-  tx: CertifiedTransaction
+  tx: CertifiedTransaction,
 ): SuiObjectRef {
   return tx.data.gasPayment;
 }
@@ -393,25 +435,25 @@ export function getTransactionGasBudget(tx: CertifiedTransaction): number {
 }
 
 export function getTransferObjectTransaction(
-  data: SuiTransactionKind
+  data: SuiTransactionKind,
 ): TransferObject | undefined {
   return 'TransferObject' in data ? data.TransferObject : undefined;
 }
 
 export function getPublishTransaction(
-  data: SuiTransactionKind
+  data: SuiTransactionKind,
 ): SuiMovePackage | undefined {
   return 'Publish' in data ? data.Publish : undefined;
 }
 
 export function getMoveCallTransaction(
-  data: SuiTransactionKind
+  data: SuiTransactionKind,
 ): MoveCall | undefined {
   return 'Call' in data ? data.Call : undefined;
 }
 
 export function getTransferSuiTransaction(
-  data: SuiTransactionKind
+  data: SuiTransactionKind,
 ): SuiTransferSui | undefined {
   return 'TransferSui' in data ? data.TransferSui : undefined;
 }
@@ -421,25 +463,33 @@ export function getPayTransaction(data: SuiTransactionKind): Pay | undefined {
 }
 
 export function getPaySuiTransaction(
-  data: SuiTransactionKind
+  data: SuiTransactionKind,
 ): PaySui | undefined {
   return 'PaySui' in data ? data.PaySui : undefined;
 }
 
 export function getPayAllSuiTransaction(
-  data: SuiTransactionKind
+  data: SuiTransactionKind,
 ): PayAllSui | undefined {
   return 'PayAllSui' in data ? data.PayAllSui : undefined;
 }
 
 export function getChangeEpochTransaction(
-  data: SuiTransactionKind
+  data: SuiTransactionKind,
 ): SuiChangeEpoch | undefined {
   return 'ChangeEpoch' in data ? data.ChangeEpoch : undefined;
 }
 
+export function getConsensusCommitPrologueTransaction(
+  data: SuiTransactionKind,
+): SuiConsensusCommitPrologue | undefined {
+  return 'ConsensusCommitPrologue' in data
+    ? data.ConsensusCommitPrologue
+    : undefined;
+}
+
 export function getTransactions(
-  data: CertifiedTransaction
+  data: CertifiedTransaction,
 ): SuiTransactionKind[] {
   return data.data.transactions;
 }
@@ -451,7 +501,7 @@ export function getTransferSuiAmount(data: SuiTransactionKind): bigint | null {
 }
 
 export function getTransactionKindName(
-  data: SuiTransactionKind
+  data: SuiTransactionKind,
 ): TransactionKindName {
   return Object.keys(data)[0] as TransactionKindName;
 }
@@ -459,19 +509,19 @@ export function getTransactionKindName(
 /* ----------------------------- ExecutionStatus ---------------------------- */
 
 export function getExecutionStatusType(
-  data: SuiTransactionResponse | SuiExecuteTransactionResponse
+  data: SuiTransactionResponse | SuiExecuteTransactionResponse,
 ): ExecutionStatusType | undefined {
   return getExecutionStatus(data)?.status;
 }
 
 export function getExecutionStatus(
-  data: SuiTransactionResponse | SuiExecuteTransactionResponse
+  data: SuiTransactionResponse | SuiExecuteTransactionResponse,
 ): ExecutionStatus | undefined {
   return getTransactionEffects(data)?.status;
 }
 
 export function getExecutionStatusError(
-  data: SuiTransactionResponse | SuiExecuteTransactionResponse
+  data: SuiTransactionResponse | SuiExecuteTransactionResponse,
 ): string | undefined {
   return getExecutionStatus(data)?.error;
 }
@@ -480,7 +530,7 @@ export function getExecutionStatusGasSummary(
   data:
     | SuiTransactionResponse
     | SuiExecuteTransactionResponse
-    | TransactionEffects
+    | TransactionEffects,
 ): GasCostSummary | undefined {
   if (is(data, TransactionEffects)) {
     return data.gasUsed;
@@ -492,7 +542,7 @@ export function getTotalGasUsed(
   data:
     | SuiTransactionResponse
     | SuiExecuteTransactionResponse
-    | TransactionEffects
+    | TransactionEffects,
 ): number | undefined {
   const gasSummary = getExecutionStatusGasSummary(data);
   return gasSummary
@@ -506,21 +556,19 @@ export function getTotalGasUsedUpperBound(
   data:
     | SuiTransactionResponse
     | SuiExecuteTransactionResponse
-    | TransactionEffects
+    | TransactionEffects,
 ): number | undefined {
   const gasSummary = getExecutionStatusGasSummary(data);
   return gasSummary
-    ? gasSummary.computationCost +
-        gasSummary.storageCost
+    ? gasSummary.computationCost + gasSummary.storageCost
     : undefined;
 }
 
-
 export function getTransactionEffects(
-  data: SuiExecuteTransactionResponse | SuiTransactionResponse
+  data: SuiExecuteTransactionResponse | SuiTransactionResponse,
 ): TransactionEffects | undefined {
   if ('effects' in data) {
-    return data.effects;
+    return `effects` in data.effects ? data.effects.effects : data.effects;
   }
   return 'EffectsCert' in data ? data.EffectsCert.effects.effects : undefined;
 }
@@ -528,13 +576,13 @@ export function getTransactionEffects(
 /* ---------------------------- Transaction Effects --------------------------- */
 
 export function getEvents(
-  data: SuiExecuteTransactionResponse | SuiTransactionResponse
+  data: SuiExecuteTransactionResponse | SuiTransactionResponse,
 ): SuiEvent[] | undefined {
   return getTransactionEffects(data)?.events;
 }
 
 export function getCreatedObjects(
-  data: SuiExecuteTransactionResponse | SuiTransactionResponse
+  data: SuiExecuteTransactionResponse | SuiTransactionResponse,
 ): OwnedObjectRef[] | undefined {
   return getTransactionEffects(data)?.created;
 }
@@ -542,27 +590,27 @@ export function getCreatedObjects(
 /* --------------------------- TransactionResponse -------------------------- */
 
 export function getTimestampFromTransactionResponse(
-  data: SuiExecuteTransactionResponse | SuiTransactionResponse
+  data: SuiExecuteTransactionResponse | SuiTransactionResponse,
 ): number | undefined {
   return 'timestamp_ms' in data ? data.timestamp_ms ?? undefined : undefined;
 }
 
 export function getParsedSplitCoinResponse(
-  data: SuiTransactionResponse
+  data: SuiTransactionResponse,
 ): SuiParsedSplitCoinResponse | undefined {
   const parsed = data.parsed_data;
   return parsed && 'SplitCoin' in parsed ? parsed.SplitCoin : undefined;
 }
 
 export function getParsedMergeCoinResponse(
-  data: SuiTransactionResponse
+  data: SuiTransactionResponse,
 ): SuiParsedMergeCoinResponse | undefined {
   const parsed = data.parsed_data;
   return parsed && 'MergeCoin' in parsed ? parsed.MergeCoin : undefined;
 }
 
 export function getParsedPublishResponse(
-  data: SuiTransactionResponse
+  data: SuiTransactionResponse,
 ): SuiParsedPublishResponse | undefined {
   const parsed = data.parsed_data;
   return parsed && 'Publish' in parsed ? parsed.Publish : undefined;
@@ -574,7 +622,7 @@ export function getParsedPublishResponse(
  * @returns the updated state of the primary coin after the merge
  */
 export function getCoinAfterMerge(
-  data: SuiTransactionResponse
+  data: SuiTransactionResponse,
 ): SuiObject | undefined {
   return getParsedMergeCoinResponse(data)?.updatedCoin;
 }
@@ -585,7 +633,7 @@ export function getCoinAfterMerge(
  * @returns the updated state of the original coin object used for the split
  */
 export function getCoinAfterSplit(
-  data: SuiTransactionResponse
+  data: SuiTransactionResponse,
 ): SuiObject | undefined {
   return getParsedSplitCoinResponse(data)?.updatedCoin;
 }
@@ -596,7 +644,7 @@ export function getCoinAfterSplit(
  * @returns the updated state of the original coin object used for the split
  */
 export function getNewlyCreatedCoinsAfterSplit(
-  data: SuiTransactionResponse
+  data: SuiTransactionResponse,
 ): SuiObject[] | undefined {
   return getParsedSplitCoinResponse(data)?.newCoins;
 }
@@ -605,10 +653,15 @@ export function getNewlyCreatedCoinsAfterSplit(
  * Get the newly created coin refs after a split.
  */
 export function getNewlyCreatedCoinRefsAfterSplit(
-  data: SuiTransactionResponse | SuiExecuteTransactionResponse
+  data: SuiTransactionResponse | SuiExecuteTransactionResponse,
 ): SuiObjectRef[] | undefined {
   if ('EffectsCert' in data) {
     const effects = data.EffectsCert.effects.effects;
+    return effects.created?.map((c) => c.reference);
+  }
+  if ('effects' in data) {
+    const effects =
+      'effects' in data.effects ? data.effects.effects : data.effects;
     return effects.created?.map((c) => c.reference);
   }
   return undefined;

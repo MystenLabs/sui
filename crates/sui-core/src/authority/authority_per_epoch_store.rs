@@ -19,13 +19,14 @@ use sui_storage::mutex_table::LockGuard;
 use sui_storage::write_ahead_log::{DBWriteAheadLog, TxGuard, WriteAheadLog};
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::committee::Committee;
-use sui_types::crypto::{AuthoritySignInfo, Signature};
+use sui_types::crypto::AuthoritySignInfo;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
-    SenderSignedData, TransactionEffects, TrustedCertificate, TrustedSignedTransactionEffects,
-    VerifiedCertificate, VerifiedSignedTransaction,
+    SenderSignedData, SharedInputObject, TransactionEffects, TrustedCertificate,
+    TrustedSignedTransactionEffects, VerifiedCertificate, VerifiedSignedTransaction,
 };
+use sui_types::signature::GenericSignature;
 use tracing::{debug, info, trace, warn};
 use typed_store::rocks::{DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
@@ -47,10 +48,12 @@ use crate::transaction_manager::TransactionManager;
 use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;
+use sui_protocol_config::ProtocolConfig;
+use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
-    CheckpointSignatureMessage, CheckpointSummary,
+    CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp,
 };
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
 use sui_types::temporary_store::InnerTemporaryStore;
@@ -74,8 +77,11 @@ pub struct ExecutionIndicesWithHash {
 }
 
 pub struct AuthorityPerEpochStore {
+    // TODO: Make this Arc<Committee> for more efficient pass-around.
     committee: Committee,
     tables: AuthorityEpochTables,
+
+    protocol_config: ProtocolConfig,
 
     // needed for re-opening epoch db.
     parent_path: PathBuf,
@@ -115,6 +121,7 @@ pub struct AuthorityPerEpochStore {
     /// the last few seconds of an epoch.
     epoch_close_time: RwLock<Option<Instant>>,
     metrics: Arc<EpochMetrics>,
+    epoch_start_configuration: Arc<EpochStartConfiguration>,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -123,6 +130,10 @@ pub struct AuthorityEpochTables {
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
     #[default_options_override_fn = "transactions_table_default_config"]
     transactions: DBMap<TransactionDigest, TrustedEnvelope<SenderSignedData, AuthoritySignInfo>>,
+
+    /// Signatures over transaction effects that were executed in the current epoch.
+    /// Store this to avoid re-signing the same effects twice.
+    effects_signatures: DBMap<TransactionDigest, AuthoritySignInfo>,
 
     /// The two tables below manage shared object locks / versions. There are two ways they can be
     /// updated:
@@ -213,7 +224,7 @@ pub struct AuthorityEpochTables {
 
     /// When we see certificate through consensus for the first time, we record
     /// user signature for this transaction here. This will be included in the checkpoint later.
-    user_signatures_for_checkpoints: DBMap<TransactionDigest, Signature>,
+    user_signatures_for_checkpoints: DBMap<TransactionDigest, GenericSignature>,
 
     /// Maps sequence number to checkpoint summary, used by CheckpointBuilder to build checkpoint within epoch
     builder_checkpoint_summary: DBMap<CheckpointSequenceNumber, CheckpointSummary>,
@@ -223,6 +234,17 @@ pub struct AuthorityEpochTables {
     /// epoch, used for tallying rule scores.
     num_certified_checkpoint_signatures:
         DBMap<AuthorityName, (Option<CheckpointSequenceNumber>, u64)>,
+
+    /// Parameters of the system fixed at the epoch start
+    epoch_start_configuration: DBMap<(), EpochStartConfiguration>,
+}
+
+/// Parameters of the epoch fixed at epoch start.
+#[derive(Default, Serialize, Deserialize, Debug, Eq, PartialEq)]
+pub struct EpochStartConfiguration {
+    pub epoch_id: EpochId,
+    pub epoch_start_timestamp_ms: CheckpointTimestamp,
+    // Current epoch committee can eventually move here too, though right now it is served from a different table
 }
 
 impl AuthorityEpochTables {
@@ -271,12 +293,13 @@ impl AuthorityPerEpochStore {
         parent_path: &Path,
         db_options: Option<Options>,
         metrics: Arc<EpochMetrics>,
+        epoch_start_configuration: Option<EpochStartConfiguration>,
     ) -> Arc<Self> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
         let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options.clone());
         let end_of_publish =
-            StakeAggregator::from_iter(committee.clone(), tables.end_of_publish.iter());
+            StakeAggregator::from_iter(Arc::new(committee.clone()), tables.end_of_publish.iter());
         let reconfig_state = tables
             .load_reconfig_state()
             .expect("Load reconfig state at initialization cannot fail");
@@ -294,13 +317,41 @@ impl AuthorityPerEpochStore {
                 }
             })
             .collect();
+        // Insert epoch_start_configuration in the DB. This is used by unit tests
+        //
+        // Production code goes different path:
+        // (1) For the first epoch, this is inserted in the DB along with genesis checkpoint
+        // (2) For other epochs, this is updated when AuthorityPerEpochStore
+        // is initialized during epoch change
+        let epoch_start_configuration =
+            if let Some(epoch_start_configuration) = epoch_start_configuration {
+                assert_eq!(epoch_start_configuration.epoch_id, epoch_id);
+                tables
+                    .epoch_start_configuration
+                    .insert(&(), &epoch_start_configuration)
+                    .expect("Failed to store epoch_start_configuration");
+                epoch_start_configuration
+            } else {
+                assert!(
+                    epoch_id > 0,
+                    "epoch_start_configuration should be provided for epoch 0"
+                );
+                tables
+                    .epoch_start_configuration
+                    .get(&())
+                    .expect("Failed to load epoch_start_configuration")
+                    .expect("epoch_start_configuration not found for non-0 epoch")
+            };
+        let epoch_start_configuration = Arc::new(epoch_start_configuration);
         metrics.current_epoch.set(epoch_id as i64);
         metrics
             .current_voting_right
             .set(committee.weight(&name) as i64);
         metrics.epoch_total_votes.set(committee.total_votes as i64);
+        let protocol_version = committee.protocol_version;
         Arc::new(Self {
             committee,
+            protocol_config: ProtocolConfig::get_for_version(protocol_version),
             tables,
             parent_path: parent_path.to_path_buf(),
             db_options,
@@ -314,6 +365,7 @@ impl AuthorityPerEpochStore {
             epoch_open_time: current_time,
             epoch_close_time: Default::default(),
             metrics,
+            epoch_start_configuration,
         })
     }
 
@@ -321,7 +373,18 @@ impl AuthorityPerEpochStore {
         self.parent_path.clone()
     }
 
-    pub fn new_at_next_epoch(&self, name: AuthorityName, new_committee: Committee) -> Arc<Self> {
+    /// Returns &Arc<EpochStartConfiguration>
+    /// User can treat this Arc as &EpochStartConfiguration, or clone the Arc to pass as owned object
+    pub fn epoch_start_configuration(&self) -> &Arc<EpochStartConfiguration> {
+        &self.epoch_start_configuration
+    }
+
+    pub fn new_at_next_epoch(
+        &self,
+        name: AuthorityName,
+        new_committee: Committee,
+        epoch_start_configuration: EpochStartConfiguration,
+    ) -> Arc<Self> {
         assert_eq!(self.epoch() + 1, new_committee.epoch);
         self.record_reconfig_halt_duration_metric();
         self.record_epoch_total_duration_metric();
@@ -331,6 +394,7 @@ impl AuthorityPerEpochStore {
             &self.parent_path,
             self.db_options.clone(),
             self.metrics.clone(),
+            Some(epoch_start_configuration),
         )
     }
 
@@ -344,6 +408,10 @@ impl AuthorityPerEpochStore {
 
     pub fn committee(&self) -> &Committee {
         &self.committee
+    }
+
+    pub fn protocol_config(&self) -> &ProtocolConfig {
+        &self.protocol_config
     }
 
     pub fn epoch(&self) -> EpochId {
@@ -405,6 +473,24 @@ impl AuthorityPerEpochStore {
         tx_digest: &TransactionDigest,
     ) -> SuiResult<Option<VerifiedSignedTransaction>> {
         Ok(self.tables.transactions.get(tx_digest)?.map(|t| t.into()))
+    }
+
+    pub fn insert_effects_signature(
+        &self,
+        tx_digest: &TransactionDigest,
+        effects_signature: &AuthoritySignInfo,
+    ) -> SuiResult {
+        Ok(self
+            .tables
+            .effects_signatures
+            .insert(tx_digest, effects_signature)?)
+    }
+
+    pub fn get_effects_signature(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> SuiResult<Option<AuthoritySignInfo>> {
+        Ok(self.tables.effects_signatures.get(tx_digest)?)
     }
 
     pub fn multi_get_next_shared_object_versions<'a>(
@@ -550,7 +636,7 @@ impl AuthorityPerEpochStore {
             // from the cert.
             let initial_versions: HashMap<_, _> = certificate
                 .shared_input_objects()
-                .map(|(id, v)| (*id, *v))
+                .map(SharedInputObject::into_id_and_version)
                 .collect();
 
             let mut versions_to_write = Vec::new();
@@ -689,11 +775,13 @@ impl AuthorityPerEpochStore {
     pub fn remove_pending_consensus_transaction(&self, key: &ConsensusTransactionKey) -> SuiResult {
         self.tables.pending_consensus_transactions.remove(key)?;
         if let ConsensusTransactionKey::Certificate(cert) = key {
-            self.pending_consensus_certificates
-                .lock()
-                .remove(cert.as_ref());
+            self.pending_consensus_certificates.lock().remove(cert);
         }
         Ok(())
+    }
+
+    pub fn pending_consensus_certificates_count(&self) -> usize {
+        self.pending_consensus_certificates.lock().len()
     }
 
     pub fn pending_consensus_certificates_empty(&self) -> bool {
@@ -759,7 +847,7 @@ impl AuthorityPerEpochStore {
     pub async fn user_signatures_for_checkpoint(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Signature>> {
+    ) -> SuiResult<Vec<GenericSignature>> {
         // todo - use NotifyRead::register_all might be faster
         for digest in digests {
             self.consensus_message_processed_notify(ConsensusTransactionKey::Certificate(*digest))
@@ -797,7 +885,7 @@ impl AuthorityPerEpochStore {
                 write_batch.insert_batch(&self.tables.end_of_publish, [(authority, ())])?;
             self.end_of_publish.try_lock()
                 .expect("No contention on Authority::end_of_publish as it is only accessed from consensus handler")
-                .insert(authority, ()).is_quorum_reached()
+                .insert_generic(authority, ()).is_quorum_reached()
         } else {
             // If we past the stage where we are accepting consensus certificates we also don't record end of publish messages
             debug!("Ignoring end of publish message from validator {:?} as we already collected enough end of publish messages", authority.concise());
@@ -857,9 +945,10 @@ impl AuthorityPerEpochStore {
         let transaction_digest = *certificate.digest();
 
         // Make an iterator to update the locks of the transaction's shared objects.
-        let ids: Vec<_> = certificate
-            .shared_input_objects()
-            .map(|(id, _)| *id)
+        let shared_input_objects: Vec<_> = certificate.shared_input_objects().collect();
+        let ids: Vec<_> = shared_input_objects
+            .iter()
+            .map(SharedInputObject::id)
             .collect();
 
         let versions = self
@@ -867,17 +956,28 @@ impl AuthorityPerEpochStore {
             .await?;
 
         let mut input_object_keys = transaction_input_object_keys(certificate)?;
-        let mut assigned_versions = Vec::new();
-        for ((id, _), version) in certificate.shared_input_objects().zip(versions.into_iter()) {
+        let mut assigned_versions = Vec::with_capacity(shared_input_objects.len());
+        let mut is_mutable_input = Vec::with_capacity(shared_input_objects.len());
+        for (SharedInputObject { id, mutable, .. }, version) in
+            shared_input_objects.iter().zip(versions.into_iter())
+        {
             assigned_versions.push((*id, version));
             input_object_keys.push(ObjectKey(*id, version));
+            is_mutable_input.push(*mutable);
         }
 
         let next_version =
             SequenceNumber::lamport_increment(input_object_keys.iter().map(|obj| obj.1));
         let next_versions: Vec<_> = assigned_versions
             .iter()
-            .map(|(id, _)| (*id, next_version))
+            .zip(is_mutable_input.into_iter())
+            .filter_map(|((id, _), mutable)| {
+                if mutable {
+                    Some((*id, next_version))
+                } else {
+                    None
+                }
+            })
             .collect();
 
         trace!(tx_digest = ?transaction_digest,
@@ -1041,7 +1141,11 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn test_insert_user_signature(&self, digest: TransactionDigest, signature: &Signature) {
+    pub fn test_insert_user_signature(
+        &self,
+        digest: TransactionDigest,
+        signature: &GenericSignature,
+    ) {
         self.tables
             .user_signatures_for_checkpoints
             .insert(&digest, signature)
@@ -1618,4 +1722,10 @@ impl AuthorityPerEpochStore {
 
 fn transactions_table_default_config() -> DBOptions {
     default_db_options(None, None).1
+}
+
+impl EpochStartConfiguration {
+    pub fn epoch_data(&self) -> EpochData {
+        EpochData::new(self.epoch_id)
+    }
 }

@@ -7,11 +7,12 @@ use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use std::sync::Arc;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::transaction_manager::TransactionManager;
 use narwhal_worker::TransactionValidator;
 use sui_types::message_envelope::Message;
 use sui_types::{
     crypto::{AuthoritySignInfoTrait, VerificationObligation},
-    messages::{ConsensusTransaction, ConsensusTransactionKind},
+    messages::{ConsensusTransaction, ConsensusTransactionKind, VerifiedCertificate},
 };
 
 use tracing::info;
@@ -20,12 +21,14 @@ use tracing::info;
 #[derive(Clone)]
 pub struct SuiTxValidator {
     epoch_store: Arc<AuthorityPerEpochStore>,
+    transaction_manager: Arc<TransactionManager>,
     metrics: Arc<SuiTxValidatorMetrics>,
 }
 
 impl SuiTxValidator {
     pub fn new(
         epoch_store: Arc<AuthorityPerEpochStore>,
+        transaction_manager: Arc<TransactionManager>,
         metrics: Arc<SuiTxValidatorMetrics>,
     ) -> Self {
         info!(
@@ -34,6 +37,7 @@ impl SuiTxValidator {
         );
         Self {
             epoch_store,
+            transaction_manager,
             metrics,
         }
     }
@@ -60,6 +64,7 @@ impl TransactionValidator for SuiTxValidator {
             .map(|tx| tx_from_bytes(tx))
             .collect::<Result<Vec<_>, _>>()?;
 
+        let mut owned_tx_certs = Vec::new();
         let mut obligation = VerificationObligation::default();
         for tx in txs.into_iter() {
             match tx.kind {
@@ -72,6 +77,12 @@ impl TransactionValidator for SuiTxValidator {
                         &mut obligation,
                         idx,
                     )?;
+
+                    if !certificate.contains_shared_object() {
+                        // new_unchecked safety: we do not use the certs in this list until all
+                        // have had their signatures verified.
+                        owned_tx_certs.push(VerifiedCertificate::new_unchecked(*certificate));
+                    }
                 }
                 ConsensusTransactionKind::CheckpointSignature(signature) => {
                     self.metrics.checkpoint_signatures_verified.inc();
@@ -92,7 +103,15 @@ impl TransactionValidator for SuiTxValidator {
         // verify the user transaction signatures as a batch
         obligation
             .verify_all()
-            .wrap_err("Malformed batch (failed to verify)")
+            .wrap_err("Malformed batch (failed to verify)")?;
+
+        // all certificates had valid signatures, schedule them for execution prior to sequencing
+        // which is unnecessary for owned object transactions.
+        // It is unnecessary to write to pending_certificates table because the certs will be written
+        // via Narwhal output.
+        self.transaction_manager
+            .enqueue(owned_tx_certs, &self.epoch_store)
+            .wrap_err("Failed to schedule certificates for execution")
     }
 }
 
@@ -122,20 +141,21 @@ impl SuiTxValidatorMetrics {
 
 #[cfg(test)]
 mod tests {
-    use fastcrypto::traits::KeyPair;
-    use narwhal_types::Batch;
-    use narwhal_worker::TransactionValidator;
-    use sui_types::{base_types::AuthorityName, messages::ConsensusTransaction};
-
-    use super::*;
     use crate::{
         authority::authority_tests::init_state_with_objects_and_committee,
         consensus_adapter::consensus_tests::{test_certificates, test_gas_objects},
+        consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
+    };
+    use fastcrypto::traits::KeyPair;
+    use narwhal_types::Batch;
+    use narwhal_worker::TransactionValidator;
+    use sui_types::{
+        base_types::AuthorityName, messages::ConsensusTransaction, signature::GenericSignature,
     };
 
     use sui_macros::sim_test;
+    use sui_types::crypto::Ed25519SuiSignature;
     use sui_types::object::Object;
-
     #[sim_test]
     async fn accept_valid_transaction() {
         // Initialize an authority with a (owned) gas object and a shared object; then
@@ -164,7 +184,11 @@ mod tests {
         .unwrap();
 
         let metrics = SuiTxValidatorMetrics::new(&Default::default());
-        let validator = SuiTxValidator::new(state.epoch_store().clone(), metrics);
+        let validator = SuiTxValidator::new(
+            state.epoch_store_for_testing().clone(),
+            state.transaction_manager().clone(),
+            metrics,
+        );
         let res = validator.validate(&first_transaction_bytes);
         assert!(res.is_ok(), "{res:?}");
 
@@ -184,7 +208,11 @@ mod tests {
         let bogus_transaction_bytes: Vec<_> = certificates
             .into_iter()
             .map(|mut cert| {
-                cert.tx_signature.as_mut()[2] = cert.tx_signature.as_mut()[2].wrapping_add(1);
+                // set it to an all-zero user signature
+                cert.tx_signature =
+                    GenericSignature::Signature(sui_types::crypto::Signature::Ed25519SuiSignature(
+                        Ed25519SuiSignature::default(),
+                    ));
                 bincode::serialize(&ConsensusTransaction::new_certificate_message(&name1, cert))
                     .unwrap()
             })

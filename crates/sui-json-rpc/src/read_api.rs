@@ -8,8 +8,6 @@ use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use sui_json::SuiJsonValue;
-use sui_transaction_builder::TransactionBuilder;
 use sui_types::committee::EpochId;
 use sui_types::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use tap::TapFallible;
@@ -21,13 +19,13 @@ use sui_json_rpc_types::{
     DevInspectResults, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
     MoveFunctionArgType, ObjectValueKind, Page, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
     SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionAuthSignersResponse,
-    SuiTransactionEffects, SuiTransactionResponse, SuiTypeTag, TransactionsPage,
+    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
 use sui_types::crypto::sha3_hash;
-use sui_types::messages::TransactionData;
+use sui_types::messages::{TransactionData, TransactionKind};
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
     CheckpointSummary,
@@ -36,12 +34,10 @@ use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead};
 use sui_types::query::TransactionQuery;
 
-use sui_adapter::execution_mode::DevInspect;
 use tracing::debug;
 
 use crate::api::RpcFullNodeReadApiServer;
 use crate::api::{cap_page_limit, RpcReadApiServer};
-use crate::transaction_builder_api::AuthorityStateDataReader;
 use crate::SuiRpcModule;
 
 // An implementation of the read portion of the JSON-RPC interface intended for use in
@@ -52,24 +48,19 @@ pub struct ReadApi {
 
 pub struct FullNodeApi {
     pub state: Arc<AuthorityState>,
-    dev_inspect_builder: TransactionBuilder<DevInspect>,
 }
 
 impl FullNodeApi {
     pub fn new(state: Arc<AuthorityState>) -> Self {
-        let reader = Arc::new(AuthorityStateDataReader::new(state.clone()));
-        Self {
-            state,
-            dev_inspect_builder: TransactionBuilder::new(reader),
-        }
+        Self { state }
     }
 
-    fn get_sui_system_state_object_epoch(&self) -> RpcResult<EpochId> {
-        Ok(self
+    fn get_sui_system_state_object_epoch_and_gas_price(&self) -> RpcResult<(EpochId, u64)> {
+        let sys_state = self
             .state
             .get_sui_system_state_object()
-            .map_err(|e| anyhow!("Unable to retrieve sui system state object: {e}"))?
-            .epoch)
+            .map_err(|e| anyhow!("Unable to retrieve sui system state object: {e}"))?;
+        Ok((sys_state.epoch, sys_state.reference_gas_price))
     }
 }
 
@@ -92,38 +83,6 @@ impl RpcReadApiServer for ReadApi {
             .into_iter()
             .map(SuiObjectInfo::from)
             .collect())
-    }
-
-    // TODO: Remove this
-    // This is very expensive, it's only for backward compatibilities and should be removed asap.
-    async fn get_objects_owned_by_object(
-        &self,
-        object_id: ObjectID,
-    ) -> RpcResult<Vec<SuiObjectInfo>> {
-        let dynamic_fields = self
-            .state
-            .get_dynamic_fields(object_id, None, usize::MAX)
-            .map_err(|e| anyhow!("{e}"))?;
-
-        let mut object_info = vec![];
-        for info in dynamic_fields {
-            let object = self
-                .state
-                .get_object_read(&info.object_id)
-                .await
-                .and_then(|read| read.into_object())
-                .map_err(|e| anyhow!(e))?;
-            object_info.push(SuiObjectInfo {
-                object_id: object.id(),
-                version: object.version(),
-                digest: object.digest(),
-                // Package cannot be owned by object, safe to unwrap.
-                type_: format!("{}", object.type_().unwrap()),
-                owner: object.owner,
-                previous_transaction: object.previous_transaction,
-            });
-        }
-        Ok(object_info)
     }
 
     async fn get_dynamic_fields(
@@ -207,6 +166,8 @@ impl RpcReadApiServer for ReadApi {
         &self,
         digest: TransactionDigest,
     ) -> RpcResult<SuiTransactionAuthSignersResponse> {
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+
         let (cert, _effects) = self
             .state
             .get_transaction(digest)
@@ -214,7 +175,6 @@ impl RpcReadApiServer for ReadApi {
             .tap_err(|err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err))?;
 
         let mut signers = Vec::new();
-        let epoch_store = self.state.epoch_store();
         for authority_index in cert.auth_sig().signers_map.iter() {
             let authority = epoch_store
                 .committee()
@@ -241,47 +201,27 @@ impl SuiRpcModule for ReadApi {
 impl RpcFullNodeReadApiServer for FullNodeApi {
     async fn dev_inspect_transaction(
         &self,
-        tx_bytes: Base64,
-        epoch: Option<EpochId>,
-    ) -> RpcResult<DevInspectResults> {
-        let epoch = match epoch {
-            None => self.get_sui_system_state_object_epoch()?,
-            Some(n) => n,
-        };
-        let (txn_data, txn_digest) = get_transaction_data_and_digest(tx_bytes)?;
-        Ok(self
-            .state
-            .dev_inspect_transaction(txn_data, txn_digest, epoch)
-            .await?)
-    }
-
-    async fn dev_inspect_move_call(
-        &self,
         sender_address: SuiAddress,
-        package_object_id: ObjectID,
-        module: String,
-        function: String,
-        type_arguments: Vec<SuiTypeTag>,
-        arguments: Vec<SuiJsonValue>,
+        tx_bytes: Base64,
+        gas_price: Option<u64>,
         epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults> {
-        let epoch = match epoch {
-            None => self.get_sui_system_state_object_epoch()?,
-            Some(n) => n,
-        };
-        let move_call = self
-            .dev_inspect_builder
-            .single_move_call(
-                package_object_id,
-                &module,
-                &function,
-                type_arguments,
-                arguments,
-            )
-            .await?;
+        let (mut current_epoch, mut reference_gas_price) = (0, 0);
+        // Only fetch from DB if necessary
+        if gas_price.is_none() || epoch.is_none() {
+            (current_epoch, reference_gas_price) =
+                self.get_sui_system_state_object_epoch_and_gas_price()?
+        }
+        let tx_kind: TransactionKind =
+            bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
         Ok(self
             .state
-            .dev_inspect_move_call(sender_address, move_call, epoch)
+            .dev_inspect_transaction(
+                sender_address,
+                tx_kind,
+                gas_price.unwrap_or(reference_gas_price),
+                epoch.unwrap_or(current_epoch),
+            )
             .await?)
     }
 

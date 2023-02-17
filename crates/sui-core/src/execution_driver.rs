@@ -66,15 +66,11 @@ pub async fn execution_process(
             return;
         };
 
-        let epoch_store = authority.epoch_store();
+        // TODO: Ideally execution_driver should own a copy of epoch store and recreate each epoch.
+        let epoch_store = authority.load_epoch_store_one_call_per_task();
 
         let digest = *certificate.digest();
         debug!(?digest, "Pending certificate execution activated.");
-
-        // Process any tx that failed to commit.
-        if let Err(err) = authority.process_tx_recovery_log(None, &epoch_store).await {
-            error!("Error processing tx recovery log: {:?}", err);
-        }
 
         let limit = limit.clone();
         // hold semaphore permit until task completes. unwrap ok because we never close
@@ -95,13 +91,11 @@ pub async fn execution_process(
                     .await;
                 if let Err(e) = res {
                     if attempts == EXECUTION_MAX_ATTEMPTS {
-                        error!("Failed to execute certified transaction after {attempts} attempts! error={e} certificate={:?}", certificate);
-                        authority.metrics.execution_driver_execution_failures.inc();
-                        return;
+                        panic!("Failed to execute certified transaction {digest:?} after {attempts} attempts! error={e} certificate={certificate:?}");
                     }
                     // Assume only transient failure can happen. Permanent failure is probably
                     // a bug. There is nothing that can be done to recover from permanent failures.
-                    error!(tx_digest=?digest, "Failed to execute certified transaction! attempt {attempts}, {e}");
+                    error!(tx_digest=?digest, "Failed to execute certified transaction {digest:?}! attempt {attempts}, {e}");
                     sleep(EXECUTION_FAILURE_RETRY_INTERVAL).await;
                 } else {
                     break;

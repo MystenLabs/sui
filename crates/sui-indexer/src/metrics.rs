@@ -1,9 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
+use prometheus::{
+    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
+    Registry,
+};
 
 /// Prometheus metrics for sui-indexer.
+
+// buckets defined in seconds
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 3.0, 5.0, 10.0, 20.0, 40.0, 60.0,
+    80.0, 100.0, 200.0,
+];
 
 #[derive(Clone, Debug)]
 pub struct IndexerTransactionHandlerMetrics {
@@ -15,6 +24,9 @@ pub struct IndexerTransactionHandlerMetrics {
     pub total_transaction_page_committed: IntCounter,
 
     pub total_transaction_handler_error: IntCounter,
+
+    pub db_write_request_latency: Histogram,
+    pub full_node_read_request_latency: Histogram,
 }
 
 impl IndexerTransactionHandlerMetrics {
@@ -56,6 +68,20 @@ impl IndexerTransactionHandlerMetrics {
                 registry,
             )
             .unwrap(),
+            db_write_request_latency: register_histogram_with_registry!(
+                "transaction_db_write_request_latency",
+                "Time spent commiting a transaction to the db",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            full_node_read_request_latency: register_histogram_with_registry!(
+                "transaction_full_node_read_request_latency",
+                "Time spent in waiting for a new transaction from the Full Node",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
         }
     }
 }
@@ -70,6 +96,9 @@ pub struct IndexerEventHandlerMetrics {
     pub total_event_page_committed: IntCounter,
 
     pub total_event_handler_error: IntCounter,
+
+    pub db_write_request_latency: Histogram,
+    pub full_node_read_request_latency: Histogram,
 }
 
 impl IndexerEventHandlerMetrics {
@@ -108,6 +137,20 @@ impl IndexerEventHandlerMetrics {
             total_event_handler_error: register_int_counter_with_registry!(
                 "total_event_handler_error",
                 "Total number of event handler error",
+                registry,
+            )
+            .unwrap(),
+            db_write_request_latency: register_histogram_with_registry!(
+                "event_db_write_request_latency",
+                "Time spent commiting an event to the db",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            full_node_read_request_latency: register_histogram_with_registry!(
+                "event_full_node_read_request_latency",
+                "Time spent in waiting for a new event from the Full Node",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -217,6 +260,8 @@ pub struct IndexerCheckpointHandlerMetrics {
     pub total_checkpoint_received: IntCounter,
     pub total_checkpoint_processed: IntCounter,
     pub total_checkpoint_handler_error: IntCounter,
+    pub db_write_request_latency: Histogram,
+    pub full_node_read_request_latency: Histogram,
 }
 
 impl IndexerCheckpointHandlerMetrics {
@@ -243,6 +288,20 @@ impl IndexerCheckpointHandlerMetrics {
             total_checkpoint_requested: register_int_counter_with_registry!(
                 "total_checkpoint_requested",
                 "Total number of checkpoint requested",
+                registry,
+            )
+            .unwrap(),
+            db_write_request_latency: register_histogram_with_registry!(
+                "checkpoint_db_write_request_latency",
+                "Time spent commiting a checkpoint to the db",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            full_node_read_request_latency: register_histogram_with_registry!(
+                "checkpoint_full_node_read_request_latency",
+                "Time spent in waiting for a new checkpoint from the Full Node",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),

@@ -18,20 +18,6 @@ pub(super) struct Server {
 
 #[anemo::async_trait]
 impl Discovery for Server {
-    async fn get_external_address(
-        &self,
-        request: Request<()>,
-    ) -> Result<Response<std::net::SocketAddr>, anemo::rpc::Status> {
-        request
-            .extensions()
-            .get::<std::net::SocketAddr>()
-            .copied()
-            .map(Response::new)
-            .ok_or_else(|| {
-                anemo::rpc::Status::internal("unable to query caller's external address")
-            })
-    }
-
     async fn get_known_peers(
         &self,
         _request: Request<()>,

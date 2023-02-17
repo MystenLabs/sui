@@ -32,14 +32,17 @@ use sui_types::error::SuiError;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    DynamicFieldPage, GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse,
+    DynamicFieldPage, GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiRawData,
+    SuiTransactionResponse,
 };
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_keys::keystore::AccountKeystore;
+use sui_sdk::SuiClient;
 use sui_sdk::TransactionExecutionResult;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::intent::Intent;
+use sui_types::signature::GenericSignature;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
@@ -47,14 +50,9 @@ use sui_types::{
     object::Owner,
     parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS,
 };
-use sui_types::{
-    crypto::{Signature, SignatureScheme},
-    intent::IntentMessage,
-};
+use sui_types::{crypto::SignatureScheme, intent::IntentMessage};
 use tokio::sync::RwLock;
 use tracing::{info, warn};
-
-use sui_sdk::SuiClient;
 
 pub const EXAMPLE_NFT_NAME: &str = "Example NFT";
 pub const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the Sui Command Line Tool";
@@ -133,10 +131,6 @@ pub enum SuiClientCommands {
         /// Gas budget for running module initializers
         #[clap(long)]
         gas_budget: u64,
-
-        /// (Deprecated) This flag is deprecated, dependency verification is on by default.
-        #[clap(long)]
-        verify_dependencies: bool,
 
         /// Publish the package without checking whether compiling dependencies from source results
         /// in bytecode matching the dependencies found on-chain.
@@ -467,7 +461,6 @@ impl SuiClientCommands {
                 gas,
                 build_config,
                 gas_budget,
-                verify_dependencies,
                 skip_dependency_verification,
                 with_unpublished_dependencies,
             } => {
@@ -499,16 +492,6 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 let compiled_modules =
                     compiled_package.get_package_bytes(with_unpublished_dependencies);
-
-                if verify_dependencies {
-                    eprintln!(
-                        "{}",
-                        "Dependency verification is on by default. --verify-dependencies is \
-                         deprecated and will be removed in the next release."
-                            .bold()
-                            .yellow(),
-                    );
-                }
 
                 if !skip_dependency_verification {
                     BytecodeSourceVerifier::new(client.read_api(), false)
@@ -545,8 +528,13 @@ impl SuiClientCommands {
             SuiClientCommands::Object { id, bcs } => {
                 // Fetch the object ref
                 let client = context.get_client().await?;
-                let object_read = client.read_api().get_parsed_object(id).await?;
-                SuiClientCommandResult::Object(object_read, bcs)
+                if !bcs {
+                    let object_read = client.read_api().get_parsed_object(id).await?;
+                    SuiClientCommandResult::Object(object_read)
+                } else {
+                    let raw_object_read = client.read_api().get_object(id).await?;
+                    SuiClientCommandResult::RawObject(raw_object_read)
+                }
             }
 
             SuiClientCommands::DynamicFieldQuery { id, cursor, limit } => {
@@ -778,9 +766,10 @@ impl SuiClientCommands {
                 SuiClientCommandResult::PayAllSui(cert, effects)
             }
 
-            SuiClientCommands::Addresses => {
-                SuiClientCommandResult::Addresses(context.config.keystore.addresses())
-            }
+            SuiClientCommands::Addresses => SuiClientCommandResult::Addresses(
+                context.config.keystore.addresses(),
+                context.active_address().ok(),
+            ),
 
             SuiClientCommands::Objects { address } => {
                 let address = address.unwrap_or(context.active_address()?);
@@ -966,15 +955,14 @@ impl SuiClientCommands {
                         .to_vec()
                         .map_err(|e| anyhow!(e))?,
                 )?;
-                let signature = Signature::from_bytes(
-                    &Base64::try_from(signature)
-                        .map_err(|e| anyhow!(e))?
-                        .to_vec()
-                        .map_err(|e| anyhow!(e))?,
-                )?;
-                let verified =
-                    Transaction::from_data(data, Intent::default(), signature).verify()?;
+                let bytes = &Base64::try_from(signature)
+                    .map_err(|e| anyhow!(e))?
+                    .to_vec()
+                    .map_err(|e| anyhow!(e))?;
 
+                let sig = GenericSignature::from_bytes(bytes)?;
+                let verified =
+                    Transaction::from_generic_sig_data(data, Intent::default(), sig).verify()?;
                 let response = context.execute_transaction(verified).await?;
                 SuiClientCommandResult::ExecuteSignedTx(response)
             }
@@ -1237,19 +1225,29 @@ impl Display for SuiClientCommandResult {
                     writeln!(writer, "{}", parsed_resp)?;
                 }
             }
-            SuiClientCommandResult::Object(object_read, bcs) => {
-                let object = if *bcs {
-                    match object_read.object() {
-                        Ok(v) => {
-                            let bcs_bytes = bcs::to_bytes(v).unwrap();
-                            format!("{:?}\nNumber of bytes: {}", bcs_bytes, bcs_bytes.len())
-                        }
-                        Err(err) => format!("{err}").red().to_string(),
-                    }
-                } else {
-                    unwrap_err_to_string(|| Ok(object_read.object()?))
-                };
+            SuiClientCommandResult::Object(object_read) => {
+                let object = unwrap_err_to_string(|| Ok(object_read.object()?));
                 writeln!(writer, "{}", object)?;
+            }
+            SuiClientCommandResult::RawObject(raw_object_read) => {
+                let raw_object = match raw_object_read.object() {
+                    Ok(v) => match &v.data {
+                        SuiRawData::MoveObject(o) => {
+                            format!("{:?}\nNumber of bytes: {}", o.bcs_bytes, o.bcs_bytes.len())
+                        }
+                        SuiRawData::Package(p) => {
+                            let mut temp = String::new();
+                            let mut bcs_bytes = 0usize;
+                            for m in &p.module_map {
+                                temp.push_str(&format!("{:?}\n", m));
+                                bcs_bytes += m.1.len()
+                            }
+                            format!("{}Number of bytes: {}", temp, bcs_bytes)
+                        }
+                    },
+                    Err(err) => format!("{err}").red().to_string(),
+                };
+                writeln!(writer, "{}", raw_object)?;
             }
             SuiClientCommandResult::Call(cert, effects) => {
                 write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
@@ -1270,10 +1268,14 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::PayAllSui(cert, effects) => {
                 write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
             }
-            SuiClientCommandResult::Addresses(addresses) => {
+            SuiClientCommandResult::Addresses(addresses, active_address) => {
                 writeln!(writer, "Showing {} results.", addresses.len())?;
                 for address in addresses {
-                    writeln!(writer, "{}", address)?;
+                    if *active_address == Some(*address) {
+                        writeln!(writer, "{} <=", address)?;
+                    } else {
+                        writeln!(writer, "{}", address)?;
+                    }
                 }
             }
             SuiClientCommandResult::Objects(object_refs) => {
@@ -1513,13 +1515,13 @@ fn write_cert_and_effects(
 impl Debug for SuiClientCommandResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let s = unwrap_err_to_string(|| match self {
-            SuiClientCommandResult::Object(object_read, bcs) => {
+            SuiClientCommandResult::Object(object_read) => {
                 let object = object_read.object()?;
-                if *bcs {
-                    Ok(serde_json::to_string_pretty(&bcs::to_bytes(&object)?)?)
-                } else {
-                    Ok(serde_json::to_string_pretty(&object)?)
-                }
+                Ok(serde_json::to_string_pretty(&object)?)
+            }
+            SuiClientCommandResult::RawObject(raw_object_read) => {
+                let raw_object = raw_object_read.object()?;
+                Ok(serde_json::to_string_pretty(&raw_object)?)
             }
             _ => Ok(serde_json::to_string_pretty(self)?),
         });
@@ -1555,7 +1557,8 @@ impl SuiClientCommandResult {
 pub enum SuiClientCommandResult {
     Publish(SuiTransactionResponse),
     VerifySource,
-    Object(GetObjectDataResponse, bool),
+    Object(GetObjectDataResponse),
+    RawObject(GetRawObjectDataResponse),
     Call(SuiCertifiedTransaction, SuiTransactionEffects),
     Transfer(
         // Skipping serialisation for elapsed time.
@@ -1567,7 +1570,7 @@ pub enum SuiClientCommandResult {
     Pay(SuiCertifiedTransaction, SuiTransactionEffects),
     PaySui(SuiCertifiedTransaction, SuiTransactionEffects),
     PayAllSui(SuiCertifiedTransaction, SuiTransactionEffects),
-    Addresses(Vec<SuiAddress>),
+    Addresses(Vec<SuiAddress>, Option<SuiAddress>),
     Objects(Vec<SuiObjectInfo>),
     DynamicFieldQuery(DynamicFieldPage),
     SyncClientState,

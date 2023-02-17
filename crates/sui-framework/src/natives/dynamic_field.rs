@@ -92,6 +92,7 @@ pub fn hash_type_and_key(
     // hash(parent || k || K)
     let mut hasher = Sha3_256::default();
     hasher.update(parent);
+    hasher.update(k_bytes.len().to_le_bytes());
     hasher.update(k_bytes);
     hasher.update(k_tag_bytes);
     let hash = hasher.finalize();

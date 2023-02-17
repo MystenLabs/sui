@@ -102,7 +102,6 @@ async fn propose_header() {
     let _core_handle = Core::spawn(
         name,
         committee.clone(),
-        worker_cache,
         header_store.clone(),
         certificate_store.clone(),
         synchronizer,
@@ -199,7 +198,6 @@ async fn propose_header_failure() {
     let _core_handle = Core::spawn(
         name,
         committee.clone(),
-        worker_cache,
         header_store.clone(),
         certificate_store.clone(),
         synchronizer,
@@ -271,7 +269,6 @@ async fn process_certificates() {
     let _core_handle = Core::spawn(
         name,
         committee.clone(),
-        worker_cache,
         header_store.clone(),
         certificate_store.clone(),
         synchronizer,
@@ -383,7 +380,6 @@ async fn recover_core() {
     let _core_handle = Core::spawn(
         name.clone(),
         committee.clone(),
-        worker_cache.clone(),
         header_store.clone(),
         certificate_store.clone(),
         synchronizer.clone(),
@@ -427,7 +423,6 @@ async fn recover_core() {
     let _core_handle = Core::spawn(
         name,
         committee.clone(),
-        worker_cache,
         header_store.clone(),
         certificate_store.clone(),
         synchronizer.clone(),
@@ -522,7 +517,6 @@ async fn recover_core_partial_certs() {
     let _core_handle = Core::spawn(
         name.clone(),
         committee.clone(),
-        worker_cache.clone(),
         header_store.clone(),
         certificate_store.clone(),
         synchronizer.clone(),
@@ -568,7 +562,6 @@ async fn recover_core_partial_certs() {
     let _core_handle = Core::spawn(
         name.clone(),
         committee.clone(),
-        worker_cache.clone(),
         header_store.clone(),
         certificate_store.clone(),
         synchronizer.clone(),
@@ -655,7 +648,6 @@ async fn recover_core_expecting_header_of_previous_round() {
     let _core_handle = Core::spawn(
         name.clone(),
         committee.clone(),
-        worker_cache.clone(),
         header_store.clone(),
         certificate_store.clone(),
         synchronizer.clone(),
@@ -712,7 +704,6 @@ async fn recover_core_expecting_header_of_previous_round() {
     let _core_handle = Core::spawn(
         name.clone(),
         committee.clone(),
-        worker_cache.clone(),
         header_store.clone(),
         certificate_store.clone(),
         synchronizer.clone(),
@@ -790,7 +781,6 @@ async fn shutdown_core() {
     let handle = Core::spawn(
         name.clone(),
         committee.clone(),
-        worker_cache.clone(),
         header_store.clone(),
         certificate_store.clone(),
         synchronizer.clone(),

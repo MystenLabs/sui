@@ -77,7 +77,7 @@ async fn test_publishing_with_unpublished_deps() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "depends_on_basics",
         "delegate",
         vec![],
@@ -117,7 +117,7 @@ async fn test_object_wrapping_unwrapping() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_wrapping",
         "create_child",
         vec![],
@@ -142,7 +142,7 @@ async fn test_object_wrapping_unwrapping() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_wrapping",
         "create_parent",
         vec![],
@@ -172,7 +172,7 @@ async fn test_object_wrapping_unwrapping() {
     );
     // Make sure that the child's version gets increased after wrapped.
     assert_eq!(new_child_object_ref, expected_child_object_ref);
-    check_latest_object_ref(&authority, &expected_child_object_ref).await;
+    check_latest_object_ref(&authority, &expected_child_object_ref, true).await;
 
     let parent_object_ref = effects.created[0].0;
     assert_eq!(parent_object_ref.1, wrapped_version);
@@ -186,7 +186,7 @@ async fn test_object_wrapping_unwrapping() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_wrapping",
         "extract_child",
         vec![],
@@ -211,7 +211,7 @@ async fn test_object_wrapping_unwrapping() {
     );
     // Make sure that version increments again when unwrapped.
     assert_eq!(effects.unwrapped[0].0 .1, unwrapped_version);
-    check_latest_object_ref(&authority, &effects.unwrapped[0].0).await;
+    check_latest_object_ref(&authority, &effects.unwrapped[0].0, false).await;
     let child_object_ref = effects.unwrapped[0].0;
 
     let rewrap_version = SequenceNumber::lamport_increment([
@@ -226,7 +226,7 @@ async fn test_object_wrapping_unwrapping() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_wrapping",
         "set_child",
         vec![],
@@ -251,7 +251,7 @@ async fn test_object_wrapping_unwrapping() {
         ObjectDigest::OBJECT_DIGEST_WRAPPED,
     );
     assert_eq!(effects.wrapped[0], expected_child_object_ref);
-    check_latest_object_ref(&authority, &expected_child_object_ref).await;
+    check_latest_object_ref(&authority, &expected_child_object_ref, true).await;
     let child_object_ref = effects.wrapped[0];
     let parent_object_ref = effects.mutated_excluding_gas().next().unwrap().0;
 
@@ -264,7 +264,7 @@ async fn test_object_wrapping_unwrapping() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_wrapping",
         "delete_parent",
         vec![],
@@ -285,14 +285,14 @@ async fn test_object_wrapping_unwrapping() {
         ObjectDigest::OBJECT_DIGEST_DELETED,
     );
     assert!(effects.deleted.contains(&expected_child_object_ref));
-    check_latest_object_ref(&authority, &expected_child_object_ref).await;
+    check_latest_object_ref(&authority, &expected_child_object_ref, true).await;
     let expected_parent_object_ref = (
         parent_object_ref.0,
         deleted_version,
         ObjectDigest::OBJECT_DIGEST_DELETED,
     );
     assert!(effects.deleted.contains(&expected_parent_object_ref));
-    check_latest_object_ref(&authority, &expected_parent_object_ref).await;
+    check_latest_object_ref(&authority, &expected_parent_object_ref, true).await;
 }
 
 #[tokio::test]
@@ -312,7 +312,7 @@ async fn test_object_owning_another_object() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_owner",
         "create_parent",
         vec![],
@@ -333,7 +333,7 @@ async fn test_object_owning_another_object() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_owner",
         "create_child",
         vec![],
@@ -353,7 +353,7 @@ async fn test_object_owning_another_object() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_owner",
         "mutate_child",
         vec![],
@@ -369,7 +369,7 @@ async fn test_object_owning_another_object() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_owner",
         "add_child",
         vec![],
@@ -397,7 +397,7 @@ async fn test_object_owning_another_object() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_owner",
         "mutate_child",
         vec![],
@@ -412,7 +412,7 @@ async fn test_object_owning_another_object() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_owner",
         "mutate_child_with_parent",
         vec![],
@@ -429,7 +429,7 @@ async fn test_object_owning_another_object() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_owner",
         "create_parent",
         vec![],
@@ -449,7 +449,7 @@ async fn test_object_owning_another_object() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_owner",
         "transfer_child",
         vec![],
@@ -518,7 +518,7 @@ async fn test_object_owning_another_object() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_owner",
         "delete_child",
         vec![],
@@ -545,7 +545,7 @@ async fn test_create_then_delete_parent_child() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_owner",
         "create_parent_and_child",
         vec![],
@@ -571,7 +571,7 @@ async fn test_create_then_delete_parent_child() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_owner",
         "delete_parent_and_child",
         vec![],
@@ -602,7 +602,7 @@ async fn test_create_then_delete_parent_child_wrap() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_owner",
         "create_parent_and_child_wrapped",
         vec![],
@@ -641,7 +641,7 @@ async fn test_create_then_delete_parent_child_wrap() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_owner",
         "delete_parent_and_child_wrapped",
         vec![],
@@ -687,7 +687,7 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_owner",
         "create_parent",
         vec![],
@@ -708,7 +708,7 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_owner",
         "create_child",
         vec![],
@@ -729,7 +729,7 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_owner",
         "add_child_wrapped",
         vec![],
@@ -748,7 +748,7 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "object_owner",
         "delete_parent_and_child_wrapped",
         vec![],
@@ -784,7 +784,7 @@ async fn test_entry_point_vector_empty() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "obj_vec_empty",
         vec![],
@@ -806,7 +806,7 @@ async fn test_entry_point_vector_empty() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "type_param_vec_empty",
         vec![type_tag],
@@ -843,7 +843,7 @@ async fn test_entry_point_vector_primitive() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "prim_vec_len",
         vec![],
@@ -882,7 +882,7 @@ async fn test_entry_point_vector() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "mint",
         vec![],
@@ -902,7 +902,7 @@ async fn test_entry_point_vector() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "obj_vec_destroy",
         vec![],
@@ -923,7 +923,7 @@ async fn test_entry_point_vector() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "mint",
         vec![],
@@ -942,7 +942,7 @@ async fn test_entry_point_vector() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "mint_child",
         vec![],
@@ -966,7 +966,7 @@ async fn test_entry_point_vector() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "child_access",
         vec![],
@@ -1003,7 +1003,7 @@ async fn test_entry_point_vector_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "mint_another",
         vec![],
@@ -1023,7 +1023,7 @@ async fn test_entry_point_vector_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "obj_vec_destroy",
         vec![],
@@ -1044,7 +1044,7 @@ async fn test_entry_point_vector_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "mint_another",
         vec![],
@@ -1063,7 +1063,7 @@ async fn test_entry_point_vector_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "mint",
         vec![],
@@ -1083,7 +1083,7 @@ async fn test_entry_point_vector_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "two_obj_vec_destroy",
         vec![],
@@ -1104,7 +1104,7 @@ async fn test_entry_point_vector_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "mint_shared",
         vec![],
@@ -1125,7 +1125,7 @@ async fn test_entry_point_vector_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "obj_vec_destroy",
         vec![],
@@ -1147,7 +1147,7 @@ async fn test_entry_point_vector_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "mint",
         vec![],
@@ -1168,7 +1168,7 @@ async fn test_entry_point_vector_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "same_objects",
         vec![],
@@ -1193,7 +1193,7 @@ async fn test_entry_point_vector_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "mint",
         vec![],
@@ -1214,7 +1214,7 @@ async fn test_entry_point_vector_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "same_objects_ref",
         vec![],
@@ -1259,7 +1259,7 @@ async fn test_entry_point_vector_any() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "mint_any",
         vec![any_type_tag.clone()],
@@ -1279,7 +1279,7 @@ async fn test_entry_point_vector_any() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "obj_vec_destroy_any",
         vec![any_type_tag.clone()],
@@ -1300,7 +1300,7 @@ async fn test_entry_point_vector_any() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "mint_any",
         vec![any_type_tag.clone()],
@@ -1319,7 +1319,7 @@ async fn test_entry_point_vector_any() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "mint_child_any",
         vec![any_type_tag.clone()],
@@ -1343,7 +1343,7 @@ async fn test_entry_point_vector_any() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "child_access_any",
         vec![any_type_tag],
@@ -1383,7 +1383,7 @@ async fn test_entry_point_vector_any_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "mint_another_any",
         vec![any_type_tag.clone()],
@@ -1403,7 +1403,7 @@ async fn test_entry_point_vector_any_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "obj_vec_destroy_any",
         vec![any_type_tag.clone()],
@@ -1424,7 +1424,7 @@ async fn test_entry_point_vector_any_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "mint_another_any",
         vec![any_type_tag.clone()],
@@ -1443,7 +1443,7 @@ async fn test_entry_point_vector_any_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "mint_any",
         vec![any_type_tag.clone()],
@@ -1463,7 +1463,7 @@ async fn test_entry_point_vector_any_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "two_obj_vec_destroy_any",
         vec![any_type_tag.clone()],
@@ -1484,7 +1484,7 @@ async fn test_entry_point_vector_any_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "mint_shared_any",
         vec![any_type_tag.clone()],
@@ -1505,7 +1505,7 @@ async fn test_entry_point_vector_any_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "obj_vec_destroy_any",
         vec![any_type_tag.clone()],
@@ -1527,7 +1527,7 @@ async fn test_entry_point_vector_any_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "mint_any",
         vec![any_type_tag.clone()],
@@ -1548,7 +1548,7 @@ async fn test_entry_point_vector_any_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "same_objects_any",
         vec![any_type_tag.clone()],
@@ -1573,7 +1573,7 @@ async fn test_entry_point_vector_any_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "mint_any",
         vec![any_type_tag.clone()],
@@ -1594,7 +1594,7 @@ async fn test_entry_point_vector_any_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_vector",
         "same_objects_ref_any",
         vec![any_type_tag.clone()],
@@ -1646,7 +1646,7 @@ async fn test_entry_point_string() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_string",
         "ascii_arg",
         vec![],
@@ -1677,7 +1677,7 @@ async fn test_entry_point_string() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_string",
         "utf8_arg",
         vec![],
@@ -1735,7 +1735,7 @@ async fn test_entry_point_string_vec() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_string",
         "utf8_vec_arg",
         vec![],
@@ -1786,7 +1786,7 @@ async fn test_entry_point_string_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_string",
         "ascii_arg",
         vec![],
@@ -1819,7 +1819,7 @@ async fn test_entry_point_string_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_string",
         "utf8_arg",
         vec![],
@@ -1878,7 +1878,7 @@ async fn test_entry_point_string_vec_error() {
         &gas,
         &sender,
         &sender_key,
-        &package,
+        &package.0,
         "entry_point_string",
         "utf8_vec_arg",
         vec![],
@@ -1896,7 +1896,7 @@ async fn test_entry_point_string_vec_error() {
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
 async fn test_object_no_id_error() {
-    let mut build_config = BuildConfig::default();
+    let mut build_config = BuildConfig::new_for_testing();
     build_config.config.test_mode = true;
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     // in this package object struct (NotObject) is defined incorrectly and publishing should
@@ -1919,7 +1919,7 @@ pub async fn build_and_try_publish_test_package(
     gas_budget: u64,
     with_unpublished_deps: bool,
 ) -> (Transaction, SignedTransactionEffects) {
-    let build_config = BuildConfig::default();
+    let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/");
     path.push(test_dir);
@@ -1942,11 +1942,12 @@ pub async fn build_and_try_publish_test_package(
         transaction.clone().into_inner(),
         send_and_confirm_transaction(authority, transaction)
             .await
-            .unwrap(),
+            .unwrap()
+            .1,
     )
 }
 
-async fn build_and_publish_test_package(
+pub async fn build_and_publish_test_package(
     authority: &AuthorityState,
     sender: &SuiAddress,
     sender_key: &AccountKeyPair,
@@ -1973,13 +1974,24 @@ async fn build_and_publish_test_package(
     effects.created[0].0
 }
 
-async fn check_latest_object_ref(authority: &AuthorityState, object_ref: &ObjectRef) {
+async fn check_latest_object_ref(
+    authority: &AuthorityState,
+    object_ref: &ObjectRef,
+    expect_not_found: bool,
+) {
     let response = authority
         .handle_object_info_request(ObjectInfoRequest {
             object_id: object_ref.0,
-            request_kind: ObjectInfoRequestKind::LatestObjectInfo(None),
+            object_format_options: None,
+            request_kind: ObjectInfoRequestKind::LatestObjectInfo,
         })
-        .await
-        .unwrap();
-    assert_eq!(&response.requested_object_reference.unwrap(), object_ref,);
+        .await;
+    if expect_not_found {
+        assert!(matches!(response, Err(SuiError::ObjectNotFound { .. })));
+    } else {
+        assert_eq!(
+            &response.unwrap().object.compute_object_reference(),
+            object_ref
+        );
+    }
 }

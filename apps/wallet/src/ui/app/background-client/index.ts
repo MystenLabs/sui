@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer, publicKeyFromSerialized } from '@mysten/sui.js';
+import { type SerializedSignature, toB64 } from '@mysten/sui.js';
 import { lastValueFrom, map, take } from 'rxjs';
 
 import { growthbook } from '../experimentation/feature-gating';
@@ -10,19 +10,16 @@ import { PortStream } from '_messaging/PortStream';
 import { type BasePayload } from '_payloads';
 import { isLoadedFeaturesPayload } from '_payloads/feature-gating';
 import { isKeyringPayload } from '_payloads/keyring';
+import { isSetNetworkPayload, type SetNetworkPayload } from '_payloads/network';
 import { isPermissionRequests } from '_payloads/permissions';
 import { isUpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
 import { isGetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
 import { setKeyringStatus } from '_redux/slices/account';
-import { setActiveOrigin } from '_redux/slices/app';
+import { setActiveOrigin, changeActiveNetwork } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 
-import type {
-    SignaturePubkeyPair,
-    SuiAddress,
-    SuiTransactionResponse,
-} from '@mysten/sui.js';
+import type { SuiAddress, SuiTransactionResponse } from '@mysten/sui.js';
 import type { Message } from '_messages';
 import type { KeyringPayload } from '_payloads/keyring';
 import type {
@@ -32,6 +29,7 @@ import type {
 import type { DisconnectApp } from '_payloads/permissions/DisconnectApp';
 import type { GetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
 import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
+import type { NetworkEnvType } from '_src/background/NetworkEnv';
 import type { AppDispatch } from '_store';
 
 /**
@@ -59,6 +57,7 @@ export class BackgroundClient {
             this.sendGetTransactionRequests(),
             this.getWalletStatus(),
             this.loadFeatures(),
+            this.getNetwork(),
         ]).then(() => undefined);
     }
 
@@ -143,7 +142,7 @@ export class BackgroundClient {
                 createMessage<KeyringPayload<'unlock'>>({
                     type: 'keyring',
                     method: 'unlock',
-                    args: { password: password },
+                    args: { password },
                     return: undefined,
                 })
             ).pipe(take(1))
@@ -210,14 +209,14 @@ export class BackgroundClient {
 
     public async signData(
         address: SuiAddress,
-        data: Base64DataBuffer
-    ): Promise<SignaturePubkeyPair> {
+        data: Uint8Array
+    ): Promise<SerializedSignature> {
         return await lastValueFrom(
             this.sendMessage(
                 createMessage<KeyringPayload<'signData'>>({
                     type: 'keyring',
                     method: 'signData',
-                    args: { data: data.toString(), address },
+                    args: { data: toB64(data), address },
                 })
             ).pipe(
                 take(1),
@@ -226,22 +225,47 @@ export class BackgroundClient {
                         isKeyringPayload(payload, 'signData') &&
                         payload.return
                     ) {
-                        const { signatureScheme, signature, pubKey } =
-                            payload.return;
-                        return {
-                            signatureScheme,
-                            signature: new Base64DataBuffer(signature),
-                            pubKey: publicKeyFromSerialized(
-                                signatureScheme,
-                                pubKey
-                            ),
-                        };
+                        return payload.return;
                     }
                     throw new Error(
                         'Error unknown response for signData message'
                     );
                 })
             )
+        );
+    }
+
+    public async setActiveNetworkEnv(network: NetworkEnvType) {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<SetNetworkPayload>({
+                    type: 'set-network',
+                    network,
+                })
+            ).pipe(take(1))
+        );
+    }
+
+    public async selectAccount(address: SuiAddress) {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'switchAccount'>>({
+                    type: 'keyring',
+                    method: 'switchAccount',
+                    args: { address },
+                })
+            ).pipe(take(1))
+        );
+    }
+
+    public async deriveNextAccount() {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'deriveNextAccount'>>({
+                    type: 'keyring',
+                    method: 'deriveNextAccount',
+                })
+            ).pipe(take(1))
         );
     }
 
@@ -283,6 +307,16 @@ export class BackgroundClient {
         );
     }
 
+    private async getNetwork() {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<BasePayload>({
+                    type: 'get-network',
+                })
+            ).pipe(take(1))
+        );
+    }
+
     private handleIncomingMessage(msg: Message) {
         if (!this._initialized || !this._dispatch) {
             throw new Error(
@@ -307,6 +341,10 @@ export class BackgroundClient {
             action = setKeyringStatus(payload.return);
         } else if (isLoadedFeaturesPayload(payload)) {
             growthbook.setFeatures(payload.features);
+        } else if (isSetNetworkPayload(payload)) {
+            action = changeActiveNetwork({
+                network: payload.network,
+            });
         }
         if (action) {
             this._dispatch(action);

@@ -59,7 +59,7 @@ export class JsonRpcClient {
     const client = new RpcClient(
       async (
         request: any,
-        callback: (arg0: Error | null, arg1?: string | undefined) => void
+        callback: (arg0: Error | null, arg1?: string | undefined) => void,
       ) => {
         const options = {
           method: 'POST',
@@ -67,8 +67,10 @@ export class JsonRpcClient {
           headers: Object.assign(
             {
               'Content-Type': 'application/json',
+              // 'Client-Type': 'ts-sdk',
+              // 'Client-Api-Version': version,
             },
-            httpHeaders || {}
+            httpHeaders || {},
           ),
         };
 
@@ -78,13 +80,18 @@ export class JsonRpcClient {
           if (res.ok) {
             callback(null, result);
           } else {
-            callback(new Error(`${res.status} ${res.statusText}: ${result}`));
+            const isHtml = res.headers.get('content-type') === 'text/html';
+            callback(
+              new Error(
+                `${res.status} ${res.statusText}${isHtml ? '' : `: ${result}`}`,
+              ),
+            );
           }
         } catch (err) {
           if (err instanceof Error) callback(err);
         }
       },
-      {}
+      {},
     );
 
     return client;
@@ -94,7 +101,7 @@ export class JsonRpcClient {
     method: string,
     args: Array<any>,
     struct: Struct<T>,
-    skipDataValidation: boolean = false
+    skipDataValidation: boolean = false,
   ): Promise<T> {
     const response = await this.request(method, args);
     if (is(response, ErrorResponse)) {
@@ -133,49 +140,49 @@ export class JsonRpcClient {
   async batchRequestWithType<T>(
     requests: RpcParams[],
     struct: Struct<T>,
-    skipDataValidation: boolean = false
+    skipDataValidation: boolean = false,
   ): Promise<T[]> {
     const responses = await this.batchRequest(requests);
     // TODO: supports other error modes such as throw or return
     const validResponses = responses.filter(
       (response: any) =>
         is(response, ValidResponse) &&
-        (skipDataValidation || is(response.result, struct))
+        (skipDataValidation || is(response.result, struct)),
     );
 
     if (responses.length > validResponses.length) {
       console.warn(
         `Batch request contains invalid responses. ${
           responses.length - validResponses.length
-        } of the ${responses.length} requests has invalid schema.`
+        } of the ${responses.length} requests has invalid schema.`,
       );
       const exampleTypeMismatch = responses.find(
-        (r: any) => !is(r.result, struct)
+        (r: any) => !is(r.result, struct),
       );
       const exampleInvalidResponseIndex = responses.findIndex(
-        (r: any) => !is(r, ValidResponse)
+        (r: any) => !is(r, ValidResponse),
       );
       if (exampleTypeMismatch) {
         console.warn(
           TYPE_MISMATCH_ERROR +
             `One example mismatch is: ${JSON.stringify(
-              exampleTypeMismatch.result
-            )}`
+              exampleTypeMismatch.result,
+            )}`,
         );
       }
       if (exampleInvalidResponseIndex !== -1) {
         console.warn(
           `The request ${JSON.stringify(
-            requests[exampleInvalidResponseIndex]
+            requests[exampleInvalidResponseIndex],
           )} within a batch request returns an invalid response ${JSON.stringify(
-            responses[exampleInvalidResponseIndex]
-          )}`
+            responses[exampleInvalidResponseIndex],
+          )}`,
         );
       }
     }
 
     return validResponses.map(
-      (response: Infer<typeof ValidResponse>) => response.result
+      (response: Infer<typeof ValidResponse>) => response.result,
     );
   }
 

@@ -245,12 +245,11 @@ pub async fn do_cert_with_shared_objects(
     send_consensus(authority, cert).await;
     authority
         .database
-        .notify_read_effects(vec![*cert.digest()])
+        .notify_read_executed_effects(vec![*cert.digest()])
         .await
         .unwrap()
         .pop()
         .unwrap()
-        .into_message()
 }
 
 async fn execute_shared_on_first_three_authorities(
@@ -296,7 +295,7 @@ async fn test_transaction_manager() {
         .collect_vec();
     let all_gas_objects = gas_objects.clone().into_iter().flatten().collect_vec();
 
-    let (aggregator, authorities, _genesis, framework_obj_ref) =
+    let (aggregator, authorities, _genesis, package) =
         init_local_authorities(4, all_gas_objects.clone()).await;
     let authority_clients: Vec<_> = authorities
         .iter()
@@ -311,7 +310,7 @@ async fn test_transaction_manager() {
     // Initialize an object owned by 1st account.
     let (addr1, key1): &(_, AccountKeyPair) = &accounts[0];
     let gas_ref = get_latest_ref(authority_clients[0], gas_objects[0][0].id()).await;
-    let tx1 = create_object_move_transaction(*addr1, key1, *addr1, 100, framework_obj_ref, gas_ref);
+    let tx1 = create_object_move_transaction(*addr1, key1, *addr1, 100, package, gas_ref);
     let (cert, effects1) =
         execute_owned_on_first_three_authorities(&authority_clients, &aggregator.committee, &tx1)
             .await;
@@ -320,7 +319,7 @@ async fn test_transaction_manager() {
 
     // Initialize a shared counter, re-using gas_ref_0 so it has to execute after tx1.
     let gas_ref = get_latest_ref(authority_clients[0], gas_objects[0][0].id()).await;
-    let tx2 = make_counter_create_transaction(gas_ref, framework_obj_ref, *addr1, key1);
+    let tx2 = make_counter_create_transaction(gas_ref, package, *addr1, key1, None);
     let (cert, effects2) =
         execute_owned_on_first_three_authorities(&authority_clients, &aggregator.committee, &tx2)
             .await;
@@ -357,7 +356,7 @@ async fn test_transaction_manager() {
             source_key,
             *dest_addr,
             owned_object_ref,
-            framework_obj_ref,
+            package,
             gas_ref,
         );
         let (cert, effects) = execute_owned_on_first_three_authorities(
@@ -376,11 +375,12 @@ async fn test_transaction_manager() {
         .await;
         let shared_tx = make_counter_increment_transaction(
             gas_ref,
-            framework_obj_ref,
+            package,
             shared_counter_ref.0,
             shared_counter_initial_version,
             *source_addr,
             source_key,
+            None,
         );
         let (cert, effects) = execute_shared_on_first_three_authorities(
             &authority_clients,
@@ -425,7 +425,7 @@ async fn test_transaction_manager() {
         .collect();
     authorities[3]
         .database
-        .notify_read_effects(digests)
+        .notify_read_executed_effects(digests)
         .await
         .unwrap();
 }
@@ -454,7 +454,7 @@ async fn test_per_object_overload() {
         .into_iter()
         .map(|_| Object::with_owner_for_testing(addr))
         .collect_vec();
-    let (aggregator, authorities, _genesis, framework_obj_ref) =
+    let (aggregator, authorities, _genesis, package) =
         init_local_authorities(4, gas_objects.clone()).await;
     let authority_clients: Vec<_> = authorities
         .iter()
@@ -463,8 +463,7 @@ async fn test_per_object_overload() {
 
     // Create a shared counter.
     let gas_ref = get_latest_ref(authority_clients[0], gas_objects[0].id()).await;
-    let create_counter_txn =
-        make_counter_create_transaction(gas_ref, framework_obj_ref, addr, &key);
+    let create_counter_txn = make_counter_create_transaction(gas_ref, package, addr, &key, None);
     let create_counter_cert = try_sign_on_first_three_authorities(
         &authority_clients,
         &aggregator.committee,
@@ -478,7 +477,7 @@ async fn test_per_object_overload() {
     for authority in authorities.iter().take(3) {
         authority
             .database
-            .notify_read_effects(vec![*create_counter_cert.digest()])
+            .notify_read_executed_effects(vec![*create_counter_cert.digest()])
             .await
             .unwrap()
             .pop()
@@ -493,7 +492,7 @@ async fn test_per_object_overload() {
     send_consensus(&authorities[3], &create_counter_cert).await;
     let create_counter_effects = authorities[3]
         .database
-        .notify_read_effects(vec![*create_counter_cert.digest()])
+        .notify_read_executed_effects(vec![*create_counter_cert.digest()])
         .await
         .unwrap()
         .pop()
@@ -520,11 +519,12 @@ async fn test_per_object_overload() {
         let gas_ref = get_latest_ref(authority_clients[0], gas_object.id()).await;
         let shared_txn = make_counter_increment_transaction(
             gas_ref,
-            framework_obj_ref,
+            package,
             shared_counter_ref.0,
             shared_counter_initial_version,
             addr,
             &key,
+            None,
         );
         let shared_cert = try_sign_on_first_three_authorities(
             &authority_clients,
@@ -545,11 +545,12 @@ async fn test_per_object_overload() {
     let gas_ref = get_latest_ref(authority_clients[0], gas_objects[num_txns].id()).await;
     let shared_txn = make_counter_increment_transaction(
         gas_ref,
-        framework_obj_ref,
+        package,
         shared_counter_ref.0,
         shared_counter_initial_version,
         addr,
         &key,
+        None,
     );
     let sign_result = authority_clients[3]
         .handle_transaction(shared_txn.clone())

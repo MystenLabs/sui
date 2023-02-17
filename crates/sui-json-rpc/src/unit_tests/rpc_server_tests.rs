@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::api::CoinReadApiClient;
 use crate::api::GovernanceReadApiClient;
-use crate::api::{RpcFullNodeReadApiClient, TransactionExecutionApiClient};
+use crate::api::{RpcFullNodeReadApiClient, ThresholdBlsApiClient, TransactionExecutionApiClient};
 use crate::api::{RpcReadApiClient, RpcTransactionBuilderClient};
 use std::path::Path;
 
@@ -14,7 +14,8 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::SuiObjectInfo;
 use sui_json_rpc_types::{
     Balance, CoinPage, GetObjectDataResponse, SuiCoinMetadata, SuiEvent,
-    SuiExecuteTransactionResponse, SuiExecutionStatus, SuiTransactionResponse, TransactionBytes,
+    SuiExecuteTransactionResponse, SuiExecutionStatus, SuiTBlsSignObjectCommitmentType,
+    SuiTransactionResponse, TransactionBytes,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::balance::Supply;
@@ -80,11 +81,162 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
+    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
     assert_eq!(
         dryrun_response.transaction_digest,
         effects.effects.transaction_digest
     );
+    Ok(())
+}
+
+#[sim_test]
+async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+    let http_client = cluster.rpc_client();
+
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+
+    let address = cluster.accounts.first().unwrap();
+    let objects = http_client.get_objects_owned_by_address(*address).await?;
+    let gas = objects.first().unwrap();
+
+    ////////////////////////////////////////////////////////////////////////
+    // Trying to get a tBLS signature for a type that is not Randomness should fail.
+
+    let tx_response = http_client
+        .tbls_sign_randomness_object(
+            gas.object_id,
+            SuiTBlsSignObjectCommitmentType::ConsensusCommitted,
+        )
+        .await;
+    assert!(tx_response.is_err());
+
+    ////////////////////////////////////////////////////////////////////////
+    // Publish the basic randomness example
+
+    let compiled_modules = BuildConfig::new_for_testing()
+        .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?
+        .get_package_base64(false);
+    let transaction_bytes: TransactionBytes = http_client
+        .publish(*address, compiled_modules, Some(gas.object_id), 10000)
+        .await?;
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+
+    let tx_response = http_client
+        .execute_transaction(
+            tx_bytes,
+            signature_bytes,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
+    assert_eq!(SuiExecutionStatus::Success, effects.effects.status);
+
+    let package_id = effects
+        .effects
+        .events
+        .iter()
+        .find_map(|e| {
+            if let SuiEvent::Publish { package_id, .. } = e {
+                Some(package_id)
+            } else {
+                None
+            }
+        })
+        .unwrap();
+
+    ////////////////////////////////////////////////////////////////////////
+    // Call create_owned_randomness
+
+    let transaction_bytes: TransactionBytes = http_client
+        .move_call(
+            *address,
+            *package_id,
+            "randomness_basics".to_string(),
+            "create_owned_randomness".to_string(),
+            vec![],
+            vec![],
+            Some(gas.object_id),
+            10_000,
+            None,
+        )
+        .await?;
+    let tx = transaction_bytes.to_data()?;
+    let tx = to_sender_signed_transaction(tx, keystore.get_key(address)?);
+    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+
+    let tx_response = http_client
+        .execute_transaction(
+            tx_bytes,
+            signature_bytes,
+            ExecuteTransactionRequestType::WaitForEffectsCert,
+        )
+        .await?;
+
+    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
+    assert_eq!(SuiExecutionStatus::Success, effects.effects.status);
+
+    let randomness_object_id = effects
+        .effects
+        .events
+        .iter()
+        .find_map(|e| {
+            if let SuiEvent::NewObject { object_id, .. } = e {
+                Some(*object_id)
+            } else {
+                None
+            }
+        })
+        .unwrap();
+
+    ////////////////////////////////////////////////////////////////////////
+    // Get the tBLS signature from the JSON-RPC.
+
+    let tx_response = http_client
+        .tbls_sign_randomness_object(
+            randomness_object_id,
+            SuiTBlsSignObjectCommitmentType::ConsensusCommitted,
+        )
+        .await?;
+
+    let sig = tx_response.signature.0;
+
+    ////////////////////////////////////////////////////////////////////////
+    // Call set_randomness
+
+    let transaction_bytes = http_client
+        .move_call(
+            *address,
+            *package_id,
+            "randomness_basics".to_string(),
+            "set_randomness".to_string(),
+            vec![],
+            vec![
+                SuiJsonValue::from_object_id(randomness_object_id),
+                SuiJsonValue::from_bcs_bytes(&sig).unwrap(),
+            ],
+            Some(gas.object_id),
+            10_000,
+            None,
+        )
+        .await?;
+    let tx = transaction_bytes.to_data()?;
+    let tx = to_sender_signed_transaction(tx, keystore.get_key(address)?);
+    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+
+    let tx_response = http_client
+        .execute_transaction(
+            tx_bytes,
+            signature_bytes,
+            ExecuteTransactionRequestType::WaitForEffectsCert,
+        )
+        .await?;
+    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
+    assert_eq!(SuiExecutionStatus::Success, effects.effects.status);
+
     Ok(())
 }
 
@@ -97,7 +249,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let objects = http_client.get_objects_owned_by_address(*address).await?;
     let gas = objects.first().unwrap();
 
-    let compiled_modules = BuildConfig::default()
+    let compiled_modules = BuildConfig::new_for_testing()
         .build(Path::new("../../sui_programmability/examples/fungible_tokens").to_path_buf())?
         .get_package_base64(/* with_unpublished_deps */ false);
 
@@ -117,7 +269,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
-    matches!(tx_response, SuiExecuteTransactionResponse::EffectsCert {effects, ..} if effects.effects.created.len() == 6);
+    matches!(tx_response, SuiExecuteTransactionResponse {effects, ..} if effects.effects.created.len() == 6);
     Ok(())
 }
 
@@ -168,7 +320,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
-    matches!(tx_response, SuiExecuteTransactionResponse::EffectsCert {effects, ..} if effects.effects.created.len() == 1);
+    matches!(tx_response, SuiExecuteTransactionResponse {effects, ..} if effects.effects.created.len() == 1);
     Ok(())
 }
 
@@ -276,7 +428,7 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
+    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
 
     let package_id = effects
         .effects
@@ -314,7 +466,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let gas = objects.first().unwrap();
 
     // Publish test coin package
-    let compiled_modules = BuildConfig::default()
+    let compiled_modules = BuildConfig::new_for_testing()
         .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?
         .get_package_base64(/* with_unpublished_deps */ false);
 
@@ -335,7 +487,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
+    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
 
     let package_id = effects
         .effects
@@ -413,7 +565,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
+    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
 
     assert_eq!(SuiExecutionStatus::Success, effects.effects.status);
 
@@ -467,7 +619,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     for tx_digest in tx {
         let response: SuiTransactionResponse = http_client.get_transaction(tx_digest).await?;
         assert!(tx_responses.iter().any(
-            |resp| matches!(resp, SuiExecuteTransactionResponse::EffectsCert {effects, ..} if effects.effects.transaction_digest == response.effects.transaction_digest)
+            |resp| matches!(resp, SuiExecuteTransactionResponse {effects, ..} if effects.effects.transaction_digest == response.effects.transaction_digest)
         ))
     }
 
@@ -704,8 +856,8 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         )
         .await
         .unwrap();
-    // 17 events created by this test + 33 Genesis event
-    assert_eq!(50, page2.data.len());
+    // 17 events created by this test + 34 Genesis event
+    assert_eq!(51, page2.data.len());
     assert_eq!(None, page2.next_cursor);
 
     // test get sender events

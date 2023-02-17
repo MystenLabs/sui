@@ -24,6 +24,7 @@ use rand::SeedableRng;
 use sui_config::genesis::GenesisChainParameters;
 use sui_config::ValidatorInfo;
 use sui_config::{genesis::Builder, genesis_config::GenesisConfig};
+use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
@@ -82,11 +83,15 @@ fn populated_genesis_snapshot_matches() {
     let genesis = Builder::new()
         .add_objects(objects)
         .add_validator(validator, pop)
-        .with_parameters(GenesisChainParameters { timestamp_ms: 10 })
+        .with_parameters(GenesisChainParameters {
+            timestamp_ms: 10,
+            protocol_version: ProtocolVersion::MAX,
+        })
         .add_validator_signature(&key)
         .build();
     assert_yaml_snapshot!(genesis.validator_set());
     assert_yaml_snapshot!(genesis.sui_system_object());
+    assert_yaml_snapshot!(genesis.clock());
     // Serialized `genesis` is not static and cannot be snapshot tested.
 }
 

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::test_utils::make_transfer_sui_transaction;
-use bcs::to_bytes;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use multiaddr::Multiaddr;
 use std::collections::BTreeMap;
@@ -10,17 +9,15 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use sui_framework_build::compiled_package::BuildConfig;
-use sui_types::crypto::AuthoritySignature;
 use sui_types::crypto::{
     get_authority_key_pair, get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
 };
+use sui_types::crypto::{AuthoritySignature, Signer};
 use sui_types::crypto::{KeypairTraits, Signature};
-use test_utils::sui_system_state::{test_sui_system_state, test_validator};
 
 use sui_macros::sim_test;
 use sui_types::messages::*;
-use sui_types::object::{MoveObject, Object, Owner, GAS_VALUE_FOR_TESTING};
-use test_utils::messages::make_random_certified_transaction;
+use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
 
 use super::*;
 use crate::authority_client::AuthorityAPI;
@@ -50,7 +47,7 @@ pub fn get_local_client(
 
 pub fn transfer_coin_transaction(
     src: SuiAddress,
-    secret: &dyn signature::Signer<Signature>,
+    secret: &dyn Signer<Signature>,
     dest: SuiAddress,
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
@@ -69,10 +66,10 @@ pub fn transfer_coin_transaction(
 
 pub fn transfer_object_move_transaction(
     src: SuiAddress,
-    secret: &dyn signature::Signer<Signature>,
+    secret: &dyn Signer<Signature>,
     dest: SuiAddress,
     object_ref: ObjectRef,
-    framework_obj_ref: ObjectRef,
+    framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
 ) -> VerifiedTransaction {
     let args = vec![
@@ -83,7 +80,7 @@ pub fn transfer_object_move_transaction(
     to_sender_signed_transaction(
         TransactionData::new_move_call_with_dummy_gas_price(
             src,
-            framework_obj_ref,
+            framework_obj_id,
             ident_str!("object_basics").to_owned(),
             ident_str!("transfer").to_owned(),
             Vec::new(),
@@ -97,10 +94,10 @@ pub fn transfer_object_move_transaction(
 
 pub fn create_object_move_transaction(
     src: SuiAddress,
-    secret: &dyn signature::Signer<Signature>,
+    secret: &dyn Signer<Signature>,
     dest: SuiAddress,
     value: u64,
-    framework_obj_ref: ObjectRef,
+    package_id: ObjectID,
     gas_object_ref: ObjectRef,
 ) -> VerifiedTransaction {
     // When creating an object_basics object, we provide the value (u64) and address which will own the object
@@ -112,7 +109,7 @@ pub fn create_object_move_transaction(
     to_sender_signed_transaction(
         TransactionData::new_move_call_with_dummy_gas_price(
             src,
-            framework_obj_ref,
+            package_id,
             ident_str!("object_basics").to_owned(),
             ident_str!("create").to_owned(),
             Vec::new(),
@@ -126,15 +123,15 @@ pub fn create_object_move_transaction(
 
 pub fn delete_object_move_transaction(
     src: SuiAddress,
-    secret: &dyn signature::Signer<Signature>,
+    secret: &dyn Signer<Signature>,
     object_ref: ObjectRef,
-    framework_obj_ref: ObjectRef,
+    framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
 ) -> VerifiedTransaction {
     to_sender_signed_transaction(
         TransactionData::new_move_call_with_dummy_gas_price(
             src,
-            framework_obj_ref,
+            framework_obj_id,
             ident_str!("object_basics").to_owned(),
             ident_str!("delete").to_owned(),
             Vec::new(),
@@ -148,10 +145,10 @@ pub fn delete_object_move_transaction(
 
 pub fn set_object_move_transaction(
     src: SuiAddress,
-    secret: &dyn signature::Signer<Signature>,
+    secret: &dyn Signer<Signature>,
     object_ref: ObjectRef,
     value: u64,
-    framework_obj_ref: ObjectRef,
+    framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
 ) -> VerifiedTransaction {
     let args = vec![
@@ -162,7 +159,7 @@ pub fn set_object_move_transaction(
     to_sender_signed_transaction(
         TransactionData::new_move_call_with_dummy_gas_price(
             src,
-            framework_obj_ref,
+            framework_obj_id,
             ident_str!("object_basics").to_owned(),
             ident_str!("set_value").to_owned(),
             Vec::new(),
@@ -193,27 +190,33 @@ where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
     let mut votes = vec![];
-    let mut transaction: Option<VerifiedSignedTransaction> = None;
+    let mut tx_data: Option<SenderSignedData> = None;
     for authority in authorities {
-        if let Ok(VerifiedTransactionInfoResponse {
-            signed_transaction: Some(signed),
-            ..
-        }) = authority
-            .handle_transaction_info_request(TransactionInfoRequest::from(*transaction_digest))
-            .await
-        {
-            votes.push(signed.auth_sig().clone());
-            if let Some(inner_transaction) = transaction {
-                assert!(
-                    inner_transaction.data().intent_message.value
-                        == signed.data().intent_message.value
-                );
+        let response = authority
+            .handle_transaction_info_request(TransactionInfoRequest {
+                transaction_digest: *transaction_digest,
+            })
+            .await;
+        match response {
+            Ok(VerifiedTransactionInfoResponse::Signed(signed)) => {
+                let (data, sig) = signed.into_inner().into_data_and_sig();
+                votes.push(sig);
+                if let Some(inner_transaction) = tx_data {
+                    assert_eq!(
+                        inner_transaction.intent_message.value,
+                        data.intent_message.value
+                    );
+                }
+                tx_data = Some(data);
             }
-            transaction = Some(signed);
+            Ok(VerifiedTransactionInfoResponse::ExecutedWithCert(cert, _)) => {
+                return cert.into_inner();
+            }
+            _ => {}
         }
     }
 
-    CertifiedTransaction::new(transaction.unwrap().into_message(), votes, committee).unwrap()
+    CertifiedTransaction::new(tx_data.unwrap(), votes, committee).unwrap()
 }
 
 pub async fn do_cert<A>(
@@ -245,17 +248,13 @@ pub async fn get_latest_ref<A>(authority: &SafeClient<A>, object_id: ObjectID) -
 where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
-    if let Ok(ObjectInfoResponse {
-        requested_object_reference: Some(object_ref),
-        ..
-    }) = authority
-        .handle_object_info_request(
-            ObjectInfoRequest::latest_object_info_request(object_id, None),
-            false,
-        )
+    if let Ok(VerifiedObjectInfoResponse { object }) = authority
+        .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
+            object_id, None,
+        ))
         .await
     {
-        return object_ref;
+        return object.compute_object_reference();
     }
     panic!("Object not found!");
 }
@@ -296,7 +295,10 @@ async fn execute_transaction_with_fault_configs(
         get_local_client(&mut authorities, *index).fault_config = *config;
     }
 
-    authorities.process_certificate(cert.into()).await.is_ok()
+    authorities
+        .process_certificate(cert.into_cert_for_testing().into())
+        .await
+        .is_ok()
 }
 
 /// The intent of this is to test whether client side timeouts
@@ -306,7 +308,7 @@ async fn execute_transaction_with_fault_configs(
 /// execution on its side
 #[sim_test(config = "constant_latency_ms(1)")]
 async fn test_quorum_map_and_reduce_timeout() {
-    let build_config = BuildConfig::default();
+    let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
     let modules = sui_framework::build_move_package(&path, build_config)
@@ -321,13 +323,12 @@ async fn test_quorum_map_and_reduce_timeout() {
     let genesis_objects = vec![pkg.clone(), gas_object1.clone()];
     let (mut authorities, _, genesis, _) = init_local_authorities(4, genesis_objects).await;
     let pkg = genesis.object(pkg.id()).unwrap();
-    let pkg_ref = pkg.compute_object_reference();
     let gas_object1 = genesis.object(gas_object1.id()).unwrap();
     let gas_ref_1 = gas_object1.compute_object_reference();
-    let tx = create_object_move_transaction(addr1, &key1, addr1, 100, pkg_ref, gas_ref_1);
+    let tx = create_object_move_transaction(addr1, &key1, addr1, 100, pkg.id(), gas_ref_1);
     let certified_tx = authorities.process_transaction(tx.clone()).await;
     assert!(certified_tx.is_ok());
-    let certificate = certified_tx.unwrap();
+    let certificate = certified_tx.unwrap().into_cert_for_testing();
     // Send request with a very small timeout to trigger timeout error
     authorities.timeouts.pre_quorum_timeout = Duration::from_nanos(0);
     authorities.timeouts.post_quorum_timeout = Duration::from_nanos(0);
@@ -351,7 +352,7 @@ async fn test_quorum_map_and_reduce_timeout() {
         // Server should return a signed effect even though previous calls
         // failed due to timeout
         assert!(resp.is_ok());
-        assert!(resp.unwrap().signed_effects.is_some());
+        assert!(resp.unwrap().is_executed());
     }
 }
 
@@ -359,29 +360,8 @@ async fn test_quorum_map_and_reduce_timeout() {
 async fn test_map_reducer() {
     let (authorities, _, _, _) = init_local_authorities(4, vec![]).await;
 
-    // Test: reducer errors get propagated up
-    let res = authorities
-        .quorum_map_then_reduce_with_timeout(
-            0usize,
-            |_name, _client| Box::pin(async move { Ok(()) }),
-            |_accumulated_state, _authority_name, _authority_weight, _result| {
-                Box::pin(async move {
-                    Err(SuiError::TooManyIncorrectAuthorities {
-                        errors: vec![],
-                        action: "".to_string(),
-                    })
-                })
-            },
-            Duration::from_millis(1000),
-        )
-        .await;
-    assert!(matches!(
-        res,
-        Err(SuiError::TooManyIncorrectAuthorities { .. })
-    ));
-
     // Test: mapper errors do not get propagated up, reducer works
-    let res = authorities
+    let res: Result<(), usize> = authorities
         .quorum_map_then_reduce_with_timeout(
             0usize,
             |_name, _client| {
@@ -400,13 +380,13 @@ async fn test_map_reducer() {
                         Err(SuiError::TooManyIncorrectAuthorities { .. })
                     ));
                     accumulated_state += 1;
-                    Ok(ReduceOutput::Continue(accumulated_state))
+                    ReduceOutput::Continue(accumulated_state)
                 })
             },
             Duration::from_millis(1000),
         )
         .await;
-    assert_eq!(Ok(4), res);
+    assert_eq!(Err(4), res);
 
     // Test: early end
     let res = authorities
@@ -416,10 +396,10 @@ async fn test_map_reducer() {
             |mut accumulated_state, _authority_name, _authority_weight, _result| {
                 Box::pin(async move {
                     if accumulated_state > 2 {
-                        Ok(ReduceOutput::End(accumulated_state))
+                        ReduceOutput::Success(accumulated_state)
                     } else {
                         accumulated_state += 1;
-                        Ok(ReduceOutput::Continue(accumulated_state))
+                        ReduceOutput::Continue(accumulated_state)
                     }
                 })
             },
@@ -429,7 +409,7 @@ async fn test_map_reducer() {
     assert_eq!(Ok(3), res);
 
     // Test: Global timeout works
-    let res = authorities
+    let res: Result<(), _> = authorities
         .quorum_map_then_reduce_with_timeout(
             0usize,
             |_name, _client| {
@@ -440,21 +420,16 @@ async fn test_map_reducer() {
                 })
             },
             |_accumulated_state, _authority_name, _authority_weight, _result| {
-                Box::pin(async move {
-                    Err(SuiError::TooManyIncorrectAuthorities {
-                        errors: vec![],
-                        action: "".to_string(),
-                    })
-                })
+                Box::pin(async move { ReduceOutput::Continue(0) })
             },
             Duration::from_millis(10),
         )
         .await;
-    assert_eq!(Ok(0), res);
+    assert_eq!(Err(0), res);
 
     // Test: Local timeout works
     let bad_auth = *authorities.committee.sample();
-    let res = authorities
+    let res: Result<(), _> = authorities
         .quorum_map_then_reduce_with_timeout(
             HashSet::new(),
             |_name, _client| {
@@ -470,12 +445,12 @@ async fn test_map_reducer() {
                 Box::pin(async move {
                     accumulated_state.insert(authority_name);
                     if accumulated_state.len() <= 3 {
-                        Ok(ReduceOutput::Continue(accumulated_state))
+                        ReduceOutput::Continue(accumulated_state)
                     } else {
-                        Ok(ReduceOutput::ContinueWithTimeout(
+                        ReduceOutput::ContinueWithTimeout(
                             accumulated_state,
                             Duration::from_millis(10),
-                        ))
+                        )
                     }
                 })
             },
@@ -483,8 +458,8 @@ async fn test_map_reducer() {
             Duration::from_millis(10 * 60),
         )
         .await;
-    assert_eq!(res.as_ref().unwrap().len(), 3);
-    assert!(!res.as_ref().unwrap().contains(&bad_auth));
+    assert_eq!(res.as_ref().unwrap_err().len(), 3);
+    assert!(!res.as_ref().unwrap_err().contains(&bad_auth));
 }
 
 #[sim_test]
@@ -572,7 +547,17 @@ async fn test_quorum_once_with_timeout() {
                 Box::pin(async move {
                     // log the start time of the request
                     log.lock().unwrap().push(Instant::now() - start);
-                    client.handle_transaction_info_request(digest.into()).await
+                    let res = client
+                        .handle_transaction_info_request(TransactionInfoRequest {
+                            transaction_digest: digest,
+                        })
+                        .await;
+                    match res {
+                        Ok(_) => Ok(()),
+                        // Treat transaction not found OK just to test timeout functionality.
+                        Err(SuiError::TransactionNotFound { .. }) => Ok(()),
+                        Err(err) => Err(err),
+                    }
                 })
             },
             Duration::from_millis(authority_request_timeout),
@@ -638,7 +623,7 @@ fn get_agg<A>(
     clients: BTreeMap<AuthorityName, A>,
     epoch: EpochId,
 ) -> AuthorityAggregator<A> {
-    let committee = Committee::new(epoch, authorities).unwrap();
+    let committee = Committee::new(epoch, ProtocolVersion::MIN, authorities).unwrap();
     let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
 
     AuthorityAggregator::new_with_timeouts(
@@ -653,293 +638,11 @@ fn get_agg<A>(
     )
 }
 
-#[tokio::test]
-async fn test_get_committee_with_net_addresses() {
-    telemetry_subscribers::init_for_testing();
-    let count = Arc::new(Mutex::new(0));
-    let new_client = |delay: u64| {
-        let delay = Duration::from_millis(delay);
-        let count = count.clone();
-        MockAuthorityApi::new(delay, count)
-    };
-
-    let (val0_pk, val0_addr) = get_authority_pub_key_bytes_and_address();
-    let (val1_pk, val1_addr) = get_authority_pub_key_bytes_and_address();
-    let (val2_pk, val2_addr) = get_authority_pub_key_bytes_and_address();
-    let (val3_pk, val3_addr) = get_authority_pub_key_bytes_and_address();
-
-    let mut clients = BTreeMap::from([
-        (val0_pk, new_client(1000)),
-        (val1_pk, new_client(1000)),
-        (val2_pk, new_client(1000)),
-        (val3_pk, new_client(1000)),
-    ]);
-    let authorities = BTreeMap::from([(val0_pk, 1), (val1_pk, 1), (val2_pk, 1), (val3_pk, 1)]);
-
-    let validators = vec![
-        test_validator(val0_pk, Multiaddr::empty().to_vec(), 1, 0),
-        test_validator(val1_pk, Multiaddr::empty().to_vec(), 1, 0),
-        test_validator(val2_pk, Multiaddr::empty().to_vec(), 1, 0),
-        test_validator(val3_pk, Multiaddr::empty().to_vec(), 1, 0),
-    ];
-    let system_state = test_sui_system_state(1, validators);
-    let good_result = make_response_from_sui_system_state(system_state.clone());
-
-    for client in clients.values_mut() {
-        client.set_handle_object_info_request(good_result.clone());
-    }
-    let clients = clients;
-    let agg = get_agg(authorities.clone(), clients.clone(), 0);
-    let res = agg.get_committee_with_net_addresses(1).await;
-
-    macro_rules! verify_good_result {
-        ($res: expr, $epoch: expr) => {{
-            let res = $res;
-            match res {
-                Ok(info) => {
-                    assert_eq!(info.committee.epoch, $epoch);
-                    assert_eq!(
-                        info.committee
-                            .voting_rights
-                            .into_iter()
-                            .collect::<BTreeMap<_, _>>(),
-                        BTreeMap::from([(val0_pk, 1), (val1_pk, 1), (val2_pk, 1), (val3_pk, 1),]),
-                    );
-                    assert_eq!(
-                        info.net_addresses,
-                        BTreeMap::from([
-                            (val0_pk, val0_addr.clone()),
-                            (val1_pk, val1_addr.clone()),
-                            (val2_pk, val2_addr.clone()),
-                            (val3_pk, val3_addr.clone()),
-                        ])
-                    );
-                }
-                Err(err) => panic!("expect Ok result but got {err}"),
-            };
-        }};
-    }
-
-    macro_rules! verify_bad_result {
-        ($res: expr, $epoch: expr) => {{
-            let res = $res;
-            match res {
-                Ok(info) => panic!(
-                    "expect SuiError::FailedToGetAgreedCommitteeFromMajority but got {:?}",
-                    info
-                ),
-                Err(SuiError::FailedToGetAgreedCommitteeFromMajority { minimal_epoch }) => {
-                    assert_eq!(minimal_epoch, $epoch);
-                }
-                Err(err) => panic!(
-                    "expect SuiError::FailedToGetAgreedCommitteeFromMajority but got {:?}",
-                    err
-                ),
-            };
-        }};
-    }
-    verify_good_result!(res, 1);
-
-    // 1 out of 4 gives bad result, we are good
-    let mut clone_clients = clients.clone();
-    let bad_result: SuiResult<ObjectInfoResponse> = Err(SuiError::GenericAuthorityError {
-        error: "foo".into(),
-    });
-
-    clone_clients
-        .get_mut(&val0_pk)
-        .unwrap()
-        .set_handle_object_info_request(bad_result.clone());
-
-    let agg = get_agg(authorities.clone(), clone_clients.clone(), 0);
-    let res = agg.get_committee_with_net_addresses(1).await;
-
-    verify_good_result!(res, 1);
-
-    // 2 out of 4 give bad result, get error
-    clone_clients
-        .get_mut(&val1_pk)
-        .unwrap()
-        .set_handle_object_info_request(bad_result.clone());
-    let agg = get_agg(authorities.clone(), clone_clients.clone(), 0);
-    let res = agg.get_committee_with_net_addresses(1).await;
-    verify_bad_result!(res, 1);
-
-    // val0 and val1 gives a slightly different system state but
-    // CommitteeWithNetAddresses is the same, we are good.
-    let mut system_state_clone = system_state.clone();
-    // In practice we wouldn't expect validator_stake differs in the same epoch.
-    // Here we update it for simplicity.
-    system_state_clone.validators.validator_stake += 1;
-    let different_result = make_response_from_sui_system_state(system_state_clone);
-
-    let mut clone_clients = clients.clone();
-    clone_clients
-        .get_mut(&val0_pk)
-        .unwrap()
-        .set_handle_object_info_request(different_result.clone());
-    clone_clients
-        .get_mut(&val1_pk)
-        .unwrap()
-        .set_handle_object_info_request(different_result.clone());
-
-    let agg = get_agg(authorities.clone(), clone_clients.clone(), 0);
-    let res = agg.get_committee_with_net_addresses(1).await;
-    verify_good_result!(res, 1);
-
-    // (val0, val1) disagree with (val2, val3) on network address, get error
-    let validators = vec![
-        test_validator(
-            val0_pk,
-            "/ip4/127.0.0.1".parse::<Multiaddr>().unwrap().to_vec(),
-            1,
-            0,
-        ),
-        test_validator(val1_pk, Multiaddr::empty().to_vec(), 1, 0),
-        test_validator(val2_pk, Multiaddr::empty().to_vec(), 1, 0),
-        test_validator(val3_pk, Multiaddr::empty().to_vec(), 1, 0),
-    ];
-    let system_state_with_different_net_addr = test_sui_system_state(1, validators);
-    let different_result =
-        make_response_from_sui_system_state(system_state_with_different_net_addr);
-
-    clone_clients
-        .get_mut(&val0_pk)
-        .unwrap()
-        .set_handle_object_info_request(different_result.clone());
-    clone_clients
-        .get_mut(&val1_pk)
-        .unwrap()
-        .set_handle_object_info_request(different_result.clone());
-
-    let agg = get_agg(authorities.clone(), clone_clients, 0);
-    let res = agg.get_committee_with_net_addresses(1).await;
-    verify_bad_result!(res, 1);
-
-    // val0, val1 and val2 are still in epoch0
-    let mut system_state_clone = system_state.clone();
-    system_state_clone.epoch = 0;
-    let epoch_0_result = make_response_from_sui_system_state(system_state_clone);
-
-    let mut clone_clients = clients.clone();
-    clone_clients
-        .get_mut(&val0_pk)
-        .unwrap()
-        .set_handle_object_info_request(epoch_0_result.clone());
-    clone_clients
-        .get_mut(&val1_pk)
-        .unwrap()
-        .set_handle_object_info_request(epoch_0_result.clone());
-    clone_clients
-        .get_mut(&val2_pk)
-        .unwrap()
-        .set_handle_object_info_request(epoch_0_result.clone());
-    let agg = get_agg(authorities.clone(), clone_clients, 0);
-    let res = agg.get_committee_with_net_addresses(1).await;
-    // Get error when asking with minimal epoch = 1
-    verify_bad_result!(res, 1);
-    // Get good results when asking with minimal epoch = 0
-    let res = agg.get_committee_with_net_addresses(0).await;
-    verify_good_result!(res, 0);
-}
-
-#[tokio::test]
-async fn test_get_committee_info() {
-    telemetry_subscribers::init_for_testing();
-
-    let count = Arc::new(Mutex::new(0));
-    // 4 out of 4 give good result
-    let (authorities, authorities_vec, mut clients) = get_authorities(count.clone(), 4);
-    let good_result = Ok(CommitteeInfoResponse {
-        epoch: 0,
-        committee_info: Some(authorities_vec.clone()),
-    });
-    for client in clients.values_mut() {
-        client.set_handle_committee_info_request_result(good_result.clone());
-    }
-    let clients = clients;
-    let clone_clients = clients.clone();
-    let agg = get_agg(authorities.clone(), clone_clients, 0);
-    let res = agg.get_committee_info(Some(0)).await;
-    match res {
-        Ok(info) => {
-            assert_eq!(info.epoch, 0);
-            assert_eq!(info.committee_info, authorities_vec);
-        }
-        Err(err) => panic!("expect Ok result but got {err}"),
-    };
-
-    // 1 out 4 gives error
-    let mut clone_clients = clients.clone();
-    let bad_result = Err(SuiError::GenericAuthorityError {
-        error: "foo".into(),
-    });
-
-    clone_clients
-        .values_mut()
-        .next()
-        .unwrap()
-        .set_handle_committee_info_request_result(bad_result.clone());
-    let agg = get_agg(authorities.clone(), clone_clients, 0);
-    let res = agg.get_committee_info(Some(0)).await;
-    match res {
-        Ok(info) => {
-            assert_eq!(info.epoch, 0);
-            assert_eq!(info.committee_info, authorities_vec);
-        }
-        Err(_) => panic!("expect Ok result!"),
-    };
-
-    // 2 out 4 gives error
-    let mut clone_clients = clients.clone();
-    let mut i = 0;
-    for client in clone_clients.values_mut() {
-        client.set_handle_committee_info_request_result(bad_result.clone());
-        i += 1;
-        if i >= 2 {
-            break;
-        }
-    }
-    let agg = get_agg(authorities.clone(), clone_clients, 0);
-    let res = agg.get_committee_info(Some(0)).await;
-    match res {
-        Err(SuiError::TooManyIncorrectAuthorities { .. }) => (),
-        other => panic!(
-            "expect to get SuiError::TooManyIncorrectAuthorities but got {:?}",
-            other
-        ),
-    };
-
-    // 2 out 4 gives empty committee info
-    let mut clone_clients = clients.clone();
-    let empty_result = Ok(CommitteeInfoResponse {
-        epoch: 0,
-        committee_info: None,
-    });
-    let mut i = 0;
-    for client in clone_clients.values_mut() {
-        client.set_handle_committee_info_request_result(empty_result.clone());
-        i += 1;
-        if i >= 2 {
-            break;
-        }
-    }
-    let agg = get_agg(authorities, clone_clients, 0);
-    let res = agg.get_committee_info(Some(0)).await;
-    match res {
-        Err(SuiError::TooManyIncorrectAuthorities { .. }) => (),
-        other => panic!(
-            "expect to get SuiError::TooManyIncorrectAuthorities but got {:?}",
-            other
-        ),
-    };
-}
-
 fn sign_tx(
     tx: VerifiedTransaction,
     epoch: EpochId,
     authority: AuthorityName,
-    secret: &dyn signature::Signer<AuthoritySignature>,
+    secret: &dyn Signer<AuthoritySignature>,
 ) -> SignedTransaction {
     SignedTransaction::new(epoch, tx.into_inner().into_data(), secret, authority)
 }
@@ -948,7 +651,7 @@ fn sign_tx_effects(
     effects: TransactionEffects,
     epoch: EpochId,
     authority: AuthorityName,
-    secret: &dyn signature::Signer<AuthoritySignature>,
+    secret: &dyn Signer<AuthoritySignature>,
 ) -> SignedTransactionEffects {
     SignedTransactionEffects::new(epoch, effects, secret, authority)
 }
@@ -975,27 +678,29 @@ async fn test_handle_transaction_response() {
         None,
         sender,
         &sender_kp,
+        None,
     );
     // Case 0
     // Validators give invalid response because of the initial value set for their responses.
     let agg = get_agg(authorities.clone(), clients.clone(), 0);
 
-    assert_resp_err(&agg, tx.clone(), |e| {
-        matches!(e, SuiError::ByzantineAuthoritySuspicion { .. })
-    })
-    .await;
+    assert_resp_err(&agg, tx.clone(), |e| matches!(e, SuiError::Unknown(..))).await;
 
     // Case 1
     // All Validators gives signed-tx
     set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx, 0);
     // Validators now gives valid signed tx and we get TxCert
     let mut agg = get_agg(authorities.clone(), clients.clone(), 0);
-    let cert_epoch_0 = agg.process_transaction(tx.clone()).await.unwrap();
+    let cert_epoch_0 = agg
+        .process_transaction(tx.clone())
+        .await
+        .unwrap()
+        .into_cert_for_testing();
 
     // Case 2
     // Validators return signed-tx with epoch 0, client expects 1
     // Update client to epoch 1
-    let committee_1 = Committee::new(1, authorities.clone()).unwrap();
+    let committee_1 = Committee::new(1, ProtocolVersion::MIN, authorities.clone()).unwrap();
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
@@ -1012,10 +717,11 @@ async fn test_handle_transaction_response() {
         ..Default::default()
     };
     let (name_0, key_0) = &authority_keys[0];
-    let resp = TransactionInfoResponse {
-        signed_transaction: None, // we don't care signed_tx when we have tx_cert
-        certified_transaction: Some(cert_epoch_0.clone().into_inner()),
-        signed_effects: Some(sign_tx_effects(effects, 0, *name_0, key_0)),
+    let resp = HandleTransactionResponse {
+        status: TransactionStatus::Executed(
+            Some(cert_epoch_0.auth_sig().clone()),
+            sign_tx_effects(effects, 0, *name_0, key_0),
+        ),
     };
     clients
         .get_mut(&authority_keys[0].0)
@@ -1025,12 +731,7 @@ async fn test_handle_transaction_response() {
     // Val-3 returns invalid response
     // (Val-1 and Val-2 returns signed-tx)
     for (name, _) in authority_keys.iter().skip(3) {
-        let resp = TransactionInfoResponse {
-            signed_transaction: None,
-            certified_transaction: None,
-            signed_effects: None,
-        };
-        clients.get_mut(name).unwrap().set_tx_info_response(resp);
+        clients.get_mut(name).unwrap().reset_tx_info_response();
     }
     let agg = get_agg(authorities.clone(), clients.clone(), 0);
     // We have a valid cert because val-0 has it. Note we can't form a cert based on what val-1 and val-2 give
@@ -1049,12 +750,16 @@ async fn test_handle_transaction_response() {
     )
     .await;
 
-    let committee_1 = Committee::new(1, authorities.clone()).unwrap();
+    let committee_1 = Committee::new(1, ProtocolVersion::MIN, authorities.clone()).unwrap();
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
     agg.committee = committee_1.clone();
-    let cert_epoch_1 = agg.process_transaction(tx.clone()).await.unwrap();
+    let cert_epoch_1 = agg
+        .process_transaction(tx.clone())
+        .await
+        .unwrap()
+        .into_cert_for_testing();
 
     // Case 5
     // Validators return tx-cert with epoch 0, client expects 1
@@ -1172,12 +877,18 @@ async fn assert_resp_err<F>(
     match agg.process_transaction(tx).await {
         Err(QuorumSignTransactionError {
             total_stake,
-            good_stake,
+            good_stake: _,
             errors,
             conflicting_tx_digests,
         }) => {
+            println!("{:?}", errors);
             assert_eq!(total_stake, 4);
-            assert_eq!(good_stake, 0);
+            // TODO: good_stake no longer always makes sense.
+            // Specifically, when we have non-quorum signed effects, it's difficult to say
+            // what good state should be. Right now, good_stake is only used for conflicting
+            // transaction processing. We should refactor this when we refactor conflicting
+            // transaction processing.
+            //assert_eq!(good_stake, 0);
             assert!(conflicting_tx_digests.is_empty());
             assert!(errors.iter().map(|e| &e.0).all(checker));
         }
@@ -1198,15 +909,11 @@ fn set_tx_info_response_with_cert_and_effects<'a>(
     epoch: EpochId,
 ) {
     for (name, key) in authority_keys {
-        let resp = TransactionInfoResponse {
-            signed_transaction: None,
-            certified_transaction: Some(cert.clone()),
-            signed_effects: Some(SignedTransactionEffects::new(
-                epoch,
-                effects.clone(),
-                key,
-                *name,
-            )),
+        let resp = HandleTransactionResponse {
+            status: TransactionStatus::Executed(
+                Some(cert.auth_sig().clone()),
+                SignedTransactionEffects::new(epoch, effects.clone(), key, *name),
+            ),
         };
         clients.get_mut(name).unwrap().set_tx_info_response(resp);
     }
@@ -1221,47 +928,11 @@ fn set_tx_info_response_with_signed_tx(
     for (name, secret) in authority_keys {
         let signed_tx = sign_tx(tx.clone(), epoch, *name, secret);
 
-        let resp = TransactionInfoResponse {
-            signed_transaction: Some(signed_tx),
-            certified_transaction: None,
-            signed_effects: None,
+        let resp = HandleTransactionResponse {
+            status: TransactionStatus::Signed(signed_tx.into_sig()),
         };
         clients.get_mut(name).unwrap().set_tx_info_response(resp);
     }
-}
-
-pub fn make_response_from_sui_system_state(
-    system_state: SuiSystemState,
-) -> SuiResult<ObjectInfoResponse> {
-    let move_content = to_bytes(&system_state).unwrap();
-    let tx_cert = make_random_certified_transaction();
-    let move_object = unsafe {
-        MoveObject::new_from_execution(
-            SuiSystemState::type_(),
-            false,
-            SequenceNumber::from_u64(1),
-            move_content,
-        )
-        .unwrap()
-    };
-    let initial_shared_version = move_object.version();
-    let object = Object::new_move(
-        move_object,
-        Owner::Shared {
-            initial_shared_version,
-        },
-        *tx_cert.digest(),
-    );
-    let obj_digest = object.compute_object_reference();
-    Ok(ObjectInfoResponse {
-        parent_certificate: Some(tx_cert.into()),
-        requested_object_reference: Some(obj_digest),
-        object_and_lock: Some(ObjectResponse {
-            object,
-            lock: None,
-            layout: None,
-        }),
-    })
 }
 
 pub fn get_authority_pub_key_bytes_and_address() -> (AuthorityPublicKeyBytes, Vec<u8>) {

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer } from '@mysten/sui.js';
+import { fromB64 } from '@mysten/sui.js';
 
 // TODO : Import from  SDK
 import { VALDIATOR_NAME } from '~/pages/validator/ValidatorDataTypes';
@@ -14,7 +14,7 @@ export function getName(rawName: string | number[]) {
     if (Array.isArray(rawName)) {
         name = String.fromCharCode(...rawName);
     } else {
-        name = textDecoder.decode(new Base64DataBuffer(rawName).getData());
+        name = textDecoder.decode(fromB64(rawName));
         if (!VALDIATOR_NAME.test(name)) {
             name = rawName;
         }

@@ -227,14 +227,16 @@ impl Worker {
             quic_config.keep_alive_interval_ms = Some(5_000);
             let mut config = anemo::Config::default();
             config.quic = Some(quic_config);
-            // Set a default size limit of 8 MiB for all RPCs
-            // TODO: remove this and revert to default anemo max_frame_size once size
-            // limits are fully implemented on narwhal data structures.
-            config.max_frame_size = Some(8 << 20);
+            // Set the max_frame_size to be 2 GB to work around the issue of there being too many
+            // delegation events in the epoch change txn.
+            config.max_frame_size = Some(2 << 30);
             // Set a default timeout of 300s for all RPC requests
             config.inbound_request_timeout_ms = Some(300_000);
             config.outbound_request_timeout_ms = Some(300_000);
             config.shutdown_idle_timeout_ms = Some(1_000);
+            config.connectivity_check_interval_ms = Some(2_000);
+            config.connection_backoff_ms = Some(1_000);
+            config.max_connection_backoff_ms = Some(20_000);
             config
         };
 

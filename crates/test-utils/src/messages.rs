@@ -7,7 +7,6 @@ use move_core_types::language_storage::{StructTag, TypeTag};
 use std::path::PathBuf;
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
-use sui_adapter::genesis;
 use sui_core::test_utils::dummy_transaction_effects;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json_rpc_types::SuiObjectInfo;
@@ -22,8 +21,8 @@ use sui_types::crypto::{
     AuthorityPublicKeyBytes, AuthoritySignInfo, KeypairTraits,
 };
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::CallArg;
 use sui_types::messages::SignedTransactionEffects;
+use sui_types::messages::{CallArg, DUMMY_GAS_PRICE};
 use sui_types::messages::{
     CertifiedTransaction, ObjectArg, TransactionData, VerifiedCertificate,
     VerifiedSignedTransaction, VerifiedTransaction,
@@ -34,10 +33,13 @@ use sui_types::object::{
 use sui_types::parse_sui_struct_tag;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::utils::to_sender_signed_transaction;
-use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
+use sui_types::{
+    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+};
 
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 2_000;
+pub const MAX_DELEGATION_GAS: u64 = 15_000;
 
 /// A helper function to get all accounts and their owned GasCoin
 /// with a WalletContext
@@ -175,7 +177,6 @@ pub async fn make_counter_increment_transaction_with_wallet_context(
     counter_initial_shared_version: SequenceNumber,
     gas_object_ref: Option<ObjectRef>,
 ) -> VerifiedTransaction {
-    let package_object_ref = genesis::get_framework_object_ref();
     let gas_object_ref = match gas_object_ref {
         Some(obj_ref) => obj_ref,
         None => get_gas_object_with_wallet_context(context, &sender)
@@ -184,7 +185,7 @@ pub async fn make_counter_increment_transaction_with_wallet_context(
     };
     let data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        package_object_ref,
+        SUI_FRAMEWORK_OBJECT_ID,
         "counter".parse().unwrap(),
         "increment".parse().unwrap(),
         Vec::new(),
@@ -192,6 +193,7 @@ pub async fn make_counter_increment_transaction_with_wallet_context(
         vec![CallArg::Object(ObjectArg::SharedObject {
             id: counter_id,
             initial_shared_version: counter_initial_shared_version,
+            mutable: true,
         })],
         MAX_GAS,
     );
@@ -249,12 +251,11 @@ pub fn test_shared_object_transactions() -> Vec<VerifiedTransaction> {
     let initial_shared_version = shared_object.version();
     let module = "object_basics";
     let function = "create";
-    let package_object_ref = genesis::get_framework_object_ref();
 
     for gas_object in generate_test_gas_objects() {
         let data = TransactionData::new_move_call_with_dummy_gas_price(
             sender,
-            package_object_ref,
+            SUI_FRAMEWORK_OBJECT_ID,
             ident_str!(module).to_owned(),
             ident_str!(function).to_owned(),
             /* type_args */ vec![],
@@ -264,6 +265,7 @@ pub fn test_shared_object_transactions() -> Vec<VerifiedTransaction> {
                 CallArg::Object(ObjectArg::SharedObject {
                     id: shared_object_id,
                     initial_shared_version,
+                    mutable: true,
                 }),
                 CallArg::Pure(16u64.to_le_bytes().to_vec()),
                 CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
@@ -281,16 +283,18 @@ pub fn create_publish_move_package_transaction(
     path: PathBuf,
     sender: SuiAddress,
     keypair: &AccountKeyPair,
+    gas_price: Option<u64>,
 ) -> VerifiedTransaction {
-    let build_config = BuildConfig::default();
+    let build_config = BuildConfig::new_for_testing();
     let all_module_bytes = sui_framework::build_move_package(&path, build_config)
         .unwrap()
         .get_package_bytes(/* with_unpublished_deps */ false);
-    let data = TransactionData::new_module_with_dummy_gas_price(
+    let data = TransactionData::new_module(
         sender,
         gas_object_ref,
         all_module_bytes,
         MAX_GAS,
+        gas_price.unwrap_or(DUMMY_GAS_PRICE),
     );
     to_sender_signed_transaction(data, keypair)
 }
@@ -312,7 +316,7 @@ pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> VerifiedTransac
     let (sender, keypair) = deterministic_random_account_key();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sui_programmability/examples/basics");
-    let build_config = BuildConfig::default();
+    let build_config = BuildConfig::new_for_testing();
     let all_module_bytes = sui_framework::build_move_package(&path, build_config)
         .unwrap()
         .get_package_bytes(/* with_unpublished_deps */ false);
@@ -342,34 +346,37 @@ pub fn make_random_certified_transaction() -> VerifiedCertificate {
 
 pub fn make_counter_create_transaction(
     gas_object: ObjectRef,
-    package_ref: ObjectRef,
+    package_id: ObjectID,
     sender: SuiAddress,
     keypair: &AccountKeyPair,
+    gas_price: Option<u64>,
 ) -> VerifiedTransaction {
-    let data = TransactionData::new_move_call_with_dummy_gas_price(
+    let data = TransactionData::new_move_call(
         sender,
-        package_ref,
+        package_id,
         "counter".parse().unwrap(),
         "create".parse().unwrap(),
         Vec::new(),
         gas_object,
         vec![],
         MAX_GAS,
+        gas_price.unwrap_or(DUMMY_GAS_PRICE),
     );
     to_sender_signed_transaction(data, keypair)
 }
 
 pub fn make_counter_increment_transaction(
     gas_object: ObjectRef,
-    package_ref: ObjectRef,
+    package_id: ObjectID,
     counter_id: ObjectID,
     counter_initial_shared_version: SequenceNumber,
     sender: SuiAddress,
     keypair: &AccountKeyPair,
+    gas_price: Option<u64>,
 ) -> VerifiedTransaction {
-    let data = TransactionData::new_move_call_with_dummy_gas_price(
+    let data = TransactionData::new_move_call(
         sender,
-        package_ref,
+        package_id,
         "counter".parse().unwrap(),
         "increment".parse().unwrap(),
         Vec::new(),
@@ -377,8 +384,10 @@ pub fn make_counter_increment_transaction(
         vec![CallArg::Object(ObjectArg::SharedObject {
             id: counter_id,
             initial_shared_version: counter_initial_shared_version,
+            mutable: true,
         })],
         MAX_GAS,
+        gas_price.unwrap_or(1),
     );
     to_sender_signed_transaction(data, keypair)
 }
@@ -386,14 +395,14 @@ pub fn make_counter_increment_transaction(
 pub fn make_delegation_transaction(
     gas_object: ObjectRef,
     coin: ObjectRef,
-    system_package_ref: ObjectRef,
     validator: SuiAddress,
     sender: SuiAddress,
     keypair: &AccountKeyPair,
+    gas_price: Option<u64>,
 ) -> VerifiedTransaction {
-    let data = TransactionData::new_move_call_with_dummy_gas_price(
+    let data = TransactionData::new_move_call(
         sender,
-        system_package_ref,
+        SUI_FRAMEWORK_OBJECT_ID,
         SUI_SYSTEM_MODULE_NAME.to_owned(),
         "request_add_delegation".parse().unwrap(),
         vec![],
@@ -402,11 +411,13 @@ pub fn make_delegation_transaction(
             CallArg::Object(ObjectArg::SharedObject {
                 id: SUI_SYSTEM_STATE_OBJECT_ID,
                 initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                mutable: true,
             }),
             CallArg::Object(ObjectArg::ImmOrOwnedObject(coin)),
             CallArg::Pure(bcs::to_bytes(&validator).unwrap()),
         ],
-        MAX_GAS,
+        MAX_DELEGATION_GAS,
+        gas_price.unwrap_or(DUMMY_GAS_PRICE),
     );
     to_sender_signed_transaction(data, keypair)
 }
@@ -416,10 +427,10 @@ pub fn move_transaction(
     gas_object: Object,
     module: &'static str,
     function: &'static str,
-    package_ref: ObjectRef,
+    package_id: ObjectID,
     arguments: Vec<CallArg>,
 ) -> VerifiedTransaction {
-    move_transaction_with_type_tags(gas_object, module, function, package_ref, &[], arguments)
+    move_transaction_with_type_tags(gas_object, module, function, package_id, &[], arguments)
 }
 
 /// Make a transaction calling a specific move module & function, with specific type tags
@@ -427,7 +438,7 @@ pub fn move_transaction_with_type_tags(
     gas_object: Object,
     module: &'static str,
     function: &'static str,
-    package_ref: ObjectRef,
+    package_id: ObjectID,
     type_args: &[TypeTag],
     arguments: Vec<CallArg>,
 ) -> VerifiedTransaction {
@@ -436,7 +447,7 @@ pub fn move_transaction_with_type_tags(
     // Make the transaction.
     let data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        package_ref,
+        package_id,
         ident_str!(module).to_owned(),
         ident_str!(function).to_owned(),
         type_args.to_vec(),

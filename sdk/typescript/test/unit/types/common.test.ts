@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect } from 'vitest';
-import { generateTransactionDigest } from '../../../src';
+import { bcs, generateTransactionDigest } from '../../../src';
 
 describe('Test common functions', () => {
   describe('Calculate transaction digest', () => {
@@ -27,32 +27,10 @@ describe('Test common functions', () => {
         gasPrice: 1,
         gasBudget: 100,
       };
-      const publicKey = 'ISHc0JgGmuU1aX3QGc/YZ3ynq6CtrB0ZWcvObcVLElk=';
-      const signature =
-        '4wL9wK8iLCLLmFKMMB/8t9KEGZxFOntJH2zWI/RBsySfNpnSLPxhYVdfujjnxvlP3bZunFz/GZAJga38bdn9Aw==';
 
-      const transactionDigest = generateTransactionDigest(
-        transactionData,
-        'ED25519',
-        signature,
-        publicKey,
-        "base58",
-        true
-      );
+      const transactionDigest = generateTransactionDigest(transactionData, bcs);
       expect(transactionDigest).toEqual(
-        'HZaXLHhraTyRJjQAEbaEn9ruT1LrjUMG9Sq9EeGY2JLZ'
-      );
-
-      const legacyTransactionDigest = generateTransactionDigest(
-        transactionData,
-        'ED25519',
-        signature,
-        publicKey,
-        "base64",
-        false
-      );
-      expect(legacyTransactionDigest).toEqual(
-        'DAOJCfCACatIaLpFEWuK90dJSPkbM48nRUOkGcbKZ9A='
+        'HZaXLHhraTyRJjQAEbaEn9ruT1LrjUMG9Sq9EeGY2JLZ',
       );
     });
   });

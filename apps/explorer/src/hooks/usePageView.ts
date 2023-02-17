@@ -2,18 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useEffect } from 'react';
-// eslint-disable-next-line no-restricted-imports
-import { useLocation, useSearchParams } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 
-import { DEFAULT_NETWORK } from '../utils/envUtil';
 import { plausible } from '../utils/plausible';
 
-export function usePageView() {
-    const { pathname } = useLocation();
-    const [searchParams] = useSearchParams();
+import { useNetwork } from '~/context';
 
-    const networkParam = searchParams.get('network');
-    const network = (networkParam || DEFAULT_NETWORK).toUpperCase();
+export function usePageView() {
+    const [network] = useNetwork();
+    const { pathname } = useLocation();
 
     useEffect(() => {
         // Send a pageview to Plausible

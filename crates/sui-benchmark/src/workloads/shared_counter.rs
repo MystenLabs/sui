@@ -4,6 +4,7 @@
 use super::workload::{Workload, WorkloadType};
 use crate::workloads::Gas;
 
+use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
 use crate::workloads::workload::MAX_GAS_FOR_TESTING;
 use crate::workloads::{GasCoinConfig, WorkloadInitGas, WorkloadPayloadGas};
@@ -24,11 +25,13 @@ use test_utils::{
 };
 use tracing::info;
 
+#[derive(Debug)]
 pub struct SharedCounterTestPayload {
-    package_ref: ObjectRef,
+    package_id: ObjectID,
     counter_id: ObjectID,
     counter_initial_shared_version: SequenceNumber,
     gas: Gas,
+    system_state_observer: Arc<SystemStateObserver>,
 }
 
 impl Payload for SharedCounterTestPayload {
@@ -39,16 +42,17 @@ impl Payload for SharedCounterTestPayload {
         _: &ExecutionEffects,
     ) -> Box<dyn Payload> {
         Box::new(SharedCounterTestPayload {
-            package_ref: self.package_ref,
+            package_id: self.package_id,
             counter_id: self.counter_id,
             counter_initial_shared_version: self.counter_initial_shared_version,
             gas: (new_gas, self.gas.1, self.gas.2),
+            system_state_observer: self.system_state_observer,
         })
     }
     fn make_transaction(&self) -> VerifiedTransaction {
         make_counter_increment_transaction(
             self.gas.0,
-            self.package_ref,
+            self.package_id,
             self.counter_id,
             self.counter_initial_shared_version,
             self.gas
@@ -56,6 +60,7 @@ impl Payload for SharedCounterTestPayload {
                 .get_owner_address()
                 .expect("Cannot convert owner to address"),
             &self.gas.2,
+            Some(*self.system_state_observer.reference_gas_price.borrow()),
         )
     }
     fn get_object_id(&self) -> ObjectID {
@@ -64,20 +69,25 @@ impl Payload for SharedCounterTestPayload {
     fn get_workload_type(&self) -> WorkloadType {
         WorkloadType::SharedCounter
     }
+
+    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self as &SharedCounterTestPayload)
+    }
 }
 
+#[derive(Debug)]
 pub struct SharedCounterWorkload {
-    pub basics_package_ref: Option<ObjectRef>,
+    pub basics_package_id: Option<ObjectID>,
     pub counters: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
 }
 
 impl SharedCounterWorkload {
     pub fn new_boxed(
-        basics_package_ref: Option<ObjectRef>,
+        basics_package_id: Option<ObjectID>,
         counters: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
     ) -> Box<dyn Workload<dyn Payload>> {
         Box::<dyn Workload<dyn Payload>>::from(Box::new(SharedCounterWorkload {
-            basics_package_ref,
+            basics_package_id,
             counters,
         }))
     }
@@ -123,10 +133,12 @@ pub async fn publish_basics_package(
     proxy: Arc<dyn ValidatorProxy + Sync + Send>,
     sender: SuiAddress,
     keypair: &AccountKeyPair,
+    gas_price: u64,
 ) -> ObjectRef {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sui_programmability/examples/basics");
-    let transaction = create_publish_move_package_transaction(gas, path, sender, keypair);
+    let transaction =
+        create_publish_move_package_transaction(gas, path, sender, keypair, Some(gas_price));
     let (_, effects) = proxy.execute_transaction(transaction.into()).await.unwrap();
     parse_package_ref(&effects.created()).unwrap()
 }
@@ -137,10 +149,12 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
         &mut self,
         init_config: WorkloadInitGas,
         proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        system_state_observer: Arc<SystemStateObserver>,
     ) {
-        if self.basics_package_ref.is_some() {
+        if self.basics_package_id.is_some() {
             return;
         }
+        let gas_price = *system_state_observer.reference_gas_price.borrow();
         let (head, tail) = init_config
             .shared_counter_init_gas
             .split_first()
@@ -148,7 +162,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
 
         // Publish basics package
         info!("Publishing basics package");
-        self.basics_package_ref = Some(
+        self.basics_package_id = Some(
             publish_basics_package(
                 head.0,
                 proxy.clone(),
@@ -156,8 +170,10 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                     .get_owner_address()
                     .expect("Could not get sui address from owner"),
                 &head.2,
+                gas_price,
             )
-            .await,
+            .await
+            .0,
         );
         if !self.counters.is_empty() {
             // We already initialized the workload with some counters
@@ -167,11 +183,12 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
         for (gas, sender, keypair) in tail.iter() {
             let transaction = make_counter_create_transaction(
                 *gas,
-                self.basics_package_ref.unwrap(),
+                self.basics_package_id.unwrap(),
                 (*sender)
                     .get_owner_address()
                     .expect("Could not get sui address from owner"),
                 keypair,
+                Some(gas_price),
             );
             let proxy_ref = proxy.clone();
             futures.push(async move {
@@ -189,6 +206,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
         _num_payloads: u64,
         payload_config: WorkloadPayloadGas,
         _proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<dyn Payload>> {
         // create counters using gas objects we created above
         info!("Creating shared txn payloads, hang tight..");
@@ -200,10 +218,11 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 .choose(&mut rand::thread_rng())
                 .expect("Failed to get a random counter from the pool");
             shared_payloads.push(Box::new(SharedCounterTestPayload {
-                package_ref: self.basics_package_ref.unwrap(),
+                package_id: self.basics_package_id.unwrap(),
                 counter_id: counter_ref.0,
                 counter_initial_shared_version: counter_ref.1,
                 gas: g,
+                system_state_observer: system_state_observer.clone(),
             }));
         }
         let payloads: Vec<Box<dyn Payload>> = shared_payloads
@@ -214,5 +233,9 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
     }
     fn get_workload_type(&self) -> WorkloadType {
         WorkloadType::SharedCounter
+    }
+
+    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self as &SharedCounterWorkload)
     }
 }

@@ -6,7 +6,10 @@
     "dev": "vite",
     "build": "pnpm typecheck && vite build",
     "typecheck": "tsc -b",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "vercel:setup": "pnpm vercel:link && pnpm vercel:pull",
+    "vercel:link": "vercel link --scope mysten-labs --project frenemies -y && rm .gitignore",
+    "vercel:pull": "vercel env pull"
   },
   "dependencies": {
     "@fontsource/inter": "^4.5.14",

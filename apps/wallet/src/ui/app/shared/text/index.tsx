@@ -20,7 +20,6 @@ const textStyles = cva([], {
             subtitleSmallExtra: 'text-subtitleSmallExtra',
             caption: 'uppercase text-caption',
             captionSmall: 'uppercase text-captionSmall ',
-            heading4: 'text-heading4',
             p1: 'text-p1',
             p2: 'text-p2',
             p3: 'text-p3',
@@ -43,9 +42,14 @@ const textStyles = cva([], {
             hero: 'text-hero',
             'hero-dark': 'text-hero-dark',
             'success-dark': 'text-success-dark',
+            'issue-dark': 'text-issue-dark',
         },
         italic: {
             true: 'italic',
+            false: '',
+        },
+        truncate: {
+            true: 'truncate',
             false: '',
         },
         mono: {

@@ -9,3 +9,4 @@ edition = "2021"
 [dependencies]
 sui-proc-macros = { path = "../sui-proc-macros" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+once_cell = "1.16"

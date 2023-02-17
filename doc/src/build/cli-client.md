@@ -215,7 +215,7 @@ You can transfer mutable objects you own to another address using the command be
     sui client transfer [OPTIONS] --to <TO> --object-id <OBJECT_ID> --gas-budget <GAS_BUDGET>
 
 OPTIONS:
-        --coin-object-id <OBJECT_ID>
+        --object-id <OBJECT_ID> 
             Object to transfer, in 20 bytes Hex string
 
         --gas <GAS>
@@ -239,7 +239,7 @@ To transfer an object to a recipient, you need the recipient's address,
 the object ID of the object to transfer, and, optionally, the ID of the coin object for the transaction fee payment. If not specified, a coin that meets the budget is picked. Gas budget sets a cap for how much gas to spend. We are still finalizing our gas metering mechanisms. For now, just set something large enough.
 
 ```shell
-sui client transfer --to 0xf456ebef195e4a231488df56b762ac90695be2dd --object-id 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 --gas-budget 100
+sui client transfer --to 0xf456ebef195e4a231488df56b762ac90695be2dd --object-id 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 --gas-budget 1000
 ```
 
 ## Create an example NFT
@@ -378,7 +378,7 @@ public entry fun transfer(c: coin::Coin<SUI>, recipient: address) {
 
 Please note that there is no real need to use a Move call to transfer
 coins as this can be accomplished with a built-in Sui client
-[command](#transferring-coins) - we chose this example due to its
+[command](#transfer-objects) - we chose this example due to its
 simplicity.
 
 Let us examine objects owned by address `0x48ff0a932b12976caec91d521265b009ad5b2225`:
@@ -398,7 +398,7 @@ Showing 5 results.
 
 Now that we know which objects are owned by that address,
 we can transfer one of them to another address, say the fresh one
-we created in the [Generating a new account](#generating-a-new-account) section
+we created in the [Create new account addresses](#create-new-account-addresses) section
 (`0xc72cf3adcc4d11c03079cef2c8992aea5268677a`). We can try any object,
 but for the sake of this exercise, let's choose the last one on the
 list.
@@ -560,27 +560,28 @@ that the location of the package sources is in the `PATH_TO_PACKAGE`
 environment variable):
 
 ```shell
-sui client publish $PATH_TO_PACKAGE/my_move_package --gas 0xc8add7b4073900ffb0a8b4fe7d70a7db454c2e19 --gas-budget 30000 --verify-dependencies
+sui client publish $PATH_TO_PACKAGE/my_move_package --gas 0xc8add7b4073900ffb0a8b4fe7d70a7db454c2e19 --gas-budget 30000
 ```
 
 The publish command accepts the path to your package as an optional positional parameter (`$PATH_TO_PACKAGE/my_move_package` in the previous call). If you do not supply the path, the command uses the current working directory as the default path value. The call also provides the following data:
 
 * `--gas` - The Coin object used to pay for gas.
 * `--gas-budget` - Gas budget for running module initializers. 
-* `--verify-dependencies` - Optional flag to have the CLI check that all dependencies match their on-chain counterparts. 
 
-When the `--verify-dependencies` flag is present, the CLI verifies that the bytecode for dependencies found at their respective published addresses matches the bytecode you get when compiling that dependency from source code. If the bytecode for a dependency does not match, your package does not publish and you receive an error message indicating which package and module the mismatch was found in:
+When you publish a package, the CLI verifies that the bytecode for dependencies found at their respective published addresses matches the bytecode you get when compiling that dependency from source code. If the bytecode for a dependency does not match, your package does not publish and you receive an error message indicating which package and module the mismatch was found in:
 
 ```shell
 Local dependency did not match its on-chain version at <address>::<package>::<module>
 ```
 
-The `--verify-dependencies` flag can fail the publish for other reasons, as well:
+The publish might fail for other reasons, as well, based on dependency verification:
 
 * There are modules missing, either in the local version of the dependency or on-chain.
 * There's nothing at the address that the dependency points to (it was deleted or never existed).
 * The address supplied for the dependency points to an object instead of a package.
 * The CLI fails to connect to the node to fetch the package.
+
+If your package fails to publish because of an error in dependency verification, you must find and include the correct and verifiable source package for the failing dependency. If you fully understand the circumstances preventing your package from passing the dependency verification, and you appreciate the risk involved with skipping that verification, you can add the `--skip-dependency-verification` flag to the `sui client publish` command to bypass the dependency check.
 
 **Note:** If your package includes unpublished depenedencies, you can add the `--with-unpublished-dependencies` flag to the `sui client publish` command to include modules from those packages in the published build.
 
@@ -631,9 +632,9 @@ Supply a package path to `verify-source` (or run from package root) to have the 
 
 `sui client verify-source ./code/MyPackage`
 
-The default behavior is for the command to verify only the direct source of the package, but you can supply the `--verify-deps` flag to have the command verify dependencies, as well. If you just want to verify dependencies, you can also add the `--skip-source` flag. Attempting to use the `--skip-source` flag without including the `--verify-deps` flag results in an error because there is essentially nothing to verify.  
+The default behavior is for the command to verify only the direct source of the package, but you can supply the `--verify-deps` flag to have the command verify dependencies, as well. If you just want to verify dependencies, you can also add the `--skip-source` flag. Attempting to use the `--skip-source` flag without including the `--verify-deps` flag results in an error because there is essentially nothing to verify.
 
-Running `sui client verify-source --skip-source --verify-deps` does not publish the package, but is otherwise the same as `sui client publish --verify-dependencies`, as described in the [previous section](#publish-packages). 
+Running `sui client verify-source --skip-source --verify-deps` does not publish the package, but performs the same dependency verification as `sui client publish`. You could use this command to check dependency verification before attempting to publish, as described in the [previous section](#publish-packages).
 
 The `sui client verify-source` command expects package on-chain addresses to be set in the package manifest. There should not be any unspecified or `0x0` addresses in the package. If you want to verify a seemingly unpublished package against an on-chain address, use the `--address-override` flag to supply the on-chain address to verify against. This flag only supports packages that are truly unpublished, with all modules at address `0x0`. You receive an error if you attempt to use this flag on a published (or somehow partially published) package. 
 

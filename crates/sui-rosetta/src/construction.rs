@@ -4,12 +4,9 @@
 use axum::{Extension, Json};
 use fastcrypto::encoding::{Encoding, Hex};
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto;
 use sui_types::crypto::{SignatureScheme, ToFromBytes};
-use sui_types::messages::{
-    ExecuteTransactionRequestType, SingleTransactionKind, Transaction, TransactionData,
-    TransactionKind,
-};
+use sui_types::messages::{ExecuteTransactionRequestType, Transaction, TransactionData};
+use sui_types::signature::GenericSignature;
 
 use crate::errors::Error;
 use crate::types::{
@@ -96,10 +93,10 @@ pub async fn combine(
     }
     .flag()];
 
-    let signed_tx = Transaction::from_data(
+    let signed_tx = Transaction::from_generic_sig_data(
         intent_msg.value,
         Intent::default(),
-        crypto::Signature::from_bytes(&[&*flag, &*sig_bytes, &*pub_key].concat())?,
+        GenericSignature::from_bytes(&[&*flag, &*sig_bytes, &*pub_key].concat())?,
     );
     signed_tx.verify_signature()?;
     let signed_tx_bytes = bcs::to_bytes(&signed_tx)?;
@@ -193,6 +190,13 @@ pub async fn metadata(
     env.check_network_identifier(&request.network_identifier)?;
     let option = request.options.ok_or(Error::MissingMetadata)?;
     let sender = option.internal_operation.sender();
+    let gas_price = context
+        .client
+        .governance_api()
+        .get_sui_system_state()
+        .await?
+        .reference_gas_price;
+
     let (tx_metadata, gas) = match &option.internal_operation {
         InternalOperation::PaySui {
             sender, amounts, ..
@@ -201,7 +205,13 @@ pub async fn metadata(
             let sender_coins = context
                 .client
                 .coin_read_api()
-                .select_coins(*sender, None, amount + 1000, None, vec![])
+                .select_coins(
+                    *sender,
+                    None,
+                    amount + (1000 * gas_price as u128),
+                    None,
+                    vec![],
+                )
                 .await?
                 .into_iter()
                 .map(|coin| coin.object_ref())
@@ -238,19 +248,12 @@ pub async fn metadata(
                 )
                 .await?;
 
-            let gas = data.gas();
-            let TransactionKind::Single(SingleTransactionKind::Call(call)) = data.kind else{
-                // This will not happen because `request_add_delegation` call creates a move call transaction.
-                panic!("Malformed transaction received from TransactionBuilder.")
-            };
-
             (
                 TransactionMetadata::Delegation {
-                    sui_framework: call.package,
                     coins,
                     locked_until_epoch: *locked_until_epoch,
                 },
-                gas,
+                data.gas(),
             )
         }
     };
@@ -261,6 +264,7 @@ pub async fn metadata(
             tx_metadata: tx_metadata.clone(),
             sender,
             gas,
+            gas_price,
             budget: 1000,
         })?;
     let dry_run = context.client.read_api().dry_run_transaction(data).await?;
@@ -272,6 +276,7 @@ pub async fn metadata(
             tx_metadata,
             sender,
             gas,
+            gas_price,
             budget,
         },
         suggested_fee: vec![Amount::new(budget as i128)],

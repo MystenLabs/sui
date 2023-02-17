@@ -13,6 +13,7 @@ use narwhal_types::{Empty, TransactionProto};
 use sui_network::tonic;
 use sui_types::crypto::deterministic_random_account_key;
 use sui_types::utils::to_sender_signed_transaction;
+use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use sui_types::{
     base_types::ObjectID,
     messages::{CallArg, CertifiedTransaction, ObjectArg, TransactionData},
@@ -45,16 +46,16 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
     let shared_object_arg = ObjectArg::SharedObject {
         id: shared_object.id(),
         initial_shared_version: shared_object.version(),
+        mutable: true,
     };
     for gas_object in test_gas_objects() {
         // Make a sample transaction.
         let module = "object_basics";
         let function = "create";
-        let package_object_ref = authority.get_framework_object_ref().await.unwrap();
 
         let data = TransactionData::new_move_call_with_dummy_gas_price(
             sender,
-            package_object_ref,
+            SUI_FRAMEWORK_OBJECT_ID,
             ident_str!(module).to_owned(),
             ident_str!(function).to_owned(),
             /* type_args */ vec![],
@@ -75,10 +76,10 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
             .handle_transaction(transaction.clone())
             .await
             .unwrap();
-        let vote = response.signed_transaction.unwrap();
+        let vote = response.status.into_signed_for_testing();
         let certificate = CertifiedTransaction::new(
             transaction.into_message(),
-            vec![vote.auth_sig().clone()],
+            vec![vote.clone()],
             &authority.clone_committee_for_testing(),
         )
         .unwrap();
@@ -119,12 +120,8 @@ async fn submit_transaction_to_consensus_adapter() {
         }
     }
     // Make a new consensus adapter instance.
-    let adapter = ConsensusAdapter::new(
-        Box::new(SubmitDirectly(state.clone())),
-        state.name,
-        &state.epoch_store_for_testing(),
-        metrics,
-    );
+    let adapter =
+        ConsensusAdapter::new(Box::new(SubmitDirectly(state.clone())), state.name, metrics);
 
     // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).

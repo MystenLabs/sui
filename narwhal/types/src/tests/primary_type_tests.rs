@@ -3,6 +3,7 @@
 
 use config::WorkerId;
 use crypto::{KeyPair, Signature};
+use fastcrypto::traits::Signer;
 use fastcrypto::{
     hash::{Digest, Hash},
     traits::KeyPair as _,
@@ -10,7 +11,6 @@ use fastcrypto::{
 use once_cell::sync::OnceCell;
 use proptest::{collection, prelude::*, strategy::Strategy};
 use rand::{rngs::StdRng, SeedableRng};
-use signature::Signer;
 
 use crate::{BatchDigest, CertificateDigest, Header, HeaderDigest};
 

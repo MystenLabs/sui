@@ -22,7 +22,7 @@ use sui_sdk::{
         id::UID,
         messages::Transaction,
     },
-    SuiClient,
+    SuiClient, SuiClientBuilder,
 };
 use sui_types::intent::Intent;
 use sui_types::messages::ExecuteTransactionRequestType;
@@ -35,7 +35,9 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let game = TicTacToe {
         game_package_id: opts.game_package_id,
-        client: SuiClient::new(&opts.rpc_server_url, None, None).await?,
+        client: SuiClientBuilder::default()
+            .build(opts.rpc_server_url)
+            .await?,
         keystore,
     };
 

@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
+
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -9,6 +9,7 @@ import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
 import { ValidatorLogo } from '../validators/ValidatorLogo';
+import { validatorsFields } from '../validatorsFields';
 import { Card } from '_app/shared/card';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
@@ -32,7 +33,7 @@ export function ValidatorFormDetail({
     const [searchParams] = useSearchParams();
     const stakeIdParams = searchParams.get('staked');
     const {
-        data: validatetors,
+        data: validators,
         isLoading: loadingValidators,
         isError: errorValidators,
     } = useGetObject(STATE_OBJECT);
@@ -44,22 +45,7 @@ export function ValidatorFormDetail({
         error,
     } = useGetDelegatedStake(accountAddress || '');
 
-    const validatorsData =
-        validatetors &&
-        is(validatetors.details, SuiObject) &&
-        validatetors.details.data.dataType === 'moveObject'
-            ? (validatetors.details.data.fields as ValidatorsFields)
-            : null;
-
-    const delegationData = useMemo(() => {
-        if (!allDelegation) return null;
-
-        return allDelegation.find(
-            ({ staked_sui }) => staked_sui.id.id === stakedId
-        );
-    }, [allDelegation, stakedId]);
-
-    const totalSuiStake = delegationData?.staked_sui.principal.value || 0n;
+    const validatorsData = validatorsFields(validators);
 
     const validatorData = useMemo(() => {
         if (!validatorsData) return null;
@@ -68,7 +54,8 @@ export function ValidatorFormDetail({
         );
     }, [validatorAddress, validatorsData]);
 
-    const totalValidatorStake = validatorData?.fields.stake_amount || 0;
+    const totalValidatorStake =
+        validatorData?.fields.delegation_staking_pool.fields.sui_balance || 0;
 
     const totalStake = useMemo(() => {
         if (!allDelegation) return 0n;
@@ -130,20 +117,25 @@ export function ValidatorFormDetail({
                         </div>
                     }
                     footer={
-                        <>
-                            <Text
-                                variant="body"
-                                weight="medium"
-                                color="steel-darker"
-                            >
-                                Your Staked SUI
-                            </Text>
+                        !unstake && (
+                            <>
+                                <Text
+                                    variant="body"
+                                    weight="medium"
+                                    color="steel-darker"
+                                >
+                                    Your Staked SUI
+                                </Text>
 
-                            <StakeAmount balance={totalStake} variant="body" />
-                        </>
+                                <StakeAmount
+                                    balance={totalStake}
+                                    variant="body"
+                                />
+                            </>
+                        )
                     }
                 >
-                    <div className="divide-x flex divide-solid divide-gray-45 divide-y-0 flex-col gap-3.5 mb-3.5">
+                    <div className="divide-x flex divide-solid divide-gray-45 divide-y-0 flex-col gap-3.5">
                         <div className="flex gap-2 items-center justify-between ">
                             <div className="flex gap-1 items-baseline text-steel">
                                 <Text
@@ -153,7 +145,7 @@ export function ValidatorFormDetail({
                                 >
                                     Staking APY
                                 </Text>
-                                <IconTooltip tip="Annual Percentage Yield" />
+                                <IconTooltip tip="This is the Annualized Percentage Yield of the a specific validator’s past operations. Note there is no guarantee this APY will be true in the future." />
                             </div>
 
                             <Text
@@ -165,7 +157,7 @@ export function ValidatorFormDetail({
                             </Text>
                         </div>
                         {!unstake && (
-                            <div className="flex gap-2 items-center justify-between">
+                            <div className="flex gap-2 items-center justify-between mb-3.5">
                                 <div className="flex gap-1 items-baseline text-steel">
                                     <Text
                                         variant="body"
@@ -174,13 +166,10 @@ export function ValidatorFormDetail({
                                     >
                                         Total Staked
                                     </Text>
+                                    <IconTooltip tip="The total SUI staked on the network by this validator and its delegators, to validate the network and earn rewards." />
                                 </div>
                                 <StakeAmount
-                                    balance={
-                                        stakedId
-                                            ? totalSuiStake
-                                            : totalValidatorStake
-                                    }
+                                    balance={totalValidatorStake}
                                     variant="body"
                                 />
                             </div>

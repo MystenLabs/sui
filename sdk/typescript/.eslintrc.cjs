@@ -5,7 +5,7 @@ module.exports = {
   root: true,
   extends: ['react-app', 'prettier', 'plugin:prettier/recommended'],
   rules: {
-    "@typescript-eslint/no-redeclare": "off",
+    '@typescript-eslint/no-redeclare': 'off',
     '@typescript-eslint/ban-types': [
       'error',
       {
@@ -13,6 +13,7 @@ module.exports = {
           Buffer:
             'Buffer usage increases bundle size and is not consistently implemented on web.',
         },
+        extendDefaults: true,
       },
     ],
     'no-restricted-globals': [
@@ -24,6 +25,16 @@ module.exports = {
       },
     ],
   },
+  overrides: [
+    {
+      files: ['*.test.*', '*.spec.*'],
+      rules: {
+        // Reset to defaults to allow `Buffer` usage in tests (given they run in Node and do not impact bundle):
+        'no-restricted-globals': ['off'],
+        '@typescript-eslint/ban-types': ['error'],
+      },
+    },
+  ],
   settings: {
     react: {
       version: '18',

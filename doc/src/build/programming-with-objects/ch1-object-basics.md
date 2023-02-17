@@ -57,7 +57,7 @@ All of the APIs for adding objects to persistent storage live in the [`transfer`
 ```rust
 public fun transfer<T: key>(obj: T, recipient: address)
 ```
-This places `obj` in global storage along with metadata that records `recipient` as the owner of the object. In Sui, every object must have an owner, which can be either an address, another object, or "shared"--see [Object ownership](../learn/objects#object-ownership) for more details.
+This places `obj` in global storage along with metadata that records `recipient` as the owner of the object. In Sui, every object must have an owner, which can be either an address, another object, or "shared". See [Object ownership](../../learn/objects.md#object-ownership) for more details.
 
 > :bulb: In core Move, we would call `move_to<T>(a: address, t: T)` to add the entry `(a, T) -> t` to the global storage. But because (as explained above) the schema of Sui Move's global storage is different, we use the `Transfer` APIs instead of `move_to` or the other [global storage operators](https://github.com/move-language/move/blob/main/language/documentation/book/src/global-storage-operators.md) in core Move. These operators cannot be used in Sui Move.
 
@@ -93,7 +93,7 @@ sui move build
 ### Writing unit tests
 After defining the `create` function, we want to test this function in Move using unit tests, without having to go all the way through sending Sui transactions. Since [Sui manages global storage separately outside of Move](../../learn/sui-move-diffs.md#object-centric-global-storage), there is no direct way to retrieve objects from global storage within Move. This poses a question: after calling the `create` function, how do we check that the object is properly transferred?
 
-To assist easy testing in Move, we provide a comprehensive testing framework in the [test_scenario](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/test_scenario.move) module that allows us to interact with objects put into the global storage. This allows us to test the behavior of any function directly in Move unit tests. A lot of this is also covered in our [Move testing doc](../move/build-test.md#sui-specific-testing).
+To assist easy testing in Move, we provide a comprehensive testing framework in the [test_scenario](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/test/test_scenario.move) module that allows us to interact with objects put into the global storage. This allows us to test the behavior of any function directly in Move unit tests. A lot of this is also covered in our [Move testing doc](../move/build-test.md#sui-specific-testing).
 
 The idea of `test_scenario` is to emulate a series of Sui transactions, each sent from a particular address. A developer writing a test starts the first transaction using the `test_scenario::begin` function that takes the address of the user sending this transaction as an argument and returns an instance of the `Scenario` struct representing a test scenario.
 

@@ -43,7 +43,7 @@ async fn test_onsite_reconfig_observer_basic() {
     info!("Shutting down epoch 0");
     for handle in &authorities {
         handle
-            .with_async(|node| async { node.close_epoch().await.unwrap() })
+            .with_async(|node| async { node.close_epoch_for_testing().await.unwrap() })
             .await;
     }
     // Wait for all nodes to reach the next epoch.

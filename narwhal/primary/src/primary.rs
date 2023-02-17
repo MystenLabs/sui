@@ -52,7 +52,7 @@ use store::Store;
 use tokio::{sync::oneshot, time::Instant};
 use tokio::{sync::watch, task::JoinHandle};
 use tower::ServiceBuilder;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 pub use types::PrimaryMessage;
 use types::{
@@ -75,7 +75,7 @@ pub mod primary_tests;
 pub const CHANNEL_CAPACITY: usize = 1_000;
 
 /// The number of shutdown receivers to create on startup. We need one per component loop.
-pub const NUM_SHUTDOWN_RECEIVERS: u64 = 25;
+pub const NUM_SHUTDOWN_RECEIVERS: u64 = 26;
 
 /// Maximum duration to fetch certificates from local storage.
 const FETCH_CERTIFICATES_MAX_HANDLER_TIME: Duration = Duration::from_secs(10);
@@ -344,14 +344,16 @@ impl Primary {
             quic_config.keep_alive_interval_ms = Some(5_000);
             let mut config = anemo::Config::default();
             config.quic = Some(quic_config);
-            // Set a default size limit of 8 MiB for all RPCs
-            // TODO: remove this and revert to default anemo max_frame_size once size
-            // limits are fully implemented on narwhal data structures.
-            config.max_frame_size = Some(8 << 20);
+            // Set the max_frame_size to be 2 GB to work around the issue of there being too many
+            // delegation events in the epoch change txn.
+            config.max_frame_size = Some(2 << 30);
             // Set a default timeout of 300s for all RPC requests
             config.inbound_request_timeout_ms = Some(300_000);
             config.outbound_request_timeout_ms = Some(300_000);
             config.shutdown_idle_timeout_ms = Some(1_000);
+            config.connectivity_check_interval_ms = Some(2_000);
+            config.connection_backoff_ms = Some(1_000);
+            config.max_connection_backoff_ms = Some(20_000);
             config
         };
 
@@ -459,7 +461,6 @@ impl Primary {
         let core_handle = Core::spawn(
             name.clone(),
             (**committee.load()).clone(),
-            worker_cache.clone(),
             header_store.clone(),
             certificate_store.clone(),
             synchronizer,
@@ -482,6 +483,7 @@ impl Primary {
         let certificate_fetcher_handle = CertificateFetcher::spawn(
             name.clone(),
             (**committee.load()).clone(),
+            worker_cache.clone(),
             network.clone(),
             certificate_store.clone(),
             rx_consensus_round_updates,
@@ -502,6 +504,7 @@ impl Primary {
             parameters.header_num_of_batches_threshold,
             parameters.max_header_num_of_batches,
             parameters.max_header_delay,
+            parameters.min_header_delay,
             None,
             network_model,
             tx_shutdown.subscribe(),
@@ -583,6 +586,7 @@ impl Primary {
                 dag,
                 committee.clone(),
                 endpoint_metrics,
+                tx_shutdown.subscribe(),
             );
 
             handles.extend(vec![block_synchronizer_handle, consensus_api_handle]);
@@ -672,6 +676,17 @@ impl PrimaryReceiverHandler {
         Ok(None)
     }
 
+    fn deduplicate_and_verify(&self, certificate: &Certificate) -> DagResult<bool> {
+        let digest = certificate.digest();
+        if self.certificate_store.contains(&digest)? {
+            trace!("Certificate {digest:?} has already been processed. Skip processing.");
+            self.metrics.duplicate_certificates_processed.inc();
+            return Ok(false);
+        }
+        certificate.verify(&self.committee.load(), self.worker_cache.clone())?;
+        Ok(true)
+    }
+
     #[allow(clippy::mutable_key_type)]
     async fn process_request_vote(
         &self,
@@ -729,8 +744,14 @@ impl PrimaryReceiverHandler {
 
         // If requester has provided us with parent certificates, process them all
         // before proceeding.
+        self.metrics
+            .certificates_in_votes
+            .inc_by(request.body().parents.len() as u64);
         let mut notifies = Vec::new();
         for certificate in request.body().parents.clone() {
+            if !self.deduplicate_and_verify(&certificate)? {
+                continue;
+            }
             let (tx_notify, rx_notify) = oneshot::channel();
             notifies.push(rx_notify);
             self.tx_certificates
@@ -906,12 +927,18 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         request: anemo::Request<PrimaryMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let PrimaryMessage::Certificate(certificate) = request.into_body();
-        let (tx_ack, rx_ack) = oneshot::channel();
+        if !self
+            .deduplicate_and_verify(&certificate)
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?
+        {
+            return Ok(anemo::Response::new(()));
+        }
+        let (tx_notify, rx_notify) = oneshot::channel();
         self.tx_certificates
-            .send((certificate, Some(tx_ack)))
+            .send((certificate, Some(tx_notify)))
             .await
             .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
-        rx_ack
+        rx_notify
             .await
             .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?
             .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;

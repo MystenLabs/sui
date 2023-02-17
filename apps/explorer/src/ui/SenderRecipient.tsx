@@ -8,10 +8,8 @@ import { SenderRecipientAddress } from '~/ui/SenderRecipientAddress';
 
 type Recipient = {
     address: string;
-    coin?: {
-        amount: number | string | bigint;
-        coinType?: string | null;
-    };
+    amount?: number | null;
+    coinType?: string | null;
 };
 
 export interface SenderRecipientProps {
@@ -67,27 +65,27 @@ export function SenderRecipient({
                         </div>
 
                         <div className="flex flex-col gap-2">
-                            {multipleRecipientsList.map((recipient) => (
-                                <div
-                                    className="flex flex-col gap-0.5"
-                                    key={recipient.address}
-                                >
-                                    <SenderRecipientAddress
-                                        address={recipient?.address}
-                                    />
-                                    {recipient?.coin && (
-                                        <div className="ml-6">
-                                            <CoinBalance
-                                                amount={recipient.coin.amount}
-                                                coinType={
-                                                    recipient.coin?.coinType
-                                                }
-                                                format={CoinFormat.FULL}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                            {multipleRecipientsList.map(
+                                ({ address, amount, coinType }) => (
+                                    <div
+                                        className="flex flex-col gap-0.5"
+                                        key={address}
+                                    >
+                                        <SenderRecipientAddress
+                                            address={address}
+                                        />
+                                        {amount ? (
+                                            <div className="ml-6">
+                                                <CoinBalance
+                                                    amount={amount}
+                                                    coinType={coinType}
+                                                    format={CoinFormat.FULL}
+                                                />
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                )
+                            )}
                         </div>
                     </div>
                 ) : null}

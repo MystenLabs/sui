@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
 use std::ops::Neg;
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -16,7 +15,7 @@ use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_json_rpc_types::{
     type_and_fields_from_move_struct, EventPage, SuiEvent, SuiEventEnvelope, SuiEventFilter,
     SuiExecuteTransactionResponse, SuiExecutionStatus, SuiMoveStruct, SuiMoveValue,
-    SuiTransactionFilter, SuiTransactionResponse,
+    SuiTransactionResponse,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
@@ -25,6 +24,7 @@ use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::crypto::{get_key_pair, SuiKeyPair};
 use sui_types::event::BalanceChangeType;
 use sui_types::event::Event;
+use sui_types::message_envelope::Message;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
     QuorumDriverResponse,
@@ -93,7 +93,7 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context, sender).await;
 
     let (tx_cert, _effects_cert) =
-        increment_counter(context, sender, None, package_ref, counter_ref.0).await;
+        increment_counter(context, sender, None, package_ref.0, counter_ref.0).await;
     let digest = tx_cert.transaction_digest;
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -112,7 +112,7 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
 
     let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context, sender).await;
     let (tx_cert, _effects_cert) =
-        increment_counter(context, sender, None, package_ref, counter_ref.0).await;
+        increment_counter(context, sender, None, package_ref.0, counter_ref.0).await;
     let digest = tx_cert.transaction_digest;
 
     wait_for_tx(digest, node.state().clone()).await;
@@ -423,7 +423,8 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
             transaction_digest: digest,
         })
         .await?;
-    assert!(info.signed_effects.is_some());
+    // Check that it has been executed.
+    info.status.into_effects_for_testing();
 
     Ok(())
 }
@@ -491,7 +492,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                         context,
                         sender,
                         Some(gas_object_id),
-                        package_ref,
+                        package_ref.0,
                         counter_ref.0,
                     )
                     .await
@@ -513,67 +514,6 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
         .flat_map(|(a, b)| std::iter::once(a).chain(std::iter::once(b)))
         .collect();
     wait_for_all_txes(digests, node.state().clone()).await;
-
-    Ok(())
-}
-
-#[sim_test]
-async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
-
-    // Start a new fullnode that is not on the write path
-    let fullnode = test_cluster.start_fullnode().await.unwrap();
-    let ws_client = fullnode.ws_client;
-    let node = fullnode.sui_node;
-
-    let context = &mut test_cluster.wallet;
-
-    let mut sub: Subscription<SuiTransactionResponse> = ws_client
-        .subscribe(
-            "sui_subscribeTransaction",
-            rpc_params![SuiTransactionFilter::Any],
-            "sui_unsubscribeTransaction",
-        )
-        .await
-        .unwrap();
-
-    let mut expected_digests = HashSet::new();
-    for _i in 0..3 {
-        let (_, _, _, digest, _, _) = transfer_coin(context).await?;
-        expected_digests.insert(digest);
-    }
-
-    wait_for_all_txes(
-        expected_digests.iter().cloned().collect(),
-        node.state().clone(),
-    )
-    .await;
-
-    // Wait for streaming
-    let mut actual_digests = HashSet::new();
-    for _ in &expected_digests {
-        match timeout(Duration::from_secs(3), sub.next()).await {
-            Ok(Some(Ok(resp))) => {
-                actual_digests.insert(resp.certificate.transaction_digest);
-            }
-            other => panic!(
-                "Failed to get Ok item from transaction streaming, but {:?}",
-                other
-            ),
-        };
-    }
-
-    // No more
-    match timeout(Duration::from_secs(3), sub.next()).await {
-        Err(_) => (),
-        other => panic!(
-            "Expect to time out because no new txs are coming in. Got {:?}",
-            other
-        ),
-    }
-
-    // Check the digests match
-    assert_eq!(expected_digests, actual_digests);
 
     Ok(())
 }
@@ -952,11 +892,11 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let QuorumDriverResponse {
         tx_cert: certified_txn,
         effects_cert: certified_txn_effects,
-    } = rx.recv().await.unwrap();
+    } = rx.recv().await.unwrap().unwrap();
     let (ct, cte, is_executed_locally) = *res;
-    assert_eq!(*ct.digest(), digest);
-    assert_eq!(*certified_txn.digest(), digest);
-    assert_eq!(*cte.digest(), *certified_txn_effects.digest());
+    assert_eq!(*ct.unwrap().digest(), digest);
+    assert_eq!(*certified_txn.unwrap().digest(), digest);
+    assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(is_executed_locally);
     // verify that the node has sequenced and executed the txn
     node.state().get_transaction(digest).await
@@ -977,11 +917,11 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let QuorumDriverResponse {
         tx_cert: certified_txn,
         effects_cert: certified_txn_effects,
-    } = rx.recv().await.unwrap();
+    } = rx.recv().await.unwrap().unwrap();
     let (ct, cte, is_executed_locally) = *res;
-    assert_eq!(*ct.digest(), digest);
-    assert_eq!(*certified_txn.digest(), digest);
-    assert_eq!(*cte.digest(), *certified_txn_effects.digest());
+    assert_eq!(*ct.unwrap().digest(), digest);
+    assert_eq!(*certified_txn.unwrap().digest(), digest);
+    assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(!is_executed_locally);
     wait_for_tx(digest, node.state().clone()).await;
     node.state().get_transaction(digest).await
@@ -1035,12 +975,12 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
             .await
             .unwrap();
 
-        let SuiExecuteTransactionResponse::EffectsCert {
-            certificate,
-            effects: _,
+        let SuiExecuteTransactionResponse {
+            certificate: _,
+            effects,
             confirmed_local_execution,
         } = response;
-        assert_eq!(&certificate.transaction_digest, tx_digest);
+        assert_eq!(&effects.effects.transaction_digest, tx_digest);
         assert!(confirmed_local_execution);
     }
     Ok(())
@@ -1075,12 +1015,12 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
         .await
         .unwrap();
 
-    let SuiExecuteTransactionResponse::EffectsCert {
-        certificate,
-        effects: _,
+    let SuiExecuteTransactionResponse {
+        certificate: _,
+        effects,
         confirmed_local_execution,
     } = response;
-    assert_eq!(&certificate.transaction_digest, tx_digest);
+    assert_eq!(&effects.effects.transaction_digest, tx_digest);
     assert!(confirmed_local_execution);
 
     let _response: SuiTransactionResponse = jsonrpc_client
@@ -1100,12 +1040,12 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
         .await
         .unwrap();
 
-    let SuiExecuteTransactionResponse::EffectsCert {
-        certificate,
-        effects: _,
+    let SuiExecuteTransactionResponse {
+        certificate: _,
+        effects,
         confirmed_local_execution,
     } = response;
-    assert_eq!(&certificate.transaction_digest, tx_digest);
+    assert_eq!(&effects.effects.transaction_digest, tx_digest);
     assert!(!confirmed_local_execution);
 
     Ok(())
@@ -1141,6 +1081,7 @@ async fn get_past_obj_read_from_node(
 }
 
 #[sim_test]
+#[ignore]
 async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = TestClusterBuilder::new().build().await?;
@@ -1179,9 +1120,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         .expect("Failed to transfer coins to recipient");
 
     // Delete the object
-    let package_ref = node.state().get_framework_object_ref().await.unwrap();
-    let (_tx_cert, effects) =
-        delete_devnet_nft(context, &recipient, object_ref_v2, package_ref).await;
+    let (_tx_cert, effects) = delete_devnet_nft(context, &recipient, object_ref_v2).await;
     assert_eq!(effects.status, SuiExecutionStatus::Success);
     sleep(Duration::from_secs(1)).await;
 

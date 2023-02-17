@@ -9,7 +9,7 @@ and playing it to the end.
 
 ## Set up
 
-1. [Install Sui binaries](../build/install.md#binaries) and
+1. [Install Sui binaries](../build/install.md#install-or-update-sui-binaries) and
    [download Sui source code](../build/install.md#source-code).
 1. [Create Sui genesis](../build/cli-client.md#genesis) by running the
    `sui genesis` command.

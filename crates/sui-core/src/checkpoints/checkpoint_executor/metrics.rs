@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::histogram::Histogram;
+use mysten_metrics::histogram::Histogram;
 use prometheus::{
     register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
     Registry,
@@ -11,9 +11,9 @@ use std::sync::Arc;
 pub struct CheckpointExecutorMetrics {
     pub last_executed_checkpoint: IntGauge,
     pub checkpoint_exec_errors: IntCounter,
-    pub checkpoint_exec_recv_channel_overflow: IntCounter,
-    pub current_local_epoch: IntGauge,
+    pub checkpoint_exec_epoch: IntGauge,
     pub checkpoint_transaction_count: Histogram,
+    pub checkpoint_contents_age_ms: Histogram,
 }
 
 impl CheckpointExecutorMetrics {
@@ -31,23 +31,22 @@ impl CheckpointExecutorMetrics {
                 registry
             )
             .unwrap(),
-            checkpoint_exec_recv_channel_overflow: register_int_counter_with_registry!(
-                "checkpoint_exec_recv_channel_overflow",
-                "Count of the number of times the recv channel from StateSync to CheckpointExecutor has been overflowed",
-                registry
-            )
-            .unwrap(),
-            current_local_epoch: register_int_gauge_with_registry!(
-                "current_local_epoch",
-                "Current local epoch sequence number",
+            checkpoint_exec_epoch: register_int_gauge_with_registry!(
+                "checkpoint_exec_epoch",
+                "Current epoch number in the checkpoint executor",
                 registry
             )
             .unwrap(),
             checkpoint_transaction_count: Histogram::new_in_registry(
                 "checkpoint_transaction_count",
                 "Number of transactions in the checkpoint",
-                registry
-            )
+                registry,
+            ),
+            checkpoint_contents_age_ms: Histogram::new_in_registry(
+                "checkpoint_contents_age_ms",
+                "Age of checkpoints when they arrive for execution",
+                registry,
+            ),
         };
         Arc::new(this)
     }

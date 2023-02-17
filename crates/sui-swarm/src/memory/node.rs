@@ -50,7 +50,7 @@ impl Node {
 
     /// Start this Node
     pub async fn spawn(&self) -> Result<()> {
-        info!(name =% self.name(), "starting in-memory node");
+        info!(name =% self.name().concise(), "starting in-memory node");
         *self.container.lock().unwrap() =
             Some(Container::spawn(self.config.clone(), self.runtime_type).await);
         Ok(())
@@ -63,7 +63,7 @@ impl Node {
 
     /// Stop this Node
     pub fn stop(&self) {
-        info!(name =% self.name(), "stopping in-memory node");
+        info!(name =% self.name().concise(), "stopping in-memory node");
         *self.container.lock().unwrap() = None;
     }
 
@@ -89,14 +89,19 @@ impl Node {
                 .await
                 .map_err(|err| anyhow!(err.to_string()))
                 .map_err(HealthCheckError::Failure)
-                .tap_err(|e| error!("error connecting to {}: {e}", self.name()))?;
+                .tap_err(|e| error!("error connecting to {}: {e}", self.name().concise()))?;
 
             let mut client = tonic_health::proto::health_client::HealthClient::new(channel);
             client
                 .check(tonic_health::proto::HealthCheckRequest::default())
                 .await
                 .map_err(|e| HealthCheckError::Failure(e.into()))
-                .tap_err(|e| error!("error performing health check on {}: {e}", self.name()))?;
+                .tap_err(|e| {
+                    error!(
+                        "error performing health check on {}: {e}",
+                        self.name().concise()
+                    )
+                })?;
         }
 
         Ok(())

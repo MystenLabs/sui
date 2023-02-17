@@ -25,7 +25,7 @@ jobs:
     steps:
       - name: Generate token
         id: generate_token
-        uses: tibdex/github-app-token@021a2405c7f990db57f5eae5397423dcc554159c # pin@v1
+        uses: tibdex/github-app-token@b62528385c34dbc9f38e5f4225ac829252d1ea92 # pin@v1
         with:
           app_id: ${{ secrets.APP_ID }}
           private_key: ${{ secrets.APP_PRIVATE_KEY }}
@@ -47,5 +47,9 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Create Release Pull Request
         uses: changesets/action@e9cc34b540dd3ad1b030c57fd97269e8f6ad905a # pin@v1
+        with:
+          # Generates src/version.ts file using genVersion
+          # https://github.com/changesets/action#with-version-script
+          version: pnpm run codegen:version
         env:
           GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}

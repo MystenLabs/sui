@@ -21,7 +21,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::instrument;
-use types::{metered_channel, Certificate, CertificateDigest, Round};
+use types::{metered_channel, Certificate, CertificateDigest, ConditionalBroadcastReceiver, Round};
 
 use crate::{metrics::ConsensusMetrics, DEFAULT_CHANNEL_SIZE};
 
@@ -51,6 +51,8 @@ struct InnerDag {
 
     /// Metrics handler
     metrics: Arc<ConsensusMetrics>,
+    /// Receiver of shutdown signal
+    rx_shutdown: ConditionalBroadcastReceiver,
 }
 
 /// The publicly exposed Dag handle, to which one can send commands
@@ -109,6 +111,7 @@ impl InnerDag {
         dag: NodeDag<Certificate>,
         vertices: RwLock<BTreeMap<(PublicKey, Round), CertificateDigest>>,
         metrics: Arc<ConsensusMetrics>,
+        rx_shutdown: ConditionalBroadcastReceiver,
     ) -> Self {
         let mut idg = InnerDag {
             rx_primary,
@@ -116,6 +119,7 @@ impl InnerDag {
             dag,
             vertices,
             metrics,
+            rx_shutdown,
         };
         let genesis = Certificate::genesis(committee);
         for cert in genesis.into_iter() {
@@ -177,6 +181,9 @@ impl InnerDag {
                             }
                         },
                     }
+                },
+                _ = self.rx_shutdown.receiver.recv() => {
+                    return;
                 }
             }
         }
@@ -341,6 +348,7 @@ impl Dag {
         committee: &Committee,
         rx_primary: metered_channel::Receiver<Certificate>,
         metrics: Arc<ConsensusMetrics>,
+        rx_shutdown: ConditionalBroadcastReceiver,
     ) -> (JoinHandle<()>, Self) {
         let (tx_commands, rx_commands) = tokio::sync::mpsc::channel(DEFAULT_CHANNEL_SIZE);
         let mut idg = InnerDag::new(
@@ -350,6 +358,7 @@ impl Dag {
             /* dag */ NodeDag::new(),
             /* vertices */ RwLock::new(BTreeMap::new()),
             metrics,
+            rx_shutdown,
         );
 
         let handle = spawn_logged_monitored_task!(async move { idg.run().await }, "DAGTask");

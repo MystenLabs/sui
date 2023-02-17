@@ -202,8 +202,7 @@ pub fn update_input_coins<S>(
     let new_contents = bcs::to_bytes(gas_coin).expect("Coin serialization should not fail");
     // unwrap is safe because we checked that it was a coin object above.
     let move_obj = gas_coin_obj.data.try_as_move_mut().unwrap();
-    // unwrap is safe because size of coin contents should never change
-    move_obj.update_contents(new_contents).unwrap();
+    move_obj.update_coin_contents(new_contents);
     if let Some(recipient) = recipient {
         gas_coin_obj.transfer(recipient);
     }

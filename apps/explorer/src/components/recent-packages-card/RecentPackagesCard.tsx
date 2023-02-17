@@ -93,6 +93,8 @@ const transformTable = (events: SuiEvents) => ({
     columns: [...columns],
 });
 
+const RECENT_MODULES_COUNT = 10;
+
 export function RecentModulesCard() {
     const rpc = useRpc();
 
@@ -104,7 +106,7 @@ export function RecentModulesCard() {
                     EventType: 'Publish',
                 },
                 null,
-                5,
+                RECENT_MODULES_COUNT,
                 'descending'
             );
 

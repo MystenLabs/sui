@@ -104,7 +104,7 @@ async fn get_sub_account_balances(
         }
     };
 
-    Ok(balances
+    let mut amounts = balances
         .into_iter()
         .map(|(lock, balance)| {
             if let Some(lock) = lock {
@@ -114,7 +114,14 @@ async fn get_sub_account_balances(
                 Amount::new(balance as i128)
             }
         })
-        .collect())
+        .collect::<Vec<_>>();
+
+    // Make sure there are always one amount returned
+    if amounts.is_empty() {
+        amounts.push(Amount::new(0))
+    }
+
+    Ok(amounts)
 }
 
 /// Get an array of all unspent coins for an AccountIdentifier and the BlockIdentifier at which the lookup was performed. .

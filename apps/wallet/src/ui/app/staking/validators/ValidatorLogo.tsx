@@ -41,7 +41,7 @@ export function ValidatorLogo({
         TRUNCATE_PREFIX_LENGTH
     );
 
-    const validatorName = useMemo(() => {
+    const validatorMeta = useMemo(() => {
         if (!validatorsData) return null;
 
         const validator = validatorsData.find(
@@ -49,16 +49,23 @@ export function ValidatorLogo({
         );
         if (!validator) return null;
 
-        return getName(validator.name);
-    }, [validatorAddress, validatorsData]);
+        const logo =
+            (validator.image_url && typeof validator.image_url === 'string') ||
+            Array.isArray(validator.image_url)
+                ? validator.image_url
+                : null;
 
-    const logo = null;
+        return {
+            name: getName(validator.name),
+            logo: logo && getName(logo),
+        };
+    }, [validatorAddress, validatorsData]);
 
     if (isLoading) {
         return <div className="flex justify-center items-center">...</div>;
     }
 
-    return validatorName ? (
+    return validatorMeta ? (
         <div
             className={cl(
                 ['w-full flex justify-start  font-semibold'],
@@ -67,26 +74,26 @@ export function ValidatorLogo({
             )}
         >
             <ImageIcon
-                src={logo}
-                label={validatorName}
-                fallback={validatorName}
+                src={validatorMeta.logo}
+                label={validatorMeta.name}
+                fallback={validatorMeta.name}
                 size={iconSize}
                 circle
             />
             <div className="flex flex-col gap-1.5">
                 {isTitle ? (
                     <Heading as="h4" variant="heading4" color="steel-darker">
-                        {validatorName}
+                        {validatorMeta.name}
                     </Heading>
                 ) : (
                     <Text color="gray-90" variant={size} weight="semibold">
-                        {validatorName}
+                        {validatorMeta.name}
                     </Text>
                 )}
                 {showAddress && (
                     <ExplorerLink
-                        type={ExplorerLinkType.address}
-                        address={validatorAddress}
+                        type={ExplorerLinkType.validator}
+                        validator={validatorAddress}
                         showIcon={false}
                         className="text-steel-dark no-underline text-body font-mono"
                     >

@@ -210,6 +210,7 @@ async fn fetch_certificates_basic() {
     let _certificate_fetcher_handle = CertificateFetcher::spawn(
         name.clone(),
         fixture.committee(),
+        fixture.shared_worker_cache(),
         client_network.clone(),
         certificate_store.clone(),
         rx_consensus_round_updates.clone(),
@@ -224,7 +225,6 @@ async fn fetch_certificates_basic() {
     let _core_handle = Core::spawn(
         name.clone(),
         fixture.committee(),
-        worker_cache,
         store.header_store.clone(),
         certificate_store.clone(),
         synchronizer.clone(),

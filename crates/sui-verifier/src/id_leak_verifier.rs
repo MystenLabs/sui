@@ -63,7 +63,21 @@ fn verify_id_leak(module: &CompiledModule) -> Result<(), ExecutionError> {
             FunctionView::function(module, FunctionDefinitionIndex(index as u16), code, handle);
         let initial_state = AbstractState::new(&func_view);
         let mut verifier = IDLeakAnalysis::new(&binary_view, &func_view);
-        verifier.analyze_function(initial_state, &func_view)?;
+        verifier
+            .analyze_function(initial_state, &func_view)
+            .map_err(|err| {
+                if let Some(message) = err.source().as_ref() {
+                    let function_name = binary_view
+                        .identifier_at(binary_view.function_handle_at(func_def.function).name);
+                    let module_name = module.self_id();
+                    verification_failure(format!(
+                        "{} Found in {module_name}::{function_name}",
+                        message
+                    ))
+                } else {
+                    err
+                }
+            })?;
     }
 
     Ok(())

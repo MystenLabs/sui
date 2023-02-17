@@ -41,23 +41,21 @@ move-command-line-common.workspace = true
 move-core-types.workspace = true
 move-disassembler.workspace = true
 move-ir-types.workspace = true
+move-vm-runtime.workspace = true
 move-vm-types.workspace = true
 
 narwhal-config = { path = "../../narwhal/config" }
 narwhal-crypto = { path = "../../narwhal/crypto" }
-narwhal-executor = { path = "../../narwhal/executor" }
 sui-cost-tables = { path = "../sui-cost-tables"}
-sui-protocol-constants = { path = "../sui-protocol-constants" }
+sui-protocol-config = { path = "../sui-protocol-config" }
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
 
-
-
 typed-store.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-proptest = "1.0.0"
 derive_more = "0.99.17"
 
 [dev-dependencies]
 bincode = "1.3.3"
 test-utils = { path = "../test-utils" }
+proptest = "1.0.0"

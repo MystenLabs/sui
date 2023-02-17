@@ -216,7 +216,12 @@ impl PrimaryNodeInner {
         let (dag, network_model) = if !internal_consensus {
             debug!("Consensus is disabled: the primary will run w/o Bullshark");
             let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
-            let (handle, dag) = Dag::new(&committee.load(), rx_new_certificates, consensus_metrics);
+            let (handle, dag) = Dag::new(
+                &committee.load(),
+                rx_new_certificates,
+                consensus_metrics,
+                tx_shutdown.subscribe(),
+            );
 
             handles.push(handle);
 
@@ -332,7 +337,6 @@ impl PrimaryNodeInner {
             tx_sequence,
             ordering_engine,
             consensus_metrics.clone(),
-            parameters.gc_depth,
         );
 
         // Spawn the client executing the transactions. It can also synchronize with the
