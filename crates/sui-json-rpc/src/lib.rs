@@ -38,6 +38,7 @@ pub const CLIENT_SDK_VERSION_HEADER: &str = "client-sdk-version";
 /// The RPC API version that the client is targeting. Different SDK versions may target the same
 /// API version.
 pub const CLIENT_TARGET_API_VERSION_HEADER: &str = "client-target-api-version";
+pub const APP_NAME_HEADER: &str = "app-name";
 
 #[cfg(test)]
 #[path = "unit_tests/rpc_server_tests.rs"]
@@ -103,6 +104,7 @@ impl JsonRpcServerBuilder {
                 HeaderName::from_static(CLIENT_SDK_TYPE_HEADER),
                 HeaderName::from_static(CLIENT_SDK_VERSION_HEADER),
                 HeaderName::from_static(CLIENT_TARGET_API_VERSION_HEADER),
+                HeaderName::from_static(APP_NAME_HEADER),
             ]);
 
         self.module
