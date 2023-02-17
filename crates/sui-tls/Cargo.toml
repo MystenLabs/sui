@@ -20,5 +20,8 @@ x509-parser = "0.14.0"
 fastcrypto.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
+# reqwest support
+reqwest = { version = "0.11.4", default-features = false, features = ["rustls-tls"] }
+
 [dev-dependencies]
 rand = "0.8.5"

@@ -83,9 +83,8 @@ impl rustls::server::ClientCertVerifier for ValidatorCertVerifier {
             .map(|_| cert)?;
 
         // Ensure the cert is valid for the network name
-        let dns_nameref =
-            webpki::DnsNameRef::try_from_ascii_str(crate::TLS_CERTIFICATE_SERVER_NAME)
-                .map_err(|_| rustls::Error::UnsupportedNameType)?;
+        let dns_nameref = webpki::DnsNameRef::try_from_ascii_str(crate::SUI_VALIDATOR_SERVER_NAME)
+            .map_err(|_| rustls::Error::UnsupportedNameType)?;
         cert.verify_is_valid_for_dns_name(dns_nameref)
             .map_err(pki_error)
             .map(|_| rustls::server::ClientCertVerified::assertion())

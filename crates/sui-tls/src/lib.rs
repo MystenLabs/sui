@@ -4,10 +4,12 @@
 mod certgen;
 mod verifier;
 
-pub const TLS_CERTIFICATE_SERVER_NAME: &str = "sui";
+pub const SUI_VALIDATOR_SERVER_NAME: &str = "sui";
 
-pub use certgen::generate_self_signed_tls_certificate;
+pub use certgen::SelfSignedCertificate;
 pub use verifier::ValidatorCertVerifier;
+
+pub use rustls;
 
 #[cfg(test)]
 mod tests {
@@ -23,9 +25,10 @@ mod tests {
         let disallowed = Ed25519KeyPair::generate(&mut rng);
 
         let allowed_public_key = allowed.public().to_owned();
-        let allowed_cert = generate_self_signed_tls_certificate(allowed.private()).0;
+        let allowed_cert = SelfSignedCertificate::new(allowed.private(), SUI_VALIDATOR_SERVER_NAME);
 
-        let disallowed_cert = generate_self_signed_tls_certificate(disallowed.private()).0;
+        let disallowed_cert =
+            SelfSignedCertificate::new(disallowed.private(), SUI_VALIDATOR_SERVER_NAME);
 
         let (verifier, allowlist) = ValidatorCertVerifier::new();
 
@@ -33,18 +36,30 @@ mod tests {
 
         // The allowed cert passes validation
         verifier
-            .verify_client_cert(&allowed_cert, &[], std::time::SystemTime::now())
+            .verify_client_cert(
+                &allowed_cert.rustls_certificate(),
+                &[],
+                std::time::SystemTime::now(),
+            )
             .unwrap();
 
         // The disallowed cert fails validation
         verifier
-            .verify_client_cert(&disallowed_cert, &[], std::time::SystemTime::now())
+            .verify_client_cert(
+                &disallowed_cert.rustls_certificate(),
+                &[],
+                std::time::SystemTime::now(),
+            )
             .unwrap_err();
 
         // After removing the allowed public key from the set it now fails validation
         allowlist.write().unwrap().clear();
         verifier
-            .verify_client_cert(&allowed_cert, &[], std::time::SystemTime::now())
+            .verify_client_cert(
+                &allowed_cert.rustls_certificate(),
+                &[],
+                std::time::SystemTime::now(),
+            )
             .unwrap_err();
     }
 }
