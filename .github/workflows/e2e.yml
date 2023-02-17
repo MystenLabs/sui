@@ -30,7 +30,18 @@ jobs:
       - uses: pnpm/action-setup@c3b53f6a16e57305370b4ae5a540c2077a1d50dd # pin@v2.2.4
         with:
           version: 7
-      - run: cargo build --bin sui-test-validator --bin sui --profile dev
+
+      - name: Read Sui crate version
+        working-directory: ./
+        run: | 
+          echo "sui_version=$(cat Cargo.toml | grep '^version =' | tr -d '\"' | awk '{ print $3 }')" >> $GITHUB_ENV
+          echo "sui_version=${{ env.sui_version }}"
+
+      - name: Download sui-test-validator from current devnet release
+        uses: wei/wget@v1
+        with:
+          args: -O $PWD/target/debug/sui-test-validator https://github.com/MystenLabs/sui/releases/download/devnet-${{ env.sui_version }}/sui-test-validator
+
       - name: Install Nodejs
         uses: actions/setup-node@8c91899e586c5b171469028077307d293428b516 # pin@v3
         with:
@@ -87,8 +98,17 @@ jobs:
       - uses: pnpm/action-setup@c3b53f6a16e57305370b4ae5a540c2077a1d50dd # pin@v2.2.4
         with:
           version: 7
-      - name: Build validator for devnet
-        run: cargo build --bin sui-test-validator --profile dev
+
+      - name: Read Sui crate version
+        working-directory: ./
+        run: | 
+          echo "sui_version=$(cat Cargo.toml | grep '^version =' | tr -d '\"' | awk '{ print $3 }')" >> $GITHUB_ENV
+          echo "sui_version=${{ env.sui_version }}"
+
+      - name: Download sui-test-validator from current devnet release
+        uses: wei/wget@v1
+        with:
+          args: -O $PWD/target/debug/sui-test-validator https://github.com/MystenLabs/sui/releases/download/devnet-${{ env.sui_version }}/sui-test-validator
 
       # checkout and build the current branch
       - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
