@@ -98,11 +98,11 @@ export function SendTokenForm({
                     <div className="w-full flex gap-2.5 flex-col flex-grow">
                         <div className="px-2">
                             <Text
-                                variant="captionSmall"
+                                variant="caption"
                                 color="steel-dark"
                                 weight="semibold"
                             >
-                                Select SUI Amount to Send {symbol}
+                                Select SUI Amount to Send
                             </Text>
                         </div>
                         <InputWithAction

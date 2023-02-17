@@ -67,7 +67,7 @@ export function StakeTxnCard({ txnEffects }: StakeTxnCardProps) {
     }, [stakingData, validatorsData]);
 
     return (
-        <>
+        <div className="flex flex-col w-full items-center justify-center divide-y divide-solid divide-steel/20 divide-x-0">
             {stakingData?.fields.validator_address && (
                 <div className="mb-3.5 w-full">
                     <ValidatorLogo
@@ -116,6 +116,6 @@ export function StakeTxnCard({ txnEffects }: StakeTxnCardProps) {
                     </Text>
                 </div>
             )}
-        </>
+        </div>
     );
 }
