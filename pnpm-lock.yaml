@@ -42,8 +42,8 @@ importers:
       '@mysten/sui.js': workspace:*
       '@mysten/wallet-kit': workspace:*
       '@playwright/test': ^1.29.1
-      '@sentry/react': ^7.29.0
-      '@sentry/tracing': ^7.29.0
+      '@sentry/react': ^7.38.0
+      '@sentry/tracing': ^7.38.0
       '@storybook/addon-a11y': 7.0.0-beta.3
       '@storybook/addon-essentials': 7.0.0-beta.3
       '@storybook/addons': 7.0.0-beta.3
@@ -113,8 +113,8 @@ importers:
       '@mysten/icons': link:../icons
       '@mysten/sui.js': link:../../sdk/typescript
       '@mysten/wallet-kit': link:../../sdk/wallet-adapter/wallet-kit
-      '@sentry/react': 7.29.0_react@18.2.0
-      '@sentry/tracing': 7.29.0
+      '@sentry/react': 7.38.0_react@18.2.0
+      '@sentry/tracing': 7.38.0
       '@tanstack/react-query': 4.22.0_biqbaboplfbrettd7655fr4n2y
       '@tanstack/react-query-devtools': 4.22.0_gp275tdwez2a4eujt75dnnp754
       '@tanstack/react-table': 8.7.4_biqbaboplfbrettd7655fr4n2y
@@ -169,7 +169,7 @@ importers:
       prettier-plugin-tailwindcss: 0.2.1_prettier@2.8.1
       start-server-and-test: 1.15.2
       storybook: 7.0.0-beta.3_o4scbtliisanygemawej7x2d6i
-      tailwindcss: 3.2.4
+      tailwindcss: 3.2.4_postcss@8.4.21
       tsconfig-paths: 4.1.2
       typescript: 4.9.4
       vite: 4.0.4_@types+node@18.11.18
@@ -212,8 +212,8 @@ importers:
       '@reduxjs/toolkit': ^1.9.1
       '@scure/bip32': ^1.1.1
       '@scure/bip39': ^1.1.0
-      '@sentry/react': ^7.29.0
-      '@sentry/tracing': ^7.29.0
+      '@sentry/react': ^7.38.0
+      '@sentry/tracing': ^7.38.0
       '@sentry/webpack-plugin': ^1.20.0
       '@storybook/addon-a11y': 7.0.0-beta.3
       '@storybook/addon-essentials': 7.0.0-beta.3
@@ -343,7 +343,7 @@ importers:
       rxjs: 7.8.0
       semver: 7.3.8
       stream-browserify: 3.0.0
-      tailwindcss: 3.2.4_ts-node@10.9.1
+      tailwindcss: 3.2.4_aesdjsunmf4wiehhujt67my7tu
       throttle-debounce: 5.0.0
       tweetnacl: 1.0.3
       uuid: 8.3.2
@@ -354,8 +354,8 @@ importers:
       '@babel/preset-env': 7.20.2
       '@babel/preset-typescript': 7.18.6
       '@playwright/test': 1.29.1
-      '@sentry/react': 7.29.0_react@18.2.0
-      '@sentry/tracing': 7.29.0
+      '@sentry/react': 7.38.0_react@18.2.0
+      '@sentry/tracing': 7.38.0
       '@sentry/webpack-plugin': 1.20.0
       '@storybook/addon-a11y': 7.0.0-beta.3_biqbaboplfbrettd7655fr4n2y
       '@storybook/addon-essentials': 7.0.0-beta.3_o4scbtliisanygemawej7x2d6i
@@ -4427,14 +4427,14 @@ packages:
       '@scure/base': 1.1.1
     dev: false
 
-  /@sentry/browser/7.29.0:
-    resolution: {integrity: sha512-Af+dIcntaw405Wt7myDOMGDxiszfy4aBdshrEKYbGgcfHjgXBIdF3iKlNatvl6nrOm+IOVuKgSpCLOr2hiCwzw==}
+  /@sentry/browser/7.38.0:
+    resolution: {integrity: sha512-rPJr+2jRYL29PeMYA2JgzYKTZQx6bc3T9evbAdIh0n+popSjpVyOpOMV/3l6A7KZeeix3dpp6eUZUxTJukqriQ==}
     engines: {node: '>=8'}
     dependencies:
-      '@sentry/core': 7.29.0
-      '@sentry/replay': 7.29.0_@sentry+browser@7.29.0
-      '@sentry/types': 7.29.0
-      '@sentry/utils': 7.29.0
+      '@sentry/core': 7.38.0
+      '@sentry/replay': 7.38.0
+      '@sentry/types': 7.38.0
+      '@sentry/utils': 7.38.0
       tslib: 1.14.1
 
   /@sentry/cli/1.74.6:
@@ -4455,56 +4455,53 @@ packages:
       - supports-color
     dev: true
 
-  /@sentry/core/7.29.0:
-    resolution: {integrity: sha512-+e9aIp2ljtT4EJq3901z6TfEVEeqZd5cWzbKEuQzPn2UO6If9+Utd7kY2Y31eQYb4QnJgZfiIEz1HonuYY6zqQ==}
+  /@sentry/core/7.38.0:
+    resolution: {integrity: sha512-+hXh/SO3Ie6WC2b+wi01xLhyVREdkRXS5QBmCiv3z2ks2HvYXp7PoKSXJvNKiwCP+pBD+enOnM1YEzM2yEy5yw==}
     engines: {node: '>=8'}
     dependencies:
-      '@sentry/types': 7.29.0
-      '@sentry/utils': 7.29.0
+      '@sentry/types': 7.38.0
+      '@sentry/utils': 7.38.0
       tslib: 1.14.1
 
-  /@sentry/react/7.29.0_react@18.2.0:
-    resolution: {integrity: sha512-pJ138QTChfAiYzFrCgycBgXrAVARV6TdVvLB8z/HsqbHzPq17RhyF9M1xPE4ffeLDQAEuSudwED9CLOpJqKnAw==}
+  /@sentry/react/7.38.0_react@18.2.0:
+    resolution: {integrity: sha512-IZpQ0aptV3UPjvDj+xorrgPgnW2xIL6Zcy7B6wAgwTC81OUITE7YaShglGD0sJ8M1ReFuH9duwTysr/uv8AytQ==}
     engines: {node: '>=8'}
     peerDependencies:
       react: 15.x || 16.x || 17.x || 18.x
     dependencies:
-      '@sentry/browser': 7.29.0
-      '@sentry/types': 7.29.0
-      '@sentry/utils': 7.29.0
+      '@sentry/browser': 7.38.0
+      '@sentry/types': 7.38.0
+      '@sentry/utils': 7.38.0
       hoist-non-react-statics: 3.3.2
       react: 18.2.0
       tslib: 1.14.1
 
-  /@sentry/replay/7.29.0_@sentry+browser@7.29.0:
-    resolution: {integrity: sha512-Gw7HgviJQu6pX5RFQGVY38Av4qFn9otrZdwSSl/QK5hIyg6yhlh5h7U0ydZkrYYGiW6Z6SYYRpEWCJc/Wbh+ZQ==}
+  /@sentry/replay/7.38.0:
+    resolution: {integrity: sha512-Ai78/OIYedny605x8uS0n/a5uj7qnuevogGD6agLat9lGc8DFvC07m2iS+EFyGOwtQzyDlRYJvYkHL8peR3crQ==}
     engines: {node: '>=12'}
-    peerDependencies:
-      '@sentry/browser': '>=7.24.0'
     dependencies:
-      '@sentry/browser': 7.29.0
-      '@sentry/core': 7.29.0
-      '@sentry/types': 7.29.0
-      '@sentry/utils': 7.29.0
+      '@sentry/core': 7.38.0
+      '@sentry/types': 7.38.0
+      '@sentry/utils': 7.38.0
 
-  /@sentry/tracing/7.29.0:
-    resolution: {integrity: sha512-MAN/G6XROtRhzo/KDjddb6VJn/Q1TaPLwdyj9vvfkUkBNtlt5k16oXp+u7eHWX0uujER9wnZtj2ivXaPeqq0VA==}
+  /@sentry/tracing/7.38.0:
+    resolution: {integrity: sha512-ejXJp8oOT64MVtBzqdECUUaNzKbpu25St8Klub1i4Sm7xO+ZjDQDI4TIHvWojZvtkwQ3F4jcsCclc8KuyJunyQ==}
     engines: {node: '>=8'}
     dependencies:
-      '@sentry/core': 7.29.0
-      '@sentry/types': 7.29.0
-      '@sentry/utils': 7.29.0
+      '@sentry/core': 7.38.0
+      '@sentry/types': 7.38.0
+      '@sentry/utils': 7.38.0
       tslib: 1.14.1
 
-  /@sentry/types/7.29.0:
-    resolution: {integrity: sha512-DmoEpoqHPty3VxqubS/5gxarwebHRlcBd/yuno+PS3xy++/i9YPjOWLZhU2jYs1cW68M9R6CcCOiC9f2ckJjdw==}
+  /@sentry/types/7.38.0:
+    resolution: {integrity: sha512-NKOALR6pNUMzUrsk2m+dkPrO8uGNvNh1LD0BCPswKNjC2qHo1h1mDGCgBmF9+EWyii8ZoACTIsxvsda+MBf97Q==}
     engines: {node: '>=8'}
 
-  /@sentry/utils/7.29.0:
-    resolution: {integrity: sha512-ICcBwTiBGK8NQA8H2BJo0JcMN6yCeKLqNKNMVampRgS6wSfSk1edvcTdhRkW3bSktIGrIPZrKskBHyMwDGF2XQ==}
+  /@sentry/utils/7.38.0:
+    resolution: {integrity: sha512-MgbI3YmYuyyhUtvcXkgGBqjOW+nuLLNGUdWCK+C4kObf8VbLt3dSE/7SEMT6TSHLYQmxs2BxFgx5Agn97m68kQ==}
     engines: {node: '>=8'}
     dependencies:
-      '@sentry/types': 7.29.0
+      '@sentry/types': 7.38.0
       tslib: 1.14.1
 
   /@sentry/webpack-plugin/1.20.0:
@@ -4811,7 +4808,7 @@ packages:
     dependencies:
       '@storybook/client-logger': 7.0.0-beta.3
       '@storybook/core-events': 7.0.0-beta.3
-      '@storybook/csf': 0.0.2-next.8
+      '@storybook/csf': 0.0.2-next.10
       '@storybook/manager-api': 7.0.0-beta.3_biqbaboplfbrettd7655fr4n2y
       '@storybook/preview-api': 7.0.0-beta.3
       '@storybook/router': 7.0.0-beta.3_biqbaboplfbrettd7655fr4n2y
@@ -4958,7 +4955,7 @@ packages:
       '@storybook/client-logger': 7.0.0-beta.3
       '@storybook/components': 7.0.0-beta.3_biqbaboplfbrettd7655fr4n2y
       '@storybook/core-events': 7.0.0-beta.3
-      '@storybook/csf': 0.0.2-next.8
+      '@storybook/csf': 0.0.2-next.10
       '@storybook/docs-tools': 7.0.0-beta.3_typescript@4.9.4
       '@storybook/manager-api': 7.0.0-beta.3_biqbaboplfbrettd7655fr4n2y
       '@storybook/preview-api': 7.0.0-beta.3
@@ -5205,7 +5202,7 @@ packages:
     resolution: {integrity: sha512-mpqd/d8AKFWpB36hV+m3PmKLy4koTZumdpmlmy4oBnXFeGsXsvQ8PBkHhPAS4PyDsepwCOOKMAD+jyYEg2OQ1g==}
     dependencies:
       '@babel/types': 7.20.7
-      '@storybook/csf': 0.0.2-next.8
+      '@storybook/csf': 0.0.2-next.10
       '@storybook/csf-tools': 7.0.0-beta.3
       '@storybook/node-logger': 7.0.0-beta.3
       '@storybook/types': 7.0.0-beta.3
@@ -5228,7 +5225,7 @@ packages:
       react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0
     dependencies:
       '@storybook/client-logger': 7.0.0-beta.3
-      '@storybook/csf': 0.0.2-next.8
+      '@storybook/csf': 0.0.2-next.10
       '@storybook/theming': 7.0.0-beta.3_biqbaboplfbrettd7655fr4n2y
       '@storybook/types': 7.0.0-beta.3
       memoizerific: 1.11.3
@@ -5306,7 +5303,7 @@ packages:
       '@storybook/builder-manager': 7.0.0-beta.3_typescript@4.9.4
       '@storybook/core-common': 7.0.0-beta.3_typescript@4.9.4
       '@storybook/core-events': 7.0.0-beta.3
-      '@storybook/csf': 0.0.2-next.8
+      '@storybook/csf': 0.0.2-next.10
       '@storybook/csf-tools': 7.0.0-beta.3
       '@storybook/docs-mdx': 0.0.1-next.6
       '@storybook/node-logger': 7.0.0-beta.3
@@ -5378,7 +5375,7 @@ packages:
     resolution: {integrity: sha512-x8TrCW2JrsOdu3Uqtd0gsxXDm15EWbtLBIx6qn0acDZXFrD5KjnJj2cI3Wc+lbABOG4QNs3IkxkNx8Nra+hMrQ==}
     dependencies:
       '@babel/types': 7.20.7
-      '@storybook/csf': 0.0.2-next.8
+      '@storybook/csf': 0.0.2-next.10
       '@storybook/types': 7.0.0-beta.3
       fs-extra: 9.1.0
       ts-dedent: 2.2.0
@@ -5386,11 +5383,9 @@ packages:
       - supports-color
     dev: true
 
-  /@storybook/csf/0.0.2-next.8:
-    resolution: {integrity: sha512-3T6rflW7D9q1iXOR+bidwoNbd9rVUTyjYH/sqsnYjbXhb/aOXsQzGKwNeq9QqZIFVpKfg5BoOF5i7DCMtoGknQ==}
+  /@storybook/csf/0.0.2-next.10:
+    resolution: {integrity: sha512-m2PFgBP/xRIF85VrDhvesn9ktaD2pN3VUjvMqkAL/cINp/3qXsCyI81uw7N5VEOkQAbWrY2FcydnvEPDEdE8fA==}
     dependencies:
-      expect-type: 0.14.2
-      lodash: 4.17.21
       type-fest: 2.19.0
     dev: true
 
@@ -5434,7 +5429,7 @@ packages:
       '@storybook/channels': 7.0.0-beta.3
       '@storybook/client-logger': 7.0.0-beta.3
       '@storybook/core-events': 7.0.0-beta.3
-      '@storybook/csf': 0.0.2-next.8
+      '@storybook/csf': 0.0.2-next.10
       '@storybook/router': 7.0.0-beta.3_biqbaboplfbrettd7655fr4n2y
       '@storybook/theming': 7.0.0-beta.3_biqbaboplfbrettd7655fr4n2y
       '@storybook/types': 7.0.0-beta.3
@@ -5524,7 +5519,7 @@ packages:
       '@storybook/channels': 7.0.0-beta.3
       '@storybook/client-logger': 7.0.0-beta.3
       '@storybook/core-events': 7.0.0-beta.3
-      '@storybook/csf': 0.0.2-next.8
+      '@storybook/csf': 0.0.2-next.10
       '@storybook/types': 7.0.0-beta.3
       '@types/qs': 6.9.7
       dequal: 2.0.3
@@ -5556,7 +5551,7 @@ packages:
       flat-cache: 3.0.4
       micromatch: 4.0.5
       react-docgen-typescript: 2.2.2_typescript@4.9.4
-      tslib: 2.4.1
+      tslib: 2.5.0
       typescript: 4.9.4
       webpack: 5.74.0_webpack-cli@4.10.0
     transitivePeerDependencies:
@@ -6989,7 +6984,7 @@ packages:
       esbuild: '>=0.10.0'
     dependencies:
       esbuild: 0.14.54
-      tslib: 2.4.1
+      tslib: 2.5.0
     dev: true
 
   /JSONStream/1.3.5:
@@ -7371,7 +7366,7 @@ packages:
     dependencies:
       '@types/react': 18.0.26
       react: 18.2.0
-      tslib: 2.4.1
+      tslib: 2.5.0
     dev: false
 
   /aria-query/4.2.2:
@@ -7581,7 +7576,7 @@ packages:
   /axios/0.25.0_debug@4.3.4:
     resolution: {integrity: sha512-cD8FOb0tRH3uuEe6+evtAbgJtfxr7ly3fQjYcMcuPlgkwVS9xboaVIpcDV+cYQe+yGykgwZCs1pzjntcGa6l5g==}
     dependencies:
-      follow-redirects: 1.15.1
+      follow-redirects: 1.15.1_debug@4.3.4
     transitivePeerDependencies:
       - debug
     dev: true
@@ -8164,7 +8159,7 @@ packages:
     resolution: {integrity: sha512-gxGWBrTT1JuMx6R+o5PTXMmUnhnVzLQ9SNutD4YqKtI6ap897t3tKECYla6gCWEkplXnlNybEkZg9GEGxKFCgw==}
     dependencies:
       pascal-case: 3.1.2
-      tslib: 2.4.1
+      tslib: 2.5.0
     dev: true
 
   /camelcase-css/2.0.1:
@@ -9349,7 +9344,7 @@ packages:
     resolution: {integrity: sha512-Kv5nKlh6yRrdrGvxeJ2e5y2eRUpkUosIW4A2AS38zwSz27zu7ufDwQPi5Jhs3XAlGNetl3bmnGhQsMtkKJnj3w==}
     dependencies:
       no-case: 3.0.4
-      tslib: 2.4.1
+      tslib: 2.5.0
     dev: true
 
   /dot-prop/6.0.1:
@@ -10665,10 +10660,6 @@ packages:
       - supports-color
     dev: true
 
-  /expect-type/0.14.2:
-    resolution: {integrity: sha512-ed3+tr5ujbIYXZ8Pl/VgIphwJQ0q5tBLGGdn7Zvwt1WyPBRX83xjT5pT77P/GkuQbctx0K2ZNSSan7eruJqTCQ==}
-    dev: true
-
   /expect/28.1.3:
     resolution: {integrity: sha512-eEh0xn8HlsuOBxFgIss+2mX85VAS4Qy3OSkjV7rlBWljtA4oWH37glVGyOZSZvErDT/yBywZdPGwCXuTvSG85g==}
     engines: {node: ^12.13.0 || ^14.15.0 || ^16.10.0 || >=17.0.0}
@@ -11051,6 +11042,18 @@ packages:
     peerDependenciesMeta:
       debug:
         optional: true
+    dev: true
+
+  /follow-redirects/1.15.1_debug@4.3.4:
+    resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
+    engines: {node: '>=4.0'}
+    peerDependencies:
+      debug: '*'
+    peerDependenciesMeta:
+      debug:
+        optional: true
+    dependencies:
+      debug: 4.3.4
     dev: true
 
   /for-each/0.3.3:
@@ -13196,7 +13199,7 @@ packages:
   /lower-case/2.0.2:
     resolution: {integrity: sha512-7fm3l3NAF9WfN6W3JOmf5drwpVqX78JtoGJ3A6W0a6ZnldM41w2fV5D490psKFTpMds8TJse/eHLFFsNHHjHgg==}
     dependencies:
-      tslib: 2.4.1
+      tslib: 2.5.0
     dev: true
 
   /lowercase-keys/3.0.0:
@@ -13862,7 +13865,7 @@ packages:
     resolution: {integrity: sha512-fgAN3jGAh+RoxUGZHTSOLJIqUc2wmoBwGR4tbpNAKmmovFoWq0OdRkb0VkldReO2a2iBT/OEulG9XSUc10r3zg==}
     dependencies:
       lower-case: 2.0.2
-      tslib: 2.4.1
+      tslib: 2.5.0
     dev: true
 
   /node-abort-controller/3.0.1:
@@ -14364,7 +14367,7 @@ packages:
     resolution: {integrity: sha512-RXlj7zCYokReqWpOPH9oYivUzLYZ5vAPIfEmCTNViosC78F8F0H9y7T7gG2M39ymgutxF5gcFEsyZQSph9Bp3A==}
     dependencies:
       dot-case: 3.0.4
-      tslib: 2.4.1
+      tslib: 2.5.0
     dev: true
 
   /parent-module/1.0.1:
@@ -14415,7 +14418,7 @@ packages:
     resolution: {integrity: sha512-uWlGT3YSnK9x3BQJaOdcZwrnV6hPpd8jFH1/ucpiLRPh/2zCVJKS19E4GvYHvaCcACn3foXZ0cLB9Wrx1KGe5g==}
     dependencies:
       no-case: 3.0.4
-      tslib: 2.4.1
+      tslib: 2.5.0
     dev: true
 
   /pascalcase/0.1.1:
@@ -15825,7 +15828,7 @@ packages:
       ast-types: 0.14.2
       esprima: 4.0.1
       source-map: 0.6.1
-      tslib: 2.4.1
+      tslib: 2.5.0
     dev: true
 
   /rechoir/0.6.2:
@@ -17381,10 +17384,12 @@ packages:
       - ts-node
     dev: true
 
-  /tailwindcss/3.2.4_ts-node@10.9.1:
+  /tailwindcss/3.2.4_aesdjsunmf4wiehhujt67my7tu:
     resolution: {integrity: sha512-AhwtHCKMtR71JgeYDaswmZXhPcW9iuI9Sp2LvZPo9upDZ7231ZJ7eA9RaURbhpXGVlrjX4cFNlB4ieTetEb7hQ==}
     engines: {node: '>=12.13.0'}
     hasBin: true
+    peerDependencies:
+      postcss: ^8.0.9
     dependencies:
       arg: 5.0.2
       chokidar: 3.5.3
@@ -17412,6 +17417,40 @@ packages:
     transitivePeerDependencies:
       - ts-node
     dev: false
+
+  /tailwindcss/3.2.4_postcss@8.4.21:
+    resolution: {integrity: sha512-AhwtHCKMtR71JgeYDaswmZXhPcW9iuI9Sp2LvZPo9upDZ7231ZJ7eA9RaURbhpXGVlrjX4cFNlB4ieTetEb7hQ==}
+    engines: {node: '>=12.13.0'}
+    hasBin: true
+    peerDependencies:
+      postcss: ^8.0.9
+    dependencies:
+      arg: 5.0.2
+      chokidar: 3.5.3
+      color-name: 1.1.4
+      detective: 5.2.1
+      didyoumean: 1.2.2
+      dlv: 1.1.3
+      fast-glob: 3.2.12
+      glob-parent: 6.0.2
+      is-glob: 4.0.3
+      lilconfig: 2.0.6
+      micromatch: 4.0.5
+      normalize-path: 3.0.0
+      object-hash: 3.0.0
+      picocolors: 1.0.0
+      postcss: 8.4.21
+      postcss-import: 14.1.0_postcss@8.4.21
+      postcss-js: 4.0.0_postcss@8.4.21
+      postcss-load-config: 3.1.4_postcss@8.4.21
+      postcss-nested: 6.0.0_postcss@8.4.21
+      postcss-selector-parser: 6.0.11
+      postcss-value-parser: 4.2.0
+      quick-lru: 5.1.1
+      resolve: 1.22.1
+    transitivePeerDependencies:
+      - ts-node
+    dev: true
 
   /tapable/2.2.1:
     resolution: {integrity: sha512-GNzQvQTOIP6RyTfE2Qxb8ZVlNmw0n88vp1szwWRimP02mnTsx3Wtn5qRdqY9w2XduFNUgvOwhNnQsjwCp+kqaQ==}
@@ -17797,6 +17836,9 @@ packages:
 
   /tslib/2.4.1:
     resolution: {integrity: sha512-tGyy4dAjRIEwI7BzsB0lynWgOpfqjUdq91XXAlIWD2OwKBH7oCl/GZG/HT4BOHrTlPMOASlMQ7veyTqpmRcrNA==}
+
+  /tslib/2.5.0:
+    resolution: {integrity: sha512-336iVw3rtn2BUK7ORdIAHTyxHGRIHVReokCR3XjbckJMK7ms8FysBfhLR8IXnAgy7T0PTPNBWKiH514FOW/WSg==}
 
   /tsup/6.5.0_typescript@4.9.4:
     resolution: {integrity: sha512-36u82r7rYqRHFkD15R20Cd4ercPkbYmuvRkz3Q1LCm5BsiFNUgpo36zbjVhCOgvjyxNBWNKHsaD5Rl8SykfzNA==}
