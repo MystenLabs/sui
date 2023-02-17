@@ -1,11 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod acceptor;
 mod certgen;
 mod verifier;
 
 pub const SUI_VALIDATOR_SERVER_NAME: &str = "sui";
 
+pub use acceptor::{TlsAcceptor, TlsConnectionInfo};
 pub use certgen::SelfSignedCertificate;
 pub use verifier::{ValidatorAllowlist, ValidatorCertVerifier};
 
@@ -61,5 +63,59 @@ mod tests {
                 std::time::SystemTime::now(),
             )
             .unwrap_err();
+    }
+
+    #[tokio::test]
+    async fn axum_acceptor() {
+        use fastcrypto::ed25519::Ed25519KeyPair;
+        use fastcrypto::traits::KeyPair;
+
+        let mut rng = rand::thread_rng();
+        let client_keypair = Ed25519KeyPair::generate(&mut rng);
+        let client_public_key = client_keypair.public().to_owned();
+        let client_certificate =
+            SelfSignedCertificate::new(client_keypair.private(), SUI_VALIDATOR_SERVER_NAME);
+        let server_keypair = Ed25519KeyPair::generate(&mut rng);
+        let server_certificate = SelfSignedCertificate::new(server_keypair.private(), "localhost");
+
+        let client = reqwest::Client::builder()
+            .add_root_certificate(server_certificate.reqwest_certificate())
+            .identity(client_certificate.reqwest_identity())
+            .https_only(true)
+            .build()
+            .unwrap();
+
+        let (tls_config, allowlist) = ValidatorCertVerifier::rustls_server_config(
+            vec![server_certificate.rustls_certificate()],
+            server_certificate.rustls_private_key(),
+        )
+        .unwrap();
+
+        async fn handler(tls_info: axum::Extension<TlsConnectionInfo>) -> String {
+            tls_info.public_key().unwrap().to_string()
+        }
+
+        let app = axum::Router::new().route("/", axum::routing::get(handler));
+        let listener = std::net::TcpListener::bind("localhost:0").unwrap();
+        let server_address = listener.local_addr().unwrap();
+        let acceptor = TlsAcceptor::new(tls_config);
+        let _server = tokio::spawn(async move {
+            axum_server::Server::from_tcp(listener)
+                .acceptor(acceptor)
+                .serve(app.into_make_service())
+                .await
+                .unwrap()
+        });
+
+        let server_url = format!("https://localhost:{}", server_address.port());
+        // Client request is rejected because it isn't in the allowlist
+        client.get(&server_url).send().await.unwrap_err();
+
+        // Insert the client's public key into the allowlist and verify the request is successful
+        allowlist.write().unwrap().insert(client_public_key.clone());
+
+        let res = client.get(&server_url).send().await.unwrap();
+        let body = res.text().await.unwrap();
+        assert_eq!(client_public_key.to_string(), body);
     }
 }
