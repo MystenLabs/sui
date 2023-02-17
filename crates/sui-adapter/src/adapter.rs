@@ -94,7 +94,7 @@ pub fn new_session<
 >(
     vm: &'v MoveVM,
     state_view: &'r S,
-    input_objects: BTreeMap<ObjectID, (/* by_value */ bool, Owner)>,
+    input_objects: BTreeMap<ObjectID, Owner>,
     is_metered: bool,
     protocol_config: &ProtocolConfig,
 ) -> Session<'r, 'v, S> {
@@ -221,7 +221,7 @@ fn execute_internal<
 ) -> Result<Mode::ExecutionResult, ExecutionError> {
     let input_objects = object_data
         .iter()
-        .map(|(id, (owner, _))| (*id, (by_value_objects.contains(id), *owner)))
+        .map(|(id, (owner, _))| (*id, *owner))
         .collect();
     let mut session = new_session(
         vm,
@@ -307,7 +307,7 @@ fn execute_internal<
         deletions,
         user_events,
         loaded_child_objects,
-    } = object_runtime.finish()?;
+    } = object_runtime.finish(by_value_objects)?;
     let session = new_session(
         vm,
         &*state_view,
