@@ -10,24 +10,41 @@ use std::{
 
 static SUPPORTED_SIG_ALGS: &[&webpki::SignatureAlgorithm] = &[&webpki::ED25519];
 
+pub type ValidatorAllowlist = Arc<RwLock<HashSet<Ed25519PublicKey>>>;
+
 /// A `rustls::server::ClientCertVerifier` that will ensure that every client provides a valid,
 /// expected certificate and that the client's public key is in the validator set.
 #[derive(Clone, Debug)]
 pub struct ValidatorCertVerifier {
     // Set of public keys to allow
-    validator_set: Arc<RwLock<HashSet<Ed25519PublicKey>>>,
+    allowlist: ValidatorAllowlist,
 }
 
 impl ValidatorCertVerifier {
-    pub fn new() -> (Self, Arc<RwLock<HashSet<Ed25519PublicKey>>>) {
-        let validator_set = Arc::new(RwLock::new(HashSet::new()));
+    pub fn new() -> (Self, ValidatorAllowlist) {
+        let allowlist = Arc::new(RwLock::new(HashSet::new()));
 
         (
             Self {
-                validator_set: validator_set.clone(),
+                allowlist: allowlist.clone(),
             },
-            validator_set,
+            allowlist,
         )
+    }
+
+    pub fn rustls_server_config(
+        certificates: Vec<rustls::Certificate>,
+        private_key: rustls::PrivateKey,
+    ) -> Result<(rustls::ServerConfig, ValidatorAllowlist), rustls::Error> {
+        let (cert_verifier, allowlist) = Self::new();
+
+        let mut config = rustls::ServerConfig::builder()
+            .with_safe_defaults()
+            .with_client_cert_verifier(std::sync::Arc::new(cert_verifier))
+            .with_single_cert(certificates, private_key)?;
+        config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+
+        Ok((config, allowlist))
     }
 }
 
@@ -59,7 +76,7 @@ impl rustls::server::ClientCertVerifier for ValidatorCertVerifier {
         // Step 1: Check this matches the key we expect
         let public_key = public_key_from_certificate(end_entity)?;
 
-        if !self.validator_set.read().unwrap().contains(&public_key) {
+        if !self.allowlist.read().unwrap().contains(&public_key) {
             return Err(rustls::Error::InvalidCertificateData(format!(
                 "invalid certificate: {:?} is not in the validator set",
                 public_key,
