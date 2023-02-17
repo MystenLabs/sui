@@ -39,9 +39,9 @@ module sui::display {
     /// // Example of a display object
     /// Display<0x...::capy::Capy> {
     ///  fields:
-    ///    <name, "Capy {{ genes }}">
-    ///    <link, "https://capy.art/capy/{{ id }}">
-    ///    <image, "https://api.capy.art/capy/{{ id }}/svg">
+    ///    <name, "Capy { genes }">
+    ///    <link, "https://capy.art/capy/{ id }">
+    ///    <image, "https://api.capy.art/capy/{ id }/svg">
     ///    <description, "Lovely Capy, one of many">
     /// }
     /// ```
@@ -58,6 +58,9 @@ module sui::display {
     /// Event: emitted when a new Display object has been created for type T.
     /// Type signature of the event corresponds to the type while id serves for
     /// the discovery.
+    ///
+    /// Since Sui RPC supports querying events by type, finding a Display for the T
+    /// would be as simple as looking for the first event with `Display<T>`.
     struct DisplayCreated<phantom T: key> has copy, drop {
         id: ID
     }
@@ -149,7 +152,7 @@ module sui::display {
 }
 
 #[test_only]
-module sui::display_capy {
+module sui::display_tests {
     use sui::object::UID;
     use sui::test_scenario as test;
     use std::string::String;
@@ -174,9 +177,9 @@ module sui::display_capy {
         // create a new display object
         let display = display::empty<Capy>(&pub, test::ctx(&mut test));
 
-        let d = display::set_owned(display, b"name", b"Capy {{name}}");
-        let d = display::set_owned(d, b"link", b"https://capy.art/capy/{{id}}");
-        let d = display::set_owned(d, b"image", b"https://api.capy.art/capy/{{id}}/svg");
+        let d = display::set_owned(display, b"name", b"Capy {name}");
+        let d = display::set_owned(d, b"link", b"https://capy.art/capy/{id}");
+        let d = display::set_owned(d, b"image", b"https://api.capy.art/capy/{id}/svg");
         let d = display::set_owned(d, b"description", b"A Lovely Capy");
 
         publisher::burn(pub);
