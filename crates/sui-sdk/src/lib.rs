@@ -21,6 +21,7 @@ pub use sui_json as json;
 use crate::apis::{CoinReadApi, EventApi, GovernanceApi, QuorumDriver, ReadApi};
 pub use sui_json_rpc_types as rpc_types;
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiObjectInfo};
+use sui_json_rpc::{CLIENT_TYPE_HEADER, CLIENT_VERSION_HEADER};
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
@@ -76,10 +77,10 @@ impl SuiClientBuilder {
         let client_version = env!("CARGO_PKG_VERSION");
         let mut headers = HeaderMap::new();
         headers.insert(
-            "client_api_version",
+            CLIENT_VERSION_HEADER,
             HeaderValue::from_static(client_version),
         );
-        headers.insert("client_type", HeaderValue::from_static("rust_sdk"));
+        headers.insert(CLIENT_TYPE_HEADER, HeaderValue::from_static("rust_sdk"));
 
         let ws = if let Some(url) = self.ws_url {
             Some(

@@ -32,6 +32,9 @@ pub mod threshold_bls_api;
 pub mod transaction_builder_api;
 pub mod transaction_execution_api;
 
+pub const CLIENT_TYPE_HEADER: &str = "client-type";
+pub const CLIENT_VERSION_HEADER: &str = "client-api-version";
+
 #[cfg(test)]
 #[path = "unit_tests/rpc_server_tests.rs"]
 mod rpc_server_test;
@@ -86,8 +89,8 @@ impl JsonRpcServerBuilder {
         };
         info!(?acl);
 
-        let client_type: HeaderName = HeaderName::from_static("client-type");
-        let client_api_version: HeaderName = HeaderName::from_static("client-api-version");
+        let client_type: HeaderName = HeaderName::from_static(CLIENT_TYPE_HEADER);
+        let client_api_version: HeaderName = HeaderName::from_static(CLIENT_VERSION_HEADER);
 
         let cors = CorsLayer::new()
             // Allow `POST` when accessing the resource
