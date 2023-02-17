@@ -13,6 +13,7 @@ use std::iter;
 use std::path::Path;
 use std::sync::Arc;
 use sui_config::node::AuthorityStorePruningConfig;
+use sui_protocol_config::ProtocolConfig;
 use sui_storage::mutex_table::{LockGuard, MutexTable};
 use sui_types::message_envelope::Message;
 use sui_types::object::Owner;
@@ -312,6 +313,10 @@ impl AuthorityStore {
         &self,
         objects: &[InputObjectKind],
     ) -> Result<Vec<Object>, SuiError> {
+        if objects.len() > ProtocolConfig::get_for_min_version().max_num_input_objects() {
+            return Err(SuiError::TooManyInputObjects);
+        }
+
         let mut result = Vec::new();
         let mut errors = Vec::new();
         for kind in objects {

@@ -102,6 +102,8 @@ pub enum SuiError {
         queue_len: usize,
         threshold: usize,
     },
+    #[error("Maximum number of input objects reached.")]
+    TooManyInputObjects,
 
     // Signature verification
     #[error("Signature is not valid: {}", error)]

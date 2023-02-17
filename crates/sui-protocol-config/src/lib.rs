@@ -113,6 +113,9 @@ pub struct ProtocolConfig {
     /// Maximum size of a Move user event. Enforced by the VM during execution.
     max_event_emit_size: Option<u64>,
 
+    /// Maximum number of input objects to a transaction. Enforced during signing.
+    max_num_input_objects: Option<usize>,
+
     // === Execution gas costs ====
     // note: Option<per-instruction and native function gas costs live in the sui-cost-tables crate
     /// Base cost for any Sui transaction
@@ -309,6 +312,10 @@ impl ProtocolConfig {
             .expect(CONSTANT_ERR_MSG)
     }
 
+    pub fn max_num_input_objects(&self) -> usize {
+        self.max_num_input_objects.expect(CONSTANT_ERR_MSG)
+    }
+
     // When adding a new constant, create a new getter for it as follows, so that the validator
     // will crash if the constant is accessed before the protocol in which it is defined.
     //
@@ -401,6 +408,7 @@ impl ProtocolConfig {
                 stake_subsidy_rate: Some(1),
                 storage_gas_price: Some(1),
                 max_transactions_per_checkpoint: Some(1000),
+                max_num_input_objects: Some(256),
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
