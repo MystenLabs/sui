@@ -75,12 +75,14 @@ export function TransactionCard({
     const transferAmount = useMemo(() => {
         // Find SUI transfer amount
         const amountTransfersSui = transfer.find(
-            ({ coinType }) => coinType === SUI_TYPE_ARG
+            ({ receiverAddress, coinType }) =>
+                receiverAddress === address && coinType === SUI_TYPE_ARG
         );
 
         // Find non-SUI transfer amount
         const amountTransfersNonSui = transfer.find(
-            ({ coinType }) => coinType !== SUI_TYPE_ARG
+            ({ receiverAddress, coinType }) =>
+                receiverAddress === address && coinType !== SUI_TYPE_ARG
         );
 
         return {
@@ -93,7 +95,7 @@ export function TransactionCard({
                 amountTransfersNonSui?.coinType ||
                 null,
         };
-    }, [transfer]);
+    }, [address, transfer]);
 
     const recipientAddress = useGetTxnRecipientAddress({ txn, address });
 
