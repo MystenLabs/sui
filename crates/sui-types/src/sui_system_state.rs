@@ -8,7 +8,7 @@ use crate::crypto::{AuthorityPublicKeyBytes, NetworkPublicKey};
 use crate::{
     balance::{Balance, Supply},
     id::UID,
-    SUI_FRAMEWORK_ADDRESS,
+    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use fastcrypto::traits::ToFromBytes;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
@@ -312,6 +312,42 @@ impl SuiSystemState {
         WorkerCache {
             workers,
             epoch: self.epoch,
+        }
+    }
+}
+
+// The default implementation for tests
+impl Default for SuiSystemState {
+    fn default() -> Self {
+        let validator_set = ValidatorSet {
+            validator_stake: 1,
+            delegation_stake: 1,
+            active_validators: vec![],
+            pending_validators: vec![],
+            pending_removals: vec![],
+            next_epoch_validators: vec![],
+            pending_delegation_switches: VecMap { contents: vec![] },
+        };
+        SuiSystemState {
+            info: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),
+            epoch: 0,
+            protocol_version: ProtocolVersion::MIN.0,
+            validators: validator_set,
+            treasury_cap: Supply { value: 0 },
+            storage_fund: Balance::new(0),
+            parameters: SystemParameters {
+                min_validator_stake: 1,
+                max_validator_candidate_count: 100,
+            },
+            reference_gas_price: 1,
+            validator_report_records: VecMap { contents: vec![] },
+            stake_subsidy: StakeSubsidy {
+                epoch_counter: 0,
+                balance: Balance::new(0),
+                current_epoch_amount: 0,
+            },
+            safe_mode: false,
+            epoch_start_timestamp_ms: 0,
         }
     }
 }

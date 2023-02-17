@@ -56,6 +56,7 @@ use sui_types::messages_checkpoint::{
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp,
 };
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::temporary_store::InnerTemporaryStore;
 use tokio::time::Instant;
 use typed_store::{retry_transaction_forever, Map};
@@ -242,9 +243,7 @@ pub struct AuthorityEpochTables {
 /// Parameters of the epoch fixed at epoch start.
 #[derive(Default, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct EpochStartConfiguration {
-    pub epoch_id: EpochId,
-    pub epoch_start_timestamp_ms: CheckpointTimestamp,
-    // Current epoch committee can eventually move here too, though right now it is served from a different table
+    pub system_state: SuiSystemState,
 }
 
 impl AuthorityEpochTables {
@@ -325,7 +324,7 @@ impl AuthorityPerEpochStore {
         // is initialized during epoch change
         let epoch_start_configuration =
             if let Some(epoch_start_configuration) = epoch_start_configuration {
-                assert_eq!(epoch_start_configuration.epoch_id, epoch_id);
+                assert_eq!(epoch_start_configuration.epoch_id(), epoch_id);
                 tables
                     .epoch_start_configuration
                     .insert(&(), &epoch_start_configuration)
@@ -1726,6 +1725,14 @@ fn transactions_table_default_config() -> DBOptions {
 
 impl EpochStartConfiguration {
     pub fn epoch_data(&self) -> EpochData {
-        EpochData::new(self.epoch_id)
+        EpochData::new(self.epoch_id())
+    }
+
+    pub fn epoch_id(&self) -> EpochId {
+        self.system_state.epoch
+    }
+
+    pub fn epoch_start_timestamp_ms(&self) -> CheckpointTimestamp {
+        self.system_state.epoch_start_timestamp_ms
     }
 }

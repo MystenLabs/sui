@@ -96,6 +96,7 @@ pub struct ValidatorComponents {
     sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
 }
 use sui_json_rpc::governance_api::GovernanceReadApi;
+use sui_types::sui_system_state::SuiSystemState;
 
 pub struct SuiNode {
     config: NodeConfig,
@@ -160,11 +161,8 @@ impl SuiNode {
             .get_committee(&cur_epoch)?
             .expect("Committee of the current epoch must exist");
         let epoch_start_configuration = if cur_epoch == genesis.epoch() {
-            let checkpoint = genesis.checkpoint();
-            let summary = &checkpoint.summary;
             Some(EpochStartConfiguration {
-                epoch_id: summary.epoch,
-                epoch_start_timestamp_ms: summary.timestamp_ms,
+                system_state: genesis.sui_system_object(),
             })
         } else {
             None
@@ -591,7 +589,7 @@ impl SuiNode {
             authority: config.protocol_public_key(),
             next_reconfiguration_timestamp_ms: epoch_store
                 .epoch_start_configuration()
-                .epoch_start_timestamp_ms
+                .epoch_start_timestamp_ms()
                 .checked_add(config.epoch_duration_ms)
                 .expect("Overflow calculating next_reconfiguration_timestamp_ms"),
             metrics: checkpoint_metrics.clone(),
@@ -790,11 +788,7 @@ impl SuiNode {
                 narwhal_manager.shutdown().await;
 
                 let new_epoch_store = self
-                    .reconfigure_state(
-                        &cur_epoch_store,
-                        next_epoch_committee,
-                        system_state.epoch_start_timestamp_ms,
-                    )
+                    .reconfigure_state(&cur_epoch_store, next_epoch_committee, system_state)
                     .await;
 
                 narwhal_epoch_data_remover
@@ -825,11 +819,7 @@ impl SuiNode {
                 }
             } else {
                 let new_epoch_store = self
-                    .reconfigure_state(
-                        &cur_epoch_store,
-                        next_epoch_committee,
-                        system_state.epoch_start_timestamp_ms,
-                    )
+                    .reconfigure_state(&cur_epoch_store, next_epoch_committee, system_state)
                     .await;
 
                 if self.state.is_validator(&new_epoch_store) {
@@ -859,16 +849,12 @@ impl SuiNode {
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
         next_epoch_committee: Committee,
-        epoch_start_timestamp_ms: u64,
+        sui_system_state: SuiSystemState,
     ) -> Arc<AuthorityPerEpochStore> {
         let next_epoch = next_epoch_committee.epoch();
         let new_epoch_store = self
             .state
-            .reconfigure(
-                cur_epoch_store,
-                next_epoch_committee,
-                epoch_start_timestamp_ms,
-            )
+            .reconfigure(cur_epoch_store, next_epoch_committee, sui_system_state)
             .await
             .expect("Reconfigure authority state cannot fail");
         info!(next_epoch, "Validator State has been reconfigured");
