@@ -10,7 +10,7 @@ import pkg from './package.json' assert { type: 'json' };
 async function main() {
   await writeFile(
     'src/pkg-version.ts',
-    LICENSE + `export const version = '${pkg.version}';\n`,
+    LICENSE + `export const pkgVersion = '${pkg.version}';\n`,
   );
 }
 

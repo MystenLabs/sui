@@ -33,7 +33,11 @@ pub mod transaction_builder_api;
 pub mod transaction_execution_api;
 
 pub const CLIENT_SDK_TYPE_HEADER: &str = "client-sdk-type";
+/// The version number of the SDK itself. This can be different from the API version.
 pub const CLIENT_SDK_VERSION_HEADER: &str = "client-sdk-version";
+/// The RPC API version that the client is targeting. Different SDK versions may target the same
+/// API version.
+pub const CLIENT_TARGET_API_VERSION_HEADER: &str = "client-target-api-version";
 
 #[cfg(test)]
 #[path = "unit_tests/rpc_server_tests.rs"]
@@ -89,15 +93,17 @@ impl JsonRpcServerBuilder {
         };
         info!(?acl);
 
-        let client_type: HeaderName = HeaderName::from_static(CLIENT_SDK_TYPE_HEADER);
-        let client_api_version: HeaderName = HeaderName::from_static(CLIENT_SDK_VERSION_HEADER);
-
         let cors = CorsLayer::new()
             // Allow `POST` when accessing the resource
             .allow_methods([Method::POST])
             // Allow requests from any origin
             .allow_origin(acl)
-            .allow_headers([hyper::header::CONTENT_TYPE, client_type, client_api_version]);
+            .allow_headers([
+                hyper::header::CONTENT_TYPE,
+                HeaderName::from_static(CLIENT_SDK_TYPE_HEADER),
+                HeaderName::from_static(CLIENT_SDK_VERSION_HEADER),
+                HeaderName::from_static(CLIENT_TARGET_API_VERSION_HEADER),
+            ]);
 
         self.module
             .register_method("rpc.discover", move |_, _| Ok(self.rpc_doc.clone()))?;

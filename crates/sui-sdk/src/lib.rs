@@ -19,7 +19,9 @@ use sui_adapter::execution_mode::Normal;
 pub use sui_json as json;
 
 use crate::apis::{CoinReadApi, EventApi, GovernanceApi, QuorumDriver, ReadApi};
-use sui_json_rpc::{CLIENT_SDK_TYPE_HEADER, CLIENT_SDK_VERSION_HEADER};
+use sui_json_rpc::{
+    CLIENT_SDK_TYPE_HEADER, CLIENT_SDK_VERSION_HEADER, CLIENT_TARGET_API_VERSION_HEADER,
+};
 pub use sui_json_rpc_types as rpc_types;
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiObjectInfo};
 use sui_transaction_builder::{DataReader, TransactionBuilder};
@@ -76,6 +78,11 @@ impl SuiClientBuilder {
     pub async fn build(self, http: impl AsRef<str>) -> SuiRpcResult<SuiClient> {
         let client_version = env!("CARGO_PKG_VERSION");
         let mut headers = HeaderMap::new();
+        headers.insert(
+            CLIENT_TARGET_API_VERSION_HEADER,
+            // for rust, the client version is the same as the target api version
+            HeaderValue::from_static(client_version),
+        );
         headers.insert(
             CLIENT_SDK_VERSION_HEADER,
             HeaderValue::from_static(client_version),

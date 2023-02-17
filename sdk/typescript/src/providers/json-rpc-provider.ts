@@ -75,7 +75,9 @@ import { UnserializedSignableTransaction } from '../signers/txn-data-serializers
 import { LocalTxnDataSerializer } from '../signers/txn-data-serializers/local-txn-data-serializer';
 import { toB64 } from '@mysten/bcs';
 import { SerializedSignature } from '../cryptography/signature';
-import { version as packageVersion } from '../pkg-version';
+import { pkgVersion } from '../pkg-version';
+
+export const TARGETED_RPC_VERSION = '0.27.0';
 
 /**
  * Configuration options for the JsonRpcProvider. If the value of a field is not provided,
@@ -154,7 +156,8 @@ export class JsonRpcProvider extends Provider {
     // method
     // this.client = new JsonRpcClient(this.endpoints.fullNode, {
     //   'Client-Sdk-Type': 'typescript',
-    //   'Client-Sdk-Version': packageVersion,
+    //   'Client-Sdk-Version': pkgVersion,
+    //   'Client-Target-Api-Version': TARGETED_RPC_VERSION,
     // });
     // TODO: add header for websocket request
     this.wsClient = new WebsocketClient(
@@ -188,7 +191,8 @@ export class JsonRpcProvider extends Provider {
       ) {
         this.client = new JsonRpcClient(this.endpoints.fullNode, {
           'Client-Sdk-Type': 'typescript',
-          'Client-Sdk-Version': packageVersion,
+          'Client-Sdk-Version': pkgVersion,
+          'Client-Target-Api-Version': TARGETED_RPC_VERSION,
         });
         this.addedHeaders = true;
       }
