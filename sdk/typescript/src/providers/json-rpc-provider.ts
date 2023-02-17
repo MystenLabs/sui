@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Provider } from './provider';
-import { ErrorResponse, HttpHeaders, JsonRpcClient, TlsOptions } from '../rpc/client';
+import {
+  ErrorResponse,
+  HttpHeaders,
+  JsonRpcClient,
+  TlsOptions,
+} from '../rpc/client';
 import {
   Coin,
   ExecuteTransactionRequestType,

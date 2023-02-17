@@ -30,7 +30,7 @@ export type RpcParams = {
 };
 
 /**
- * An object defining client certificate and key path for mTLS protocol 
+ * An object defining client certificate and key path for mTLS protocol
  */
 export type TlsOptions = {
   certificatePath: string;
@@ -65,25 +65,31 @@ export class JsonRpcClient {
     this.rpcClient = this.createRpcClient(url, httpHeaders, tlsOptions);
   }
 
-  private createRpcClient(url: string, httpHeaders?: HttpHeaders, tlsOptions?: TlsOptions): RpcClient {
+  private createRpcClient(
+    url: string,
+    httpHeaders?: HttpHeaders,
+    tlsOptions?: TlsOptions,
+  ): RpcClient {
     const client = new RpcClient(
       async (
         request: any,
         callback: (arg0: Error | null, arg1?: string | undefined) => void,
       ) => {
-        
         let agent = null;
         if (tlsOptions?.certificatePath && tlsOptions?.keyPath) {
-          if (fs.existsSync(tlsOptions.certificatePath) && fs.existsSync(tlsOptions.keyPath)) {
+          if (
+            fs.existsSync(tlsOptions.certificatePath) &&
+            fs.existsSync(tlsOptions.keyPath)
+          ) {
             agent = new https.Agent({
               cert: fs.readFileSync(tlsOptions.certificatePath),
               key: fs.readFileSync(tlsOptions.keyPath),
             });
           } else {
-            console.error("Certificate or Key path does not exist.");
+            console.error('Certificate or Key path does not exist.');
           }
         }
-        
+
         const options = {
           method: 'POST',
           body: request,
