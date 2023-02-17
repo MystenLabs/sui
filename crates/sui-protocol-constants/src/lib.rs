@@ -67,6 +67,9 @@ pub const MAX_NUM_DELETED_MOVE_OBJECT_IDS: usize = 2048;
 /// Maximum number of IDs that a single transaction can transfer. Enforced by the VM during execution.
 pub const MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS: usize = 2048;
 
+/// Maximum size of a Move user event. Enforced by the VM during execution.
+pub const MAX_EVENT_EMIT_SIZE: u64 = 256 * 1024;
+
 // === Execution gas costs ====
 // note: per-instruction and native function gas costs live in the sui-cost-tables crate
 
