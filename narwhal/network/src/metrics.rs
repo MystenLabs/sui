@@ -7,6 +7,7 @@ use prometheus::{
     HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 use std::sync::Arc;
+use tracing::warn;
 
 #[derive(Clone, Debug)]
 pub struct NetworkConnectionMetrics {
@@ -46,6 +47,10 @@ pub struct NetworkMetrics {
     request_size: HistogramVec,
     /// Response size by route
     response_size: HistogramVec,
+    /// Counter of requests exceeding the "excessive" size limit
+    excessive_size_requests: IntCounterVec,
+    /// Counter of responses exceeding the "excessive" size limit
+    excessive_size_responses: IntCounterVec,
     /// Gauge of the number of inflight requests at any given time by route
     inflight_requests: IntGaugeVec,
     /// Failed requests by route
@@ -96,6 +101,22 @@ impl NetworkMetrics {
         )
         .unwrap();
 
+        let excessive_size_requests = register_int_counter_vec_with_registry!(
+            format!("{node}_{direction}_excessive_size_requests"),
+            "The number of excessively large request messages sent",
+            &["route"],
+            registry
+        )
+        .unwrap();
+
+        let excessive_size_responses = register_int_counter_vec_with_registry!(
+            format!("{node}_{direction}_excessive_size_responses"),
+            "The number of excessively large response messages seen",
+            &["route"],
+            registry
+        )
+        .unwrap();
+
         let inflight_requests = register_int_gauge_vec_with_registry!(
             format!("{node}_{direction}_inflight_requests"),
             "The number of inflight network requests",
@@ -117,6 +138,8 @@ impl NetworkMetrics {
             request_latency,
             request_size,
             response_size,
+            excessive_size_requests,
+            excessive_size_responses,
             inflight_requests,
             errors,
         }
@@ -126,11 +149,16 @@ impl NetworkMetrics {
 #[derive(Clone)]
 pub struct MetricsMakeCallbackHandler {
     metrics: Arc<NetworkMetrics>,
+    /// Size in bytes above which a request or response message is considered excessively large
+    excessive_message_size: usize,
 }
 
 impl MetricsMakeCallbackHandler {
-    pub fn new(metrics: Arc<NetworkMetrics>) -> Self {
-        Self { metrics }
+    pub fn new(metrics: Arc<NetworkMetrics>, excessive_message_size: usize) -> Self {
+        Self {
+            metrics,
+            excessive_message_size,
+        }
     }
 }
 
@@ -145,10 +173,21 @@ impl MakeCallbackHandler for MetricsMakeCallbackHandler {
             .inflight_requests
             .with_label_values(&[&route])
             .inc();
+        let body_len = request.body().len();
         self.metrics
             .request_size
             .with_label_values(&[&route])
-            .observe(request.body().len() as f64);
+            .observe(body_len as f64);
+        if body_len > self.excessive_message_size {
+            warn!(
+                "Saw excessively large request with size {body_len} for {route} with peer {:?}",
+                request.peer_id()
+            );
+            self.metrics
+                .excessive_size_requests
+                .with_label_values(&[&route])
+                .inc();
+        }
 
         let timer = self
             .metrics
@@ -160,6 +199,7 @@ impl MakeCallbackHandler for MetricsMakeCallbackHandler {
             metrics: self.metrics.clone(),
             timer,
             route,
+            excessive_message_size: self.excessive_message_size,
         }
     }
 }
@@ -170,14 +210,27 @@ pub struct MetricsResponseHandler {
     #[allow(unused)]
     timer: HistogramTimer,
     route: String,
+    excessive_message_size: usize,
 }
 
 impl ResponseHandler for MetricsResponseHandler {
     fn on_response(self, response: &anemo::Response<bytes::Bytes>) {
+        let body_len = response.body().len();
         self.metrics
             .response_size
             .with_label_values(&[&self.route])
-            .observe(response.body().len() as f64);
+            .observe(body_len as f64);
+        if body_len > self.excessive_message_size {
+            warn!(
+                "Saw excessively large response with size {body_len} for {} with peer {:?}",
+                self.route,
+                response.peer_id()
+            );
+            self.metrics
+                .excessive_size_responses
+                .with_label_values(&[&self.route])
+                .inc();
+        }
 
         if !response.status().is_success() {
             let status = response.status().to_u16().to_string();

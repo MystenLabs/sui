@@ -221,6 +221,22 @@ pub struct AnemoParameters {
     /// Per-peer rate-limits (in requests/sec) for the WorkerToWorker service.
     pub report_batch_rate_limit: Option<NonZeroU32>,
     pub request_batch_rate_limit: Option<NonZeroU32>,
+
+    /// Size in bytes above which network messages are considered excessively large. Excessively
+    /// large messages will still be handled, but logged and reported in metrics for debugging.
+    ///
+    /// If unspecified, this will default to 8 MiB.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub excessive_message_size: Option<usize>,
+}
+
+impl AnemoParameters {
+    pub fn excessive_message_size(&self) -> usize {
+        const EXCESSIVE_MESSAGE_SIZE: usize = 8 << 20;
+
+        self.excessive_message_size
+            .unwrap_or(EXCESSIVE_MESSAGE_SIZE)
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
