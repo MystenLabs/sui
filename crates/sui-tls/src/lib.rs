@@ -7,7 +7,7 @@ mod verifier;
 pub const SUI_VALIDATOR_SERVER_NAME: &str = "sui";
 
 pub use certgen::SelfSignedCertificate;
-pub use verifier::ValidatorCertVerifier;
+pub use verifier::{ValidatorAllowlist, ValidatorCertVerifier};
 
 pub use rustls;
 
