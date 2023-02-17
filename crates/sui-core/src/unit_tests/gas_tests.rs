@@ -93,8 +93,7 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
     let effects = result
         .response
         .unwrap()
-        .into_executed_for_testing()
-        .1
+        .into_effects_for_testing()
         .into_data();
     let gas_cost = effects.gas_used;
     assert!(gas_cost.computation_cost > *MIN_GAS_BUDGET);
@@ -141,8 +140,7 @@ async fn test_native_transfer_gas_price_is_used() {
     let effects = result
         .response
         .unwrap()
-        .into_executed_for_testing()
-        .1
+        .into_effects_for_testing()
         .into_data();
     let gas_summary_1 = effects.gas_cost_summary();
 
@@ -151,8 +149,7 @@ async fn test_native_transfer_gas_price_is_used() {
     let effects = result
         .response
         .unwrap()
-        .into_executed_for_testing()
-        .1
+        .into_effects_for_testing()
         .into_data();
     let gas_summary_2 = effects.gas_cost_summary();
 
@@ -222,8 +219,7 @@ async fn test_native_transfer_insufficient_gas_reading_objects() {
     let effects = result
         .response
         .unwrap()
-        .into_executed_for_testing()
-        .1
+        .into_effects_for_testing()
         .into_data();
     assert_eq!(
         effects.status.unwrap_err(),
@@ -241,8 +237,7 @@ async fn test_native_transfer_insufficient_gas_execution() {
     let total_gas = result
         .response
         .unwrap()
-        .into_executed_for_testing()
-        .1
+        .into_effects_for_testing()
         .data()
         .gas_used
         .gas_used();
@@ -251,8 +246,7 @@ async fn test_native_transfer_insufficient_gas_execution() {
     let effects = result
         .response
         .unwrap()
-        .into_executed_for_testing()
-        .1
+        .into_effects_for_testing()
         .into_data();
     // We won't drain the entire budget because we don't charge for storage if tx failed.
     assert!(effects.gas_used.gas_used() < budget);
@@ -559,7 +553,7 @@ struct TransferResult {
     pub authority_state: Arc<AuthorityState>,
     pub object_id: ObjectID,
     pub gas_object_id: ObjectID,
-    pub response: SuiResult<TransactionInfoResponse>,
+    pub response: SuiResult<TransactionStatus>,
 }
 
 async fn execute_transfer(gas_balance: u64, gas_budget: u64, run_confirm: bool) -> TransferResult {
@@ -596,12 +590,12 @@ async fn execute_transfer_with_price(
     let response = if run_confirm {
         send_and_confirm_transaction(&authority_state, tx)
             .await
-            .map(|(cert, effects)| TransactionInfoResponse::Executed(cert, effects))
+            .map(|(cert, effects)| TransactionStatus::Executed(Some(cert.into_sig()), effects))
     } else {
         authority_state
             .handle_transaction(tx)
             .await
-            .map(|r| r.into())
+            .map(|r| r.status)
     };
     TransferResult {
         authority_state,

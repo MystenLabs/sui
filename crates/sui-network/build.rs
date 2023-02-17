@@ -27,7 +27,7 @@ fn main() -> Result<()> {
                 .name("transaction")
                 .route_name("Transaction")
                 .input_type("sui_types::messages::Transaction")
-                .output_type("sui_types::messages::TransactionInfoResponse")
+                .output_type("sui_types::messages::HandleTransactionResponse")
                 .codec_path(codec_path)
                 .build(),
         )

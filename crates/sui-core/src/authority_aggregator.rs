@@ -224,7 +224,10 @@ struct ProcessCertificateState {
 #[derive(Debug)]
 pub enum ProcessTransactionResult {
     Certified(VerifiedCertificate),
-    Executed(VerifiedCertificate, VerifiedCertifiedTransactionEffects),
+    Executed(
+        Option<VerifiedCertificate>,
+        VerifiedCertifiedTransactionEffects,
+    ),
 }
 
 impl ProcessTransactionResult {
@@ -1057,9 +1060,13 @@ where
                 debug!(?tx_digest, name=?name.concise(), weight, "Received signed transaction from validator handle_transaction");
                 self.handle_transaction_response_with_signed(state, signed)
             }
-            Ok(VerifiedTransactionInfoResponse::Executed(cert, effects)) => {
-                debug!(?tx_digest, name=?name.concise(), weight, "Received prev certificate from validator handle_transaction");
-                self.handle_transaction_response_with_executed(state, cert, effects)
+            Ok(VerifiedTransactionInfoResponse::ExecutedWithCert(cert, effects)) => {
+                debug!(?tx_digest, name=?name.concise(), weight, "Received prev certificate and effects from validator handle_transaction");
+                self.handle_transaction_response_with_executed(state, Some(cert), effects)
+            }
+            Ok(VerifiedTransactionInfoResponse::ExecutedWithoutCert(_, effects)) => {
+                debug!(?tx_digest, name=?name.concise(), weight, "Received prev effects from validator handle_transaction");
+                self.handle_transaction_response_with_executed(state, None, effects)
             }
             Err(err) => {
                 self.record_conflicting_transaction_if_any(state, name, weight, &err);
@@ -1111,28 +1118,32 @@ where
     fn handle_transaction_response_with_executed(
         &self,
         state: &mut ProcessTransactionState,
-        certificate: VerifiedCertificate,
+        certificate: Option<VerifiedCertificate>,
         signed_effects: VerifiedSignedTransactionEffects,
     ) -> SuiResult<Option<ProcessTransactionResult>> {
-        // If we get a certificate in the same epoch, then we use it.
-        // A certificate in a past epoch does not guarantee finality
-        // and validators may reject to process it.
-        if certificate.epoch() == self.committee.epoch {
-            Ok(Some(ProcessTransactionResult::Certified(certificate)))
-        } else {
-            // If we get 2f+1 effects, it's an proof that the transaction
-            // has already been finalized. This works because validators would re-sign effects for transactions
-            // that were finalized in previous epochs.
-            let (effects, sig) = signed_effects.into_inner().into_data_and_sig();
-            match state.effects_map.insert(effects.digest(), &effects, sig) {
-                InsertResult::NotEnoughVotes => Ok(None),
-                InsertResult::Failed { error } => Err(error),
-                InsertResult::QuorumReached(cert_sig) => {
-                    let ct = CertifiedTransactionEffects::new_from_data_and_sig(effects, cert_sig);
-                    Ok(Some(ProcessTransactionResult::Executed(
-                        certificate,
-                        ct.verify(&self.committee)?,
-                    )))
+        match certificate {
+            Some(certificate) if certificate.epoch() == self.committee.epoch => {
+                // If we get a certificate in the same epoch, then we use it.
+                // A certificate in a past epoch does not guarantee finality
+                // and validators may reject to process it.
+                Ok(Some(ProcessTransactionResult::Certified(certificate)))
+            }
+            _ => {
+                // If we get 2f+1 effects, it's a proof that the transaction
+                // has already been finalized. This works because validators would re-sign effects for transactions
+                // that were finalized in previous epochs.
+                let (effects, sig) = signed_effects.into_inner().into_data_and_sig();
+                match state.effects_map.insert(effects.digest(), &effects, sig) {
+                    InsertResult::NotEnoughVotes => Ok(None),
+                    InsertResult::Failed { error } => Err(error),
+                    InsertResult::QuorumReached(cert_sig) => {
+                        let ct =
+                            CertifiedTransactionEffects::new_from_data_and_sig(effects, cert_sig);
+                        Ok(Some(ProcessTransactionResult::Executed(
+                            certificate,
+                            ct.verify(&self.committee)?,
+                        )))
+                    }
                 }
             }
         }
@@ -1292,7 +1303,13 @@ where
     pub async fn execute_transaction(
         &self,
         transaction: &VerifiedTransaction,
-    ) -> Result<(VerifiedCertificate, VerifiedCertifiedTransactionEffects), anyhow::Error> {
+    ) -> Result<
+        (
+            Option<VerifiedCertificate>,
+            VerifiedCertifiedTransactionEffects,
+        ),
+        anyhow::Error,
+    > {
         let result = self
             .process_transaction(transaction.clone())
             .instrument(tracing::debug_span!("process_tx"))
@@ -1309,7 +1326,7 @@ where
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
 
-        Ok((cert, response))
+        Ok((Some(cert), response))
     }
 
     /// This function tries to get SignedTransaction OR CertifiedTransaction from
@@ -1355,8 +1372,15 @@ where
                 }
                 match self.process_transaction(transaction.clone()).await {
                     Ok(ProcessTransactionResult::Certified(cert))
-                    | Ok(ProcessTransactionResult::Executed(cert, _)) => {
+                    | Ok(ProcessTransactionResult::Executed(Some(cert), _)) => {
                         return cert;
+                    }
+                    Ok(ProcessTransactionResult::Executed(None, _)) => {
+                        // Note: This will go away as soon as finalized transaction work finishes,
+                        // since we will no longer need a cert.
+                        debug!(
+                            "The network has executed this transaction, but no cert is available"
+                        );
                     }
                     Err(err) => {
                         debug!("Did not create advance epoch transaction cert: {:?}", err);

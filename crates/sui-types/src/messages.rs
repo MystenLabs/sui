@@ -1598,62 +1598,77 @@ pub struct TransactionInfoRequest {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum TransactionInfoResponse<
-    TxnT = SignedTransaction,
-    CertT = CertifiedTransaction,
-    EfxT = SignedTransactionEffects,
-> {
-    Signed(TxnT),
-    // TODO: Eventually support a mode for finalized transactions, where we include raw effects
-    // and the finalized epoch/checkpoint number.
-    // We also shouldn't return the cert in the Executed case, but currently the client is expecting it.
-    Executed(CertT, EfxT),
+pub enum TransactionStatus {
+    /// Signature over the transaction.
+    Signed(AuthoritySignInfo),
+    /// For executed transaction, we could return an optional certificate signature on the transaction
+    /// (i.e. the signature part of the CertifiedTransaction), as well as the signed effects.
+    /// The certificate signature is optional because for transactions executed in previous
+    /// epochs, we won't keep around the certificate signatures.
+    Executed(
+        Option<AuthorityStrongQuorumSignInfo>,
+        SignedTransactionEffects,
+    ),
 }
 
-impl PartialEq for TransactionInfoResponse {
-    fn eq(&self, other: &Self) -> bool {
-        match self {
-            Self::Signed(s1) => match other {
-                Self::Signed(s2) => s1.digest() == s2.digest(),
-                _ => false,
-            },
-            Self::Executed(c1, e1) => match other {
-                Self::Executed(c2, e2) => c1.digest() == c2.digest() && e1.digest() == e2.digest(),
-                _ => false,
-            },
-        }
-    }
-}
-
-pub type VerifiedTransactionInfoResponse = TransactionInfoResponse<
-    VerifiedSignedTransaction,
-    VerifiedCertificate,
-    VerifiedSignedTransactionEffects,
->;
-
-impl<TxnT, CertT, EfxT> TransactionInfoResponse<TxnT, CertT, EfxT> {
-    pub fn into_signed_for_testing(self) -> TxnT {
+impl TransactionStatus {
+    pub fn into_signed_for_testing(self) -> AuthoritySignInfo {
         match self {
             Self::Signed(s) => s,
             _ => unreachable!("Incorrect response type"),
         }
     }
 
-    pub fn into_executed_for_testing(self) -> (CertT, EfxT) {
+    pub fn into_effects_for_testing(self) -> SignedTransactionEffects {
         match self {
-            Self::Executed(c, e) => (c, e),
+            Self::Executed(_, e) => e,
             _ => unreachable!("Incorrect response type"),
         }
     }
 }
 
-impl From<VerifiedTransactionInfoResponse> for TransactionInfoResponse {
-    fn from(other: VerifiedTransactionInfoResponse) -> Self {
-        match other {
-            VerifiedTransactionInfoResponse::Signed(s) => Self::Signed(s.into_inner()),
-            VerifiedTransactionInfoResponse::Executed(c, e) => {
-                Self::Executed(c.into_inner(), e.into_inner())
-            }
+impl PartialEq for TransactionStatus {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            Self::Signed(s1) => match other {
+                Self::Signed(s2) => s1.epoch == s2.epoch,
+                _ => false,
+            },
+            Self::Executed(c1, e1) => match other {
+                Self::Executed(c2, e2) => {
+                    c1.as_ref().map(|a| a.epoch) == c2.as_ref().map(|a| a.epoch)
+                        && e1.epoch() == e2.epoch()
+                        && e1.digest() == e2.digest()
+                }
+                _ => false,
+            },
+        }
+    }
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct HandleTransactionResponse {
+    pub status: TransactionStatus,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TransactionInfoResponse {
+    pub transaction: SenderSignedData,
+    pub status: TransactionStatus,
+}
+
+#[derive(Clone, Debug)]
+pub enum VerifiedTransactionInfoResponse {
+    Signed(VerifiedSignedTransaction),
+    ExecutedWithCert(VerifiedCertificate, VerifiedSignedTransactionEffects),
+    ExecutedWithoutCert(VerifiedTransaction, VerifiedSignedTransactionEffects),
+}
+
+impl VerifiedTransactionInfoResponse {
+    pub fn is_executed(&self) -> bool {
+        match self {
+            VerifiedTransactionInfoResponse::Signed(_) => false,
+            VerifiedTransactionInfoResponse::ExecutedWithCert(_, _)
+            | VerifiedTransactionInfoResponse::ExecutedWithoutCert(_, _) => true,
         }
     }
 }
@@ -2784,7 +2799,7 @@ pub struct QuorumDriverRequest {
 
 #[derive(Debug, Clone)]
 pub struct QuorumDriverResponse {
-    pub tx_cert: VerifiedCertificate,
+    pub tx_cert: Option<VerifiedCertificate>,
     pub effects_cert: VerifiedCertifiedTransactionEffects,
 }
 
