@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use jsonrpsee::core::Error as RpcError;
+use jsonrpsee::types::error::CallError;
 use thiserror::Error;
 
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
@@ -16,6 +18,9 @@ pub enum IndexerError {
 
     #[error("Indexer failed to convert structs to diesel Insertable with error: `{0}`")]
     InsertableParsingError(String),
+
+    #[error("Indexer failed to build JsonRpcServer with error: `{0}`")]
+    JsonRpcServerError(String),
 
     #[error("Indexer failed to find object mutations, which should never happen.")]
     ObjectMutationNotAvailable,
@@ -55,6 +60,13 @@ impl IndexerError {
             IndexerError::PgConnectionPoolInitError(_) => "PgConnectionPoolInitError".into(),
             IndexerError::RpcClientInitError(_) => "RpcClientInitError".into(),
             IndexerError::PgPoolConnectionError(_) => "PgPoolConnectionError".into(),
+            IndexerError::JsonRpcServerError(_) => "JsonRpcServerError".into(),
         }
+    }
+}
+
+impl From<IndexerError> for RpcError {
+    fn from(e: IndexerError) -> Self {
+        RpcError::Call(CallError::Failed(e.into()))
     }
 }
