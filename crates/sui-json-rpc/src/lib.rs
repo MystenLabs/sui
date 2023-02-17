@@ -5,6 +5,7 @@ use std::env;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
+use hyper::header::HeaderName;
 use hyper::header::HeaderValue;
 use hyper::Method;
 pub use jsonrpsee::server::ServerHandle;
@@ -85,12 +86,15 @@ impl JsonRpcServerBuilder {
         };
         info!(?acl);
 
+        let client_type: HeaderName = HeaderName::from_static("client-type");
+        let client_api_version: HeaderName = HeaderName::from_static("client-api-version");
+
         let cors = CorsLayer::new()
             // Allow `POST` when accessing the resource
             .allow_methods([Method::POST])
             // Allow requests from any origin
             .allow_origin(acl)
-            .allow_headers([hyper::header::CONTENT_TYPE]);
+            .allow_headers([hyper::header::CONTENT_TYPE, client_type, client_api_version]);
 
         self.module
             .register_method("rpc.discover", move |_, _| Ok(self.rpc_doc.clone()))?;

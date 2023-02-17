@@ -13,6 +13,7 @@ import {
   string,
   Struct,
 } from 'superstruct';
+import { version } from '../pkg-version';
 
 /**
  * An object defining headers to be passed to the RPC server
@@ -67,6 +68,8 @@ export class JsonRpcClient {
           headers: Object.assign(
             {
               'Content-Type': 'application/json',
+              'Client-Type': 'ts-sdk',
+              'Client-Api-Version': version,
             },
             httpHeaders || {},
           ),
