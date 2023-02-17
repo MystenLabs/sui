@@ -357,29 +357,6 @@ impl Core {
         info!("Core on node {} has started successfully.", self.name);
         loop {
             let result = tokio::select! {
-                // Here loopback certificates from the `CertificateFetcher` are received. These are
-                // certificates fetched from other validators that are potentially missing locally.
-                // Some(message) = self.rx_certificates_loopback.recv() => {
-                //     let mut result = Ok(());
-                //     for cert in message.certificates {
-                //         result = match self.process_certificate(cert, None).await {
-                //             // It is possible that subsequent certificates are above GC round,
-                //             // so not stopping early.
-                //             Err(DagError::TooOld(_, _, _)) => continue,
-                //             result => result
-                //         };
-                //         if result.is_err() {
-                //             break;
-                //         }
-                //     };
-
-                //     if message.done.send(()).is_err() {
-                //         result = Err(DagError::ShuttingDown);
-                //     }
-
-                //     result
-                // },
-
                 // We also receive here our new headers created by the `Proposer`.
                 Some(header) = self.rx_headers.recv() => {
                     let (tx_cancel, rx_cancel) = oneshot::channel();

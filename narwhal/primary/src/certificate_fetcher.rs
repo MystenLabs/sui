@@ -438,7 +438,7 @@ async fn process_certificates_helper(
     // In PrimaryReceiverHandler, certificates already in storage are ignored.
     // The check is unnecessary here, because there is no concurrent processing of older
     // certificates. For byzantine failures, the check will not be effective anyway.
-    let verify_scope = monitored_scope("VerifyingFetchedCertificates");
+    let _verify_scope = monitored_scope("VerifyingFetchedCertificates");
     let all_certificates = response.certificates;
     let verify_tasks = all_certificates
         .chunks(VERIFY_CERTIFICATES_BATCH_SIZE)
@@ -456,19 +456,20 @@ async fn process_certificates_helper(
             })
         })
         .collect_vec();
-    // Send verified certificates to core for processing, in the same order as received.
-    let mut verified_certificates = Vec::new();
+    // Process verified certificates in the same order as received.
     for task in verify_tasks {
-        let mut certificates = task.await.map_err(|_| DagError::Canceled)??;
-        verified_certificates.append(&mut certificates);
+        let certificates = task.await.map_err(|_| DagError::Canceled)??;
+        for cert in certificates {
+            match synchronizer.try_accept_certificate(cert, network).await {
+                Ok(()) => continue,
+                // It is possible that subsequent certificates are above GC round,
+                // so not stopping early.
+                Err(DagError::TooOld(_, _, _)) => continue,
+                result => return result,
+            };
+        }
     }
-    drop(verify_scope);
 
-    // Wait for Core to finish processing the certificates.
-    let _process_scope = monitored_scope("ProcessingFetchedCertificates");
-    for cert in verified_certificates {
-        synchronizer.try_accept_certificate(cert, network).await?;
-    }
     trace!("Fetched certificates have been processed");
 
     Ok(())
