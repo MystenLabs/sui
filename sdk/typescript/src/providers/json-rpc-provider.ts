@@ -153,8 +153,8 @@ export class JsonRpcProvider extends Provider {
     // add headers here, instead we add headers in the first call of the `getRpcApiVersion`
     // method
     // this.client = new JsonRpcClient(this.endpoints.fullNode, {
-    //   'Client-Type': 'ts-sdk',
-    //   'Client-Api-Version': packageVersion,
+    //   'Client-Sdk-Type': 'typescript',
+    //   'Client-Sdk-Version': packageVersion,
     // });
     // TODO: add header for websocket request
     this.wsClient = new WebsocketClient(
@@ -187,8 +187,8 @@ export class JsonRpcProvider extends Provider {
         gt(versionToString(this.rpcApiVersion), '0.26.0')
       ) {
         this.client = new JsonRpcClient(this.endpoints.fullNode, {
-          'Client-Type': 'ts-sdk',
-          'Client-Api-Version': packageVersion,
+          'Client-Sdk-Type': 'typescript',
+          'Client-Sdk-Version': packageVersion,
         });
         this.addedHeaders = true;
       }
