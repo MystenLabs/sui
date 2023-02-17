@@ -24,7 +24,8 @@ parking_lot = "0.12.1"
 prometheus = "0.13.3"
 rand = { version = "0.8.5", features = ["small_rng"] }
 thiserror = "1.0.35"
-tokio = { workspace = true, features = ["sync", "rt", "macros", "time", "test-util"] }
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7.4", features = ["codec"] }
 tonic = "0.8.2"
 tower = { version = "0.4.13", features = ["full"] }
 tracing = "0.1.36"
@@ -32,19 +33,17 @@ tap = "1.0.1"
 
 
 consensus = { path = "../consensus", package = "narwhal-consensus" }
-fastcrypto.workspace = true
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", features = ["copy_key"] }
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 network = { path = "../network", package = "narwhal-network" }
 types = { path = "../types", package = "narwhal-types" }
 storage = { path = "../storage", package = "narwhal-storage" }
 store = { path = "../../crates/typed-store", package = "typed-store" }
-mysten-network.workspace = true
-
-mysten-common.workspace = true
+mysten-network = { path = "../../crates/mysten-network" }
 mysten-metrics = { path = "../../crates/mysten-metrics" }
 
-anemo.workspace = true
-anemo-tower.workspace = true
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "0e0ef7054082a6f5a8921688e3d568761bc3be21" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "0e0ef7054082a6f5a8921688e3d568761bc3be21" }
 fail = "0.5.1"
 
 [dev-dependencies]

@@ -10,10 +10,12 @@ publish = false
 [dependencies]
 tempfile = "3.3.0"
 dashmap = "5.4.0"
-fastcrypto.workspace = true
-mysten-common.workspace = true
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e" }
 futures = "0.3.24"
-tokio = { workspace = true, features = ["sync", "rt", "macros"] }
+thiserror = "1.0.35"
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7.4", features = ["codec"] }
+tonic = { version = "0.8.2", features = ["tls"] }
 tracing = "0.1.36"
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 types = { path = "../types", package = "narwhal-types" }

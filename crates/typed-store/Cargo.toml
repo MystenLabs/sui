@@ -23,7 +23,7 @@ hdrhistogram = "7.5.1"
 rocksdb = { version = "0.20.1", features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"], default-features = false }
 serde = { version = "1.0.140", features = ["derive"] }
 thiserror = "1.0.37"
-tokio = { workspace = true, features = ["full", "test-util"] }
+tokio = { version = "1", features = ["full", "test-util"] }
 tracing = "0.1.37"
 sui-macros = { path = "../sui-macros" }
 ouroboros = "0.15.5"

@@ -20,16 +20,15 @@ use narwhal_node::worker_node::WorkerNode;
 use network::client::NetworkClient;
 use node::{
     execution_state::SimpleExecutionState,
+    keypair_file::{
+        get_key_pair_from_rng, read_authority_keypair_from_file, read_network_keypair_from_file,
+        write_authority_keypair_to_file, write_keypair_to_file, AuthorityKeyPair,
+    },
     metrics::{primary_metrics_registry, start_prometheus_server, worker_metrics_registry},
 };
 use prometheus::Registry;
 use std::sync::Arc;
-use storage::{CertificateStoreCacheMetrics, NodeStorage};
-use sui_keys::keypair_file::{
-    read_authority_keypair_from_file, read_network_keypair_from_file,
-    write_authority_keypair_to_file, write_keypair_to_file,
-};
-use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair, SuiKeyPair};
+use storage::NodeStorage;
 use telemetry_subscribers::TelemetryGuards;
 use tokio::sync::mpsc::channel;
 #[cfg(feature = "benchmark")]
@@ -105,14 +104,14 @@ async fn main() -> Result<(), eyre::Report> {
         ("generate_keys", Some(sub_matches)) => {
             let _guard = setup_telemetry(tracing_level, network_tracing_level, None);
             let key_file = sub_matches.value_of("filename").unwrap();
-            let keypair: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+            let keypair: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng);
             write_authority_keypair_to_file(&keypair, key_file).unwrap();
         }
         ("generate_network_keys", Some(sub_matches)) => {
             let _guard = setup_telemetry(tracing_level, network_tracing_level, None);
             let network_key_file = sub_matches.value_of("filename").unwrap();
-            let network_keypair: NetworkKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
-            write_keypair_to_file(&SuiKeyPair::Ed25519(network_keypair), network_key_file).unwrap();
+            let network_keypair: NetworkKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng);
+            write_keypair_to_file(&network_keypair, network_key_file).unwrap();
         }
         ("get_pub_key", Some(sub_matches)) => {
             let _guard = setup_telemetry(tracing_level, network_tracing_level, None);

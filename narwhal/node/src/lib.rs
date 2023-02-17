@@ -8,6 +8,7 @@ pub use storage::{CertificateStoreCacheMetrics, NodeStorage};
 use thiserror::Error;
 
 pub mod execution_state;
+pub mod keypair_file;
 pub mod metrics;
 pub mod primary_node;
 pub mod worker_node;

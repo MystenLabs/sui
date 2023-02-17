@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 arc-swap = "1.5.1"
-fastcrypto.workspace = true
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e" }
 dashmap = "5.4.0"
 either = "1.8.0"
 itertools = "0.10.5"

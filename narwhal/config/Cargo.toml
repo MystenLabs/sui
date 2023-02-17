@@ -12,9 +12,8 @@ serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.88"
 thiserror = "1.0.35"
 tracing = "0.1.36"
-
-fastcrypto.workspace = true
-mysten-util-mem.workspace = true
+arc-swap = { version = "1.5.1", features = ["serde"] }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e" }
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 rand = "0.8.5"
 
