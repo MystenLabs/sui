@@ -116,4 +116,14 @@ export class Connections {
             }
         }
     }
+
+    public gatAllConnectedOrigins() {
+        const origins = new Set<string>();
+        for (const aConnection of this.#connections) {
+            if (aConnection instanceof ContentScriptConnection) {
+                origins.add(aConnection.origin);
+            }
+        }
+        return Array.from(origins.values());
+    }
 }

@@ -129,6 +129,13 @@ export class Keyring {
         return Array.from(this.#accountsMap.values());
     }
 
+    public getAccount(accountAddress: SuiAddress) {
+        if (this.isLocked) {
+            return null;
+        }
+        return this.#accountsMap.get(accountAddress) || null;
+    }
+
     public async changeActiveAccount(address: SuiAddress) {
         if (!this.isLocked && this.#accountsMap.has(address)) {
             await this.storeActiveAccount(address);

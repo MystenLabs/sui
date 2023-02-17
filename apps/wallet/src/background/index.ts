@@ -10,7 +10,9 @@ import NetworkEnv from './NetworkEnv';
 import Permissions from './Permissions';
 import { Connections } from './connections';
 import Keyring from './keyring';
+import { getAccountsDetails } from './keyring/Account';
 import { isSessionStorageSupported } from './storage-utils';
+import { type AccountDetails } from '_payloads/wallet-status-change';
 import { openInNewTab } from '_shared/utils';
 import { MSG_CONNECT } from '_src/content-script/keep-bg-alive';
 import { setAttributes } from '_src/shared/experimentation/features';
@@ -50,12 +52,46 @@ Permissions.permissionReply.subscribe((permission) => {
     }
 });
 
-Permissions.on('connectedAccountsChanged', ({ origin, accounts }) => {
-    connections.notifyContentScript({
-        event: 'walletStatusChange',
-        origin,
-        change: { accounts },
-    });
+Permissions.on(
+    'connectedAccountsChanged',
+    async ({ origin, accounts: addresses }) => {
+        connections.notifyContentScript({
+            event: 'walletStatusChange',
+            origin,
+            change: {
+                accounts: Array.from(
+                    (await getAccountsDetails(addresses, Keyring)).values()
+                ),
+            },
+        });
+    }
+);
+
+Keyring.on('activeAccountChanged', async () => {
+    const allConnectedOrigins = connections.gatAllConnectedOrigins();
+    const connectedAccountByOrigin =
+        await Permissions.getConnectedAccountsForOrigins(allConnectedOrigins);
+    const allAccountDetails = await getAccountsDetails(
+        Array.from(connectedAccountByOrigin.values()).flat(),
+        Keyring
+    );
+    for (const [
+        anOrigin,
+        connectedAddresses,
+    ] of connectedAccountByOrigin.entries()) {
+        // do not notify origins that have no permissions
+        if (connectedAddresses.length) {
+            connections.notifyContentScript({
+                event: 'walletStatusChange',
+                origin: anOrigin,
+                change: {
+                    accounts: connectedAddresses
+                        .map((anAddress) => allAccountDetails.get(anAddress))
+                        .filter((anAccount) => !!anAccount) as AccountDetails[],
+                },
+            });
+        }
+    }
 });
 
 const keyringStatusCallback = () => {

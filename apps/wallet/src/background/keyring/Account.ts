@@ -9,6 +9,9 @@ import {
     type SuiAddress,
 } from '@mysten/sui.js';
 
+import type { Keyring } from '.';
+import type { AccountDetails } from '_payloads/wallet-status-change';
+
 export type AccountType = 'derived' | 'imported';
 export type AccountSerialized = {
     type: AccountType;
@@ -60,4 +63,31 @@ export class Account {
             derivationPath: this.derivationPath,
         };
     }
+
+    get publicKey() {
+        return this.#keypair.getPublicKey();
+    }
+}
+
+export async function getAccountsDetails(
+    addresses: SuiAddress[],
+    keyring: Keyring
+) {
+    const activeAccountAddress = (await keyring.getActiveAccount())?.address;
+    const accounts = new Map<SuiAddress, AccountDetails>();
+    for (const anAddress of addresses) {
+        if (accounts.has(anAddress)) {
+            continue;
+        }
+        const anAccount = keyring.getAccount(anAddress);
+        if (anAccount) {
+            accounts.set(anAddress, {
+                address: anAddress,
+                publicKey: anAccount.publicKey.toBase64(),
+                label: '',
+                selected: activeAccountAddress === anAddress,
+            });
+        }
+    }
+    return accounts;
 }

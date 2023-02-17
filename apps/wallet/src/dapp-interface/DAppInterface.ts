@@ -73,7 +73,7 @@ export class DAppInterface {
             this.send<GetAccount, GetAccountResponse>({
                 type: 'get-account',
             }),
-            (response) => response.accounts
+            (response) => response.accounts.map(({ address }) => address)
         );
     }
 

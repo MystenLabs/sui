@@ -262,6 +262,34 @@ class Permissions {
         }
     }
 
+    /**
+     * Returns the connected account addresses for each origin.
+     * @param origins The origin urls to search for their connected accounts
+     * @returns A Map with key the origin and values an array of account addresses
+     */
+    public async getConnectedAccountsForOrigins(origins: string[]) {
+        const accountsMap = new Map<string, SuiAddress[]>();
+        const allPermissions = await this.getPermissions();
+        for (const anOrigin of origins) {
+            if (
+                allPermissions[anOrigin] &&
+                (await this.hasPermissions(
+                    anOrigin,
+                    ['viewAccount'],
+                    allPermissions[origin]
+                ))
+            ) {
+                accountsMap.set(
+                    anOrigin,
+                    allPermissions[anOrigin].accounts.slice()
+                );
+            } else {
+                accountsMap.set(anOrigin, []);
+            }
+        }
+        return accountsMap;
+    }
+
     public on = this.#events.on;
 
     public off = this.#events.off;

@@ -5,6 +5,8 @@ import Browser from 'webextension-polyfill';
 
 import NetworkEnv from '../NetworkEnv';
 import { Window } from '../Window';
+import Keyring from '../keyring';
+import { getAccountsDetails } from '../keyring/Account';
 import { Connection } from './Connection';
 import { createMessage } from '_messages';
 import { type ErrorPayload, isBasePayload } from '_payloads';
@@ -210,12 +212,14 @@ export class ContentScriptConnection extends Connection {
         );
     }
 
-    private sendAccounts(accounts: SuiAddress[], responseForID?: string) {
+    private async sendAccounts(accounts: SuiAddress[], responseForID?: string) {
         this.send(
             createMessage<GetAccountResponse>(
                 {
                     type: 'get-account-response',
-                    accounts,
+                    accounts: Array.from(
+                        (await getAccountsDetails(accounts, Keyring)).values()
+                    ),
                 },
                 responseForID
             )

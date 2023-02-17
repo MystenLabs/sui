@@ -7,9 +7,18 @@ import type { SuiAddress } from '@mysten/sui.js/src';
 import type { BasePayload, Payload } from '_payloads';
 import type { NetworkEnvType } from '_src/background/NetworkEnv';
 
+export type AccountDetails = {
+    address: SuiAddress;
+    /** Indicates if it is the current active account that the user has selected in the wallet */
+    selected: boolean;
+    /** The public key of the account serialized in base64 */
+    publicKey: string;
+    label: string | null;
+};
+
 export type WalletStatusChange = {
     network?: NetworkEnvType;
-    accounts?: SuiAddress[];
+    accounts?: AccountDetails[];
 };
 
 export interface WalletStatusChangePayload

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { fromB64 } from '@mysten/sui.js';
 import {
     SUI_CHAINS,
     ReadonlyWalletAccount,
@@ -29,10 +30,12 @@ import {
     type HasPermissionsResponse,
     ALL_PERMISSION_TYPES,
 } from '_payloads/permissions';
+import {
+    type AccountDetails,
+    isWalletStatusChangePayload,
+} from '_payloads/wallet-status-change';
 import { API_ENV } from '_src/shared/api-env';
-import { isWalletStatusChangePayload } from '_src/shared/messaging/messages/payloads/wallet-status-change';
 
-import type { SuiAddress } from '@mysten/sui.js/src';
 import type { BasePayload, Payload } from '_payloads';
 import type { GetAccount } from '_payloads/account/GetAccount';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
@@ -72,7 +75,7 @@ export class SuiWallet implements Wallet {
     readonly #events: Emitter<WalletEventsMap>;
     readonly #version = '1.0.0' as const;
     readonly #name = name;
-    #account: ReadonlyWalletAccount | null;
+    #accounts: ReadonlyWalletAccount[];
     #messagesStream: WindowMessageStream;
     #activeChain: ChainType | null = null;
 
@@ -118,26 +121,32 @@ export class SuiWallet implements Wallet {
     }
 
     get accounts() {
-        return this.#account ? [this.#account] : [];
+        return this.#accounts;
     }
 
-    #setAccount(address: SuiAddress | null) {
-        if (!address) {
-            this.#account = null;
-            return;
+    #setAccounts(accounts: AccountDetails[]) {
+        const newAccounts: ReadonlyWalletAccount[] = [];
+        for (const anAccount of accounts) {
+            const aWalletAccount = new ReadonlyWalletAccount({
+                address: anAccount.address,
+                publicKey: fromB64(anAccount.publicKey),
+                chains: this.#activeChain ? [this.#activeChain] : [],
+                features: ['sui:signAndExecuteTransaction'],
+                label: anAccount.label || '',
+            });
+            // move the selected account first
+            if (anAccount.selected) {
+                newAccounts.unshift(aWalletAccount);
+            } else {
+                newAccounts.push(aWalletAccount);
+            }
         }
-        this.#account = new ReadonlyWalletAccount({
-            address,
-            // TODO: Expose public key instead of address:
-            publicKey: new Uint8Array(),
-            chains: this.#activeChain ? [this.#activeChain] : [],
-            features: ['sui:signAndExecuteTransaction'],
-        });
+        this.#accounts = newAccounts;
     }
 
     constructor() {
         this.#events = mitt();
-        this.#account = null;
+        this.#accounts = [];
         this.#messagesStream = new WindowMessageStream(
             'sui_in-page',
             'sui_content-script'
@@ -147,19 +156,26 @@ export class SuiWallet implements Wallet {
                 const { network, accounts } = payload;
                 if (network) {
                     this.#setActiveChain(network);
-                    if (
-                        this.#account &&
-                        this.#activeChain &&
-                        this.#account.chains[0] !== this.#activeChain
-                    ) {
-                        this.#setAccount(this.#account.address);
+                    if (!accounts) {
+                        // in case an accounts change exists skip updating chains of current accounts
+                        // accounts will be updated in the if block below
+                        this.#accounts = this.#accounts.map(
+                            ({ address, features, icon, label, publicKey }) =>
+                                new ReadonlyWalletAccount({
+                                    address,
+                                    publicKey,
+                                    chains: this.#activeChain
+                                        ? [this.#activeChain]
+                                        : [],
+                                    features,
+                                    label,
+                                    icon,
+                                })
+                        );
                     }
                 }
                 if (accounts) {
-                    const [address = null] = accounts;
-                    if (address !== this.#account?.address) {
-                        this.#setAccount(address);
-                    }
+                    this.#setAccounts(accounts);
                 }
                 this.#events.emit('change', { accounts: this.accounts });
             }
@@ -177,14 +193,10 @@ export class SuiWallet implements Wallet {
         if (!(await this.#hasPermissions(['viewAccount']))) {
             return;
         }
-        const accounts = await this.#getAccount();
-        const [address] = accounts;
-        if (address) {
-            const account = this.#account;
-            if (!account || account.address !== address) {
-                this.#setAccount(address);
-                this.#events.emit('change', { accounts: this.accounts });
-            }
+        const accounts = await this.#getAccounts();
+        this.#setAccounts(accounts);
+        if (accounts.length) {
+            this.#events.emit('change', { accounts: this.accounts });
         }
     };
 
@@ -240,7 +252,7 @@ export class SuiWallet implements Wallet {
         );
     }
 
-    #getAccount() {
+    #getAccounts() {
         return mapToPromise(
             this.#send<GetAccount, GetAccountResponse>({
                 type: 'get-account',
