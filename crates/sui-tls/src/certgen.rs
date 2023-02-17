@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::ed25519::Ed25519PrivateKey;
+use fastcrypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};
 use pkcs8::EncodePrivateKey;
 use rcgen::{CertificateParams, KeyPair, SignatureAlgorithm};
 
@@ -82,4 +82,24 @@ fn gen_certificate(
         "unreachable! from_params should only fail if the key is incompatible with params.algo",
     );
     Ok(cert)
+}
+
+pub(crate) fn public_key_from_certificate(
+    certificate: &rustls::Certificate,
+) -> Result<Ed25519PublicKey, anyhow::Error> {
+    use fastcrypto::traits::ToFromBytes;
+    use x509_parser::{certificate::X509Certificate, prelude::FromDer};
+
+    let cert = X509Certificate::from_der(certificate.0.as_ref())
+        .map_err(|_| rustls::Error::InvalidCertificateEncoding)?;
+    let spki = cert.1.public_key();
+    let public_key_bytes =
+        <ed25519::pkcs8::PublicKeyBytes as pkcs8::DecodePublicKey>::from_public_key_der(spki.raw)
+            .map_err(|e| {
+            rustls::Error::InvalidCertificateData(format!("invalid ed25519 public key: {e}"))
+        })?;
+
+    let public_key = Ed25519PublicKey::from_bytes(public_key_bytes.as_ref())?;
+
+    Ok(public_key)
 }
