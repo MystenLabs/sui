@@ -50,10 +50,6 @@ jobs:
   clippy:
     runs-on: [ubuntu-latest]
     steps:
-      - uses: arduino/setup-protoc@v1
-        # this avoids rate-limiting
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
