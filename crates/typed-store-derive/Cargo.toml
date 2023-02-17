@@ -21,5 +21,5 @@ syn = { version = "1.0.104", features = ["full"] }
 eyre = "0.6.8"
 rocksdb = { version = "0.20.1", features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"], default-features = false }
 tempfile = "3.3.0"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["test-util"] }
 typed-store = { path = "../typed-store" }

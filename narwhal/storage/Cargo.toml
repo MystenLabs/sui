@@ -13,7 +13,7 @@ dashmap = "5.4.0"
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e" }
 futures = "0.3.24"
 thiserror = "1.0.35"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.4", features = ["codec"] }
 tonic = { version = "0.8.2", features = ["tls"] }
 tracing = "0.1.36"

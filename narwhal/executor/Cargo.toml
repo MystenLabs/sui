@@ -18,7 +18,7 @@ futures = "0.3.24"
 primary = { path = "../primary", package = "narwhal-primary" }
 serde = { version = "1.0.144", features = ["derive"] }
 thiserror = "1.0.35"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["sync"] }
 tokio-util = { version = "0.7.4", features = ["codec"] }
 tonic = "0.8.2"
 tracing = "0.1.36"

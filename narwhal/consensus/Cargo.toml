@@ -12,7 +12,7 @@ bcs = "0.1.4"
 match_opt = "0.1.2"
 rand = { version = "0.8.5", optional = true }
 thiserror = "1.0.35"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["sync"] }
 tracing = "0.1.36"
 
 config = { path = "../config", package = "narwhal-config" }
