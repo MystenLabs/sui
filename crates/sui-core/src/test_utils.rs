@@ -122,7 +122,7 @@ pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
         transaction_digest: *tx.digest(),
         gas_object: (
             random_object_ref(),
-            Owner::AddressOwner(tx.data().intent_message.value.signer()),
+            Owner::AddressOwner(tx.data().intent_message.value.sender()),
         ),
         ..Default::default()
     }

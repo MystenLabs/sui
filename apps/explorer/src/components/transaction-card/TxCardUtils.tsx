@@ -15,6 +15,7 @@ import {
     type ExecutionStatusType,
     type TransactionKindName,
     type JsonRpcProvider,
+    type CertifiedTransaction_v26,
 } from '@mysten/sui.js';
 import { Fragment } from 'react';
 
@@ -182,7 +183,8 @@ export const getDataOnTxDigests = (
                         transactionId ===
                         getTransactionDigest(txEff.certificate)
                 )[0];
-                const res: CertifiedTransaction = txEff.certificate;
+                const res: CertifiedTransaction | CertifiedTransaction_v26 =
+                    txEff.certificate;
                 // TODO: handle multiple transactions
                 const txns = getTransactions(res);
                 if (txns.length > 1) {

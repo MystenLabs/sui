@@ -1537,13 +1537,20 @@ impl From<PayAllSui> for SuiPayAllSui {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
+#[serde(rename = "GasData", rename_all = "camelCase")]
+pub struct SuiGasData {
+    pub payment: SuiObjectRef,
+    pub owner: SuiAddress,
+    pub price: u64,
+    pub budget: u64,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
 #[serde(rename = "TransactionData", rename_all = "camelCase")]
 pub struct SuiTransactionData {
     pub transactions: Vec<SuiTransactionKind>,
     pub sender: SuiAddress,
-    pub gas_payment: SuiObjectRef,
-    pub gas_price: u64,
-    pub gas_budget: u64,
+    pub gas_data: SuiGasData,
 }
 
 impl Display for SuiTransactionData {
@@ -1559,9 +1566,10 @@ impl Display for SuiTransactionData {
             }
         }
         writeln!(writer, "Sender: {}", self.sender)?;
-        writeln!(writer, "Gas Payment: {}", self.gas_payment)?;
-        writeln!(writer, "Gas Price: {}", self.gas_price)?;
-        writeln!(writer, "Gas Budget: {}", self.gas_budget)?;
+        writeln!(writer, "Gas Payment: {}", self.gas_data.payment)?;
+        writeln!(writer, "Gas Owner: {}", self.gas_data.owner)?;
+        writeln!(writer, "Gas Price: {}", self.gas_data.price)?;
+        writeln!(writer, "Gas Budget: {}", self.gas_data.budget)?;
         write!(f, "{}", writer)
     }
 }
@@ -1581,10 +1589,13 @@ impl TryFrom<TransactionData> for SuiTransactionData {
         };
         Ok(Self {
             transactions,
-            sender: data.signer(),
-            gas_payment: data.gas().into(),
-            gas_price: data.gas_price,
-            gas_budget: data.gas_budget,
+            sender: data.sender(),
+            gas_data: SuiGasData {
+                payment: data.gas().into(),
+                owner: data.gas_owner(),
+                price: data.gas_price(),
+                budget: data.gas_budget(),
+            },
         })
     }
 }
@@ -1814,8 +1825,9 @@ pub struct SuiChangeEpoch {
 pub struct SuiCertifiedTransaction {
     pub transaction_digest: TransactionDigest,
     pub data: SuiTransactionData,
-    /// tx_signature is signed by the transaction sender, committing to the intent message containing the transaction data and intent.
-    pub tx_signature: GenericSignature,
+    /// tx_signatures is a list of signatures signed by transaction participants,
+    /// committing to the intent message containing the transaction data and intent.
+    pub tx_signatures: Vec<GenericSignature>,
     /// authority signature information, if available, is signed by an authority, applied on `data`.
     pub auth_sign_info: SuiAuthorityStrongQuorumSignInfo,
 }
@@ -1824,7 +1836,7 @@ impl Display for SuiCertifiedTransaction {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut writer = String::new();
         writeln!(writer, "Transaction Hash: {:?}", self.transaction_digest)?;
-        writeln!(writer, "Transaction Signature: {:?}", self.tx_signature)?;
+        writeln!(writer, "Transaction Signature: {:?}", self.tx_signatures)?;
         writeln!(
             writer,
             "Signed Authorities Bitmap: {:?}",
@@ -1844,7 +1856,7 @@ impl TryFrom<CertifiedTransaction> for SuiCertifiedTransaction {
         Ok(Self {
             transaction_digest: digest,
             data: data.intent_message.value.try_into()?,
-            tx_signature: data.tx_signature,
+            tx_signatures: data.tx_signatures,
             auth_sign_info: SuiAuthorityStrongQuorumSignInfo::from(&sig),
         })
     }

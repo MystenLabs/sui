@@ -96,7 +96,9 @@ pub async fn combine(
     let signed_tx = Transaction::from_generic_sig_data(
         intent_msg.value,
         Intent::default(),
-        GenericSignature::from_bytes(&[&*flag, &*sig_bytes, &*pub_key].concat())?,
+        vec![GenericSignature::from_bytes(
+            &[&*flag, &*sig_bytes, &*pub_key].concat(),
+        )?],
     );
     signed_tx.verify_signature()?;
     let signed_tx_bytes = bcs::to_bytes(&signed_tx)?;
@@ -302,7 +304,7 @@ pub async fn parse(
         intent.value
     };
     let account_identifier_signers = if request.signed {
-        vec![data.signer().into()]
+        vec![data.sender().into()]
     } else {
         vec![]
     };

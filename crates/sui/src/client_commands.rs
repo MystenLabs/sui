@@ -444,9 +444,9 @@ pub enum SuiClientCommands {
         #[clap(long)]
         tx_bytes: String,
 
-        /// Base64 encoded signature `flag || signature || pubkey`.
+        /// A list of Base64 encoded signatures `flag || signature || pubkey`.
         #[clap(long)]
-        signature: String,
+        signatures: Vec<String>,
     },
 }
 
@@ -518,7 +518,8 @@ impl SuiClientCommands {
                         .sign_secure(&sender, &data, Intent::default())?;
                 let response = context
                     .execute_transaction(
-                        Transaction::from_data(data, Intent::default(), signature).verify()?,
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+                            .verify()?,
                     )
                     .await?;
 
@@ -583,7 +584,8 @@ impl SuiClientCommands {
                         .sign_secure(&from, &data, Intent::default())?;
                 let response = context
                     .execute_transaction(
-                        Transaction::from_data(data, Intent::default(), signature).verify()?,
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+                            .verify()?,
                     )
                     .await?;
                 let cert = response.certificate;
@@ -616,7 +618,8 @@ impl SuiClientCommands {
                         .sign_secure(&from, &data, Intent::default())?;
                 let response = context
                     .execute_transaction(
-                        Transaction::from_data(data, Intent::default(), signature).verify()?,
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+                            .verify()?,
                     )
                     .await?;
                 let cert = response.certificate;
@@ -664,7 +667,8 @@ impl SuiClientCommands {
                         .sign_secure(&from, &data, Intent::default())?;
                 let response = context
                     .execute_transaction(
-                        Transaction::from_data(data, Intent::default(), signature).verify()?,
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+                            .verify()?,
                     )
                     .await?;
                 let cert = response.certificate;
@@ -713,7 +717,8 @@ impl SuiClientCommands {
                         .sign_secure(&signer, &data, Intent::default())?;
                 let response = context
                     .execute_transaction(
-                        Transaction::from_data(data, Intent::default(), signature).verify()?,
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+                            .verify()?,
                     )
                     .await?;
 
@@ -751,7 +756,8 @@ impl SuiClientCommands {
                         .sign_secure(&signer, &data, Intent::default())?;
                 let response = context
                     .execute_transaction(
-                        Transaction::from_data(data, Intent::default(), signature).verify()?,
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+                            .verify()?,
                     )
                     .await?;
 
@@ -838,7 +844,8 @@ impl SuiClientCommands {
                         .sign_secure(&signer, &data, Intent::default())?;
                 let response = context
                     .execute_transaction(
-                        Transaction::from_data(data, Intent::default(), signature).verify()?,
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+                            .verify()?,
                     )
                     .await?;
                 SuiClientCommandResult::SplitCoin(response)
@@ -862,7 +869,8 @@ impl SuiClientCommands {
                         .sign_secure(&signer, &data, Intent::default())?;
                 let response = context
                     .execute_transaction(
-                        Transaction::from_data(data, Intent::default(), signature).verify()?,
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+                            .verify()?,
                     )
                     .await?;
 
@@ -947,7 +955,7 @@ impl SuiClientCommands {
 
             SuiClientCommands::ExecuteSignedTx {
                 tx_bytes,
-                signature,
+                signatures,
             } => {
                 let data = bcs::from_bytes(
                     &Base64::try_from(tx_bytes)
@@ -955,14 +963,22 @@ impl SuiClientCommands {
                         .to_vec()
                         .map_err(|e| anyhow!(e))?,
                 )?;
-                let bytes = &Base64::try_from(signature)
-                    .map_err(|e| anyhow!(e))?
-                    .to_vec()
-                    .map_err(|e| anyhow!(e))?;
 
-                let sig = GenericSignature::from_bytes(bytes)?;
+                let mut sigs = Vec::new();
+                for sig in signatures {
+                    sigs.push(
+                        GenericSignature::from_bytes(
+                            &Base64::try_from(sig)
+                                .map_err(|e| anyhow!(e))?
+                                .to_vec()
+                                .map_err(|e| anyhow!(e))?,
+                        )
+                        .map_err(|e| anyhow!(e))?,
+                    );
+                }
                 let verified =
-                    Transaction::from_generic_sig_data(data, Intent::default(), sig).verify()?;
+                    Transaction::from_generic_sig_data(data, Intent::default(), sigs).verify()?;
+
                 let response = context.execute_transaction(verified).await?;
                 SuiClientCommandResult::ExecuteSignedTx(response)
             }
@@ -1468,7 +1484,7 @@ pub async fn call_move(
         .config
         .keystore
         .sign_secure(&sender, &data, Intent::default())?;
-    let transaction = Transaction::from_data(data, Intent::default(), signature).verify()?;
+    let transaction = Transaction::from_data(data, Intent::default(), vec![signature]).verify()?;
 
     let response = context.execute_transaction(transaction).await?;
     let cert = response.certificate;

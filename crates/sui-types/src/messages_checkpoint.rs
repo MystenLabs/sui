@@ -405,7 +405,7 @@ pub struct CheckpointContents {
     /// * Genesis checkpoint has transactions but this field is empty.
     /// * Last checkpoint in the epoch will have (last)extra system transaction
     /// in the transactions list not covered in the signatures list
-    user_signatures: Vec<GenericSignature>,
+    user_signatures: Vec<Vec<GenericSignature>>,
 }
 
 impl CheckpointSignatureMessage {
@@ -427,7 +427,7 @@ impl CheckpointContents {
 
     pub fn new_with_causally_ordered_transactions_and_signatures<T>(
         contents: T,
-        signatures: Vec<GenericSignature>,
+        signatures: Vec<Vec<GenericSignature>>,
     ) -> Self
     where
         T: IntoIterator<Item = ExecutionDigests>,
