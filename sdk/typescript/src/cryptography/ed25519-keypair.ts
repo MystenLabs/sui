@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import nacl from 'tweetnacl';
-import type { ExportedKeypair, Keypair } from './keypair';
+import { ExportedKeypair, Keypair, PRIVATE_KEY_SIZE } from './keypair';
 import { Ed25519PublicKey } from './ed25519-publickey';
 import { isValidHardenedPath, mnemonicToSeedHex } from './mnemonics';
 import { derivePath, getPublicKey } from '../utils/ed25519-hd-key';
@@ -55,16 +55,17 @@ export class Ed25519Keypair implements Keypair {
 
   /**
    * Create a Ed25519 keypair from a raw secret key byte array, also known as seed.
-   * This is NOT the private scalar which is resukt of hashing and bit clamping the
-   * secret key.
+   * This is NOT the private scalar which is result of hashing and bit clamping of
+   * the raw secret key.
    *
    * The sui.keystore key is a list of Base64 encoded `flag || privkey`. To import
    * a key from sui.keystore to typescript, decode from base64 and remove the first
-   * flag byte after checking it is indeed the Ed25519 scheme flag 0x00:
+   * flag byte after checking it is indeed the Ed25519 scheme flag 0x00 (See more
+   * on flag for signature scheme: https://github.com/MystenLabs/sui/blob/818406c5abdf7de1b80915a0519071eec3a5b1c7/crates/sui-types/src/crypto.rs#L1650):
    * ```
    * import { Ed25519Keypair, fromB64 } from '@mysten/sui.js';
    * const raw = fromB64(t[1]);
-   * if (raw[0] !== 0 || raw.length !== 33) {
+   * if (raw[0] !== 0 || raw.length !== PRIVATE_KEY_SIZE + 1) {
    *   throw new Error('invalid key');
    * }
    * const imported = Ed25519Keypair.fromSecretKey(raw.slice(1))
@@ -79,9 +80,9 @@ export class Ed25519Keypair implements Keypair {
     options?: { skipValidation?: boolean },
   ): Ed25519Keypair {
     const secretKeyLength = secretKey.length;
-    if (secretKeyLength !== 32) {
+    if (secretKeyLength !== PRIVATE_KEY_SIZE) {
       throw new Error(
-        `Wrong secretKey size. Expected 32 bytes, got ${secretKeyLength}.`,
+        `Wrong secretKey size. Expected ${PRIVATE_KEY_SIZE} bytes, got ${secretKeyLength}.`,
       );
     }
     const keypair = nacl.sign.keyPair.fromSeed(secretKey);

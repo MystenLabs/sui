@@ -4,7 +4,7 @@
 import { fromB64 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
 import { describe, it, expect } from 'vitest';
-import { Ed25519Keypair } from '../../../src';
+import { Ed25519Keypair, PRIVATE_KEY_SIZE } from '../../../src';
 
 const VALID_SECRET_KEY = 'mdqVWeFekT7pqy5T49+tV12jO0m+ESW7ki4zSU9JiCg=';
 
@@ -53,7 +53,7 @@ describe('ed25519-keypair', () => {
 
       // Keypair derived from 32-byte secret key
       const raw = fromB64(t[1]);
-      if (raw[0] !== 0 || raw.length !== 33) {
+      if (raw[0] !== 0 || raw.length !== PRIVATE_KEY_SIZE + 1) {
         throw new Error('invalid key');
       }
       const imported = Ed25519Keypair.fromSecretKey(raw.slice(1));
@@ -63,7 +63,7 @@ describe('ed25519-keypair', () => {
 
   it('generate keypair from random seed', () => {
     const keypair = Ed25519Keypair.fromSecretKey(
-      Uint8Array.from(Array(32).fill(8)),
+      Uint8Array.from(Array(PRIVATE_KEY_SIZE).fill(8)),
     );
     expect(keypair.getPublicKey().toBase64()).toEqual(
       'E5j2LG0aRXxRumpLXz29L2n8qTIWIY3ImX5Ba9F9k8o=',
