@@ -83,6 +83,7 @@ export function getTransfersAmount(
                 amount:
                     payData.amounts[index] +
                     (recipient in acc ? acc[recipient].amount : 0),
+
                 // for PaySuiTransaction the coinType is SUI
                 coinType:
                     txKindName === 'PaySui'
