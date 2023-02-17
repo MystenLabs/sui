@@ -39,6 +39,10 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
       - uses: taiki-e/install-action@nextest
       - name: cargo test
         run: |
@@ -53,7 +57,9 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
+          toolchain: nightly
           components: clippy
+          override: true
       # See '.cargo/config' for list of enabled/disappled clippy lints
       - name: cargo clippy
         run: cargo xclippy -D warnings
@@ -64,7 +70,10 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
+          profile: minimal
+          toolchain: nightly
           components: rustfmt
+          override: true
       - name: rustfmt
         uses: actions-rs/cargo@v1
         with:
