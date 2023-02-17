@@ -1405,7 +1405,7 @@ impl Display for SuiClientCommandResult {
                 }
             }
             SuiClientCommandResult::DeserializeTx(response) => {
-                write!(writer, "{:?}", response)?;
+                write!(writer, "{:#?}", response)?;
             }
             SuiClientCommandResult::SerializeTransferSui(data_to_sign, data_to_execute) => {
                 writeln!(writer, "Intent message to sign: {}", data_to_sign)?;
