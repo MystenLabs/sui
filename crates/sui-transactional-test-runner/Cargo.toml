@@ -13,6 +13,7 @@ bimap = "0.6.2"
 clap = { version = "3.1.8", features = ["derive"] }
 once_cell = "1.16"
 rand = "0.8.5"
+bcs = "0.1.4"
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
@@ -27,4 +28,5 @@ sui-framework = { path = "../sui-framework" }
 sui-types = { path = "../sui-types" }
 sui-adapter = { path = "../sui-adapter" }
 sui-core = { path = "../sui-core" }
+sui-protocol-config = { path = "../sui-protocol-config" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

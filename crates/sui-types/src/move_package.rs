@@ -17,7 +17,7 @@ use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::Bytes;
 use std::collections::BTreeMap;
-use sui_protocol_constants::*;
+use sui_protocol_config::ProtocolConfig;
 
 // TODO: robust MovePackage tests
 // #[cfg(test)]
@@ -61,10 +61,12 @@ impl MovePackage {
             module_map: module_map.clone(),
         };
         let object_size = pkg.size() as u64;
-        if object_size > MAX_MOVE_PACKAGE_SIZE {
+        // This assumes jkjk
+        let max_move_package_size = ProtocolConfig::get_for_min_version().max_move_package_size();
+        if object_size > max_move_package_size {
             return Err(ExecutionErrorKind::MovePackageTooBig {
                 object_size,
-                max_object_size: MAX_MOVE_PACKAGE_SIZE,
+                max_object_size: max_move_package_size,
             }
             .into());
         }

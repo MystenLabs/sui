@@ -48,6 +48,7 @@ use crate::transaction_manager::TransactionManager;
 use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
@@ -79,6 +80,8 @@ pub struct AuthorityPerEpochStore {
     // TODO: Make this Arc<Committee> for more efficient pass-around.
     committee: Committee,
     tables: AuthorityEpochTables,
+
+    protocol_config: ProtocolConfig,
 
     // needed for re-opening epoch db.
     parent_path: PathBuf,
@@ -345,8 +348,10 @@ impl AuthorityPerEpochStore {
             .current_voting_right
             .set(committee.weight(&name) as i64);
         metrics.epoch_total_votes.set(committee.total_votes as i64);
+        let protocol_version = committee.protocol_version;
         Arc::new(Self {
             committee,
+            protocol_config: ProtocolConfig::get_for_version(protocol_version),
             tables,
             parent_path: parent_path.to_path_buf(),
             db_options,
@@ -403,6 +408,10 @@ impl AuthorityPerEpochStore {
 
     pub fn committee(&self) -> &Committee {
         &self.committee
+    }
+
+    pub fn protocol_config(&self) -> &ProtocolConfig {
+        &self.protocol_config
     }
 
     pub fn epoch(&self) -> EpochId {

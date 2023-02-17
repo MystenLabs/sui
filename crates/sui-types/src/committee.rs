@@ -11,27 +11,15 @@ use itertools::Itertools;
 use rand::rngs::ThreadRng;
 use rand::seq::SliceRandom;
 use rand::Rng;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
-use sui_protocol_constants::MIN_PROTOCOL_VERSION;
+pub use sui_protocol_config::ProtocolVersion;
 
 pub type EpochId = u64;
-
-#[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
-pub struct ProtocolVersion(pub u64);
-
-impl ProtocolVersion {
-    // The minimum protocol version supported by this binary. Counterintuitively, this constant may
-    // change over time as support for old protocol versions is removed from the source. This
-    // ensures that when a new network (such as a testnet) is created, its genesis committee will
-    // use a protocol version that is actually supported by the binary.
-    pub const MIN: Self = Self(MIN_PROTOCOL_VERSION);
-}
 
 // TODO: the stake and voting power of a validator can be different so
 // in some places when we are actually referring to the voting power, we

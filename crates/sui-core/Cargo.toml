@@ -44,7 +44,7 @@ sui-storage = { path = "../sui-storage" }
 sui-config = { path = "../sui-config" }
 sui-json = { path = "../sui-json" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
-sui-protocol-constants = { path = "../sui-protocol-constants" }
+sui-protocol-config = { path = "../sui-protocol-config" }
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
@@ -84,7 +84,7 @@ narwhal-test-utils = { path = "../../narwhal/test-utils" }
 [target.'cfg(not(target_env = "msvc"))'.dev-dependencies]
 pprof = { version = "0.11.0", features = ["cpp", "frame-pointer"] }
 
-sui-protocol-constants = { path = "../sui-protocol-constants" }
+sui-protocol-config = { path = "../sui-protocol-config" }
 sui-macros = { path = "../sui-macros" }
 
 test-fuzz = "3.0.4"

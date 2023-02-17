@@ -13,10 +13,7 @@ use move_vm_types::{
     values::{GlobalValue, Value},
 };
 use std::collections::{BTreeMap, BTreeSet};
-use sui_protocol_constants::{
-    MAX_NUM_DELETED_MOVE_OBJECT_IDS, MAX_NUM_EVENT_EMIT, MAX_NUM_NEW_MOVE_OBJECT_IDS,
-    MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS,
-};
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     error::{ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode},
@@ -77,6 +74,26 @@ pub(crate) struct ObjectRuntimeState {
     events: Vec<(StructTag, Value)>,
 }
 
+pub(crate) struct LocalProtocolConfig {
+    pub(crate) max_num_deleted_move_object_ids: usize,
+    pub(crate) max_num_event_emit: u64,
+    pub(crate) max_num_new_move_object_ids: usize,
+    pub(crate) max_num_transfered_move_object_ids: usize,
+    pub(crate) max_event_emit_size: u64,
+}
+
+impl LocalProtocolConfig {
+    fn new(constants: &ProtocolConfig) -> Self {
+        Self {
+            max_num_deleted_move_object_ids: constants.max_num_deleted_move_object_ids(),
+            max_num_event_emit: constants.max_num_event_emit(),
+            max_num_new_move_object_ids: constants.max_num_new_move_object_ids(),
+            max_num_transfered_move_object_ids: constants.max_num_transfered_move_object_ids(),
+            max_event_emit_size: constants.max_event_emit_size(),
+        }
+    }
+}
+
 #[derive(Tid)]
 pub struct ObjectRuntime<'a> {
     object_store: ObjectStore<'a>,
@@ -86,6 +103,8 @@ pub struct ObjectRuntime<'a> {
     pub(crate) state: ObjectRuntimeState,
     // whether or not this TX is gas metered
     is_metered: bool,
+
+    pub(crate) constants: LocalProtocolConfig,
 }
 
 pub enum TransferResult {
@@ -105,6 +124,7 @@ impl<'a> ObjectRuntime<'a> {
         object_resolver: Box<dyn ChildObjectResolver + 'a>,
         input_objects: BTreeMap<ObjectID, (/* by_value */ bool, Owner)>,
         is_metered: bool,
+        protocol_config: &ProtocolConfig,
     ) -> Self {
         Self {
             object_store: ObjectStore::new(object_resolver),
@@ -117,15 +137,19 @@ impl<'a> ObjectRuntime<'a> {
                 events: vec![],
             },
             is_metered,
+            constants: LocalProtocolConfig::new(protocol_config),
         }
     }
 
     pub fn new_id(&mut self, id: ObjectID) -> PartialVMResult<()> {
         // Metered transactions don't have limits for now
-        if self.is_metered && (self.state.new_ids.len() >= MAX_NUM_NEW_MOVE_OBJECT_IDS) {
+        if self.is_metered
+            && (self.state.new_ids.len() >= self.constants.max_num_new_move_object_ids)
+        {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
-                    "Creating more than {MAX_NUM_NEW_MOVE_OBJECT_IDS} IDs is not allowed"
+                    "Creating more than {} IDs is not allowed",
+                    self.constants.max_num_new_move_object_ids
                 ))
                 .with_sub_status(
                     VMMemoryLimitExceededSubStatusCode::NEW_ID_COUNT_LIMIT_EXCEEDED as u64,
@@ -144,10 +168,13 @@ impl<'a> ObjectRuntime<'a> {
         // This is defensive because `self.state.deleted_ids` may not indeed
         // be called based on the `was_new` flag
         // Metered transactions don't have limits for now
-        if self.is_metered && (self.state.deleted_ids.len() >= MAX_NUM_DELETED_MOVE_OBJECT_IDS) {
+        if self.is_metered
+            && (self.state.deleted_ids.len() >= self.constants.max_num_deleted_move_object_ids)
+        {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
-                    "Deleting more than {MAX_NUM_DELETED_MOVE_OBJECT_IDS} IDs is not allowed"
+                    "Deleting more than {} IDs is not allowed",
+                    self.constants.max_num_deleted_move_object_ids
                 ))
                 .with_sub_status(
                     VMMemoryLimitExceededSubStatusCode::DELETED_ID_COUNT_LIMIT_EXCEEDED as u64,
@@ -192,12 +219,13 @@ impl<'a> ObjectRuntime<'a> {
 
         // Metered transactions don't have limits for now
         if self.is_metered
-            && (self.state.transfers.len() >= MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS)
+            && (self.state.transfers.len() >= self.constants.max_num_transfered_move_object_ids)
             && !is_framework_obj
         {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
-                    "Transfering more than {MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS} IDs is not allowed"
+                    "Transfering more than {} IDs is not allowed",
+                    self.constants.max_num_transfered_move_object_ids
                 ))
                 .with_sub_status(
                     VMMemoryLimitExceededSubStatusCode::TRANSFER_ID_COUNT_LIMIT_EXCEEDED as u64,
@@ -208,10 +236,11 @@ impl<'a> ObjectRuntime<'a> {
     }
 
     pub fn emit_event(&mut self, tag: StructTag, event: Value) -> PartialVMResult<()> {
-        if self.state.events.len() >= (MAX_NUM_EVENT_EMIT as usize) {
+        if self.state.events.len() >= (self.constants.max_num_event_emit as usize) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
-                    "Emitting more than {MAX_NUM_EVENT_EMIT} events is not allowed"
+                    "Emitting more than {} events is not allowed",
+                    self.constants.max_num_event_emit
                 ))
                 .with_sub_status(
                     VMMemoryLimitExceededSubStatusCode::EVENT_COUNT_LIMIT_EXCEEDED as u64,

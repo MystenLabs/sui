@@ -238,7 +238,7 @@ impl SuiSystemState {
         CommitteeWithNetAddresses {
             committee: Committee::new(
                 self.epoch,
-                ProtocolVersion(self.protocol_version),
+                ProtocolVersion::new(self.protocol_version),
                 voting_rights,
             )
             // unwrap is safe because we should have verified the committee on-chain.
