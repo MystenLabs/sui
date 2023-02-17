@@ -97,7 +97,8 @@ impl TransactionValidator for SuiTxValidator {
                             idx,
                         )?;
                 }
-                ConsensusTransactionKind::EndOfPublish(_) => {}
+                ConsensusTransactionKind::EndOfPublish(_)
+                | ConsensusTransactionKind::CapabilityNotification(_) => {}
             }
         }
         // verify the user transaction signatures as a batch

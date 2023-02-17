@@ -79,6 +79,7 @@ use sui_json_rpc::coin_api::CoinReadApi;
 use sui_json_rpc::threshold_bls_api::ThresholdBlsApi;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::error::{SuiError, SuiResult};
+use sui_types::messages::{AuthorityCapabilities, ConsensusTransaction};
 
 pub struct ValidatorComponents {
     validator_server_handle: tokio::task::JoinHandle<Result<()>>,
@@ -293,6 +294,7 @@ impl SuiNode {
             .await?;
             // This is only needed during cold start.
             components.consensus_adapter.submit_recovered(&epoch_store);
+
             Some(components)
         } else {
             None
@@ -756,6 +758,20 @@ impl SuiNode {
 
         loop {
             let cur_epoch_store = self.state.load_epoch_store_one_call_per_task();
+            // Advertise capabilities to committee, if we are a validator.
+            if let Some(components) = &*self.validator_components.lock().await {
+                let transaction =
+                    ConsensusTransaction::new_capability_notification(AuthorityCapabilities::new(
+                        self.state.name,
+                        self.config
+                            .supported_protocol_versions
+                            .expect("Supported versions should be populated"),
+                    ));
+                components
+                    .consensus_adapter
+                    .submit(transaction, None, &cur_epoch_store)?;
+            }
+
             let next_epoch_committee = checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
             let next_epoch = next_epoch_committee.epoch();
             assert_eq!(cur_epoch_store.epoch() + 1, next_epoch);
