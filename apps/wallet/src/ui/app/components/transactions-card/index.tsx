@@ -75,12 +75,14 @@ export function TransactionCard({
     const transferAmount = useMemo(() => {
         // Find SUI transfer amount
         const amountTransfersSui = transfer.find(
-            ({ coinType }) => coinType === SUI_TYPE_ARG
+            ({ receiverAddress, coinType }) =>
+                receiverAddress === address && coinType === SUI_TYPE_ARG
         );
 
         // Find non-SUI transfer amount
         const amountTransfersNonSui = transfer.find(
-            ({ coinType }) => coinType !== SUI_TYPE_ARG
+            ({ receiverAddress, coinType }) =>
+                receiverAddress === address && coinType !== SUI_TYPE_ARG
         );
 
         return {
@@ -93,7 +95,7 @@ export function TransactionCard({
                 amountTransfersNonSui?.coinType ||
                 null,
         };
-    }, [transfer]);
+    }, [address, transfer]);
 
     const recipientAddress = useGetTxnRecipientAddress({ txn, address });
 
@@ -142,14 +144,6 @@ export function TransactionCard({
         moveCallLabel === 'Staked' ||
         moveCallLabel === 'Unstaked';
 
-    const transferAmountComponent = transferAmount.coinType &&
-        transferAmount.amount && (
-            <CoinBalance
-                amount={Math.abs(transferAmount.amount)}
-                coinType={transferAmount.coinType}
-            />
-        );
-
     const timestamp = txn.timestamp_ms || txn.timestampMs;
 
     return (
@@ -168,23 +162,20 @@ export function TransactionCard({
                 </div>
                 <div className="flex flex-col w-full gap-1.5">
                     {error ? (
-                        <div className="flex w-full justify-between">
-                            <div className="flex flex-col w-full gap-1.5">
-                                <Text color="gray-90" weight="medium">
-                                    Transaction Failed
-                                </Text>
+                        <div className="flex flex-col w-full gap-1.5">
+                            <Text color="gray-90" weight="medium">
+                                Transaction Failed
+                            </Text>
 
-                                <div className="flex break-all">
-                                    <Text
-                                        variant="subtitle"
-                                        weight="medium"
-                                        color="issue-dark"
-                                    >
-                                        {error}
-                                    </Text>
-                                </div>
+                            <div className="flex break-all">
+                                <Text
+                                    variant="subtitle"
+                                    weight="medium"
+                                    color="issue-dark"
+                                >
+                                    {error}
+                                </Text>
                             </div>
-                            {transferAmountComponent}
                         </div>
                     ) : (
                         <div className="flex w-full justify-between flex-col ">
@@ -203,8 +194,15 @@ export function TransactionCard({
                                         </Text>
                                     )}
                                 </div>
-
-                                {transferAmountComponent}
+                                {transferAmount.coinType &&
+                                    transferAmount.amount && (
+                                        <CoinBalance
+                                            amount={Math.abs(
+                                                transferAmount.amount
+                                            )}
+                                            coinType={transferAmount.coinType}
+                                        />
+                                    )}
                             </div>
                             <div className="flex flex-col w-full gap-1.5">
                                 <TxnTypeLabel
