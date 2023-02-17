@@ -19,4 +19,30 @@ describe('Move bcs', () => {
     expect(bcs.de('string', fromB64(str.toString('base64')), 'base64')).toEqual(STR);
     expect(bcs.de('string', fromHEX(str.toString('hex')), 'hex')).toEqual(STR);
   });
+
+  it('should de/ser native encoding types', () => {
+    const bcs = new BCS(getSuiMoveConfig());
+
+    bcs.registerStructType('TestStruct', {
+      hex: BCS.HEX,
+      base58: BCS.BASE58,
+      base64: BCS.BASE64
+    });
+
+    let hex_str = toHEX(new Uint8Array([1, 2, 3, 4, 5, 6]));
+    let b58_str = toB58(new Uint8Array([1, 2, 3, 4, 5, 6]));
+    let b64_str = toB64(new Uint8Array([1, 2, 3, 4, 5, 6]));
+
+    let serialized = bcs.ser('TestStruct', {
+      hex: hex_str,
+      base58: b58_str,
+      base64: b64_str
+    });
+
+    let deserialized = bcs.de('TestStruct', serialized.toBytes());
+
+    expect(deserialized.hex).toEqual(hex_str);
+    expect(deserialized.base58).toEqual(b58_str);
+    expect(deserialized.base64).toEqual(b64_str);
+  });
 });

@@ -474,6 +474,9 @@ export class BCS {
   static readonly VECTOR: string = "vector";
   static readonly ADDRESS: string = "address";
   static readonly STRING: string = "string";
+  static readonly HEX: string = "hex-string";
+  static readonly BASE58: string = "base58-string";
+  static readonly BASE64: string = "base64-string";
 
   /**
    * Map of kind `TypeName => TypeInterface`. Holds all
@@ -1107,6 +1110,42 @@ export function registerPrimitives(bcs: BCS): void {
         .join("");
     },
     (_str: string) => true
+  );
+
+  bcs.registerType(
+    BCS.HEX,
+    (writer: BcsWriter, data: string) => writer.writeVec(
+      Array.from(fromHEX(data)),
+      (writer, el) => writer.write8(el)
+    ),
+    (reader: BcsReader) => {
+      let bytes = reader.readVec((reader) => reader.read8());
+      return toHEX(new Uint8Array(bytes));
+    }
+  );
+
+  bcs.registerType(
+    BCS.BASE58,
+    (writer: BcsWriter, data: string) => writer.writeVec(
+      Array.from(fromB58(data)),
+      (writer, el) => writer.write8(el)
+    ),
+    (reader: BcsReader) => {
+      let bytes = reader.readVec((reader) => reader.read8());
+      return toB58(new Uint8Array(bytes));
+    }
+  );
+
+  bcs.registerType(
+    BCS.BASE64,
+    (writer: BcsWriter, data: string) => writer.writeVec(
+      Array.from(fromB64(data)),
+      (writer, el) => writer.write8(el)
+    ),
+    (reader: BcsReader) => {
+      let bytes = reader.readVec((reader) => reader.read8());
+      return toB64(new Uint8Array(bytes));
+    }
   );
 }
 
