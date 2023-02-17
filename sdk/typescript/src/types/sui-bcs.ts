@@ -78,7 +78,7 @@ export type PayTx = {
   Pay: {
     coins: SuiObjectRef[];
     recipients: string[];
-    amounts: number[];
+    amounts: string[];
   };
 };
 
@@ -86,7 +86,7 @@ export type PaySuiTx = {
   PaySui: {
     coins: SuiObjectRef[];
     recipients: string[];
-    amounts: number[];
+    amounts: string[];
   };
 };
 
@@ -307,7 +307,7 @@ const BCS_SPEC = {
     struct: {
       coins: 'vector<SuiObjectRef>',
       recipients: 'vector<address>',
-      amounts: 'vector<u64>',
+      amounts: 'vector<string>',
     },
   },
 
@@ -315,7 +315,7 @@ const BCS_SPEC = {
     struct: {
       coins: 'vector<SuiObjectRef>',
       recipients: 'vector<address>',
-      amounts: 'vector<u64>',
+      amounts: 'vector<string>',
     },
   },
 

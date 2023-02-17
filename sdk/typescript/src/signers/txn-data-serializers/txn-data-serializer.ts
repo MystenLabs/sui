@@ -43,7 +43,7 @@ export interface PayTransaction extends TransactionCommon {
    */
   inputCoins: ObjectId[];
   recipients: SuiAddress[];
-  amounts: number[];
+  amounts: string[];
   gasPayment?: ObjectId;
 }
 
@@ -64,7 +64,7 @@ export interface PaySuiTransaction extends TransactionCommon {
    */
   inputCoins: ObjectId[];
   recipients: SuiAddress[];
-  amounts: number[];
+  amounts: string[];
 }
 
 /// Send all SUI coins to one recipient.

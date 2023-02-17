@@ -172,7 +172,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
           inputCoins: splitCoins,
           gasBudget: DEFAULT_GAS_BUDGET,
           recipients: [DEFAULT_RECIPIENT, DEFAULT_RECIPIENT_2],
-          amounts: [4, 2],
+          amounts: ['4', '2'],
           gasPayment: getObjectId(coins[2]),
         },
       });
@@ -201,7 +201,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         data: {
           inputCoins: splitCoins,
           recipients: [DEFAULT_RECIPIENT, DEFAULT_RECIPIENT_2],
-          amounts: [1000, 1000],
+          amounts: ['1000', '1000'],
           gasBudget: gasBudget,
         },
       });
