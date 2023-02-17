@@ -9257,6 +9257,7 @@ dependencies = [
  "pkcs8",
  "rand 0.8.5",
  "rcgen",
+ "reqwest",
  "rustls",
  "tracing",
  "webpki",
