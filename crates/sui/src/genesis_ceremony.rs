@@ -7,9 +7,13 @@ use clap::Parser;
 use fastcrypto::encoding::{Encoding, Hex};
 use multiaddr::Multiaddr;
 use std::path::PathBuf;
-use sui_config::{genesis::Builder, SUI_GENESIS_FILENAME};
+use sui_config::{
+    genesis::{Builder, GenesisTuple},
+    SUI_GENESIS_FILENAME,
+};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
+    committee::ProtocolVersion,
     crypto::{
         generate_proof_of_possession, AuthorityKeyPair, KeypairTraits, NetworkKeyPair, SuiKeyPair,
     },
@@ -24,6 +28,9 @@ use sui_keys::keypair_file::{
 pub struct Ceremony {
     #[clap(long)]
     path: Option<PathBuf>,
+
+    #[clap(long)]
+    protocol_version: Option<u64>,
 
     #[clap(subcommand)]
     command: CeremonyCommand,
@@ -93,9 +100,14 @@ pub fn run(cmd: Ceremony) -> Result<()> {
     };
     let dir = Utf8PathBuf::try_from(dir)?;
 
+    let protocol_version = cmd
+        .protocol_version
+        .map(ProtocolVersion::new)
+        .unwrap_or(ProtocolVersion::MAX);
+
     match cmd.command {
         CeremonyCommand::Init => {
-            let builder = Builder::new();
+            let builder = Builder::new().with_protocol_version(protocol_version);
             builder.save(dir)?;
         }
 
@@ -159,7 +171,8 @@ pub fn run(cmd: Ceremony) -> Result<()> {
 
         CeremonyCommand::BuildUnsignedCheckpoint => {
             let mut builder = Builder::load(&dir)?;
-            let (unsigned_checkpoint, ..) = builder.build_unsigned_genesis_checkpoint();
+            let GenesisTuple(_, unsigned_checkpoint, ..) =
+                builder.build_unsigned_genesis_checkpoint();
             println!(
                 "Successfully built unsigned checkpoint: {}",
                 unsigned_checkpoint.digest()
@@ -173,6 +186,8 @@ pub fn run(cmd: Ceremony) -> Result<()> {
 
             let mut builder = Builder::load(&dir)?;
 
+            check_protocol_version(&builder, protocol_version)?;
+
             // Don't sign unless the unsigned checkpoint has already been created
             if builder.unsigned_genesis_checkpoint().is_none() {
                 return Err(anyhow::anyhow!(
@@ -181,7 +196,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             }
 
             builder = builder.add_validator_signature(&keypair);
-            let checkpoint = builder.unsigned_genesis_checkpoint().unwrap().0;
+            let checkpoint = builder.unsigned_genesis_checkpoint().unwrap().1;
             builder.save(dir)?;
 
             println!(
@@ -192,6 +207,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
 
         CeremonyCommand::Finalize => {
             let builder = Builder::load(&dir)?;
+            check_protocol_version(&builder, protocol_version)?;
 
             let genesis = builder.build();
 
@@ -205,6 +221,18 @@ pub fn run(cmd: Ceremony) -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+fn check_protocol_version(builder: &Builder, protocol_version: ProtocolVersion) -> Result<()> {
+    // It is entirely possible for the user to sign a genesis blob with an unknown
+    // protocol version, but if this happens there is almost certainly some confusion
+    // (e.g. using a `sui` binary built at the wrong commit).
+    if builder.protocol_version() != protocol_version {
+        return Err(anyhow::anyhow!(
+                        "Serialized protocol version does not match local --protocol-version argument. ({:?} vs {:?})",
+                        builder.protocol_version(), protocol_version));
+    }
     Ok(())
 }
 
@@ -276,6 +304,7 @@ mod test {
         // Initialize
         let command = Ceremony {
             path: Some(dir.path().into()),
+            protocol_version: None,
             command: CeremonyCommand::Init,
         };
         command.run()?;
@@ -286,6 +315,7 @@ mod test {
         {
             let command = Ceremony {
                 path: Some(dir.path().into()),
+                protocol_version: None,
                 command: CeremonyCommand::AddValidator {
                     name: validator.name().to_owned(),
                     validator_key_file: key_file.into(),
@@ -307,6 +337,7 @@ mod test {
         // Build the unsigned checkpoint
         let command = Ceremony {
             path: Some(dir.path().into()),
+            protocol_version: None,
             command: CeremonyCommand::BuildUnsignedCheckpoint,
         };
         command.run()?;
@@ -315,6 +346,7 @@ mod test {
         for (key, _worker_key, _network_key, _account_key, _validator) in &validators {
             let command = Ceremony {
                 path: Some(dir.path().into()),
+                protocol_version: None,
                 command: CeremonyCommand::VerifyAndSign {
                     key_file: key.into(),
                 },
@@ -325,6 +357,7 @@ mod test {
         // Finalize the Ceremony and build the Genesis object
         let command = Ceremony {
             path: Some(dir.path().into()),
+            protocol_version: None,
             command: CeremonyCommand::Finalize,
         };
         command.run()?;

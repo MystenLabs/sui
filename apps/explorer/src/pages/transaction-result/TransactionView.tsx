@@ -8,6 +8,7 @@ import {
     getTransactions,
     getTransactionSender,
     getTransferObjectTransaction,
+    getTransactionSignature,
     getMovePackageContent,
     getObjectId,
     SUI_TYPE_ARG,
@@ -357,7 +358,7 @@ function TransactionView({
         content: [
             {
                 label: 'Signature',
-                value: transaction.certificate.txSignature,
+                value: getTransactionSignature(transaction.certificate),
                 monotypeClass: true,
             },
         ],
@@ -442,7 +443,18 @@ function TransactionView({
 
     const txError = getExecutionStatusError(transaction);
 
-    const gasPrice = transaction.certificate.data.gasPrice || 1;
+    const gasPrice =
+        ('gasData' in transaction.certificate.data
+            ? transaction.certificate.data.gasData.price
+            : transaction.certificate.data.gasPrice) || 1;
+    const gasPayment =
+        'gasData' in transaction.certificate.data
+            ? transaction.certificate.data.gasData.payment
+            : transaction.certificate.data.gasPayment;
+    const gasBudget =
+        'gasData' in transaction.certificate.data
+            ? transaction.certificate.data.gasData.budget
+            : transaction.certificate.data.gasBudget;
 
     return (
         <div className={clsx(styles.txdetailsbg)}>
@@ -568,20 +580,12 @@ function TransactionView({
                                 <DescriptionItem title="Gas Payment">
                                     <ObjectLink
                                         noTruncate
-                                        objectId={
-                                            transaction.certificate.data
-                                                .gasPayment.objectId
-                                        }
+                                        objectId={gasPayment.objectId}
                                     />
                                 </DescriptionItem>
 
                                 <DescriptionItem title="Gas Budget">
-                                    <GasAmount
-                                        amount={
-                                            transaction.certificate.data
-                                                .gasBudget * gasPrice
-                                        }
-                                    />
+                                    <GasAmount amount={gasBudget * gasPrice} />
                                 </DescriptionItem>
 
                                 {gasFeesExpanded && (

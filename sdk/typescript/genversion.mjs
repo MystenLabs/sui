@@ -8,7 +8,10 @@ const LICENSE =
 import pkg from './package.json' assert { type: 'json' };
 
 async function main() {
-  await writeFile('src/pkg-version.ts', LICENSE + `export const version = '${pkg.version}';\n`);
+  await writeFile(
+    'src/pkg-version.ts',
+    LICENSE + `export const version = '${pkg.version}';\n`,
+  );
 }
 
 await main();

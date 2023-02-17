@@ -8415,7 +8415,7 @@ dependencies = [
  "sui-cost-tables",
  "sui-framework",
  "sui-json",
- "sui-protocol-constants",
+ "sui-protocol-config",
  "sui-types",
  "sui-verifier",
  "tracing",
@@ -8469,7 +8469,7 @@ dependencies = [
  "sui-macros",
  "sui-network",
  "sui-node",
- "sui-protocol-constants",
+ "sui-protocol-config",
  "sui-sdk",
  "sui-simulator",
  "sui-types",
@@ -8548,6 +8548,7 @@ dependencies = [
  "sui-adapter",
  "sui-framework",
  "sui-keys",
+ "sui-protocol-config",
  "sui-simulator",
  "sui-types",
  "tempfile",
@@ -8612,7 +8613,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-macros",
  "sui-network",
- "sui-protocol-constants",
+ "sui-protocol-config",
  "sui-simulator",
  "sui-storage",
  "sui-types",
@@ -8666,7 +8667,7 @@ dependencies = [
  "move-vm-types",
  "once_cell",
  "serde 1.0.152",
- "sui-protocol-constants",
+ "sui-protocol-config",
  "workspace-hack",
 ]
 
@@ -8736,7 +8737,7 @@ dependencies = [
  "serde 1.0.152",
  "smallvec",
  "sui-framework-build",
- "sui-protocol-constants",
+ "sui-protocol-config",
  "sui-types",
  "workspace-hack",
 ]
@@ -8847,7 +8848,7 @@ dependencies = [
  "sui-macros",
  "sui-open-rpc",
  "sui-open-rpc-macros",
- "sui-protocol-constants",
+ "sui-protocol-config",
  "sui-sdk",
  "sui-simulator",
  "sui-transaction-builder",
@@ -8883,6 +8884,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "sui-json",
+ "sui-protocol-config",
  "sui-types",
  "tracing",
  "workspace-hack",
@@ -8970,7 +8972,7 @@ dependencies = [
  "sui-core",
  "sui-json-rpc",
  "sui-network",
- "sui-protocol-constants",
+ "sui-protocol-config",
  "sui-simulator",
  "sui-storage",
  "sui-telemetry",
@@ -9032,9 +9034,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-protocol-constants"
+name = "sui-protocol-config"
 version = "0.1.0"
 dependencies = [
+ "once_cell",
+ "schemars",
+ "serde 1.0.152",
  "workspace-hack",
 ]
 
@@ -9323,6 +9328,7 @@ name = "sui-transactional-test-runner"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "bimap",
  "clap 3.2.23",
  "move-binary-format",
@@ -9338,6 +9344,7 @@ dependencies = [
  "sui-adapter",
  "sui-core",
  "sui-framework",
+ "sui-protocol-config",
  "sui-types",
  "workspace-hack",
 ]
@@ -9382,7 +9389,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "sui-cost-tables",
- "sui-protocol-constants",
+ "sui-protocol-config",
  "tap",
  "test-utils",
  "thiserror",

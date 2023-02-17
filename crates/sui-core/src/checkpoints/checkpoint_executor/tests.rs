@@ -15,6 +15,7 @@ use tokio::{sync::broadcast, time::timeout};
 use crate::{authority::AuthorityState, checkpoints::CheckpointStore};
 
 use sui_network::state_sync::test_utils::{empty_contents, CommitteeFixture};
+use sui_types::sui_system_state::SuiSystemState;
 
 /// Test checkpoint executor happy path, test that checkpoint executor correctly
 /// picks up where it left off in the event of a mid-epoch node crash.
@@ -170,11 +171,15 @@ pub async fn test_checkpoint_executor_cross_epoch() {
         num_to_sync_per_epoch as u64,
     );
 
+    let sui_system_state = SuiSystemState {
+        epoch: 1,
+        ..Default::default()
+    };
     let new_epoch_store = authority_state
         .reconfigure(
             &authority_state.epoch_store_for_testing(),
             second_committee.committee().clone(),
-            0,
+            sui_system_state,
         )
         .await
         .unwrap();

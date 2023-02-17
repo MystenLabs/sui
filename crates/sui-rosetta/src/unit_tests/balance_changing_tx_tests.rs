@@ -551,7 +551,7 @@ async fn test_transaction(
     );
 
     let signature = keystore
-        .sign_secure(&data.signer(), &data, Intent::default())
+        .sign_secure(&data.sender(), &data, Intent::default())
         .unwrap();
 
     // Balance before execution
@@ -565,7 +565,7 @@ async fn test_transaction(
     let response = client
         .quorum_driver()
         .execute_transaction(
-            Transaction::from_data(data.clone(), Intent::default(), signature)
+            Transaction::from_data(data.clone(), Intent::default(), vec![signature])
                 .verify()
                 .unwrap(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),

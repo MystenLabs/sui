@@ -114,6 +114,11 @@ pub struct Opts {
     // the end of the benchmark or periodically during a continuous run.
     #[clap(long, action, global = true)]
     pub stress_stat_collection: bool,
+
+    /// Start the stress test at a given protocol version. (Usually unnecessary if stress test is
+    /// built at the same commit as the validators.
+    #[clap(long, global = true)]
+    pub protocol_version: Option<u64>,
 }
 
 #[derive(Debug, Clone, Parser, Eq, PartialEq, EnumString)]

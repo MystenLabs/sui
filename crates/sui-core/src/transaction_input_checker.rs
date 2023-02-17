@@ -4,8 +4,8 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
 use std::collections::HashSet;
-use sui_protocol_constants::STORAGE_GAS_PRICE;
 use sui_types::base_types::ObjectRef;
+use sui_types::gas::SuiCostTable;
 use sui_types::messages::TransactionKind;
 use sui_types::{
     base_types::{SequenceNumber, SuiAddress},
@@ -22,6 +22,7 @@ use tracing::instrument;
 
 async fn get_gas_status(
     store: &AuthorityStore,
+    epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
 ) -> SuiResult<SuiGasStatus<'static>> {
     let tx_kind = &transaction.kind;
@@ -35,9 +36,10 @@ async fn get_gas_status(
 
     check_gas(
         store,
+        epoch_store,
         gas_object_ref,
-        transaction.gas_budget,
-        transaction.gas_price,
+        transaction.gas_budget(),
+        transaction.gas_price(),
         &transaction.kind,
         extra_gas_object_refs,
     )
@@ -50,12 +52,13 @@ async fn get_gas_status(
 #[instrument(level = "trace", skip_all)]
 pub async fn check_transaction_input(
     store: &AuthorityStore,
+    epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
     transaction
         .validity_check()
         .map_err(SuiError::into_transaction_input_error)?;
-    let gas_status = get_gas_status(store, transaction).await?;
+    let gas_status = get_gas_status(store, epoch_store, transaction).await?;
     let input_objects = transaction.input_objects()?;
     let objects = store.check_input_objects(&input_objects)?;
     let input_objects = check_objects(transaction, input_objects, objects).await?;
@@ -117,7 +120,7 @@ pub async fn check_certificate_input(
     epoch_store: &AuthorityPerEpochStore,
     cert: &VerifiedCertificate,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
-    let gas_status = get_gas_status(store, &cert.data().intent_message.value).await?;
+    let gas_status = get_gas_status(store, epoch_store, &cert.data().intent_message.value).await?;
     let input_object_kinds = cert.data().intent_message.value.input_objects()?;
     let tx_data = &cert.data().intent_message.value;
     let input_object_data = if tx_data.kind.is_change_epoch_tx() {
@@ -143,6 +146,7 @@ pub async fn check_certificate_input(
 #[instrument(level = "trace", skip_all)]
 async fn check_gas(
     store: &AuthorityStore,
+    epoch_store: &AuthorityPerEpochStore,
     gas_payment: &ObjectRef,
     gas_budget: u64,
     computation_gas_price: u64,
@@ -167,8 +171,12 @@ async fn check_gas(
             TransactionKind::Single(SingleTransactionKind::PaySui(t)) => t.amounts.iter().sum(),
             _ => 0,
         };
+        let protocol_config = epoch_store.protocol_config();
+        let cost_table = SuiCostTable::new(protocol_config);
+        let storage_gas_price = protocol_config.storage_gas_price();
+
         // TODO: We should revisit how we compute gas price and compare to gas budget.
-        let gas_price = std::cmp::max(computation_gas_price, STORAGE_GAS_PRICE);
+        let gas_price = std::cmp::max(computation_gas_price, storage_gas_price);
 
         if tx_kind.is_pay_sui_tx() {
             let mut additional_objs = vec![];
@@ -186,12 +194,25 @@ async fn check_gas(
                 gas_price,
                 extra_amount,
                 additional_objs,
+                &cost_table,
             )?;
         } else {
-            gas::check_gas_balance(&gas_object, gas_budget, gas_price, extra_amount, vec![])?;
+            gas::check_gas_balance(
+                &gas_object,
+                gas_budget,
+                gas_price,
+                extra_amount,
+                vec![],
+                &cost_table,
+            )?;
         }
 
-        gas::start_gas_metering(gas_budget, computation_gas_price, STORAGE_GAS_PRICE)
+        gas::start_gas_metering(
+            gas_budget,
+            computation_gas_price,
+            storage_gas_price,
+            cost_table,
+        )
     }
 }
 
@@ -245,9 +266,15 @@ async fn check_objects(
         if transfer_object_ids.contains(&object.id()) {
             object.ensure_public_transfer_eligible()?;
         }
+        // For Gas Object, we check the object is owned by gas owner
+        let owner_address = if object.id() == transaction.gas_payment_object_ref().0 {
+            transaction.gas_owner()
+        } else {
+            transaction.sender()
+        };
         // Check if the object contents match the type of lock we need for
         // this object.
-        match check_one_object(&transaction.signer(), object_kind, &object) {
+        match check_one_object(&owner_address, object_kind, &object) {
             Ok(()) => all_objects.push((object_kind, object)),
             Err(e) => {
                 errors.push(e);
@@ -271,7 +298,7 @@ async fn check_objects(
 /// The logic to check one object against a reference, and return the object if all is well
 /// or an error if not.
 fn check_one_object(
-    sender: &SuiAddress,
+    owner: &SuiAddress,
     object_kind: InputObjectKind,
     object: &Object,
 ) -> SuiResult {
@@ -318,12 +345,12 @@ fn check_one_object(
                 Owner::Immutable => {
                     // Nothing else to check for Immutable.
                 }
-                Owner::AddressOwner(owner) => {
-                    // Check the owner is the transaction sender.
+                Owner::AddressOwner(actual_owner) => {
+                    // Check the owner is correct.
                     fp_ensure!(
-                        sender == &owner,
+                        owner == &actual_owner,
                         SuiError::IncorrectSigner {
-                            error: format!("Object {:?} is owned by account address {:?}, but signer address is {:?}", object_id, owner, sender),
+                            error: format!("Object {:?} is owned by account address {:?}, but given owner/signer address is {:?}", object_id, actual_owner, owner),
                         }
                     );
                 }

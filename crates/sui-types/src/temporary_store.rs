@@ -10,7 +10,7 @@ use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use sui_protocol_constants::STORAGE_REBATE_RATE;
+use sui_protocol_config::ProtocolConfig;
 use tracing::trace;
 
 use crate::coin::Coin;
@@ -101,12 +101,18 @@ pub struct TemporaryStore<S> {
     /// Ordered sequence of events emitted by execution
     events: Vec<Event>,
     gas_charged: Option<(SuiAddress, ObjectID, GasCostSummary)>,
+    storage_rebate_rate: u64,
 }
 
 impl<S> TemporaryStore<S> {
     /// Creates a new store associated with an authority store, and populates it with
     /// initial objects.
-    pub fn new(store: S, input_objects: InputObjects, tx_digest: TransactionDigest) -> Self {
+    pub fn new(
+        store: S,
+        input_objects: InputObjects,
+        tx_digest: TransactionDigest,
+        protocol_config: &ProtocolConfig,
+    ) -> Self {
         let mutable_inputs = input_objects.mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp();
         let objects = input_objects.into_object_map();
@@ -120,6 +126,7 @@ impl<S> TemporaryStore<S> {
             deleted: BTreeMap::new(),
             events: Vec::new(),
             gas_charged: None,
+            storage_rebate_rate: protocol_config.storage_rebate_rate(),
         }
     }
 
@@ -676,7 +683,7 @@ impl<S> TemporaryStore<S> {
         // we round storage rebate such that `>= x.5` goes to x+1 (rounds up) and
         // `< x.5` goes to x (truncates). We replicate `f32/64::round()`
         const BASIS_POINTS: u128 = 10000;
-        let gas_rebate = (((cost_summary.storage_rebate as u128 * STORAGE_REBATE_RATE as u128)
+        let gas_rebate = (((cost_summary.storage_rebate as u128 * self.storage_rebate_rate as u128)
             + (BASIS_POINTS / 2)) // integer rounding adds half of the BASIS_POINTS (denominator)
             / BASIS_POINTS) as u64;
         // We must re-fetch the gas object from the temporary store, as it may have been reset
@@ -864,11 +871,17 @@ pub fn empty_for_testing() -> TemporaryStore<()> {
         (),
         InputObjects::new(Vec::new()),
         TransactionDigest::genesis(),
+        ProtocolConfig::get_for_min_version(),
     )
 }
 
 /// Create a `TemporaryStore` with the given inputs and no backing storage for module resolution.
 /// For testing purposes only.
 pub fn with_input_objects_for_testing(input_objects: InputObjects) -> TemporaryStore<()> {
-    TemporaryStore::new((), input_objects, TransactionDigest::genesis())
+    TemporaryStore::new(
+        (),
+        input_objects,
+        TransactionDigest::genesis(),
+        ProtocolConfig::get_for_min_version(),
+    )
 }

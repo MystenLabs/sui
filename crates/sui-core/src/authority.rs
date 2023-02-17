@@ -29,7 +29,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, pin::Pin};
 use sui_config::node::AuthorityStorePruningConfig;
-use sui_protocol_constants::{MAX_TX_GAS, STORAGE_GAS_PRICE};
 use sui_types::message_envelope::Message;
 use sui_types::parse_sui_struct_tag;
 use tap::TapFallible;
@@ -62,7 +61,7 @@ use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{sha3_hash, AuthorityKeyPair, NetworkKeyPair, Signer};
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldType};
 use sui_types::event::{Event, EventID};
-use sui_types::gas::{GasCostSummary, GasPrice, SuiGasStatus};
+use sui_types::gas::{GasCostSummary, GasPrice, SuiCostTable, SuiGasStatus};
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
     CheckpointSummary, CheckpointTimestamp,
@@ -461,6 +460,7 @@ impl AuthorityState {
     ) -> Result<VerifiedSignedTransaction, SuiError> {
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
+            epoch_store.as_ref(),
             &transaction.data().intent_message.value,
         )
         .await?;
@@ -916,10 +916,14 @@ impl AuthorityState {
 
         let shared_object_refs = input_objects.filter_shared_objects();
         let transaction_dependencies = input_objects.transaction_dependencies();
-        let temporary_store =
-            TemporaryStore::new(self.database.clone(), input_objects, *certificate.digest());
+        let temporary_store = TemporaryStore::new(
+            self.database.clone(),
+            input_objects,
+            *certificate.digest(),
+            epoch_store.protocol_config(),
+        );
         let transaction_data = certificate.data().intent_message.value.clone();
-        let signer = transaction_data.signer();
+        let signer = transaction_data.sender();
         let gas = transaction_data.gas();
         let (inner_temp_store, effects, _execution_error) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
@@ -934,6 +938,7 @@ impl AuthorityState {
                 &self._native_functions,
                 gas_status,
                 &epoch_store.epoch_start_configuration().epoch_data(),
+                epoch_store.protocol_config(),
             );
 
         let signed_effects = VerifiedSignedTransactionEffects::new_unchecked(
@@ -962,15 +967,22 @@ impl AuthorityState {
             return Err(anyhow!("dry-exec is only support on fullnodes"));
         }
 
-        let (gas_status, input_objects) =
-            transaction_input_checker::check_transaction_input(&self.database, &transaction)
-                .await?;
+        let (gas_status, input_objects) = transaction_input_checker::check_transaction_input(
+            &self.database,
+            epoch_store.as_ref(),
+            &transaction,
+        )
+        .await?;
         let shared_object_refs = input_objects.filter_shared_objects();
 
         let transaction_dependencies = input_objects.transaction_dependencies();
-        let temporary_store =
-            TemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
-        let signer = transaction.signer();
+        let temporary_store = TemporaryStore::new(
+            self.database.clone(),
+            input_objects,
+            transaction_digest,
+            epoch_store.protocol_config(),
+        );
+        let signer = transaction.sender();
         let gas = transaction.gas();
         let (_inner_temp_store, effects, _execution_error) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
@@ -985,6 +997,7 @@ impl AuthorityState {
                 &self._native_functions,
                 gas_status,
                 &epoch_store.epoch_start_configuration().epoch_data(),
+                epoch_store.protocol_config(),
             );
         SuiTransactionEffects::try_from(effects, self.module_cache.as_ref())
     }
@@ -1002,9 +1015,14 @@ impl AuthorityState {
             return Err(anyhow!("dev-inspect is only supported on fullnodes"));
         }
 
+        let protocol_config = epoch_store.protocol_config();
+
+        let max_tx_gas = protocol_config.max_tx_gas();
+        let storage_gas_price = protocol_config.storage_gas_price();
+
         let gas_object_id = ObjectID::random();
         let gas_object = Object::new_move(
-            MoveObject::new_gas_coin(SequenceNumber::new(), gas_object_id, MAX_TX_GAS),
+            MoveObject::new_gas_coin(SequenceNumber::new(), gas_object_id, max_tx_gas),
             Owner::AddressOwner(sender),
             TransactionDigest::genesis(),
         );
@@ -1018,7 +1036,7 @@ impl AuthorityState {
 
         // TODO should we error instead for 0?
         let gas_price = std::cmp::max(gas_price, 1);
-        let gas_budget = MAX_TX_GAS;
+        let gas_budget = max_tx_gas;
         let data = TransactionData::new(
             transaction_kind,
             sender,
@@ -1029,12 +1047,17 @@ impl AuthorityState {
         let transaction_digest = TransactionDigest::new(sha3_hash(&data));
         let transaction_kind = data.kind;
         let transaction_dependencies = input_objects.transaction_dependencies();
-        let temporary_store =
-            TemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
+        let temporary_store = TemporaryStore::new(
+            self.database.clone(),
+            input_objects,
+            transaction_digest,
+            protocol_config,
+        );
         let mut gas_status = SuiGasStatus::new_with_budget(
-            MAX_TX_GAS,
+            max_tx_gas,
             GasPrice::from(gas_price),
-            STORAGE_GAS_PRICE.into(),
+            storage_gas_price.into(),
+            SuiCostTable::new(protocol_config),
         );
         gas_status.charge_min_tx_gas()?;
         let (_inner_temp_store, effects, execution_result) =
@@ -1050,6 +1073,7 @@ impl AuthorityState {
                 &self._native_functions,
                 gas_status,
                 &EpochData::new(epoch), /* TODO(epoch_data): this needs to be figured out */
+                protocol_config,
             );
         DevInspectResults::new(effects, execution_result, self.module_cache.as_ref())
     }
@@ -1432,7 +1456,7 @@ impl AuthorityState {
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
         let move_vm = Arc::new(
-            adapter::new_move_vm(native_functions.clone())
+            adapter::new_move_vm(native_functions.clone(), epoch_store.protocol_config())
                 .expect("We defined natives to not fail here"),
         );
         let module_cache = Arc::new(SyncModuleCache::new(ResolverWrapper(store.clone())));
@@ -1670,7 +1694,7 @@ impl AuthorityState {
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
         new_committee: Committee,
-        epoch_start_timestamp_ms: u64,
+        sui_system_state: SuiSystemState,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         self.committee_store.insert_new_committee(&new_committee)?;
         let db = self.db();
@@ -1679,7 +1703,7 @@ impl AuthorityState {
             .await?;
         let new_epoch = new_committee.epoch;
         let new_epoch_store = self
-            .reopen_epoch_db(cur_epoch_store, new_committee, epoch_start_timestamp_ms)
+            .reopen_epoch_db(cur_epoch_store, new_committee, sui_system_state)
             .await?;
         assert_eq!(new_epoch_store.epoch(), new_epoch);
         self.transaction_manager.reconfigure(new_epoch);
@@ -2508,15 +2532,12 @@ impl AuthorityState {
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
         new_committee: Committee,
-        epoch_start_timestamp_ms: u64,
+        system_state: SuiSystemState,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         let new_epoch = new_committee.epoch;
         info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
 
-        let epoch_start_configuration = EpochStartConfiguration {
-            epoch_id: new_epoch,
-            epoch_start_timestamp_ms,
-        };
+        let epoch_start_configuration = EpochStartConfiguration { system_state };
         let new_epoch_store =
             cur_epoch_store.new_at_next_epoch(self.name, new_committee, epoch_start_configuration);
         self.db().perpetual_tables.set_recovery_epoch(new_epoch)?;

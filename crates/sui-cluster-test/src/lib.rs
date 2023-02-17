@@ -134,7 +134,7 @@ impl TestContext {
             .get_fullnode_client()
             .quorum_driver()
             .execute_transaction(
-                Transaction::from_data(txn_data, Intent::default(), signature)
+                Transaction::from_data(txn_data, Intent::default(), vec![signature])
                     .verify()
                     .unwrap(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
