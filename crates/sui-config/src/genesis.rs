@@ -285,7 +285,9 @@ pub struct GenesisValidatorInfo {
 #[derive(Serialize, Deserialize)]
 pub struct GenesisChainParameters {
     pub timestamp_ms: u64,
-    // protocol version that the chain starts at.
+
+    /// protocol version that the chain starts at.
+    #[serde(default = "ProtocolVersion::max")]
     pub protocol_version: ProtocolVersion,
     // Most other parameters (e.g. initial gas schedule) should be derived from protocol_version.
 }
