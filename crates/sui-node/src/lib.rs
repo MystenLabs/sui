@@ -216,6 +216,7 @@ impl SuiNode {
         let state = AuthorityState::new(
             config.protocol_public_key(),
             secret,
+            config.supported_protocol_versions.unwrap(),
             store,
             epoch_store.clone(),
             committee_store.clone(),
@@ -854,7 +855,12 @@ impl SuiNode {
         let next_epoch = next_epoch_committee.epoch();
         let new_epoch_store = self
             .state
-            .reconfigure(cur_epoch_store, next_epoch_committee, sui_system_state)
+            .reconfigure(
+                cur_epoch_store,
+                self.config.supported_protocol_versions.unwrap(),
+                next_epoch_committee,
+                sui_system_state,
+            )
             .await
             .expect("Reconfigure authority state cannot fail");
         info!(next_epoch, "Validator State has been reconfigured");

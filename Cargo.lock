@@ -8381,6 +8381,7 @@ dependencies = [
  "sui-keys",
  "sui-macros",
  "sui-node",
+ "sui-protocol-config",
  "sui-sdk",
  "sui-simulator",
  "sui-source-validation",

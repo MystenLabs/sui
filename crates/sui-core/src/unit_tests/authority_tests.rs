@@ -40,7 +40,7 @@ use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEW
 use crate::epoch::epoch_metrics::EpochMetrics;
 use std::{convert::TryInto, env};
 use sui_macros::sim_test;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::object::Data;
 use sui_types::{
@@ -2660,6 +2660,7 @@ async fn test_authority_persist() {
         AuthorityState::new(
             name,
             secrete,
+            SupportedProtocolVersions::SYSTEM_DEFAULT,
             store,
             epoch_store,
             committee_store,
