@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { toB64 } from '@mysten/bcs';
-import { SignerWithProvider, Ed25519PublicKey } from '@mysten/sui.js';
+import {
+    SignerWithProvider,
+    Ed25519PublicKey,
+    toSerializedSignature,
+} from '@mysten/sui.js';
 
 import type Transport from '@ledgerhq/hw-transport';
 import type AppSui from 'hw-app-sui';
@@ -12,11 +16,14 @@ import type {
     SuiAddress,
     TxnDataSerializer,
     SerializedSignature,
+    SignatureScheme,
 } from '@mysten/sui.js';
 
 export class LedgerSigner extends SignerWithProvider {
     readonly #appSui: Promise<AppSui>;
     readonly #derivationPath: string;
+    readonly #signatureScheme: SignatureScheme = 'ED25519';
+
     constructor(
         appSui: Promise<AppSui>,
         derivationPath: string,
@@ -49,13 +56,15 @@ export class LedgerSigner extends SignerWithProvider {
     }
 
     async signData(data: Uint8Array): Promise<SerializedSignature> {
-        return toB64(
-            await (
-                await (
-                    await this.#appSui
-                ).signTransaction(this.#derivationPath, data)
-            ).signature
-        );
+        const { signature } = await (
+            await this.#appSui
+        ).signTransaction(this.#derivationPath, data);
+        const pubKey = await this.getPublicKey();
+        return toSerializedSignature({
+            signature,
+            signatureScheme: this.#signatureScheme,
+            pubKey,
+        });
     }
 
     connect(provider: Provider): SignerWithProvider {
