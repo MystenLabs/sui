@@ -43,6 +43,7 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
+      - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@nextest
       - name: cargo test
         run: |
@@ -60,6 +61,7 @@ jobs:
           toolchain: stable
           components: clippy
           override: true
+      - uses: Swatinem/rust-cache@v2
       # See '.cargo/config' for list of enabled/disappled clippy lints
       - name: cargo clippy
         run: cargo xclippy -D warnings
