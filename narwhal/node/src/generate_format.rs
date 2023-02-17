@@ -42,7 +42,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_value(&mut samples, &pk)?;
 
     let msg = b"Hello world!";
-    let signature = kp.try_sign(msg).unwrap();
+    let signature = kp.sign(msg);
     tracer.trace_value(&mut samples, &signature)?;
 
     let committee = Committee {

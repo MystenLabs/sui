@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use eyre::eyre;
 use rocksdb::MultiThreaded;
 use std::collections::{BTreeMap, HashMap};
@@ -21,7 +21,7 @@ use sui_types::temporary_store::InnerTemporaryStore;
 use typed_store::rocks::MetricConf;
 use typed_store::traits::{Map, TableSummary};
 
-#[derive(EnumString, Parser, Debug)]
+#[derive(EnumString, Clone, Parser, Debug, ValueEnum)]
 pub enum StoreName {
     Validator,
     Index,

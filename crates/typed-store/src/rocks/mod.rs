@@ -11,6 +11,7 @@ use crate::{
 };
 use bincode::Options;
 use collectable::TryExtend;
+use rocksdb::checkpoint::Checkpoint;
 use rocksdb::{
     properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error,
     ErrorKind, IteratorMode, MultiThreaded, OptimisticTransactionOptions, ReadOptions, Transaction,
@@ -32,7 +33,7 @@ use tracing::{debug, error, info, instrument};
 
 use self::{iter::Iter, keys::Keys, values::Values};
 pub use errors::TypedStoreError;
-use sui_macros::nondeterministic;
+use sui_macros::{fail_point, nondeterministic};
 
 // Write buffer size per RocksDB instance can be set via the env var below.
 // If the env var is not set, use the default value in MiB.
@@ -189,6 +190,12 @@ macro_rules! delegate_call {
     }
 }
 
+impl Drop for RocksDB {
+    fn drop(&mut self) {
+        delegate_call!(self.cancel_all_background_work(/* wait */ true))
+    }
+}
+
 impl RocksDB {
     pub fn get<K: AsRef<[u8]>>(&self, key: K) -> Result<Option<Vec<u8>>, rocksdb::Error> {
         delegate_call!(self.get(key))
@@ -264,6 +271,7 @@ impl RocksDB {
         K: AsRef<[u8]>,
         V: AsRef<[u8]>,
     {
+        fail_point!("put-cf");
         delegate_call!(self.put_cf_opt(cf, key, value, writeopts))
     }
 
@@ -281,6 +289,7 @@ impl RocksDB {
     }
 
     pub fn write(&self, batch: RocksDBBatch) -> Result<(), TypedStoreError> {
+        fail_point!("batch-write");
         match (self, batch) {
             (RocksDB::DBWithThreadMode(db), RocksDBBatch::Regular(batch)) => {
                 db.underlying.write(batch)?;
@@ -367,6 +376,20 @@ impl RocksDB {
 
     pub fn flush(&self) -> Result<(), rocksdb::Error> {
         delegate_call!(self.flush())
+    }
+
+    pub fn checkpoint(&self, path: &Path) -> Result<(), rocksdb::Error> {
+        match self {
+            Self::DBWithThreadMode(d) => {
+                let checkpoint = Checkpoint::new(&d.underlying)?;
+                checkpoint.create_checkpoint(path)?;
+            }
+            Self::OptimisticTransactionDB(d) => {
+                let checkpoint = Checkpoint::new(&d.underlying)?;
+                checkpoint.create_checkpoint(path)?;
+            }
+        }
+        Ok(())
     }
 
     pub fn flush_cf(&self, cf: &impl AsColumnFamilyRef) -> Result<(), rocksdb::Error> {
@@ -1278,6 +1301,7 @@ impl<'a> DBTransaction<'a> {
     }
 
     pub fn commit(self) -> Result<(), TypedStoreError> {
+        fail_point!("transaction-commit");
         self.transaction.commit().map_err(|e| match e.kind() {
             // empirically, this is what you get when there is a write conflict. it is not
             // documented whether this is the only time you can get this error.

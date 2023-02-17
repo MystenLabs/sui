@@ -3,9 +3,11 @@
 
 import Browser from 'webextension-polyfill';
 
+import NetworkEnv from '../NetworkEnv';
 import { Window } from '../Window';
 import { Connection } from './Connection';
 import { createMessage } from '_messages';
+import { type ErrorPayload, isBasePayload } from '_payloads';
 import { isGetAccount } from '_payloads/account/GetAccount';
 import {
     isAcquirePermissionsRequest,
@@ -21,8 +23,8 @@ import Transactions from '_src/background/Transactions';
 import type { SuiAddress } from '@mysten/sui.js';
 import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
-import type { ErrorPayload } from '_payloads';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
+import type { SetNetworkPayload } from '_payloads/network';
 import type {
     HasPermissionsResponse,
     AcquirePermissionsResponse,
@@ -47,37 +49,37 @@ export class ContentScriptConnection extends Connection {
 
     protected async handleMessage(msg: Message) {
         const { payload } = msg;
-        if (isGetAccount(payload)) {
-            const existingPermission = await Permissions.getPermission(
-                this.origin
-            );
-            if (
-                !(await Permissions.hasPermissions(
-                    this.origin,
-                    ['viewAccount'],
-                    existingPermission
-                )) ||
-                !existingPermission
-            ) {
-                this.sendNotAllowedError(msg.id);
-            } else {
-                this.sendAccounts(existingPermission.accounts, msg.id);
-            }
-        } else if (isHasPermissionRequest(payload)) {
-            this.send(
-                createMessage<HasPermissionsResponse>(
-                    {
-                        type: 'has-permissions-response',
-                        result: await Permissions.hasPermissions(
-                            this.origin,
-                            payload.permissions
-                        ),
-                    },
-                    msg.id
-                )
-            );
-        } else if (isAcquirePermissionsRequest(payload)) {
-            try {
+        try {
+            if (isGetAccount(payload)) {
+                const existingPermission = await Permissions.getPermission(
+                    this.origin
+                );
+                if (
+                    !(await Permissions.hasPermissions(
+                        this.origin,
+                        ['viewAccount'],
+                        existingPermission
+                    )) ||
+                    !existingPermission
+                ) {
+                    this.sendNotAllowedError(msg.id);
+                } else {
+                    this.sendAccounts(existingPermission.accounts, msg.id);
+                }
+            } else if (isHasPermissionRequest(payload)) {
+                this.send(
+                    createMessage<HasPermissionsResponse>(
+                        {
+                            type: 'has-permissions-response',
+                            result: await Permissions.hasPermissions(
+                                this.origin,
+                                payload.permissions
+                            ),
+                        },
+                        msg.id
+                    )
+                );
+            } else if (isAcquirePermissionsRequest(payload)) {
                 const permission = await Permissions.startRequestPermissions(
                     payload.permissions,
                     this,
@@ -86,54 +88,59 @@ export class ContentScriptConnection extends Connection {
                 if (permission) {
                     this.permissionReply(permission, msg.id);
                 }
-            } catch (e) {
-                this.sendError(
-                    {
-                        error: true,
-                        message: (e as Error).toString(),
-                        code: -1,
-                    },
-                    msg.id
-                );
-            }
-        } else if (isExecuteTransactionRequest(payload)) {
-            const allowed = await Permissions.hasPermissions(this.origin, [
-                'viewAccount',
-                'suggestTransactions',
-            ]);
-            if (allowed) {
-                try {
+            } else if (isExecuteTransactionRequest(payload)) {
+                const allowed = await Permissions.hasPermissions(this.origin, [
+                    'viewAccount',
+                    'suggestTransactions',
+                ]);
+                if (allowed) {
                     const result = await Transactions.executeTransaction(
                         payload.transaction,
                         this
                     );
                     this.send(
                         createMessage<ExecuteTransactionResponse>(
-                            { type: 'execute-transaction-response', result },
+                            {
+                                type: 'execute-transaction-response',
+                                result,
+                            },
                             msg.id
                         )
                     );
-                } catch (e) {
-                    this.sendError(
+                } else {
+                    this.sendNotAllowedError(msg.id);
+                }
+            } else if (isStakeRequest(payload)) {
+                const window = new Window(
+                    Browser.runtime.getURL('ui.html') +
+                        `#/stake/new?address=${encodeURIComponent(
+                            payload.validatorAddress
+                        )}`
+                );
+                await window.show();
+            } else if (
+                isBasePayload(payload) &&
+                payload.type === 'get-network'
+            ) {
+                this.send(
+                    createMessage<SetNetworkPayload>(
                         {
-                            error: true,
-                            code: -1,
-                            message: (e as Error).message,
+                            type: 'set-network',
+                            network: await NetworkEnv.getActiveNetwork(),
                         },
                         msg.id
-                    );
-                }
-            } else {
-                this.sendNotAllowedError(msg.id);
+                    )
+                );
             }
-        } else if (isStakeRequest(payload)) {
-            const window = new Window(
-                Browser.runtime.getURL('ui.html') +
-                    `#/stake/new?address=${encodeURIComponent(
-                        payload.validatorAddress
-                    )}`
+        } catch (e) {
+            this.sendError(
+                {
+                    error: true,
+                    code: -1,
+                    message: (e as Error).message,
+                },
+                msg.id
             );
-            await window.show();
         }
     }
 

@@ -7,6 +7,7 @@ import { RecentModulesCard } from '../../components/recent-packages-card/RecentP
 import { TopValidatorsCard } from '../../components/top-validators-card/TopValidatorsCard';
 import { LatestTxCard } from '../../components/transaction-card/RecentTxCard';
 
+import { HomeMetrics } from '~/components/HomeMetrics';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 const NodeMap = lazy(() => import('../../components/node-map'));
@@ -17,18 +18,28 @@ function Home() {
     return (
         <div
             data-testid="home-page"
-            id="home"
-            className="mx-auto grid grid-cols-1 gap-2 bg-white md:grid-cols-2"
+            // NOTE: The gap-y isn't used currently, but added for consistency when we eventually use grid layouts more naturally.
+            className="grid grid-cols-1 gap-y-10 gap-x-12 md:grid-cols-2"
         >
-            <section className="left-item mb-4 md:mb-0">
+            <div className="flex flex-col gap-10">
+                <ErrorBoundary>
+                    <HomeMetrics />
+                </ErrorBoundary>
+
                 <ErrorBoundary>
                     <LatestTxCard
                         txPerPage={TXN_PER_PAGE}
                         paginationtype="more button"
                     />
                 </ErrorBoundary>
-            </section>
-            <section className="right-item flex flex-col gap-10 md:gap-12">
+            </div>
+
+            <div className="flex flex-col gap-10">
+                <ErrorBoundary>
+                    <Suspense fallback={null}>
+                        <NodeMap minHeight={280} />
+                    </Suspense>
+                </ErrorBoundary>
                 <div data-testid="validators-table">
                     <TabGroup>
                         <TabList>
@@ -43,11 +54,6 @@ function Home() {
                         </TabPanels>
                     </TabGroup>
                 </div>
-                <ErrorBoundary>
-                    <Suspense fallback={null}>
-                        <NodeMap />
-                    </Suspense>
-                </ErrorBoundary>
                 <div>
                     <TabGroup>
                         <TabList>
@@ -62,7 +68,7 @@ function Home() {
                         </TabPanels>
                     </TabGroup>
                 </div>
-            </section>
+            </div>
         </div>
     );
 }

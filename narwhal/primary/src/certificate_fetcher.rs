@@ -2,9 +2,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::metrics::PrimaryMetrics;
-use config::Committee;
+use config::{Committee, SharedWorkerCache};
 use crypto::{NetworkPublicKey, PublicKey};
 use futures::{stream::FuturesUnordered, StreamExt};
+use itertools::Itertools;
 use mysten_metrics::{monitored_future, monitored_scope, spawn_logged_monitored_task};
 use network::PrimaryToPrimaryRpc;
 use rand::{rngs::ThreadRng, seq::SliceRandom};
@@ -14,7 +15,7 @@ use std::{
     time::Duration,
 };
 use storage::CertificateStore;
-use tokio::task::JoinSet;
+use tokio::task::{spawn_blocking, JoinSet};
 use tokio::{
     sync::{oneshot, watch},
     task::JoinHandle,
@@ -33,12 +34,16 @@ use types::{
 pub mod certificate_fetcher_tests;
 
 // Maximum number of certificates to fetch with one request.
-const MAX_CERTIFICATES_TO_FETCH: usize = 1000;
+const MAX_CERTIFICATES_TO_FETCH: usize = 2000;
 // Seconds to wait for a response before issuing another parallel fetch request.
 const PARALLEL_FETCH_REQUEST_INTERVAL_SECS: Duration = Duration::from_secs(5);
 // The timeout for an iteration of parallel fetch requests over all peers would be
 // num peers * PARALLEL_FETCH_REQUEST_INTERVAL_SECS + PARALLEL_FETCH_REQUEST_ADDITIONAL_TIMEOUT
 const PARALLEL_FETCH_REQUEST_ADDITIONAL_TIMEOUT: Duration = Duration::from_secs(15);
+// Number of certificates to verify in a batch. Verifications in each batch run serially.
+// Batch size is chosen so that verifying a batch takes non-trival
+// time (verifying a batch of 200 certificates should take > 100ms).
+const VERIFY_CERTIFICATES_BATCH_SIZE: usize = 200;
 
 /// Message format from CertificateFetcher to core on the loopback channel.
 pub struct CertificateLoopbackMessage {
@@ -60,6 +65,8 @@ pub(crate) struct CertificateFetcher {
     state: Arc<CertificateFetcherState>,
     /// The committee information.
     committee: Committee,
+    /// The worker information.
+    worker_cache: SharedWorkerCache,
     /// Persistent storage for certificates. Read-only usage.
     certificate_store: CertificateStore,
     /// Receiver for signal of round changes. Used for calculating gc_round.
@@ -98,6 +105,7 @@ impl CertificateFetcher {
     pub fn spawn(
         name: PublicKey,
         committee: Committee,
+        worker_cache: SharedWorkerCache,
         network: anemo::Network,
         certificate_store: CertificateStore,
         rx_consensus_round_updates: watch::Receiver<u64>,
@@ -119,6 +127,7 @@ impl CertificateFetcher {
                 Self {
                     state,
                     committee,
+                    worker_cache,
                     certificate_store,
                     rx_consensus_round_updates,
                     gc_depth,
@@ -256,6 +265,7 @@ impl CertificateFetcher {
 
         let state = self.state.clone();
         let committee = self.committee.clone();
+        let worker_cache = self.worker_cache.clone();
 
         debug!(
             "Starting task to fetch missing certificates: max target {}, gc round {:?}",
@@ -268,8 +278,14 @@ impl CertificateFetcher {
                 state.metrics.certificate_fetcher_inflight_fetch.inc();
 
                 let now = Instant::now();
-                match run_fetch_task(state.clone(), committee.clone(), gc_round, written_rounds)
-                    .await
+                match run_fetch_task(
+                    state.clone(),
+                    committee,
+                    worker_cache,
+                    gc_round,
+                    written_rounds,
+                )
+                .await
                 {
                     Ok(_) => {
                         debug!(
@@ -299,6 +315,7 @@ impl CertificateFetcher {
 async fn run_fetch_task(
     state: Arc<CertificateFetcherState>,
     committee: Committee,
+    worker_cahce: SharedWorkerCache,
     gc_round: Round,
     written_rounds: BTreeMap<PublicKey, BTreeSet<Round>>,
 ) -> DagResult<()> {
@@ -313,7 +330,13 @@ async fn run_fetch_task(
 
     // Process and store fetched certificates.
     let num_certs_fetched = response.certificates.len();
-    process_certificates_helper(response, &state.tx_certificates_loopback).await?;
+    process_certificates_helper(
+        response,
+        &state.tx_certificates_loopback,
+        &committee,
+        &worker_cahce,
+    )
+    .await?;
     state
         .metrics
         .certificate_fetcher_num_certificates_processed
@@ -332,6 +355,7 @@ async fn fetch_certificates_helper(
     committee: &Committee,
     request: FetchCertificatesRequest,
 ) -> Option<FetchCertificatesResponse> {
+    let _scope = monitored_scope("FetchingCertificatesFromPeers");
     trace!("Start sending fetch certificates requests");
     // TODO: make this a config parameter.
     let request_interval = PARALLEL_FETCH_REQUEST_INTERVAL_SECS;
@@ -406,6 +430,8 @@ async fn fetch_certificates_helper(
 async fn process_certificates_helper(
     response: FetchCertificatesResponse,
     tx_certificates_loopback: &Sender<CertificateLoopbackMessage>,
+    committee: &Committee,
+    worker_cache: &SharedWorkerCache,
 ) -> DagResult<()> {
     trace!("Start sending fetched certificates to processing");
     if response.certificates.len() > MAX_CERTIFICATES_TO_FETCH {
@@ -414,26 +440,60 @@ async fn process_certificates_helper(
             MAX_CERTIFICATES_TO_FETCH,
         ));
     }
-    let (tx_done, rx_done) = oneshot::channel();
-    if let Err(e) = tx_certificates_loopback
-        .send(CertificateLoopbackMessage {
-            certificates: response.certificates,
-            done: tx_done,
+    // Verify certificates in parallel.
+    // In PrimaryReceiverHandler, certificates already in storage are ignored.
+    // The check is unnecessary here, because there is no concurrent processing of older
+    // certificates. For byzantine failures, the check will not be effective anyway.
+    let verify_scope = monitored_scope("VerifyingFetchedCertificates");
+    let all_certificates = response.certificates;
+    let verify_tasks = all_certificates
+        .chunks(VERIFY_CERTIFICATES_BATCH_SIZE)
+        .map(|certs| {
+            let certs = certs.to_vec();
+            let committee = committee.clone();
+            let worker_cache = worker_cache.clone();
+            // Use threads dedicated to computation heavy work.
+            spawn_blocking(move || {
+                for c in &certs {
+                    let worker_cache = worker_cache.clone();
+                    c.verify(&committee, worker_cache)?;
+                }
+                Ok::<Vec<Certificate>, DagError>(certs)
+            })
         })
-        .await
-    {
-        return Err(DagError::ClosedChannel(format!(
-            "Failed to send fetched certificate to processing. tx_certificates_loopback error: {}",
-            e
-        )));
+        .collect_vec();
+    // Send verified certificates to core for processing, in the same order as received.
+    let mut processing_tasks = JoinSet::new();
+    for task in verify_tasks {
+        let certificates = task.await.map_err(|_| DagError::Canceled)??;
+        let (tx_done, rx_done) = oneshot::channel();
+        if let Err(e) = tx_certificates_loopback
+            .send(CertificateLoopbackMessage {
+                certificates,
+                done: tx_done,
+            })
+            .await
+        {
+            return Err(DagError::ClosedChannel(format!(
+                "Failed to send fetched certificate to processing. tx_certificates_loopback error: {}",
+                e
+            )));
+        }
+        processing_tasks.spawn(rx_done);
     }
-    if let Err(e) = rx_done.await {
-        return Err(DagError::ClosedChannel(format!(
-            "Failed to wait for core to process loopback certificates: {}",
-            e
-        )));
+    drop(verify_scope);
+
+    // Wait for Core to finish processing the certificates.
+    let _process_scope = monitored_scope("ProcessingFetchedCertificates");
+    while let Some(result) = processing_tasks.join_next().await {
+        if let Err(e) = result {
+            return Err(DagError::ClosedChannel(format!(
+                "Failed to wait for core to process loopback certificates: {}",
+                e
+            )));
+        }
     }
-    trace!("Fetched certificates have finished processing");
+    trace!("Fetched certificates have been processed");
 
     Ok(())
 }

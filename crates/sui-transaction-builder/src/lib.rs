@@ -72,6 +72,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         input_gas: Option<ObjectID>,
         budget: u64,
         input_objects: Vec<ObjectID>,
+        gas_price: u64,
     ) -> Result<ObjectRef, anyhow::Error> {
         if let Some(gas) = input_gas {
             self.get_object_ref(gas).await
@@ -80,6 +81,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             let gas_objs = objs
                 .iter()
                 .filter(|obj| obj.type_ == GasCoin::type_().to_string());
+            let required_gas_amount = (budget as u128) * (gas_price as u128);
 
             for obj in gas_objs {
                 let response = self.0.get_object(obj.object_id).await?;
@@ -90,11 +92,13 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                         .ok_or_else(|| anyhow!("Cannot parse move object to gas object"))?
                         .bcs_bytes,
                 )?;
-                if !input_objects.contains(&obj.id()) && gas.value() >= budget {
+                if !input_objects.contains(&obj.id())
+                    && (gas.value() as u128) >= required_gas_amount
+                {
                     return Ok(obj.reference.to_object_ref());
                 }
             }
-            Err(anyhow!("Cannot find gas coin for signer address [{signer}] with amount sufficient for the budget [{budget}]."))
+            Err(anyhow!("Cannot find gas coin for signer address [{signer}] with amount sufficient for the required gas amount [{required_gas_amount}]."))
         }
     }
 
@@ -107,10 +111,11 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         recipient: SuiAddress,
     ) -> anyhow::Result<TransactionData> {
         let single_transfer = self.single_transfer_object(object_id, recipient).await?;
-        let gas = self
-            .select_gas(signer, gas, gas_budget, vec![object_id])
-            .await?;
         let gas_price = self.0.get_reference_gas_price().await?;
+        let gas = self
+            .select_gas(signer, gas, gas_budget, vec![object_id], gas_price)
+            .await?;
+
         Ok(TransactionData::new(
             TransactionKind::Single(single_transfer),
             signer,
@@ -169,10 +174,11 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             .await
             .into_iter()
             .collect::<anyhow::Result<Vec<ObjectRef>>>()?;
-        let gas = self
-            .select_gas(signer, gas, gas_budget, input_coins)
-            .await?;
         let gas_price = self.0.get_reference_gas_price().await?;
+        let gas = self
+            .select_gas(signer, gas, gas_budget, input_coins, gas_price)
+            .await?;
+
         let data = TransactionData::new_pay(
             signer, coin_refs, recipients, amounts, gas, gas_budget, gas_price,
         );
@@ -265,11 +271,11 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                 _ => None,
             })
             .collect();
-
-        let gas = self
-            .select_gas(signer, gas, gas_budget, input_objects)
-            .await?;
         let gas_price = self.0.get_reference_gas_price().await?;
+        let gas = self
+            .select_gas(signer, gas, gas_budget, input_objects, gas_price)
+            .await?;
+
         Ok(TransactionData::new(
             TransactionKind::Single(single_move_call),
             signer,
@@ -281,13 +287,12 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
 
     pub async fn single_move_call(
         &self,
-        package_object_id: ObjectID,
+        package: ObjectID,
         module: &str,
         function: &str,
         type_args: Vec<SuiTypeTag>,
         call_args: Vec<SuiJsonValue>,
     ) -> anyhow::Result<MoveCall> {
-        let package_ref = self.get_object_ref(package_object_id).await?;
         let module = Identifier::from_str(module)?;
         let function = Identifier::from_str(function)?;
 
@@ -297,17 +302,11 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             .collect::<Result<Vec<_>, _>>()?;
 
         let call_args = self
-            .resolve_and_checks_json_args(
-                package_object_id,
-                &module,
-                &function,
-                &type_args,
-                call_args,
-            )
+            .resolve_and_checks_json_args(package, &module, &function, &type_args, call_args)
             .await?;
 
         Ok(MoveCall {
-            package: package_ref,
+            package,
             module,
             function,
             type_arguments: type_args,
@@ -331,6 +330,8 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             } => ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
+                // todo(RWLocks) - do we want to parametrise this?
+                mutable: true, // using mutable reference by default here.
             },
             Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
                 ObjectArg::ImmOrOwnedObject(obj_ref)
@@ -401,8 +402,10 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
-        let gas = self.select_gas(sender, gas, gas_budget, vec![]).await?;
         let gas_price = self.0.get_reference_gas_price().await?;
+        let gas = self
+            .select_gas(sender, gas, gas_budget, vec![], gas_price)
+            .await?;
         Ok(TransactionData::new_module(
             sender,
             gas,
@@ -425,13 +428,14 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         let coin_object_ref = coin.reference.to_object_ref();
         let coin: Object = coin.try_into()?;
         let type_args = vec![coin.get_move_template_type()?];
-        let gas = self
-            .select_gas(signer, gas, gas_budget, vec![coin_object_id])
-            .await?;
         let gas_price = self.0.get_reference_gas_price().await?;
+        let gas = self
+            .select_gas(signer, gas, gas_budget, vec![coin_object_id], gas_price)
+            .await?;
+
         Ok(TransactionData::new_move_call(
             signer,
-            self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
+            SUI_FRAMEWORK_OBJECT_ID,
             coin::PAY_MODULE_NAME.to_owned(),
             coin::PAY_SPLIT_VEC_FUNC_NAME.to_owned(),
             type_args,
@@ -458,13 +462,14 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         let coin_object_ref = coin.reference.to_object_ref();
         let coin: Object = coin.try_into()?;
         let type_args = vec![coin.get_move_template_type()?];
-        let gas = self
-            .select_gas(signer, gas, gas_budget, vec![coin_object_id])
-            .await?;
         let gas_price = self.0.get_reference_gas_price().await?;
+        let gas = self
+            .select_gas(signer, gas, gas_budget, vec![coin_object_id], gas_price)
+            .await?;
+
         Ok(TransactionData::new_move_call(
             signer,
-            self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
+            SUI_FRAMEWORK_OBJECT_ID,
             coin::PAY_MODULE_NAME.to_owned(),
             coin::PAY_SPLIT_N_FUNC_NAME.to_owned(),
             type_args,
@@ -492,13 +497,20 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         let coin_to_merge_ref = self.get_object_ref(coin_to_merge).await?;
         let coin: Object = coin.try_into()?;
         let type_args = vec![coin.get_move_template_type()?];
-        let gas = self
-            .select_gas(signer, gas, gas_budget, vec![primary_coin, coin_to_merge])
-            .await?;
         let gas_price = self.0.get_reference_gas_price().await?;
+        let gas = self
+            .select_gas(
+                signer,
+                gas,
+                gas_budget,
+                vec![primary_coin, coin_to_merge],
+                gas_price,
+            )
+            .await?;
+
         Ok(TransactionData::new_move_call(
             signer,
-            self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
+            SUI_FRAMEWORK_OBJECT_ID,
             coin::PAY_MODULE_NAME.to_owned(),
             coin::PAY_JOIN_FUNC_NAME.to_owned(),
             type_args,
@@ -561,9 +573,11 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                 _ => None,
             })
             .collect();
-
-        let gas = self.select_gas(signer, gas, gas_budget, inputs).await?;
         let gas_price = self.0.get_reference_gas_price().await?;
+        let gas = self
+            .select_gas(signer, gas, gas_budget, inputs, gas_price)
+            .await?;
+
         Ok(TransactionData::new(
             TransactionKind::Batch(tx_kinds),
             signer,
@@ -582,8 +596,9 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
+        let gas_price = self.0.get_reference_gas_price().await?;
         let gas = self
-            .select_gas(signer, gas, gas_budget, coins.clone())
+            .select_gas(signer, gas, gas_budget, coins.clone(), gas_price)
             .await?;
 
         let mut obj_vec = vec![];
@@ -591,7 +606,6 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             .pop()
             .ok_or_else(|| anyhow!("Coins input should contain at lease one coin object."))?;
         let (oref, coin_type) = self.get_object_ref_and_type(coin).await?;
-        obj_vec.push(ObjectArg::ImmOrOwnedObject(oref));
 
         let ObjectType::Struct(type_) = &coin_type else{
             return Err(anyhow!("Provided object [{coin}] is not a move object."))
@@ -609,6 +623,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             );
             obj_vec.push(ObjectArg::ImmOrOwnedObject(oref))
         }
+        obj_vec.push(ObjectArg::ImmOrOwnedObject(oref));
 
         let function = if Coin::is_coin(type_) {
             ADD_DELEGATION_MUL_COIN_FUN_NAME
@@ -616,10 +631,10 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             ADD_DELEGATION_LOCKED_COIN_FUN_NAME
         }
         .to_owned();
-        let gas_price = self.0.get_reference_gas_price().await?;
+
         Ok(TransactionData::new_move_call(
             signer,
-            self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
+            SUI_FRAMEWORK_OBJECT_ID,
             SUI_SYSTEM_MODULE_NAME.to_owned(),
             function,
             vec![],
@@ -628,6 +643,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                 CallArg::Object(ObjectArg::SharedObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                    mutable: true,
                 }),
                 CallArg::ObjVec(obj_vec),
                 CallArg::Pure(bcs::to_bytes(&amount)?),
@@ -648,11 +664,13 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
     ) -> anyhow::Result<TransactionData> {
         let delegation = self.get_object_ref(delegation).await?;
         let staked_sui = self.get_object_ref(staked_sui).await?;
-        let gas = self.select_gas(signer, gas, gas_budget, vec![]).await?;
         let gas_price = self.0.get_reference_gas_price().await?;
+        let gas = self
+            .select_gas(signer, gas, gas_budget, vec![], gas_price)
+            .await?;
         Ok(TransactionData::new_move_call(
             signer,
-            self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
+            SUI_FRAMEWORK_OBJECT_ID,
             SUI_SYSTEM_MODULE_NAME.to_owned(),
             WITHDRAW_DELEGATION_FUN_NAME.to_owned(),
             vec![],
@@ -661,6 +679,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                 CallArg::Object(ObjectArg::SharedObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                    mutable: true,
                 }),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(delegation)),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(staked_sui)),
@@ -681,11 +700,13 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
     ) -> anyhow::Result<TransactionData> {
         let delegation = self.get_object_ref(delegation).await?;
         let staked_sui = self.get_object_ref(staked_sui).await?;
-        let gas = self.select_gas(signer, gas, gas_budget, vec![]).await?;
         let gas_price = self.0.get_reference_gas_price().await?;
+        let gas = self
+            .select_gas(signer, gas, gas_budget, vec![], gas_price)
+            .await?;
         Ok(TransactionData::new_move_call(
             signer,
-            self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
+            SUI_FRAMEWORK_OBJECT_ID,
             SUI_SYSTEM_MODULE_NAME.to_owned(),
             SWITCH_DELEGATION_FUN_NAME.to_owned(),
             vec![],
@@ -694,6 +715,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                 CallArg::Object(ObjectArg::SharedObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                    mutable: true,
                 }),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(delegation)),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(staked_sui)),

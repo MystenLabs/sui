@@ -16,9 +16,9 @@
     display: flex;
     flex-flow: row nowrap;
     align-items: center;
-    padding: 0 15px;
-    justify-content: space-between;
+    padding: 0 12px;
     min-height: 52px;
+    gap: 20px;
 
     &.center {
         justify-content: center;
@@ -55,11 +55,23 @@
     @include utils.main-extra-space-for-nav;
 }
 
-.logo {
-    color: v.use(v.$colors-text-on-background);
+.dapp-status-container {
+    display: flex;
+    align-items: center;
+    overflow: hidden;
 }
 
-.logo-link {
-    text-decoration: none;
-    color: inherit;
+.logo-container,
+.menu-container {
+    display: flex;
+    flex: 1 0;
+    align-items: center;
+}
+
+.logo-container {
+    justify-content: flex-start;
+}
+
+.menu-container {
+    justify-content: flex-end;
 }

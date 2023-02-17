@@ -10,7 +10,7 @@ export function Header() {
 
   // TODO: Probably debounce this:
   useEffect(() => {
-    const listener = () => setScrolled(window.pageYOffset > 40);
+    const listener = () => setScrolled(window.pageYOffset > 10);
     window.addEventListener("scroll", listener, { passive: true });
     return () => window.removeEventListener("scroll", listener);
   }, []);
@@ -18,7 +18,7 @@ export function Header() {
   return (
     <header
       className={clsx(
-        "py-4 px-8 flex items-center sticky top-0 transition-all",
+        "py-4 px-8 flex items-center sticky top-0 transition-all z-50",
         scrolled ? "backdrop-blur-xl bg-white/70" : "bg-white/0"
       )}
     >
@@ -30,7 +30,7 @@ export function Header() {
       </div>
 
       <div className="">
-        <ConnectButton className="!bg-white !text-steel-dark !px-5 !py-3 leading-none" />
+        {/* <ConnectButton className="!bg-white !text-steel-dark !px-5 !py-3 leading-none" /> */}
       </div>
     </header>
   );

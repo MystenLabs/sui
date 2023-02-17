@@ -85,7 +85,6 @@ impl AuthorityServer {
         let consensus_adapter = ConsensusAdapter::new(
             consensus_client,
             state.name,
-            &state.epoch_store_for_testing(),
             ConsensusAdapterMetrics::new_test(),
         );
 
@@ -241,7 +240,7 @@ impl ValidatorService {
         state: Arc<AuthorityState>,
         request: tonic::Request<Transaction>,
         metrics: Arc<ValidatorServiceMetrics>,
-    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+    ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
         let transaction = request.into_inner();
 
         let _metrics_guard = metrics.handle_transaction_latency.start_timer();
@@ -255,7 +254,7 @@ impl ValidatorService {
         let tx_digest = transaction.digest();
 
         // Enable Trace Propagation across spans/processes using tx_digest
-        let span = tracing::error_span!("validator_state_process_tx", ?tx_digest);
+        let span = error_span!("validator_state_process_tx", ?tx_digest);
 
         let info = state
             .handle_transaction(transaction)
@@ -267,7 +266,7 @@ impl ValidatorService {
                 }
             })?;
 
-        Ok(tonic::Response::new(info.into()))
+        Ok(tonic::Response::new(info))
     }
 
     // TODO: reject certificate if TransactionManager or Narwhal is backlogged.
@@ -277,6 +276,8 @@ impl ValidatorService {
         request: tonic::Request<CertifiedTransaction>,
         metrics: Arc<ValidatorServiceMetrics>,
     ) -> Result<tonic::Response<HandleCertificateResponse>, tonic::Status> {
+        let epoch_store = state.load_epoch_store_one_call_per_task();
+
         let certificate = request.into_inner();
         let shared_object_tx = certificate.contains_shared_object();
 
@@ -288,12 +289,10 @@ impl ValidatorService {
                 .start_timer()
         };
 
-        let epoch_store = state.epoch_store();
-
         // 1) Check if cert already executed
         let tx_digest = *certificate.digest();
         if let Some(signed_effects) =
-            state.get_signed_effects_and_maybe_resign(epoch_store.epoch(), &tx_digest)?
+            state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store)?
         {
             return Ok(tonic::Response::new(HandleCertificateResponse {
                 signed_effects: signed_effects.into_inner(),
@@ -301,7 +300,7 @@ impl ValidatorService {
         }
 
         // 2) Validate if cert can be executed, and verify the cert.
-        if state.is_fullnode() {
+        if state.is_fullnode(&epoch_store) {
             return Err(tonic::Status::unimplemented(format!(
                 "Cannot execute certificate without effects on fullnode! {:?}",
                 certificate.digest()
@@ -378,16 +377,10 @@ impl ValidatorService {
 
         // 4) Execute the certificate if it contains only owned object transactions, or wait for
         // the execution results if it contains shared objects.
-        let res = if certificate.contains_shared_object() {
-            // The transaction needs sequencing by Narwhal before it can be sent for execution.
-            // So rely on the submission to consensus above to execute the certificate.
-            state.notify_read_effects(&certificate).await
-        } else {
-            state.execute_certificate(&certificate, &epoch_store).await
-        };
+        let res = state.execute_certificate(&certificate, &epoch_store).await;
         match res {
-            Ok(signed_effects) => Ok(tonic::Response::new(HandleCertificateResponse {
-                signed_effects: signed_effects.into_inner(),
+            Ok(effects) => Ok(tonic::Response::new(HandleCertificateResponse {
+                signed_effects: effects.into_inner(),
             })),
             Err(e) => Err(tonic::Status::from(e)),
         }
@@ -399,7 +392,7 @@ impl Validator for ValidatorService {
     async fn transaction(
         &self,
         request: tonic::Request<Transaction>,
-    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+    ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
         let state = self.state.clone();
 
         // Spawns a task which handles the transaction. The task will unconditionally continue
@@ -430,17 +423,6 @@ impl Validator for ValidatorService {
         .unwrap()
     }
 
-    async fn account_info(
-        &self,
-        request: tonic::Request<AccountInfoRequest>,
-    ) -> Result<tonic::Response<AccountInfoResponse>, tonic::Status> {
-        let request = request.into_inner();
-
-        let response = self.state.handle_account_info_request(request).await?;
-
-        Ok(tonic::Response::new(response))
-    }
-
     async fn object_info(
         &self,
         request: tonic::Request<ObjectInfoRequest>,
@@ -449,7 +431,7 @@ impl Validator for ValidatorService {
 
         let response = self.state.handle_object_info_request(request).await?;
 
-        Ok(tonic::Response::new(response.into()))
+        Ok(tonic::Response::new(response))
     }
 
     async fn transaction_info(
@@ -460,7 +442,7 @@ impl Validator for ValidatorService {
 
         let response = self.state.handle_transaction_info_request(request).await?;
 
-        Ok(tonic::Response::new(response.into()))
+        Ok(tonic::Response::new(response))
     }
 
     async fn checkpoint(

@@ -43,6 +43,7 @@ Only bit_length = 64, 32, 16, 8 will work.
 
 
 <pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
 
 

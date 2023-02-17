@@ -40,7 +40,7 @@ pub struct WorkloadInitGas {
     pub shared_counter_init_gas: Vec<Gas>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct WorkloadPayloadGas {
     // Gas coins to be used as transfer tokens
     // These are the objects which get transferred

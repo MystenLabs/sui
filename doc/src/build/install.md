@@ -9,7 +9,7 @@ Before you install Sui, you need to install some prerequisite tools and configur
 The steps to install Sui include:
 
 1. Install [prerequisites](#prerequisites) for your operating system.
-1. Install the [Sui binaries](#install-sui-binaries).
+1. Install the [Sui binaries](#install-or-update-sui-binaries).
 1. Configure an [Integrated Development Environment (IDE)](#integrated-development-environment).
 1. Request [SUI tokens](#sui-tokens) to evaluate Devnet and Sui Wallet.
 1. Optionally, download the [source code](#source-code) to have local
@@ -113,12 +113,32 @@ For more information, see [Install Git on Linux](https://github.com/git-guides/i
 
 Install CMake using the instructions at [Installing CMake](https://cmake.org/install/) on the CMake website.
 
+Or you can use the following command
+
+```shell
+sudo apt-get install cmake
+```
+
+### GCC
+
+Use the following command to install `gcc`:
+
+```shell
+sudo apt-get install gcc
+```
+
 ### libssl-dev
 
 Use the following command to install `libssl-dev`:
 
 ```shell
 sudo apt-get install libssl-dev
+```
+
+(Optional) If you have OpenSSL it may be required to also install `pkg-config`:
+
+```shell
+sudo apt-get install pkg-config
 ```
 
 ### libclang-dev
@@ -129,8 +149,15 @@ Use the following command to install `libclang-dev`:
 sudo apt-get install libclang-dev
 ```
 
-Proceed to [Install Sui binaries](#install-sui-binaries) to continue installing Sui.
+### libpq-dev
 
+Use the following command to install `libpq-dev`:
+
+```shell
+sudo apt-get install libpq-dev
+```
+
+Proceed to [Install Sui binaries](#install-sui-binaries) to continue installing Sui.
 
 ## macOS prerequisites
 
@@ -166,7 +193,7 @@ brew install git
 
 After installing Git, download and install the [Git command line interface](https://git-scm.com/download/).
 
-Proceed to [Install Sui binaries](#install-sui-binaries) to continue installing Sui.
+Proceed to [Install Sui binaries](#install-or-update-sui-binaries) to continue installing Sui.
 
 ## Windows prerequisites
 
@@ -200,7 +227,7 @@ If the progress appears to freeze, press **Enter** in the command prompt to fix 
 
 **Known issue** - The `sui console` command does not work in PowerShell.
 
-## Install (or update) Sui binaries
+## Install (or update) Sui binaries <a name="binaries"></a>
 
 With Cargo installed, use the following command to install or update the sui executable:
 
@@ -243,7 +270,7 @@ Use the `--help` flag to access helpful information for any of these binaries.
 
 ## Integrated development environment
 
-The recommended IDE for Move development is [Visual Studio Code](https://code.visualstudio.com/) with the move-analyzer extension. Follow the Visual Studio Marketplace instructions to install the [move-nalyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer), passing `address20` using the `--features` flag:
+The recommended IDE for Move development is [Visual Studio Code](https://code.visualstudio.com/) with the move-analyzer extension. Follow the Visual Studio Marketplace instructions to install the [move-analyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer), then install the move-analyzer language server passing `address20` using the `--features` flag:
 
 ```shell
 cargo install --git https://github.com/move-language/move move-analyzer --features "address20"
@@ -305,7 +332,7 @@ See the Rust [Crates](https://doc.rust-lang.org/rust-by-example/crates.html) in 
 To contribute updates to Sui code, [send pull requests](../contribute/index.md#send-pull-requests) our way.
 
 > **Note:** The previous `git clone` command syncs with the `devnet` branch, which makes sure the source code is compatible with our Devnet. If you want to run a network locally using the latest version and don't need to interact with our Devnet, you should switch to `main` branch.
- 
+
 ## Next steps
 
 Continue your journey through:

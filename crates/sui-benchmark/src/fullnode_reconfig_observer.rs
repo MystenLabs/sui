@@ -11,7 +11,7 @@ use sui_core::{
     quorum_driver::{reconfig_observer::ReconfigObserver, QuorumDriver},
     safe_client::SafeClientMetricsBase,
 };
-use sui_sdk::SuiClient;
+use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::committee::Committee;
 use tracing::{debug, error, trace};
 
@@ -36,7 +36,8 @@ impl FullNodeReconfigObserver {
         auth_agg_metrics: AuthAggMetrics,
     ) -> Self {
         Self {
-            fullnode_client: SuiClient::new(fullnode_rpc_url, None, None)
+            fullnode_client: SuiClientBuilder::default()
+                .build(fullnode_rpc_url)
                 .await
                 .unwrap_or_else(|e| {
                     panic!(
@@ -71,9 +72,12 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
                             .get_committee_info(Some(epoch_id))
                             .await
                         {
-                            Ok(committee) if committee.committee_info.is_some() => {
+                            Ok(committee) => {
                                 // Safe to unwrap, checked above
-                                Committee::new(committee.epoch, BTreeMap::from_iter(committee.committee_info.unwrap().into_iter())).unwrap_or_else(
+                                Committee::new(
+                                    committee.epoch,
+                                    committee.protocol_version,
+                                    BTreeMap::from_iter(committee.committee_info.into_iter())).unwrap_or_else(
                                     |e| panic!("Can't create a valid Committee given info returned from Full Node: {:?}", e)
                                 )
                             }

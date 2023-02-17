@@ -38,8 +38,7 @@ use move_vm_runtime::{
 use sui_cost_tables::bytecode_tables::GasStatus;
 use sui_framework::natives::object_runtime::{self, ObjectRuntime};
 use sui_json::primitive_type;
-use sui_protocol_constants::*;
-use sui_types::storage::SingleTxContext;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::*,
     error::ExecutionError,
@@ -49,6 +48,7 @@ use sui_types::{
     object::{self, Data, MoveObject, Object, Owner, ID_END_INDEX},
     storage::{ChildObjectResolver, DeleteKind, ObjectChange, ParentSync, Storage, WriteKind},
 };
+use sui_types::{error::convert_vm_error, storage::SingleTxContext};
 use sui_verifier::{
     entry_points_verifier::{is_tx_context, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR},
     verifier, INIT_FN_NAME,
@@ -57,24 +57,29 @@ use tracing::instrument;
 
 use crate::execution_mode::{self, ExecutionMode};
 
-pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
+pub fn new_move_vm(
+    natives: NativeFunctionTable,
+    protocol_config: &ProtocolConfig,
+) -> Result<MoveVM, SuiError> {
     MoveVM::new_with_config(
         natives,
         VMConfig {
             verifier: VerifierConfig {
-                max_loop_depth: Some(MAX_LOOP_DEPTH),
-                max_generic_instantiation_length: Some(MAX_GENERIC_INSTANTIATION_LENGTH),
-                max_function_parameters: Some(MAX_FUNCTION_PARAMETERS),
-                max_basic_blocks: Some(MAX_BASIC_BLOCKS),
-                max_value_stack_size: MAX_VALUE_STACK_SIZE,
-                max_type_nodes: Some(MAX_TYPE_NODES),
-                max_push_size: Some(MAX_PUSH_SIZE),
-                max_dependency_depth: Some(MAX_DEPENDENCY_DEPTH),
-                max_fields_in_struct: Some(MAX_FIELDS_IN_STRUCT),
-                max_function_definitions: Some(MAX_FUNCTION_DEFINITIONS),
-                max_struct_definitions: Some(MAX_STRUCT_DEFINITIONS),
+                max_loop_depth: Some(protocol_config.max_loop_depth()),
+                max_generic_instantiation_length: Some(
+                    protocol_config.max_generic_instantiation_length(),
+                ),
+                max_function_parameters: Some(protocol_config.max_function_parameters()),
+                max_basic_blocks: Some(protocol_config.max_basic_blocks()),
+                max_value_stack_size: protocol_config.max_value_stack_size(),
+                max_type_nodes: Some(protocol_config.max_type_nodes()),
+                max_push_size: Some(protocol_config.max_push_size()),
+                max_dependency_depth: Some(protocol_config.max_dependency_depth()),
+                max_fields_in_struct: Some(protocol_config.max_fields_in_struct()),
+                max_function_definitions: Some(protocol_config.max_function_definitions()),
+                max_struct_definitions: Some(protocol_config.max_struct_definitions()),
             },
-            max_binary_format_version: MOVE_BINARY_FORMAT_VERSION,
+            max_binary_format_version: protocol_config.move_binary_format_version(),
             paranoid_type_checks: false,
         },
     )
@@ -90,9 +95,16 @@ pub fn new_session<
     vm: &'v MoveVM,
     state_view: &'r S,
     input_objects: BTreeMap<ObjectID, (/* by_value */ bool, Owner)>,
+    is_metered: bool,
+    protocol_config: &ProtocolConfig,
 ) -> Session<'r, 'v, S> {
     let mut extensions = NativeContextExtensions::default();
-    extensions.add(ObjectRuntime::new(Box::new(state_view), input_objects));
+    extensions.add(ObjectRuntime::new(
+        Box::new(state_view),
+        input_objects,
+        is_metered,
+        protocol_config,
+    ));
     vm.new_session_with_extensions(state_view, extensions)
 }
 
@@ -124,6 +136,7 @@ pub fn execute<
     args: Vec<CallArg>,
     gas_status: &mut GasStatus,
     ctx: &mut TxContext,
+    protocol_config: &ProtocolConfig,
 ) -> Result<Mode::ExecutionResult, ExecutionError> {
     let mut objects: BTreeMap<ObjectID, &Object> = BTreeMap::new();
     for arg in &args {
@@ -147,7 +160,9 @@ pub fn execute<
         }
     }
 
-    let module = vm.load_module(&module_id, state_view)?;
+    let module = vm
+        .load_module(&module_id, state_view)
+        .map_err(|e| convert_vm_error(e, vm, state_view))?;
     let is_genesis = ctx.digest() == TransactionDigest::genesis();
     let TypeCheckSuccess {
         module_id,
@@ -174,6 +189,7 @@ pub fn execute<
         mutable_ref_objects,
         gas_status,
         ctx,
+        protocol_config,
     )
 }
 
@@ -201,29 +217,40 @@ fn execute_internal<
     mut mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
     gas_status: &mut GasStatus, // gas status for the current call operation
     ctx: &mut TxContext,
+    protocol_config: &ProtocolConfig,
 ) -> Result<Mode::ExecutionResult, ExecutionError> {
     let input_objects = object_data
         .iter()
         .map(|(id, (owner, _))| (*id, (by_value_objects.contains(id), *owner)))
         .collect();
-    let mut session = new_session(vm, state_view, input_objects);
+    let mut session = new_session(
+        vm,
+        state_view,
+        input_objects,
+        gas_status.is_metered(),
+        protocol_config,
+    );
     // check type arguments separately for error conversion
     for (idx, ty) in type_args.iter().enumerate() {
         session
             .load_type(ty)
-            .map_err(|e| convert_type_argument_error(idx, e))?;
+            .map_err(|e| convert_type_argument_error(idx, e, vm, state_view))?;
     }
     // script visibility checked manually for entry points
-    let result = session.execute_function_bypass_visibility(
-        module_id,
-        function,
-        type_args.clone(),
-        args,
-        gas_status,
-    )?;
+    let result = session
+        .execute_function_bypass_visibility(
+            module_id,
+            function,
+            type_args.clone(),
+            args,
+            gas_status,
+        )
+        .map_err(|e| convert_vm_error(e, vm, state_view))?;
     let mode_result = Mode::make_result(&session, module_id, function, &type_args, &result)?;
 
-    let (change_set, events, mut native_context_extensions) = session.finish_with_extensions()?;
+    let (change_set, events, mut native_context_extensions) = session
+        .finish_with_extensions()
+        .map_err(|e| convert_vm_error(e, vm, state_view))?;
     let SerializedReturnValues {
         mut mutable_reference_outputs,
         ..
@@ -281,7 +308,13 @@ fn execute_internal<
         user_events,
         loaded_child_objects,
     } = object_runtime.finish()?;
-    let session = new_session(vm, &*state_view, BTreeMap::new());
+    let session = new_session(
+        vm,
+        &*state_view,
+        BTreeMap::new(),
+        gas_status.is_metered(),
+        protocol_config,
+    );
     let writes = writes
         .into_iter()
         .map(|(id, (write_kind, owner, ty, tag, value))| {
@@ -290,16 +323,20 @@ fn execute_internal<
             let bytes = value.simple_serialize(&layout).unwrap();
             Ok((id, (write_kind, owner, tag, abilities, bytes)))
         })
-        .collect::<VMResult<_>>()?;
+        .collect::<VMResult<_>>()
+        .map_err(|e| convert_vm_error(e, vm, state_view))?;
     let user_events = user_events
         .into_iter()
-        .map(|(_ty, tag, value)| {
+        .map(|(tag, value)| {
             let layout = session.get_type_layout(&TypeTag::Struct(Box::new(tag.clone())))?;
             let bytes = value.simple_serialize(&layout).unwrap();
             Ok((tag, bytes))
         })
-        .collect::<VMResult<_>>()?;
-    let (empty_changes, empty_events) = session.finish()?;
+        .collect::<VMResult<_>>()
+        .map_err(|e| convert_vm_error(e, vm, state_view))?;
+    let (empty_changes, empty_events) = session
+        .finish()
+        .map_err(|e| convert_vm_error(e, vm, state_view))?;
     debug_assert!(empty_changes.into_inner().is_empty());
     debug_assert!(empty_events.is_empty());
     process_successful_execution(
@@ -312,6 +349,7 @@ fn execute_internal<
         deletions,
         user_events,
         ctx,
+        protocol_config,
     )?;
     Ok(mode_result)
 }
@@ -326,10 +364,12 @@ pub fn publish<
         + ChildObjectResolver,
 >(
     state_view: &mut S,
+    vm: &MoveVM,
     natives: NativeFunctionTable,
     module_bytes: Vec<Vec<u8>>,
     ctx: &mut TxContext,
     gas_status: &mut GasStatus,
+    protocol_config: &ProtocolConfig,
 ) -> Result<(), ExecutionError> {
     let mut modules = module_bytes
         .iter()
@@ -337,15 +377,23 @@ pub fn publish<
             CompiledModule::deserialize(b)
                 .map_err(|e| e.finish(move_binary_format::errors::Location::Undefined))
         })
-        .collect::<move_binary_format::errors::VMResult<Vec<CompiledModule>>>()?;
+        .collect::<move_binary_format::errors::VMResult<Vec<CompiledModule>>>()
+        .map_err(|e| convert_vm_error(e, vm, state_view))?;
 
     if modules.is_empty() {
         return Err(ExecutionErrorKind::PublishErrorEmptyPackage.into());
     }
 
     let package_id = generate_package_id(&mut modules, ctx)?;
-    let vm = verify_and_link(state_view, &modules, package_id, natives, gas_status)?;
-    store_package_and_init_modules(state_view, &vm, modules, ctx, gas_status)
+    let vm = verify_and_link(
+        state_view,
+        &modules,
+        package_id,
+        natives,
+        gas_status,
+        protocol_config,
+    )?;
+    store_package_and_init_modules(state_view, &vm, modules, ctx, gas_status, protocol_config)
 }
 
 /// Store package in state_view and call module initializers
@@ -362,6 +410,7 @@ pub fn store_package_and_init_modules<
     modules: Vec<CompiledModule>,
     ctx: &mut TxContext,
     gas_status: &mut GasStatus,
+    protocol_config: &ProtocolConfig,
 ) -> Result<(), ExecutionError> {
     let modules_to_init = modules
         .iter()
@@ -391,7 +440,14 @@ pub fn store_package_and_init_modules<
     )]);
     state_view.apply_object_changes(changes);
 
-    init_modules(state_view, vm, modules_to_init, ctx, gas_status)
+    init_modules(
+        state_view,
+        vm,
+        modules_to_init,
+        ctx,
+        gas_status,
+        protocol_config,
+    )
 }
 
 /// Modules in module_ids_to_init must have the init method defined
@@ -408,10 +464,13 @@ fn init_modules<
     module_ids_to_init: Vec<(ModuleId, FunctionHandleIndex)>,
     ctx: &mut TxContext,
     gas_status: &mut GasStatus,
+    protocol_config: &ProtocolConfig,
 ) -> Result<(), ExecutionError> {
     let init_ident = Identifier::new(INIT_FN_NAME.as_str()).unwrap();
     for (module_id, fhandle_idx) in module_ids_to_init {
-        let module = vm.load_module(&module_id, state_view)?;
+        let module = vm
+            .load_module(&module_id, state_view)
+            .map_err(|e| convert_vm_error(e, vm, state_view))?;
         let view = &BinaryIndexedView::Module(&module);
         let fhandle = module.function_handle_at(fhandle_idx);
         let parameters = &module.signature_at(fhandle.parameters).0;
@@ -444,6 +503,7 @@ fn init_modules<
             BTreeMap::new(),
             gas_status,
             ctx,
+            protocol_config,
         )?;
     }
     Ok(())
@@ -461,13 +521,20 @@ pub fn verify_and_link<
     package_id: ObjectID,
     natives: NativeFunctionTable,
     gas_status: &mut GasStatus,
+    protocol_config: &ProtocolConfig,
 ) -> Result<MoveVM, ExecutionError> {
     // Run the Move bytecode verifier and linker.
     // It is important to do this before running the Sui verifier, since the sui
     // verifier may assume well-formedness conditions enforced by the Move verifier hold
     let vm = MoveVM::new(natives)
         .expect("VM creation only fails if natives are invalid, and we created the natives");
-    let mut session = new_session(&vm, state_view, BTreeMap::new());
+    let mut session = new_session(
+        &vm,
+        state_view,
+        BTreeMap::new(),
+        gas_status.is_metered(),
+        protocol_config,
+    );
     // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
     let new_module_bytes: Vec<_> = modules
         .iter()
@@ -477,18 +544,20 @@ pub fn verify_and_link<
             bytes
         })
         .collect();
-    session.publish_module_bundle(
-        new_module_bytes,
-        AccountAddress::from(package_id),
-        // TODO: publish_module_bundle() currently doesn't charge gas.
-        // Do we want to charge there?
-        gas_status,
-    )?;
+    session
+        .publish_module_bundle(
+            new_module_bytes,
+            AccountAddress::from(package_id),
+            // TODO: publish_module_bundle() currently doesn't charge gas.
+            // Do we want to charge there?
+            gas_status,
+        )
+        .map_err(|e| convert_vm_error(e, &vm, state_view))?;
 
     // run the Sui verifier
     for module in modules.iter() {
         // Run Sui bytecode verifier, which runs some additional checks that assume the Move bytecode verifier has passed.
-        verifier::verify_module(module)?;
+        verifier::verify_module(module, &BTreeMap::new())?;
     }
     Ok(vm)
 }
@@ -548,6 +617,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
     deletions: LinkedHashMap<ObjectID, DeleteKind>,
     user_events: Vec<(StructTag, Vec<u8>)>,
     ctx: &TxContext,
+    protocol_config: &ProtocolConfig,
 ) -> Result<(), ExecutionError> {
     let sender = ctx.sender();
     let tx_ctx = SingleTxContext {
@@ -565,7 +635,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
         obj.data
             .try_as_move_mut()
             .expect("We previously checked that mutable ref inputs are Move objects")
-            .update_contents(new_contents)?;
+            .update_contents(new_contents, protocol_config)?;
 
         changes.insert(
             obj_id,
@@ -606,6 +676,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
                 has_public_transfer,
                 old_obj_ver.unwrap_or_else(SequenceNumber::new),
                 contents,
+                protocol_config,
             )?
         };
 
@@ -824,11 +895,13 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
                 CallArg::Object(ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
+                    mutable,
                 }) => {
                     let (o, arg_type, param_type) = serialize_object(
                         InputObjectKind::SharedMoveObject {
                             id,
                             initial_shared_version,
+                            mutable,
                         },
                         idx,
                         param_type,
@@ -858,9 +931,11 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
                             ObjectArg::SharedObject {
                                 id,
                                 initial_shared_version,
+                                mutable,
                             } => InputObjectKind::SharedMoveObject {
                                 id,
                                 initial_shared_version,
+                                mutable,
                             },
                         };
                         let (o, arg_type, param_type) = serialize_object(
@@ -1055,7 +1130,6 @@ fn serialize_object<'a>(
             return Err(ExecutionErrorKind::InvariantViolation.into());
         }
     };
-
     match object_kind {
         InputObjectKind::ImmOrOwnedMoveObject(_) if object.is_shared() => {
             let error = format!(
@@ -1071,19 +1145,54 @@ fn serialize_object<'a>(
                 error,
             ));
         }
-        InputObjectKind::SharedMoveObject { .. } if !object.is_shared() => {
-            let error = format!(
-                "Argument at index {} populated with an immutable or owned object id {} \
-                        but an shared object was expected",
-                idx, object_id
-            );
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::entry_argument_error(
-                    idx,
-                    EntryArgumentErrorKind::ObjectKindMismatch,
-                ),
-                error,
-            ));
+        InputObjectKind::SharedMoveObject { mutable, .. } => {
+            if !object.is_shared() {
+                let error = format!(
+                    "Argument at index {} populated with an immutable or owned object id {} \
+                            but an shared object was expected",
+                    idx, object_id
+                );
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::entry_argument_error(
+                        idx,
+                        EntryArgumentErrorKind::ObjectKindMismatch,
+                    ),
+                    error,
+                ));
+            }
+            // Immutable shared object can only pass as immutable reference to move call
+            if !mutable {
+                match param_type {
+                    SignatureToken::Reference(_) => {} // ok
+                    SignatureToken::MutableReference(_) => {
+                        let error = format!(
+                            "Argument at index {} populated with an immutable shared object id {} \
+                            but move call takes mutable object reference",
+                            idx, object_id
+                        );
+                        return Err(ExecutionError::new_with_source(
+                            ExecutionErrorKind::entry_argument_error(
+                                idx,
+                                EntryArgumentErrorKind::ObjectMutabilityMismatch,
+                            ),
+                            error,
+                        ));
+                    }
+                    _ => {
+                        return Err(ExecutionError::new_with_source(
+                            ExecutionErrorKind::entry_argument_error(
+                                idx,
+                                EntryArgumentErrorKind::InvalidObjectByValue,
+                            ),
+                            format!(
+                                "Shared objects cannot be passed by-value, \
+                                    violation found in argument {}",
+                                idx
+                            ),
+                        ));
+                    }
+                }
+            }
         }
         _ => (),
     }
@@ -1345,15 +1454,23 @@ fn missing_unwrapped_msg(id: &ObjectID) -> String {
     )
 }
 
-fn convert_type_argument_error(idx: usize, error: VMError) -> ExecutionError {
+fn convert_type_argument_error<
+    'r,
+    E: Debug,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E>,
+>(
+    idx: usize,
+    error: VMError,
+    vm: &'r MoveVM,
+    state_view: &'r S,
+) -> ExecutionError {
     use move_core_types::vm_status::StatusCode;
     use sui_types::messages::EntryTypeArgumentErrorKind;
     let kind = match error.major_status() {
-        StatusCode::LINKER_ERROR => EntryTypeArgumentErrorKind::ModuleNotFound,
         StatusCode::TYPE_RESOLUTION_FAILURE => EntryTypeArgumentErrorKind::TypeNotFound,
         StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => EntryTypeArgumentErrorKind::ArityMismatch,
         StatusCode::CONSTRAINT_NOT_SATISFIED => EntryTypeArgumentErrorKind::ConstraintNotSatisfied,
-        _ => return error.into(),
+        _ => return convert_vm_error(error, vm, state_view),
     };
     ExecutionErrorKind::entry_type_argument_error(idx as TypeParameterIndex, kind).into()
 }

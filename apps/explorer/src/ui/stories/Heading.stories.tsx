@@ -15,26 +15,24 @@ interface StoryProps {
 }
 
 export const Heading1: StoryObj<StoryProps> = {
-    render: ({ as, variants }) => {
-        return (
-            <div className="space-y-2">
-                <div>
-                    {variants.map((variant) => (
-                        <Heading key={variant} as={as} variant={variant}>
-                            This is a sample heading.
-                        </Heading>
-                    ))}
-                </div>
-                <div>
-                    {variants.map((variant) => (
-                        <Heading key={variant} as={as} variant={variant} fixed>
-                            This is a sample heading. (fixed)
-                        </Heading>
-                    ))}
-                </div>
+    render: ({ as, variants }) => (
+        <div className="space-y-2">
+            <div>
+                {variants.map((variant) => (
+                    <Heading key={variant} as={as} variant={variant}>
+                        This is a sample heading.
+                    </Heading>
+                ))}
             </div>
-        );
-    },
+            <div>
+                {variants.map((variant) => (
+                    <Heading key={variant} as={as} variant={variant} fixed>
+                        This is a sample heading. (fixed)
+                    </Heading>
+                ))}
+            </div>
+        </div>
+    ),
     args: {
         as: 'h1',
         variants: ['heading1/bold', 'heading1/semibold', 'heading1/medium'],

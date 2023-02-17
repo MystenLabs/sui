@@ -9,9 +9,17 @@ use crate::{
     messages_checkpoint::CheckpointSequenceNumber,
     object::Owner,
 };
-use move_binary_format::errors::{Location, PartialVMError, VMError};
-use move_core_types::vm_status::{StatusCode, StatusType};
-use narwhal_executor::SubscriberError;
+use fastcrypto::error::FastCryptoError;
+use move_binary_format::access::ModuleAccess;
+use move_binary_format::{
+    errors::{Location, PartialVMError, VMError},
+    file_format::FunctionDefinitionIndex,
+};
+use move_core_types::{
+    resolver::{ModuleResolver, ResourceResolver},
+    vm_status::{StatusCode, StatusType},
+};
+pub use move_vm_runtime::move_vm::MoveVM;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Debug};
 use strum_macros::{AsRefStr, IntoStaticStr};
@@ -108,6 +116,15 @@ pub enum SuiError {
         index: Option<u32>,
         committee: Committee,
     },
+    #[error(
+        "Validator {:?} responded multiple signatures for the same message, conflicting: {:?}",
+        signer,
+        conflicting_sig
+    )]
+    StakeAggregatorRepeatedSigner {
+        signer: AuthorityName,
+        conflicting_sig: bool,
+    },
 
     // Certificate verification and execution
     #[error(
@@ -121,14 +138,6 @@ pub enum SuiError {
     CertificateRequiresQuorum,
     #[error("Authority {authority_name:?} could not sync certificate: {err:?}")]
     CertificateSyncError { authority_name: String, err: String },
-    #[error(
-        "The given sequence number ({given_sequence:?}) must match the next expected sequence ({expected_sequence:?}) number of the object ({object_id:?})"
-    )]
-    UnexpectedSequenceNumber {
-        object_id: ObjectID,
-        expected_sequence: SequenceNumber,
-        given_sequence: SequenceNumber,
-    },
     #[error("Invalid Authority Bitmap: {}", error)]
     InvalidAuthorityBitmap { error: String },
     #[error("Transaction certificate processing failed: {err}")]
@@ -137,7 +146,7 @@ pub enum SuiError {
         "Failed to get a quorum of signed effects when processing transaction: {effects_map:?}"
     )]
     QuorumFailedToGetEffectsQuorumWhenProcessingTransaction {
-        effects_map: BTreeMap<(EpochId, TransactionEffectsDigest), (Vec<AuthorityName>, StakeUnit)>,
+        effects_map: BTreeMap<TransactionEffectsDigest, (Vec<AuthorityName>, StakeUnit)>,
     },
     #[error("Module publish failed: {err}")]
     ErrorWhileProcessingPublish { err: String },
@@ -221,6 +230,8 @@ pub enum SuiError {
     TransferImmutableError,
     #[error("Wrong initial version given for shared object")]
     SharedObjectStartingVersionMismatch,
+    #[error("Mutable parameter provided, immutable parameter expected.")]
+    ImmutableParameterExpectedError,
 
     // Errors related to batches
     #[error("The range specified is invalid.")]
@@ -542,6 +553,18 @@ pub enum SuiError {
     Unknown(String),
 }
 
+#[repr(u64)]
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+/// Sub-status codes for the `MEMORY_LIMIT_EXCEEDED` VM Status Code which provides more context
+pub enum VMMemoryLimitExceededSubStatusCode {
+    EVENT_COUNT_LIMIT_EXCEEDED = 0,
+    EVENT_SIZE_LIMIT_EXCEEDED = 1,
+    NEW_ID_COUNT_LIMIT_EXCEEDED = 2,
+    DELETED_ID_COUNT_LIMIT_EXCEEDED = 3,
+    TRANSFER_ID_COUNT_LIMIT_EXCEEDED = 4,
+}
+
 pub type SuiResult<T = ()> = Result<T, SuiError>;
 
 // TODO these are both horribly wrong, categorization needs to be considered
@@ -564,12 +587,6 @@ impl From<VMError> for SuiError {
         SuiError::ModuleVerificationFailure {
             error: error.to_string(),
         }
-    }
-}
-
-impl From<SubscriberError> for SuiError {
-    fn from(error: SubscriberError) -> Self {
-        SuiError::HandleConsensusTransactionFailure(error.to_string())
     }
 }
 
@@ -608,6 +625,17 @@ impl From<&str> for SuiError {
     }
 }
 
+impl From<FastCryptoError> for SuiError {
+    fn from(kind: FastCryptoError) -> Self {
+        match kind {
+            FastCryptoError::InvalidSignature => SuiError::InvalidSignature {
+                error: "Invalid signature".to_string(),
+            },
+            _ => SuiError::Unknown("Unknown cryptography error".to_string()),
+        }
+    }
+}
+
 impl SuiError {
     pub fn individual_error_indicates_epoch_change(&self) -> bool {
         matches!(
@@ -635,6 +663,35 @@ impl SuiError {
     pub fn into_transaction_input_error(error: SuiError) -> SuiError {
         SuiError::TransactionInputObjectsErrors {
             errors: vec![error],
+        }
+    }
+
+    /// Returns if the error is retryable and if the error's retryability is
+    /// explicitly categorized.
+    /// There should be only a handful of retryable errors. For now we list common
+    /// non-retryable error below to help us find more retryable errors in logs.
+    pub fn is_retryable(&self) -> (bool, bool) {
+        match self {
+            // Network error
+            SuiError::RpcError { .. } => (true, true),
+
+            // Reconfig error
+            SuiError::ValidatorHaltedAtEpochEnd => (true, true),
+            SuiError::MissingCommitteeAtEpoch(..) => (true, true),
+            SuiError::WrongEpoch { .. } => (true, true),
+
+            // Non retryable error
+            SuiError::TransactionInputObjectsErrors { .. } => (false, true),
+            SuiError::ExecutionError(..) => (false, true),
+            SuiError::ByzantineAuthoritySuspicion { .. } => (false, true),
+            SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. } => {
+                (false, true)
+            }
+            SuiError::ObjectVersionUnavailableForConsumption { .. } => (false, true),
+            SuiError::GasBudgetTooHigh { .. } => (false, true),
+            SuiError::GasBudgetTooLow { .. } => (false, true),
+            SuiError::GasBalanceTooLowToCoverGasBudget { .. } => (false, true),
+            _ => (false, false),
         }
     }
 }
@@ -673,6 +730,10 @@ impl ExecutionError {
         &self.inner.kind
     }
 
+    pub fn source(&self) -> &Option<BoxError> {
+        &self.inner.source
+    }
+
     pub fn to_execution_status(&self) -> ExecutionFailureStatus {
         self.kind().clone()
     }
@@ -696,69 +757,86 @@ impl From<ExecutionErrorKind> for ExecutionError {
     }
 }
 
-impl From<VMError> for ExecutionError {
-    fn from(error: VMError) -> Self {
-        let kind = match (error.major_status(), error.sub_status(), error.location()) {
-            (StatusCode::EXECUTED, _, _) => {
-                // If we have an error the status probably shouldn't ever be Executed
-                debug_assert!(false, "VmError shouldn't ever report successful execution");
-                ExecutionFailureStatus::VMInvariantViolation
+pub fn convert_vm_error<
+    'r,
+    E: Debug,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E>,
+>(
+    error: VMError,
+    vm: &'r MoveVM,
+    state_view: &'r S,
+) -> ExecutionError {
+    let kind = match (error.major_status(), error.sub_status(), error.location()) {
+        (StatusCode::EXECUTED, _, _) => {
+            // If we have an error the status probably shouldn't ever be Executed
+            debug_assert!(false, "VmError shouldn't ever report successful execution");
+            ExecutionFailureStatus::VMInvariantViolation
+        }
+        (StatusCode::ABORTED, None, _) => {
+            debug_assert!(false, "No abort code");
+            // this is a Move VM invariant violation, the code should always be there
+            ExecutionFailureStatus::VMInvariantViolation
+        }
+        (StatusCode::ABORTED, _, Location::Script) => {
+            debug_assert!(false, "Scripts are not used in Sui");
+            // this is a Move VM invariant violation, in the sense that the location
+            // is malformed
+            ExecutionFailureStatus::VMInvariantViolation
+        }
+        (StatusCode::ABORTED, Some(code), Location::Module(id)) => {
+            let offset = error.offsets().first().copied().map(|(f, i)| (f.0, i));
+            debug_assert!(offset.is_some(), "Move should set the location on aborts");
+            let (function, instruction) = offset.unwrap_or((0, 0));
+            let function_name = vm.load_module(id, state_view).ok().map(|module| {
+                let fdef = module.function_def_at(FunctionDefinitionIndex(function as u16));
+                let fhandle = module.function_handle_at(fdef.function);
+                module.identifier_at(fhandle.name).to_string()
+            });
+            ExecutionFailureStatus::MoveAbort(
+                MoveLocation {
+                    module: id.clone(),
+                    function,
+                    instruction,
+                    function_name,
+                },
+                code,
+            )
+        }
+        (StatusCode::OUT_OF_GAS, _, _) => ExecutionFailureStatus::InsufficientGas,
+        (_, _, location) => match error.major_status().status_type() {
+            StatusType::Execution => {
+                debug_assert!(error.major_status() != StatusCode::ABORTED);
+                let location = match location {
+                    Location::Module(id) => {
+                        let offset = error.offsets().first().copied().map(|(f, i)| (f.0, i));
+                        debug_assert!(
+                            offset.is_some(),
+                            "Move should set the location on all execution errors"
+                        );
+                        let (function, instruction) = offset.unwrap_or((0, 0));
+                        let function_name = vm.load_module(id, state_view).ok().map(|module| {
+                            let fdef =
+                                module.function_def_at(FunctionDefinitionIndex(function as u16));
+                            let fhandle = module.function_handle_at(fdef.function);
+                            module.identifier_at(fhandle.name).to_string()
+                        });
+                        Some(MoveLocation {
+                            module: id.clone(),
+                            function,
+                            instruction,
+                            function_name,
+                        })
+                    }
+                    _ => None,
+                };
+                ExecutionFailureStatus::MovePrimitiveRuntimeError(location)
             }
-            (StatusCode::ABORTED, None, _) => {
-                debug_assert!(false, "No abort code");
-                // this is a Move VM invariant violation, the code should always be there
-                ExecutionFailureStatus::VMInvariantViolation
-            }
-            (StatusCode::ABORTED, _, Location::Script) => {
-                debug_assert!(false, "Scripts are not used in Sui");
-                // this is a Move VM invariant violation, in the sense that the location
-                // is malformed
-                ExecutionFailureStatus::VMInvariantViolation
-            }
-            (StatusCode::ABORTED, Some(code), Location::Module(id)) => {
-                let offset = error.offsets().first().copied().map(|(f, i)| (f.0, i));
-                debug_assert!(offset.is_some(), "Move should set the location on aborts");
-                let (function, instruction) = offset.unwrap_or((0, 0));
-                ExecutionFailureStatus::MoveAbort(
-                    MoveLocation {
-                        module: id.clone(),
-                        function,
-                        instruction,
-                    },
-                    code,
-                )
-            }
-            (StatusCode::OUT_OF_GAS, _, _) => ExecutionFailureStatus::InsufficientGas,
-            (_, _, location) => match error.major_status().status_type() {
-                StatusType::Execution => {
-                    debug_assert!(error.major_status() != StatusCode::ABORTED);
-                    let location = match location {
-                        Location::Module(id) => {
-                            let offset = error.offsets().first().copied().map(|(f, i)| (f.0, i));
-                            debug_assert!(
-                                offset.is_some(),
-                                "Move should set the location on all execution errors"
-                            );
-                            let (function, instruction) = offset.unwrap_or((0, 0));
-                            Some(MoveLocation {
-                                module: id.clone(),
-                                function,
-                                instruction,
-                            })
-                        }
-                        _ => None,
-                    };
-                    ExecutionFailureStatus::MovePrimitiveRuntimeError(location)
-                }
-                StatusType::Validation
-                | StatusType::Verification
-                | StatusType::Deserialization
-                | StatusType::Unknown => {
-                    ExecutionFailureStatus::VMVerificationOrDeserializationError
-                }
-                StatusType::InvariantViolation => ExecutionFailureStatus::VMInvariantViolation,
-            },
-        };
-        Self::new_with_source(kind, error)
-    }
+            StatusType::Validation
+            | StatusType::Verification
+            | StatusType::Deserialization
+            | StatusType::Unknown => ExecutionFailureStatus::VMVerificationOrDeserializationError,
+            StatusType::InvariantViolation => ExecutionFailureStatus::VMInvariantViolation,
+        },
+    };
+    ExecutionError::new_with_source(kind, error)
 }

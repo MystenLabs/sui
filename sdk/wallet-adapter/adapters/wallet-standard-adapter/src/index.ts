@@ -15,6 +15,8 @@ type Events = {
   changed: void;
 };
 
+export { StandardWalletAdapter };
+
 export class WalletStandardAdapterProvider implements WalletAdapterProvider {
   #wallets: Wallets;
   #adapters: Map<StandardWalletAdapterWallet, StandardWalletAdapter>;

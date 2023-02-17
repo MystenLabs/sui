@@ -13,6 +13,7 @@ To test more advanced features not available in Sui Wallet, see [Sui CLI client]
 You can use Sui Wallet to:
 
 * Mint NFTs
+* Stake and earn SUI
 * Transfer coins and NFTs to another address
 * View your coins, tokens, and NFTs
 * View recent transactions
@@ -40,7 +41,7 @@ If you don't yet have a Sui Wallet, create a new one. To import an existing wall
 1. Under **Confirm Password**, enter the same password to confirm it.
 1. Click the checkbox to accept the Terms of Service.
 1. Click **Create Wallet**.
-1. Copy the Recovery Phrase and store it in a safe location.
+1. Copy the Recovery Phrase and store it in a safe location, then click the checkbox for **I saved my recovery phrase**.
 1. Click **Open Sui Wallet**.
 
 Sui Wallet prompts you to enter your password when you open it after the first use.
@@ -64,18 +65,15 @@ Sui Wallet prompts you to enter your password when you open it after the first u
 
 ## Add SUI tokens to your Sui Wallet
 
-When you first open the wallet, you have no coins in it. You can add test SUI coins to your wallet directly from the wallet interface, or you can use the faucet in Discord. You need an active Discord account to access the Sui channels.
-
-**To get SUI test coins from Sui Wallet**
-If you have no coins in your wallet, click **Request Devnet SUI tokens** to add coins to your wallet. You can request coins 5 times every 60 minutes. After you request tokens the first time, the button moves to the menu so it doesn't take up space on your wallet interface.
-
-If you don't yet have coins in your wallet, click the menu in the top-right corner, and then click **Request Devnet SUI tokens**.
+When you first open the wallet, you have no coins in it. You can add test SUI coins to your wallet using the faucet in Discord.
 
 **To get SUI test coins through Discord**
 1. Click **Coins**.
 1. Click the small clipboard icon next to your address to copy it.
    It's near the top of the wallet and starts with 0x.
-1. Open the Sui [devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) channel in Discord. You must have an active Discord account that has joined the Sui Discord to access the channel.
+1. Go to the Discord faucet channel for the network you use:
+   * [devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) channel in Discord.
+   * [testnet-faucet](https://discord.com/channels/916379725201563759/1037811694564560966).
 1. Use the `!faucet` command with your wallet address to request tokens:
    `!faucet 0x6c04ed5110554acf59ff1b535129548dd9a0c741`
    Replace the address in the command with your wallet address.
@@ -131,6 +129,23 @@ You can send coins from your wallet to another address.
 1. Click **Coins** and then click **Send**.
 1. In the **Amount** field, enter the number of SUI to send, and then click **Continue**.
 1. Enter the recipient's address, then click **Send Coins Now**.
+
+## Stake and earn SUI (Testnet only)
+
+While the Testnet network is available, you can try out staking to earn SUI. When you stake SUI, you delegate your SUI tokens to a validator to stake. The validator then pays you rewards for delegating your SUI to stake. Note that SUI tokens have no value. The rewards are for testing purposes and have no real value.
+
+1. Open your wallet and click **Coins**.
+1. Click **Stake & Earn SUI**.
+1. Select a validator to stake with.
+1. Choose an amount of SUI to stake.
+   Be sure to enter an amount that leaves enough SUI in your wallet to cover gas fees.
+1. Click **Stake Now**.
+
+Your stake starts earning rewards at the start of the next epoch.
+
+## View current stake
+
+To view details about your current stakes, click **Currently Staked** on the **Coins** tab of the Wallet. Details include: the amount you staked, the validator you chose, amount earned, and the validator commission.
 
 ## View recent transaction details
 

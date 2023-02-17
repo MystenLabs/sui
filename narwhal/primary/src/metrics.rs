@@ -5,10 +5,11 @@ use mysten_network::metrics::MetricsCallbackProvider;
 use network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::{
     core::{AtomicI64, GenericGauge},
-    default_registry, register_histogram_vec_with_registry, register_histogram_with_registry,
-    register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
-    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    default_registry, linear_buckets, register_histogram_vec_with_registry,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge,
+    IntGaugeVec, Registry,
 };
 use std::time::Duration;
 use tonic::Code;
@@ -272,10 +273,6 @@ impl PrimaryChannelMetrics {
                 "total received on channel signaling own committed headers.",
                 registry
             ).unwrap(),
-
-
-
-
         }
     }
 
@@ -313,11 +310,16 @@ impl PrimaryChannelMetrics {
 #[derive(Clone)]
 pub struct PrimaryMetrics {
     /// count number of headers that the node proposed
-    pub headers_proposed: IntCounter,
+    pub headers_proposed: IntCounterVec,
+    // total number of parents in all proposed headers, for calculating average number of parents
+    // per header.
+    pub header_parents: Histogram,
     /// the current proposed header round
     pub proposed_header_round: IntGauge,
     /// The number of received votes for the proposed last round
     pub votes_received_last_round: IntGauge,
+    // total number of parent certificates included in votes.
+    pub certificates_in_votes: IntCounter,
     /// The round of the latest created certificate by our node
     pub certificate_created_round: IntGauge,
     /// count number of certificates that the node created
@@ -359,10 +361,24 @@ pub struct PrimaryMetrics {
 
 impl PrimaryMetrics {
     pub fn new(registry: &Registry) -> Self {
+        let parents_buckets = [
+            linear_buckets(1.0, 1.0, 20).unwrap().as_slice(),
+            linear_buckets(21.0, 2.0, 20).unwrap().as_slice(),
+            linear_buckets(61.0, 3.0, 20).unwrap().as_slice(),
+        ]
+        .concat();
         Self {
-            headers_proposed: register_int_counter_with_registry!(
+            headers_proposed: register_int_counter_vec_with_registry!(
                 "headers_proposed",
                 "Number of headers that node proposed",
+                &["leader_support"],
+                registry
+            )
+            .unwrap(),
+            header_parents: register_histogram_with_registry!(
+                "header_parents",
+                "Number of parents included in proposed headers",
+                parents_buckets,
                 registry
             )
             .unwrap(),
@@ -374,6 +390,11 @@ impl PrimaryMetrics {
             votes_received_last_round: register_int_gauge_with_registry!(
                 "votes_received_last_round",
                 "The number of received votes for the proposed last round",
+                registry
+            ).unwrap(),
+            certificates_in_votes: register_int_counter_with_registry!(
+                "certificates_in_votes",
+                "Total number of parent certificates included in votes.",
                 registry
             ).unwrap(),
             certificate_created_round: register_int_gauge_with_registry!(

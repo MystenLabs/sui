@@ -11,9 +11,10 @@ use std::task::{Context, Poll};
 use hyper::service::Service;
 use hyper::{body, http, Body, Request, Response};
 use jsonrpsee::core::__reexports::serde_json;
+use jsonrpsee::types::error::ErrorCode;
 use prometheus::{
-    register_histogram_vec_with_registry, register_int_counter_vec_with_registry, HistogramVec,
-    IntCounterVec,
+    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
+    register_int_gauge_vec_with_registry, HistogramVec, IntCounterVec, IntGaugeVec,
 };
 use serde::Deserialize;
 use tokio::time::Instant;
@@ -36,6 +37,13 @@ impl MetricsLayer {
                 registry,
             )
             .unwrap(),
+            inflight_requests_by_route: register_int_gauge_vec_with_registry!(
+                "inflight_rpc_requests_by_route",
+                "Number of inflight requests by route",
+                &["route"],
+                registry,
+            )
+            .unwrap(),
             req_latency_by_route: register_histogram_vec_with_registry!(
                 "req_latency_by_route",
                 "Latency of a request by route",
@@ -47,7 +55,7 @@ impl MetricsLayer {
             errors_by_route: register_int_counter_vec_with_registry!(
                 "errors_by_route",
                 "Number of errors by route",
-                &["route"],
+                &["route", "error"],
                 registry,
             )
             .unwrap(),
@@ -79,6 +87,8 @@ pub struct JsonRpcMetricService<S> {
 pub struct Metrics {
     /// Counter of requests, route is a label (ie separate timeseries per route)
     requests_by_route: IntCounterVec,
+    /// Gauge of inflight requests, route is a label (ie separate timeseries per route)
+    inflight_requests_by_route: IntGaugeVec,
     /// Request latency, route is a label
     req_latency_by_route: HistogramVec,
     /// Failed requests by route
@@ -144,22 +154,58 @@ where
                 (None, req)
             };
 
+            let _inflight_guard = if let Some(name) = &rpc_name {
+                if whitelist.contains(name) {
+                    metrics.requests_by_route.with_label_values(&[name]).inc();
+                    let in_flight = metrics
+                        .inflight_requests_by_route
+                        .with_label_values(&[name]);
+                    in_flight.inc();
+                    Some(scopeguard::guard(in_flight, |in_flight| {
+                        in_flight.dec();
+                    }))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
             let fut = inner.call(req);
-            let res = fut.await.map_err(|err| err.into())?;
+            let res: Response<Body> = fut.await.map_err(|err| err.into())?;
 
             // Record metrics if the request is a http RPC request.
             if let Some(name) = rpc_name {
                 if whitelist.contains(&name) {
                     let req_latency_secs = (Instant::now() - started_at).as_secs_f64();
-                    metrics.requests_by_route.with_label_values(&[&name]).inc();
                     metrics
                         .req_latency_by_route
                         .with_label_values(&[&name])
                         .observe(req_latency_secs);
-
-                    if res.status().is_server_error() {
-                        metrics.errors_by_route.with_label_values(&[&name]).inc();
+                    // Parse error code from response
+                    #[derive(Deserialize)]
+                    struct RPCResponse {
+                        #[serde(default)]
+                        error: Option<RPCError>,
                     }
+                    #[derive(Deserialize)]
+                    struct RPCError {
+                        code: ErrorCode,
+                    }
+                    let (parts, body) = res.into_parts();
+                    let bytes = body::to_bytes(body).await?;
+                    let error_code = serde_json::from_slice::<RPCResponse>(&bytes)
+                        .ok()
+                        .and_then(|rpc| rpc.error)
+                        .map(|error| error.code);
+
+                    if let Some(error_code) = error_code {
+                        metrics
+                            .errors_by_route
+                            .with_label_values(&[&name, error_code.message()])
+                            .inc();
+                    }
+                    return Ok(Response::from_parts(parts, bytes.into()));
                 } else {
                     // Only record request count for spams
                     metrics

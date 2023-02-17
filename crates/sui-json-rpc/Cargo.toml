@@ -7,7 +7,8 @@ publish = false
 edition = "2021"
 
 [dependencies]
-fastcrypto = { workspace = true }
+fastcrypto.workspace = true
+fastcrypto-tbls.workspace = true
 jsonrpsee = { version = "0.16.2", features = ["full"] }
 jsonrpsee-proc-macros = "0.16.2"
 hyper = "0.14"
@@ -25,6 +26,7 @@ futures = "0.3.23"
 tokio = { workspace = true, features = ["full"] }
 signature = "1.6.0"
 thiserror = "1.0.37"
+scopeguard = "1.1"
 bcs = "0.1.4"
 
 tap = "1.0"
@@ -37,6 +39,7 @@ sui-open-rpc = { path = "../sui-open-rpc" }
 sui-open-rpc-macros = { path = "../sui-open-rpc-macros" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-transaction-builder = { path = "../sui-transaction-builder" }
+sui-protocol-config = { path = "../sui-protocol-config" }
 mysten-metrics = { path = "../mysten-metrics" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

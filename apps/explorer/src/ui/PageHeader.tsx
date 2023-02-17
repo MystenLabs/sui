@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { CopyNew24 } from '@mysten/icons';
 import { type TransactionKindName } from '@mysten/sui.js';
 import toast from 'react-hot-toast';
 
 import { Badge } from './Badge';
 import { Heading } from './Heading';
-import { ReactComponent as CopyIcon } from './icons/copy.svg';
 import { ReactComponent as ImageIcon } from './icons/image.svg';
 import { ReactComponent as SenderIcon } from './icons/sender.svg';
 import { ReactComponent as CallIcon } from './icons/transactions/call.svg';
@@ -29,7 +29,7 @@ export interface PageHeaderProps {
     status?: 'success' | 'failure';
 }
 
-const TYPE_TO_ICON: Record<PageHeaderType, typeof CallIcon> = {
+const TYPE_TO_ICON: Record<string, typeof CallIcon> = {
     Call: CallIcon,
     ChangeEpoch: ChangeEpochIcon,
     Pay: PayIcon,
@@ -58,10 +58,11 @@ const STATUS_TO_TEXT = {
 
 export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
     const Icon = TYPE_TO_ICON[type];
+
     return (
         <div data-testid="pageheader">
             <div className="mb-3 flex items-center gap-2">
-                <Icon className="text-steel" />
+                {Icon && <Icon className="text-steel" />}
                 <Heading variant="heading4/semibold" color="steel-darker">
                     {type}
                 </Heading>
@@ -84,10 +85,12 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
                             navigator.clipboard.writeText(title);
                             toast.success('Copied!');
                         }}
-                        className="m-0 -mt-0.5 flex cursor-pointer items-center justify-center border-none bg-transparent p-0 text-steel"
+                        className="m-0 -mt-0.5 flex cursor-pointer items-center justify-center border-none bg-transparent p-0 text-xl text-steel transition-colors hover:text-steel-dark"
                     >
                         <span className="sr-only">Copy</span>
-                        <CopyIcon aria-hidden="true" />
+                        <CopyNew24 aria-hidden="true" />
+                        {/* <Copy12 aria-hidden="true" /> */}
+                        {/* <CopyIcon aria-hidden="true" /> */}
                     </button>
                 </div>
 

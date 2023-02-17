@@ -3,11 +3,11 @@
 
 import cl from 'classnames';
 
-import { API_ENV } from '_app/ApiProvider';
 import CopyToClipboard from '_components/copy-to-clipboard';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { useAppSelector, useMiddleEllipsis } from '_hooks';
+import { API_ENV } from '_src/shared/api-env';
 
 import st from './AccountAddress.module.scss';
 
@@ -42,7 +42,11 @@ function AccountAddress({
     return address ? (
         <span className={cl(st.addressContainer, className)}>
             {copyable ? (
-                <CopyToClipboard txt={address} mode={cpIconMode}>
+                <CopyToClipboard
+                    txt={address}
+                    mode={cpIconMode}
+                    copySuccessMessage="Address copied"
+                >
                     {addressLink}
                 </CopyToClipboard>
             ) : (

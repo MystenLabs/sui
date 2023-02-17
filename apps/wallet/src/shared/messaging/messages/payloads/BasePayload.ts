@@ -25,7 +25,9 @@ export type PayloadType =
     | 'stake-request'
     | 'wallet-status-changed'
     | 'get-features'
-    | 'features-response';
+    | 'features-response'
+    | 'get-network'
+    | 'set-network';
 
 export interface BasePayload {
     type: PayloadType;

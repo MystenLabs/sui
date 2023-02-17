@@ -8,6 +8,7 @@ import { type DataType } from '../OwnedObjectConstants';
 import styles from '../styles/OwnedObjects.module.css';
 
 import { ObjectLink } from '~/ui/InternalLink';
+import { Text } from '~/ui/Text';
 
 export default function OwnedNFTView({ results }: { results: DataType }) {
     return (
@@ -25,7 +26,9 @@ export default function OwnedNFTView({ results }: { results: DataType }) {
                             <ObjectLink objectId={entryObj.id} />
                         </div>
                         <div className={styles.typevalue}>
-                            {trimStdLibPrefix(entryObj.Type)}
+                            <Text variant="p2/medium">
+                                {trimStdLibPrefix(entryObj.Type)}
+                            </Text>
                         </div>
                     </div>
                 </div>

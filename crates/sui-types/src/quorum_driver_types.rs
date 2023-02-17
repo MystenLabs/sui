@@ -14,6 +14,9 @@ use thiserror::Error;
 
 pub type QuorumDriverResult = Result<QuorumDriverResponse, QuorumDriverError>;
 
+pub type QuorumDriverEffectsQueueResult =
+    Result<QuorumDriverResponse, (TransactionDigest, QuorumDriverError)>;
+
 /// Client facing errors regarding transaction submission via Quorum Driver.
 /// Every invariant needs detailed documents to instruct client handling.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr)]

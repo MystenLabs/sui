@@ -110,8 +110,8 @@ pub type WorkerId = u32;
 /// milliseconds or seconds (e.x 5s, 10ms , 2000ms).
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Parameters {
-    /// When the primary has at least `header_num_of_batches_threshold` num of batch digests
-    /// available, then it can propose a new header.
+    /// When the primary has `header_num_of_batches_threshold` num of batch digests available,
+    /// then it can propose a new header.
     #[serde(default = "Parameters::default_header_num_of_batches_threshold")]
     pub header_num_of_batches_threshold: usize,
 
@@ -119,10 +119,21 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_max_header_num_of_batches")]
     pub max_header_num_of_batches: usize,
 
-    /// The maximum delay that the primary waits between generating two headers, even if the header
-    /// did not reach `max_header_num_of_batches`.
-    #[serde(with = "duration_format")]
+    /// The maximum delay that the primary should wait between generating two headers, even if
+    /// other conditions are not satisfied besides having enough parent stakes.
+    #[serde(
+        with = "duration_format",
+        default = "Parameters::default_max_header_delay"
+    )]
     pub max_header_delay: Duration,
+    /// When the delay from last header reaches `min_header_delay`, a new header can be proposed
+    /// even if batches have not reached `header_num_of_batches_threshold`.
+    #[serde(
+        with = "duration_format",
+        default = "Parameters::default_min_header_delay"
+    )]
+    pub min_header_delay: Duration,
+
     /// The depth of the garbage collection (Denominated in number of rounds).
     pub gc_depth: u64,
     /// The delay after which the synchronizer retries to send sync requests. Denominated in ms.
@@ -160,6 +171,14 @@ impl Parameters {
 
     fn default_max_header_num_of_batches() -> usize {
         1_000
+    }
+
+    fn default_max_header_delay() -> Duration {
+        Duration::from_secs(2)
+    }
+
+    fn default_min_header_delay() -> Duration {
+        Duration::from_secs_f64(1.8)
     }
 }
 
@@ -347,6 +366,7 @@ impl Default for Parameters {
             header_num_of_batches_threshold: 32,
             max_header_num_of_batches: 1000,
             max_header_delay: Duration::from_millis(100),
+            min_header_delay: Duration::from_millis(100),
             gc_depth: 50,
             sync_retry_delay: Duration::from_millis(5_000),
             sync_retry_nodes: 3,
@@ -383,6 +403,10 @@ impl Parameters {
         info!(
             "Max header delay set to {} ms",
             self.max_header_delay.as_millis()
+        );
+        info!(
+            "Min header delay set to {} ms",
+            self.min_header_delay.as_millis()
         );
         info!("Garbage collection depth set to {} rounds", self.gc_depth);
         info!(
@@ -840,56 +864,5 @@ impl Committee {
         };
 
         errors.map(Err).unwrap_or(Ok(()))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::Parameters;
-    use tracing_test::traced_test;
-
-    #[test]
-    #[traced_test]
-    fn tracing_should_print_parameters() {
-        // GIVEN
-        let parameters = Parameters::default();
-
-        // WHEN
-        parameters.tracing();
-
-        // THEN
-        assert!(logs_contain("Header number of batches threshold set to 32"));
-        assert!(logs_contain("Header max number of batches set to 1000"));
-        assert!(logs_contain("Max header delay set to 100 ms"));
-        assert!(logs_contain("Garbage collection depth set to 50 rounds"));
-        assert!(logs_contain("Sync retry delay set to 5000 ms"));
-        assert!(logs_contain("Sync retry nodes set to 3 nodes"));
-        assert!(logs_contain("Batch size set to 500000 B"));
-        assert!(logs_contain("Max batch delay set to 100 ms"));
-        assert!(logs_contain("Synchronize certificates timeout set to 30 s"));
-        assert!(logs_contain(
-            "Payload (batches) availability timeout set to 30 s"
-        ));
-        assert!(logs_contain(
-            "Synchronize payload (batches) timeout set to 30 s"
-        ));
-        assert!(logs_contain(
-            "Handler certificate deliver timeout set to 30 s"
-        ));
-        assert!(logs_contain(
-            "Consensus API gRPC Server set to listen on on /ip4/127.0.0.1/tcp"
-        ));
-        assert!(logs_contain("Get collections timeout set to 5000 ms"));
-        assert!(logs_contain("Remove collections timeout set to 5000 ms"));
-        assert!(logs_contain("Max concurrent requests set to 500000"));
-        assert!(logs_contain(
-            "Prometheus metrics server will run on /ip4/127.0.0.1/tcp"
-        ));
-        assert!(logs_contain(
-            "Primary network admin server will run on 127.0.0.1:"
-        ));
-        assert!(logs_contain(
-            "Worker network admin server will run starting on base port 127.0.0.1:"
-        ));
     }
 }

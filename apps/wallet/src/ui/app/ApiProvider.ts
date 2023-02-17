@@ -6,20 +6,15 @@ import { JsonRpcProvider, LocalTxnDataSerializer } from '@mysten/sui.js';
 import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
 import { queryClient } from './helpers/queryClient';
 import { growthbook } from '_app/experimentation/feature-gating';
+import { API_ENV } from '_src/shared/api-env';
 import { FEATURES } from '_src/shared/experimentation/features';
 
 import type { BackgroundClient } from './background-client';
 import type { SuiAddress, SignerWithProvider } from '@mysten/sui.js';
 
-export enum API_ENV {
-    local = 'local',
-    devNet = 'devNet',
-    testNet = 'testNet',
-    customRPC = 'customRPC',
-}
-
 type EnvInfo = {
     name: string;
+    env: API_ENV;
 };
 
 type ApiEndpoints = {
@@ -27,10 +22,10 @@ type ApiEndpoints = {
     faucet?: string;
 } | null;
 export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
-    [API_ENV.local]: { name: 'Local' },
-    [API_ENV.devNet]: { name: 'Sui Devnet' },
-    [API_ENV.customRPC]: { name: 'Custom RPC URL' },
-    [API_ENV.testNet]: { name: 'Sui Testnet' },
+    [API_ENV.local]: { name: 'Local', env: API_ENV.local },
+    [API_ENV.devNet]: { name: 'Sui Devnet', env: API_ENV.devNet },
+    [API_ENV.customRPC]: { name: 'Custom RPC URL', env: API_ENV.customRPC },
+    [API_ENV.testNet]: { name: 'Sui Testnet', env: API_ENV.testNet },
 };
 
 export const ENV_TO_API: Record<API_ENV, ApiEndpoints> = {
@@ -94,13 +89,14 @@ export default class ApiProvider {
         apiEnv: API_ENV = DEFAULT_API_ENV,
         customRPC?: string | null
     ) {
-        // We also clear the query client whenever set set a new API provider:
-        queryClient.clear();
         this._apiFullNodeProvider = new JsonRpcProvider(
             customRPC ?? getDefaultAPI(apiEnv).fullNode,
             { faucetURL: customRPC ? '' : getDefaultAPI(apiEnv).faucet }
         );
         this._signerByAddress.clear();
+        // We also clear the query client whenever set set a new API provider:
+        queryClient.resetQueries();
+        queryClient.clear();
     }
 
     public get instance() {

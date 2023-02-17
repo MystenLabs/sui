@@ -6,7 +6,7 @@ import { type ReactNode } from 'react';
 
 import { parseVariant, type SizeAndWeightVariant } from './utils/sizeAndWeight';
 
-const textStyles = cva([], {
+const textStyles = cva(['break-words'], {
     variants: {
         size: {
             body: 'text-body',
@@ -15,16 +15,20 @@ const textStyles = cva([], {
             subtitleSmall: 'text-subtitleSmall',
             subtitleSmallExtra: 'text-subtitleSmallExtra',
             caption: 'uppercase text-caption',
-            captionSmall: 'uppercase text-captionSmall ',
+            captionSmall: 'uppercase text-captionSmall',
             p1: 'text-p1',
             p2: 'text-p2',
+            p3: 'text-p3',
+            p4: 'text-p4',
         },
         weight: {
             medium: 'font-medium',
+            normal: 'font-normal',
             semibold: 'font-semibold',
             bold: 'font-bold',
         },
         color: {
+            white: 'text-white',
             'gray-100': 'text-gray-100',
             'gray-90': 'text-gray-90',
             'gray-80': 'text-gray-80',

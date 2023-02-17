@@ -38,7 +38,6 @@ fn test_to_json_value() {
             .unwrap()
             .into();
     let json_value = sui_move_struct.to_json_value().unwrap();
-    dbg!(&json_value);
     assert_eq!(
         Some(&json!("1000000")),
         json_value.pointer("/coins/0/balance")

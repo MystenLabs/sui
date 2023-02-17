@@ -17,7 +17,7 @@
 }
 
 .moretxbtn {
-    @apply cursor-pointer border-0 bg-transparent pl-0 pr-0 text-left text-sm font-normal text-[#636870] transition-colors duration-200 ease-in-out hover:text-gray-80;
+    @apply cursor-pointer bg-transparent pl-0 pr-0 text-left text-sm font-normal text-[#636870] transition-colors duration-200 ease-in-out hover:text-gray-80;
 }
 
 .moretxbtn::after {

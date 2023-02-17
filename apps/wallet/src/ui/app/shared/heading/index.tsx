@@ -30,12 +30,14 @@ const headingStyles = cva(
                 'gray-75': 'text-gray-75',
                 'gray-70': 'text-gray-70',
                 'gray-65': 'text-gray-65',
+                'gray-60': 'text-gray-60',
                 'sui-dark': 'text-sui-dark',
                 sui: 'text-sui',
                 'sui-light': 'text-sui-light',
                 steel: 'text-steel',
                 'steel-dark': 'text-steel-dark',
                 'steel-darker': 'text-steel-darker',
+                'success-dark': 'text-success-dark',
             },
             weight: {
                 medium: 'font-medium',
@@ -49,6 +51,10 @@ const headingStyles = cva(
             leading: {
                 none: '!leading-none',
                 tight: 'leading-tight',
+            },
+            truncate: {
+                true: 'truncate',
+                false: '',
             },
             /** Fix the header size, and disable responsive sizing of the heading. */
             fixed: { true: '', false: '' },

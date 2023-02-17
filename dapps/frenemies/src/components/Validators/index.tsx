@@ -2,42 +2,40 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useWalletKit } from "@mysten/wallet-kit";
-import { useMyStake } from "../../network/queries/my-stake";
 import { useScorecard } from "../../network/queries/scorecard";
-import { useSuiSystem } from "../../network/queries/sui-system";
 import { formatGoal } from "../../utils/format";
-import { Card } from "../Card";
+import { Goal } from "../../network/types";
 import { Balance } from "./Balance";
 import { Table } from "./Table";
+import { Card } from "../Card";
 
-export function Validators() {
+export function Validators({ hasAssignment }: { hasAssignment: boolean }) {
   const { currentAccount } = useWalletKit();
-  const { data: system } = useSuiSystem();
-  const { data: scorecard } = useScorecard(currentAccount || '');
-  const { data: stakes } = useMyStake(currentAccount || '');
+  const { data: scorecard } = useScorecard();
 
-  // TODO: SuiSystem doesn't exist.
-  // Redundant check; it must exist if RPC is set correctly
-  // TODO: What do we do if user is not connected?
-  if (!system || !scorecard || !stakes || !currentAccount) {
+  // At this point there's no way it errors out.
+  if (!currentAccount) {
     return null;
   }
 
-  const validators = system.data.validators.activeValidators;
-  const assignment = scorecard.data.assignment;
-  const goal = formatGoal(assignment.goal);
+  const assignment = scorecard?.data.assignment;
 
   return (
     <Card variant="white" spacing="lg">
       <div className="flex items-center justify-between mb-10">
-        <h2 className="text-steel-dark font-normal text-2xl">
-          Stake SUI to achieve your goal as {goal.charAt(0) == 'E' ? 'an ' : 'a '}
-          <span className="font-bold">{goal}</span>.
-        </h2>
+        {assignment && hasAssignment ? (
+          <h2 className="text-steel-dark font-normal text-2xl">
+            Stake SUI to achieve your goal as{" "}
+            {assignment.goal === Goal.Enemy ? "an " : "a "}
+            <span className="font-bold">{formatGoal(assignment.goal)}</span>.
+          </h2>
+        ) : (
+          <div />
+        )}
 
         <Balance />
       </div>
-      <Table validators={validators} assignment={assignment} stakes={stakes} />
+      <Table />
     </Card>
   );
 }

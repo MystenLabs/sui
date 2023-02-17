@@ -7,11 +7,15 @@ import {
     getTransferSuiTransaction,
     getTransferObjectTransaction,
     getTransactionKindName,
+    getTransactionSender,
+    getTransactions,
+    SUI_TYPE_ARG,
 } from '@mysten/sui.js';
 
 import type {
     SuiTransactionKind,
     TransactionEffects,
+    SuiTransactionResponse,
     SuiEvent,
 } from '@mysten/sui.js';
 
@@ -32,23 +36,23 @@ const getCoinType = (
 };
 
 type FormattedBalance = {
-    amount?: number | bigint | null;
+    amount?: number | null;
     coinType?: string | null;
-    isCoin?: boolean;
-    recipientAddress: string;
-}[];
+    address: string;
+};
 
-export function getAmount(
+// For TransferObject, TransferSui, Pay, PaySui, transactions get the amount from the transfer data
+export function getTransfersAmount(
     txnData: SuiTransactionKind,
     txnEffect?: TransactionEffects
-): FormattedBalance | null {
+): FormattedBalance[] | null {
     const txKindName = getTransactionKindName(txnData);
     if (txKindName === 'TransferObject') {
         const txn = getTransferObjectTransaction(txnData);
         return txn?.recipient
             ? [
                   {
-                      recipientAddress: txn?.recipient,
+                      address: txn?.recipient,
                   },
               ]
             : null;
@@ -59,11 +63,10 @@ export function getAmount(
         return txn?.recipient
             ? [
                   {
-                      recipientAddress: txn.recipient,
+                      address: txn.recipient,
                       amount: txn?.amount,
                       coinType:
                           txnEffect && getCoinType(txnEffect, txn.recipient),
-                      isCoin: true,
                   },
               ]
             : null;
@@ -73,35 +76,85 @@ export function getAmount(
         getPaySuiTransaction(txnData) ?? getPayTransaction(txnData);
 
     const amountByRecipient = paySuiData?.recipients.reduce(
-        (acc, value, index) => {
-            return {
-                ...acc,
-                [value]: {
-                    amount:
-                        paySuiData.amounts[index] +
-                        (value in acc ? acc[value].amount : 0),
-                    coinType: txnEffect
-                        ? getCoinType(
-                              txnEffect,
-                              paySuiData.recipients[index] ||
-                                  paySuiData.recipients[0]
-                          )
-                        : null,
-                    recipientAddress:
-                        paySuiData.recipients[index] ||
-                        paySuiData.recipients[0],
-                    isCoin: true,
-                },
-            };
-        },
+        (acc, value, index) => ({
+            ...acc,
+            [value]: {
+                amount:
+                    paySuiData.amounts[index] +
+                    (value in acc ? acc[value].amount : 0),
+                coinType: txnEffect
+                    ? getCoinType(
+                          txnEffect,
+                          paySuiData.recipients[index] ||
+                              paySuiData.recipients[0]
+                      )
+                    : null,
+                address:
+                    paySuiData.recipients[index] || paySuiData.recipients[0],
+            },
+        }),
         {} as {
             [key: string]: {
                 amount: number;
                 coinType: string | null;
-                recipientAddress: string;
+                address: string;
             };
         }
     );
-
     return amountByRecipient ? Object.values(amountByRecipient) : null;
+}
+
+// Get transaction amount from coinBalanceChange event for Call Txn
+// Aggregate coinBalanceChange by coinType and address
+function getTxnAmountFromCoinBalanceEvent(
+    txEffects: TransactionEffects,
+    address: string
+): FormattedBalance[] {
+    const events = txEffects?.events || [];
+    const coinsMeta = {} as { [coinType: string]: FormattedBalance };
+
+    events.forEach((event) => {
+        if (
+            'coinBalanceChange' in event &&
+            event?.coinBalanceChange?.changeType &&
+            ['Receive', 'Pay'].includes(event?.coinBalanceChange?.changeType) &&
+            event?.coinBalanceChange?.transactionModule !== 'gas'
+        ) {
+            const { coinBalanceChange } = event;
+            const { coinType, amount, owner, sender } = coinBalanceChange;
+            const { AddressOwner } = owner as { AddressOwner: string };
+            if (AddressOwner === address || address === sender) {
+                coinsMeta[`${AddressOwner}${coinType}`] = {
+                    amount:
+                        (coinsMeta[`${AddressOwner}${coinType}`]?.amount || 0) +
+                        amount,
+                    coinType: coinType,
+                    address: AddressOwner,
+                };
+            }
+        }
+    });
+    return Object.values(coinsMeta);
+}
+
+// Get the amount from events and transfer data
+// optional flag to get only SUI coin type for table view
+export function getAmount({
+    txnData,
+    suiCoinOnly = false,
+}: {
+    txnData: SuiTransactionResponse;
+    suiCoinOnly?: boolean;
+}) {
+    const { effects, certificate } = txnData;
+    const txnDetails = getTransactions(certificate)[0];
+    const sender = getTransactionSender(certificate);
+    const suiTransfer = getTransfersAmount(txnDetails, effects);
+    const coinBalanceChange = getTxnAmountFromCoinBalanceEvent(effects, sender);
+    const transfers = suiTransfer || coinBalanceChange;
+    if (suiCoinOnly) {
+        return transfers?.filter(({ coinType }) => coinType === SUI_TYPE_ARG);
+    }
+
+    return transfers;
 }

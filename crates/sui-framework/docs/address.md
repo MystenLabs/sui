@@ -93,6 +93,19 @@ Convert <code>a</code> into a u256 by interpreting <code>a</code> as the bytes o
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_address_from_u256"></a>
 
 ## Function `from_u256`
@@ -117,6 +130,19 @@ Aborts if <code>n</code> > <code>MAX_ADDRESS</code>
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_address_from_bytes"></a>
 
 ## Function `from_bytes`
@@ -135,6 +161,19 @@ Aborts with <code><a href="address.md#0x2_address_EAddressParseError">EAddressPa
 
 
 <pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="address.md#0x2_address_from_bytes">from_bytes</a>(bytes: <a href="">vector</a>&lt;u8&gt;): <b>address</b>;
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
 
 

@@ -17,6 +17,7 @@ use bincode::Options;
 use collectable::TryExtend;
 use ouroboros::self_referencing;
 use rand::distributions::{Alphanumeric, DistString};
+use rocksdb::Direction;
 use serde::{de::DeserializeOwned, Serialize};
 use std::sync::{RwLockReadGuard, RwLockWriteGuard};
 
@@ -42,30 +43,31 @@ impl<K, V> TestDB<K, V> {
     }
 }
 
-#[self_referencing]
+#[self_referencing(pub_extras)]
 pub struct TestDBIter<'a, K, V> {
-    rows: RwLockReadGuard<'a, BTreeMap<Vec<u8>, Vec<u8>>>,
+    pub rows: RwLockReadGuard<'a, BTreeMap<Vec<u8>, Vec<u8>>>,
     #[borrows(mut rows)]
     #[covariant]
-    iter: Iter<'this, Vec<u8>, Vec<u8>>,
+    pub iter: Iter<'this, Vec<u8>, Vec<u8>>,
     phantom: PhantomData<(K, V)>,
+    pub direction: Direction,
 }
 
-#[self_referencing]
+#[self_referencing(pub_extras)]
 pub struct TestDBKeys<'a, K> {
     rows: RwLockReadGuard<'a, BTreeMap<Vec<u8>, Vec<u8>>>,
     #[borrows(mut rows)]
     #[covariant]
-    iter: Iter<'this, Vec<u8>, Vec<u8>>,
+    pub iter: Iter<'this, Vec<u8>, Vec<u8>>,
     phantom: PhantomData<K>,
 }
 
-#[self_referencing]
+#[self_referencing(pub_extras)]
 pub struct TestDBValues<'a, V> {
     rows: RwLockReadGuard<'a, BTreeMap<Vec<u8>, Vec<u8>>>,
     #[borrows(mut rows)]
     #[covariant]
-    iter: Iter<'this, Vec<u8>, Vec<u8>>,
+    pub iter: Iter<'this, Vec<u8>, Vec<u8>>,
     phantom: PhantomData<V>,
 }
 
@@ -78,13 +80,102 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for TestDBIter<'a, K
             .with_big_endian()
             .with_fixint_encoding();
         self.with_mut(|fields| {
-            if let Some((raw_key, raw_value)) = fields.iter.next() {
+            let resp = match fields.direction {
+                Direction::Forward => fields.iter.next(),
+                Direction::Reverse => panic!("Reverse iteration not supported in test db"),
+            };
+            if let Some((raw_key, raw_value)) = resp {
                 let key: K = config.deserialize(raw_key).ok().unwrap();
                 let value: V = bincode::deserialize(raw_value).ok().unwrap();
                 out = Some((key, value));
             }
         });
         out
+    }
+}
+
+impl<'a, K: Serialize, V> TestDBIter<'a, K, V> {
+    /// Skips all the elements that are smaller than the given key,
+    /// and either lands on the key or the first one greater than
+    /// the key.
+    pub fn skip_to(mut self, key: &K) -> Result<Self, TypedStoreError> {
+        self.with_mut(|fields| {
+            let serialized_key = be_fix_int_ser(key).expect("serialization failed");
+            let mut peekable = fields.iter.peekable();
+            let mut peeked = peekable.peek();
+            while peeked.is_some() {
+                let serialized = be_fix_int_ser(peeked.unwrap()).expect("serialization failed");
+                if serialized >= serialized_key {
+                    break;
+                } else {
+                    peekable.next();
+                    peeked = peekable.peek();
+                }
+            }
+        });
+        Ok(self)
+    }
+
+    /// Moves the iterator to the element given or
+    /// the one prior to it if it does not exist. If there is
+    /// no element prior to it, it returns an empty iterator.
+    pub fn skip_prior_to(mut self, key: &K) -> Result<Self, TypedStoreError> {
+        self.with_mut(|fields| {
+            let serialized_key = be_fix_int_ser(key).expect("serialization failed");
+            let mut peekable = fields.iter.peekable();
+            let mut peeked = peekable.peek();
+            while peeked.is_some() {
+                let serialized = be_fix_int_ser(peeked.unwrap()).expect("serialization failed");
+                if serialized > serialized_key {
+                    break;
+                } else {
+                    peekable.next();
+                    peeked = peekable.peek();
+                }
+            }
+        });
+        Ok(self)
+    }
+
+    /// Seeks to the last key in the database (at this column family).
+    pub fn skip_to_last(mut self) -> Self {
+        self.with_mut(|fields| {
+            fields.iter.last();
+        });
+        self
+    }
+
+    /// Will make the direction of the iteration reverse and will
+    /// create a new `RevIter` to consume. Every call to `next` method
+    /// will give the next element from the end.
+    pub fn reverse(mut self) -> TestDBRevIter<'a, K, V> {
+        self.with_mut(|fields| {
+            *fields.direction = Direction::Reverse;
+        });
+        TestDBRevIter::new(self)
+    }
+}
+
+/// An iterator with a reverted direction to the original. The `RevIter`
+/// is hosting an iteration which is consuming in the opposing direction.
+/// It's not possible to do further manipulation (ex re-reverse) to the
+/// iterator.
+pub struct TestDBRevIter<'a, K, V> {
+    iter: TestDBIter<'a, K, V>,
+}
+
+impl<'a, K, V> TestDBRevIter<'a, K, V> {
+    fn new(iter: TestDBIter<'a, K, V>) -> Self {
+        Self { iter }
+    }
+}
+
+impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for TestDBRevIter<'a, K, V> {
+    type Item = (K, V);
+
+    /// Will give the next item backwards
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
     }
 }
 
@@ -182,6 +273,7 @@ where
             rows: self.rows.read().unwrap(),
             iter_builder: |rows: &mut RwLockReadGuard<'a, BTreeMap<Vec<u8>, Vec<u8>>>| rows.iter(),
             phantom: PhantomData,
+            direction: Direction::Forward,
         }
         .build()
     }

@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { API_ENV, DEFAULT_API_ENV } from '_app/ApiProvider';
+import { DEFAULT_API_ENV } from '_app/ApiProvider';
+import { API_ENV } from '_src/shared/api-env';
 
 import type { ObjectId, SuiAddress, TransactionDigest } from '@mysten/sui.js';
 
@@ -55,4 +56,12 @@ export function getAddressUrl(
     customRPC: string
 ) {
     return getExplorerUrl(`/address/${address}`, apiEnv, customRPC);
+}
+
+export function getValidatorUrl(
+    address: SuiAddress,
+    apiEnv: API_ENV,
+    customRPC: string
+) {
+    return getExplorerUrl(`/validator/${address}`, apiEnv, customRPC);
 }

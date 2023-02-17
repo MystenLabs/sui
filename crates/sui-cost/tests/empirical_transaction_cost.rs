@@ -4,7 +4,6 @@
 use insta::assert_json_snapshot;
 use std::{collections::BTreeMap, path::PathBuf};
 use sui_config::NetworkConfig;
-use sui_config::ValidatorInfo;
 use sui_core::test_utils::make_transfer_object_transaction;
 use sui_core::test_utils::make_transfer_sui_transaction;
 use sui_types::base_types::SuiAddress;
@@ -14,13 +13,13 @@ use sui_types::coin::PAY_SPLIT_VEC_FUNC_NAME;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::messages::VerifiedTransaction;
 use sui_types::object::{generate_test_gas_objects, Object};
+use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use sui_types::{
     gas::GasCostSummary,
     messages::{CallArg, ExecutionStatus, ObjectArg},
 };
 use test_utils::authority::spawn_test_authorities;
 use test_utils::messages::move_transaction_with_type_tags;
-use test_utils::transaction::get_framework_object;
 use test_utils::transaction::make_publish_package;
 use test_utils::{
     authority::test_authority_configs,
@@ -81,12 +80,7 @@ async fn test_good_snapshot() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-async fn split_n_tx(
-    n: u64,
-    coin: &Object,
-    gas: &Object,
-    validator_info: &[ValidatorInfo],
-) -> VerifiedTransaction {
+async fn split_n_tx(n: u64, coin: &Object, gas: &Object) -> VerifiedTransaction {
     let split_amounts = vec![10u64; n as usize];
     let type_args = vec![coin.get_move_template_type().unwrap()];
 
@@ -94,9 +88,7 @@ async fn split_n_tx(
         gas.clone(),
         PAY_MODULE_NAME.as_str(),
         PAY_SPLIT_VEC_FUNC_NAME.as_str(),
-        get_framework_object(validator_info)
-            .await
-            .compute_object_reference(),
+        SUI_FRAMEWORK_OBJECT_ID,
         &type_args,
         vec![
             CallArg::Object(ObjectArg::ImmOrOwnedObject(coin.compute_object_reference())),
@@ -135,6 +127,7 @@ async fn create_txes(
         None,
         sender,
         keypair,
+        None,
     );
     let partial_sui_coin_tx = make_transfer_sui_transaction(
         gas_objects.pop().unwrap().compute_object_reference(),
@@ -142,6 +135,7 @@ async fn create_txes(
         Some(100),
         sender,
         keypair,
+        None,
     );
     ret.insert(
         CommonTransactionCosts::TransferWholeSuiCoin,
@@ -161,6 +155,7 @@ async fn create_txes(
         sender,
         keypair,
         SuiAddress::default(),
+        None,
     );
 
     ret.insert(CommonTransactionCosts::TransferWholeCoin, whole_coin_tx);
@@ -175,9 +170,7 @@ async fn create_txes(
         gas_objects.pop().unwrap(),
         PAY_MODULE_NAME.as_str(),
         PAY_JOIN_FUNC_NAME.as_str(),
-        get_framework_object(configs.validator_set())
-            .await
-            .compute_object_reference(),
+        SUI_FRAMEWORK_OBJECT_ID,
         &type_args,
         vec![
             CallArg::Object(ObjectArg::ImmOrOwnedObject(c1.compute_object_reference())),
@@ -195,9 +188,7 @@ async fn create_txes(
     for n in 0..4 {
         let gas = gas_objects.pop().unwrap();
         let coin = gas_objects.pop().unwrap();
-        let split_tx = split_n_tx(n, &gas, &coin, configs.validator_set())
-            .await
-            .clone();
+        let split_tx = split_n_tx(n, &gas, &coin).await.clone();
         ret.insert(CommonTransactionCosts::SplitCoin(n as usize), split_tx);
     }
 
@@ -206,8 +197,9 @@ async fn create_txes(
     // Using the `counter` example
     //
 
-    let package_ref =
-        publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
+    let package_id = publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set())
+        .await
+        .0;
 
     // Make a transaction to create a counter.
     tokio::task::yield_now().await;
@@ -215,7 +207,7 @@ async fn create_txes(
         gas_objects.pop().unwrap(),
         "counter",
         "create",
-        package_ref,
+        package_id,
         /* arguments */ Vec::default(),
     );
     let effects =
@@ -225,6 +217,7 @@ async fn create_txes(
     let counter_object_arg = ObjectArg::SharedObject {
         id: counter_id,
         initial_shared_version: counter_initial_shared_version,
+        mutable: true,
     };
 
     ret.insert(CommonTransactionCosts::SharedCounterCreate, transaction);
@@ -235,7 +228,7 @@ async fn create_txes(
         gas_objects.pop().unwrap(),
         "counter",
         "assert_value",
-        package_ref,
+        package_id,
         vec![
             CallArg::Object(counter_object_arg),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
@@ -253,7 +246,7 @@ async fn create_txes(
         gas_objects.pop().unwrap(),
         "counter",
         "increment",
-        package_ref,
+        package_id,
         vec![CallArg::Object(counter_object_arg)],
     );
 

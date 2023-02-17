@@ -1,13 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import clsx from "clsx";
 import { ReactNode } from "react";
 import { ObjectData } from "../../network/rawObject";
-import { Assignment, StakedSui, Validator } from "../../network/types";
-import { formatAddress } from "../../utils/format";
-import { Stake } from "./Stake";
-import { Target } from "./Target";
+import {
+  DELEGATION,
+  Delegation,
+  StakedSui,
+  STAKED_SUI,
+} from "../../network/types";
+import { useMyType } from "../../network/queries/use-raw";
+import { GridItem } from "./GridItem";
+import { ValidatorItem } from "./Validator";
+import { normalizeSuiAddress } from "@mysten/sui.js";
+import { useValidators } from "../../network/queries/sui-system";
 
 function Header({ children }: { children: ReactNode }) {
   return (
@@ -17,69 +23,62 @@ function Header({ children }: { children: ReactNode }) {
   );
 }
 
-interface Props {
-  /** Set of 40 currently active validators */
-  validators: Validator[];
-  /** My assignment */
-  assignment: Assignment;
-  /** Currently staked Sui */
-  stakes: ObjectData<StakedSui>[];
-}
+export function Table() {
+  const { data: stakes } = useMyType<StakedSui>(STAKED_SUI);
+  const { data: delegations } = useMyType<Delegation>(DELEGATION);
 
-function GridItem({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={clsx("grid", className)}
-      style={{
-        gridTemplateColumns:
-          "minmax(100px, 1fr) minmax(100px, 2fr) minmax(min-content, 5fr) minmax(min-content, 2fr)",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
+  const { data: validators } = useValidators();
 
-export function Table({ validators, assignment, stakes }: Props) {
-  // sort validators by their voting power in DESC order (not by stake - these are different)
-  const sorted = validators.sort((a, b) =>
-    Number(b.votingPower - a.votingPower)
+  // sort validators by their live stake info in DESC order
+  const sorted = [...(validators || [])].sort((a, b) =>
+    Number(
+      BigInt(b.next_epoch_stake) +
+        BigInt(b.next_epoch_delegation) -
+        (BigInt(a.next_epoch_stake) + BigInt(a.next_epoch_delegation))
+    )
   );
 
-  const stakeByValidator: { [key: string]: ObjectData<StakedSui> } = stakes.reduce((acc, stake) => Object.assign(acc, {
-    [stake.data.validatorAddress]: stake
-  }), {});
+  const stakeByValidator: Record<string, ObjectData<StakedSui>> = (
+    stakes || []
+  ).reduce(
+    (acc, stake) =>
+      Object.assign(acc, {
+        [normalizeSuiAddress(stake.data.validatorAddress)]: stake,
+      }),
+    {}
+  );
+
+  function getDelegation(address: string) {
+    const stake = stakeByValidator[address];
+    return (
+      stake &&
+      (delegations || []).find((d) => d.data.stakedSuiId == stake.data.id)
+    );
+  }
 
   return (
     <>
       <GridItem className="px-5 py-4">
         <Header>Rank</Header>
         <Header>Validator</Header>
-        <Header>Your Sui Stake</Header>
+        <Header>Your SUI Stake</Header>
       </GridItem>
-      {sorted.map((validator, index) => {
-        return (
-          <GridItem
-            key={validator.metadata.suiAddress}
-            className="px-5 py-2 rounded-xl bg-[#F5FAFA] text-steel-dark items-center"
-          >
-            <div>{index + 1 + ` (${validator.votingPower})`}</div>
-            <div>{formatAddress(validator.metadata.suiAddress)}</div>
-            <div>
-              <Stake stake={stakeByValidator[validator.metadata.suiAddress] || null} />
-            </div>
-            {validator.metadata.suiAddress == assignment.validator && (
-              <Target goal={assignment.goal} />
-            )}
-          </GridItem>
-        );
-      })}
+
+      <div className="flex flex-col gap-1">
+        {sorted.map((validator, index) => {
+          const address = normalizeSuiAddress(validator.sui_address);
+
+          return (
+            <ValidatorItem
+              key={address}
+              index={index}
+              validator={validator}
+              stake={stakeByValidator[address]}
+              delegation={getDelegation(address)}
+            />
+          );
+        })}
+      </div>
     </>
   );
 }

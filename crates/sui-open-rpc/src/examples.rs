@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 use std::str::FromStr;
 
-use fastcrypto::encoding::Base64;
 use fastcrypto::traits::AggregateAuthenticator;
+use fastcrypto::traits::EncodeDecodeBase64;
 use fastcrypto::traits::KeyPair;
 use move_core_types::identifier::Identifier;
 use rand::rngs::StdRng;
@@ -31,7 +31,7 @@ use sui_types::base_types::{
 use sui_types::crypto::AuthorityQuorumSignInfo;
 use sui_types::crypto::{
     get_key_pair_from_rng, AccountKeyPair, AggregateAuthoritySignature, AuthorityKeyPair,
-    AuthorityPublicKeyBytes, AuthoritySignature, Signature, SuiAuthorityStrongQuorumSignInfo,
+    AuthorityPublicKeyBytes, AuthoritySignature, SuiAuthorityStrongQuorumSignInfo,
 };
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
@@ -39,9 +39,10 @@ use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, MoveCall, SingleTransactionKind, TransactionData,
     TransactionKind, TransferObject,
 };
-use sui_types::object::{Owner, PACKAGE_VERSION};
+use sui_types::object::Owner;
 use sui_types::query::EventQuery;
 use sui_types::query::TransactionQuery;
+use sui_types::signature::GenericSignature;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 
@@ -76,7 +77,6 @@ impl RpcExampleProvider {
             self.get_object_example(),
             self.get_past_object_example(),
             self.get_objects_owned_by_address(),
-            self.get_objects_owned_by_object(),
             self.get_raw_object(),
             self.get_total_transaction_number(),
             self.get_transaction(),
@@ -117,11 +117,7 @@ impl RpcExampleProvider {
         let data = TransactionData::new_with_dummy_gas_price(
             TransactionKind::Batch(vec![
                 SingleTransactionKind::Call(MoveCall {
-                    package: (
-                        SUI_FRAMEWORK_OBJECT_ID,
-                        PACKAGE_VERSION,
-                        ObjectDigest::new(self.rng.gen()),
-                    ),
+                    package: SUI_FRAMEWORK_OBJECT_ID,
                     module: Identifier::from_str("devnet_nft").unwrap(),
                     function: Identifier::from_str("mint").unwrap(),
                     type_arguments: vec![],
@@ -177,7 +173,7 @@ impl RpcExampleProvider {
                 "Execute an transaction with serialized signature",
                 vec![
                     ("tx_bytes", json!(tx_bytes.tx_bytes)),
-                    ("signature", json!(Base64::from_bytes(signature.as_ref()))),
+                    ("signature", json!(signature.encode_base64())),
                     (
                         "request_type",
                         json!(ExecuteTransactionRequestType::WaitForLocalExecution),
@@ -268,28 +264,6 @@ impl RpcExampleProvider {
             vec![ExamplePairing::new(
                 "Get objects owned by an address",
                 vec![("address", json!(owner))],
-                json!(result),
-            )],
-        )
-    }
-    fn get_objects_owned_by_object(&mut self) -> Examples {
-        let owner = ObjectID::new(self.rng.gen());
-        let result = (0..4)
-            .map(|_| SuiObjectInfo {
-                object_id: ObjectID::new(self.rng.gen()),
-                version: Default::default(),
-                digest: ObjectDigest::new(self.rng.gen()),
-                type_: ObjectType::Struct(GasCoin::type_()).to_string(),
-                owner: Owner::ObjectOwner(SuiAddress::from(owner)),
-                previous_transaction: TransactionDigest::new(self.rng.gen()),
-            })
-            .collect::<Vec<_>>();
-
-        Examples::new(
-            "sui_getObjectsOwnedByObject",
-            vec![ExamplePairing::new(
-                "Get objects owned by an object",
-                vec![("object_id", json!(owner))],
                 json!(result),
             )],
         )
@@ -413,7 +387,7 @@ impl RpcExampleProvider {
         &mut self,
     ) -> (
         TransactionData,
-        Signature,
+        GenericSignature,
         SuiAddress,
         ObjectID,
         SuiTransactionResponse,
@@ -477,6 +451,7 @@ impl RpcExampleProvider {
             },
             effects: SuiTransactionEffects {
                 status: SuiExecutionStatus::Success,
+                executed_epoch: 0,
                 gas_used: SuiGasCostSummary {
                     computation_cost: 100,
                     storage_cost: 100,

@@ -1,5 +1,66 @@
 # @mysten/sui.js
 
+## 0.27.0
+
+### Minor Changes
+
+- 473005d8f: Add protocol_version to CheckpointSummary and SuiSystemObject. Consolidate end-of-epoch information in CheckpointSummary.
+- 59641dc29: Support for deserializing new ConsensusCommitPrologue system transaction
+- 629804d26: Remove usage of `Base64DataBuffer`, and use `Uint8Array` instead.
+- f51c85e85: remove get_objects_owned_by_object and replace it with get_dynamic_fields
+
+### Patch Changes
+
+- fcba70206: Add basic formatting utilities
+- ebe6c3945: Support deserializing `paySui` and `payAllSui` transactions
+- e630f6832: Added string option to getCheckpointContents call in SDK to support 0.22.0
+
+## 0.26.1
+
+### Patch Changes
+
+- 97c46ca9d: Support calling Move function with "option" parameter
+
+## 0.26.0
+
+### Minor Changes
+
+- a8746d4e9: update SuiExecuteTransactionResponse
+- e6a71882f: Rename getDelegatedStake to getDelegatedStakes
+- 21781ba52: Secp256k1 signs 64-bytes signature [r, s] instead of [r, s, v] with recovery id
+
+### Patch Changes
+
+- 034158656: Allow passing Pure args directly in Move call
+- 57fc4dedd: Fix gas selection logic to take gas price into account
+- e6a71882f: Add convenience methods in RpcTxnDataSerializer for building staking transactions
+- b3ba6dfbc: Support Genesis transaction kind
+
+## 0.25.0
+
+### Minor Changes
+
+- 7b4bf43bc: Support for interacting with Devnet v0.24+ where Move Calls refer to their packages by ObjectID only (not ObjectRef).
+
+### Patch Changes
+
+- ebfdd5c56: Adding Checkpoint APIs for ts sdk
+- 72481e759: Updated to new dev inspect transaction layout
+- 969a88669: RPC requests errors now don't include the html response text (to keep message shorter)
+
+## 0.24.0
+
+### Minor Changes
+
+- 88a687834: Add methods for the CoinRead endpoints
+
+### Patch Changes
+
+- 01458ffd5: Fix websocket default port for DevNet
+- a274ecfc7: Make previousTransaction optional for CoinStruct to support v0.22 network where it doesn't exist
+- 89091ddab: change estimator logic to use upper bound
+- 71bee7563: fix creating websocket url
+
 ## 0.23.0
 
 ### Minor Changes

@@ -6,6 +6,7 @@ module sui::object_tests {
     use sui::address;
     use sui::object;
     use sui::tx_context;
+    use sui::test_scenario::{Self as ts};
 
     const EDifferentAddress: u64 = 0xF000;
     const EDifferentBytes: u64 = 0xF001;
@@ -31,5 +32,41 @@ module sui::object_tests {
 
         object::delete(uid0);
         object::delete(uid1);
+    }
+
+    #[test]
+    fun test_deletion_proof() {
+        use sui::deletion_proof as proof;
+
+        let test = ts::begin(@0x1);
+        ts::next_tx(&mut test, @0x1); {
+            proof::create(ts::ctx(&mut test));
+        };
+
+        ts::next_tx(&mut test, @0x1); {
+            let obj = ts::take_from_sender<proof::Test>(&mut test);
+            let _ = proof::delete(obj);
+        };
+
+        ts::end(test);
+    }
+}
+
+#[test_only]
+/// Module used to reproduce proof deletion logic.
+module sui::deletion_proof {
+    use sui::tx_context::{sender, TxContext};
+    use sui::object::{Self, UID, DeletedUID};
+
+    /// A Test struct
+    struct Test has key { id: UID }
+
+    public entry fun create(ctx: &mut TxContext) {
+        sui::transfer::transfer(Test { id: object::new(ctx) }, sender(ctx))
+    }
+
+    public fun delete(t: Test): DeletedUID {
+        let Test { id } = t;
+        object::delete_with_proof(id)
     }
 }

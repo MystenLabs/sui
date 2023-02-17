@@ -33,9 +33,13 @@ diesel::table! {
         total_storage_cost -> Int8,
         total_storage_rebate -> Int8,
         total_transactions -> Int8,
+        total_transactions_current_epoch -> Int8,
+        total_transactions_from_genesis -> Int8,
         previous_digest -> Nullable<Varchar>,
         next_epoch_committee -> Nullable<Text>,
         timestamp_ms -> Int8,
+        timestamp_ms_str -> Timestamp,
+        checkpoint_tps -> Float4,
     }
 }
 
@@ -57,7 +61,6 @@ diesel::table! {
         event_type -> Varchar,
         event_content -> Varchar,
         next_cursor_transaction_digest -> Nullable<Varchar>,
-        next_cursor_event_sequence -> Nullable<Int8>,
     }
 }
 

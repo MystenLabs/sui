@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use bcs::to_bytes;
 use sui_types::balance::{Balance, Supply};
 use sui_types::base_types::SuiAddress;
 use sui_types::collection_types::VecMap;
-use sui_types::committee::EpochId;
+use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{
     get_key_pair, AuthorityPublicKeyBytes, KeypairTraits, NetworkKeyPair, ToFromBytes,
 };
@@ -29,10 +28,10 @@ pub fn test_validatdor_metadata(
         network_pubkey_bytes: network_keypair.public().as_bytes().to_vec(),
         worker_pubkey_bytes: vec![],
         proof_of_possession_bytes: vec![],
-        name: to_bytes("zero_commission").unwrap(),
-        description: vec![],
-        image_url: vec![],
-        project_url: vec![],
+        name: "zero_commission".to_string(),
+        description: "".to_string(),
+        image_url: "".to_string(),
+        project_url: "".to_string(),
         net_address,
         consensus_address: vec![],
         worker_address: vec![],
@@ -87,6 +86,7 @@ pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiS
     SuiSystemState {
         info: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),
         epoch,
+        protocol_version: ProtocolVersion::MAX.as_u64(),
         validators: validator_set,
         treasury_cap: Supply { value: 0 },
         storage_fund: Balance::new(0),

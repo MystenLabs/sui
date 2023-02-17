@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import nacl from 'tweetnacl';
-import { Base64DataBuffer } from '../serialization/base64';
 import type { ExportedKeypair, Keypair } from './keypair';
 import { Ed25519PublicKey } from './ed25519-publickey';
-import { SignatureScheme } from './publickey';
 import { isValidHardenedPath, mnemonicToSeedHex } from './mnemonics';
 import { derivePath, getPublicKey } from '../utils/ed25519-hd-key';
 import { toB64 } from '@mysten/bcs';
+import { SignatureScheme } from './signature';
 
 export const DEFAULT_ED25519_DERIVATION_PATH = "m/44'/784'/0'/0'/0'";
 
@@ -67,18 +66,18 @@ export class Ed25519Keypair implements Keypair {
    */
   static fromSecretKey(
     secretKey: Uint8Array,
-    options?: { skipValidation?: boolean }
+    options?: { skipValidation?: boolean },
   ): Ed25519Keypair {
     const secretKeyLength = secretKey.length;
-    if (secretKeyLength != 64) {
+    if (secretKeyLength !== 64) {
       // Many users actually wanted to invoke fromSeed(seed: Uint8Array), especially when reading from keystore.
-      if (secretKeyLength == 32) {
+      if (secretKeyLength === 32) {
         throw new Error(
-          'Wrong secretKey size. Expected 64 bytes, got 32. Similar function exists: fromSeed(seed: Uint8Array)'
+          'Wrong secretKey size. Expected 64 bytes, got 32. Similar function exists: fromSeed(seed: Uint8Array)',
         );
       }
       throw new Error(
-        `Wrong secretKey size. Expected 64 bytes, got ${secretKeyLength}.`
+        `Wrong secretKey size. Expected 64 bytes, got ${secretKeyLength}.`,
       );
     }
     const keypair = nacl.sign.keyPair.fromSecretKey(secretKey);
@@ -100,7 +99,7 @@ export class Ed25519Keypair implements Keypair {
    */
   static fromSeed(seed: Uint8Array): Ed25519Keypair {
     const seedLength = seed.length;
-    if (seedLength != 32) {
+    if (seedLength !== 32) {
       throw new Error(`Wrong seed size. Expected 32 bytes, got ${seedLength}.`);
     }
     return new Ed25519Keypair(nacl.sign.keyPair.fromSeed(seed));
@@ -116,10 +115,8 @@ export class Ed25519Keypair implements Keypair {
   /**
    * Return the signature for the provided data using Ed25519.
    */
-  signData(data: Base64DataBuffer): Base64DataBuffer {
-    return new Base64DataBuffer(
-      nacl.sign.detached(data.getData(), this.keypair.secretKey)
-    );
+  signData(data: Uint8Array, _useRecoverable: boolean = false): Uint8Array {
+    return nacl.sign.detached(data, this.keypair.secretKey);
   }
 
   /**

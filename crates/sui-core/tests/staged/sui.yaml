@@ -12,14 +12,23 @@ AccountAddress:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 20
+Argument:
+  ENUM:
+    0:
+      GasCoin: UNIT
+    1:
+      Input:
+        NEWTYPE: U16
+    2:
+      Result:
+        NEWTYPE: U16
+    3:
+      NestedResult:
+        TUPLE:
+          - U16
+          - U16
 AuthorityPublicKeyBytes:
   NEWTYPESTRUCT: BYTES
-BLS12381Signature:
-  STRUCT:
-    - sig:
-        TUPLEARRAY:
-          CONTENT: U8
-          SIZE: 48
 CallArg:
   ENUM:
     0:
@@ -38,6 +47,8 @@ CallArg:
 ChangeEpoch:
   STRUCT:
     - epoch: U64
+    - protocol_version:
+        TYPENAME: ProtocolVersion
     - storage_charge: U64
     - computation_charge: U64
     - storage_rebate: U64
@@ -46,6 +57,37 @@ CircularObjectOwnership:
   STRUCT:
     - object:
         TYPENAME: ObjectID
+Command:
+  ENUM:
+    0:
+      MoveCall:
+        NEWTYPE:
+          TYPENAME: ProgrammableMoveCall
+    1:
+      TransferObjects:
+        TUPLE:
+          - SEQ:
+              TYPENAME: Argument
+          - TYPENAME: Argument
+    2:
+      SplitCoin:
+        TUPLE:
+          - TYPENAME: Argument
+          - TYPENAME: Argument
+    3:
+      MergeCoins:
+        TUPLE:
+          - TYPENAME: Argument
+          - SEQ:
+              TYPENAME: Argument
+    4:
+      Publish:
+        NEWTYPE:
+          SEQ:
+            SEQ: U8
+ConsensusCommitPrologue:
+  STRUCT:
+    - checkpoint_start_timestamp_ms: U64
 Data:
   ENUM:
     0:
@@ -83,6 +125,8 @@ EntryArgumentErrorKind:
       UnsupportedPureArg: UNIT
     5:
       ArityMismatch: UNIT
+    6:
+      ObjectMutabilityMismatch: UNIT
 EntryTypeArgumentError:
   STRUCT:
     - argument_idx: U16
@@ -91,12 +135,10 @@ EntryTypeArgumentError:
 EntryTypeArgumentErrorKind:
   ENUM:
     0:
-      ModuleNotFound: UNIT
-    1:
       TypeNotFound: UNIT
-    2:
+    1:
       ArityMismatch: UNIT
-    3:
+    2:
       ConstraintNotSatisfied: UNIT
 ExecutionFailureStatus:
   ENUM:
@@ -107,69 +149,67 @@ ExecutionFailureStatus:
     2:
       InvalidTransactionUpdate: UNIT
     3:
-      ModuleNotFound: UNIT
-    4:
       FunctionNotFound: UNIT
-    5:
+    4:
       InvariantViolation: UNIT
-    6:
+    5:
       MoveObjectTooBig:
         STRUCT:
           - object_size: U64
           - max_object_size: U64
-    7:
+    6:
       MovePackageTooBig:
         STRUCT:
           - object_size: U64
           - max_object_size: U64
-    8:
+    7:
       InvalidTransferObject: UNIT
-    9:
+    8:
       InvalidTransferSui: UNIT
-    10:
+    9:
       InvalidTransferSuiInsufficientBalance: UNIT
-    11:
+    10:
       InvalidCoinObject: UNIT
-    12:
+    11:
       EmptyInputCoins: UNIT
-    13:
+    12:
       EmptyRecipients: UNIT
-    14:
+    13:
       RecipientsAmountsArityMismatch: UNIT
-    15:
+    14:
       InsufficientBalance: UNIT
-    16:
+    15:
       CoinTypeMismatch: UNIT
-    17:
+    16:
       NonEntryFunctionInvoked: UNIT
-    18:
+    17:
       EntryTypeArityMismatch: UNIT
-    19:
+    18:
       EntryArgumentError:
         NEWTYPE:
           TYPENAME: EntryArgumentError
-    20:
+    19:
       EntryTypeArgumentError:
         NEWTYPE:
           TYPENAME: EntryTypeArgumentError
-    21:
+    20:
       CircularObjectOwnership:
         NEWTYPE:
           TYPENAME: CircularObjectOwnership
-    22:
+    21:
       InvalidChildObjectArgument:
         NEWTYPE:
           TYPENAME: InvalidChildObjectArgument
-    23:
+    22:
       InvalidSharedByValue:
         NEWTYPE:
           TYPENAME: InvalidSharedByValue
-    24:
+    23:
       TooManyChildObjects:
         STRUCT:
           - object:
               TYPENAME: ObjectID
-    25:
+    24:
       InvalidParentDeletion:
         STRUCT:
           - parent:
@@ -177,32 +217,32 @@ ExecutionFailureStatus:
           - kind:
               OPTION:
                 TYPENAME: DeleteKind
-    26:
+    25:
       InvalidParentFreezing:
         STRUCT:
           - parent:
               TYPENAME: ObjectID
-    27:
+    26:
       PublishErrorEmptyPackage: UNIT
-    28:
+    27:
       PublishErrorNonZeroAddress: UNIT
-    29:
+    28:
       PublishErrorDuplicateModule: UNIT
-    30:
+    29:
       SuiMoveVerificationError: UNIT
-    31:
+    30:
       MovePrimitiveRuntimeError:
         NEWTYPE:
           OPTION:
             TYPENAME: MoveLocation
-    32:
+    31:
       MoveAbort:
         TUPLE:
           - TYPENAME: MoveLocation
           - U64
-    33:
+    32:
       VMVerificationOrDeserializationError: UNIT
-    34:
+    33:
       VMInvariantViolation: UNIT
 ExecutionStatus:
   ENUM:
@@ -248,10 +288,7 @@ ModuleId:
 MoveCall:
   STRUCT:
     - package:
-        TUPLE:
-          - TYPENAME: ObjectID
-          - TYPENAME: SequenceNumber
-          - TYPENAME: ObjectDigest
+        TYPENAME: ObjectID
     - module:
         TYPENAME: Identifier
     - function:
@@ -274,6 +311,8 @@ MoveLocation:
         TYPENAME: ModuleId
     - function: U16
     - instruction: U16
+    - function_name:
+        OPTION: STR
 MoveModulePublish:
   STRUCT:
     - modules:
@@ -358,31 +397,20 @@ ObjectArg:
               TYPENAME: ObjectID
           - initial_shared_version:
               TYPENAME: SequenceNumber
+          - mutable: BOOL
 ObjectDigest:
   NEWTYPESTRUCT: BYTES
-ObjectFormatOptions:
-  STRUCT:
-    - include_types: BOOL
 ObjectID:
   NEWTYPESTRUCT:
     TYPENAME: AccountAddress
 ObjectInfoRequestKind:
   ENUM:
     0:
-      LatestObjectInfo:
-        NEWTYPE:
-          OPTION:
-            TYPENAME: ObjectFormatOptions
+      LatestObjectInfo: UNIT
     1:
-      PastObjectInfo:
+      PastObjectInfoDebug:
         NEWTYPE:
           TYPENAME: SequenceNumber
-    2:
-      PastObjectInfoDebug:
-        TUPLE:
-          - TYPENAME: SequenceNumber
-          - OPTION:
-              TYPENAME: ObjectFormatOptions
 Owner:
   ENUM:
     0:
@@ -436,8 +464,34 @@ PaySui:
           TYPENAME: SuiAddress
     - amounts:
         SEQ: U64
+ProgrammableMoveCall:
+  STRUCT:
+    - package:
+        TYPENAME: ObjectID
+    - module:
+        TYPENAME: Identifier
+    - function:
+        TYPENAME: Identifier
+    - type_arguments:
+        SEQ:
+          TYPENAME: TypeTag
+    - arguments:
+        SEQ:
+          TYPENAME: Argument
+ProgrammableTransaction:
+  STRUCT:
+    - inputs:
+        SEQ:
+          TYPENAME: CallArg
+    - commands:
+        SEQ:
+          TYPENAME: Command
+ProtocolVersion:
+  NEWTYPESTRUCT: U64
 SequenceNumber:
   NEWTYPESTRUCT: U64
+Sha3Digest:
+  NEWTYPESTRUCT: BYTES
 SingleTransactionKind:
   ENUM:
     0:
@@ -476,6 +530,14 @@ SingleTransactionKind:
       Genesis:
         NEWTYPE:
           TYPENAME: GenesisTransaction
+    9:
+      ConsensusCommitPrologue:
+        NEWTYPE:
+          TYPENAME: ConsensusCommitPrologue
+    10:
+      ProgrammableTransaction:
+        NEWTYPE:
+          TYPENAME: ProgrammableTransaction
 StructTag:
   STRUCT:
     - address:
@@ -493,9 +555,11 @@ SuiAddress:
       CONTENT: U8
       SIZE: 20
 TransactionDigest:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT:
+    TYPENAME: Sha3Digest
 TransactionEffectsDigest:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT:
+    TYPENAME: Sha3Digest
 TransactionKind:
   ENUM:
     0:
