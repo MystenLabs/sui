@@ -11,6 +11,10 @@ module sui::safe_tests {
     use sui::sui::SUI;
     use sui::transfer;
 
+    const TEST_SENDER_ADDR: address = @0x1;
+    const TEST_OWNER_ADDR: address = @0x1337;
+    const TEST_DELEGATEE_ADDR: address = @0x1ce1ce1ce;
+
     fun create_safe(scenario: &mut Scenario, owner: address, stored_amount: u64) {
         ts::next_tx(scenario, owner);
         {
@@ -57,83 +61,87 @@ module sui::safe_tests {
     #[test]
     /// Ensure that all funds can be withdrawn by the owners
     fun test_safe_create_and_withdraw_funds_as_owner() {
-        let owner = @1337;
-        let scenario = ts::begin(@0x1);
+        let owner = TEST_OWNER_ADDR;
+        let scenario_val = ts::begin(TEST_SENDER_ADDR);
+        let scenario = &mut scenario_val;
 
         let initial_funds = 1000u64;
-        create_safe(&mut scenario, owner, initial_funds);
+        create_safe(scenario, owner, initial_funds);
 
-        ts::next_tx(&mut scenario, owner);
-        let safe = ts::take_shared<Safe<SUI>>(&mut scenario);
-        let cap = ts::take_from_sender<OwnerCapability<SUI>>(&mut scenario);
+        ts::next_tx(scenario, owner);
+        let safe = ts::take_shared<Safe<SUI>>(scenario);
+        let cap = ts::take_from_sender<OwnerCapability<SUI>>(scenario);
 
         let balance = safe::withdraw_(&mut safe, &cap, initial_funds);
         balance::destroy_for_testing(balance);
 
-        ts::return_to_sender(&mut scenario, cap);
+        ts::return_to_sender(scenario, cap);
         ts::return_shared(safe);
 
 
-        ts::end(scenario);
+        ts::end(scenario_val);
     }
 
     #[test]
     /// Ensure that all funds can be withdrawn to a delegator
     fun test_safe_create_and_withdraw_funds_as_delegatee() {
-        let owner = @0x1337;
-        let delegatee = @0x1ce1ce1ce;
-        let scenario = ts::begin(@0x1);
+        let owner = TEST_OWNER_ADDR;
+        let delegatee = TEST_DELEGATEE_ADDR;
+        let scenario_val = ts::begin(TEST_SENDER_ADDR);
+        let scenario = &mut scenario_val;
 
         let initial_funds = 1000u64;
         let delegated_funds = 1000u64;
         // Create Safe
-        create_safe(&mut scenario, owner, initial_funds);
-        delegate_safe(&mut scenario, owner, delegatee, delegated_funds);
-        withdraw_as_delegatee(&mut scenario, delegatee, delegated_funds);
-        ts::end(scenario);
+        create_safe(scenario, owner, initial_funds);
+        delegate_safe(scenario, owner, delegatee, delegated_funds);
+        withdraw_as_delegatee(scenario, delegatee, delegated_funds);
+        ts::end(scenario_val);
     }
 
     #[test]
     #[expected_failure(abort_code = safe::OVERDRAWN)]
     /// Ensure that funds cannot be over withdrawn
     fun test_safe_attempt_to_over_withdraw() {
-        let owner = @0x1337;
-        let delegatee = @0x1ce1ce1ce;
-        let scenario = ts::begin(@0x1);
+        let owner = TEST_OWNER_ADDR;
+        let delegatee = TEST_DELEGATEE_ADDR;
+        let scenario_val = ts::begin(TEST_SENDER_ADDR);
+        let scenario = &mut scenario_val;
 
         let initial_funds = 1000u64;
         let delegated_funds = 1000u64;
         // Create Safe
-        create_safe(&mut scenario, owner, initial_funds);
-        delegate_safe(&mut scenario, owner, delegatee, delegated_funds);
+        create_safe(scenario, owner, initial_funds);
+        delegate_safe(scenario, owner, delegatee, delegated_funds);
 
         // Withdraw all funds
-        withdraw_as_delegatee(&mut scenario, delegatee, delegated_funds);
+        withdraw_as_delegatee(scenario, delegatee, delegated_funds);
         // Attempt to withdraw by 1 coin.
-        withdraw_as_delegatee(&mut scenario, delegatee, 1);
+        withdraw_as_delegatee(scenario, delegatee, 1);
 
-        ts::end(scenario);
+        ts::end(scenario_val);
     }
 
     #[test]
     #[expected_failure(abort_code = safe::TRANSFER_CAPABILITY_REVOKED)]
     /// Ensure that funds cannot be over withdrawn
     fun test_safe_withdraw_revoked() {
-        let owner = @0x1337;
-        let delegatee = @0x1ce1ce1ce;
-        let scenario = ts::begin(@0x1);
+        let owner = TEST_OWNER_ADDR;
+        let delegatee = TEST_DELEGATEE_ADDR;
+        let scenario_val = ts::begin(TEST_SENDER_ADDR);
+        let scenario = &mut scenario_val;
 
         let initial_funds = 1000u64;
         let delegated_funds = 1000u64;
         // Create Safe
-        create_safe(&mut scenario, owner, initial_funds);
-        let capability_id = delegate_safe(&mut scenario, owner, delegatee, delegated_funds);
+        create_safe(scenario, owner, initial_funds);
+        let capability_id = delegate_safe(scenario, owner, delegatee, delegated_funds);
 
-        revoke_capability(&mut scenario, owner, capability_id);
+        revoke_capability(scenario, owner, capability_id);
 
         // Withdraw funds
-        withdraw_as_delegatee(&mut scenario, delegatee, delegated_funds);
+        withdraw_as_delegatee(scenario, delegatee, delegated_funds);
 
-        ts::end(scenario);
+        ts::end(scenario_val);
     }
 }
