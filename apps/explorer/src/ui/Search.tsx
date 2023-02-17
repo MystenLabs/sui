@@ -61,12 +61,12 @@ export function Search({
             nullable
             onChange={onSelectResult}
             as="div"
-            className="relative flex h-fit w-full flex-col"
+            className="relative w-full"
         >
             <Combobox.Input
                 spellCheck={false}
                 displayValue={(value: SearchResult) => value?.label}
-                className="w-full rounded-md border border-transparent bg-search-fill/60 pl-2 text-body leading-9 text-white/20 outline-none placeholder:text-xs placeholder:text-white/40 hover:bg-search-fill hover:placeholder:text-white/60 focus:border-sui focus:bg-search-fill focus:text-white focus:placeholder:text-white/60"
+                className="h-10 w-full rounded-md border border-transparent bg-search-fill/60 pl-2 text-body text-white/20 outline-none placeholder:text-xs placeholder:text-white/40 hover:bg-search-fill hover:placeholder:text-white/60 focus:border-sui focus:bg-search-fill focus:text-white focus:placeholder:text-white/60"
                 onChange={onChange}
                 placeholder={placeholder}
                 autoComplete="off"
@@ -84,7 +84,7 @@ export function Search({
             </div>
 
             {queryValue && (
-                <Combobox.Options className="absolute right-0 left-0 top-6 flex list-none flex-col gap-y-2 overflow-auto rounded-md bg-white p-3.5 shadow-md">
+                <Combobox.Options className="absolute mt-1 w-full list-none space-y-2 rounded-md bg-white p-3.5 shadow-md">
                     {isLoading ? (
                         <div className="flex items-center justify-center">
                             <LoadingSpinner />
