@@ -6,12 +6,9 @@ members = [
     "crates/mysten-util-mem",
     "crates/mysten-util-mem-derive",
     "crates/prometheus-closure-metric",
-    # "crates/sui-cost-tables",
-    # "crates/sui-keys",
     "crates/sui-macros",
     "crates/sui-proc-macros",
     "crates/sui-protocol-constants",
-    # "crates/sui-types",
     "crates/telemetry-subscribers",
     "crates/typed-store",
     "crates/typed-store-derive",
@@ -67,21 +64,10 @@ opt-level = 1
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
 
-tokio = "1.27.0"
-axum = { version = "0.6.6", default-features = false, features = ["headers", "tokio", "http1", "http2", "json", "matched-path", "original-uri", "form", "query"] }
-
-# Move dependencies
-move-binary-format = { git = "https://github.com/move-language/move", rev = "f976503ec92e6942eac1c05dd8231918d07e0af6" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "f976503ec92e6942eac1c05dd8231918d07e0af6" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "f976503ec92e6942eac1c05dd8231918d07e0af6", features = ["address20"] }
-move-command-line-common = { git = "https://github.com/move-language/move", rev = "f976503ec92e6942eac1c05dd8231918d07e0af6" }
-move-disassembler = { git = "https://github.com/move-language/move", rev = "f976503ec92e6942eac1c05dd8231918d07e0af6" }
-move-ir-types = { git = "https://github.com/move-language/move", rev = "f976503ec92e6942eac1c05dd8231918d07e0af6" }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "f976503ec92e6942eac1c05dd8231918d07e0af6" }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "f976503ec92e6942eac1c05dd8231918d07e0af6" }
-
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c2f79b1807bff7d09517b631191b61f2614c641c" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c2f79b1807bff7d09517b631191b61f2614c641c", package = "fastcrypto-zkp" }
+tokio = "1.24.1"
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", package = "fastcrypto-zkp" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", package = "fastcrypto-tbls" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "fafd8a33615a1d5f0ea99ae3d0cc993b833fa313" }
