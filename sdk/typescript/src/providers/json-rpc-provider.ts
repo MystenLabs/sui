@@ -69,7 +69,7 @@ import {
 } from '../rpc/websocket-client';
 import { ApiEndpoints, Network, NETWORK_TO_API } from '../utils/api-endpoints';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
-import { lt, gt } from '@suchipi/femver';
+import { lt } from '@suchipi/femver';
 import { any, is, number, array } from 'superstruct';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import { LocalTxnDataSerializer } from '../signers/txn-data-serializers/local-txn-data-serializer';
@@ -187,7 +187,7 @@ export class JsonRpcProvider extends Provider {
       if (
         !this.addedHeaders &&
         this.rpcApiVersion &&
-        gt(versionToString(this.rpcApiVersion), '0.26.0')
+        !lt(versionToString(this.rpcApiVersion), '0.27.0')
       ) {
         this.client = new JsonRpcClient(this.endpoints.fullNode, {
           'Client-Sdk-Type': 'typescript',
