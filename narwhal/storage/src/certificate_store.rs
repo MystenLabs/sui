@@ -860,7 +860,7 @@ mod test {
         let mut certs = Vec::new();
         for r in &rounds {
             let mut c = cert.clone();
-            c.header_mut().update_round(*r);
+            c.header.round = *r;
             certs.push(c);
         }
 

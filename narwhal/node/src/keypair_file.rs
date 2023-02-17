@@ -62,6 +62,5 @@ where
     R: rand::CryptoRng + rand::RngCore,
     <KP as KeypairTraits>::PubKey: VerifyingKey,
 {
-    let kp = KP::generate(&mut StdRng::from_rng(csprng).unwrap());
-    kp
+    KP::generate(&mut StdRng::from_rng(csprng).unwrap())
 }
