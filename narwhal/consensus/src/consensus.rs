@@ -314,8 +314,8 @@ where
                         for certificate in &committed_sub_dag.certificates {
                             i+=1;
 
-                            #[cfg(not(feature = "benchmark"))]
                             if i % 5_000 == 0 {
+                                #[cfg(not(feature = "benchmark"))]
                                 tracing::debug!("Committed {}", certificate.header);
                             }
 
