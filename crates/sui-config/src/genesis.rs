@@ -684,7 +684,11 @@ impl Builder {
 }
 
 fn get_genesis_context() -> TxContext {
-    TxContext::new(&SuiAddress::default(), &TransactionDigest::genesis(), 0)
+    TxContext::new(
+        &SuiAddress::default(),
+        &TransactionDigest::genesis(),
+        &EpochData::genesis(),
+    )
 }
 
 fn build_unsigned_genesis_data(
