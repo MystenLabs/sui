@@ -104,95 +104,109 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
             )}
 
             <ReceiptCardBg status={isSuccessful}>
-                {error && (
-                    <Text variant="body" weight="medium" color="steel-darker">
-                        {error}
-                    </Text>
-                )}
+                <div className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col pt-3.5 first:pt-0">
+                    {error && (
+                        <Text
+                            variant="body"
+                            weight="medium"
+                            color="steel-darker"
+                        >
+                            {error}
+                        </Text>
+                    )}
 
-                {isStakeTxn ? (
-                    moveCallLabel === 'Staked' ? (
-                        <StakeTxnCard txnEffects={effects} events={events} />
+                    {isStakeTxn ? (
+                        moveCallLabel === 'Staked' ? (
+                            <StakeTxnCard txnEffects={effects} events={events}/>
+                        ) : (
+                            <UnStakeTxnCard
+                                txn={txn}
+                                activeAddress={activeAddress}
+                                amount={totalSuiAmount || 0}
+                            />
+                        )
                     ) : (
-                        <UnStakeTxnCard
-                            txn={txn}
-                            activeAddress={activeAddress}
-                            amount={totalSuiAmount || 0}
-                        />
-                    )
-                ) : (
-                    <div className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col">
-                        {objectId && (
-                            <div className="py-3.5 first:pt-0 flex gap-2 flex-col">
-                                <Text
-                                    variant="body"
-                                    weight="medium"
-                                    color="steel-darker"
-                                >
-                                    {nftObjectLabel}
-                                </Text>
-                                <TxnImage id={objectId} />
-                            </div>
-                        )}
-
-                        {transferAmount.length > 0
-                            ? transferAmount.map(
-                                  ({ amount, coinType, receiverAddress }) => {
-                                      return (
-                                          <div
-                                              key={coinType + receiverAddress}
-                                              className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col pt-3.5 first:pt-0"
-                                          >
-                                              <TxnAmount
-                                                  amount={amount}
-                                                  label={
-                                                      isSender
-                                                          ? 'Sent'
-                                                          : 'Received'
-                                                  }
-                                                  coinType={coinType}
-                                              />
-
-                                              <TxnAddress
-                                                  address={recipientAddress}
-                                                  label={
-                                                      amount > 0 ? 'From' : 'To'
-                                                  }
-                                              />
-                                          </div>
-                                      );
-                                  }
-                              )
-                            : null}
-
-                        {txnKind === 'ChangeEpoch' &&
-                            !transferAmount.length && (
-                                <TxnAddress
-                                    address={recipientAddress}
-                                    label="From"
-                                />
+                        <>
+                            {objectId && (
+                                <div className="py-3.5 first:pt-0 flex gap-2 flex-col">
+                                    <Text
+                                        variant="body"
+                                        weight="medium"
+                                        color="steel-darker"
+                                    >
+                                        {nftObjectLabel}
+                                    </Text>
+                                    <TxnImage id={objectId} />
+                                </div>
                             )}
 
-                        {gasTotal && isSender ? (
-                            <TxnGasSummery
-                                totalGas={gasTotal}
-                                transferAmount={totalSuiAmount}
-                            />
-                        ) : null}
-                    </div>
-                )}
+                            {transferAmount.length > 0
+                                ? transferAmount.map(
+                                      ({
+                                          amount,
+                                          coinType,
+                                          receiverAddress,
+                                      }) => {
+                                          return (
+                                              <div
+                                                  key={
+                                                      coinType + receiverAddress
+                                                  }
+                                                  className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col pt-3.5 first:pt-0"
+                                              >
+                                                  <TxnAmount
+                                                      amount={amount}
+                                                      label={
+                                                          isSender
+                                                              ? 'Sent'
+                                                              : 'Received'
+                                                      }
+                                                      coinType={coinType}
+                                                  />
 
-                <div className="flex gap-1.5 w-full py-3.5">
-                    <ExplorerLink
-                        type={ExplorerLinkType.transaction}
-                        transactionID={getTransactionDigest(txn)}
-                        title="View on Sui Explorer"
-                        className="text-sui-dark text-p4 font-semibold no-underline uppercase tracking-wider"
-                        showIcon={false}
-                    >
-                        View on Explorer
-                    </ExplorerLink>
-                    <ArrowUpRight12 className="text-steel text-p3" />
+                                                  <TxnAddress
+                                                      address={recipientAddress}
+                                                      label={
+                                                          amount > 0
+                                                              ? 'From'
+                                                              : 'To'
+                                                      }
+                                                  />
+                                              </div>
+                                          );
+                                      }
+                                  )
+                                : null}
+
+                            {txnKind === 'ChangeEpoch' &&
+                                !transferAmount.length && (
+                                    <TxnAddress
+                                        address={recipientAddress}
+                                        label="From"
+                                    />
+                                )}
+
+                            {gasTotal && isSender ? (
+                                <TxnGasSummery
+                                    totalGas={gasTotal}
+                                    transferAmount={totalSuiAmount}
+                                />
+                            ) : null}
+                        </>
+                    )}
+
+                    <div className="flex gap-1.5 w-full py-3.5">
+                        <ExplorerLink
+                            type={ExplorerLinkType.transaction}
+                            transactionID={certificate.transactionDigest}
+                            title="View on Sui Explorer"
+                            className="text-sui-dark text-p4 font-semibold no-underline uppercase tracking-wider"
+                            showIcon={false}
+                        >
+                            View on Explorer
+                        </ExplorerLink>
+                        <ArrowUpRight12 className="text-steel text-p3" />
+                    </div>
                 </div>
             </ReceiptCardBg>
         </div>

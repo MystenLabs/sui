@@ -6,6 +6,8 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useRpc } from '_hooks';
 
+const dedupe = (arr: string[]) => Array.from(new Set(arr));
+
 export function useGetTransactionsByAddress(address: SuiAddress | null) {
     const rpc = useRpc();
 
@@ -13,10 +15,23 @@ export function useGetTransactionsByAddress(address: SuiAddress | null) {
         ['transactions-by-address', address],
         async () => {
             if (!address) return [];
-            const txnIdDs = await rpc.getTransactions({
-                ToAddress: address,
-            });
-            return rpc.getTransactionWithEffectsBatch(txnIdDs.data);
+            // combine from and to transactions
+            const [txnIdDs, fromTxnIds] = await Promise.all([
+                rpc.getTransactions({
+                    ToAddress: address,
+                }),
+                rpc.getTransactions({
+                    FromAddress: address,
+                }),
+            ]);
+            const resp = await rpc.getTransactionWithEffectsBatch(
+                dedupe([...txnIdDs.data, ...fromTxnIds.data])
+            );
+
+            return resp.sort(
+                // timestamp could be null, so we need to handle
+                (a, b) => (b?.timestamp_ms || 0) - (a.timestamp_ms || 0)
+            );
         },
         { enabled: !!address, staleTime: 10 * 1000 }
     );
