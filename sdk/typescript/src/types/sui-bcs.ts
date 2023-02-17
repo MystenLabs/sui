@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { BCS, decodeStr, encodeStr, getSuiMoveConfig } from '@mysten/bcs';
+import { BCS, getSuiMoveConfig } from '@mysten/bcs';
 import { SuiObjectRef } from './objects';
 import { RpcApiVersion } from './version';
 
@@ -15,20 +15,6 @@ function registerUTF8String(bcs: BCS) {
     (reader) => {
       let bytes = reader.readVec((reader) => reader.read8());
       return new TextDecoder().decode(new Uint8Array(bytes));
-    },
-  );
-}
-
-function registerObjectDigest(bcs: BCS) {
-  bcs.registerType(
-    'ObjectDigest',
-    (writer, str) => {
-      let bytes = Array.from(decodeStr(str, 'base64'));
-      return writer.writeVec(bytes, (writer, el) => writer.write8(el));
-    },
-    (reader) => {
-      let bytes = reader.readVec((reader) => reader.read8());
-      return encodeStr(new Uint8Array(bytes), 'base64');
     },
   );
 }
@@ -291,7 +277,7 @@ const BCS_SPEC = {
     struct: {
       objectId: 'address',
       version: 'u64',
-      digest: 'ObjectDigest',
+      digest: 'base64-string',
     },
   },
 
@@ -465,18 +451,15 @@ const BCS_0_24_SPEC = {
 
 const bcs = new BCS(getSuiMoveConfig());
 registerUTF8String(bcs);
-registerObjectDigest(bcs);
 registerTypes(bcs, BCS_SPEC);
 
 // ========== Backward Compatibility (remove after v0.24 deploys) ===========
 const bcs_0_23 = new BCS(getSuiMoveConfig());
 registerUTF8String(bcs_0_23);
-registerObjectDigest(bcs_0_23);
 registerTypes(bcs_0_23, BCS_0_23_SPEC);
 
 const bcs_0_24 = new BCS(getSuiMoveConfig());
 registerUTF8String(bcs_0_24);
-registerObjectDigest(bcs_0_24);
 registerTypes(bcs_0_24, BCS_0_24_SPEC);
 
 export function bcsForVersion(v?: RpcApiVersion) {
