@@ -372,6 +372,7 @@ async fn test_dev_inspect_object_by_bytes() {
     assert!(effects.created.is_empty());
     assert_eq!(effects.mutated.len(), 2);
     assert!(effects.deleted.is_empty());
+    assert!(effects.unwrapped_then_deleted.is_empty());
 
     // compare the bytes
     let updated_object = validator
