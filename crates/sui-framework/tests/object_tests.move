@@ -45,7 +45,10 @@ module sui::object_tests {
 
         ts::next_tx(&mut test, @0x1); {
             let obj = ts::take_from_sender<proof::Test>(&mut test);
-            let _ = proof::delete(obj);
+            let id = object::id(&obj);
+            let deleted_id = proof::delete(obj);
+
+            assert!(id == object::deleted_id(&deleted_id), 0);
         };
 
         ts::end(test);
