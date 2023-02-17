@@ -88,10 +88,7 @@ export function getTransfersAmount(
                     coinType:
                         txKindName === 'PaySui'
                             ? SUI_TYPE_ARG
-                            : getCoinType(
-                                  txnEffect || null,
-                                  recipient
-                              ),
+                            : getCoinType(txnEffect || null, recipient),
                     address: recipient,
                 },
             };
