@@ -240,7 +240,7 @@ impl ValidatorService {
         state: Arc<AuthorityState>,
         request: tonic::Request<Transaction>,
         metrics: Arc<ValidatorServiceMetrics>,
-    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+    ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
         let transaction = request.into_inner();
 
         let _metrics_guard = metrics.handle_transaction_latency.start_timer();
@@ -266,7 +266,7 @@ impl ValidatorService {
                 }
             })?;
 
-        Ok(tonic::Response::new(info.into()))
+        Ok(tonic::Response::new(info))
     }
 
     // TODO: reject certificate if TransactionManager or Narwhal is backlogged.
@@ -292,7 +292,7 @@ impl ValidatorService {
         // 1) Check if cert already executed
         let tx_digest = *certificate.digest();
         if let Some(signed_effects) =
-            state.get_signed_effects_and_maybe_resign(epoch_store.epoch(), &tx_digest)?
+            state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store)?
         {
             return Ok(tonic::Response::new(HandleCertificateResponse {
                 signed_effects: signed_effects.into_inner(),
@@ -379,8 +379,8 @@ impl ValidatorService {
         // the execution results if it contains shared objects.
         let res = state.execute_certificate(&certificate, &epoch_store).await;
         match res {
-            Ok(signed_effects) => Ok(tonic::Response::new(HandleCertificateResponse {
-                signed_effects: signed_effects.into_inner(),
+            Ok(effects) => Ok(tonic::Response::new(HandleCertificateResponse {
+                signed_effects: effects.into_inner(),
             })),
             Err(e) => Err(tonic::Status::from(e)),
         }
@@ -392,7 +392,7 @@ impl Validator for ValidatorService {
     async fn transaction(
         &self,
         request: tonic::Request<Transaction>,
-    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+    ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
         let state = self.state.clone();
 
         // Spawns a task which handles the transaction. The task will unconditionally continue
@@ -442,7 +442,7 @@ impl Validator for ValidatorService {
 
         let response = self.state.handle_transaction_info_request(request).await?;
 
-        Ok(tonic::Response::new(response.into()))
+        Ok(tonic::Response::new(response))
     }
 
     async fn checkpoint(

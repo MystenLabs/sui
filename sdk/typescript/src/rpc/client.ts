@@ -90,6 +90,8 @@ export class JsonRpcClient {
           headers: Object.assign(
             {
               'Content-Type': 'application/json',
+              // 'Client-Type': 'ts-sdk',
+              // 'Client-Api-Version': version,
             },
             httpHeaders || {},
           ),

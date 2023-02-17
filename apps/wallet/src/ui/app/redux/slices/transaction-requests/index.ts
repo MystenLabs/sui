@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    Base64DataBuffer,
+    fromB64,
     getCertifiedTransaction,
     getTransactionEffects,
     LocalTxnDataSerializer,
@@ -84,7 +84,7 @@ export const deserializeTxn = createAsyncThunk<
         }
         const signer = api.getSignerInstance(activeAddress, background);
         const localSerializer = new LocalTxnDataSerializer(signer.provider);
-        const txnBytes = new Base64DataBuffer(serializedTxn);
+        const txnBytes = fromB64(serializedTxn);
 
         //TODO: Error handling - either show the error or use the serialized txn
         const deserializeTx =
@@ -170,7 +170,7 @@ export const respondToTransactionRequest = createAsyncThunk<
                             : undefined
                     );
                 } else if (txRequest.tx.type === 'serialized-move-call') {
-                    const txBytes = new Base64DataBuffer(txRequest.tx.data);
+                    const txBytes = fromB64(txRequest.tx.data);
                     response = await signer.signAndExecuteTransaction(txBytes);
                 } else {
                     throw new Error(

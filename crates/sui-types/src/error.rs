@@ -116,6 +116,15 @@ pub enum SuiError {
         index: Option<u32>,
         committee: Committee,
     },
+    #[error(
+        "Validator {:?} responded multiple signatures for the same message, conflicting: {:?}",
+        signer,
+        conflicting_sig
+    )]
+    StakeAggregatorRepeatedSigner {
+        signer: AuthorityName,
+        conflicting_sig: bool,
+    },
 
     // Certificate verification and execution
     #[error(
@@ -129,14 +138,6 @@ pub enum SuiError {
     CertificateRequiresQuorum,
     #[error("Authority {authority_name:?} could not sync certificate: {err:?}")]
     CertificateSyncError { authority_name: String, err: String },
-    #[error(
-        "The given sequence number ({given_sequence:?}) must match the next expected sequence ({expected_sequence:?}) number of the object ({object_id:?})"
-    )]
-    UnexpectedSequenceNumber {
-        object_id: ObjectID,
-        expected_sequence: SequenceNumber,
-        given_sequence: SequenceNumber,
-    },
     #[error("Invalid Authority Bitmap: {}", error)]
     InvalidAuthorityBitmap { error: String },
     #[error("Transaction certificate processing failed: {err}")]
@@ -145,7 +146,7 @@ pub enum SuiError {
         "Failed to get a quorum of signed effects when processing transaction: {effects_map:?}"
     )]
     QuorumFailedToGetEffectsQuorumWhenProcessingTransaction {
-        effects_map: BTreeMap<(EpochId, TransactionEffectsDigest), (Vec<AuthorityName>, StakeUnit)>,
+        effects_map: BTreeMap<TransactionEffectsDigest, (Vec<AuthorityName>, StakeUnit)>,
     },
     #[error("Module publish failed: {err}")]
     ErrorWhileProcessingPublish { err: String },

@@ -61,11 +61,6 @@ import {
 } from '../types';
 import { DynamicFieldPage } from '../types/dynamic_fields';
 import {
-  PublicKey,
-  SignatureScheme,
-  SIGNATURE_SCHEME_TO_FLAG,
-} from '../cryptography/publickey';
-import {
   DEFAULT_CLIENT_OPTIONS,
   WebsocketClient,
   WebsocketClientOptions,
@@ -73,10 +68,11 @@ import {
 import { ApiEndpoints, Network, NETWORK_TO_API } from '../utils/api-endpoints';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
 import { lt } from '@suchipi/femver';
-import { Base64DataBuffer } from '../serialization/base64';
 import { any, is, number, array } from 'superstruct';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import { LocalTxnDataSerializer } from '../signers/txn-data-serializers/local-txn-data-serializer';
+import { toB64 } from '@mysten/bcs';
+import { SerializedSignature } from '../cryptography/signature';
 
 /**
  * Configuration options for the JsonRpcProvider. If the value of a field is not provided,
@@ -664,33 +660,21 @@ export class JsonRpcProvider extends Provider {
   }
 
   async executeTransaction(
-    txnBytes: Base64DataBuffer,
-    signatureScheme: SignatureScheme,
-    signature: Base64DataBuffer,
-    pubkey: PublicKey,
+    txnBytes: Uint8Array | string,
+    signature: SerializedSignature,
     requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert',
   ): Promise<SuiExecuteTransactionResponse> {
     try {
-      let resp;
-      // Serialize sigature field as: `flag || signature || pubkey`
-      const serialized_sig = new Uint8Array(
-        1 + signature.getLength() + pubkey.toBytes().length,
-      );
-      serialized_sig.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
-      serialized_sig.set(signature.getData(), 1);
-      serialized_sig.set(pubkey.toBytes(), 1 + signature.getLength());
-
-      resp = await this.client.requestWithType(
+      return await this.client.requestWithType(
         'sui_executeTransactionSerializedSig',
         [
-          txnBytes.toString(),
-          new Base64DataBuffer(serialized_sig).toString(),
+          typeof txnBytes === 'string' ? txnBytes : toB64(txnBytes),
+          signature,
           requestType,
         ],
         SuiExecuteTransactionResponse,
         this.options.skipDataValidation,
       );
-      return resp;
     } catch (err) {
       throw new Error(`Error executing transaction with request type: ${err}`);
     }
@@ -841,7 +825,7 @@ export class JsonRpcProvider extends Provider {
 
   async devInspectTransaction(
     sender: SuiAddress,
-    tx: UnserializedSignableTransaction | string | Base64DataBuffer,
+    tx: UnserializedSignableTransaction | string | Uint8Array,
     gasPrice: number | null = null,
     epoch: number | null = null,
   ): Promise<DevInspectResults> {
@@ -855,15 +839,15 @@ export class JsonRpcProvider extends Provider {
       let devInspectTxBytes;
       if (typeof tx === 'string') {
         devInspectTxBytes = tx;
-      } else if (tx instanceof Base64DataBuffer) {
-        devInspectTxBytes = tx.toString();
+      } else if (tx instanceof Uint8Array) {
+        devInspectTxBytes = toB64(tx);
       } else {
-        devInspectTxBytes = (
+        devInspectTxBytes = toB64(
           await new LocalTxnDataSerializer(this).serializeToBytesWithoutGasInfo(
             sender,
             tx,
-          )
-        ).toString();
+          ),
+        );
       }
 
       const resp = await this.client.requestWithType(
@@ -882,14 +866,14 @@ export class JsonRpcProvider extends Provider {
 
   async devInspectTransactionDeprecated(
     sender: SuiAddress,
-    tx: UnserializedSignableTransaction | string | Base64DataBuffer,
+    tx: UnserializedSignableTransaction | string | Uint8Array,
     epoch: number | null = null,
   ): Promise<DevInspectResults> {
     let devInspectTxBytes;
     if (typeof tx === 'string') {
       devInspectTxBytes = tx;
-    } else if (tx instanceof Base64DataBuffer) {
-      devInspectTxBytes = tx.toString();
+    } else if (tx instanceof Uint8Array) {
+      devInspectTxBytes = toB64(tx);
     } else {
       if (tx.kind === 'moveCall' && tx.data.gasBudget == null) {
         const moveCall = tx.data;
@@ -908,9 +892,9 @@ export class JsonRpcProvider extends Provider {
         );
         return resp;
       }
-      devInspectTxBytes = (
-        await new LocalTxnDataSerializer(this).serializeToBytes(sender, tx)
-      ).toString();
+      devInspectTxBytes = toB64(
+        await new LocalTxnDataSerializer(this).serializeToBytes(sender, tx),
+      );
     }
 
     const resp = await this.client.requestWithType(
@@ -922,11 +906,11 @@ export class JsonRpcProvider extends Provider {
     return resp;
   }
 
-  async dryRunTransaction(txBytes: string): Promise<TransactionEffects> {
+  async dryRunTransaction(txBytes: Uint8Array): Promise<TransactionEffects> {
     try {
       const resp = await this.client.requestWithType(
         'sui_dryRunTransaction',
-        [txBytes],
+        [toB64(txBytes)],
         TransactionEffects,
         this.options.skipDataValidation,
       );

@@ -216,11 +216,14 @@ where
                 } = response;
                 if !wait_for_local_execution {
                     return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        Some(tx_cert.into()),
+                        tx_cert.map(|cert| cert.into()),
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
                         false,
                     ))));
                 }
+                // TODO: Once we support executing transactions without a cert, we won't need this unwrap.
+                let tx_cert = tx_cert.expect("Currently we always obtain a cert");
+
                 match Self::execute_finalized_tx_locally_with_timeout(
                     &self.validator_state,
                     &tx_cert,
@@ -345,6 +348,8 @@ where
                     tx_cert,
                     effects_cert,
                 })) => {
+                    // TODO: Once we support executing transactions without a cert, we won't need this unwrap.
+                    let tx_cert = tx_cert.expect("Currently we always obtain a cert");
                     let tx_digest = tx_cert.digest();
                     if let Err(err) = pending_transaction_log.finish_transaction(tx_digest) {
                         error!(

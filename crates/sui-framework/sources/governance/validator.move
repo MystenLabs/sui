@@ -306,7 +306,15 @@ module sui::validator {
     }
 
     public fun total_stake_amount(self: &Validator): u64 {
+        spec {
+            // TODO: this should be provable rather than assumed
+            assume self.stake_amount + self.delegation_staking_pool.sui_balance <= MAX_U64;
+        };
         self.stake_amount + staking_pool::sui_balance(&self.delegation_staking_pool)
+    }
+
+    spec total_stake_amount {
+        aborts_if false;
     }
 
     public fun stake_amount(self: &Validator): u64 {

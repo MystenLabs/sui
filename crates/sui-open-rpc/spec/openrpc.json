@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "0.26.0"
+    "version": "0.27.0"
   },
   "methods": [
     {
@@ -334,6 +334,7 @@
                 "status": {
                   "status": "success"
                 },
+                "executedEpoch": 0,
                 "gasUsed": {
                   "computationCost": 100,
                   "storageCost": 100,
@@ -1543,6 +1544,7 @@
                 "status": {
                   "status": "success"
                 },
+                "executedEpoch": 0,
                 "gasUsed": {
                   "computationCost": 100,
                   "storageCost": 100,
@@ -6318,6 +6320,7 @@
         "description": "The response from processing a transaction or a certified transaction",
         "type": "object",
         "required": [
+          "executedEpoch",
           "gasObject",
           "gasUsed",
           "status",
@@ -6349,6 +6352,12 @@
             "items": {
               "$ref": "#/components/schemas/Event"
             }
+          },
+          "executedEpoch": {
+            "description": "The epoch when this transaction was executed.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           },
           "gasObject": {
             "$ref": "#/components/schemas/OwnedObjectRef"
@@ -6767,28 +6776,13 @@
             }
           },
           "description": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+            "type": "string"
           },
           "image_url": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+            "type": "string"
           },
           "name": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+            "type": "string"
           },
           "net_address": {
             "type": "array",
@@ -6827,12 +6821,7 @@
             "minimum": 0.0
           },
           "project_url": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+            "type": "string"
           },
           "proof_of_possession_bytes": {
             "type": "array",

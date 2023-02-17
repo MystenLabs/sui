@@ -43,7 +43,7 @@ rustyline-derive = "0.7.0"
 colored = "2.0.0"
 unescape = "0.1.0"
 shell-words = "1.1.0"
-rocksdb = "0.19.0"
+rocksdb = "0.20.1"
 
 tempfile = "3.3.0"
 narwhal-executor = { path = "../../narwhal/executor" }

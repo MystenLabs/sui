@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer } from '../../serialization/base64';
+import { SerializedSignature } from '../../cryptography/signature';
 import {
   ObjectId,
   PureArg,
@@ -146,6 +146,11 @@ export type UnserializedSignableTransaction =
       data: PublishTransaction;
     };
 
+export type SignedTransaction = {
+  transactionBytes: string;
+  signature: SerializedSignature;
+};
+
 /** A type that represents the possible transactions that can be signed: */
 export type SignableTransaction =
   | UnserializedSignableTransaction
@@ -173,7 +178,7 @@ export type SignableTransactionData = SignableTransaction['data'];
  *
  * // Include the following line if you are using `LocalTxnDataSerializer`, skip
  * // if you are using `RpcTxnDataSerializer`
- * // const modulesInBytes = modules.map((m) => Array.from(new Base64DataBuffer(m).getData()));
+ * // const modulesInBytes = modules.map((m) => Array.from(fromB64(m)));
  * // ... publish logic ...
  * ```
  *
@@ -195,5 +200,5 @@ export interface TxnDataSerializer {
     signerAddress: SuiAddress,
     txn: UnserializedSignableTransaction,
     mode: TransactionBuilderMode,
-  ): Promise<Base64DataBuffer>;
+  ): Promise<Uint8Array>;
 }

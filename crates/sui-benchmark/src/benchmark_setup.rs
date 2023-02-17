@@ -6,6 +6,7 @@ use prometheus::Registry;
 use rand::seq::SliceRandom;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::thread::JoinHandle;
 use std::time::Duration;
 use sui_config::utils;
 
@@ -22,7 +23,7 @@ use sui_types::object::{generate_test_gas_objects_with_owner, Owner};
 use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::authority::{spawn_fullnode, spawn_test_authorities};
 use tokio::runtime::Builder;
-use tokio::sync::Barrier;
+use tokio::sync::{oneshot, Barrier};
 use tracing::info;
 
 pub enum Env {
@@ -41,13 +42,19 @@ pub struct ProxyGasAndCoin {
     pub pay_coin_type_tag: TypeTag,
 }
 
+pub struct BenchmarkSetup {
+    pub server_handle: JoinHandle<()>,
+    pub shutdown_notifier: oneshot::Sender<()>,
+    pub proxy_and_coins: Vec<ProxyGasAndCoin>,
+}
+
 impl Env {
     pub async fn setup(
         &self,
         barrier: Arc<Barrier>,
         registry: &Registry,
         opts: &Opts,
-    ) -> Result<Vec<ProxyGasAndCoin>> {
+    ) -> Result<BenchmarkSetup> {
         match self {
             Env::Local => {
                 self.setup_local_env(
@@ -83,7 +90,7 @@ impl Env {
         committee_size: usize,
         server_metric_port: u16,
         num_server_threads: u64,
-    ) -> Result<Vec<ProxyGasAndCoin>> {
+    ) -> Result<BenchmarkSetup> {
         info!("Running benchmark setup in local mode..");
         let mut network_config = test_and_configure_authority_configs(committee_size);
         let mut metric_port = server_metric_port;
@@ -119,7 +126,8 @@ impl Env {
         let fullnode_barrier_clone = fullnode_barrier.clone();
         // spawn a thread to spin up sui nodes on the multi-threaded server runtime.
         // running forever
-        let _validators = std::thread::spawn(move || {
+        let (sender, recv) = tokio::sync::oneshot::channel::<()>();
+        let join_handle = std::thread::spawn(move || {
             // create server runtime
             let server_runtime = Builder::new_multi_thread()
                 .thread_stack_size(32 * 1024 * 1024)
@@ -134,10 +142,7 @@ impl Env {
                 let _fullnode = spawn_fullnode(&cloned_config, Some(fullnode_rpc_port)).await;
                 fullnode_barrier_clone.wait().await;
                 barrier.wait().await;
-                // This thread cannot exit, otherwise validators will shutdown.
-                loop {
-                    sleep(Duration::from_secs(300)).await;
-                }
+                recv.await.expect("Unable to wait for terminate signal");
             });
         });
         // Let fullnode be created.
@@ -155,20 +160,24 @@ impl Env {
         );
         let keypair = Arc::new(keypair);
         let ttag = pay_coin.get_move_template_type()?;
-        Ok(vec![ProxyGasAndCoin {
-            primary_gas: (
-                primary_gas.compute_object_reference(),
-                Owner::AddressOwner(owner),
-                keypair.clone(),
-            ),
-            pay_coin: (
-                pay_coin.compute_object_reference(),
-                Owner::AddressOwner(owner),
-                keypair,
-            ),
-            pay_coin_type_tag: ttag,
-            proxy,
-        }])
+        Ok(BenchmarkSetup {
+            server_handle: join_handle,
+            shutdown_notifier: sender,
+            proxy_and_coins: vec![ProxyGasAndCoin {
+                primary_gas: (
+                    primary_gas.compute_object_reference(),
+                    Owner::AddressOwner(owner),
+                    keypair.clone(),
+                ),
+                pay_coin: (
+                    pay_coin.compute_object_reference(),
+                    Owner::AddressOwner(owner),
+                    keypair,
+                ),
+                pay_coin_type_tag: ttag,
+                proxy,
+            }],
+        })
     }
 
     async fn setup_remote_env(
@@ -182,17 +191,18 @@ impl Env {
         use_fullnode_for_reconfig: bool,
         use_fullnode_for_execution: bool,
         fullnode_rpc_address: Vec<String>,
-    ) -> Result<Vec<ProxyGasAndCoin>> {
+    ) -> Result<BenchmarkSetup> {
         info!("Running benchmark setup in remote mode ..");
-        std::thread::spawn(move || {
+        let (sender, recv) = tokio::sync::oneshot::channel::<()>();
+        let join_handle = std::thread::spawn(move || {
             Builder::new_multi_thread()
                 .build()
                 .unwrap()
                 .block_on(async move {
                     barrier.wait().await;
+                    recv.await.expect("Unable to wait for terminate signal");
                 });
         });
-
         let fullnode_rpc_urls = fullnode_rpc_address.clone();
         info!("List of fullnode rpc urls: {:?}", fullnode_rpc_urls);
         let proxies: Vec<Arc<dyn ValidatorProxy + Send + Sync>> = if use_fullnode_for_execution {
@@ -286,6 +296,10 @@ impl Env {
                 proxy: proxy.clone(),
             })
         }
-        Ok(proxy_gas_and_coins)
+        Ok(BenchmarkSetup {
+            server_handle: join_handle,
+            shutdown_notifier: sender,
+            proxy_and_coins: proxy_gas_and_coins,
+        })
     }
 }

@@ -48,6 +48,8 @@ use crate::transaction_manager::TransactionManager;
 use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;
+use sui_protocol_config::ProtocolConfig;
+use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
@@ -78,6 +80,8 @@ pub struct AuthorityPerEpochStore {
     // TODO: Make this Arc<Committee> for more efficient pass-around.
     committee: Committee,
     tables: AuthorityEpochTables,
+
+    protocol_config: ProtocolConfig,
 
     // needed for re-opening epoch db.
     parent_path: PathBuf,
@@ -117,6 +121,7 @@ pub struct AuthorityPerEpochStore {
     /// the last few seconds of an epoch.
     epoch_close_time: RwLock<Option<Instant>>,
     metrics: Arc<EpochMetrics>,
+    epoch_start_configuration: Arc<EpochStartConfiguration>,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -125,6 +130,10 @@ pub struct AuthorityEpochTables {
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
     #[default_options_override_fn = "transactions_table_default_config"]
     transactions: DBMap<TransactionDigest, TrustedEnvelope<SenderSignedData, AuthoritySignInfo>>,
+
+    /// Signatures over transaction effects that were executed in the current epoch.
+    /// Store this to avoid re-signing the same effects twice.
+    effects_signatures: DBMap<TransactionDigest, AuthoritySignInfo>,
 
     /// The two tables below manage shared object locks / versions. There are two ways they can be
     /// updated:
@@ -233,6 +242,7 @@ pub struct AuthorityEpochTables {
 /// Parameters of the epoch fixed at epoch start.
 #[derive(Default, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct EpochStartConfiguration {
+    pub epoch_id: EpochId,
     pub epoch_start_timestamp_ms: CheckpointTimestamp,
     // Current epoch committee can eventually move here too, though right now it is served from a different table
 }
@@ -313,19 +323,35 @@ impl AuthorityPerEpochStore {
         // (1) For the first epoch, this is inserted in the DB along with genesis checkpoint
         // (2) For other epochs, this is updated when AuthorityPerEpochStore
         // is initialized during epoch change
-        if let Some(epoch_start_configuration) = epoch_start_configuration {
-            tables
-                .epoch_start_configuration
-                .insert(&(), &epoch_start_configuration)
-                .expect("Failed to store epoch_start_configuration");
-        }
+        let epoch_start_configuration =
+            if let Some(epoch_start_configuration) = epoch_start_configuration {
+                assert_eq!(epoch_start_configuration.epoch_id, epoch_id);
+                tables
+                    .epoch_start_configuration
+                    .insert(&(), &epoch_start_configuration)
+                    .expect("Failed to store epoch_start_configuration");
+                epoch_start_configuration
+            } else {
+                assert!(
+                    epoch_id > 0,
+                    "epoch_start_configuration should be provided for epoch 0"
+                );
+                tables
+                    .epoch_start_configuration
+                    .get(&())
+                    .expect("Failed to load epoch_start_configuration")
+                    .expect("epoch_start_configuration not found for non-0 epoch")
+            };
+        let epoch_start_configuration = Arc::new(epoch_start_configuration);
         metrics.current_epoch.set(epoch_id as i64);
         metrics
             .current_voting_right
             .set(committee.weight(&name) as i64);
         metrics.epoch_total_votes.set(committee.total_votes as i64);
+        let protocol_version = committee.protocol_version;
         Arc::new(Self {
             committee,
+            protocol_config: ProtocolConfig::get_for_version(protocol_version),
             tables,
             parent_path: parent_path.to_path_buf(),
             db_options,
@@ -339,6 +365,7 @@ impl AuthorityPerEpochStore {
             epoch_open_time: current_time,
             epoch_close_time: Default::default(),
             metrics,
+            epoch_start_configuration,
         })
     }
 
@@ -346,12 +373,10 @@ impl AuthorityPerEpochStore {
         self.parent_path.clone()
     }
 
-    pub fn epoch_start_configuration(&self) -> SuiResult<EpochStartConfiguration> {
-        Ok(self
-            .tables
-            .epoch_start_configuration
-            .get(&())?
-            .expect("epoch_start_configuration was not initialized properly"))
+    /// Returns &Arc<EpochStartConfiguration>
+    /// User can treat this Arc as &EpochStartConfiguration, or clone the Arc to pass as owned object
+    pub fn epoch_start_configuration(&self) -> &Arc<EpochStartConfiguration> {
+        &self.epoch_start_configuration
     }
 
     pub fn new_at_next_epoch(
@@ -383,6 +408,10 @@ impl AuthorityPerEpochStore {
 
     pub fn committee(&self) -> &Committee {
         &self.committee
+    }
+
+    pub fn protocol_config(&self) -> &ProtocolConfig {
+        &self.protocol_config
     }
 
     pub fn epoch(&self) -> EpochId {
@@ -444,6 +473,24 @@ impl AuthorityPerEpochStore {
         tx_digest: &TransactionDigest,
     ) -> SuiResult<Option<VerifiedSignedTransaction>> {
         Ok(self.tables.transactions.get(tx_digest)?.map(|t| t.into()))
+    }
+
+    pub fn insert_effects_signature(
+        &self,
+        tx_digest: &TransactionDigest,
+        effects_signature: &AuthoritySignInfo,
+    ) -> SuiResult {
+        Ok(self
+            .tables
+            .effects_signatures
+            .insert(tx_digest, effects_signature)?)
+    }
+
+    pub fn get_effects_signature(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> SuiResult<Option<AuthoritySignInfo>> {
+        Ok(self.tables.effects_signatures.get(tx_digest)?)
     }
 
     pub fn multi_get_next_shared_object_versions<'a>(
@@ -1522,12 +1569,6 @@ impl AuthorityPerEpochStore {
                 .builder_digest_to_checkpoint
                 .insert(&digest, &sequence)?;
         }
-        let epoch_start_configuration = EpochStartConfiguration {
-            epoch_start_timestamp_ms: summary.timestamp_ms,
-        };
-        self.tables
-            .epoch_start_configuration
-            .insert(&(), &epoch_start_configuration)?;
         self.tables
             .builder_checkpoint_summary
             .insert(summary.sequence_number(), summary)?;
@@ -1681,4 +1722,10 @@ impl AuthorityPerEpochStore {
 
 fn transactions_table_default_config() -> DBOptions {
     default_db_options(None, None).1
+}
+
+impl EpochStartConfiguration {
+    pub fn epoch_data(&self) -> EpochData {
+        EpochData::new(self.epoch_id)
+    }
 }

@@ -29,6 +29,7 @@ use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
 use sui_json::SuiJsonValue;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{
     AuthorityName, ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
     TransactionDigest, TransactionEffectsDigest,
@@ -576,6 +577,7 @@ impl TryInto<Object> for SuiObject<SuiRawData> {
                         o.has_public_transfer,
                         o.version,
                         o.bcs_bytes,
+                        ProtocolConfig::get_for_min_version(),
                     )?
                 })
             }
@@ -1779,6 +1781,9 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
                     checkpoint_start_timestamp_ms: p.checkpoint_start_timestamp_ms,
                 })
             }
+            SingleTransactionKind::ProgrammableTransaction(_) => {
+                anyhow::bail!("programmable transactions are not yet supported")
+            }
         })
     }
 }
@@ -1928,6 +1933,8 @@ impl SuiFinalizedEffects {
 pub struct SuiTransactionEffects {
     // The status of the execution
     pub status: SuiExecutionStatus,
+    /// The epoch when this transaction was executed.
+    pub executed_epoch: EpochId,
     pub gas_used: SuiGasCostSummary,
     // The object references of the shared objects used in this transaction. Empty if no shared objects were used.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -1974,6 +1981,7 @@ impl SuiTransactionEffects {
     ) -> Result<Self, anyhow::Error> {
         Ok(Self {
             status: effect.status.into(),
+            executed_epoch: effect.executed_epoch,
             gas_used: effect.gas_used.into(),
             shared_objects: to_sui_object_ref(effect.shared_objects),
             transaction_digest: effect.transaction_digest,

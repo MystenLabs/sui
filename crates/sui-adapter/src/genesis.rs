@@ -5,6 +5,7 @@ use move_binary_format::CompiledModule;
 use once_cell::sync::Lazy;
 use sui_types::base_types::{ObjectRef, SuiAddress, TxContext};
 use sui_types::clock::Clock;
+use sui_types::epoch_data::EpochData;
 use sui_types::id::UID;
 use sui_types::object::{MoveObject, Owner};
 use sui_types::{base_types::TransactionDigest, object::Object};
@@ -40,7 +41,11 @@ pub fn get_framework_object_ref() -> ObjectRef {
 }
 
 pub fn get_genesis_context() -> TxContext {
-    TxContext::new(&SuiAddress::default(), &TransactionDigest::genesis(), 0)
+    TxContext::new(
+        &SuiAddress::default(),
+        &TransactionDigest::genesis(),
+        &EpochData::genesis(),
+    )
 }
 
 /// Create and return objects wrapping the genesis modules for sui

@@ -30,9 +30,8 @@ use sui_types::{
     },
     committee::Committee,
     crypto::{AuthoritySignInfo, AuthoritySignature},
-    gas::GasCostSummary,
     message_envelope::Message,
-    messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects},
+    messages::{CertifiedTransaction, Transaction, TransactionEffects},
     object::{Object, Owner},
 };
 use tokio::time::timeout;
@@ -64,7 +63,7 @@ where
 pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) {
     match timeout(
         WAIT_FOR_TX_TIMEOUT,
-        state.database.notify_read_effects(vec![digest]),
+        state.database.notify_read_executed_effects(vec![digest]),
     )
     .await
     {
@@ -79,7 +78,7 @@ pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) 
 pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<AuthorityState>) {
     match timeout(
         WAIT_FOR_TX_TIMEOUT,
-        state.database.notify_read_effects(digests.clone()),
+        state.database.notify_read_executed_effects(digests.clone()),
     )
     .await
     {
@@ -120,26 +119,12 @@ pub fn create_fake_cert_and_effect_digest<'a>(
 
 pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
     TransactionEffects {
-        status: ExecutionStatus::Success,
-        gas_used: GasCostSummary {
-            computation_cost: 0,
-            storage_cost: 0,
-            storage_rebate: 0,
-        },
-        modified_at_versions: Vec::new(),
-        shared_objects: Vec::new(),
         transaction_digest: *tx.digest(),
-        created: Vec::new(),
-        mutated: Vec::new(),
-        unwrapped: Vec::new(),
-        deleted: Vec::new(),
-        wrapped: Vec::new(),
         gas_object: (
             random_object_ref(),
             Owner::AddressOwner(tx.data().intent_message.value.signer()),
         ),
-        events: Vec::new(),
-        dependencies: Vec::new(),
+        ..Default::default()
     }
 }
 

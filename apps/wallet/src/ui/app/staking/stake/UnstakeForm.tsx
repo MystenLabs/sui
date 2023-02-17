@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 
 import LoadingIndicator from '../../components/loading/LoadingIndicator';
 import { useGasBudgetInMist } from '../../hooks/useGasBudgetInMist';
+import { Heading } from '../../shared/heading';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import { useFormatCoin } from '_hooks';
@@ -59,13 +60,14 @@ export function UnStakeForm({
                             Your Stake
                         </Text>
                         <div className="flex gap-0.5 items-end">
-                            <Text
+                            <Heading
                                 variant="heading4"
                                 weight="semibold"
                                 color="steel-darker"
+                                leading="none"
                             >
                                 {tokenBalance}
-                            </Text>
+                            </Heading>
                             <Text
                                 variant="bodySmall"
                                 weight="medium"

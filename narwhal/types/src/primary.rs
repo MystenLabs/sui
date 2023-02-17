@@ -14,7 +14,7 @@ use derive_builder::Builder;
 use fastcrypto::{
     hash::{Digest, Hash, HashFunction},
     signature_service::SignatureService,
-    traits::{AggregateAuthenticator, EncodeDecodeBase64, Signer, VerifyingKey},
+    traits::{AggregateAuthenticator, EncodeDecodeBase64, InsecureDefault, Signer, VerifyingKey},
 };
 use indexmap::IndexMap;
 use mysten_util_mem::MallocSizeOf;
@@ -151,7 +151,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Batch {
     }
 }
 
-#[derive(Builder, Clone, Default, Deserialize, MallocSizeOf, Serialize)]
+#[derive(Builder, Clone, Deserialize, MallocSizeOf, Serialize)]
 #[builder(pattern = "owned", build_fn(skip))]
 pub struct Header {
     pub author: PublicKey,
@@ -275,6 +275,21 @@ impl Header {
         self.author
             .verify(digest.as_ref(), &self.signature)
             .map_err(|_| DagError::InvalidSignature)
+    }
+}
+
+impl Default for Header {
+    fn default() -> Self {
+        Self {
+            author: PublicKey::insecure_default(),
+            round: Round::default(),
+            epoch: Epoch::default(),
+            created_at: TimestampMs::default(),
+            payload: IndexMap::default(),
+            parents: BTreeSet::default(),
+            digest: OnceCell::default(),
+            signature: Signature::default(),
+        }
     }
 }
 

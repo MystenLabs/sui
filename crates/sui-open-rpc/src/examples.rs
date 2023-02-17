@@ -451,6 +451,7 @@ impl RpcExampleProvider {
             },
             effects: SuiTransactionEffects {
                 status: SuiExecutionStatus::Success,
+                executed_epoch: 0,
                 gas_used: SuiGasCostSummary {
                     computation_cost: 100,
                     storage_cost: 100,

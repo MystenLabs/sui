@@ -4,8 +4,8 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
 use std::collections::HashSet;
-use sui_protocol_constants::STORAGE_GAS_PRICE;
 use sui_types::base_types::ObjectRef;
+use sui_types::gas::SuiCostTable;
 use sui_types::messages::TransactionKind;
 use sui_types::{
     base_types::{SequenceNumber, SuiAddress},
@@ -22,6 +22,7 @@ use tracing::instrument;
 
 async fn get_gas_status(
     store: &AuthorityStore,
+    epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
 ) -> SuiResult<SuiGasStatus<'static>> {
     let tx_kind = &transaction.kind;
@@ -35,6 +36,7 @@ async fn get_gas_status(
 
     check_gas(
         store,
+        epoch_store,
         gas_object_ref,
         transaction.gas_budget,
         transaction.gas_price,
@@ -50,12 +52,13 @@ async fn get_gas_status(
 #[instrument(level = "trace", skip_all)]
 pub async fn check_transaction_input(
     store: &AuthorityStore,
+    epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
     transaction
         .validity_check()
         .map_err(SuiError::into_transaction_input_error)?;
-    let gas_status = get_gas_status(store, transaction).await?;
+    let gas_status = get_gas_status(store, epoch_store, transaction).await?;
     let input_objects = transaction.input_objects()?;
     let objects = store.check_input_objects(&input_objects)?;
     let input_objects = check_objects(transaction, input_objects, objects).await?;
@@ -82,7 +85,8 @@ pub(crate) async fn check_dev_inspect_input(
             SingleTransactionKind::Publish(_)
             | SingleTransactionKind::ChangeEpoch(_)
             | SingleTransactionKind::Genesis(_)
-            | SingleTransactionKind::ConsensusCommitPrologue(_) => {
+            | SingleTransactionKind::ConsensusCommitPrologue(_)
+            | SingleTransactionKind::ProgrammableTransaction(_) => {
                 anyhow::bail!("Transaction kind {} is not supported in dev-inspect", k)
             }
         }
@@ -116,7 +120,7 @@ pub async fn check_certificate_input(
     epoch_store: &AuthorityPerEpochStore,
     cert: &VerifiedCertificate,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
-    let gas_status = get_gas_status(store, &cert.data().intent_message.value).await?;
+    let gas_status = get_gas_status(store, epoch_store, &cert.data().intent_message.value).await?;
     let input_object_kinds = cert.data().intent_message.value.input_objects()?;
     let tx_data = &cert.data().intent_message.value;
     let input_object_data = if tx_data.kind.is_change_epoch_tx() {
@@ -142,6 +146,7 @@ pub async fn check_certificate_input(
 #[instrument(level = "trace", skip_all)]
 async fn check_gas(
     store: &AuthorityStore,
+    epoch_store: &AuthorityPerEpochStore,
     gas_payment: &ObjectRef,
     gas_budget: u64,
     computation_gas_price: u64,
@@ -166,8 +171,12 @@ async fn check_gas(
             TransactionKind::Single(SingleTransactionKind::PaySui(t)) => t.amounts.iter().sum(),
             _ => 0,
         };
+        let protocol_config = epoch_store.protocol_config();
+        let cost_table = SuiCostTable::new(protocol_config);
+        let storage_gas_price = protocol_config.storage_gas_price();
+
         // TODO: We should revisit how we compute gas price and compare to gas budget.
-        let gas_price = std::cmp::max(computation_gas_price, STORAGE_GAS_PRICE);
+        let gas_price = std::cmp::max(computation_gas_price, storage_gas_price);
 
         if tx_kind.is_pay_sui_tx() {
             let mut additional_objs = vec![];
@@ -185,12 +194,25 @@ async fn check_gas(
                 gas_price,
                 extra_amount,
                 additional_objs,
+                &cost_table,
             )?;
         } else {
-            gas::check_gas_balance(&gas_object, gas_budget, gas_price, extra_amount, vec![])?;
+            gas::check_gas_balance(
+                &gas_object,
+                gas_budget,
+                gas_price,
+                extra_amount,
+                vec![],
+                &cost_table,
+            )?;
         }
 
-        gas::start_gas_metering(gas_budget, computation_gas_price, STORAGE_GAS_PRICE)
+        gas::start_gas_metering(
+            gas_budget,
+            computation_gas_price,
+            storage_gas_price,
+            cost_table,
+        )
     }
 }
 
@@ -293,22 +315,17 @@ fn check_one_object(
                 SuiError::InvalidSequenceNumber
             );
 
-            // Check that the seq number is the same
-            // Note that this generally can't fail, because we fetch objects at the version
-            // specified by the input objects. This makes check_transaction_input idempotent.
-            // A tx that tries to operate on older versions will fail later when checking the
-            // object locks.
-            fp_ensure!(
-                object.version() == sequence_number,
-                SuiError::UnexpectedSequenceNumber {
-                    object_id,
-                    expected_sequence: object.version(),
-                    given_sequence: sequence_number,
-                }
+            // This is an invariant - we just load the object with the given ID and version.
+            assert_eq!(
+                object.version(),
+                sequence_number,
+                "The fetched object version {} does not match the requested version {}, object id: {}",
+                object.version(),
+                sequence_number,
+                object.id(),
             );
 
-            // Check the digest matches
-
+            // Check the digest matches - uesr could give a mismatched ObjectDigest
             let expected_digest = object.digest();
             fp_ensure!(
                 expected_digest == object_digest,

@@ -116,6 +116,7 @@ Private
 
 
 <pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
 
 
@@ -153,6 +154,7 @@ A native move wrapper around the addition of Ristretto points. Returns self + ot
 
 
 <pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
 
 
@@ -190,6 +192,7 @@ A native move wrapper around the subtraction of Ristretto points. Returns self -
 
 
 <pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
 
 
@@ -227,6 +230,7 @@ A native move wrapper for the creation of Scalars on Curve25519.
 
 
 <pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
 
 
@@ -264,6 +268,7 @@ A native move wrapper for the creation of Scalars on Curve25519.
 
 
 <pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
 
 

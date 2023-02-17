@@ -46,10 +46,10 @@ pub struct ValidatorMetadata {
     pub network_pubkey_bytes: Vec<u8>,
     pub worker_pubkey_bytes: Vec<u8>,
     pub proof_of_possession_bytes: Vec<u8>,
-    pub name: Vec<u8>,
-    pub description: Vec<u8>,
-    pub image_url: Vec<u8>,
-    pub project_url: Vec<u8>,
+    pub name: String,
+    pub description: String,
+    pub image_url: String,
+    pub project_url: String,
     pub net_address: Vec<u8>,
     pub consensus_address: Vec<u8>,
     pub worker_address: Vec<u8>,
@@ -238,7 +238,7 @@ impl SuiSystemState {
         CommitteeWithNetAddresses {
             committee: Committee::new(
                 self.epoch,
-                ProtocolVersion(self.protocol_version),
+                ProtocolVersion::new(self.protocol_version),
                 voting_rights,
             )
             // unwrap is safe because we should have verified the committee on-chain.

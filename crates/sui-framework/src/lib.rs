@@ -12,6 +12,7 @@ use natives::object_runtime::ObjectRuntime;
 use once_cell::sync::Lazy;
 use std::{collections::BTreeMap, path::Path};
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::TransactionDigest, error::SuiResult, in_memory_storage::InMemoryStorage,
     messages::InputObjects, temporary_store::TemporaryStore, MOVE_STDLIB_ADDRESS,
@@ -78,11 +79,13 @@ fn new_testing_object_runtime(ext: &mut NativeContextExtensions) {
         store,
         InputObjects::new(vec![]),
         TransactionDigest::random(),
+        ProtocolConfig::get_for_min_version(),
     );
     ext.add(ObjectRuntime::new(
         Box::new(state_view),
         BTreeMap::new(),
         false,
+        ProtocolConfig::get_for_min_version(),
     ))
 }
 

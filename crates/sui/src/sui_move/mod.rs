@@ -49,7 +49,7 @@ pub fn execute_move_command(
                 filter: c.test.filter.clone(),
                 list: c.test.list,
                 num_threads: c.test.num_threads,
-                report_statistics: c.test.report_statistics,
+                report_statistics: c.test.report_statistics.clone(),
                 report_storage_on_error: c.test.report_storage_on_error,
                 check_stackless_vm: c.test.check_stackless_vm,
                 verbose: c.test.verbose_mode,

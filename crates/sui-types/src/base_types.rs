@@ -23,6 +23,7 @@ use crate::crypto::{
     SuiPublicKey,
 };
 pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
+use crate::epoch_data::EpochData;
 use crate::error::ExecutionError;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
@@ -347,11 +348,11 @@ pub struct TxContext {
 }
 
 impl TxContext {
-    pub fn new(sender: &SuiAddress, digest: &TransactionDigest, epoch: EpochId) -> Self {
+    pub fn new(sender: &SuiAddress, digest: &TransactionDigest, epoch_data: &EpochData) -> Self {
         Self {
             sender: AccountAddress::new(sender.0),
             digest: digest.into_inner().to_vec(),
-            epoch,
+            epoch: epoch_data.epoch_id(),
             ids_created: 0,
         }
     }
@@ -401,13 +402,13 @@ impl TxContext {
         Self::new(
             &SuiAddress::random_for_testing_only(),
             &TransactionDigest::random(),
-            0,
+            &EpochData::genesis(),
         )
     }
 
     // for testing
     pub fn with_sender_for_testing_only(sender: &SuiAddress) -> Self {
-        Self::new(sender, &TransactionDigest::random(), 0)
+        Self::new(sender, &TransactionDigest::random(), &EpochData::genesis())
     }
 }
 

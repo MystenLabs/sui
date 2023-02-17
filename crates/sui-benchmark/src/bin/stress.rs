@@ -11,7 +11,7 @@ use sui_benchmark::drivers::bench_driver::BenchDriver;
 use sui_benchmark::drivers::driver::Driver;
 use sui_benchmark::drivers::BenchmarkCmp;
 use sui_benchmark::drivers::BenchmarkStats;
-use sui_protocol_constants::{MAX_NUM_NEW_MOVE_OBJECT_IDS, MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS};
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 
 use sui_node::metrics;
 
@@ -52,11 +52,20 @@ use tokio::sync::Barrier;
 async fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
 
-    if (opts.gas_request_chunk_size > MAX_NUM_NEW_MOVE_OBJECT_IDS as u64)
-        || (opts.gas_request_chunk_size > MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS as u64)
+    // TODO: query the network for the current protocol version.
+    let protocol_config = match opts.protocol_version {
+        Some(v) => ProtocolConfig::get_for_version(ProtocolVersion::new(v)),
+        None => ProtocolConfig::get_for_max_version().clone(),
+    };
+
+    let max_num_new_move_object_ids = protocol_config.max_num_new_move_object_ids();
+    let max_num_transfered_move_object_ids = protocol_config.max_num_transfered_move_object_ids();
+
+    if (opts.gas_request_chunk_size > max_num_new_move_object_ids as u64)
+        || (opts.gas_request_chunk_size > max_num_transfered_move_object_ids as u64)
     {
         eprintln!(
-            "`gas-request-chunk-size` must be less than the maximum number of new IDs {MAX_NUM_NEW_MOVE_OBJECT_IDS} and the maximum number of transferred IDs {MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS}",
+            "`gas-request-chunk-size` must be less than the maximum number of new IDs {max_num_new_move_object_ids} and the maximum number of transferred IDs {max_num_transfered_move_object_ids}",
         );
     }
 
@@ -77,12 +86,13 @@ async fn main() -> Result<()> {
     let barrier = Arc::new(Barrier::new(2));
     let cloned_barrier = barrier.clone();
     let env = if opts.local { Env::Local } else { Env::Remote };
-    let proxy_gas_and_coins = env.setup(cloned_barrier, &registry, &opts).await?;
+    let bench_setup = env.setup(cloned_barrier, &registry, &opts).await?;
     let system_state_observer = {
         // Only need to get system state from one proxy as it is shared for the
         // whole network.
         let mut system_state_observer = SystemStateObserver::new(
-            proxy_gas_and_coins
+            bench_setup
+                .proxy_and_coins
                 .choose(&mut rand::thread_rng())
                 .context("Failed to get proxy for system state observer")?
                 .proxy
@@ -116,7 +126,11 @@ async fn main() -> Result<()> {
             };
 
             let proxy_workloads = workload_configuration
-                .configure(proxy_gas_and_coins, &opts, system_state_observer.clone())
+                .configure(
+                    bench_setup.proxy_and_coins,
+                    &opts,
+                    system_state_observer.clone(),
+                )
                 .await?;
             let interval = opts.run_duration;
             // We only show continuous progress in stderr
@@ -140,6 +154,15 @@ async fn main() -> Result<()> {
     if let Err(err) = joined {
         Err(anyhow!("Failed to join client runtime: {:?}", err))
     } else {
+        // send signal to stop the server runtime
+        bench_setup
+            .shutdown_notifier
+            .send(())
+            .expect("Failed to stop server runtime");
+        bench_setup
+            .server_handle
+            .join()
+            .expect("Failed to join the server handle");
         let (benchmark_stats, stress_stats) = joined.unwrap().unwrap();
         let benchmark_table = benchmark_stats.to_table();
         eprintln!("Benchmark Report:");

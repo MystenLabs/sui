@@ -79,7 +79,7 @@ fn test_update_contents() {
     // update contents should not touch the version number or ID.
     let old_contents = coin_obj.contents().to_vec();
     let old_type_specific_contents = coin_obj.type_specific_contents().to_vec();
-    coin_obj.update_contents(old_contents).unwrap();
+    coin_obj.update_coin_contents(old_contents);
     assert_eq!(&coin_obj.id(), coin.id());
     assert_eq!(
         coin_obj.type_specific_contents(),
@@ -315,10 +315,7 @@ fn test_authority_signature_serde_human_readable() {
     let (_, key): (_, AuthorityKeyPair) = get_key_pair();
     let sig = AuthoritySignature::new(&Foo("some data".to_string()), 0, &key);
     let serialized = serde_json::to_string(&sig).unwrap();
-    assert_eq!(
-        format!(r#"{{"sig":"{}"}}"#, sig.encode_base64()),
-        serialized
-    );
+    assert_eq!(format!("\"{}\"", sig.encode_base64()), serialized);
     let deserialized: AuthoritySignature = serde_json::from_str(&serialized).unwrap();
     assert_eq!(deserialized.as_ref(), sig.as_ref());
 }

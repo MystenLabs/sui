@@ -55,6 +55,12 @@ impl CheckpointHandler {
             self.checkpoint_handler_metrics
                 .total_checkpoint_requested
                 .inc();
+
+            let request_guard = self
+                .checkpoint_handler_metrics
+                .full_node_read_request_latency
+                .start_timer();
+
             let mut checkpoint = self
                 .rpc_client
                 .read_api()
@@ -71,9 +77,16 @@ impl CheckpointHandler {
                     .get_checkpoint_summary(next_cursor_sequence_number as u64)
                     .await;
             }
+            request_guard.stop_and_record();
+
             self.checkpoint_handler_metrics
                 .total_checkpoint_received
                 .inc();
+
+            let db_guard = self
+                .checkpoint_handler_metrics
+                .db_write_request_latency
+                .start_timer();
             // unwrap here is safe because we checked for error above
             let new_checkpoint = create_checkpoint(checkpoint.unwrap(), previous_checkpoint_commit);
             commit_checkpoint(&mut pg_pool_conn, new_checkpoint.clone())?;
@@ -81,7 +94,7 @@ impl CheckpointHandler {
             self.checkpoint_handler_metrics
                 .total_checkpoint_processed
                 .inc();
-
+            db_guard.stop_and_record();
             previous_checkpoint_commit = Checkpoint::from(new_checkpoint.clone());
             next_cursor_sequence_number += 1;
             commit_checkpoint_log(&mut pg_pool_conn, next_cursor_sequence_number)?;
