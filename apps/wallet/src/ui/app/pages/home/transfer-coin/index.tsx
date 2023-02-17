@@ -11,8 +11,8 @@ import { Formik, type FormikHelpers } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { StepOne } from './TransferCoinForm/StepOne';
-import { StepTwo } from './TransferCoinForm/StepTwo';
+import { PreviewTransfer } from './PreviewTransfer';
+import { SendTokenForm } from './SendTokenForm';
 import { createValidationSchemaStepOne } from './validation';
 import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, {
@@ -183,8 +183,8 @@ function TransferCoinPage() {
         return <Navigate to="/" replace={true} />;
     }
 
-    const StepOneForm = (
-        <div className="flex flex-col w-full mt-2.5">
+    const StepOne = (
+        <>
             <div className="mb-7">
                 <ActiveCoinsCard activeCoinType={coinType} />
             </div>
@@ -195,7 +195,7 @@ function TransferCoinPage() {
                 onSubmit={handleNextStep}
                 enableReinitialize={true}
             >
-                <StepOne
+                <SendTokenForm
                     submitError={sendError}
                     coinType={coinType}
                     balance={coinBalance}
@@ -204,21 +204,19 @@ function TransferCoinPage() {
                     onAmountChanged={(anAmount) => setAmountToSend(anAmount)}
                 />
             </Formik>
-        </div>
+        </>
     );
 
     const StepTwoPreview = (
         <BottomMenuLayout>
             <Content>
-                <div className="flex flex-col w-full mt-2.5">
-                    <StepTwo
-                        coinType={coinType}
-                        amount={formData.amount}
-                        to={formData.to}
-                        gasCostEstimation={gasBudgetEstimation || null}
-                        onClearSubmitError={handleOnClearSubmitError}
-                    />
-                </div>
+                <PreviewTransfer
+                    coinType={coinType}
+                    amount={formData.amount}
+                    to={formData.to}
+                    gasCostEstimation={gasBudgetEstimation || null}
+                    onClearSubmitError={handleOnClearSubmitError}
+                />
             </Content>
             <Menu
                 stuckClass="sendCoin-cta"
@@ -244,7 +242,7 @@ function TransferCoinPage() {
         </BottomMenuLayout>
     );
 
-    const steps = [StepOneForm, StepTwoPreview];
+    const steps = [StepOne, StepTwoPreview];
 
     return (
         <Overlay
@@ -255,7 +253,9 @@ function TransferCoinPage() {
             closeIcon={SuiIcons.Close}
         >
             <Loading loading={loadingBalance || isLoading}>
-                {steps[currentStep - 1]}
+                <div className="flex flex-col w-full mt-2.5">
+                    {steps[currentStep - 1]}
+                </div>
             </Loading>
         </Overlay>
     );

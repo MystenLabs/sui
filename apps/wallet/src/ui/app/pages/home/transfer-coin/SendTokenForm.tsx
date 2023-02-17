@@ -20,26 +20,24 @@ import { useCoinDecimals, useFormatCoin } from '_hooks';
 import { GAS_SYMBOL, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { InputWithAction } from '_src/ui/app/shared/InputWithAction';
 
-import type { FormValues } from '../';
+import type { FormValues } from './';
 
 export type TransferCoinFormProps = {
     submitError: string | null;
     coinType: string;
     gasCostEstimation: number | null;
-    gasEstimationLoading?: boolean;
     onClearSubmitError: () => void;
     onAmountChanged: (amount: bigint) => void;
     balance: bigint | null;
 };
 
 //TODO: update the form input to use input with action component
-export function StepOne({
+export function SendTokenForm({
     submitError,
     coinType,
     onClearSubmitError,
     onAmountChanged,
     gasCostEstimation,
-    gasEstimationLoading,
     balance,
 }: TransferCoinFormProps) {
     const {
@@ -63,6 +61,11 @@ export function StepOne({
         if (!isCoinDecimalsLoading) {
             const parsedAmount = parseAmount(amount, coinDecimals);
             onAmountChanged(parsedAmount);
+            // reset isPayAllSui to false if the amount is not equal to the balance
+            // check against the balance instead of maxToken because the maxToken is formatted
+            if (parsedAmount !== (balance || 0n)) {
+                setFieldValue('isPayAllSui', false);
+            }
             // seems changing the validationSchema doesn't rerun the validation for the form
             // trigger re-validation here when the amount to send is changed
             // (changing the amount will probably change the gasBudget and in the end the validationSchema)
@@ -74,17 +77,12 @@ export function StepOne({
         coinDecimals,
         isCoinDecimalsLoading,
         validateForm,
+        balance,
+        setFieldValue,
     ]);
 
     const [formattedGas] = useFormatCoin(gasCostEstimation, GAS_TYPE_ARG);
     const [maxToken, symbol, queryResult] = useFormatCoin(balance, coinType);
-
-    useEffect(() => {
-        // reset isPayAllSui to false if the amount is not equal to the maxToken
-        if (amount !== maxToken) {
-            setFieldValue('isPayAllSui', false);
-        }
-    }, [maxToken, setFieldValue, amount]);
 
     const setMaxToken = useCallback(() => {
         if (!maxToken) return;

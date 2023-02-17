@@ -28,7 +28,7 @@ function AddressInput<FormValues>({
     disabled: forcedDisabled,
     placeholder = '0x...',
     className,
-    form: { isSubmitting, dirty, setFieldValue },
+    form: { isSubmitting, dirty, setFieldValue, isValid },
     field: { onBlur, name, value },
 }: AddressInputProps<FormValues>) {
     const disabled =
@@ -56,7 +56,7 @@ function AddressInput<FormValues>({
             <div
                 className={cl(
                     st.group,
-                    dirty && addressError ? st.invalidAddr : ''
+                    touched && addressError ? st.invalidAddr : ''
                 )}
             >
                 <div className={st.textarea}>
@@ -85,7 +85,7 @@ function AddressInput<FormValues>({
 
             <ErrorMessage className={st.error} name="to" component="div" />
 
-            {!addressError && touched && (
+            {isValid && (
                 <div className="mt-2 w-full">
                     <Alert mode="success">
                         <Text variant="bodySmall" weight="medium">

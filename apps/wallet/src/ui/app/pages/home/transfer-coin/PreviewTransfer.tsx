@@ -19,7 +19,7 @@ export type TransferCoinFormProps = {
     amount: string;
 };
 
-export function StepTwo({
+export function PreviewTransfer({
     coinType,
     gasCostEstimation,
     to,
