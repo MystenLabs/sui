@@ -331,7 +331,7 @@ impl Default for SuiSystemState {
         SuiSystemState {
             info: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),
             epoch: 0,
-            protocol_version: ProtocolVersion::MIN.0,
+            protocol_version: ProtocolVersion::MIN.as_u64(),
             validators: validator_set,
             treasury_cap: Supply { value: 0 },
             storage_fund: Balance::new(0),
