@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Sui object identifiers
+/// Sui object identifiers.
+/// Defines creation, use and deletion of the `UID` and `ID` types.
 module sui::object {
     use std::bcs;
     use sui::address;
@@ -40,6 +41,12 @@ module sui::object {
     /// `UID` doesn't have the `drop` ability, so deleting a `UID` requires a call to `delete`.
     struct UID has store {
         id: ID,
+    }
+
+    /// Confirmation that a UID was deleted for cases where 'proof of deletion' is required.
+    /// Can only be spawned by the `delete_with_proof` method.
+    struct DeletedUID has copy, drop, store {
+        id: ID
     }
 
     // === id ===
@@ -94,6 +101,13 @@ module sui::object {
         uid.id.bytes
     }
 
+    // === deleted uid ===
+
+    /// Get the inner `ID` of `DeletedID`
+    public fun deleted_id(proof: &DeletedUID): ID {
+        proof.id
+    }
+
     // === any object ===
 
     /// Create a new object. Returns the `UID` that must be stored in a Sui object.
@@ -112,6 +126,13 @@ module sui::object {
     public fun delete(id: UID) {
         let UID { id: ID { bytes } } = id;
         delete_impl(bytes)
+    }
+
+    /// Delete the object and it's `UID` and return the proof of deletion - `DeletedUID`.
+    public fun delete_with_proof(id: UID): DeletedUID {
+        let inner = uid_to_inner(&id);
+        delete(id);
+        DeletedUID { id: inner }
     }
 
     /// Get the underlying `ID` of `obj`
@@ -149,18 +170,19 @@ module sui::object {
 
     // === internal functions ===
 
-    // helper for delete
+    /// Helper for delete
     native fun delete_impl(id: address);
 
-    // marks newly created UIDs from hash
+    /// Marks newly created UIDs from hash
     native fun record_new_uid(id: address);
 
-    // Cost calibration functions
+    // === Cost calibration functions ===
+
     #[test_only]
     public fun calibrate_address_from_bytes(bytes: vector<u8>) {
         sui::address::from_bytes(bytes);
     }
-    
+
     #[test_only]
     public fun calibrate_address_from_bytes_nop(bytes: vector<u8>) {
         let _ = bytes;
