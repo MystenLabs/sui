@@ -42,7 +42,7 @@ use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
 
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 
 use sui_storage::{
     event_store::{EventStoreType, SqlEventStore},
@@ -122,6 +122,15 @@ impl SuiNode {
         config: &NodeConfig,
         registry_service: RegistryService,
     ) -> Result<Arc<SuiNode>> {
+        let mut config = config.clone();
+        if config.supported_protocol_versions.is_none() {
+            info!(
+                "populating config.supported_protocol_versions with default {:?}",
+                SupportedProtocolVersions::SYSTEM_DEFAULT
+            );
+            config.supported_protocol_versions = Some(SupportedProtocolVersions::SYSTEM_DEFAULT);
+        }
+
         // TODO: maybe have a config enum that takes care of this for us.
         let is_validator = config.consensus_config().is_some();
         let is_full_node = !is_validator;
@@ -211,7 +220,7 @@ impl SuiNode {
         };
 
         let (p2p_network, discovery_handle, state_sync_handle) =
-            Self::create_p2p_network(config, state_sync_store, &prometheus_registry)?;
+            Self::create_p2p_network(&config, state_sync_store, &prometheus_registry)?;
 
         let state = AuthorityState::new(
             config.protocol_public_key(),
@@ -267,14 +276,14 @@ impl SuiNode {
         let json_rpc_service = build_server(
             state.clone(),
             &transaction_orchestrator.clone(),
-            config,
+            &config,
             &prometheus_registry,
         )
         .await?;
 
         let validator_components = if state.is_validator(&epoch_store) {
             let components = Self::construct_validator_components(
-                config,
+                &config,
                 state.clone(),
                 epoch_store.clone(),
                 checkpoint_store.clone(),
@@ -290,7 +299,7 @@ impl SuiNode {
         };
 
         let node = Self {
-            config: config.clone(),
+            config,
             validator_components: Mutex::new(validator_components),
             _json_rpc_service: json_rpc_service,
             state,
