@@ -608,9 +608,9 @@ dependencies = [
 
 [[package]]
 name = "axum"
-version = "0.6.2"
+version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1304eab461cf02bd70b083ed8273388f9724c549b316ba3d1e213ce0e9e7fb7e"
+checksum = "4e246206a63c9830e118d12c894f56a82033da1a2361f5544deeee3df85c99d9"
 dependencies = [
  "async-trait",
  "axum-core",
@@ -641,9 +641,9 @@ dependencies = [
 
 [[package]]
 name = "axum-core"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f487e40dc9daee24d8a1779df88522f159a54a980f99cfbe43db0be0bd3444a8"
+checksum = "1cae3e661676ffbacb30f1a824089a8c9150e71017f7e1e38f2aa32009188d34"
 dependencies = [
  "async-trait",
  "bytes",
@@ -681,12 +681,17 @@ version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8456dab8f11484979a86651da8e619b355ede5d61a160755155f6c344bd18c47"
 dependencies = [
+ "arc-swap",
  "bytes",
  "futures-util",
  "http",
  "http-body",
  "hyper",
+ "pin-project-lite",
+ "rustls",
+ "rustls-pemfile",
  "tokio",
+ "tokio-rustls",
  "tower-service",
 ]
 
@@ -9252,6 +9257,8 @@ name = "sui-tls"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "axum",
+ "axum-server",
  "ed25519",
  "fastcrypto",
  "pkcs8",
@@ -9259,6 +9266,9 @@ dependencies = [
  "rcgen",
  "reqwest",
  "rustls",
+ "tokio",
+ "tokio-rustls",
+ "tower-layer",
  "tracing",
  "webpki",
  "workspace-hack",

@@ -58,7 +58,7 @@ auto_ops = { version = "0.3", default-features = false }
 axum = { version = "0.6" }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
-axum-server = { version = "0.4" }
+axum-server = { version = "0.4", features = ["tls-rustls"] }
 backoff = { version = "0.4", features = ["tokio"] }
 backtrace = { version = "0.3" }
 base-x = { version = "0.2", default-features = false }
@@ -708,7 +708,7 @@ autocfg = { version = "1", default-features = false }
 axum = { version = "0.6" }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
-axum-server = { version = "0.4" }
+axum-server = { version = "0.4", features = ["tls-rustls"] }
 backoff = { version = "0.4", features = ["tokio"] }
 backtrace = { version = "0.3" }
 base-x = { version = "0.2", default-features = false }
