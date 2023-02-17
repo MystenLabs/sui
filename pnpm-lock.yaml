@@ -483,13 +483,13 @@ importers:
   sdk/bcs:
     specifiers:
       '@size-limit/preset-small-lib': ^8.1.0
-      base58-js: ^1.0.5
+      bs58: ^5.0.0
       size-limit: ^8.1.0
       tsup: ^6.5.0
       typescript: ^4.9.4
       vitest: ^0.26.3
     dependencies:
-      base58-js: 1.0.5
+      bs58: 5.0.0
     devDependencies:
       '@size-limit/preset-small-lib': 8.1.0_size-limit@8.1.0
       size-limit: 8.1.0
@@ -7801,11 +7801,6 @@ packages:
       mixin-deep: 1.3.2
       pascalcase: 0.1.1
     dev: true
-
-  /base58-js/1.0.5:
-    resolution: {integrity: sha512-LkkAPP8Zu+c0SVNRTRVDyMfKVORThX+rCViget00xdgLRrKkClCTz1T7cIrpr69ShwV5XJuuoZvMvJ43yURwkA==}
-    engines: {node: '>= 8'}
-    dev: false
 
   /base64-arraybuffer/0.1.5:
     resolution: {integrity: sha512-437oANT9tP582zZMwSvZGy2nmSeAb8DW2me3y+Uv1Wp2Rulr8Mqlyrv3E7MLxmsiaPSMMDmiDVzgE+e8zlMx9g==}

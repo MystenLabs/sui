@@ -13,7 +13,7 @@
 
 import { toB64, fromB64 } from "./b64";
 import { toHEX, fromHEX } from "./hex";
-import { binary_to_base58 as toB58, base58_to_binary as fromB58 } from "base58-js";
+import bs58 from "bs58";
 
 function toLittleEndian(bigint: bigint, size: number) {
   let result = new Uint8Array(size);
@@ -25,6 +25,9 @@ function toLittleEndian(bigint: bigint, size: number) {
   }
   return result;
 }
+
+const toB58 = (buffer: Uint8Array) => bs58.encode(buffer);
+const fromB58 = (str: string) => bs58.decode(str);
 
 // Re-export all encoding dependencies.
 export { toB58, fromB58, toB64, fromB64, fromHEX, toHEX };
