@@ -1,14 +1,10 @@
 name: Rust
 
 on:
-  push:
-    branches: [main, extensions, devnet]
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  push:
+    branches:
+      - main
 
 env:
   CARGO_TERM_COLOR: always
@@ -35,35 +31,15 @@ env:
   RUSTDOCFLAGS: -D warnings
 
 jobs:
-  license-check:
-    name: license-check
-    runs-on: [ubuntu-latest]
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
-
   test:
     timeout-minutes: 45
-    env:
-      # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
-      # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
-      # non-deterministic `test` job.
-      SUI_SKIP_SIMTESTS: 1
-    runs-on: ${{ matrix.os }}
+    runs-on: [ubuntu-latest]
     strategy:
-      matrix:
-        os:
-          - [ubuntu-latest]
       fail-fast: false
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
       - uses: taiki-e/install-action@nextest
-      - name: Install python dependencies
-        run: |
-          pip install pyopenssl --upgrade
-          if [ -f narwhal/benchmark/requirements.txt ]; then pip install -r narwhal/benchmark/requirements.txt; fi
       - name: cargo test
         run: |
           cargo nextest run --profile ci
@@ -82,14 +58,6 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           components: clippy
-
-      # TODO(bradh): debug and re-enable this; the caching is breaking the clippy build
-      # Enable caching of the 'librocksdb-sys' crate by additionally caching the
-      # 'librocksdb-sys' src directory which is managed by cargo
-      # - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
-      #   with:
-      #     path: ~/.cargo/registry/src/**/librocksdb-sys-*
-
       # See '.cargo/config' for list of enabled/disappled clippy lints
       - name: cargo clippy
         run: cargo xclippy -D warnings
