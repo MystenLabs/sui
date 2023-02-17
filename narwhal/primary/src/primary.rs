@@ -35,6 +35,7 @@ use fastcrypto::{
     traits::{EncodeDecodeBase64, KeyPair as _, ToFromBytes},
 };
 use multiaddr::{Multiaddr, Protocol};
+use mysten_metrics::spawn_monitored_task;
 use network::epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY};
 use network::{failpoints::FailpointsMakeCallbackHandler, metrics::MetricsMakeCallbackHandler};
 use prometheus::Registry;
@@ -49,8 +50,11 @@ use std::{
 };
 use storage::{CertificateStore, PayloadToken, ProposerStore};
 use store::Store;
-use tokio::{sync::oneshot, time::Instant};
 use tokio::{sync::watch, task::JoinHandle};
+use tokio::{
+    sync::{mpsc, oneshot},
+    time::Instant,
+};
 use tower::ServiceBuilder;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -191,7 +195,7 @@ impl Primary {
             parameters.gc_depth,
             certificate_store.clone(),
             payload_store.clone(),
-            tx_certificate_fetcher.clone(),
+            tx_certificate_fetcher,
             tx_new_certificates,
             tx_parents,
             rx_consensus_round_updates.clone(),
@@ -483,7 +487,7 @@ impl Primary {
             parameters.gc_depth,
             tx_shutdown.subscribe(),
             rx_certificate_fetcher,
-            synchronizer,
+            synchronizer.clone(),
             node_metrics.clone(),
         );
 
@@ -521,9 +525,23 @@ impl Primary {
         // but rather an external one and we are leveraging a pure DAG structure, and more components
         // need to get initialised.
         if dag.is_some() {
+            let (tx_certificate_synchronizer, mut rx_certificate_synchronizer) =
+                mpsc::channel(CHANNEL_CAPACITY);
+            let sync_network = network.clone();
+            spawn_monitored_task!(async move {
+                while let Some(cert) = rx_certificate_synchronizer.recv().await {
+                    // Ok to ignore error including Suspended,
+                    // because fetching would be kicked off.
+                    let _ = synchronizer
+                        .try_accept_certificate(cert, &sync_network)
+                        .await;
+                }
+                // BlockSynchronizer has shut down.
+            });
+
             let block_synchronizer_handler = Arc::new(BlockSynchronizerHandler::new(
                 tx_block_synchronizer_commands,
-                tx_certificate_fetcher,
+                tx_certificate_synchronizer,
                 certificate_store.clone(),
                 parameters
                     .block_synchronizer

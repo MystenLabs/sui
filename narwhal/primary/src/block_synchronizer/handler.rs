@@ -15,7 +15,10 @@ use mockall::*;
 use std::time::Duration;
 use storage::CertificateStore;
 use thiserror::Error;
-use tokio::{sync::mpsc::channel, time::timeout};
+use tokio::{
+    sync::mpsc::{self, channel},
+    time::timeout,
+};
 use tracing::{debug, error, instrument, trace};
 use types::{metered_channel, Certificate, CertificateDigest};
 
@@ -100,8 +103,8 @@ pub struct BlockSynchronizerHandler {
     /// Channel to send commands to the block_synchronizer.
     tx_block_synchronizer: metered_channel::Sender<Command>,
 
-    /// Channel to send the certificates for causal completion.
-    tx_certificate_fetcher: metered_channel::Sender<Certificate>,
+    /// Channel to send certificates to be accepted or start fetching.
+    tx_certificate_synchronizer: mpsc::Sender<Certificate>,
 
     /// The store that holds the certificates.
     certificate_store: CertificateStore,
@@ -114,13 +117,13 @@ pub struct BlockSynchronizerHandler {
 impl BlockSynchronizerHandler {
     pub fn new(
         tx_block_synchronizer: metered_channel::Sender<Command>,
-        tx_certificate_fetcher: metered_channel::Sender<Certificate>,
+        tx_certificate_synchronizer: mpsc::Sender<Certificate>,
         certificate_store: CertificateStore,
         certificate_deliver_timeout: Duration,
     ) -> Self {
         Self {
             tx_block_synchronizer,
-            tx_certificate_fetcher,
+            tx_certificate_synchronizer,
             certificate_store,
             certificate_deliver_timeout,
         }
@@ -183,7 +186,7 @@ impl Handler for BlockSynchronizerHandler {
                     if !block_header.fetched_from_storage {
                         // we need to perform causal completion since this
                         // entity has not been fetched from storage.
-                        self.tx_certificate_fetcher
+                        self.tx_certificate_synchronizer
                             .send(block_header.certificate.clone())
                             .await
                             .expect("Couldn't send certificate to CertificateFetcher");

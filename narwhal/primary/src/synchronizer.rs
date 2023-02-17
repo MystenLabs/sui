@@ -501,11 +501,14 @@ impl Synchronizer {
         network_key: NetworkPublicKey,
         mut rx_own_certificate_broadcast: broadcast::Receiver<Certificate>,
     ) {
+        const PUSH_TIMEOUT: Duration = Duration::from_secs(5);
+        const MIN_FAILURE_BACKOFF: Duration = Duration::from_millis(100);
+        const MAX_FAILURE_BACKOFF: Duration = Duration::from_secs(10);
         let peer_id = anemo::PeerId(network_key.0.to_bytes());
         let peer = network.waiting_peer(peer_id);
         let mut client = PrimaryToPrimaryClient::new(peer);
         let mut certificates = VecDeque::new();
-        let mut failure_backoff = 0;
+        let mut failure_backoff = MIN_FAILURE_BACKOFF;
         loop {
             if certificates.is_empty() {
                 match rx_own_certificate_broadcast.recv().await {
@@ -544,18 +547,17 @@ impl Synchronizer {
                 certificates.pop_front();
             }
             let cert = certificates.front().unwrap().clone();
-            // println!("dbg broadcasting {cert:?}");
-            let request = Request::new(PrimaryMessage::Certificate(cert))
-                .with_timeout(Duration::from_secs(10));
+            let request =
+                Request::new(PrimaryMessage::Certificate(cert)).with_timeout(PUSH_TIMEOUT);
             match client.send_message(request).await {
                 Ok(_) => {
                     certificates.pop_front();
-                    failure_backoff = 0;
+                    failure_backoff = MIN_FAILURE_BACKOFF;
                 }
                 Err(status) => {
                     warn!("Failed to send certificate to {name}! {status:?}");
-                    failure_backoff = min((failure_backoff + 1) * 2, 100);
-                    sleep(Duration::from_millis(100) * failure_backoff).await;
+                    failure_backoff = min(failure_backoff * 2, MAX_FAILURE_BACKOFF);
+                    sleep(failure_backoff).await;
                 }
             }
         }
