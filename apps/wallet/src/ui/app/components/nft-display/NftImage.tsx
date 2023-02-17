@@ -27,10 +27,6 @@ const nftImageStyles = cva('overflow-hidden', {
             md: 'w-36 h-36',
             lg: 'w-44 h-44',
         },
-        backgroundColor: {
-            'gray-40': 'bg-gray-40',
-            'placeholder-gradient-01': 'bg-placeholderGradient01',
-        },
     },
     compoundVariants: [
         {
@@ -41,7 +37,6 @@ const nftImageStyles = cva('overflow-hidden', {
     ],
     defaultVariants: {
         borderRadius: 'md',
-        backgroundColor: 'placeholder-gradient-01',
     },
 });
 
@@ -61,7 +56,6 @@ export function NftImage({
     animateHover,
     borderRadius,
     size,
-    backgroundColor,
 }: NftImageProps) {
     const [error, setError] = useState(false);
     const imgCls = cl(
@@ -77,7 +71,6 @@ export function NftImage({
                 animateHover,
                 borderRadius,
                 size,
-                backgroundColor,
             })}
         >
             {error ? (
@@ -85,7 +78,7 @@ export function NftImage({
                     className={cl(
                         imgCls,
                         'flex flex-col flex-nowrap items-center justify-center',
-                        'select-none uppercase text-steel-dark gap-2'
+                        'select-none uppercase text-steel-dark gap-2 bg-gray-40'
                     )}
                     title={title}
                 >

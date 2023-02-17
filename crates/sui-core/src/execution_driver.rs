@@ -91,13 +91,11 @@ pub async fn execution_process(
                     .await;
                 if let Err(e) = res {
                     if attempts == EXECUTION_MAX_ATTEMPTS {
-                        error!("Failed to execute certified transaction after {attempts} attempts! error={e} certificate={:?}", certificate);
-                        authority.metrics.execution_driver_execution_failures.inc();
-                        return;
+                        panic!("Failed to execute certified transaction {digest:?} after {attempts} attempts! error={e} certificate={certificate:?}");
                     }
                     // Assume only transient failure can happen. Permanent failure is probably
                     // a bug. There is nothing that can be done to recover from permanent failures.
-                    error!(tx_digest=?digest, "Failed to execute certified transaction! attempt {attempts}, {e}");
+                    error!(tx_digest=?digest, "Failed to execute certified transaction {digest:?}! attempt {attempts}, {e}");
                     sleep(EXECUTION_FAILURE_RETRY_INTERVAL).await;
                 } else {
                     break;

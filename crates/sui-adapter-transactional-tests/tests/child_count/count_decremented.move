@@ -53,13 +53,13 @@ module test::m {
 
 //# run test::m::mint --sender A
 
-//# view-object 107
+//# view-object 108
 
-//# run test::m::add --sender A --args object(107) 1
+//# run test::m::add --sender A --args object(108) 1
 
-//# run test::m::remove --sender A --args object(107) 1
+//# run test::m::remove --sender A --args object(108) 1
 
-//# view-object 107
+//# view-object 108
 
 //
 // Test remove and add
@@ -67,13 +67,13 @@ module test::m {
 
 //# run test::m::mint --sender A
 
-//# view-object 113
+//# view-object 114
 
-//# run test::m::add --sender A --args object(113) 1
+//# run test::m::add --sender A --args object(114) 1
 
-//# run test::m::remove_and_add --sender A --args object(113) 1
+//# run test::m::remove_and_add --sender A --args object(114) 1
 
-//# view-object 113
+//# view-object 114
 
 //
 // Test remove and wrap
@@ -81,10 +81,10 @@ module test::m {
 
 //# run test::m::mint --sender A
 
-//# view-object 119
+//# view-object 120
 
-//# run test::m::add --sender A --args object(119) 1
+//# run test::m::add --sender A --args object(120) 1
 
-//# run test::m::remove_and_wrap --sender A --args object(119) 1
+//# run test::m::remove_and_wrap --sender A --args object(120) 1
 
-//# view-object 119
+//# view-object 120

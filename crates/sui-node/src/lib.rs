@@ -26,7 +26,6 @@ use sui_core::checkpoints::checkpoint_executor;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::storage::RocksDbStore;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
-use sui_core::transaction_streamer::TransactionStreamer;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
     authority_client::NetworkAuthorityClient,
@@ -36,7 +35,6 @@ use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
 use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
-use sui_json_rpc::streaming_api::TransactionStreamingApiImpl;
 use sui_json_rpc::transaction_builder_api::FullNodeTransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::FullNodeTransactionExecutionApi;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
@@ -68,7 +66,9 @@ pub mod metrics;
 pub use handle::SuiNodeHandle;
 use narwhal_config::SharedWorkerCache;
 use narwhal_types::TransactionsClient;
-use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use sui_core::authority::authority_per_epoch_store::{
+    AuthorityPerEpochStore, EpochStartConfiguration,
+};
 use sui_core::checkpoints::checkpoint_executor::CheckpointExecutionMessage;
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
@@ -162,13 +162,23 @@ impl SuiNode {
         let committee = committee_store
             .get_committee(&cur_epoch)?
             .expect("Committee of the current epoch must exist");
+        let epoch_start_configuration = if cur_epoch == genesis.epoch() {
+            let checkpoint = genesis.checkpoint();
+            let summary = &checkpoint.summary;
+            Some(EpochStartConfiguration {
+                epoch_id: summary.epoch,
+                epoch_start_timestamp_ms: summary.timestamp_ms,
+            })
+        } else {
+            None
+        };
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
             committee,
             &config.db_path().join("store"),
             None,
             EpochMetrics::new(&registry_service.default_registry()),
-            None,
+            epoch_start_configuration,
         );
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
@@ -208,12 +218,6 @@ impl SuiNode {
         let (p2p_network, discovery_handle, state_sync_handle) =
             Self::create_p2p_network(config, state_sync_store, &prometheus_registry)?;
 
-        let transaction_streamer = if is_full_node {
-            Some(Arc::new(TransactionStreamer::new()))
-        } else {
-            None
-        };
-
         let state = AuthorityState::new(
             config.protocol_public_key(),
             secret,
@@ -222,10 +226,10 @@ impl SuiNode {
             committee_store.clone(),
             index_store.clone(),
             event_store,
-            transaction_streamer,
             checkpoint_store.clone(),
             &prometheus_registry,
             &config.authority_store_pruning_config,
+            genesis.objects(),
         )
         .await;
 
@@ -418,13 +422,9 @@ impl SuiNode {
                 .into_inner();
 
             let mut anemo_config = config.p2p_config.anemo_config.clone().unwrap_or_default();
-            if anemo_config.max_frame_size.is_none() {
-                // Temporarily set a default size limit of 8 MiB for all RPCs. This helps us
-                // catch bugs where size limits are missing from other parts of our code.
-                // TODO: remove this and revert to default anemo max_frame_size once size
-                // limits are fully implemented on sui data structures.
-                anemo_config.max_frame_size = Some(8 << 20);
-            }
+            // Set the max_frame_size to be 2 GB to work around the issue of there being too many
+            // delegation events in the epoch change txn.
+            anemo_config.max_frame_size = Some(2 << 30);
 
             let network = Network::bind(config.p2p_config.listen_address)
                 .server_name("sui")
@@ -594,9 +594,9 @@ impl SuiNode {
             authority: config.protocol_public_key(),
             next_reconfiguration_timestamp_ms: epoch_store
                 .epoch_start_configuration()
-                .expect("Failed to load epoch start configuration")
                 .epoch_start_timestamp_ms
-                .saturating_add(config.epoch_duration_ms),
+                .checked_add(config.epoch_duration_ms)
+                .expect("Overflow calculating next_reconfiguration_timestamp_ms"),
             metrics: checkpoint_metrics.clone(),
         });
 
@@ -764,6 +764,10 @@ impl SuiNode {
                 next_epoch_committee
             );
 
+            // If we eventually add tests that exercise safe mode, we will need a configurable way of
+            // guarding against unexpected safe_mode.
+            debug_assert!(!system_state.safe_mode);
+
             info!(
                 next_epoch,
                 "Finished executing all checkpoints in epoch. About to reconfigure the system."
@@ -909,10 +913,6 @@ pub async fn build_server(
 
     if let Some(event_handler) = state.event_handler.clone() {
         server.register_module(EventReadApiImpl::new(state.clone(), event_handler))?;
-    }
-
-    if let Some(tx_streamer) = state.transaction_streamer.clone() {
-        server.register_module(TransactionStreamingApiImpl::new(state.clone(), tx_streamer))?;
     }
 
     if let Some(event_handler) = state.event_handler.clone() {

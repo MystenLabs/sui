@@ -3,7 +3,6 @@
 
 import { expect } from 'vitest';
 import {
-  Base64DataBuffer,
   Ed25519Keypair,
   getEvents,
   getExecutionStatusType,
@@ -14,6 +13,7 @@ import {
   ObjectId,
   RawSigner,
   SUI_SYSTEM_STATE_OBJECT_ID,
+  fromB64,
 } from '../../../src';
 import { retry } from 'ts-retry-promise';
 import { FaucetRateLimitError } from '../../../src/rpc/faucet-client';
@@ -94,9 +94,7 @@ export async function publishPackage(
   );
   const publishTxn = await signer.publish({
     compiledModules: useLocalTxnBuilder
-      ? compiledModules.map((m: any) =>
-          Array.from(new Base64DataBuffer(m).getData()),
-        )
+      ? compiledModules.map((m: any) => Array.from(fromB64(m)))
       : compiledModules,
     gasBudget: DEFAULT_GAS_BUDGET,
   });

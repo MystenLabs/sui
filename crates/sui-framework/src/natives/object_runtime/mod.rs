@@ -22,7 +22,7 @@ use sui_types::{
     error::{ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode},
     object::{MoveObject, Owner},
     storage::{ChildObjectResolver, DeleteKind, WriteKind},
-    SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_CLOCK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
 pub(crate) mod object_store;
@@ -122,7 +122,7 @@ impl<'a> ObjectRuntime<'a> {
 
     pub fn new_id(&mut self, id: ObjectID) -> PartialVMResult<()> {
         // Metered transactions don't have limits for now
-        if self.is_metered && (self.state.new_ids.len() == MAX_NUM_NEW_MOVE_OBJECT_IDS) {
+        if self.is_metered && (self.state.new_ids.len() >= MAX_NUM_NEW_MOVE_OBJECT_IDS) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
                     "Creating more than {MAX_NUM_NEW_MOVE_OBJECT_IDS} IDs is not allowed"
@@ -144,7 +144,7 @@ impl<'a> ObjectRuntime<'a> {
         // This is defensive because `self.state.deleted_ids` may not indeed
         // be called based on the `was_new` flag
         // Metered transactions don't have limits for now
-        if self.is_metered && (self.state.deleted_ids.len() == MAX_NUM_DELETED_MOVE_OBJECT_IDS) {
+        if self.is_metered && (self.state.deleted_ids.len() >= MAX_NUM_DELETED_MOVE_OBJECT_IDS) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
                     "Deleting more than {MAX_NUM_DELETED_MOVE_OBJECT_IDS} IDs is not allowed"
@@ -171,29 +171,29 @@ impl<'a> ObjectRuntime<'a> {
         let id: ObjectID = get_object_id(obj.copy_value()?)?
             .value_as::<AccountAddress>()?
             .into();
-        // - an object is new if it is contained in the new ids or if it is the
-        //   SUI_SYSTEM_STATE_OBJECT_ID which is only transferred in genesis
+        // - An object is new if it is contained in the new ids or if it is one of the objects
+        //   created during genesis (the system state object or clock).
         // - Otherwise, check the input objects for the previous owner
         // - If it was not in the input objects, it must have been wrapped or must have been a
         //   child object
-        let transfer_result =
-            if self.state.new_ids.contains_key(&id) || id == SUI_SYSTEM_STATE_OBJECT_ID {
-                TransferResult::New
-            } else if let Some((_, prev_owner)) = self.state.input_objects.get(&id) {
-                match (&owner, prev_owner) {
-                    // don't use == for dummy values in Shared owner
-                    (Owner::Shared { .. }, Owner::Shared { .. }) => TransferResult::SameOwner,
-                    (new, old) if new == old => TransferResult::SameOwner,
-                    _ => TransferResult::OwnerChanged,
-                }
-            } else {
-                TransferResult::OwnerChanged
-            };
+        let is_framework_obj = [SUI_SYSTEM_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID].contains(&id);
+        let transfer_result = if self.state.new_ids.contains_key(&id) || is_framework_obj {
+            TransferResult::New
+        } else if let Some((_, prev_owner)) = self.state.input_objects.get(&id) {
+            match (&owner, prev_owner) {
+                // don't use == for dummy values in Shared owner
+                (Owner::Shared { .. }, Owner::Shared { .. }) => TransferResult::SameOwner,
+                (new, old) if new == old => TransferResult::SameOwner,
+                _ => TransferResult::OwnerChanged,
+            }
+        } else {
+            TransferResult::OwnerChanged
+        };
 
         // Metered transactions don't have limits for now
         if self.is_metered
-            && (self.state.transfers.len() == MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS)
-            && (id != SUI_SYSTEM_STATE_OBJECT_ID)
+            && (self.state.transfers.len() >= MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS)
+            && !is_framework_obj
         {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
@@ -208,7 +208,7 @@ impl<'a> ObjectRuntime<'a> {
     }
 
     pub fn emit_event(&mut self, tag: StructTag, event: Value) -> PartialVMResult<()> {
-        if self.state.events.len() == (MAX_NUM_EVENT_EMIT as usize) {
+        if self.state.events.len() >= (MAX_NUM_EVENT_EMIT as usize) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
                     "Emitting more than {MAX_NUM_EVENT_EMIT} events is not allowed"

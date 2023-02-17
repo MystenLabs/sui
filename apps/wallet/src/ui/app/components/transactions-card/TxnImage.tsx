@@ -17,7 +17,6 @@ export function TxnImage({ id }: { id: string }) {
                 name={nftMeta.name}
                 src={nftMeta.url}
             />
-
             <div className="flex flex-col gap-1 justify-center break-all w-56">
                 {nftMeta.name && (
                     <Text

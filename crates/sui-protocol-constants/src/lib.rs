@@ -67,6 +67,9 @@ pub const MAX_NUM_DELETED_MOVE_OBJECT_IDS: usize = 2048;
 /// Maximum number of IDs that a single transaction can transfer. Enforced by the VM during execution.
 pub const MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS: usize = 2048;
 
+/// Maximum size of a Move user event. Enforced by the VM during execution.
+pub const MAX_EVENT_EMIT_SIZE: u64 = 256 * 1024;
+
 // === Execution gas costs ====
 // note: per-instruction and native function gas costs live in the sui-cost-tables crate
 
@@ -116,9 +119,9 @@ pub const OBJ_METADATA_COST_NON_REFUNDABLE: u64 = 50;
 
 /// === Tokenomics ===
 
-// TODO: this should be changed to u64.
 /// Sender of a txn that touches an object will get 99% of the storage rebate back.
-pub const STORAGE_REBATE_RATE: f64 = 0.99;
+/// In basis point.
+pub const STORAGE_REBATE_RATE: u64 = 9900;
 
 /// 5% of the storage fund's share of rewards are reinvested into the storage fund.
 /// In basis point.

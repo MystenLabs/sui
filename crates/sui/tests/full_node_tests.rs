@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
 use std::ops::Neg;
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -16,7 +15,7 @@ use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_json_rpc_types::{
     type_and_fields_from_move_struct, EventPage, SuiEvent, SuiEventEnvelope, SuiEventFilter,
     SuiExecuteTransactionResponse, SuiExecutionStatus, SuiMoveStruct, SuiMoveValue,
-    SuiTransactionFilter, SuiTransactionResponse,
+    SuiTransactionResponse,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
@@ -425,7 +424,7 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
         })
         .await?;
     // Check that it has been executed.
-    info.into_executed_for_testing();
+    info.status.into_effects_for_testing();
 
     Ok(())
 }
@@ -515,67 +514,6 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
         .flat_map(|(a, b)| std::iter::once(a).chain(std::iter::once(b)))
         .collect();
     wait_for_all_txes(digests, node.state().clone()).await;
-
-    Ok(())
-}
-
-#[sim_test]
-async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
-
-    // Start a new fullnode that is not on the write path
-    let fullnode = test_cluster.start_fullnode().await.unwrap();
-    let ws_client = fullnode.ws_client;
-    let node = fullnode.sui_node;
-
-    let context = &mut test_cluster.wallet;
-
-    let mut sub: Subscription<SuiTransactionResponse> = ws_client
-        .subscribe(
-            "sui_subscribeTransaction",
-            rpc_params![SuiTransactionFilter::Any],
-            "sui_unsubscribeTransaction",
-        )
-        .await
-        .unwrap();
-
-    let mut expected_digests = HashSet::new();
-    for _i in 0..3 {
-        let (_, _, _, digest, _, _) = transfer_coin(context).await?;
-        expected_digests.insert(digest);
-    }
-
-    wait_for_all_txes(
-        expected_digests.iter().cloned().collect(),
-        node.state().clone(),
-    )
-    .await;
-
-    // Wait for streaming
-    let mut actual_digests = HashSet::new();
-    for _ in &expected_digests {
-        match timeout(Duration::from_secs(3), sub.next()).await {
-            Ok(Some(Ok(resp))) => {
-                actual_digests.insert(resp.certificate.transaction_digest);
-            }
-            other => panic!(
-                "Failed to get Ok item from transaction streaming, but {:?}",
-                other
-            ),
-        };
-    }
-
-    // No more
-    match timeout(Duration::from_secs(3), sub.next()).await {
-        Err(_) => (),
-        other => panic!(
-            "Expect to time out because no new txs are coming in. Got {:?}",
-            other
-        ),
-    }
-
-    // Check the digests match
-    assert_eq!(expected_digests, actual_digests);
 
     Ok(())
 }
@@ -957,7 +895,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     } = rx.recv().await.unwrap().unwrap();
     let (ct, cte, is_executed_locally) = *res;
     assert_eq!(*ct.unwrap().digest(), digest);
-    assert_eq!(*certified_txn.digest(), digest);
+    assert_eq!(*certified_txn.unwrap().digest(), digest);
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(is_executed_locally);
     // verify that the node has sequenced and executed the txn
@@ -982,7 +920,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     } = rx.recv().await.unwrap().unwrap();
     let (ct, cte, is_executed_locally) = *res;
     assert_eq!(*ct.unwrap().digest(), digest);
-    assert_eq!(*certified_txn.digest(), digest);
+    assert_eq!(*certified_txn.unwrap().digest(), digest);
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(!is_executed_locally);
     wait_for_tx(digest, node.state().clone()).await;

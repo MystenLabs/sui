@@ -239,7 +239,7 @@ impl ConsensusConfig {
 pub struct CheckpointExecutorConfig {
     /// Upper bound on the number of checkpoints that can be concurrently executed
     ///
-    /// If unspecified, this will default to `100`
+    /// If unspecified, this will default to `200`
     #[serde(default = "default_checkpoint_execution_max_concurrency")]
     pub checkpoint_execution_max_concurrency: usize,
 
@@ -253,7 +253,7 @@ pub struct CheckpointExecutorConfig {
 }
 
 fn default_checkpoint_execution_max_concurrency() -> usize {
-    100
+    200
 }
 
 fn default_local_execution_timeout_sec() -> u64 {

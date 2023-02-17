@@ -27,7 +27,7 @@ fn main() -> Result<()> {
                 .name("transaction")
                 .route_name("Transaction")
                 .input_type("sui_types::messages::Transaction")
-                .output_type("sui_types::messages::TransactionInfoResponse")
+                .output_type("sui_types::messages::HandleTransactionResponse")
                 .codec_path(codec_path)
                 .build(),
         )
@@ -94,15 +94,6 @@ fn build_anemo_services(out_dir: &Path) {
     let discovery = anemo_build::manual::Service::builder()
         .name("Discovery")
         .package("sui")
-        .method(
-            anemo_build::manual::Method::builder()
-                .name("get_external_address")
-                .route_name("GetExternalAddress")
-                .request_type("()")
-                .response_type("std::net::SocketAddr")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
-                .build(),
-        )
         .method(
             anemo_build::manual::Method::builder()
                 .name("get_known_peers")

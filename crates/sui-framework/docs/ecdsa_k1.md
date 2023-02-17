@@ -72,6 +72,19 @@ applied to Secp256k1 signatures.
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_ecdsa_k1_decompress_pubkey"></a>
 
 ## Function `decompress_pubkey`
@@ -92,6 +105,19 @@ otherwise throw error.
 
 
 <pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_decompress_pubkey">decompress_pubkey</a>(pubkey: &<a href="">vector</a>&lt;u8&gt;): <a href="">vector</a>&lt;u8&gt;;
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
 
 
@@ -129,6 +155,19 @@ If the signature is valid to the pubkey and hashed message, return true. Else fa
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_ecdsa_k1_secp256k1_verify_recoverable"></a>
 
 ## Function `secp256k1_verify_recoverable`
@@ -154,6 +193,19 @@ If the signature is valid to the pubkey and hashed message, return true. Else fa
 
 
 <pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_secp256k1_verify_recoverable">secp256k1_verify_recoverable</a>(signature: &<a href="">vector</a>&lt;u8&gt;, public_key: &<a href="">vector</a>&lt;u8&gt;, hashed_msg: &<a href="">vector</a>&lt;u8&gt;): bool;
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
 
 

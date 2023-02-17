@@ -14,7 +14,7 @@ use sui_protocol_constants::{
     REWARD_SLASHING_RATE, STAKE_SUBSIDY_RATE, STORAGE_FUND_REINVEST_RATE,
 };
 use sui_types::coin::{transfer_coin, update_input_coins, Coin};
-use sui_types::committee::EpochId;
+use sui_types::epoch_data::EpochData;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
@@ -23,11 +23,15 @@ use sui_types::id::UID;
 use sui_types::messages::ExecutionFailureStatus;
 #[cfg(test)]
 use sui_types::messages::InputObjects;
-use sui_types::messages::{GenesisTransaction, ObjectArg, Pay, PayAllSui, PaySui, TransactionKind};
+use sui_types::messages::{
+    ConsensusCommitPrologue, GenesisTransaction, ObjectArg, Pay, PayAllSui, PaySui, TransactionKind,
+};
 use sui_types::object::{Data, MoveObject, Owner};
 use sui_types::storage::SingleTxContext;
 use sui_types::storage::{ChildObjectResolver, DeleteKind, ParentSync, WriteKind};
-use sui_types::sui_system_state::ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME;
+use sui_types::sui_system_state::{
+    ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME,
+};
 #[cfg(test)]
 use sui_types::temporary_store;
 use sui_types::temporary_store::InnerTemporaryStore;
@@ -44,7 +48,8 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_types::{
-    MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    MOVE_STDLIB_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 
 use sui_types::temporary_store::TemporaryStore;
@@ -64,13 +69,13 @@ pub fn execute_transaction_to_effects<
     move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
     gas_status: SuiGasStatus,
-    epoch: EpochId,
+    epoch_data: &EpochData,
 ) -> (
     InnerTemporaryStore,
     TransactionEffects,
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
-    let mut tx_ctx = TxContext::new(&transaction_signer, &transaction_digest, epoch);
+    let mut tx_ctx = TxContext::new(&transaction_signer, &transaction_digest, epoch_data);
 
     let (gas_cost_summary, execution_result) = execute_transaction::<Mode, _>(
         &mut temporary_store,
@@ -107,6 +112,7 @@ pub fn execute_transaction_to_effects<
         gas_cost_summary,
         status,
         gas_object_ref,
+        epoch_data.epoch_id(),
     );
     (inner, effects, execution_result)
 }
@@ -325,6 +331,12 @@ fn execution_loop<
                     }
                 }
             }
+            SingleTransactionKind::ConsensusCommitPrologue(prologue) => {
+                setup_consensus_commit(prologue, temporary_store, tx_ctx, move_vm, gas_status)?
+            }
+            SingleTransactionKind::ProgrammableTransaction(_) => {
+                unreachable!("programmable transactions are not yet supported")
+            }
         };
     }
     Ok(results)
@@ -389,6 +401,38 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             tx_ctx,
         )?;
     }
+    Ok(())
+}
+
+/// Perform metadata updates in preparation for the transactions in the upcoming checkpoint:
+///
+/// - Set the timestamp for the `Clock` shared object from the timestamp in the header from
+///   consensus.
+fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
+    prologue: ConsensusCommitPrologue,
+    temporary_store: &mut TemporaryStore<S>,
+    tx_ctx: &mut TxContext,
+    move_vm: &Arc<MoveVM>,
+    gas_status: &mut SuiGasStatus,
+) -> Result<(), ExecutionError> {
+    adapter::execute::<execution_mode::Normal, _, _>(
+        move_vm,
+        temporary_store,
+        ModuleId::new(SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_MODULE_NAME.to_owned()),
+        &CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME.to_owned(),
+        vec![],
+        vec![
+            CallArg::Object(ObjectArg::SharedObject {
+                id: SUI_CLOCK_OBJECT_ID,
+                initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+                mutable: true,
+            }),
+            CallArg::Pure(bcs::to_bytes(&prologue.checkpoint_start_timestamp_ms).unwrap()),
+        ],
+        gas_status.create_move_gas_status(),
+        tx_ctx,
+    )?;
+
     Ok(())
 }
 

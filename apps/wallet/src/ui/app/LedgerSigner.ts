@@ -1,11 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    SignerWithProvider,
-    Ed25519PublicKey,
-    Base64DataBuffer,
-} from '@mysten/sui.js';
+import { toB64 } from '@mysten/bcs';
+import { SignerWithProvider, Ed25519PublicKey } from '@mysten/sui.js';
 
 import type Transport from '@ledgerhq/hw-transport';
 import type AppSui from 'hw-app-sui';
@@ -14,6 +11,7 @@ import type {
     SignaturePubkeyPair,
     SuiAddress,
     TxnDataSerializer,
+    SerializedSignature,
 } from '@mysten/sui.js';
 
 export class LedgerSigner extends SignerWithProvider {
@@ -50,15 +48,14 @@ export class LedgerSigner extends SignerWithProvider {
         return new Ed25519PublicKey(publicKey);
     }
 
-    async signData(data: Base64DataBuffer): Promise<SignaturePubkeyPair> {
-        const { signature } = await (
-            await this.#appSui
-        ).signTransaction(this.#derivationPath, data.getData());
-        return {
-            signatureScheme: 'ED25519',
-            signature: new Base64DataBuffer(signature),
-            pubKey: await this.getPublicKey(),
-        };
+    async signData(data: Uint8Array): Promise<SerializedSignature> {
+        return toB64(
+            await (
+                await (
+                    await this.#appSui
+                ).signTransaction(this.#derivationPath, data)
+            ).signature
+        );
     }
 
     connect(provider: Provider): SignerWithProvider {

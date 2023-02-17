@@ -7,7 +7,6 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { forwardRef, type Ref } from 'react';
 
-import Loading from '../components/loading';
 import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
 
 import type { ReactNode } from 'react';
@@ -16,7 +15,7 @@ const styles = cva(
     [
         'transition no-underline outline-none bg-transparent group',
         'flex flex-row flex-nowrap items-center justify-center gap-2',
-        'cursor-pointer text-body font-semibold max-w-full min-w-0',
+        'cursor-pointer text-body font-semibold max-w-full min-w-0 w-full',
     ],
     {
         variants: {
@@ -54,10 +53,17 @@ const styles = cva(
                     'active:text-issue/70',
                     'disabled:opacity-40 disabled:text-issue-dark/50',
                 ],
+                plain: [
+                    'bg-transparent text-steel-darker border-none',
+                    'visited:text-steel-darker',
+                    'active:text-steel-darker/70',
+                    'disabled:text-steel-dark/50',
+                ],
             },
             size: {
                 tall: ['h-11 px-5 rounded-xl'],
                 narrow: ['h-9 py-2.5 px-5 rounded-lg'],
+                tiny: ['h-5 rounded-lg px-2'],
             },
         },
     }
@@ -92,18 +98,18 @@ const iconStyles = cva('flex', {
                 'group-active:text-issue/70',
                 'group-disabled:text-issue/50',
             ],
+            plain: [],
         },
     },
 });
 
 export interface ButtonProps
     extends VariantProps<typeof styles>,
-        Omit<VariantProps<typeof iconStyles>, 'disabled'>,
+        VariantProps<typeof iconStyles>,
         Omit<ButtonOrLinkProps, 'className'> {
     before?: ReactNode;
     after?: ReactNode;
-    text: ReactNode;
-    loading?: boolean;
+    text?: ReactNode;
 }
 
 export const Button = forwardRef(
@@ -115,27 +121,23 @@ export const Button = forwardRef(
             before,
             after,
             text,
-            loading = false,
             ...otherProps
         }: ButtonProps,
         ref: Ref<HTMLAnchorElement | HTMLButtonElement>
     ) => {
         return (
             <ButtonOrLink
-                disabled={disabled || loading}
                 ref={ref}
                 className={styles({ variant, size })}
                 {...otherProps}
             >
-                <Loading loading={loading} color="inherit">
-                    {before ? (
-                        <div className={iconStyles({ variant })}>{before}</div>
-                    ) : null}
-                    <div className={'truncate leading-tight'}>{text}</div>
-                    {after ? (
-                        <div className={iconStyles({ variant })}>{after}</div>
-                    ) : null}
-                </Loading>
+                {before ? (
+                    <div className={iconStyles({ variant })}>{before}</div>
+                ) : null}
+                {text ? <div className={'truncate'}>{text}</div> : null}
+                {after ? (
+                    <div className={iconStyles({ variant })}>{after}</div>
+                ) : null}
             </ButtonOrLink>
         );
     }

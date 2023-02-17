@@ -5,6 +5,7 @@ module sui::genesis {
     use std::vector;
 
     use sui::balance;
+    use sui::clock;
     use sui::sui;
     use sui::sui_system;
     use sui::tx_context::TxContext;
@@ -103,6 +104,7 @@ module sui::genesis {
             ));
             i = i + 1;
         };
+
         sui_system::create(
             validators,
             sui_supply,
@@ -113,5 +115,7 @@ module sui::genesis {
             protocol_version,
             epoch_start_timestamp_ms,
         );
+
+        clock::create();
     }
 }

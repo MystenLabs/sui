@@ -19,13 +19,16 @@ use std::str::FromStr;
 
 pub use crate::committee::EpochId;
 use crate::crypto::{
-    AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SuiPublicKey,
+    AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SignatureScheme,
+    SuiPublicKey,
 };
 pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
+use crate::epoch_data::EpochData;
 use crate::error::ExecutionError;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
 use crate::gas_coin::GasCoin;
+use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
 use crate::sui_serde::Readable;
 use fastcrypto::encoding::{Encoding, Hex};
@@ -258,6 +261,28 @@ impl From<&PublicKey> for SuiAddress {
     }
 }
 
+/// A MultiSig address is the first 20 bytes of the hash of
+/// `flag_MultiSig || threshold || flag_1 || pk_1 || weight_1 || ... || flag_n || pk_n || weight_n`
+/// of all participating public keys and its weight.  
+impl From<MultiSigPublicKey> for SuiAddress {
+    fn from(multisig_pk: MultiSigPublicKey) -> Self {
+        let mut hasher = Sha3_256::default();
+        hasher.update([SignatureScheme::MultiSig.flag()]);
+        hasher.update(multisig_pk.threshold().to_le_bytes());
+        multisig_pk.pubkeys().iter().for_each(|(pk, w)| {
+            hasher.update([pk.flag()]);
+            hasher.update(pk.as_ref());
+            hasher.update(w.to_le_bytes());
+        });
+        let g_arr = hasher.finalize();
+
+        let mut res = [0u8; SUI_ADDRESS_LENGTH];
+        // OK to access slice because Sha3_256 should never be shorter than SUI_ADDRESS_LENGTH.
+        res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
+        SuiAddress(res)
+    }
+}
+
 impl TryFrom<&[u8]> for SuiAddress {
     type Error = SuiError;
 
@@ -323,11 +348,11 @@ pub struct TxContext {
 }
 
 impl TxContext {
-    pub fn new(sender: &SuiAddress, digest: &TransactionDigest, epoch: EpochId) -> Self {
+    pub fn new(sender: &SuiAddress, digest: &TransactionDigest, epoch_data: &EpochData) -> Self {
         Self {
             sender: AccountAddress::new(sender.0),
             digest: digest.into_inner().to_vec(),
-            epoch,
+            epoch: epoch_data.epoch_id(),
             ids_created: 0,
         }
     }
@@ -377,13 +402,13 @@ impl TxContext {
         Self::new(
             &SuiAddress::random_for_testing_only(),
             &TransactionDigest::random(),
-            0,
+            &EpochData::genesis(),
         )
     }
 
     // for testing
     pub fn with_sender_for_testing_only(sender: &SuiAddress) -> Self {
-        Self::new(sender, &TransactionDigest::random(), 0)
+        Self::new(sender, &TransactionDigest::random(), &EpochData::genesis())
     }
 }
 

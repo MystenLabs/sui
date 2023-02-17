@@ -219,3 +219,16 @@ Native function for deriving an ID via hash(tx_hash || ids_created)
 
 
 </details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>false</b>;
+</code></pre>
+
+
+
+</details>

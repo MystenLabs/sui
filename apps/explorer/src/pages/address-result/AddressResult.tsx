@@ -7,7 +7,7 @@ import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import TxForID from '../../components/transaction-card/TxForID';
 
-import { Banner } from '~/ui/Banner';
+import { Heading } from '~/ui/Heading';
 import { PageHeader } from '~/ui/PageHeader';
 
 type DataType = {
@@ -27,35 +27,35 @@ function instanceOfDataType(object: any): object is DataType {
 function AddressResult() {
     const { id: addressID } = useParams();
 
-    if (addressID !== undefined) {
-        return (
-            <>
-                <div className="mt-5 mb-10">
-                    <PageHeader type="Address" title={addressID} />
+    return (
+        <div className="space-y-12">
+            <PageHeader type="Address" title={addressID!} />
+
+            <div>
+                <div className="border-b border-gray-45 pb-5 md:mt-12">
+                    <Heading color="gray-90" variant="heading4/semibold">
+                        Owned Objects
+                    </Heading>
                 </div>
-                <div>
-                    <h1>Owned Objects</h1>
-                    <div>
-                        <ErrorBoundary>
-                            <OwnedObjects id={addressID} byAddress />
-                        </ErrorBoundary>
+                <ErrorBoundary>
+                    <OwnedObjects id={addressID!} byAddress />
+                </ErrorBoundary>
+            </div>
+
+            <div>
+                <div className="border-b border-gray-45 pb-5">
+                    <Heading color="gray-90" variant="heading4/semibold">
+                        Transactions
+                    </Heading>
+                </div>
+                <ErrorBoundary>
+                    <div className="mt-2">
+                        <TxForID id={addressID!} category="address" />
                     </div>
-                </div>
-                <div>
-                    <h1>Transactions</h1>
-                    <ErrorBoundary>
-                        <TxForID id={addressID} category="address" />
-                    </ErrorBoundary>
-                </div>
-            </>
-        );
-    } else {
-        return (
-            <Banner variant="error" spacing="lg" fullWidth>
-                Something went wrong
-            </Banner>
-        );
-    }
+                </ErrorBoundary>
+            </div>
+        </div>
+    );
 }
 
 export default AddressResult;

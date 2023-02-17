@@ -18,11 +18,13 @@ import { Logo } from "../components/Validators/Logo";
 import { Refresh } from "../components/your-score/Refresh";
 import { convertToString, useValidators } from "../network/queries/sui-system";
 import { TimeRemaining } from "../components/TimeRemaining";
+import { GameEnding, useGameOverRedirect } from "../components/GameEnding";
 
 /**
  * The Home page.
  */
 export function Home() {
+  useGameOverRedirect();
   const navigate = useNavigate();
   const { data: epoch } = useEpoch();
   const { currentAccount } = useWalletKit();
@@ -52,11 +54,14 @@ export function Home() {
 
   // Whether there's an assignment for the current round (either first one
   // or requested for the round via "Play Round X" button).
-  const hasAssignment = true;
-  !!scorecard && !!epoch && scorecard.data.assignment.epoch == epoch.data.epoch;
+  const hasAssignment =
+    !!scorecard &&
+    !!epoch &&
+    scorecard.data.assignment.epoch == epoch.data.epoch;
 
   return (
     <>
+      <GameEnding />
       <Scoreboard />
       <Round />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -80,7 +85,7 @@ export function Home() {
                     .getElementById(
                       `validator-${assignedValidator.sui_address}`
                     )
-                    ?.scrollIntoView({ behavior: "smooth", block: 'center' });
+                    ?.scrollIntoView({ behavior: "smooth", block: "center" });
                 }}
               >
                 <Logo
