@@ -74,7 +74,7 @@ export function getAmount(
     const amountByRecipient = paySuiData?.recipients.reduce(
         (acc, recipient, index) => {
             const coinType =
-                txKindName === 'PayAllSui'
+                txKindName === 'PaySui'
                     ? SUI_TYPE_ARG
                     : getCoinType(txnEffect, recipient);
             return {
