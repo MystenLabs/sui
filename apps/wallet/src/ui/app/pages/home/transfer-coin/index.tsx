@@ -211,7 +211,6 @@ function TransferCoinPage() {
                 enableReinitialize={true}
             >
                 <SendTokenForm
-                    submitError={sendError}
                     coinType={coinType}
                     balance={coinBalance}
                     gasCostEstimation={gasBudgetEstimation || null}
@@ -229,7 +228,6 @@ function TransferCoinPage() {
                     amount={formData.amount}
                     to={formData.to}
                     gasCostEstimation={gasBudgetEstimation || null}
-                    onClearSubmitError={handleOnClearSubmitError}
                 />
             </Content>
             <Menu

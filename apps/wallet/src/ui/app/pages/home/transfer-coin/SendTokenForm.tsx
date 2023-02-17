@@ -24,7 +24,6 @@ import type { FormValues } from './';
 export type TransferCoinFormProps = {
     coinType: string;
     gasCostEstimation: number | null;
-    onClearSubmitError: () => void;
     onAmountChanged: (amount: bigint) => void;
     balance: bigint | null;
 };
