@@ -103,7 +103,12 @@ impl Inner {
     }
 }
 
-/// The `Synchronizer` provides functions for retrieving missing certificates and batches.
+/// `Synchronizer` helps this primary and other peers stay in sync with each other,
+/// w.r.t. certificates and the DAG. Specifically, it is responsible for
+/// - Validating and accepting certificates received from peers.
+/// - Triggering fetching for certificates and batches.
+/// - Broadcasting created certificates.
+/// `Synchronizer` contains most of the certificate processing logic in Narwhal.
 pub struct Synchronizer {
     /// Internal data that are thread safe.
     inner: Arc<Inner>,

@@ -52,7 +52,7 @@ use store::Store;
 use tokio::{sync::oneshot, time::Instant};
 use tokio::{sync::watch, task::JoinHandle};
 use tower::ServiceBuilder;
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 pub use types::PrimaryMessage;
 use types::{
@@ -668,17 +668,6 @@ impl PrimaryReceiverHandler {
         Ok(None)
     }
 
-    fn deduplicate_and_verify(&self, certificate: &Certificate) -> DagResult<bool> {
-        let digest = certificate.digest();
-        if self.certificate_store.contains(&digest)? {
-            trace!("Certificate {digest:?} has already been processed. Skip processing.");
-            self.metrics.duplicate_certificates_processed.inc();
-            return Ok(false);
-        }
-        certificate.verify(&self.committee.load(), self.worker_cache.clone())?;
-        Ok(true)
-    }
-
     #[allow(clippy::mutable_key_type)]
     async fn process_request_vote(
         &self,
@@ -742,9 +731,6 @@ impl PrimaryReceiverHandler {
         let wait_network = network.clone();
         let mut notifies = Vec::new();
         for certificate in request.body().parents.clone() {
-            if !self.deduplicate_and_verify(&certificate)? {
-                continue;
-            }
             notifies.push(
                 self.synchronizer
                     .accept_certificate_with_wait(certificate, &wait_network),
@@ -923,12 +909,6 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                 )
             })?;
         let PrimaryMessage::Certificate(certificate) = request.into_body();
-        if !self
-            .deduplicate_and_verify(&certificate)
-            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?
-        {
-            return Ok(anemo::Response::new(()));
-        }
         self.synchronizer
             .accept_certificate_with_wait(certificate, &network)
             .await
