@@ -895,6 +895,34 @@ impl AuthorityState {
         Ok(())
     }
 
+    /// Executes the cert to effects without committing it to the database. The effects of the
+    /// change epoch tx are only written to the database after a certified checkpoint has been
+    /// formed and executed by CheckpointExecutor.
+    pub(crate) async fn get_change_epoch_tx_effects(
+        &self,
+        certificate: &VerifiedCertificate,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<VerifiedSignedTransactionEffects> {
+        assert!(certificate
+            .inner()
+            .intent_message
+            .value
+            .kind
+            .is_change_epoch_tx());
+
+        let digest = certificate.digest();
+        // Even though we are not going to write any effects or objects to the db, we still acquire
+        // the proper locks. We may be racing with CheckpointExecutor, which could have received a
+        // certified checkpoint with the change epoch tx in it.
+        let _tx_lock = epoch_store.acquire_tx_lock(digest).await;
+        let _execution_guard = self
+            .database
+            .execution_lock_for_certificate(certificate)
+            .await;
+        let (_, effects) = self.prepare_certificate(certificate, epoch_store).await?;
+        Ok(effects)
+    }
+
     /// prepare_certificate validates the transaction input, and executes the certificate,
     /// returning effects, output objects, events, etc.
     ///
