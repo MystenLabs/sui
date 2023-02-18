@@ -23,26 +23,51 @@ use move_binary_format::{
 use move_bytecode_verifier::absint::{
     AbstractDomain, AbstractInterpreter, JoinResult, TransferFunctions,
 };
+use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
 use std::collections::BTreeMap;
 use sui_types::{
     error::ExecutionError, id::OBJECT_MODULE_NAME, messages::ExecutionFailureStatus,
-    SUI_FRAMEWORK_ADDRESS,
+    sui_system_state::SUI_SYSTEM_MODULE_NAME, SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::verification_failure;
+use crate::{verification_failure, TEST_SCENARIO_MODULE_NAME};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AbstractValue {
-    ID,
-    NonID,
+    Fresh,
+    Other,
 }
+
+type FunctionIdent<'a> = (&'a AccountAddress, &'a IdentStr, &'a IdentStr);
+const OBJECT_NEW: FunctionIdent = (
+    &SUI_FRAMEWORK_ADDRESS,
+    OBJECT_MODULE_NAME,
+    ident_str!("new"),
+);
+const OBJECT_NEW_UID_FROM_HASH: FunctionIdent = (
+    &SUI_FRAMEWORK_ADDRESS,
+    OBJECT_MODULE_NAME,
+    ident_str!("new_uid_from_hash"),
+);
+const TS_NEW_OBJECT: FunctionIdent = (
+    &SUI_FRAMEWORK_ADDRESS,
+    ident_str!(TEST_SCENARIO_MODULE_NAME),
+    ident_str!("new_object"),
+);
+const SUI_SYSTEM_CREATE: FunctionIdent = (
+    &SUI_FRAMEWORK_ADDRESS,
+    SUI_SYSTEM_MODULE_NAME,
+    ident_str!("create"),
+);
+const FRESH_ID_FUNCTIONS: &[FunctionIdent] = &[OBJECT_NEW, OBJECT_NEW_UID_FROM_HASH, TS_NEW_OBJECT];
+const FUNCTIONS_TO_SKIP: &[FunctionIdent] = &[SUI_SYSTEM_CREATE];
 
 impl AbstractValue {
     pub fn join(&self, value: &AbstractValue) -> AbstractValue {
         if self == value {
             *value
         } else {
-            AbstractValue::ID
+            AbstractValue::Other
         }
     }
 }
@@ -63,6 +88,13 @@ fn verify_id_leak(module: &CompiledModule) -> Result<(), ExecutionError> {
             FunctionView::function(module, FunctionDefinitionIndex(index as u16), code, handle);
         let initial_state = AbstractState::new(&func_view);
         let mut verifier = IDLeakAnalysis::new(&binary_view, &func_view);
+        let function_to_verify = verifier.cur_function();
+        if FUNCTIONS_TO_SKIP
+            .iter()
+            .any(|to_skip| function_to_verify == *to_skip)
+        {
+            continue;
+        }
         verifier
             .analyze_function(initial_state, &func_view)
             .map_err(|err| {
@@ -98,7 +130,7 @@ impl AbstractState {
         for param_idx in 0..function_view.parameters().len() {
             state
                 .locals
-                .insert(param_idx as LocalIndex, AbstractValue::NonID);
+                .insert(param_idx as LocalIndex, AbstractValue::Other);
         }
 
         state
@@ -110,7 +142,7 @@ impl AbstractDomain for AbstractState {
     fn join(&mut self, state: &AbstractState) -> JoinResult {
         let mut changed = false;
         for (local, value) in &state.locals {
-            let old_value = *self.locals.get(local).unwrap_or(&AbstractValue::NonID);
+            let old_value = *self.locals.get(local).unwrap_or(&AbstractValue::Other);
             changed |= *value != old_value;
             self.locals.insert(*local, value.join(&old_value));
         }
@@ -135,6 +167,28 @@ impl<'a> IDLeakAnalysis<'a> {
             function_view,
             stack: vec![],
         }
+    }
+
+    fn stack_popn(&mut self, n: usize) {
+        let new_len = self.stack.len() - n;
+        self.stack.drain(new_len..);
+    }
+
+    fn resolve_function(&self, function_handle: &FunctionHandle) -> FunctionIdent<'a> {
+        let m = self.binary_view.module_handle_at(function_handle.module);
+        let address = self.binary_view.address_identifier_at(m.address);
+        let module = self.binary_view.identifier_at(m.name);
+        let function = self.binary_view.identifier_at(function_handle.name);
+        (address, module, function)
+    }
+
+    fn cur_function(&self) -> FunctionIdent<'a> {
+        let fdef = self
+            .binary_view
+            .function_def_at(self.function_view.index().unwrap())
+            .unwrap();
+        let handle = self.binary_view.function_handle_at(fdef.function);
+        self.resolve_function(handle)
     }
 }
 
@@ -168,52 +222,32 @@ impl<'a> TransferFunctions for IDLeakAnalysis<'a> {
 
 impl<'a> AbstractInterpreter for IDLeakAnalysis<'a> {}
 
-/// Certain Sui Framework functions can safely take a `ID` by value
-fn is_call_safe_to_leak(verifier: &IDLeakAnalysis, function_handle: &FunctionHandle) -> bool {
-    let m = verifier
-        .binary_view
-        .module_handle_at(function_handle.module);
-    let is_framework =
-        verifier.binary_view.address_identifier_at(m.address) == &SUI_FRAMEWORK_ADDRESS;
-    if !is_framework {
-        return false;
-    }
-
-    // sui::object::delete
-    (verifier.binary_view.identifier_at(m.name) == OBJECT_MODULE_NAME
-        && verifier
-            .binary_view
-            .identifier_at(function_handle.name)
-            .as_str()
-            == "delete") ||
-    // sui::transfer::delete_child_object
-    (verifier.binary_view.identifier_at(m.name).as_str() == "transfer"
-            && verifier
-                .binary_view
-                .identifier_at(function_handle.name)
-                .as_str()
-                == "delete_child_object")
-}
-
 fn call(
     verifier: &mut IDLeakAnalysis,
     function_handle: &FunctionHandle,
 ) -> Result<(), ExecutionError> {
-    let guaranteed_safe = is_call_safe_to_leak(verifier, function_handle);
     let parameters = verifier
         .binary_view
         .signature_at(function_handle.parameters);
-    for _ in 0..parameters.len() {
-        if verifier.stack.pop().unwrap() == AbstractValue::ID && !guaranteed_safe {
-            return Err(verification_failure(
-                "ID leaked through function call.".to_string(),
-            ));
-        }
-    }
+    verifier.stack_popn(parameters.len());
 
     let return_ = verifier.binary_view.signature_at(function_handle.return_);
-    for _ in 0..return_.0.len() {
-        verifier.stack.push(AbstractValue::NonID);
+    let function = verifier.resolve_function(function_handle);
+    if FRESH_ID_FUNCTIONS
+        .iter()
+        .any(|makes_fresh| function == *makes_fresh)
+    {
+        if return_.0.len() != 1 {
+            debug_assert!(false, "{:?} should have a single return value", function);
+            return Err(ExecutionError::from_kind(
+                ExecutionFailureStatus::InvariantViolation,
+            ));
+        }
+        verifier.stack.push(AbstractValue::Fresh);
+    } else {
+        verifier
+            .stack
+            .extend(vec![AbstractValue::Other; return_.0.len()]);
     }
     Ok(())
 }
@@ -229,35 +263,35 @@ fn pack(
     verifier: &mut IDLeakAnalysis,
     struct_def: &StructDefinition,
 ) -> Result<(), ExecutionError> {
-    for _ in 0..num_fields(struct_def) {
-        let value = verifier.stack.pop().unwrap();
-        if value == AbstractValue::ID {
-            return Err(verification_failure(
-                "ID is leaked into a struct.".to_string(),
-            ));
+    // When unpacking, an object whose struct type has key ability must have the first field as
+    // "id". That fields must come from one of the functions that creates a new UID.
+    let handle = verifier
+        .binary_view
+        .struct_handle_at(struct_def.struct_handle);
+    let num_fields = num_fields(struct_def);
+    verifier.stack_popn(num_fields - 1);
+    let last_value = verifier.stack.pop().unwrap();
+    if handle.abilities.has_key() {
+        if last_value != AbstractValue::Fresh {
+            let (cur_package, cur_module, cur_function) = verifier.cur_function();
+            let msg = format!(
+                "Invalid object creation in {cur_package}::{cur_module}::{cur_function}. \
+                Object created without a newly created UID. \
+                The UID must come directly from sui::{}::{}.",
+                OBJECT_NEW.1, OBJECT_NEW.2,
+            );
+            return Err(verification_failure(msg));
         }
     }
-    verifier.stack.push(AbstractValue::NonID);
+    verifier.stack.push(AbstractValue::Other);
     Ok(())
 }
 
 fn unpack(verifier: &mut IDLeakAnalysis, struct_def: &StructDefinition) {
-    // When unpacking, fields of the struct will be pushed to the stack in order.
-    // An object whose struct type has key ability must have the first field as "id",
-    // representing the ID field of the object. It's the focus of our tracking.
-    // The struct_with_key_verifier verifies that the first field must be the id field.
     verifier.stack.pop().unwrap();
-    let handle = verifier
-        .binary_view
-        .struct_handle_at(struct_def.struct_handle);
-    verifier.stack.push(if handle.abilities.has_key() {
-        AbstractValue::ID
-    } else {
-        AbstractValue::NonID
-    });
-    for _ in 1..num_fields(struct_def) {
-        verifier.stack.push(AbstractValue::NonID);
-    }
+    verifier
+        .stack
+        .extend(vec![AbstractValue::Other; num_fields(struct_def)]);
 }
 
 fn execute_inner(
@@ -271,9 +305,9 @@ fn execute_inner(
         Bytecode::Pop => {
             verifier.stack.pop().unwrap();
         }
-        Bytecode::CopyLoc(local) => {
-            let value = state.locals.get(local).unwrap();
-            verifier.stack.push(*value);
+        Bytecode::CopyLoc(_local) => {
+            // cannot copy a UID
+            verifier.stack.push(AbstractValue::Other);
         }
         Bytecode::MoveLoc(local) => {
             let value = state.locals.remove(local).unwrap();
@@ -299,7 +333,7 @@ fn execute_inner(
         | Bytecode::VecLen(_)
         | Bytecode::VecPopBack(_) => {
             verifier.stack.pop().unwrap();
-            verifier.stack.push(AbstractValue::NonID);
+            verifier.stack.push(AbstractValue::Other);
         }
 
         // These bytecodes don't operate on any value.
@@ -329,26 +363,23 @@ fn execute_inner(
         | Bytecode::VecMutBorrow(_) => {
             verifier.stack.pop().unwrap();
             verifier.stack.pop().unwrap();
-            verifier.stack.push(AbstractValue::NonID);
+            verifier.stack.push(AbstractValue::Other);
         }
         Bytecode::WriteRef => {
-            // Top of stack is the reference, and the second element is the value.
             verifier.stack.pop().unwrap();
-            if verifier.stack.pop().unwrap() == AbstractValue::ID {
-                return Err(verification_failure("ID is leaked to a reference.".to_string()));
-            }
+            verifier.stack.pop().unwrap();
         }
 
         // These bytecodes produce references, and hence cannot be ID.
         Bytecode::MutBorrowLoc(_)
-        | Bytecode::ImmBorrowLoc(_) => verifier.stack.push(AbstractValue::NonID),
+        | Bytecode::ImmBorrowLoc(_) => verifier.stack.push(AbstractValue::Other),
 
         | Bytecode::MutBorrowField(_)
         | Bytecode::MutBorrowFieldGeneric(_)
         | Bytecode::ImmBorrowField(_)
         | Bytecode::ImmBorrowFieldGeneric(_) => {
             verifier.stack.pop().unwrap();
-            verifier.stack.push(AbstractValue::NonID);
+            verifier.stack.push(AbstractValue::Other);
         }
 
         // These bytecodes are not allowed, and will be
@@ -377,11 +408,7 @@ fn execute_inner(
         }
 
         Bytecode::Ret => {
-            for _ in 0..verifier.function_view.return_().len() {
-                if verifier.stack.pop().unwrap() == AbstractValue::ID {
-		    return Err(verification_failure("ID leaked through function return.".to_string()));
-                }
-            }
+            verifier.stack_popn(verifier.function_view.return_().len())
         }
 
         Bytecode::BrTrue(_) | Bytecode::BrFalse(_) | Bytecode::Abort => {
@@ -390,7 +417,7 @@ fn execute_inner(
 
         // These bytecodes produce constants, and hence cannot be ID.
         Bytecode::LdTrue | Bytecode::LdFalse | Bytecode::LdU8(_) | Bytecode::LdU16(_)| Bytecode::LdU32(_)  | Bytecode::LdU64(_) | Bytecode::LdU128(_)| Bytecode::LdU256(_)  | Bytecode::LdConst(_) => {
-            verifier.stack.push(AbstractValue::NonID);
+            verifier.stack.push(AbstractValue::Other);
         }
 
         Bytecode::Pack(idx) => {
@@ -413,27 +440,18 @@ fn execute_inner(
         }
 
         Bytecode::VecPack(_, num) => {
-            for _ in 0..*num {
-                if verifier.stack.pop().unwrap() == AbstractValue::ID {
-		    return Err(verification_failure("ID is leaked into a vector.".to_string()));
-                }
-            }
-            verifier.stack.push(AbstractValue::NonID);
+            verifier.stack_popn(*num as usize);
+            verifier.stack.push(AbstractValue::Other);
         }
 
         Bytecode::VecPushBack(_) => {
-            if verifier.stack.pop().unwrap() == AbstractValue::ID {
-		return Err(verification_failure("ID is leaked into a vector.".to_string()));
-            }
+            verifier.stack.pop().unwrap();
             verifier.stack.pop().unwrap();
         }
 
         Bytecode::VecUnpack(_, num) => {
             verifier.stack.pop().unwrap();
-
-            for _ in 0..*num {
-                verifier.stack.push(AbstractValue::NonID);
-            }
+            verifier.stack.extend(vec![AbstractValue::Other; *num as usize])
         }
 
         Bytecode::VecSwap(_) => {
