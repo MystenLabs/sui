@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    SUI_TYPE_ARG,
-    type CoinBalance as CoinBalanceType,
-} from '@mysten/sui.js';
+import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useMemo } from 'react';
 
@@ -15,8 +12,13 @@ import IconLink from './icon-link';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { SuiIcons } from '_font-icons/output/sui-icons';
-import { useAppSelector, useObjectsState, useGetAllBalance } from '_hooks';
-import { GAS_TYPE_ARG, Coin } from '_redux/slices/sui-objects/Coin';
+import {
+    useAppSelector,
+    useObjectsState,
+    useGetAllBalance,
+    useGetCoinBalance,
+} from '_hooks';
+import { Coin } from '_redux/slices/sui-objects/Coin';
 import { AccountSelector } from '_src/ui/app/components/AccountSelector';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
@@ -33,16 +35,13 @@ const emptyWalletDescription = (
     </div>
 );
 
-type TokensProps = {
-    coinBalance: bigint | number;
-    balances: CoinBalanceType[] | [];
-    loading: boolean;
-};
-
-function MyTokens({ coinBalance, balances, loading }: TokensProps) {
+function MyTokens() {
+    const accountAddress = useAppSelector(({ account }) => account.address);
+    const { data: balances, isLoading: loadingBalances } =
+        useGetAllBalance(accountAddress);
     return (
-        <Loading loading={loading}>
-            {balances.length ? (
+        <Loading loading={loadingBalances}>
+            {balances && balances.length ? (
                 <>
                     <div className={st.title}>MY COINS</div>
                     <div className={st.otherCoins}>
@@ -53,12 +52,6 @@ function MyTokens({ coinBalance, balances, loading }: TokensProps) {
                                 key={coinType}
                             />
                         ))}
-                        {coinBalance <= 0 ? (
-                            <div className={st.emptyWallet}>
-                                <FaucetRequestButton trackEventSource="home" />
-                                {emptyWalletDescription}
-                            </div>
-                        ) : null}
                     </div>
                 </>
             ) : (
@@ -75,25 +68,13 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
     const { loading, error, showError } = useObjectsState();
     const activeCoinType = coinType || SUI_TYPE_ARG;
     const accountAddress = useAppSelector(({ account }) => account.address);
-    const { data: coinBalance, isLoading: loadingBalances } = useGetAllBalance({
-        address: accountAddress,
-    });
+    const { data: coinBalance, isLoading: loadingBalances } = useGetCoinBalance(
+        { address: accountAddress, coinType: activeCoinType }
+    );
 
     const tokenBalance = useMemo(() => {
-        if (!coinBalance) return BigInt(0);
-        return (
-            coinBalance.find((coin) => coin.coinType === activeCoinType)
-                ?.totalBalance || BigInt(0)
-        );
-    }, [activeCoinType, coinBalance]);
-
-    const allCoinTypes = useMemo(() => {
-        if (!coinBalance) return [];
-        return coinBalance.map((coin) => coin.coinType);
+        return coinBalance?.totalBalance || BigInt(0);
     }, [coinBalance]);
-
-    const coinTypeWithBalance =
-        coinType || tokenBalance > 0 ? activeCoinType : allCoinTypes[0];
 
     const coinSymbol = useMemo(
         () => Coin.getCoinSymbol(activeCoinType),
@@ -133,13 +114,13 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                     <IconLink
                         icon={SuiIcons.ArrowLeft}
                         to={`/send${
-                            coinTypeWithBalance
+                            coinBalance?.coinType
                                 ? `?${new URLSearchParams({
-                                      type: coinTypeWithBalance,
+                                      type: coinBalance?.coinType,
                                   }).toString()}`
                                 : ''
                         }`}
-                        disabled={!coinTypeWithBalance}
+                        disabled={!tokenBalance}
                         text="Send"
                     />
                     <IconLink
@@ -150,16 +131,12 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                     />
                 </div>
 
-                {activeCoinType === GAS_TYPE_ARG && accountAddress ? (
+                {activeCoinType === SUI_TYPE_ARG && accountAddress ? (
                     <TokenIconLink accountAddress={accountAddress} />
                 ) : null}
 
                 {!coinType ? (
-                    <MyTokens
-                        coinBalance={tokenBalance}
-                        balances={coinBalance || []}
-                        loading={loading}
-                    />
+                    <MyTokens />
                 ) : (
                     <>
                         <div className={cl([st.title, st.tokenActivities])}>
