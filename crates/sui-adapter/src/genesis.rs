@@ -3,6 +3,7 @@
 
 use move_binary_format::CompiledModule;
 use once_cell::sync::Lazy;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectRef, SuiAddress, TxContext};
 use sui_types::clock::Clock;
 use sui_types::epoch_data::EpochData;
@@ -52,7 +53,7 @@ pub fn get_genesis_context() -> TxContext {
 fn create_genesis_module_objects() -> Genesis {
     let sui_modules = sui_framework::get_sui_framework();
     let std_modules = sui_framework::get_move_stdlib();
-    let objects = vec![create_clock()];
+    let objects = vec![create_clock(ProtocolConfig::get_for_max_version())];
     // SAFETY: unwraps safe because genesis packages should never exceed max size
     let packages = vec![
         Object::new_package(std_modules.clone(), TransactionDigest::genesis()).unwrap(),
@@ -66,7 +67,7 @@ fn create_genesis_module_objects() -> Genesis {
     }
 }
 
-fn create_clock() -> Object {
+fn create_clock(protocol_config: &ProtocolConfig) -> Object {
     // SAFETY: unwrap safe because genesis objects should be serializable
     let contents = bcs::to_bytes(&Clock {
         id: UID::new(SUI_CLOCK_OBJECT_ID),
@@ -83,6 +84,7 @@ fn create_clock() -> Object {
             has_public_transfer,
             SUI_CLOCK_OBJECT_SHARED_VERSION,
             contents,
+            protocol_config,
         )
         .unwrap()
     };
