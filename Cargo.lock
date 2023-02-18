@@ -8413,6 +8413,7 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-types",
  "once_cell",
+ "serde 1.0.152",
  "sui-cost-tables",
  "sui-framework",
  "sui-json",
