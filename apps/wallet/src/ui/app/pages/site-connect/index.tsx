@@ -1,17 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeature } from '@growthbook/growthbook-react';
+import { CheckFill12 } from '@mysten/icons';
+import { type SuiAddress } from '@mysten/sui.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
-import Icon, { SuiIcons } from '_components/icon';
+import { SummaryCard } from '../../components/SummaryCard';
+import { WalletListSelect } from '../../components/WalletListSelect';
+import { Text } from '../../shared/text';
 import Loading from '_components/loading';
 import UserApproveContainer from '_components/user-approve-container';
-import { useAppDispatch, useAppSelector } from '_hooks';
+import { useAppDispatch, useAppSelector, useMiddleEllipsis } from '_hooks';
 import {
     permissionsSelectors,
     respondToPermissionRequest,
 } from '_redux/slices/permissions';
+import { FEATURES } from '_src/shared/experimentation/features';
 
 import type { PermissionType } from '_messages/payloads/permissions';
 import type { RootState } from '_redux/RootReducer';
@@ -39,19 +45,24 @@ function SiteConnectPage() {
     const dispatch = useAppDispatch();
     const permissionRequest = useAppSelector(permissionSelector);
     const activeAccount = useAppSelector(({ account }) => account.address);
+    const activeAccountShort = useMiddleEllipsis(activeAccount);
+    const isMultiAccountEnabled = useFeature(FEATURES.WALLET_MULTI_ACCOUNTS).on;
+    const [accountsToConnect, setAccountsToConnect] = useState<SuiAddress[]>(
+        () => (activeAccount ? [activeAccount] : [])
+    );
     const handleOnSubmit = useCallback(
         (allowed: boolean) => {
-            if (requestID && activeAccount) {
+            if (requestID && accountsToConnect) {
                 dispatch(
                     respondToPermissionRequest({
                         id: requestID,
-                        accounts: allowed ? [activeAccount] : [],
+                        accounts: allowed ? accountsToConnect : [],
                         allowed,
                     })
                 );
             }
         },
-        [dispatch, requestID, activeAccount]
+        [dispatch, requestID, accountsToConnect]
     );
     useEffect(() => {
         if (
@@ -97,6 +108,7 @@ function SiteConnectPage() {
                         onSubmit={handleHideWarning}
                         isWarning
                         isConnect
+                        addressHidden
                     >
                         <div className={st.warningWrapper}>
                             <h1 className={st.warningTitle}>
@@ -118,27 +130,57 @@ function SiteConnectPage() {
                         origin={permissionRequest.origin}
                         originFavIcon={permissionRequest.favIcon}
                         approveTitle="Connect"
-                        rejectTitle="Cancel"
+                        rejectTitle="Reject"
                         onSubmit={handleOnSubmit}
                         isConnect
+                        addressHidden
+                        approveDisabled={!accountsToConnect.length}
                     >
-                        <div className={st.label}>App Permissions</div>
-                        <ul className={st.permissions}>
-                            {permissionRequest.permissions.map(
-                                (aPermission) => (
-                                    <li
-                                        key={aPermission}
-                                        className={st.permission}
+                        <SummaryCard
+                            header="Permissions requested"
+                            body={
+                                <ul className={st.permissions}>
+                                    {permissionRequest.permissions.map(
+                                        (aPermission) => (
+                                            <li
+                                                key={aPermission}
+                                                className={st.permission}
+                                            >
+                                                <CheckFill12
+                                                    className={st.checkmark}
+                                                />
+                                                {
+                                                    permissionTypeToTxt[
+                                                        aPermission
+                                                    ]
+                                                }
+                                            </li>
+                                        )
+                                    )}
+                                </ul>
+                            }
+                        />
+                        {isMultiAccountEnabled ? (
+                            <WalletListSelect
+                                title="Connect Accounts"
+                                values={accountsToConnect}
+                                onChange={setAccountsToConnect}
+                            />
+                        ) : (
+                            <SummaryCard
+                                header="Connect To Account"
+                                body={
+                                    <Text
+                                        mono
+                                        color="steel-dark"
+                                        variant="body"
+                                        weight="semibold"
                                     >
-                                        <Icon
-                                            icon={SuiIcons.Checkmark}
-                                            className={st.checkmark}
-                                        />
-                                        {permissionTypeToTxt[aPermission]}
-                                    </li>
-                                )
-                            )}
-                        </ul>
+                                        {activeAccountShort}
+                                    </Text>
+                                }
+                            />
+                        )}
                     </UserApproveContainer>
                 ))}
         </Loading>
