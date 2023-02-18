@@ -400,8 +400,8 @@ const BCS_SPEC = {
     },
   },
   aliases: {
-    ObjectDigest: BCS.BASE64
-  }
+    ObjectDigest: BCS.BASE64,
+  },
 };
 
 const BCS_0_23_SPEC = {
@@ -421,9 +421,9 @@ const BCS_0_23_SPEC = {
   },
   enums: BCS_SPEC.enums,
   aliases: {
-    ObjectDigest: BCS.BASE64
-  }
-}
+    ObjectDigest: BCS.BASE64,
+  },
+};
 
 const BCS_0_24_SPEC = {
   structs: {
@@ -435,8 +435,8 @@ const BCS_0_24_SPEC = {
   },
   enums: BCS_SPEC.enums,
   aliases: {
-    ObjectDigest: BCS.BASE64
-  }
+    ObjectDigest: BCS.BASE64,
+  },
 };
 
 // for version <= 0.26.0
@@ -458,18 +458,18 @@ const BCS_0_26_SPEC = {
   enums: BCS_SPEC.enums,
   aliases: {
     // change in object digest to base58
-    ObjectDigest: BCS.BASE58
-  }
+    ObjectDigest: BCS.BASE58,
+  },
 };
 
-const bcs = new BCS({...getSuiMoveConfig(), types: BCS_SPEC});
+const bcs = new BCS({ ...getSuiMoveConfig(), types: BCS_SPEC });
 registerUTF8String(bcs);
 
 // ========== Backward Compatibility (remove after v0.24 deploys) ===========
-const bcs_0_23 = new BCS({...getSuiMoveConfig(), types: BCS_0_23_SPEC});
+const bcs_0_23 = new BCS({ ...getSuiMoveConfig(), types: BCS_0_23_SPEC });
 registerUTF8String(bcs_0_23);
 
-const bcs_0_24 = new BCS({...getSuiMoveConfig(), types: BCS_0_24_SPEC});
+const bcs_0_24 = new BCS({ ...getSuiMoveConfig(), types: BCS_0_24_SPEC });
 registerUTF8String(bcs_0_24);
 
 const bcs_0_26 = new BCS({ ...getSuiMoveConfig(), types: BCS_0_26_SPEC });
