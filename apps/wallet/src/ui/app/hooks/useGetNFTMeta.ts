@@ -12,8 +12,8 @@ export type NFTMetadata = {
     url: string;
 };
 
-export function useGetNFTMeta(objectID: string): NFTMetadata | null {
-    const { data, isError } = useGetObject(objectID);
+export function useGetNFTMeta(objectID: string) {
+    const { data, isError, isLoading } = useGetObject(objectID);
 
     const nftMeta = useMemo(() => {
         if (isError) return null;
@@ -32,5 +32,8 @@ export function useGetNFTMeta(objectID: string): NFTMetadata | null {
         };
     }, [data, isError]);
 
-    return nftMeta;
+    return {
+        data: nftMeta,
+        isLoading,
+    };
 }
