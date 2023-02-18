@@ -276,6 +276,7 @@ async fn reconfig_with_revert_end_to_end_test() {
 #[sim_test]
 async fn test_passive_reconfig() {
     telemetry_subscribers::init_for_testing();
+    sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(1000)

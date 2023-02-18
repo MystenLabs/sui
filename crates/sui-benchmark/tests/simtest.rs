@@ -60,12 +60,14 @@ mod test {
     #[sim_test(config = "test_config()")]
     #[ignore = "The benchmark client aborts certificates submission when it fails to gather a quorum of acknowledgements. This happens upon epoch change."]
     async fn test_simulated_load_with_reconfig() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 1000).await;
         test_simulated_load(test_cluster, 60).await;
     }
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_basic() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(7, 0).await;
         test_simulated_load(test_cluster, 15).await;
     }
@@ -73,6 +75,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     #[ignore]
     async fn test_simulated_load_restarts() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 0).await;
         let node_restarter = test_cluster
             .random_node_restarter()
@@ -85,6 +88,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     #[ignore]
     async fn test_simulated_load_reconfig_restarts() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 1000).await;
         let node_restarter = test_cluster
             .random_node_restarter()
@@ -97,6 +101,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     #[ignore]
     async fn test_simulated_load_reconfig_crashes() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 1000).await;
 
         struct DeadValidator {
