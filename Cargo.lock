@@ -5029,7 +5029,7 @@ dependencies = [
 [[package]]
 name = "msim"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=95269e60b8570411e0b09ffbd8ac95a506259bdb#95269e60b8570411e0b09ffbd8ac95a506259bdb"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=d9f001161fb8c8362c8644013bb7dc1572bbeb45#d9f001161fb8c8362c8644013bb7dc1572bbeb45"
 dependencies = [
  "ahash 0.7.6",
  "async-task",
@@ -5059,7 +5059,7 @@ dependencies = [
 [[package]]
 name = "msim-macros"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=95269e60b8570411e0b09ffbd8ac95a506259bdb#95269e60b8570411e0b09ffbd8ac95a506259bdb"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=d9f001161fb8c8362c8644013bb7dc1572bbeb45#d9f001161fb8c8362c8644013bb7dc1572bbeb45"
 dependencies = [
  "darling",
  "proc-macro2 1.0.51",
@@ -8382,6 +8382,7 @@ dependencies = [
  "sui-macros",
  "sui-move",
  "sui-node",
+ "sui-protocol-config",
  "sui-sdk",
  "sui-simulator",
  "sui-source-validation",

@@ -544,11 +544,17 @@ impl<S> TemporaryStore<S> {
 
         let mut deleted = vec![];
         let mut wrapped = vec![];
+        let mut unwrapped_then_deleted = vec![];
         for (id, (version, kind)) in &inner.deleted {
             match kind {
-                DeleteKind::Normal | DeleteKind::UnwrapThenDelete => {
+                DeleteKind::Normal => {
                     deleted.push((*id, *version, ObjectDigest::OBJECT_DIGEST_DELETED))
                 }
+                DeleteKind::UnwrapThenDelete => unwrapped_then_deleted.push((
+                    *id,
+                    *version,
+                    ObjectDigest::OBJECT_DIGEST_DELETED,
+                )),
                 DeleteKind::Wrap => {
                     wrapped.push((*id, *version, ObjectDigest::OBJECT_DIGEST_WRAPPED))
                 }
@@ -566,6 +572,7 @@ impl<S> TemporaryStore<S> {
             mutated,
             unwrapped,
             deleted,
+            unwrapped_then_deleted,
             wrapped,
             gas_object: updated_gas_object_info,
             events,

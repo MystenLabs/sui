@@ -8,6 +8,7 @@ use tempfile::tempdir;
 use std::{sync::Arc, time::Duration};
 
 use broadcast::{Receiver, Sender};
+use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::committee::ProtocolVersion;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use tokio::{sync::broadcast, time::timeout};
@@ -178,6 +179,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     let new_epoch_store = authority_state
         .reconfigure(
             &authority_state.epoch_store_for_testing(),
+            SupportedProtocolVersions::SYSTEM_DEFAULT,
             second_committee.committee().clone(),
             sui_system_state,
         )
