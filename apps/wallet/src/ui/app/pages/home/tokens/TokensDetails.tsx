@@ -1,6 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+    SUI_TYPE_ARG,
+    type CoinBalance as CoinBalanceType,
+} from '@mysten/sui.js';
 import cl from 'classnames';
 import { useMemo } from 'react';
 
@@ -11,8 +15,7 @@ import IconLink from './icon-link';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { SuiIcons } from '_font-icons/output/sui-icons';
-import { useAppSelector, useObjectsState } from '_hooks';
-import { accountAggregateBalancesSelector } from '_redux/slices/account';
+import { useAppSelector, useObjectsState, useGetAllBalance } from '_hooks';
 import { GAS_TYPE_ARG, Coin } from '_redux/slices/sui-objects/Coin';
 import { AccountSelector } from '_src/ui/app/components/AccountSelector';
 import PageTitle from '_src/ui/app/shared/PageTitle';
@@ -31,29 +34,23 @@ const emptyWalletDescription = (
 );
 
 type TokensProps = {
-    allCoinTypes: string[];
-    coinBalance: bigint;
-    balances: Record<string, bigint>;
+    coinBalance: bigint | number;
+    balances: CoinBalanceType[] | [];
     loading: boolean;
 };
 
-function MyTokens({
-    allCoinTypes,
-    coinBalance,
-    balances,
-    loading,
-}: TokensProps) {
+function MyTokens({ coinBalance, balances, loading }: TokensProps) {
     return (
         <Loading loading={loading}>
-            {allCoinTypes.length ? (
+            {balances.length ? (
                 <>
                     <div className={st.title}>MY COINS</div>
                     <div className={st.otherCoins}>
-                        {allCoinTypes.map((aCoinType) => (
+                        {balances.map(({ coinType, totalBalance }) => (
                             <CoinBalance
-                                type={aCoinType}
-                                balance={balances[aCoinType] || BigInt(0)}
-                                key={aCoinType}
+                                type={coinType}
+                                balance={totalBalance}
+                                key={coinType}
                             />
                         ))}
                         {coinBalance <= 0 ? (
@@ -76,11 +73,25 @@ function MyTokens({
 
 function TokenDetails({ coinType }: TokenDetailsProps) {
     const { loading, error, showError } = useObjectsState();
-    const activeCoinType = coinType || GAS_TYPE_ARG;
+    const activeCoinType = coinType || SUI_TYPE_ARG;
     const accountAddress = useAppSelector(({ account }) => account.address);
-    const balances = useAppSelector(accountAggregateBalancesSelector);
-    const tokenBalance = balances[activeCoinType] || BigInt(0);
-    const allCoinTypes = useMemo(() => Object.keys(balances), [balances]);
+    const { data: coinBalance, isLoading: loadingBalances } = useGetAllBalance({
+        address: accountAddress || '',
+    });
+
+    const tokenBalance = useMemo(() => {
+        if (!coinBalance) return BigInt(0);
+        return (
+            coinBalance.find((coin) => coin.coinType === activeCoinType)
+                ?.totalBalance || BigInt(0)
+        );
+    }, [activeCoinType, coinBalance]);
+
+    const allCoinTypes = useMemo(() => {
+        if (!coinBalance) return [];
+        return coinBalance.map((coin) => coin.coinType);
+    }, [coinBalance]);
+
     const coinTypeWithBalance =
         coinType || tokenBalance > 0 ? activeCoinType : allCoinTypes[0];
 
@@ -104,7 +115,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                 ) : null}
                 {!coinType && <AccountSelector />}
                 <div className={st.balanceContainer}>
-                    <Loading loading={loading}>
+                    <Loading loading={loading || loadingBalances}>
                         <CoinBalance
                             balance={tokenBalance}
                             type={activeCoinType}
@@ -145,9 +156,8 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 
                 {!coinType ? (
                     <MyTokens
-                        allCoinTypes={allCoinTypes}
                         coinBalance={tokenBalance}
-                        balances={balances}
+                        balances={coinBalance || []}
                         loading={loading}
                     />
                 ) : (
