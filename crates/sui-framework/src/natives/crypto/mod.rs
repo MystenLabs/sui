@@ -11,3 +11,4 @@ pub mod groth16;
 pub mod hash;
 pub mod hmac;
 pub mod tbls;
+pub mod base64;
