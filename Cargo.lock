@@ -8380,6 +8380,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-keys",
  "sui-macros",
+ "sui-move",
  "sui-node",
  "sui-sdk",
  "sui-simulator",
@@ -8914,6 +8915,48 @@ version = "0.7.0"
 dependencies = [
  "once_cell",
  "sui-proc-macros",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-move"
+version = "0.27.0"
+dependencies = [
+ "anyhow",
+ "assert_cmd",
+ "clap 3.2.23",
+ "colored",
+ "const-str",
+ "fastcrypto",
+ "futures",
+ "git-version",
+ "jemalloc-ctl",
+ "jsonrpsee",
+ "move-cli",
+ "move-core-types",
+ "move-package",
+ "move-prover",
+ "move-prover-boogie-backend",
+ "move-stackless-bytecode",
+ "move-unit-test",
+ "mysten-metrics",
+ "prometheus",
+ "rand 0.8.5",
+ "serde 1.0.152",
+ "serde_json",
+ "serde_yaml",
+ "sui-core",
+ "sui-framework",
+ "sui-framework-build",
+ "sui-macros",
+ "sui-node",
+ "sui-simulator",
+ "sui-types",
+ "telemetry-subscribers",
+ "tempfile",
+ "test-utils",
+ "tokio",
+ "tracing",
  "workspace-hack",
 ]
 
