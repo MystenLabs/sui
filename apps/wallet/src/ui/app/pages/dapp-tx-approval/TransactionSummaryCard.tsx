@@ -26,7 +26,7 @@ type TransferSummerCardProps = {
 };
 
 function MiniNFTLink({ id }: { id: string }) {
-    const nftMeta = useGetNFTMeta(id);
+    const { data: nftMeta } = useGetNFTMeta(id);
     return (
         <>
             {nftMeta && (

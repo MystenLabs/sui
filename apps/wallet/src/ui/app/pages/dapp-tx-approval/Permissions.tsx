@@ -21,7 +21,7 @@ interface MetadataGroup {
 }
 
 export function PassedObject({ id, module }: { id: string; module: string }) {
-    const nftMeta = useGetNFTMeta(id);
+    const {data:nftMeta } = useGetNFTMeta(id);
 
     return (
         <div className={st.permissionsContent}>

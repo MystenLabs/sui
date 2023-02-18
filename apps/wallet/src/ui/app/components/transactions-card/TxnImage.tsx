@@ -7,7 +7,7 @@ import { useGetNFTMeta } from '_hooks';
 
 //TODO merge all NFT image displays
 export function TxnImage({ id }: { id: string }) {
-    const nftMeta = useGetNFTMeta(id);
+    const { data: nftMeta } = useGetNFTMeta(id);
 
     return nftMeta?.url ? (
         <div className="flex w-full gap-2">
