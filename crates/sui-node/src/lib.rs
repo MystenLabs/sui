@@ -760,6 +760,8 @@ impl SuiNode {
             let cur_epoch_store = self.state.load_epoch_store_one_call_per_task();
             // Advertise capabilities to committee, if we are a validator.
             if let Some(components) = &*self.validator_components.lock().await {
+                // TODO: without this sleep, the consensus message is not delivered reliably.
+                tokio::time::sleep(Duration::from_millis(100)).await;
                 let transaction =
                     ConsensusTransaction::new_capability_notification(AuthorityCapabilities::new(
                         self.state.name,

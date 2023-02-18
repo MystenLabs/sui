@@ -981,6 +981,8 @@ impl AuthorityPerEpochStore {
     pub fn record_capabilities(&self, capabilities: &AuthorityCapabilities) -> SuiResult {
         info!("received capabilities {:?}", capabilities);
         let authority = &capabilities.authority;
+
+        // Read-compare-write pattern assumes we are only called from the consensus handler task.
         if let Some(cap) = self.tables.authority_capabilities.get(authority)? {
             if cap.generation >= capabilities.generation {
                 debug!(
@@ -994,6 +996,10 @@ impl AuthorityPerEpochStore {
             .authority_capabilities
             .insert(authority, capabilities)?;
         Ok(())
+    }
+
+    pub fn get_capabilities(&self) -> Vec<AuthorityCapabilities> {
+        self.tables.authority_capabilities.values().collect()
     }
 
     /// Returns Ok(true) if 2f+1 end of publish messages were recorded at this point

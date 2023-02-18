@@ -31,8 +31,6 @@ impl ProtocolVersion {
     const MAX_ALLOWED: Self = Self(MAX_PROTOCOL_VERSION + 1);
 
     pub fn new(v: u64) -> Self {
-        assert!(v >= Self::MIN.0, "{:?}", v);
-        assert!(v <= Self::MAX_ALLOWED.0, "{:?}", v);
         Self(v)
     }
 
