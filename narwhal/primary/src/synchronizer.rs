@@ -55,18 +55,18 @@ struct Inner {
     highest_processed_round: AtomicU64,
     /// Highest round of verfied certificate that has been received.
     highest_received_round: AtomicU64,
-    /// The persistent storage.
+    /// The persistent storage tables.
     certificate_store: CertificateStore,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-    /// Send commands to the `CertificateFetcher`.
+    /// Send missing certificates to the `CertificateFetcher`.
     tx_certificate_fetcher: Sender<Certificate>,
-    /// Output all certificates to the consensus layer.
+    /// Output all certificates to the consensus layer. Must send certificates in causal order.
     tx_new_certificates: Sender<Certificate>,
     /// Send valid a quorum of certificates' ids to the `Proposer` (along with their round).
     tx_parents: Sender<(Vec<Certificate>, Round, Epoch)>,
     /// Send own certificates to be broadcasted to all other peers.
     tx_own_certificate_broadcast: broadcast::Sender<Certificate>,
-    /// Get a signal when the round changes.
+    /// Get a signal when the commit round changes.
     rx_consensus_round_updates: watch::Receiver<Round>,
     /// The genesis and its digests.
     genesis: HashMap<CertificateDigest, Certificate>,
@@ -80,8 +80,9 @@ struct Inner {
     certificate_senders: Mutex<JoinSet<()>>,
     /// Aggregates certificates to use as parents for new headers.
     certificates_aggregators: Mutex<BTreeMap<Round, Box<CertificatesAggregator>>>,
-    /// Map of certificates pending to be accepted.
-    pending: Mutex<HashMap<CertificateDigest, broadcast::Sender<()>>>,
+    /// Map of certificates pending to be accepted. This lock also ensures writing a certificate
+    /// into store and sending it to consensus is atomic.
+    pending: tokio::sync::Mutex<HashMap<CertificateDigest, broadcast::Sender<()>>>,
 }
 
 impl Inner {
@@ -158,7 +159,7 @@ impl Synchronizer {
             batch_tasks: Mutex::new(JoinSet::new()),
             certificate_senders: Mutex::new(JoinSet::new()),
             certificates_aggregators: Mutex::new(BTreeMap::new()),
-            pending: Mutex::new(HashMap::new()),
+            pending: tokio::sync::Mutex::new(HashMap::new()),
         });
 
         // Start a task to recover parent certificates for proposer.
@@ -235,32 +236,22 @@ impl Synchronizer {
         Self { inner }
     }
 
-    fn make_genesis(committee: &Committee) -> HashMap<CertificateDigest, Certificate> {
-        Certificate::genesis(committee)
-            .into_iter()
-            .map(|x| (x.digest(), x))
-            .collect()
-    }
-
+    /// Validates the certificate and accepts it into the DAG, if the certificate can be verified
+    /// and has all parents in the certificate store. Otherwise if the certificate has missing
+    /// parents and cannot be accepted immediately, an error is returned.
     pub async fn try_accept_certificate(
         &self,
         certificate: Certificate,
         network: &Network,
     ) -> DagResult<()> {
-        let digest = certificate.digest();
-        let result = self
-            .process_certificate_internal(certificate, network)
-            .await;
-        if result.is_ok() {
-            let mut pending = self.inner.pending.lock();
-            if let Some(sender) = pending.remove(&digest) {
-                let _ = sender.send(());
-            }
-        }
-        result
+        self.process_certificate_internal(certificate, network)
+            .await
     }
 
-    pub async fn accept_certificate_with_wait(
+    /// Validates the certificate and accepts it into the DAG, if the certificate can be verified
+    /// and has all parents in the certificate store. Otherwise if the certificate has missing
+    /// parents, wait until all parents are available to accept the certificate.
+    pub async fn wait_to_accept_certificate(
         &self,
         certificate: Certificate,
         network: &Network,
@@ -271,14 +262,10 @@ impl Synchronizer {
             .await;
         let mut receiver = match result {
             Ok(()) => {
-                let mut pending = self.inner.pending.lock();
-                if let Some(sender) = pending.remove(&digest) {
-                    let _ = sender.send(());
-                }
                 return Ok(());
             }
             Err(DagError::Suspended) => {
-                let mut pending = self.inner.pending.lock();
+                let mut pending = self.inner.pending.lock().await;
                 match pending.entry(digest) {
                     hash_map::Entry::Occupied(entry) => entry.get().subscribe(),
                     hash_map::Entry::Vacant(entry) => {
@@ -293,26 +280,6 @@ impl Synchronizer {
             }
         };
         receiver.recv().await.map_err(|_| DagError::ShuttingDown)
-    }
-
-    async fn sanitize_certificate(&self, certificate: &Certificate) -> DagResult<()> {
-        ensure!(
-            self.inner.committee.epoch() == certificate.epoch(),
-            DagError::InvalidEpoch {
-                expected: self.inner.committee.epoch(),
-                received: certificate.epoch()
-            }
-        );
-        // Ok to drop old certificate, because it will never be included into the consensus dag.
-        let gc_round = self.inner.gc_round.load(Ordering::Acquire);
-        ensure!(
-            gc_round < certificate.round(),
-            DagError::TooOld(certificate.digest().into(), certificate.round(), gc_round)
-        );
-        // Verify the certificate (and the embedded header).
-        certificate
-            .verify(&self.inner.committee, self.inner.worker_cache.clone())
-            .map_err(DagError::from)
     }
 
     pub async fn accept_own_certificate(
@@ -366,6 +333,33 @@ impl Synchronizer {
         );
 
         Ok(())
+    }
+
+    fn make_genesis(committee: &Committee) -> HashMap<CertificateDigest, Certificate> {
+        Certificate::genesis(committee)
+            .into_iter()
+            .map(|x| (x.digest(), x))
+            .collect()
+    }
+
+    async fn sanitize_certificate(&self, certificate: &Certificate) -> DagResult<()> {
+        ensure!(
+            self.inner.committee.epoch() == certificate.epoch(),
+            DagError::InvalidEpoch {
+                expected: self.inner.committee.epoch(),
+                received: certificate.epoch()
+            }
+        );
+        // Ok to drop old certificate, because it will never be included into the consensus dag.
+        let gc_round = self.inner.gc_round.load(Ordering::Acquire);
+        ensure!(
+            gc_round < certificate.round(),
+            DagError::TooOld(certificate.digest().into(), certificate.round(), gc_round)
+        );
+        // Verify the certificate (and the embedded header).
+        certificate
+            .verify(&self.inner.committee, self.inner.worker_cache.clone())
+            .map_err(DagError::from)
     }
 
     async fn process_certificate_internal(
@@ -423,10 +417,10 @@ impl Synchronizer {
         // We can thus continue the processing of the certificate without blocking on batch synchronization.
         let inner = self.inner.clone();
         let header = certificate.header.clone();
-        let network = network.clone();
+        let sync_network = network.clone();
         let max_age = self.inner.gc_depth.saturating_sub(1);
         self.inner.batch_tasks.lock().spawn(async move {
-            Synchronizer::sync_batches_internal(inner, &header, network, max_age).await
+            Synchronizer::sync_batches_internal(inner, &header, sync_network, max_age).await
         });
 
         // Ensure either we have all the ancestors of this certificate, or the parents have been garbage collected.
@@ -446,6 +440,21 @@ impl Synchronizer {
             return Err(DagError::Suspended);
         }
 
+        self.accept_certificate_internal(certificate).await
+    }
+
+    async fn accept_certificate_internal(&self, certificate: Certificate) -> DagResult<()> {
+        // This lock must be held for the scope of the function, to ensure the operations to write
+        // certificate into storage and sending the certificate to consensus is atomic. Otherwise
+        // it would be possible for certificates to be sent to consensus not in causal order,
+        // leading to inconsistencies or consensus forks.
+        let digest = certificate.digest();
+        let mut pending = self.inner.pending.lock().await;
+        if let Some(sender) = pending.remove(&digest) {
+            // Ignore error if there is no more listeners.
+            let _ = sender.send(());
+        }
+
         // Store the certificate. Afterwards, the certificate must be sent to consensus
         // or Narwhal needs to shutdown, to avoid insistencies certificate store and
         // consensus dag.
@@ -457,6 +466,11 @@ impl Synchronizer {
             .highest_processed_round
             .fetch_max(certificate.round(), Ordering::AcqRel)
             .max(certificate.round());
+        let certificate_source = if self.inner.name.eq(&certificate.origin()) {
+            "own"
+        } else {
+            "other"
+        };
         self.inner
             .metrics
             .highest_processed_round
@@ -470,7 +484,6 @@ impl Synchronizer {
 
         // Append the certificate to the aggregator of the
         // corresponding round.
-        let digest = certificate.digest();
         if let Err(e) = self
             .inner
             .append_certificate_in_aggregator(certificate.clone())

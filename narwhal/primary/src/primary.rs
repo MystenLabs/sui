@@ -751,7 +751,7 @@ impl PrimaryReceiverHandler {
         for certificate in request.body().parents.clone() {
             notifies.push(
                 self.synchronizer
-                    .accept_certificate_with_wait(certificate, &wait_network),
+                    .wait_to_accept_certificate(certificate, &wait_network),
             );
         }
         let mut wait_notifies = futures::future::try_join_all(notifies);
@@ -928,7 +928,7 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
             })?;
         let PrimaryMessage::Certificate(certificate) = request.into_body();
         self.synchronizer
-            .accept_certificate_with_wait(certificate, &network)
+            .wait_to_accept_certificate(certificate, &network)
             .await
             .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
         Ok(anemo::Response::new(()))
