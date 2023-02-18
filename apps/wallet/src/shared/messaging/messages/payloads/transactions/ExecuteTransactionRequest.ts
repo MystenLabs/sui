@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiSignAndExecuteTransactionOptions } from '@mysten/wallet-standard';
+import {
+    type SuiSignTransactionInput,
+    type SuiSignAndExecuteTransactionOptions,
+} from '@mysten/wallet-standard';
 
 import { isBasePayload } from '_payloads';
 
@@ -11,6 +14,7 @@ import type { BasePayload, Payload } from '_payloads';
 export type TransactionDataType =
     | {
           type: 'v2';
+          justSign?: boolean;
           data: SignableTransaction;
           options?: SuiSignAndExecuteTransactionOptions;
       }
@@ -27,5 +31,18 @@ export function isExecuteTransactionRequest(
 ): payload is ExecuteTransactionRequest {
     return (
         isBasePayload(payload) && payload.type === 'execute-transaction-request'
+    );
+}
+
+export interface SignTransactionRequest extends BasePayload {
+    type: 'sign-transaction-request';
+    transaction: SuiSignTransactionInput;
+}
+
+export function isSignTransactionRequest(
+    payload: Payload
+): payload is SignTransactionRequest {
+    return (
+        isBasePayload(payload) && payload.type === 'sign-transaction-request'
     );
 }

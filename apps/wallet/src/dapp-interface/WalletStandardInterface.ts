@@ -4,7 +4,10 @@
 import {
     SUI_CHAINS,
     ReadonlyWalletAccount,
-    type SuiSignAndExecuteTransactionFeature,
+    SUI_DEVNET_CHAIN,
+    SUI_TESTNET_CHAIN,
+    SUI_LOCALNET_CHAIN,
+    type SuiFeatures,
     type SuiSignAndExecuteTransactionMethod,
     type ConnectFeature,
     type ConnectMethod,
@@ -12,9 +15,7 @@ import {
     type EventsFeature,
     type EventsOnMethod,
     type EventsListeners,
-    SUI_DEVNET_CHAIN,
-    SUI_TESTNET_CHAIN,
-    SUI_LOCALNET_CHAIN,
+    type SuiSignTransactionMethod,
 } from '@mysten/wallet-standard';
 import mitt, { type Emitter } from 'mitt';
 import { filter, map, type Observable } from 'rxjs';
@@ -41,6 +42,8 @@ import type {
     StakeRequest,
     ExecuteTransactionRequest,
     ExecuteTransactionResponse,
+    SignTransactionRequest,
+    SignTransactionResponse,
 } from '_payloads/transactions';
 import type { NetworkEnvType } from '_src/background/NetworkEnv';
 
@@ -95,7 +98,7 @@ export class SuiWallet implements Wallet {
 
     get features(): ConnectFeature &
         EventsFeature &
-        SuiSignAndExecuteTransactionFeature &
+        SuiFeatures &
         SuiWalletStakeFeature {
         return {
             'standard:connect': {
@@ -105,6 +108,10 @@ export class SuiWallet implements Wallet {
             'standard:events': {
                 version: '1.0.0',
                 on: this.#on,
+            },
+            'sui:signTransaction': {
+                version: '1.0.0',
+                signTransaction: this.#signTransaction,
             },
             'sui:signAndExecuteTransaction': {
                 version: '1.1.0',
@@ -205,6 +212,16 @@ export class SuiWallet implements Wallet {
         await this.#connected();
 
         return { accounts: this.accounts };
+    };
+
+    #signTransaction: SuiSignTransactionMethod = async (input) => {
+        return mapToPromise(
+            this.#send<SignTransactionRequest, SignTransactionResponse>({
+                type: 'sign-transaction-request',
+                transaction: input,
+            }),
+            (response) => response.result
+        );
     };
 
     #signAndExecuteTransaction: SuiSignAndExecuteTransactionMethod = async (
