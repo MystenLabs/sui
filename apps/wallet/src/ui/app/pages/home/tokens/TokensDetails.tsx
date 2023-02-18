@@ -76,7 +76,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
     const activeCoinType = coinType || SUI_TYPE_ARG;
     const accountAddress = useAppSelector(({ account }) => account.address);
     const { data: coinBalance, isLoading: loadingBalances } = useGetAllBalance({
-        address: accountAddress || '',
+        address: accountAddress,
     });
 
     const tokenBalance = useMemo(() => {

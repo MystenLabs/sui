@@ -6,16 +6,16 @@ import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { useRpc } from '_hooks';
 type GetCoinBalanceProps = {
-    address: SuiAddress;
+    address: SuiAddress | null;
 };
 export function useGetAllBalance({
     address,
 }: GetCoinBalanceProps): UseQueryResult<CoinBalance[], unknown> {
     const rpc = useRpc();
     const response = useQuery(
-        // combine address and coinType to make a unique key account for multiple addresses and coins
-        ['coin-balance', address],
-        async () => rpc.getAllBalances(address),
+        ['get-all-balance', address],
+        // address should be available before this method is called
+        () => rpc.getAllBalances(address || ''),
         // refetchInterval is set to 2 seconds
         { enabled: !!address, refetchInterval: 20000 }
     );
