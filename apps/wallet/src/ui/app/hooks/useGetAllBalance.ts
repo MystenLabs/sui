@@ -14,8 +14,7 @@ export function useGetAllBalance({
     const rpc = useRpc();
     const response = useQuery(
         ['get-all-balance', address],
-        // address should be available before this method is called
-        () => rpc.getAllBalances(address || ''),
+        () => rpc.getAllBalances(address!),
         // refetchInterval is set to 2 seconds
         { enabled: !!address, refetchInterval: 20000 }
     );

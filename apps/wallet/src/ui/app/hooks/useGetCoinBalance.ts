@@ -17,8 +17,7 @@ export function useGetCoinBalance({
     const response = useQuery(
         // combine address and coinType to make a unique key account for multiple addresses and coins
         ['coin-balance', address + coinType],
-        // address should be available before this method is called
-        async () => rpc.getBalance(address || '', coinType),
+        async () => rpc.getBalance(address!, coinType),
         { enabled: !!address && !!coinType, refetchInterval: 20000 }
     );
 
