@@ -37,15 +37,15 @@ const emptyWalletDescription = (
 
 function MyTokens() {
     const accountAddress = useAppSelector(({ account }) => account.address);
-    const { data: balances, isLoading: loadingBalances } =
+    const { data: balance, isLoading: loadingBalances } =
         useGetAllBalance(accountAddress);
     return (
         <Loading loading={loadingBalances}>
-            {balances?.length ? (
+            {balance?.length ? (
                 <>
                     <div className={st.title}>MY COINS</div>
                     <div className={st.otherCoins}>
-                        {balances.map(({ coinType, totalBalance }) => (
+                        {balance.map(({ coinType, totalBalance }) => (
                             <CoinBalance
                                 type={coinType}
                                 balance={totalBalance}
