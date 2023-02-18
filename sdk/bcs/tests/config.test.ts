@@ -36,11 +36,14 @@ describe("serde", () => {
       vectorType: "array",
       types: {
         structs: {
-          SiteConfig: { tags: "array[string]" },
+          SiteConfig: { tags: "array[Name]" },
         },
         enums: {
           "Option[T]": { none: null, some: "T" },
         },
+        aliases: {
+            Name: 'string'
+        }
       },
     });
 

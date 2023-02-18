@@ -452,6 +452,7 @@ export type BcsConfig = {
   types?: {
     structs?: { [key: string]: StructTypeDefinition };
     enums?: { [key: string]: EnumTypeDefinition };
+    aliases?: { [key: string]: string }
   };
   /**
    * Whether to auto-register primitive types on launch.
@@ -533,6 +534,13 @@ export class BCS {
     if (schema.types && schema.types.enums) {
       for (let name of Object.keys(schema.types.enums)) {
         this.registerEnumType(name, schema.types.enums[name]);
+      }
+    }
+
+    // Register aliases if they were passed.
+    if (schema.types && schema.types.aliases) {
+      for (let name of Object.keys(schema.types.aliases)) {
+        this.registerAlias(name, schema.types.aliases[name]);
       }
     }
 
