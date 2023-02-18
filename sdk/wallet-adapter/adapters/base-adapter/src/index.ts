@@ -4,6 +4,7 @@
 import {
   ExecuteTransactionRequestType,
   SignableTransaction,
+  SignedTransaction,
   SuiAddress,
   SuiTransactionResponse,
 } from "@mysten/sui.js";
@@ -26,6 +27,7 @@ export interface WalletAdapter {
     event: E,
     callback: WalletAdapterEvents[E]
   ) => () => void;
+  signTransaction(transaction: SignableTransaction): Promise<SignedTransaction>;
   /**
    * Suggest a transaction for the user to sign. Supports all valid transaction types.
    */

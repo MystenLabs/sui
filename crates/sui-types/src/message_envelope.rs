@@ -51,6 +51,10 @@ impl<T: Message, S> Envelope<T, S> {
         self.data
     }
 
+    pub fn into_sig(self) -> S {
+        self.auth_signature
+    }
+
     pub fn into_data_and_sig(self) -> (T, S) {
         let Self {
             data,

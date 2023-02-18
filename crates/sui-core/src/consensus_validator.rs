@@ -107,8 +107,8 @@ impl TransactionValidator for SuiTxValidator {
 
         // all certificates had valid signatures, schedule them for execution prior to sequencing
         // which is unnecessary for owned object transactions.
-        self.epoch_store
-            .insert_pending_certificates(&owned_tx_certs)?;
+        // It is unnecessary to write to pending_certificates table because the certs will be written
+        // via Narwhal output.
         self.transaction_manager
             .enqueue(owned_tx_certs, &self.epoch_store)
             .wrap_err("Failed to schedule certificates for execution")
@@ -209,7 +209,7 @@ mod tests {
             .into_iter()
             .map(|mut cert| {
                 // set it to an all-zero user signature
-                cert.tx_signature =
+                cert.tx_signatures[0] =
                     GenericSignature::Signature(sui_types::crypto::Signature::Ed25519SuiSignature(
                         Ed25519SuiSignature::default(),
                     ));

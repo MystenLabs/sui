@@ -321,20 +321,18 @@ pub async fn get_transaction(tx_digest: TransactionDigest, genesis: PathBuf) -> 
         .map(|r| {
             let key =
                 r.2.as_ref()
-                    .map(|ok_result| match ok_result {
-                        TransactionInfoResponse::Signed(_) => None,
-                        TransactionInfoResponse::Executed(_, effects) => Some(effects.digest()),
+                    .map(|ok_result| match &ok_result.status {
+                        TransactionStatus::Signed(_) => None,
+                        TransactionStatus::Executed(_, effects) => Some(effects.digest()),
                     })
                     .ok();
             (key, r)
         })
         .sorted_by(|(k1, _), (k2, _)| Ord::cmp(k1, k2))
         .group_by(|(_, r)| {
-            r.2.as_ref().map(|ok_result| match ok_result {
-                TransactionInfoResponse::Signed(_) => None,
-                TransactionInfoResponse::Executed(_, effects) => {
-                    Some((effects.data(), effects.digest()))
-                }
+            r.2.as_ref().map(|ok_result| match &ok_result.status {
+                TransactionStatus::Signed(_) => None,
+                TransactionStatus::Executed(_, effects) => Some((effects.data(), effects.digest())),
             })
         });
     let mut s = String::new();
@@ -487,15 +485,10 @@ pub(crate) fn make_anemo_config() -> anemo_cli::Config {
         // Sui discovery
         .add_service(
             "Discovery",
-            anemo_cli::ServiceInfo::new()
-                .add_method(
-                    "GetExternalAddress",
-                    anemo_cli::ron_method!(DiscoveryClient, get_external_address, ()),
-                )
-                .add_method(
-                    "GetKnownPeers",
-                    anemo_cli::ron_method!(DiscoveryClient, get_known_peers, ()),
-                ),
+            anemo_cli::ServiceInfo::new().add_method(
+                "GetKnownPeers",
+                anemo_cli::ron_method!(DiscoveryClient, get_known_peers, ()),
+            ),
         )
         // Sui state sync
         .add_service(

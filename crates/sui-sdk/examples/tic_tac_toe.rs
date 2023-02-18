@@ -102,7 +102,8 @@ impl TicTacToe {
             .client
             .quorum_driver()
             .execute_transaction(
-                Transaction::from_data(create_game_call, Intent::default(), signature).verify()?,
+                Transaction::from_data(create_game_call, Intent::default(), vec![signature])
+                    .verify()?,
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?;
@@ -198,7 +199,7 @@ impl TicTacToe {
                 .client
                 .quorum_driver()
                 .execute_transaction(
-                    Transaction::from_data(place_mark_call, Intent::default(), signature)
+                    Transaction::from_data(place_mark_call, Intent::default(), vec![signature])
                         .verify()?,
                     Some(ExecuteTransactionRequestType::WaitForLocalExecution),
                 )

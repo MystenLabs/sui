@@ -13,10 +13,7 @@ use move_vm_types::{
     values::{GlobalValue, Value},
 };
 use std::collections::{BTreeMap, BTreeSet};
-use sui_protocol_constants::{
-    MAX_NUM_DELETED_MOVE_OBJECT_IDS, MAX_NUM_EVENT_EMIT, MAX_NUM_NEW_MOVE_OBJECT_IDS,
-    MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS,
-};
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     error::{ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode},
@@ -66,7 +63,7 @@ pub struct RuntimeResults {
 
 #[derive(Default)]
 pub(crate) struct ObjectRuntimeState {
-    pub(crate) input_objects: BTreeMap<ObjectID, (/* by_value */ bool, Owner)>,
+    pub(crate) input_objects: BTreeMap<ObjectID, Owner>,
     // new ids from object::new
     new_ids: Set<ObjectID>,
     // ids passed to object::delete
@@ -75,6 +72,26 @@ pub(crate) struct ObjectRuntimeState {
     // TODO these struct tags can be removed if type_to_type_tag was exposed in the session
     transfers: LinkedHashMap<ObjectID, (Owner, Type, StructTag, Value)>,
     events: Vec<(StructTag, Value)>,
+}
+
+pub(crate) struct LocalProtocolConfig {
+    pub(crate) max_num_deleted_move_object_ids: usize,
+    pub(crate) max_num_event_emit: u64,
+    pub(crate) max_num_new_move_object_ids: usize,
+    pub(crate) max_num_transfered_move_object_ids: usize,
+    pub(crate) max_event_emit_size: u64,
+}
+
+impl LocalProtocolConfig {
+    fn new(constants: &ProtocolConfig) -> Self {
+        Self {
+            max_num_deleted_move_object_ids: constants.max_num_deleted_move_object_ids(),
+            max_num_event_emit: constants.max_num_event_emit(),
+            max_num_new_move_object_ids: constants.max_num_new_move_object_ids(),
+            max_num_transfered_move_object_ids: constants.max_num_transfered_move_object_ids(),
+            max_event_emit_size: constants.max_event_emit_size(),
+        }
+    }
 }
 
 #[derive(Tid)]
@@ -86,6 +103,8 @@ pub struct ObjectRuntime<'a> {
     pub(crate) state: ObjectRuntimeState,
     // whether or not this TX is gas metered
     is_metered: bool,
+
+    pub(crate) constants: LocalProtocolConfig,
 }
 
 pub enum TransferResult {
@@ -103,8 +122,9 @@ impl TestInventories {
 impl<'a> ObjectRuntime<'a> {
     pub fn new(
         object_resolver: Box<dyn ChildObjectResolver + 'a>,
-        input_objects: BTreeMap<ObjectID, (/* by_value */ bool, Owner)>,
+        input_objects: BTreeMap<ObjectID, Owner>,
         is_metered: bool,
+        protocol_config: &ProtocolConfig,
     ) -> Self {
         Self {
             object_store: ObjectStore::new(object_resolver),
@@ -117,15 +137,19 @@ impl<'a> ObjectRuntime<'a> {
                 events: vec![],
             },
             is_metered,
+            constants: LocalProtocolConfig::new(protocol_config),
         }
     }
 
     pub fn new_id(&mut self, id: ObjectID) -> PartialVMResult<()> {
         // Metered transactions don't have limits for now
-        if self.is_metered && (self.state.new_ids.len() == MAX_NUM_NEW_MOVE_OBJECT_IDS) {
+        if self.is_metered
+            && (self.state.new_ids.len() >= self.constants.max_num_new_move_object_ids)
+        {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
-                    "Creating more than {MAX_NUM_NEW_MOVE_OBJECT_IDS} IDs is not allowed"
+                    "Creating more than {} IDs is not allowed",
+                    self.constants.max_num_new_move_object_ids
                 ))
                 .with_sub_status(
                     VMMemoryLimitExceededSubStatusCode::NEW_ID_COUNT_LIMIT_EXCEEDED as u64,
@@ -144,10 +168,13 @@ impl<'a> ObjectRuntime<'a> {
         // This is defensive because `self.state.deleted_ids` may not indeed
         // be called based on the `was_new` flag
         // Metered transactions don't have limits for now
-        if self.is_metered && (self.state.deleted_ids.len() == MAX_NUM_DELETED_MOVE_OBJECT_IDS) {
+        if self.is_metered
+            && (self.state.deleted_ids.len() >= self.constants.max_num_deleted_move_object_ids)
+        {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
-                    "Deleting more than {MAX_NUM_DELETED_MOVE_OBJECT_IDS} IDs is not allowed"
+                    "Deleting more than {} IDs is not allowed",
+                    self.constants.max_num_deleted_move_object_ids
                 ))
                 .with_sub_status(
                     VMMemoryLimitExceededSubStatusCode::DELETED_ID_COUNT_LIMIT_EXCEEDED as u64,
@@ -179,7 +206,7 @@ impl<'a> ObjectRuntime<'a> {
         let is_framework_obj = [SUI_SYSTEM_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID].contains(&id);
         let transfer_result = if self.state.new_ids.contains_key(&id) || is_framework_obj {
             TransferResult::New
-        } else if let Some((_, prev_owner)) = self.state.input_objects.get(&id) {
+        } else if let Some(prev_owner) = self.state.input_objects.get(&id) {
             match (&owner, prev_owner) {
                 // don't use == for dummy values in Shared owner
                 (Owner::Shared { .. }, Owner::Shared { .. }) => TransferResult::SameOwner,
@@ -192,12 +219,13 @@ impl<'a> ObjectRuntime<'a> {
 
         // Metered transactions don't have limits for now
         if self.is_metered
-            && (self.state.transfers.len() == MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS)
+            && (self.state.transfers.len() >= self.constants.max_num_transfered_move_object_ids)
             && !is_framework_obj
         {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
-                    "Transfering more than {MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS} IDs is not allowed"
+                    "Transfering more than {} IDs is not allowed",
+                    self.constants.max_num_transfered_move_object_ids
                 ))
                 .with_sub_status(
                     VMMemoryLimitExceededSubStatusCode::TRANSFER_ID_COUNT_LIMIT_EXCEEDED as u64,
@@ -208,10 +236,11 @@ impl<'a> ObjectRuntime<'a> {
     }
 
     pub fn emit_event(&mut self, tag: StructTag, event: Value) -> PartialVMResult<()> {
-        if self.state.events.len() == (MAX_NUM_EVENT_EMIT as usize) {
+        if self.state.events.len() >= (self.constants.max_num_event_emit as usize) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
-                    "Emitting more than {MAX_NUM_EVENT_EMIT} events is not allowed"
+                    "Emitting more than {} events is not allowed",
+                    self.constants.max_num_event_emit
                 ))
                 .with_sub_status(
                     VMMemoryLimitExceededSubStatusCode::EVENT_COUNT_LIMIT_EXCEEDED as u64,
@@ -277,9 +306,12 @@ impl<'a> ObjectRuntime<'a> {
         std::mem::take(&mut self.state)
     }
 
-    pub fn finish(mut self) -> Result<RuntimeResults, ExecutionError> {
+    pub fn finish(
+        mut self,
+        by_value_inputs: BTreeSet<ObjectID>,
+    ) -> Result<RuntimeResults, ExecutionError> {
         let child_effects = self.object_store.take_effects();
-        self.state.finish(child_effects)
+        self.state.finish(by_value_inputs, child_effects)
     }
 
     pub(crate) fn all_active_child_objects(
@@ -300,6 +332,7 @@ impl ObjectRuntimeState {
     /// - Passes through user events
     pub(crate) fn finish(
         mut self,
+        by_value_inputs: BTreeSet<ObjectID>,
         child_object_effects: BTreeMap<ObjectID, ChildObjectEffect>,
     ) -> Result<RuntimeResults, ExecutionError> {
         let mut wrapped_children = BTreeSet::new();
@@ -359,7 +392,7 @@ impl ObjectRuntimeState {
         } = self;
         let input_owner_map = input_objects
             .iter()
-            .filter_map(|(id, (_by_value, owner))| match owner {
+            .filter_map(|(id, owner)| match owner {
                 Owner::AddressOwner(_) | Owner::Shared { .. } | Owner::Immutable => None,
                 Owner::ObjectOwner(parent) => Some((*id, (*parent).into())),
             })
@@ -404,12 +437,9 @@ impl ObjectRuntimeState {
             })
             .collect();
         // remaining by value objects must be wrapped
-        let remaining_by_value_objects = input_objects
+        let remaining_by_value_objects = by_value_inputs
             .into_iter()
-            .filter(|(id, (by_value, _))| {
-                *by_value && !writes.contains_key(id) && !deletions.contains_key(id)
-            })
-            .map(|(id, _)| id)
+            .filter(|id| !writes.contains_key(id) && !deletions.contains_key(id))
             .collect::<Vec<_>>();
         for id in remaining_by_value_objects {
             deletions.insert(id, DeleteKind::Wrap);

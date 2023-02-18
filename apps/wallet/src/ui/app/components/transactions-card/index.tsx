@@ -73,14 +73,12 @@ export function TransactionCard({
     const transferAmount = useMemo(() => {
         // Find SUI transfer amount
         const amountTransfersSui = transfer.find(
-            ({ receiverAddress, coinType }) =>
-                receiverAddress === address && coinType === SUI_TYPE_ARG
+            ({ coinType }) => coinType === SUI_TYPE_ARG
         );
 
         // Find non-SUI transfer amount
         const amountTransfersNonSui = transfer.find(
-            ({ receiverAddress, coinType }) =>
-                receiverAddress === address && coinType !== SUI_TYPE_ARG
+            ({ coinType }) => coinType !== SUI_TYPE_ARG
         );
 
         return {
@@ -93,7 +91,7 @@ export function TransactionCard({
                 amountTransfersNonSui?.coinType ||
                 null,
         };
-    }, [address, transfer]);
+    }, [transfer]);
 
     const recipientAddress = useGetTxnRecipientAddress({ txn, address });
 
@@ -144,6 +142,14 @@ export function TransactionCard({
         moveCallLabel === 'Staked' ||
         moveCallLabel === 'Unstaked';
 
+    const transferAmountComponent = transferAmount.coinType &&
+        transferAmount.amount && (
+            <CoinBalance
+                amount={Math.abs(transferAmount.amount)}
+                coinType={transferAmount.coinType}
+            />
+        );
+
     return (
         <Link
             to={`/receipt?${new URLSearchParams({
@@ -160,20 +166,23 @@ export function TransactionCard({
                 </div>
                 <div className="flex flex-col w-full gap-1.5">
                     {error ? (
-                        <div className="flex flex-col w-full gap-1.5">
-                            <Text color="gray-90" weight="medium">
-                                Transaction Failed
-                            </Text>
-
-                            <div className="flex break-all">
-                                <Text
-                                    variant="subtitle"
-                                    weight="medium"
-                                    color="issue-dark"
-                                >
-                                    {error}
+                        <div className="flex w-full justify-between">
+                            <div className="flex flex-col w-full gap-1.5">
+                                <Text color="gray-90" weight="medium">
+                                    Transaction Failed
                                 </Text>
+
+                                <div className="flex break-all">
+                                    <Text
+                                        variant="subtitle"
+                                        weight="medium"
+                                        color="issue-dark"
+                                    >
+                                        {error}
+                                    </Text>
+                                </div>
                             </div>
+                            {transferAmountComponent}
                         </div>
                     ) : (
                         <div className="flex w-full justify-between flex-col ">
@@ -192,15 +201,8 @@ export function TransactionCard({
                                         </Text>
                                     )}
                                 </div>
-                                {transferAmount.coinType &&
-                                    transferAmount.amount && (
-                                        <CoinBalance
-                                            amount={Math.abs(
-                                                transferAmount.amount
-                                            )}
-                                            coinType={transferAmount.coinType}
-                                        />
-                                    )}
+
+                                {transferAmountComponent}
                             </div>
                             <div className="flex flex-col w-full gap-1.5">
                                 <TxnTypeLabel

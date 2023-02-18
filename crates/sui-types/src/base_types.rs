@@ -20,15 +20,17 @@ use std::str::FromStr;
 pub use crate::committee::EpochId;
 use crate::crypto::{
     AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SignatureScheme,
-    SuiPublicKey,
+    SuiPublicKey, SuiSignature,
 };
 pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
-use crate::error::ExecutionError;
+use crate::epoch_data::EpochData;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
+use crate::error::{ExecutionError, SuiResult};
 use crate::gas_coin::GasCoin;
 use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
+use crate::signature::GenericSignature;
 use crate::sui_serde::Readable;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::{HashFunction, Sha3_256};
@@ -282,6 +284,25 @@ impl From<MultiSigPublicKey> for SuiAddress {
     }
 }
 
+impl TryFrom<&GenericSignature> for SuiAddress {
+    type Error = SuiError;
+    fn try_from(sig: &GenericSignature) -> SuiResult<Self> {
+        Ok(match sig {
+            GenericSignature::Signature(sig) => {
+                let scheme = sig.scheme();
+                let pub_key_bytes = sig.public_key_bytes();
+                let pub_key = PublicKey::try_from_bytes(scheme, pub_key_bytes).map_err(|e| {
+                    SuiError::InvalidSignature {
+                        error: e.to_string(),
+                    }
+                })?;
+                SuiAddress::from(&pub_key)
+            }
+            GenericSignature::MultiSig(ms) => ms.multisig_pk.clone().into(),
+        })
+    }
+}
+
 impl TryFrom<&[u8]> for SuiAddress {
     type Error = SuiError;
 
@@ -347,11 +368,11 @@ pub struct TxContext {
 }
 
 impl TxContext {
-    pub fn new(sender: &SuiAddress, digest: &TransactionDigest, epoch: EpochId) -> Self {
+    pub fn new(sender: &SuiAddress, digest: &TransactionDigest, epoch_data: &EpochData) -> Self {
         Self {
             sender: AccountAddress::new(sender.0),
             digest: digest.into_inner().to_vec(),
-            epoch,
+            epoch: epoch_data.epoch_id(),
             ids_created: 0,
         }
     }
@@ -401,13 +422,13 @@ impl TxContext {
         Self::new(
             &SuiAddress::random_for_testing_only(),
             &TransactionDigest::random(),
-            0,
+            &EpochData::genesis(),
         )
     }
 
     // for testing
     pub fn with_sender_for_testing_only(sender: &SuiAddress) -> Self {
-        Self::new(sender, &TransactionDigest::random(), 0)
+        Self::new(sender, &TransactionDigest::random(), &EpochData::genesis())
     }
 }
 

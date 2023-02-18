@@ -11,7 +11,7 @@ use sui_benchmark::drivers::bench_driver::BenchDriver;
 use sui_benchmark::drivers::driver::Driver;
 use sui_benchmark::drivers::BenchmarkCmp;
 use sui_benchmark::drivers::BenchmarkStats;
-use sui_protocol_constants::{MAX_NUM_NEW_MOVE_OBJECT_IDS, MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS};
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 
 use sui_node::metrics;
 
@@ -52,11 +52,20 @@ use tokio::sync::Barrier;
 async fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
 
-    if (opts.gas_request_chunk_size > MAX_NUM_NEW_MOVE_OBJECT_IDS as u64)
-        || (opts.gas_request_chunk_size > MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS as u64)
+    // TODO: query the network for the current protocol version.
+    let protocol_config = match opts.protocol_version {
+        Some(v) => ProtocolConfig::get_for_version(ProtocolVersion::new(v)),
+        None => ProtocolConfig::get_for_max_version().clone(),
+    };
+
+    let max_num_new_move_object_ids = protocol_config.max_num_new_move_object_ids();
+    let max_num_transfered_move_object_ids = protocol_config.max_num_transfered_move_object_ids();
+
+    if (opts.gas_request_chunk_size > max_num_new_move_object_ids as u64)
+        || (opts.gas_request_chunk_size > max_num_transfered_move_object_ids as u64)
     {
         eprintln!(
-            "`gas-request-chunk-size` must be less than the maximum number of new IDs {MAX_NUM_NEW_MOVE_OBJECT_IDS} and the maximum number of transferred IDs {MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS}",
+            "`gas-request-chunk-size` must be less than the maximum number of new IDs {max_num_new_move_object_ids} and the maximum number of transferred IDs {max_num_transfered_move_object_ids}",
         );
     }
 

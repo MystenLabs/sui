@@ -1028,6 +1028,7 @@ impl AuthorityStore {
             .chain(effects.unwrapped.iter())
             .map(|(r, _)| r)
             .chain(effects.deleted.iter())
+            .chain(effects.unwrapped_then_deleted.iter())
             .chain(effects.wrapped.iter());
         write_batch = write_batch.delete_batch(&self.perpetual_tables.parent_sync, all_new_refs)?;
 

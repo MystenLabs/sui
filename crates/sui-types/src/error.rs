@@ -106,6 +106,10 @@ pub enum SuiError {
     // Signature verification
     #[error("Signature is not valid: {}", error)]
     InvalidSignature { error: String },
+    #[error("Required Signature from {signer} is absent.")]
+    SignerSignatureAbsent { signer: String },
+    #[error("Expect {actual} signer signatures but got {expected}.")]
+    SignerSignatureNumberMismatch { expected: usize, actual: usize },
     #[error("Sender Signature must be verified separately from Authority Signature")]
     SenderSigUnbatchable,
     #[error("Value was not signed by the correct sender: {}", error)]
@@ -138,14 +142,6 @@ pub enum SuiError {
     CertificateRequiresQuorum,
     #[error("Authority {authority_name:?} could not sync certificate: {err:?}")]
     CertificateSyncError { authority_name: String, err: String },
-    #[error(
-        "The given sequence number ({given_sequence:?}) must match the next expected sequence ({expected_sequence:?}) number of the object ({object_id:?})"
-    )]
-    UnexpectedSequenceNumber {
-        object_id: ObjectID,
-        expected_sequence: SequenceNumber,
-        given_sequence: SequenceNumber,
-    },
     #[error("Invalid Authority Bitmap: {}", error)]
     InvalidAuthorityBitmap { error: String },
     #[error("Transaction certificate processing failed: {err}")]
@@ -333,6 +329,17 @@ pub enum SuiError {
         gas_balance: u128,
         gas_budget: u128,
         gas_price: u64,
+    },
+    #[error("Transaction kind does not support Sponsored Transaction")]
+    UnsupportedSponsoredTransactionKind,
+    #[error(
+        "Gas price {:?} under reference gas price (RGP) {:?}",
+        gas_price,
+        reference_gas_price
+    )]
+    GasPriceUnderRGP {
+        gas_price: u64,
+        reference_gas_price: u64,
     },
 
     // Internal state errors
@@ -699,6 +706,7 @@ impl SuiError {
             SuiError::GasBudgetTooHigh { .. } => (false, true),
             SuiError::GasBudgetTooLow { .. } => (false, true),
             SuiError::GasBalanceTooLowToCoverGasBudget { .. } => (false, true),
+            SuiError::GasPriceUnderRGP { .. } => (false, true),
             _ => (false, false),
         }
     }

@@ -47,7 +47,7 @@ move-vm-types.workspace = true
 narwhal-config = { path = "../../narwhal/config" }
 narwhal-crypto = { path = "../../narwhal/crypto" }
 sui-cost-tables = { path = "../sui-cost-tables"}
-sui-protocol-constants = { path = "../sui-protocol-constants" }
+sui-protocol-config = { path = "../sui-protocol-config" }
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
 

@@ -42,10 +42,7 @@ use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
 
-#[cfg(not(test))]
-use sui_protocol_constants::MAX_TRANSACTIONS_PER_CHECKPOINT;
-#[cfg(test)]
-use sui_protocol_constants::MAX_TRANSACTIONS_PER_CHECKPOINT_FOR_TESTING;
+use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 
 use sui_storage::{
     event_store::{EventStoreType, SqlEventStore},
@@ -66,7 +63,9 @@ pub mod metrics;
 pub use handle::SuiNodeHandle;
 use narwhal_config::SharedWorkerCache;
 use narwhal_types::TransactionsClient;
-use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use sui_core::authority::authority_per_epoch_store::{
+    AuthorityPerEpochStore, EpochStartConfiguration,
+};
 use sui_core::checkpoints::checkpoint_executor::CheckpointExecutionMessage;
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
@@ -97,6 +96,7 @@ pub struct ValidatorComponents {
     sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
 }
 use sui_json_rpc::governance_api::GovernanceReadApi;
+use sui_types::sui_system_state::SuiSystemState;
 
 pub struct SuiNode {
     config: NodeConfig,
@@ -122,6 +122,15 @@ impl SuiNode {
         config: &NodeConfig,
         registry_service: RegistryService,
     ) -> Result<Arc<SuiNode>> {
+        let mut config = config.clone();
+        if config.supported_protocol_versions.is_none() {
+            info!(
+                "populating config.supported_protocol_versions with default {:?}",
+                SupportedProtocolVersions::SYSTEM_DEFAULT
+            );
+            config.supported_protocol_versions = Some(SupportedProtocolVersions::SYSTEM_DEFAULT);
+        }
+
         // TODO: maybe have a config enum that takes care of this for us.
         let is_validator = config.consensus_config().is_some();
         let is_full_node = !is_validator;
@@ -160,13 +169,20 @@ impl SuiNode {
         let committee = committee_store
             .get_committee(&cur_epoch)?
             .expect("Committee of the current epoch must exist");
+        let epoch_start_configuration = if cur_epoch == genesis.epoch() {
+            Some(EpochStartConfiguration {
+                system_state: genesis.sui_system_object(),
+            })
+        } else {
+            None
+        };
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
             committee,
             &config.db_path().join("store"),
             None,
             EpochMetrics::new(&registry_service.default_registry()),
-            None,
+            epoch_start_configuration,
         );
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
@@ -204,11 +220,12 @@ impl SuiNode {
         };
 
         let (p2p_network, discovery_handle, state_sync_handle) =
-            Self::create_p2p_network(config, state_sync_store, &prometheus_registry)?;
+            Self::create_p2p_network(&config, state_sync_store, &prometheus_registry)?;
 
         let state = AuthorityState::new(
             config.protocol_public_key(),
             secret,
+            config.supported_protocol_versions.unwrap(),
             store,
             epoch_store.clone(),
             committee_store.clone(),
@@ -217,6 +234,7 @@ impl SuiNode {
             checkpoint_store.clone(),
             &prometheus_registry,
             &config.authority_store_pruning_config,
+            genesis.objects(),
         )
         .await;
 
@@ -258,14 +276,14 @@ impl SuiNode {
         let json_rpc_service = build_server(
             state.clone(),
             &transaction_orchestrator.clone(),
-            config,
+            &config,
             &prometheus_registry,
         )
         .await?;
 
         let validator_components = if state.is_validator(&epoch_store) {
             let components = Self::construct_validator_components(
-                config,
+                &config,
                 state.clone(),
                 epoch_store.clone(),
                 checkpoint_store.clone(),
@@ -281,7 +299,7 @@ impl SuiNode {
         };
 
         let node = Self {
-            config: config.clone(),
+            config,
             validator_components: Mutex::new(validator_components),
             _json_rpc_service: json_rpc_service,
             state,
@@ -409,13 +427,9 @@ impl SuiNode {
                 .into_inner();
 
             let mut anemo_config = config.p2p_config.anemo_config.clone().unwrap_or_default();
-            if anemo_config.max_frame_size.is_none() {
-                // Temporarily set a default size limit of 8 MiB for all RPCs. This helps us
-                // catch bugs where size limits are missing from other parts of our code.
-                // TODO: remove this and revert to default anemo max_frame_size once size
-                // limits are fully implemented on sui data structures.
-                anemo_config.max_frame_size = Some(8 << 20);
-            }
+            // Set the max_frame_size to be 2 GB to work around the issue of there being too many
+            // delegation events in the epoch change txn.
+            anemo_config.max_frame_size = Some(2 << 30);
 
             let network = Network::bind(config.p2p_config.listen_address)
                 .server_name("sui")
@@ -585,17 +599,14 @@ impl SuiNode {
             authority: config.protocol_public_key(),
             next_reconfiguration_timestamp_ms: epoch_store
                 .epoch_start_configuration()
-                .expect("Failed to load epoch start configuration")
-                .epoch_start_timestamp_ms
-                .saturating_add(config.epoch_duration_ms),
+                .epoch_start_timestamp_ms()
+                .checked_add(config.epoch_duration_ms)
+                .expect("Overflow calculating next_reconfiguration_timestamp_ms"),
             metrics: checkpoint_metrics.clone(),
         });
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
-        #[cfg(test)]
-        let max_tx_per_checkpoint = MAX_TRANSACTIONS_PER_CHECKPOINT_FOR_TESTING;
-        #[cfg(not(test))]
-        let max_tx_per_checkpoint = MAX_TRANSACTIONS_PER_CHECKPOINT;
+        let max_tx_per_checkpoint = max_tx_per_checkpoint(epoch_store.protocol_config());
 
         CheckpointService::spawn(
             state.clone(),
@@ -787,11 +798,7 @@ impl SuiNode {
                 narwhal_manager.shutdown().await;
 
                 let new_epoch_store = self
-                    .reconfigure_state(
-                        &cur_epoch_store,
-                        next_epoch_committee,
-                        system_state.epoch_start_timestamp_ms,
-                    )
+                    .reconfigure_state(&cur_epoch_store, next_epoch_committee, system_state)
                     .await;
 
                 narwhal_epoch_data_remover
@@ -822,11 +829,7 @@ impl SuiNode {
                 }
             } else {
                 let new_epoch_store = self
-                    .reconfigure_state(
-                        &cur_epoch_store,
-                        next_epoch_committee,
-                        system_state.epoch_start_timestamp_ms,
-                    )
+                    .reconfigure_state(&cur_epoch_store, next_epoch_committee, system_state)
                     .await;
 
                 if self.state.is_validator(&new_epoch_store) {
@@ -856,15 +859,16 @@ impl SuiNode {
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
         next_epoch_committee: Committee,
-        epoch_start_timestamp_ms: u64,
+        sui_system_state: SuiSystemState,
     ) -> Arc<AuthorityPerEpochStore> {
         let next_epoch = next_epoch_committee.epoch();
         let new_epoch_store = self
             .state
             .reconfigure(
                 cur_epoch_store,
+                self.config.supported_protocol_versions.unwrap(),
                 next_epoch_committee,
-                epoch_start_timestamp_ms,
+                sui_system_state,
             )
             .await
             .expect("Reconfigure authority state cannot fail");
@@ -913,4 +917,14 @@ pub async fn build_server(
     let rpc_server_handle = server.start(config.json_rpc_address).await?;
 
     Ok(Some(rpc_server_handle))
+}
+
+#[cfg(test)]
+fn max_tx_per_checkpoint(protocol_config: &ProtocolConfig) -> usize {
+    protocol_config.max_transactions_per_checkpoint()
+}
+
+#[cfg(not(test))]
+fn max_tx_per_checkpoint(_: &ProtocolConfig) -> usize {
+    2
 }

@@ -224,11 +224,10 @@ validators:
           - 101
           - 131
           - 137
-        name:
-          - 48
-        description: []
-        image_url: []
-        project_url: []
+        name: "0"
+        description: ""
+        image_url: ""
+        project_url: ""
         net_address: []
         consensus_address: []
         worker_address: []
@@ -477,11 +476,10 @@ validators:
         - 101
         - 131
         - 137
-      name:
-        - 48
-      description: []
-      image_url: []
-      project_url: []
+      name: "0"
+      description: ""
+      image_url: ""
+      project_url: ""
       net_address: []
       consensus_address: []
       worker_address: []

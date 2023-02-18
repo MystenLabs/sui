@@ -61,7 +61,7 @@ export function Search({
             nullable
             onChange={onSelectResult}
             as="div"
-            className="relative flex h-fit w-full flex-col"
+            className="relative w-full"
         >
             <Combobox.Input
                 spellCheck={false}
@@ -84,7 +84,7 @@ export function Search({
             </div>
 
             {queryValue && (
-                <Combobox.Options className="absolute right-0 left-0 top-6 flex list-none flex-col gap-y-2 overflow-auto rounded-md bg-white p-3.5 shadow-md">
+                <Combobox.Options className="absolute mt-1 w-full list-none space-y-2 rounded-md bg-white p-3.5 shadow-md">
                     {isLoading ? (
                         <div className="flex items-center justify-center">
                             <LoadingSpinner />

@@ -16,7 +16,7 @@ import {
   tuple,
 } from 'superstruct';
 import { SuiEvent } from './events';
-import { SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
+import { SuiGasData, SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
 import {
   ObjectId,
   ObjectOwner,
@@ -125,10 +125,7 @@ export type SuiTransactionKind = Infer<typeof SuiTransactionKind>;
 export const SuiTransactionData = object({
   transactions: array(SuiTransactionKind),
   sender: SuiAddress,
-  gasPayment: SuiObjectRef,
-  // TODO: remove optional after 0.21.0 is released
-  gasPrice: optional(number()),
-  gasBudget: number(),
+  gasData: SuiGasData,
 });
 export type SuiTransactionData = Infer<typeof SuiTransactionData>;
 
@@ -148,7 +145,7 @@ export type AuthorityQuorumSignInfo = Infer<typeof AuthorityQuorumSignInfo>;
 export const CertifiedTransaction = object({
   transactionDigest: TransactionDigest,
   data: SuiTransactionData,
-  txSignature: string(),
+  txSignatures: array(string()),
   authSignInfo: AuthorityQuorumSignInfo,
 });
 export type CertifiedTransaction = Infer<typeof CertifiedTransaction>;
@@ -204,6 +201,8 @@ export const TransactionEffects = object({
   unwrapped: optional(array(OwnedObjectRef)),
   /** Object Refs of objects now deleted (the old refs) */
   deleted: optional(array(SuiObjectRef)),
+  /** Object Refs of objects now deleted (the old refs) */
+  unwrapped_then_deleted: optional(array(SuiObjectRef)),
   /** Object refs of objects now wrapped in other objects */
   wrapped: optional(array(SuiObjectRef)),
   /**
@@ -263,6 +262,49 @@ export const SuiFinalizedEffects = object({
   finalityInfo: SuiEffectsFinalityInfo,
 });
 export type SuiFinalizedEffects = Infer<typeof SuiFinalizedEffects>;
+
+export const SuiTransactionData_v26 = object({
+  transactions: array(SuiTransactionKind),
+  sender: SuiAddress,
+  gasPayment: SuiObjectRef,
+  // TODO: remove optional after 0.21.0 is released
+  gasPrice: optional(number()),
+  gasBudget: number(),
+});
+export type SuiTransactionData_v26 = Infer<typeof SuiTransactionData_v26>;
+
+export function toSuiTransactionData(
+  tx_data: SuiTransactionData_v26,
+): SuiTransactionData {
+  return {
+    transactions: tx_data.transactions,
+    sender: tx_data.sender,
+    gasData: {
+      payment: tx_data.gasPayment,
+      owner: tx_data.sender,
+      budget: tx_data.gasBudget,
+      price: tx_data.gasPrice!,
+    },
+  };
+}
+
+export const CertifiedTransaction_v26 = object({
+  transactionDigest: TransactionDigest,
+  data: SuiTransactionData_v26,
+  txSignature: string(),
+  authSignInfo: AuthorityQuorumSignInfo,
+});
+export type CertifiedTransaction_v26 = Infer<typeof CertifiedTransaction_v26>;
+
+export const SuiExecuteTransactionResponse_v26 = object({
+  certificate: optional(CertifiedTransaction_v26),
+  effects: SuiFinalizedEffects,
+  confirmed_local_execution: boolean(),
+});
+
+export type SuiExecuteTransactionResponse_v26 = Infer<
+  typeof SuiExecuteTransactionResponse_v26
+>;
 
 export const SuiExecuteTransactionResponse = union([
   // TODO: remove after devnet 0.25.0(or 0.24.0) is released
@@ -361,7 +403,7 @@ export type SuiParsedTransactionResponse = Infer<
 >;
 
 export const SuiTransactionResponse = object({
-  certificate: CertifiedTransaction,
+  certificate: union([CertifiedTransaction, CertifiedTransaction_v26]),
   effects: TransactionEffects,
   timestamp_ms: union([number(), literal(null)]),
   parsed_data: union([SuiParsedTransactionResponse, literal(null)]),
@@ -376,7 +418,7 @@ export type SuiTransactionResponse = Infer<typeof SuiTransactionResponse>;
 
 export function getCertifiedTransaction(
   tx: SuiTransactionResponse | SuiExecuteTransactionResponse,
-): CertifiedTransaction | undefined {
+): CertifiedTransaction | CertifiedTransaction_v26 | undefined {
   if ('certificate' in tx) {
     return tx.certificate;
   } else if ('EffectsCert' in tx) {
@@ -388,6 +430,7 @@ export function getCertifiedTransaction(
 export function getTransactionDigest(
   tx:
     | CertifiedTransaction
+    | CertifiedTransaction_v26
     | SuiTransactionResponse
     | SuiExecuteTransactionResponse,
 ): TransactionDigest {
@@ -398,8 +441,13 @@ export function getTransactionDigest(
   return effects.transactionDigest;
 }
 
-export function getTransactionSignature(tx: CertifiedTransaction): string {
-  return tx.txSignature;
+export function getTransactionSignature(
+  tx: CertifiedTransaction | CertifiedTransaction_v26,
+): string[] {
+  if ('txSignatures' in tx) {
+    return tx.txSignatures;
+  }
+  return [tx.txSignature];
 }
 
 export function getTransactionAuthorityQuorumSignInfo(
@@ -416,22 +464,24 @@ export function getTransactionData(
 
 /* ----------------------------- TransactionData ---------------------------- */
 
-export function getTransactionSender(tx: CertifiedTransaction): SuiAddress {
+export function getTransactionSender(
+  tx: CertifiedTransaction | CertifiedTransaction_v26,
+): SuiAddress {
   return tx.data.sender;
 }
 
 export function getTransactionGasObject(
   tx: CertifiedTransaction,
 ): SuiObjectRef {
-  return tx.data.gasPayment;
+  return tx.data.gasData.payment;
 }
 
 export function getTransactionGasPrice(tx: CertifiedTransaction) {
-  return tx.data.gasPrice;
+  return tx.data.gasData.price;
 }
 
 export function getTransactionGasBudget(tx: CertifiedTransaction): number {
-  return tx.data.gasBudget;
+  return tx.data.gasData.budget;
 }
 
 export function getTransferObjectTransaction(
@@ -489,7 +539,7 @@ export function getConsensusCommitPrologueTransaction(
 }
 
 export function getTransactions(
-  data: CertifiedTransaction,
+  data: CertifiedTransaction | CertifiedTransaction_v26,
 ): SuiTransactionKind[] {
   return data.data.transactions;
 }

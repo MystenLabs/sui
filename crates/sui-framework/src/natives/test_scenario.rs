@@ -70,7 +70,7 @@ pub fn end_transaction(
     let object_runtime_state = object_runtime_ref.take_state();
     // Determine writes and deletes
     // We pass an empty map as we do not expose dynamic field objects in the system
-    let results = object_runtime_state.finish(BTreeMap::new());
+    let results = object_runtime_state.finish(BTreeSet::new(), BTreeMap::new());
     let RuntimeResults {
         writes,
         deletions,
@@ -205,9 +205,7 @@ pub fn end_transaction(
         .test_inventories
         .taken
         .iter()
-        .map(|(id, owner)| {
-            (*id, (/* by_value */ false, *owner))
-        })
+        .map(|(id, owner)| (*id, *owner))
         .collect::<BTreeMap<_, _>>();
     // update inventories
     // check for bad updates to immutable values
@@ -517,7 +515,7 @@ fn take_from_inventory(
     is_in_inventory: impl FnOnce(&ObjectID) -> bool,
     objects: &BTreeMap<ObjectID, Value>,
     taken: &mut BTreeMap<ObjectID, Owner>,
-    input_objects: &mut BTreeMap<ObjectID, (/* by_value */ bool, Owner)>,
+    input_objects: &mut BTreeMap<ObjectID, Owner>,
     id: ObjectID,
     owner: Owner,
 ) -> Result<Value, NativeResult> {
@@ -530,8 +528,7 @@ fn take_from_inventory(
         ));
     }
     taken.insert(id, owner);
-    // by_value will be set to true later, if wrapped
-    input_objects.insert(id, (false, owner));
+    input_objects.insert(id, owner);
     let obj = obj_opt.unwrap();
     Ok(obj.copy_value().unwrap())
 }

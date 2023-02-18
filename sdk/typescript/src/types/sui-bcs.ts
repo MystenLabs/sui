@@ -226,17 +226,25 @@ export type TransactionKind =
   | { Batch: Transaction[] };
 
 /**
+ * The GasData to be used in the transaction.
+ */
+export type GasData = {
+  payment: SuiObjectRef;
+  owner: string; // Gas Object's owner
+  price: number;
+  budget: number;
+};
+
+/**
  * The TransactionData to be signed and sent to the RPC service.
  *
  * Field `sender` is made optional as it can be added during the signing
  * process and there's no need to define it sooner.
  */
 export type TransactionData = {
-  sender?: string; //
-  gasBudget: number;
-  gasPrice: number;
+  sender?: string;
   kind: TransactionKind;
-  gasPayment: SuiObjectRef;
+  gasData: GasData;
 };
 
 export const TRANSACTION_DATA_TYPE_TAG = Array.from('TransactionData::').map(
@@ -246,9 +254,42 @@ export const TRANSACTION_DATA_TYPE_TAG = Array.from('TransactionData::').map(
 export function deserializeTransactionBytesToTransactionData(
   bcs: BCS,
   bytes: Uint8Array,
-): TransactionData {
+): TransactionData | TransactionData_v26 {
   return bcs.de('TransactionData', bytes);
 }
+
+export function toTransactionData(
+  tx_data: TransactionData_v26 | TransactionData,
+): TransactionData {
+  if ('gasData' in tx_data) {
+    return tx_data;
+  }
+  return {
+    sender: tx_data.sender,
+    kind: tx_data.kind,
+    gasData: {
+      payment: tx_data.gasPayment,
+      owner: tx_data.sender!,
+      budget: tx_data.gasBudget,
+      price: tx_data.gasPrice,
+    },
+  };
+}
+
+/* TransactionData <= v26 */
+/**
+ * The TransactionData to be signed and sent to the RPC service.
+ *
+ * Field `sender` is made optional as it can be added during the signing
+ * process and there's no need to define it sooner.
+ */
+export type TransactionData_v26 = {
+  sender?: string; //
+  gasBudget: number;
+  gasPrice: number;
+  kind: TransactionKind;
+  gasPayment: SuiObjectRef;
+};
 
 const BCS_SPEC = {
   enums: {
@@ -344,14 +385,18 @@ const BCS_SPEC = {
     TransactionData: {
       kind: 'TransactionKind',
       sender: BCS.ADDRESS,
-      gasPayment: 'SuiObjectRef',
-      gasPrice: BCS.U64,
-      gasBudget: BCS.U64,
+      gasData: 'GasData',
+    },
+    GasData: {
+      payment: 'SuiObjectRef',
+      owner: BCS.ADDRESS,
+      price: BCS.U64,
+      budget: BCS.U64,
     },
     // Signed transaction data needed to generate transaction digest.
     SenderSignedData: {
       data: 'TransactionData',
-      txSignature: 'vector<u8>',
+      txSignatures: 'vector<vector<u8>>',
     },
   },
   aliases: {
@@ -394,7 +439,30 @@ const BCS_0_24_SPEC = {
   }
 };
 
-const bcs = new BCS({...getSuiMoveConfig(), types: BCS_SPEC });
+// for version <= 0.26.0
+const BCS_0_26_SPEC = {
+  structs: {
+    ...BCS_SPEC.structs,
+    TransactionData: {
+      kind: 'TransactionKind',
+      sender: BCS.ADDRESS,
+      gasPayment: 'SuiObjectRef',
+      gasPrice: BCS.U64,
+      gasBudget: BCS.U64,
+    },
+    SenderSignedData: {
+      data: 'TransactionData',
+      txSignature: 'vector<u8>',
+    },
+  },
+  enums: BCS_SPEC.enums,
+  aliases: {
+    // change in object digest to base58
+    ObjectDigest: BCS.BASE58
+  }
+};
+
+const bcs = new BCS({...getSuiMoveConfig(), types: BCS_SPEC});
 registerUTF8String(bcs);
 
 // ========== Backward Compatibility (remove after v0.24 deploys) ===========
@@ -404,15 +472,21 @@ registerUTF8String(bcs_0_23);
 const bcs_0_24 = new BCS({...getSuiMoveConfig(), types: BCS_0_24_SPEC});
 registerUTF8String(bcs_0_24);
 
+const bcs_0_26 = new BCS({ ...getSuiMoveConfig(), types: BCS_0_26_SPEC });
+registerUTF8String(bcs_0_26);
+
 export function bcsForVersion(v?: RpcApiVersion) {
   if (v?.major === 0 && v?.minor < 24) {
     return bcs_0_23;
   }
   if (v?.major === 0 && v?.minor === 24) {
     return bcs_0_24;
-  } else {
-    return bcs;
   }
+  if (v?.major === 0 && v?.minor <= 26) {
+    return bcs_0_26;
+  }
+
+  return bcs;
 }
 
 export { bcs };

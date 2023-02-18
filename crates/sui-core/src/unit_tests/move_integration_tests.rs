@@ -160,9 +160,10 @@ async fn test_object_wrapping_unwrapping() {
         (
             effects.created.len(),
             effects.deleted.len(),
+            effects.unwrapped_then_deleted.len(),
             effects.wrapped.len()
         ),
-        (1, 0, 1)
+        (1, 0, 0, 1)
     );
     let new_child_object_ref = effects.wrapped[0];
     let expected_child_object_ref = (
@@ -277,14 +278,17 @@ async fn test_object_wrapping_unwrapping() {
         "{:?}",
         effects.status
     );
-    assert_eq!(effects.deleted.len(), 2);
+    assert_eq!(effects.deleted.len(), 1);
+    assert_eq!(effects.unwrapped_then_deleted.len(), 1);
     // Check that both objects are marked as deleted in the authority.
     let expected_child_object_ref = (
         child_object_ref.0,
         deleted_version,
         ObjectDigest::OBJECT_DIGEST_DELETED,
     );
-    assert!(effects.deleted.contains(&expected_child_object_ref));
+    assert!(effects
+        .unwrapped_then_deleted
+        .contains(&expected_child_object_ref));
     check_latest_object_ref(&authority, &expected_child_object_ref, true).await;
     let expected_parent_object_ref = (
         parent_object_ref.0,
@@ -654,6 +658,8 @@ async fn test_create_then_delete_parent_child_wrap() {
     // The parent and field are considered deleted, the child doesn't count because it wasn't
     // considered created in the first place.
     assert_eq!(effects.deleted.len(), 2);
+    // The child was never created so it is not unwrapped.
+    assert_eq!(effects.unwrapped_then_deleted.len(), 0);
     assert_eq!(effects.events.len(), 3);
 
     assert_eq!(
@@ -757,8 +763,10 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     .await
     .unwrap();
     assert!(effects.status.is_ok());
-    // Check that both objects were deleted.
-    assert_eq!(effects.deleted.len(), 3);
+    // Check that parent object was deleted.
+    assert_eq!(effects.deleted.len(), 2);
+    // Check that child object was unwrapped and deleted.
+    assert_eq!(effects.unwrapped_then_deleted.len(), 1);
     assert_eq!(effects.events.len(), 4);
 }
 

@@ -33,14 +33,14 @@ use std::task::{Context, Poll};
 use sui_json_rpc_types::{SuiExecutionResult, SuiExecutionStatus, SuiGasCostSummary};
 use sui_types::utils::{
     make_committee_key, mock_certified_checkpoint, to_sender_signed_transaction,
+    to_sender_signed_transaction_with_multi_signers,
 };
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_OBJECT_ID};
 
 use crate::epoch::epoch_metrics::EpochMetrics;
 use std::{convert::TryInto, env};
-use sui_adapter::genesis;
 use sui_macros::sim_test;
-use sui_protocol_constants::MAX_MOVE_PACKAGE_SIZE;
+use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::object::Data;
 use sui_types::{
@@ -192,6 +192,15 @@ async fn construct_shared_object_transaction_with_sequence_number(
         gas_object_id,
         shared_object_id,
     )
+}
+
+pub fn create_genesis_module_packages() -> Vec<Object> {
+    let sui_modules = sui_framework::get_sui_framework();
+    let std_modules = sui_framework::get_move_stdlib();
+    vec![
+        Object::new_package(std_modules, TransactionDigest::genesis()).unwrap(),
+        Object::new_package(sui_modules, TransactionDigest::genesis()).unwrap(),
+    ]
 }
 
 #[tokio::test]
@@ -363,6 +372,7 @@ async fn test_dev_inspect_object_by_bytes() {
     assert!(effects.created.is_empty());
     assert_eq!(effects.mutated.len(), 2);
     assert!(effects.deleted.is_empty());
+    assert!(effects.unwrapped_then_deleted.is_empty());
 
     // compare the bytes
     let updated_object = validator
@@ -806,8 +816,10 @@ async fn test_handle_transfer_transaction_bad_signature() {
     let mut bad_signature_transfer_transaction = transfer_transaction.clone().into_inner();
     bad_signature_transfer_transaction
         .data_mut_for_testing()
-        .tx_signature =
-        Signature::new_secure(&transfer_transaction.data().intent_message, &unknown_key).into();
+        .tx_signatures =
+        vec![
+            Signature::new_secure(&transfer_transaction.data().intent_message, &unknown_key).into(),
+        ];
 
     assert!(client
         .handle_transaction(bad_signature_transfer_transaction)
@@ -1045,7 +1057,10 @@ async fn test_handle_transfer_transaction_ok() {
         .unwrap()
         .unwrap();
 
-    assert_eq!(account_info.into_signed_for_testing(), pending_confirmation);
+    assert_eq!(
+        &account_info.status.into_signed_for_testing(),
+        pending_confirmation.auth_sig()
+    );
 
     // Check the final state of the locks
     let Some(envelope) = authority_state.get_transaction_lock(
@@ -1058,6 +1073,134 @@ async fn test_handle_transfer_transaction_ok() {
     assert_eq!(
         envelope.data().intent_message.value,
         transfer_transaction.data().intent_message.value
+    );
+}
+
+#[tokio::test]
+async fn test_handle_sponsored_transaction() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (sponsor, sponsor_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let gas_object_id = ObjectID::random();
+    let authority_state =
+        init_state_with_ids(vec![(sender, object_id), (sponsor, gas_object_id)]).await;
+
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let tx_kind = TransactionKind::Single(SingleTransactionKind::TransferObject(TransferObject {
+        recipient,
+        object_ref: object.compute_object_reference(),
+    }));
+
+    let data = TransactionData::new_with_gas_data(
+        tx_kind.clone(),
+        sender,
+        GasData {
+            payment: gas_object.compute_object_reference(),
+            owner: sponsor,
+            price: DUMMY_GAS_PRICE,
+            budget: 10000,
+        },
+    );
+    let dual_signed_tx =
+        to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &sponsor_key]);
+
+    authority_state
+        .handle_transaction(dual_signed_tx.clone())
+        .await
+        .unwrap();
+
+    // Verify wrong gas owner gives error, using sender address
+    let data = TransactionData::new_with_gas_data(
+        tx_kind.clone(),
+        sender,
+        GasData {
+            payment: gas_object.compute_object_reference(),
+            owner: sender, // <-- wrong
+            price: DUMMY_GAS_PRICE,
+            budget: 10000,
+        },
+    );
+    let dual_signed_tx =
+        to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &sponsor_key]);
+
+    let error = authority_state
+        .handle_transaction(dual_signed_tx.clone())
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(
+            error.collapse_if_single_transaction_input_error().unwrap(),
+            &SuiError::IncorrectSigner { .. }
+        ),
+        "{}",
+        error
+    );
+
+    // Verify wrong gas owner gives error, using another address
+    let data = TransactionData::new_with_gas_data(
+        tx_kind.clone(),
+        sender,
+        GasData {
+            payment: gas_object.compute_object_reference(),
+            owner: dbg_addr(42), // <-- wrong
+            price: DUMMY_GAS_PRICE,
+            budget: 10000,
+        },
+    );
+    let dual_signed_tx =
+        to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &sponsor_key]);
+    let error = authority_state
+        .handle_transaction(dual_signed_tx.clone())
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(
+            error.collapse_if_single_transaction_input_error().unwrap(),
+            &SuiError::IncorrectSigner { .. }
+        ),
+        "{}",
+        error
+    );
+
+    // Sponsor sig is valid but it doesn't actually own the gas object
+    let (third_party, third_party_key): (_, AccountKeyPair) = get_key_pair();
+    let data = TransactionData::new_with_gas_data(
+        tx_kind,
+        sender,
+        GasData {
+            payment: gas_object.compute_object_reference(),
+            owner: third_party,
+            price: DUMMY_GAS_PRICE,
+            budget: 10000,
+        },
+    );
+    let dual_signed_tx =
+        to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &third_party_key]);
+    let error = authority_state
+        .handle_transaction(dual_signed_tx.clone())
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(
+            error.collapse_if_single_transaction_input_error().unwrap(),
+            &SuiError::IncorrectSigner { .. }
+        ),
+        "{}",
+        error
     );
 }
 
@@ -1177,18 +1320,15 @@ pub async fn send_and_confirm_transaction_(
 ) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
     // Make the initial request
     let response = authority.handle_transaction(transaction.clone()).await?;
-    let vote = response.into_signed_for_testing();
+    let vote = response.status.into_signed_for_testing();
 
     // Collect signatures from a quorum of authorities
     let committee = authority.clone_committee_for_testing();
-    let certificate = CertifiedTransaction::new(
-        transaction.into_message(),
-        vec![vote.auth_sig().clone()],
-        &committee,
-    )
-    .unwrap()
-    .verify(&committee)
-    .unwrap();
+    let certificate =
+        CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
+            .unwrap()
+            .verify(&committee)
+            .unwrap();
 
     if with_shared {
         send_consensus(authority, &certificate).await;
@@ -1227,7 +1367,7 @@ async fn test_publish_dependent_module_ok() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let genesis_module_objects = genesis::clone_genesis_packages();
+    let genesis_module_objects = create_genesis_module_packages();
     let genesis_module = match &genesis_module_objects[0].data {
         Data::Package(m) => {
             CompiledModule::deserialize(m.serialized_module_map().values().next().unwrap()).unwrap()
@@ -1251,7 +1391,8 @@ async fn test_publish_dependent_module_ok() {
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
 
-    let dependent_module_id = TxContext::new(&sender, transaction.digest(), 0).fresh_id();
+    let dependent_module_id =
+        TxContext::new(&sender, transaction.digest(), &EpochData::genesis()).fresh_id();
 
     // Object does not exist
     assert!(authority
@@ -1291,7 +1432,8 @@ async fn test_publish_module_no_dependencies_ok() {
         MAX_GAS,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let _module_object_id = TxContext::new(&sender, transaction.digest(), 0).fresh_id();
+    let _module_object_id =
+        TxContext::new(&sender, transaction.digest(), &EpochData::genesis()).fresh_id();
     let signed_effects = send_and_confirm_transaction(&authority, transaction)
         .await
         .unwrap()
@@ -1306,7 +1448,7 @@ async fn test_publish_non_existing_dependent_module() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let genesis_module_objects = genesis::clone_genesis_packages();
+    let genesis_module_objects = create_genesis_module_packages();
     let genesis_module = match &genesis_module_objects[0].data {
         Data::Package(m) => {
             CompiledModule::deserialize(m.serialized_module_map().values().next().unwrap()).unwrap()
@@ -1363,7 +1505,8 @@ async fn test_package_size_limit() {
     let mut package = Vec::new();
     let mut package_size = 0;
     // create a package larger than the max size
-    while package_size <= MAX_MOVE_PACKAGE_SIZE {
+    let max_move_package_size = ProtocolConfig::get_for_min_version().max_move_package_size();
+    while package_size <= max_move_package_size {
         let mut module = file_format::empty_module();
         // generate unique name
         module.identifiers[0] = Identifier::new(format!("TestModule{:?}", package_size)).unwrap();
@@ -1392,7 +1535,7 @@ async fn test_package_size_limit() {
         ExecutionStatus::Failure {
             error: ExecutionFailureStatus::MovePackageTooBig {
                 object_size: package_size,
-                max_object_size: MAX_MOVE_PACKAGE_SIZE
+                max_object_size: max_move_package_size
             }
         }
     )
@@ -1507,19 +1650,19 @@ async fn test_conflicting_transactions() {
             .unwrap();
 
         assert_eq!(
-            ok.clone().into_signed_for_testing().digest(),
+            &ok.clone().status.into_signed_for_testing(),
             object_info
                 .lock_for_debugging
                 .expect("object should be locked")
-                .digest()
+                .auth_sig()
         );
 
         assert_eq!(
-            ok.into_signed_for_testing().digest(),
+            &ok.clone().status.into_signed_for_testing(),
             gas_info
                 .lock_for_debugging
                 .expect("gas should be locked")
-                .digest()
+                .auth_sig()
         );
 
         authority_state.database.reset_locks_for_test(
@@ -1559,17 +1702,15 @@ async fn test_handle_transfer_transaction_double_spend() {
         gas_object.compute_object_reference(),
     );
 
-    let signed_transaction: TransactionInfoResponse = authority_state
+    let signed_transaction = authority_state
         .handle_transaction(transfer_transaction.clone())
         .await
-        .unwrap()
-        .into();
+        .unwrap();
     // calls to handlers are idempotent -- returns the same.
-    let double_spend_signed_transaction: TransactionInfoResponse = authority_state
+    let double_spend_signed_transaction = authority_state
         .handle_transaction(transfer_transaction)
         .await
-        .unwrap()
-        .into();
+        .unwrap();
     // this is valid because our test authority should not change its certified transaction
     assert_eq!(signed_transaction, double_spend_signed_transaction);
 }
@@ -1676,6 +1817,7 @@ async fn test_type_argument_dependencies() {
         .handle_transaction(transaction)
         .await
         .unwrap()
+        .status
         .into_signed_for_testing();
     // obj type tag succeeds
     let data = TransactionData::new_move_call_with_dummy_gas_price(
@@ -1698,6 +1840,7 @@ async fn test_type_argument_dependencies() {
         .handle_transaction(transaction)
         .await
         .unwrap()
+        .status
         .into_signed_for_testing();
     // missing package fails obj type tag succeeds
     let data = TransactionData::new_move_call_with_dummy_gas_price(
@@ -2089,7 +2232,10 @@ async fn test_handle_confirmation_transaction_idempotent() {
         .await
         .unwrap();
 
-    assert_eq!(info.into_executed_for_testing().1, signed_effects);
+    assert_eq!(
+        info.status.into_effects_for_testing(),
+        signed_effects.into_inner()
+    );
 }
 
 #[tokio::test]
@@ -2514,6 +2660,7 @@ async fn test_authority_persist() {
         AuthorityState::new(
             name,
             secrete,
+            SupportedProtocolVersions::SYSTEM_DEFAULT,
             store,
             epoch_store,
             committee_store,
@@ -2522,6 +2669,7 @@ async fn test_authority_persist() {
             checkpoint_store,
             &registry,
             &AuthorityStorePruningConfig::default(),
+            &[], // no genesis objects
         )
         .await
     }
@@ -2624,9 +2772,9 @@ async fn test_idempotent_reversed_confirmation() {
         result1.unwrap().into_message(),
         result2
             .unwrap()
-            .into_executed_for_testing()
-            .1
-            .into_message()
+            .status
+            .into_effects_for_testing()
+            .into_data()
     );
 }
 
@@ -4060,9 +4208,11 @@ async fn make_test_transaction(
             .handle_transaction(transaction.clone())
             .await
             .unwrap();
-        let vote = response.into_signed_for_testing();
-        sigs.push(vote.auth_sig().clone());
-        if let Ok(cert) = CertifiedTransaction::new(vote.into_message(), sigs.clone(), &committee) {
+        let vote = response.status.into_signed_for_testing();
+        sigs.push(vote.clone());
+        if let Ok(cert) =
+            CertifiedTransaction::new(transaction.clone().into_message(), sigs.clone(), &committee)
+        {
             return cert.verify(&committee).unwrap();
         }
     }

@@ -7,7 +7,6 @@ use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    net::SocketAddr,
     sync::{Arc, RwLock},
     time::Duration,
 };
@@ -52,7 +51,6 @@ struct State {
 pub struct NodeInfo {
     pub peer_id: PeerId,
     pub addresses: Vec<Multiaddr>,
-    pub external_socket_address: Option<SocketAddr>,
 
     /// Creation time.
     ///
@@ -122,7 +120,6 @@ impl DiscoveryEventLoop {
         let our_info = NodeInfo {
             peer_id: self.network.peer_id(),
             addresses: address,
-            external_socket_address: None,
             timestamp_ms: now_unix(),
         };
 
@@ -169,16 +166,6 @@ impl DiscoveryEventLoop {
                         .unwrap()
                         .connected_peers
                         .insert(peer_id, ());
-
-                    // If we haven't figured out what our external address is, ask this peer
-                    if let Some(our_info) = &self.state.read().unwrap().our_info {
-                        if our_info.external_socket_address.is_none() {
-                            self.tasks.spawn(query_our_external_socket_address(
-                                peer.clone(),
-                                self.state.clone(),
-                            ));
-                        }
-                    }
 
                     // Query the new node for any peers
                     self.tasks
@@ -232,7 +219,7 @@ impl DiscoveryEventLoop {
             .into_iter()
             .filter(|(peer_id, info)| {
                 peer_id != &self.network.peer_id() &&
-                (!info.addresses.is_empty() || info.external_socket_address.is_some()) // Peer has addresses we can dial
+                !info.addresses.is_empty() // Peer has addresses we can dial
                 && !state.connected_peers.contains_key(peer_id) // We're not already connected
                 && !self.pending_dials.contains_key(peer_id) // There is no pending dial to this node
             })
@@ -278,17 +265,6 @@ impl DiscoveryEventLoop {
     }
 }
 
-async fn query_our_external_socket_address(peer: Peer, state: Arc<RwLock<State>>) {
-    let mut client = DiscoveryClient::new(peer);
-    let request = Request::new(()).with_timeout(TIMEOUT);
-    if let Ok(response) = client.get_external_address(request).await {
-        let addr = response.into_inner();
-        if let Some(our_info) = &mut state.write().unwrap().our_info {
-            our_info.external_socket_address = Some(addr);
-        }
-    }
-}
-
 async fn try_to_connect_to_peer(network: Network, info: NodeInfo) {
     for multiaddr in &info.addresses {
         if let Some(address) = multiaddr_to_anemo_address(multiaddr) {
@@ -308,20 +284,6 @@ async fn try_to_connect_to_peer(network: Network, info: NodeInfo) {
                 return;
             }
         }
-    }
-
-    if let Some(socket_addr) = info.external_socket_address {
-        // Ignore the result and just log the error if there is one
-        let _ = network
-            .connect_with_peer_id(socket_addr, info.peer_id)
-            .await
-            .tap_err(|e| {
-                debug!(
-                    "error dialing {} at address '{}': {e}",
-                    info.peer_id.short_display(4),
-                    socket_addr
-                )
-            });
     }
 }
 
@@ -364,7 +326,9 @@ async fn query_peer_for_their_known_peers(peer: Peer, state: Arc<RwLock<State>>)
                  own_info,
                  mut known_peers,
              }| {
-                known_peers.push(own_info);
+                if !own_info.addresses.is_empty() {
+                    known_peers.push(own_info)
+                }
                 known_peers
             },
         )
@@ -423,7 +387,7 @@ fn update_known_peers(state: Arc<RwLock<State>>, found_peers: Vec<NodeInfo>) {
     let our_peer_id = state.read().unwrap().our_info.clone().unwrap().peer_id;
     let known_peers = &mut state.write().unwrap().known_peers;
     for peer in found_peers {
-        // Skip peers who's timestamp is too far in the future from our clock
+        // Skip peers whose timestamp is too far in the future from our clock
         // or that are too old
         if peer.timestamp_ms > now_unix.saturating_add(30 * 1_000) // 30 seconds
             || now_unix.saturating_sub(peer.timestamp_ms) > ONE_DAY_MILLISECONDS

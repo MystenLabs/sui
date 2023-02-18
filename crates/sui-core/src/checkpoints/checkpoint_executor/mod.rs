@@ -473,7 +473,6 @@ async fn execute_transactions(
                 .await?;
         }
     }
-    epoch_store.insert_pending_certificates(&synced_txns)?;
 
     transaction_manager.enqueue(synced_txns, epoch_store)?;
 

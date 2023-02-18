@@ -16,6 +16,7 @@ import {
   SuiEventEnvelope,
   SuiEventFilter,
   SuiExecuteTransactionResponse,
+  SuiExecuteTransactionResponse_v26,
   SuiMoveFunctionArgTypes,
   SuiMoveNormalizedFunction,
   SuiMoveNormalizedModule,
@@ -38,6 +39,7 @@ import {
   DevInspectResults,
   CoinMetadata,
   versionToString,
+  toSuiTransactionData,
   isValidTransactionDigest,
   isValidSuiAddress,
   isValidSuiObjectId,
@@ -661,6 +663,38 @@ export class JsonRpcProvider extends Provider {
     signature: SerializedSignature,
     requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert',
   ): Promise<SuiExecuteTransactionResponse> {
+    const version = this.rpcApiVersion;
+    if (version?.major === 0 && version?.minor <= 26) {
+      try {
+        let resp = await this.client.requestWithType(
+          'sui_executeTransactionSerializedSig',
+          [
+            typeof txnBytes === 'string' ? txnBytes : toB64(txnBytes),
+            signature,
+            requestType,
+          ],
+          SuiExecuteTransactionResponse_v26,
+          this.options.skipDataValidation,
+        );
+        let certificate = resp.certificate
+          ? {
+              transactionDigest: resp.certificate!.transactionDigest,
+              data: toSuiTransactionData(resp.certificate!.data),
+              txSignatures: [resp.certificate!.txSignature],
+              authSignInfo: resp.certificate!.authSignInfo,
+            }
+          : undefined;
+        return {
+          certificate: certificate,
+          effects: resp.effects,
+          confirmed_local_execution: resp.confirmed_local_execution,
+        };
+      } catch (err) {
+        throw new Error(
+          `Error executing transaction with request type: ${err}`,
+        );
+      }
+    }
     try {
       return await this.client.requestWithType(
         'sui_executeTransactionSerializedSig',
