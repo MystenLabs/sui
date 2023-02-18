@@ -152,7 +152,7 @@ async fn create_and_run_subscriber(
 
 impl<Network: SubscriberNetwork> Subscriber<Network> {
     /// Returns the max amount of pending consensus messages we should expect.
-    const MAX_PENDING_PAYLOADS: usize = 32;
+    const MAX_PENDING_PAYLOADS: usize = 1000;
 
     /// Main loop connecting to the consensus to listen to sequence messages.
     async fn run(
