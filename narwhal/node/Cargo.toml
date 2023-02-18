@@ -37,13 +37,10 @@ worker = { path = "../worker", package = "narwhal-worker" }
 eyre = "0.6.8"
 serde = {version = "1.0.144", features = ["derive"]}
 roaring = "0.10.1"
-enum_dispatch = "^0.3"
 schemars ="0.8.10"
 derive_more = "0.99.17"
 serde_with = "2.1.0"
 signature = "1.6.0"
-strum = "^0.24"
-strum_macros = "^0.24"
 
 mysten-metrics = { path = "../../crates/mysten-metrics" }
 store = { path = "../../crates/typed-store", package = "typed-store" }

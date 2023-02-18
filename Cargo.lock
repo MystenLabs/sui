@@ -2081,18 +2081,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "enum_dispatch"
-version = "0.3.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11f36e95862220b211a6e2aa5eca09b4fa391b13cd52ceb8035a24bf65a79de2"
-dependencies = [
- "once_cell",
- "proc-macro2 1.0.54",
- "quote 1.0.26",
- "syn 1.0.107",
-]
-
-[[package]]
 name = "env_logger"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3589,7 +3577,6 @@ dependencies = [
  "cfg-if",
  "clap 2.34.0",
  "derive_more",
- "enum_dispatch",
  "eyre",
  "fail",
  "fastcrypto",
@@ -3618,8 +3605,6 @@ dependencies = [
  "serde_yaml",
  "signature 1.6.4",
  "structopt",
- "strum",
- "strum_macros",
  "telemetry-subscribers",
  "thiserror",
  "tokio",
@@ -5552,25 +5537,6 @@ dependencies = [
  "proc-macro-error",
  "proc-macro2 1.0.54",
  "quote 1.0.26",
- "syn 1.0.107",
-]
-
-[[package]]
-name = "strum"
-version = "0.24.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "063e6045c0e62079840579a7e47a355ae92f60eb74daaf156fb1e84ba164e63f"
-
-[[package]]
-name = "strum_macros"
-version = "0.24.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e385be0d24f186b4ce2f9982191e7101bb737312ad61c1f2f984f34bcf85d59"
-dependencies = [
- "heck 0.4.0",
- "proc-macro2 1.0.54",
- "quote 1.0.26",
- "rustversion",
  "syn 1.0.107",
 ]
 
