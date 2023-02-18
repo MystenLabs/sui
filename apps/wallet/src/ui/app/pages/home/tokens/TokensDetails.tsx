@@ -41,7 +41,7 @@ function MyTokens() {
         useGetAllBalance(accountAddress);
     return (
         <Loading loading={loadingBalances}>
-            {balances && balances.length ? (
+            {balances?.length ? (
                 <>
                     <div className={st.title}>MY COINS</div>
                     <div className={st.otherCoins}>
