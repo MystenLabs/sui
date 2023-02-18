@@ -173,7 +173,7 @@ impl ConsensusState {
             .retain(|r, _| r + gc_depth >= self.last_committed_round);
         // Also purge all certificates at and below last committed round of the certificate origin
         self.dag.retain(|r, authorities| {
-            if r <= &self.last_committed_round {
+            if r <= &certificate.round() {
                 authorities.remove(&certificate.origin());
                 !authorities.is_empty()
             } else {
