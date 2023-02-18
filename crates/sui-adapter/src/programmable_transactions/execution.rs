@@ -6,6 +6,7 @@ use std::fmt;
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
 use move_vm_runtime::move_vm::MoveVM;
 use sui_cost_tables::bytecode_tables::GasStatus;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     balance::Balance,
     base_types::{ObjectID, SuiAddress, TxContext},
@@ -26,6 +27,7 @@ pub fn execute<
         + ParentSync
         + ChildObjectResolver,
 >(
+    protocol_config: &ProtocolConfig,
     vm: &MoveVM,
     state_view: &mut S,
     ctx: &mut TxContext,
@@ -34,7 +36,15 @@ pub fn execute<
     pt: ProgrammableTransaction,
 ) -> Result<(), ExecutionError> {
     let ProgrammableTransaction { inputs, commands } = pt;
-    let mut context = ExecutionContext::new(vm, state_view, ctx, gas_status, gas_coin, inputs)?;
+    let mut context = ExecutionContext::new(
+        protocol_config,
+        vm,
+        state_view,
+        ctx,
+        gas_status,
+        gas_coin,
+        inputs,
+    )?;
     for command in commands {
         execute_command(&mut context, command)?;
     }

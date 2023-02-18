@@ -6,6 +6,7 @@ use std::{collections::BTreeMap, fmt};
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use sui_cost_tables::bytecode_tables::GasStatus;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TxContext},
     error::ExecutionError,
@@ -19,8 +20,8 @@ use crate::adapter::new_session;
 use super::types::*;
 
 pub struct ExecutionContext<
-    'v,
-    's,
+    'vm,
+    'state,
     'a,
     'b,
     E: fmt::Debug,
@@ -30,19 +31,32 @@ pub struct ExecutionContext<
         + ParentSync
         + ChildObjectResolver,
 > {
-    vm: &'v MoveVM,
-    state_view: &'s S,
+    pub protocol_config: &'a ProtocolConfig,
+    /// The MoveVM
+    vm: &'vm MoveVM,
+    /// The global state, used for resolving packages
+    state_view: &'state S,
+    /// A shared transaction context, contains transaction digest information and manages the
+    /// creation of new object IDs
     ctx: &'a mut TxContext,
+    /// The gas status used for metering
     gas_status: &'a mut GasStatus<'b>,
-    session: Option<Session<'s, 'v, S>>,
+    /// The session used for interacting with Move types and calls
+    session: Option<Session<'state, 'vm, S>>,
+    /// Owner meta data for input objects,
     object_owner_map: BTreeMap<ObjectID, Owner>,
+    /// The runtime value for the Gas coin, None if it has been taken/moved
     pub gas: Option<Value>,
+    /// The runtime value for the inputs/call args, None if it has been taken/moved
     pub inputs: Vec<Option<Value>>,
+    /// The results of a given command. For most commands, the inner vector will have length 1.
+    /// It will only not be 1 for Move calls with multiple return values.
+    /// Inner values are None if taken/moved by-value
     pub results: Vec<Vec<Option<Value>>>,
-    // transfers not from the Move runtime
+    /// Additional transfers not from the Move runtime
     additional_transfers: Vec<(/* new owner */ SuiAddress, ObjectValue)>,
 }
-impl<'v, 's, 'a, 'b, E, S> ExecutionContext<'v, 's, 'a, 'b, E, S>
+impl<'vm, 'state, 'a, 'b, E, S> ExecutionContext<'vm, 'state, 'a, 'b, E, S>
 where
     E: fmt::Debug,
     S: ResourceResolver<Error = E>
@@ -52,8 +66,9 @@ where
         + ChildObjectResolver,
 {
     pub fn new(
-        vm: &'v MoveVM,
-        state_view: &'s S,
+        protocol_config: &'a ProtocolConfig,
+        vm: &'vm MoveVM,
+        state_view: &'state S,
         ctx: &'a mut TxContext,
         gas_status: &'a mut GasStatus<'b>,
         gas_coin: ObjectID,
@@ -76,6 +91,7 @@ where
             gas_coin,
         )?));
         Ok(Self {
+            protocol_config,
             vm,
             state_view,
             ctx,
@@ -89,17 +105,20 @@ where
         })
     }
 
-    pub fn session(&mut self) -> &Session<'s, 'v, S> {
+    /// Access the session
+    pub fn session(&mut self) -> &Session<'state, 'vm, S> {
         self.session.get_or_insert_with(|| {
             new_session(
                 self.vm,
                 self.state_view,
                 self.object_owner_map.clone(),
                 self.gas_status.is_metered(),
+                self.protocol_config,
             )
         })
     }
 
+    /// Create a new ID and update the state
     pub fn fresh_id(&mut self) -> Result<ObjectID, ExecutionError> {
         if true {
             todo!("update native context set")
@@ -107,6 +126,7 @@ where
         Ok(self.ctx.fresh_id())
     }
 
+    /// Delete an ID and update the state
     pub fn delete_id(&mut self, _object_id: ObjectID) -> Result<(), ExecutionError> {
         if true {
             todo!("update native context set")
@@ -132,13 +152,12 @@ where
     }
 
     pub fn restore_arg(&mut self, arg: Argument, value: Value) -> Result<(), ExecutionError> {
-        let val_opt = self.borrow_mut(arg)?;
+        let old_val = self.borrow_mut(arg)?.replace(value);
         assert_invariant!(
-            val_opt.is_none(),
+            old_val.is_none(),
             "Should never restore a non-taken value. \
             The take+restore is an implementation detail of mutable references"
         );
-        *val_opt = Some(value);
         Ok(())
     }
 
@@ -188,9 +207,11 @@ fn load_object<S: Storage>(
     id: ObjectID,
 ) -> Result<ObjectValue, ExecutionError> {
     let Some(obj) = state_view.read_object(&id) else {
+        // protected by transaction input checker
         invariant_violation!(format!("Object {} does not exist yet", id));
     };
     let prev = object_owner_map.insert(id, obj.owner);
+    // protected by transaction input checker
     assert_invariant!(prev.is_none(), format!("Duplicate input object {}", id));
     ObjectValue::from_object(obj)
 }
@@ -206,6 +227,7 @@ fn load_call_arg<S: Storage>(
             Value::Object(load_object_arg(state_view, object_owner_map, obj_arg)?)
         }
         CallArg::ObjVec(_) => {
+            // protected by transaction input checker
             invariant_violation!("ObjVec is not supported in programmable transactions")
         }
     })
