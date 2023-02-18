@@ -371,7 +371,14 @@ impl ProtocolConfig {
     // }
 }
 
+#[cfg(not(msim))]
 static POISON_VERSION_METHODS: AtomicBool = AtomicBool::new(false);
+
+// Use a thread local in sim tests for test isolation.
+#[cfg(msim)]
+thread_local! {
+    static POISON_VERSION_METHODS: AtomicBool = AtomicBool::new(false);
+}
 
 // Instantiations for each protocol version.
 impl ProtocolConfig {
@@ -384,14 +391,30 @@ impl ProtocolConfig {
         Self::get_for_version_impl(version)
     }
 
+    #[cfg(not(msim))]
     pub fn poison_get_for_min_version() {
         POISON_VERSION_METHODS.store(true, Ordering::Relaxed);
+    }
+
+    #[cfg(not(msim))]
+    fn load_poison_get_for_min_version() -> bool {
+        POISON_VERSION_METHODS.load(Ordering::Relaxed)
+    }
+
+    #[cfg(msim)]
+    pub fn poison_get_for_min_version() {
+        POISON_VERSION_METHODS.with(|p| p.store(true, Ordering::Relaxed));
+    }
+
+    #[cfg(msim)]
+    fn load_poison_get_for_min_version() -> bool {
+        POISON_VERSION_METHODS.with(|p| p.load(Ordering::Relaxed))
     }
 
     /// Convenience to get the constants at the current minimum supported version.
     /// Mainly used by client code that may not yet be protocol-version aware.
     pub fn get_for_min_version() -> &'static Self {
-        if POISON_VERSION_METHODS.load(Ordering::Relaxed) {
+        if Self::load_poison_get_for_min_version() {
             panic!("get_for_min_version called on validator");
         }
 
@@ -404,7 +427,7 @@ impl ProtocolConfig {
     /// Convenience to get the constants at the current maximum supported version.
     /// Mainly used by genesis.
     pub fn get_for_max_version() -> &'static Self {
-        if POISON_VERSION_METHODS.load(Ordering::Relaxed) {
+        if Self::load_poison_get_for_min_version() {
             panic!("get_for_max_version called on validator");
         }
 
