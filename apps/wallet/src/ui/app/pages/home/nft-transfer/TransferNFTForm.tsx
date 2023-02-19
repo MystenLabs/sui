@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ArrowRight16 } from '@mysten/icons';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
-import cl from 'classnames';
 import { Form, Field, useFormikContext } from 'formik';
 import { useEffect, useRef, memo } from 'react';
 
@@ -10,14 +10,10 @@ import { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import { AddressInput } from '_components/address-input';
 import Alert from '_components/alert';
-import Icon, { SuiIcons } from '_components/icon';
-import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useGetCoinBalance, useAppSelector } from '_hooks';
+import { useAppSelector, useGetCoinBalance } from '_hooks';
 import { useGasBudgetInMist } from '_src/ui/app/hooks/useGasBudgetInMist';
 
 import type { FormValues } from '.';
-
-import st from './TransferNFTForm.module.scss';
 
 export type TransferNFTFormProps = {
     submitError: string | null;
@@ -34,6 +30,7 @@ function TransferNFTForm({
         isSubmitting,
         isValid,
         values: { to },
+        submitForm,
     } = useFormikContext<FormValues>();
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
@@ -51,26 +48,33 @@ function TransferNFTForm({
     const { gasBudget: gasBudgetInMist } = useGasBudgetInMist(gasBudget);
     const isInsufficientGas = maxGasCoinBalance < BigInt(gasBudgetInMist || 0);
     return (
-        <div className={st.sendNft}>
+        <BottomMenuLayout>
             <Content>
-                <Form
-                    className={st.container}
-                    autoComplete="off"
-                    noValidate={true}
-                >
-                    <label className={st.labelInfo}>
-                        Enter the address of the recipient to start sending the
-                        NFT
-                    </label>
-                    <div className={st.group}>
-                        <Field
-                            component={AddressInput}
-                            name="to"
-                            as="div"
-                            id="to"
-                            placeholder="Enter Address"
-                            className={st.input}
-                        />
+                <Form autoComplete="off" noValidate={true}>
+                    <div className="flex gap-2.5 flex-col">
+                        <div className="px-2 tracking-wider">
+                            <Text
+                                variant="caption"
+                                color="steel-dark"
+                                weight="semibold"
+                            >
+                                Enter Recipient Address
+                            </Text>
+                        </div>
+                        <div className="w-full flex relative items-center flex-col">
+                            <Field
+                                component={AddressInput}
+                                allowNegative={false}
+                                name="to"
+                                placeholder="Enter Address"
+                            />
+                        </div>
+
+                        {submitError ? (
+                            <div className="mt-3 w-full">
+                                <Alert>{submitError}</Alert>
+                            </div>
+                        ) : null}
                     </div>
                     {isInsufficientGas ? (
                         <div className="mt-2.5">
@@ -86,36 +90,29 @@ function TransferNFTForm({
                             <Alert>{submitError}</Alert>
                         </div>
                     ) : null}
-                    <div className={st.formcta}>
-                        <Button
-                            size="large"
-                            mode="primary"
-                            type="submit"
-                            disabled={
-                                !isValid ||
-                                isSubmitting ||
-                                isInsufficientGas ||
-                                !gasBudgetInMist ||
-                                loadingBalances
-                            }
-                            className={cl(st.action, 'btn', st.sendNftBtn)}
-                        >
-                            {isSubmitting ? (
-                                <LoadingIndicator />
-                            ) : (
-                                <>
-                                    Send NFT Now
-                                    <Icon
-                                        icon={SuiIcons.ArrowRight}
-                                        className={st.arrowActionIcon}
-                                    />
-                                </>
-                            )}
-                        </Button>
-                    </div>
                 </Form>
             </Content>
-        </div>
+            <Menu
+                stuckClass="sendCoin-cta"
+                className="w-full px-0 pb-0 mx-0 gap-2.5"
+            >
+                <Button
+                    type="submit"
+                    variant="primary"
+                    loading={isSubmitting}
+                    onClick={submitForm}
+                    disabled={
+                        !isValid ||
+                        isSubmitting ||
+                        isInsufficientGas ||
+                        !gasBudgetInMist
+                    }
+                    size="tall"
+                    text="Send NFT Now"
+                    after={<ArrowRight16 />}
+                />
+            </Menu>
+        </BottomMenuLayout>
     );
 }
 

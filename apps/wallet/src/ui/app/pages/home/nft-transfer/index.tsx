@@ -1,26 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getObjectId, hasPublicTransfer } from '@mysten/sui.js';
-import cl from 'classnames';
+import {
+    getObjectId,
+    hasPublicTransfer,
+    is,
+    SuiObject,
+    getObjectOwner,
+} from '@mysten/sui.js';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 
 import TransferNFTForm from './TransferNFTForm';
 import { createValidationSchema } from './validation';
+import { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
-import NFTDisplayCard from '_components/nft-display';
-import { useAppSelector, useAppDispatch, useObjectsState } from '_hooks';
-import { createAccountNftByIdSelector } from '_redux/slices/account';
+import { NFTDisplayCard } from '_components/nft-display';
+import Overlay from '_components/overlay';
+import { useAppSelector, useAppDispatch, useGetObject } from '_hooks';
 import { transferNFT } from '_redux/slices/sui-objects';
 import { DEFAULT_NFT_TRANSFER_GAS_FEE } from '_redux/slices/sui-objects/Coin';
-import PageTitle from '_src/ui/app/shared/PageTitle';
 
 import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
-
-import st from './TransferNFTForm.module.scss';
 
 const initialValues = {
     to: '',
@@ -30,17 +33,28 @@ export type FormValues = typeof initialValues;
 
 function NftTransferPage() {
     const { nftId } = useParams();
-    const nftSelector = useMemo(
-        () => createAccountNftByIdSelector(nftId || ''),
-        [nftId]
-    );
-    const selectedNft = useAppSelector(nftSelector);
-    const objectId = selectedNft ? getObjectId(selectedNft) : null;
     const address = useAppSelector(({ account: { address } }) => address);
+    const [showModal, setShowModal] = useState(true);
+
+    // except for verfiying the nft is owned by the user, there is no need to get the object data here
+    const { data: objectData, isLoading } = useGetObject(nftId!);
+    const selectedNft = useMemo(() => {
+        if (
+            !is(objectData?.details, SuiObject) ||
+            !objectData ||
+            !hasPublicTransfer(objectData.details)
+        )
+            return null;
+        const owner = getObjectOwner(objectData) as { AddressOwner: string };
+        return owner.AddressOwner === address ? objectData.details : null;
+    }, [address, objectData]);
+
+    const objectId = selectedNft ? getObjectId(selectedNft.reference) : null;
+
     const dispatch = useAppDispatch();
     const [sendError, setSendError] = useState<string | null>(null);
     const validationSchema = useMemo(
-        () => createValidationSchema(address || '', objectId || ''),
+        () => createValidationSchema(address!, objectId!),
         [address, objectId]
     );
     const navigate = useNavigate();
@@ -79,25 +93,30 @@ function NftTransferPage() {
     const handleOnClearSubmitError = useCallback(() => {
         setSendError(null);
     }, []);
-    const { loading } = useObjectsState();
-    return (
-        <div className={cl(st.container, { 'items-center': loading })}>
-            <Loading loading={loading}>
-                {selectedNft && objectId && hasPublicTransfer(selectedNft) ? (
-                    <>
-                        <PageTitle
-                            title="Send NFT"
-                            back={`/nft-details?${new URLSearchParams({
-                                objectId,
-                            }).toString()}`}
-                        />
-                        <div className={st.content}>
-                            <NFTDisplayCard
-                                nftobj={selectedNft}
-                                wideView
-                                size="sm"
-                            />
 
+    const closeSendToken = useCallback(() => {
+        navigate('/');
+    }, [navigate]);
+
+    return (
+        <Overlay
+            showModal={showModal}
+            setShowModal={setShowModal}
+            title="Send NFT"
+            closeOverlay={closeSendToken}
+            closeIcon={SuiIcons.Close}
+        >
+            <div className="flex w-full flex-col">
+                <Loading loading={isLoading}>
+                    {objectId && nftId ? (
+                        <>
+                            <div className="mb-7.5">
+                                <NFTDisplayCard
+                                    objectId={nftId}
+                                    wideView
+                                    size="sm"
+                                />
+                            </div>
                             <Formik
                                 initialValues={initialValues}
                                 validateOnMount={true}
@@ -112,13 +131,13 @@ function NftTransferPage() {
                                     }
                                 />
                             </Formik>
-                        </div>
-                    </>
-                ) : (
-                    <Navigate to="/" replace />
-                )}
-            </Loading>
-        </div>
+                        </>
+                    ) : (
+                        <Navigate to="/" replace />
+                    )}
+                </Loading>
+            </div>
+        </Overlay>
     );
 }
 

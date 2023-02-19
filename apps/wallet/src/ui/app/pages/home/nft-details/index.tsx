@@ -12,7 +12,7 @@ import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
-import NFTDisplayCard from '_components/nft-display';
+import { NFTDisplayCard } from '_components/nft-display';
 import { useAppSelector, useNFTBasicData, useObjectsState } from '_hooks';
 import { createAccountNftByIdSelector } from '_redux/slices/account';
 import ExternalLink from '_src/ui/app/components/external-link';
@@ -97,10 +97,7 @@ function NFTDetailsPage() {
                         <PageTitle back="/nfts" />
                         <div className="flex flex-col flex-nowrap flex-1 items-stretch overflow-y-auto overflow-x-hidden gap-7">
                             <div className="self-center gap-3 flex flex-col flex-nowrap items-center">
-                                <NFTDisplayCard
-                                    nftobj={selectedNft}
-                                    size="lg"
-                                />
+                                <NFTDisplayCard objectId={nftId!} size="lg" />
                                 {nftId ? (
                                     <ExplorerLink
                                         type={ExplorerLinkType.object}

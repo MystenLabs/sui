@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 import Alert from '_components/alert';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
-import { NftThumbnail } from '_components/nft-display/NftThumbnail';
+import { NFTDisplayCard } from '_components/nft-display';
 import { useAppSelector, useObjectsOwnedByAddress } from '_hooks';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
@@ -47,7 +47,7 @@ function NftsPage() {
                                 className="no-underline"
                             >
                                 <ErrorBoundary>
-                                    <NftThumbnail
+                                    <NFTDisplayCard
                                         objectId={objectId}
                                         size="md"
                                         showlabel
