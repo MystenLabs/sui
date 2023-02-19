@@ -457,8 +457,7 @@ const BCS_0_26_SPEC = {
   },
   enums: BCS_SPEC.enums,
   aliases: {
-    // change in object digest to base58
-    ObjectDigest: BCS.BASE58,
+    ObjectDigest: BCS.BASE64,
   },
 };
 
