@@ -1,5 +1,19 @@
 # @mysten/sui.js
 
+## 0.28.0
+
+### Minor Changes
+
+- a67cc044b: Transaction signatures are now serialized into a single string, and all APIs that previously took the public key, signature, and scheme now just take the single serialized signature string. To help make parsing this easier, there are new `toSerializedSignature` and `fromSerializedSignature` methods exposed as well.
+- a67cc044b: The RawSigner now provides a `signTransaction` function, which can be used to sign a transaction without submitting it to the network.
+- a67cc044b: The RawSigner now provides a `signMessage` function that can be used to sign personal messages. The SDK also now exports a `verifyMessage` function that can be used to easily verify a message signed with `signMessage`.
+
+### Patch Changes
+
+- 24bdb66c6: Include client type and version in RPC client request headers
+- Updated dependencies [598f106ef]
+  - @mysten/bcs@0.6.0
+
 ## 0.27.0
 
 ### Minor Changes
