@@ -5,7 +5,6 @@ import { Coin } from '@mysten/sui.js';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
-import Alert from '_components/alert';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import { NFTDisplayCard } from '_components/nft-display';
@@ -14,11 +13,7 @@ import PageTitle from '_src/ui/app/shared/PageTitle';
 
 function NftsPage() {
     const accountAddress = useAppSelector(({ account }) => account.address);
-    const {
-        data,
-        isLoading,
-        error: nftError,
-    } = useObjectsOwnedByAddress(accountAddress);
+    const { data, isLoading } = useObjectsOwnedByAddress(accountAddress);
     const nfts = useMemo(
         () => data?.filter((obj) => !Coin.isCoin(obj)),
         [data]
@@ -28,14 +23,6 @@ function NftsPage() {
         <div className="flex flex-col flex-nowrap items-center gap-4 flex-1">
             <PageTitle title="NFTs" />
             <Loading loading={isLoading}>
-                {nftError ? (
-                    <Alert>
-                        <div>
-                            <strong>Sync error (data might be outdated)</strong>
-                        </div>
-                        <small>{nftError.message}</small>
-                    </Alert>
-                ) : null}
                 {nfts ? (
                     <div className="grid grid-cols-2 gap-x-3.5 gap-y-4 w-full">
                         {nfts.map(({ objectId }) => (
