@@ -248,15 +248,14 @@ impl AuthorityStore {
             .contains_key(digest)?)
     }
 
-    pub fn transaction_executed_in_epoch(
+    pub fn get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
-    ) -> SuiResult<Option<EpochId>> {
+    ) -> SuiResult<Option<(EpochId, CheckpointSequenceNumber)>> {
         Ok(self
             .perpetual_tables
             .executed_transactions_to_checkpoint
-            .get(digest)?
-            .map(|(epoch, _)| epoch))
+            .get(digest)?)
     }
 
     /// Returns true if there are no objects in the database
