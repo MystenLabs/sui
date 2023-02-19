@@ -11,7 +11,7 @@ import { useGetNFTMeta, useFileExtensionType } from '_hooks';
 
 import type { VariantProps } from 'class-variance-authority';
 
-const nftDisplayCardStyles = cva('flex flex-nowrap items-center', {
+const nftDisplayCardStyles = cva('flex flex-nowrap items-center h-full', {
     variants: {
         animateHover: {
             true: 'group',
@@ -42,14 +42,16 @@ export function NFTDisplayCard({
     borderRadius = 'md',
 }: NFTsProps) {
     const { data: nftMeta, isLoading } = useGetNFTMeta(objectId);
-    const nftTitle = nftMeta?.name || objectId;
+    const truncateObjectId = formatAddress(objectId);
+    const nftName = nftMeta?.name;
+    const nftTypeShort = formatAddress(nftName!);
     const nftUrl = nftMeta?.url || null;
     const fileExtensionType = useFileExtensionType(nftUrl!);
     return (
         <div className={nftDisplayCardStyles({ animateHover, wideView })}>
             <Loading loading={isLoading}>
                 <NftImage
-                    name={nftUrl}
+                    name={nftName!}
                     src={nftUrl}
                     animateHover={true}
                     showLabel={!wideView}
@@ -60,7 +62,7 @@ export function NFTDisplayCard({
                 {wideView ? (
                     <div className="flex flex-col gap-1 flex-1 min-w-0">
                         <div className="capitalize text-gray-100 truncate font-semibold text-base ws-nowrap">
-                            {nftMeta?.name}
+                            {nftName || truncateObjectId}
                         </div>
                         <div className="text-gray-75 text-body font-medium">
                             {nftMeta?.url ? (
@@ -80,7 +82,7 @@ export function NFTDisplayCard({
                                 'group-hover:text-black duration-200 ease-ease-in-out-cubic'
                         )}
                     >
-                        {formatAddress(nftTitle)}
+                        {nftTypeShort || truncateObjectId}
                     </div>
                 ) : null}
             </Loading>

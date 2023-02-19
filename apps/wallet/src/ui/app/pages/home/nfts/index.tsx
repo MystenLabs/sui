@@ -24,7 +24,7 @@ function NftsPage() {
             <PageTitle title="NFTs" />
             <Loading loading={isLoading}>
                 {nfts ? (
-                    <div className="grid grid-cols-2 gap-x-3.5 gap-y-4 w-full">
+                    <div className="grid grid-cols-2 gap-x-3.5 gap-y-4 w-full h-full">
                         {nfts.map(({ objectId }) => (
                             <Link
                                 to={`/nft-details?${new URLSearchParams({
