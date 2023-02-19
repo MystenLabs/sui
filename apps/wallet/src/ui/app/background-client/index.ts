@@ -287,6 +287,31 @@ export class BackgroundClient {
         );
     }
 
+    public async exportAccount(password: string, accountAddress: SuiAddress) {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'exportAccount'>>({
+                    type: 'keyring',
+                    method: 'exportAccount',
+                    args: { password, accountAddress },
+                })
+            ).pipe(
+                take(1),
+                map(({ payload }) => {
+                    if (
+                        isKeyringPayload(payload, 'exportAccount') &&
+                        payload.return
+                    ) {
+                        return payload.return.keyPair;
+                    }
+                    throw new Error(
+                        'Error unknown response for export account message'
+                    );
+                })
+            )
+        );
+    }
+
     private setupAppStatusUpdateInterval() {
         setInterval(() => {
             this.sendAppStatus();
