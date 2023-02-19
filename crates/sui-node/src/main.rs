@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use sui_config::{Config, NodeConfig};
 use sui_node::metrics;
-use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use sui_protocol_config::SupportedProtocolVersions;
 use sui_telemetry::send_telemetry_event;
 use tokio::task;
 use tokio::time::sleep;
