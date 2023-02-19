@@ -406,7 +406,7 @@ fn test_basic_args_linter_top_level() {
         .unwrap()
         .into_modules();
     let example_package =
-        Object::new_package(compiled_modules, TransactionDigest::genesis()).unwrap();
+        Object::new_package_for_testing(compiled_modules, TransactionDigest::genesis()).unwrap();
     let example_package = example_package.data.try_as_package().unwrap();
 
     let module = Identifier::new("geniteam").unwrap();
@@ -526,7 +526,7 @@ fn test_basic_args_linter_top_level() {
         .unwrap()
         .into_modules();
     let example_package =
-        Object::new_package(compiled_modules, TransactionDigest::genesis()).unwrap();
+        Object::new_package_for_testing(compiled_modules, TransactionDigest::genesis()).unwrap();
     let framework_pkg = example_package.data.try_as_package().unwrap();
 
     let module = Identifier::new("object_basics").unwrap();
@@ -625,7 +625,7 @@ fn test_basic_args_linter_top_level() {
         .unwrap()
         .into_modules();
     let example_package =
-        Object::new_package(compiled_modules, TransactionDigest::genesis()).unwrap();
+        Object::new_package_for_testing(compiled_modules, TransactionDigest::genesis()).unwrap();
     let example_package = example_package.data.try_as_package().unwrap();
 
     let module = Identifier::new("entry_point_vector").unwrap();

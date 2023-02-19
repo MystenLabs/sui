@@ -352,6 +352,9 @@ pub struct SuiTransactionResponse {
     pub certificate: SuiCertifiedTransaction,
     pub effects: SuiTransactionEffects,
     pub timestamp_ms: Option<u64>,
+    /// The checkpoint number when this transaction was included and hence finalized.
+    /// This is only returned in the read api, not in the transaction execution api.
+    pub checkpoint: Option<CheckpointSequenceNumber>,
     pub parsed_data: Option<SuiParsedTransactionResponse>,
 }
 
@@ -568,6 +571,7 @@ impl TryInto<Object> for SuiObject<SuiRawData> {
     type Error = anyhow::Error;
 
     fn try_into(self) -> Result<Object, Self::Error> {
+        let protocol_config = ProtocolConfig::get_for_min_version();
         let data = match self.data {
             SuiRawData::MoveObject(o) => {
                 let struct_tag = parse_sui_struct_tag(o.type_())?;
@@ -577,11 +581,15 @@ impl TryInto<Object> for SuiObject<SuiRawData> {
                         o.has_public_transfer,
                         o.version,
                         o.bcs_bytes,
-                        ProtocolConfig::get_for_min_version(),
+                        protocol_config,
                     )?
                 })
             }
-            SuiRawData::Package(p) => Data::Package(MovePackage::new(p.id, &p.module_map)?),
+            SuiRawData::Package(p) => Data::Package(MovePackage::new(
+                p.id,
+                &p.module_map,
+                protocol_config.max_move_package_size(),
+            )?),
         };
         Ok(Object {
             data,

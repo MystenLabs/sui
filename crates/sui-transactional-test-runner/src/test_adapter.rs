@@ -128,8 +128,18 @@ fn create_genesis_module_objects() -> Genesis {
     let objects = vec![create_clock()];
     // SAFETY: unwraps safe because genesis packages should never exceed max size
     let packages = vec![
-        Object::new_package(std_modules.clone(), TransactionDigest::genesis()).unwrap(),
-        Object::new_package(sui_modules.clone(), TransactionDigest::genesis()).unwrap(),
+        Object::new_package(
+            std_modules.clone(),
+            TransactionDigest::genesis(),
+            PROTOCOL_CONSTANTS.max_move_package_size(),
+        )
+        .unwrap(),
+        Object::new_package(
+            sui_modules.clone(),
+            TransactionDigest::genesis(),
+            PROTOCOL_CONSTANTS.max_move_package_size(),
+        )
+        .unwrap(),
     ];
     let modules = vec![std_modules, sui_modules];
     Genesis {

@@ -395,6 +395,7 @@
                 ]
               },
               "timestamp_ms": null,
+              "checkpoint": null,
               "parsed_data": null
             }
           }
@@ -1610,6 +1611,7 @@
                 ]
               },
               "timestamp_ms": null,
+              "checkpoint": null,
               "parsed_data": null
             }
           }
@@ -2714,6 +2716,7 @@
                 ]
               },
               "timestamp_ms": null,
+              "checkpoint": null,
               "parsed_data": null
             }
           }
@@ -6369,6 +6372,15 @@
         "properties": {
           "certificate": {
             "$ref": "#/components/schemas/CertifiedTransaction"
+          },
+          "checkpoint": {
+            "description": "The checkpoint number when this transaction was included and hence finalized. This is only returned in the read api, not in the transaction execution api.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
           },
           "effects": {
             "$ref": "#/components/schemas/TransactionEffects"
