@@ -274,6 +274,16 @@ export class Keyring {
                     throw new Error('Failed to derive next account');
                 }
                 uiConnection.send(createMessage({ type: 'done' }, id));
+            } else if (
+                isKeyringPayload(payload, 'verifyPassword') &&
+                payload.args
+            ) {
+                if (
+                    !(await VaultStorage.verifyPassword(payload.args.password))
+                ) {
+                    throw new Error('Wrong password');
+                }
+                uiConnection.send(createMessage({ type: 'done' }, id));
             }
         } catch (e) {
             uiConnection.send(

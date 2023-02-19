@@ -275,6 +275,18 @@ export class BackgroundClient {
         );
     }
 
+    public async verifyPassword(password: string) {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'verifyPassword'>>({
+                    type: 'keyring',
+                    method: 'verifyPassword',
+                    args: { password },
+                })
+            ).pipe(take(1))
+        );
+    }
+
     private setupAppStatusUpdateInterval() {
         setInterval(() => {
             this.sendAppStatus();

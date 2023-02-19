@@ -57,6 +57,10 @@ type MethodToPayloads = {
         args: void;
         return: void;
     };
+    verifyPassword: {
+        args: { password: string };
+        return: void;
+    };
 };
 
 export interface KeyringPayload<Method extends keyof MethodToPayloads>
