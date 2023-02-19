@@ -12,6 +12,7 @@ import {
   optional,
   string,
   Struct,
+  validate,
 } from 'superstruct';
 
 /**
@@ -105,16 +106,17 @@ export class JsonRpcClient {
     if (is(response, ErrorResponse)) {
       throw new Error(`RPC Error: ${response.error.message}`);
     } else if (is(response, ValidResponse)) {
-      // TODO: Improve error messaging here using superstruct asserts
-      const expectedSchema = is(response.result, struct);
+      const err = validate(response.result, struct)[0];
       const errMsg =
         TYPE_MISMATCH_ERROR +
-        `Result received was: ${JSON.stringify(response.result)}`;
+        `Result received was: ${JSON.stringify(
+          response.result,
+        )}. Debug info: ${err}`;
 
-      if (skipDataValidation && !expectedSchema) {
+      if (skipDataValidation && err) {
         console.warn(errMsg);
         return response.result;
-      } else if (!expectedSchema) {
+      } else if (err) {
         throw new Error(`RPC Error: ${errMsg}`);
       }
       return response.result;

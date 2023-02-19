@@ -404,41 +404,6 @@ const BCS_SPEC = {
   },
 };
 
-const BCS_0_23_SPEC = {
-  structs: {
-    ...BCS_SPEC.structs,
-    MoveCallTx: {
-      package: 'SuiObjectRef',
-      module: BCS.STRING,
-      function: BCS.STRING,
-      typeArguments: 'vector<TypeTag>',
-      arguments: 'vector<CallArg>',
-    },
-    SharedObjectRef: {
-      objectId: BCS.ADDRESS,
-      initialSharedVersion: BCS.U64,
-    },
-  },
-  enums: BCS_SPEC.enums,
-  aliases: {
-    ObjectDigest: BCS.BASE64,
-  },
-};
-
-const BCS_0_24_SPEC = {
-  structs: {
-    ...BCS_SPEC.structs,
-    SharedObjectRef: {
-      objectId: BCS.ADDRESS,
-      initialSharedVersion: BCS.U64,
-    },
-  },
-  enums: BCS_SPEC.enums,
-  aliases: {
-    ObjectDigest: BCS.BASE64,
-  },
-};
-
 // for version <= 0.26.0
 const BCS_0_26_SPEC = {
   structs: {
@@ -465,22 +430,10 @@ const bcs = new BCS({ ...getSuiMoveConfig(), types: BCS_SPEC });
 registerUTF8String(bcs);
 
 // ========== Backward Compatibility (remove after v0.24 deploys) ===========
-const bcs_0_23 = new BCS({ ...getSuiMoveConfig(), types: BCS_0_23_SPEC });
-registerUTF8String(bcs_0_23);
-
-const bcs_0_24 = new BCS({ ...getSuiMoveConfig(), types: BCS_0_24_SPEC });
-registerUTF8String(bcs_0_24);
-
 const bcs_0_26 = new BCS({ ...getSuiMoveConfig(), types: BCS_0_26_SPEC });
 registerUTF8String(bcs_0_26);
 
 export function bcsForVersion(v?: RpcApiVersion) {
-  if (v?.major === 0 && v?.minor < 24) {
-    return bcs_0_23;
-  }
-  if (v?.major === 0 && v?.minor === 24) {
-    return bcs_0_24;
-  }
   if (v?.major === 0 && v?.minor <= 26) {
     return bcs_0_26;
   }
