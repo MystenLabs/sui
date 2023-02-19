@@ -45,7 +45,7 @@ jobs:
     name: Report Status
     runs-on: ubuntu-latest
     if: always()
-    needs: [release]
+    needs: [simtest]
     steps:
       - uses: technote-space/workflow-conclusion-action@v3
       - name: Post to slack
