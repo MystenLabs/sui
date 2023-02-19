@@ -32,7 +32,18 @@ describe("de/ser of inline struct definitions", () => {
       .ser({ name: "string", age: "u8" }, { name: "Charlie", age: 10 })
       .toString("hex");
 
-    expect(bcs.hasType("temp_struct")).toBe(false);
+    expect(bcs.hasType("temp-struct")).toBe(false);
+  });
+
+  it("should avoid duplicate key", () => {
+    const bcs = new BCS(getSuiMoveConfig());
+
+    bcs.registerStructType("temp-struct", { a0: 'u8' });
+
+    const sr = serde(bcs, { b0: "temp-struct" }, { b0: { a0: 0 } });
+
+    expect(bcs.hasType("temp-struct")).toBe(true);
+    expect(sr).toEqual({ b0: { a0: 0 } });
   });
 });
 

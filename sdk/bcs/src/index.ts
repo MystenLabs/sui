@@ -494,9 +494,16 @@ export class BCS {
 
   /**
    * Name of the key to use for temporary struct definitions.
+   * Returns a temp key + index (for a case when multiple temp
+   * structs are processed).
    */
   private get tempKey() {
-    return "temp_struct";
+    const key = (i: any) => "temp-struct-" + i;
+    let i = 0;
+    while (this.hasType(key(i))) {
+      i++;
+    }
+    return key(i);
   }
 
   /**
@@ -572,15 +579,17 @@ export class BCS {
     size: number = 1024
   ): BcsWriter {
     if (typeof type === "string") {
-      let { typeName, typeParams } = this.parseTypeName(type);
+      const { typeName, typeParams } = this.parseTypeName(type);
       return this.getTypeInterface(typeName).encode(data, size, typeParams);
     }
 
     // Quick serialization without registering the type in the main struct.
     if (typeof type == "object") {
-      let temp = new BCS(this);
-      temp.registerStructType(this.tempKey, type);
-      return temp.ser(this.tempKey, data, size);
+      const key = this.tempKey;
+      const temp = new BCS(this);
+      return temp
+        .registerStructType(key, type)
+        .ser(key, data, size);
     }
 
     throw new Error(
@@ -618,15 +627,17 @@ export class BCS {
 
     // In case the type specified is already registered.
     if (typeof type == "string") {
-      let { typeName, typeParams } = this.parseTypeName(type);
+      const { typeName, typeParams } = this.parseTypeName(type);
       return this.getTypeInterface(typeName).decode(data, typeParams);
     }
 
     // Deserialize without registering a type using a temporary clone.
     if (typeof type == "object") {
-      let temp = new BCS(this);
-      temp.registerStructType(this.tempKey, type);
-      return temp.de(this.tempKey, data, encoding);
+      const temp = new BCS(this);
+      const key = this.tempKey;
+      return temp
+        .registerStructType(key, type)
+        .de(key, data, encoding);
     }
 
     throw new Error(
