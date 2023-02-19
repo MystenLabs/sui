@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use sui_config::{Config, NodeConfig};
 use sui_node::metrics;
-use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use sui_protocol_config::SupportedProtocolVersions;
 use sui_telemetry::send_telemetry_event;
 use tokio::task;
 use tokio::time::sleep;
@@ -46,7 +46,8 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<()> {
     // Ensure that a validator never calls get_for_min_version/get_for_max_version.
-    ProtocolConfig::poison_get_for_min_version();
+    // TODO: re-enable after we figure out how to eliminate crashes in prod because of this.
+    // ProtocolConfig::poison_get_for_min_version();
 
     let args = Args::parse();
     let mut config = NodeConfig::load(&args.config_path)?;
