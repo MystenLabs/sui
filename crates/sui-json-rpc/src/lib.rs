@@ -42,6 +42,8 @@ pub const CLIENT_SDK_VERSION_HEADER: &str = "client-sdk-version";
 pub const CLIENT_TARGET_API_VERSION_HEADER: &str = "client-target-api-version";
 pub const APP_NAME_HEADER: &str = "app-name";
 
+pub const MAX_REQUEST_SIZE: u32 = 2 << 30;
+
 #[cfg(test)]
 #[path = "unit_tests/rpc_server_tests.rs"]
 mod rpc_server_test;
@@ -147,7 +149,7 @@ impl JsonRpcServerBuilder {
             .layer(metrics_layer);
 
         let server = ServerBuilder::default()
-            .max_response_body_size(2 << 30)
+            .max_response_body_size(MAX_REQUEST_SIZE)
             .max_connections(max_connection)
             .set_host_filtering(AllowHosts::Any)
             .set_middleware(middleware)

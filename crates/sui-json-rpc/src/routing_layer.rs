@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::metrics::is_json;
-use crate::CLIENT_TARGET_API_VERSION_HEADER;
-use hyper::body::Bytes;
-use hyper::{body, http, Body, Request, Response};
+use crate::{CLIENT_TARGET_API_VERSION_HEADER, MAX_REQUEST_SIZE};
+use hyper::{Body, Method, Request, Response};
 use jsonrpsee::core::__reexports::serde_json;
-use jsonrpsee::core::server::helpers::MethodResponse;
-use jsonrpsee::types::error::ErrorCode;
-use jsonrpsee::types::{ErrorObject, Request as RpcRequest};
+use jsonrpsee::core::error::GenericTransportError;
+use jsonrpsee::core::http_helpers::read_body;
+use jsonrpsee::core::JsonRawValue;
+use jsonrpsee::types::Request as RpcRequest;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::future::Future;
@@ -93,47 +93,167 @@ where
                 .as_ref()
                 .and_then(|h| h.to_str().ok().map(|s| s.to_string()));
 
-            let req = if is_json(req.headers().get(http::header::CONTENT_TYPE)) {
-                let (part, body) = req.into_parts();
-                let bytes = body::to_bytes(body).await?;
-                let mut request: RpcRequest = serde_json::from_slice(&bytes)?;
+            let req = if req.method() == Method::POST && is_json(&req) {
+                let (parts, body) = req.into_parts();
+                let (body, is_single) =
+                    match read_body(&parts.headers, body, MAX_REQUEST_SIZE).await {
+                        Ok(r) => r,
+                        Err(GenericTransportError::TooLarge) => {
+                            return Ok(response::too_large(MAX_REQUEST_SIZE))
+                        }
+                        Err(GenericTransportError::Malformed) => return Ok(response::malformed()),
+                        Err(GenericTransportError::Inner(e)) => {
+                            tracing::error!("Internal error reading request body: {}", e);
+                            return Ok(response::internal_error());
+                        }
+                    };
+                let body = if is_single {
+                    process_single_request(
+                        &body,
+                        &version,
+                        &routes,
+                        &route_to_methods,
+                        disable_routing,
+                    )
+                } else {
+                    process_batched_requests(
+                        &body,
+                        &version,
+                        &routes,
+                        &route_to_methods,
+                        disable_routing,
+                    )
+                };
 
-                // Reject direct access to the old methods
-                if route_to_methods.contains(request.method.as_ref()) {
-                    let error = MethodResponse::error(
-                        request.id,
-                        ErrorObject::from(ErrorCode::MethodNotFound),
-                    );
-                    let response = hyper::Response::builder()
-                        .status(hyper::StatusCode::OK)
-                        .header(
-                            "content-type",
-                            hyper::header::HeaderValue::from_static(
-                                "application/json; charset=utf-8",
-                            ),
-                        )
-                        .body(Body::from(error.result))?;
-                    return Ok(response);
-                }
-
-                // Modify the method name if routing is enabled
-                if !disable_routing {
-                    if let Some(version) = version {
-                        if let Some(route) = routes.get(request.method.as_ref()) {
-                            if route.matches(&version) {
-                                request.method = route.route_to.clone().into();
-                            }
-                        };
+                let body = match body {
+                    Ok(body) => body,
+                    Err(e) => {
+                        tracing::error!("Internal error reading request body: {}", e);
+                        return Ok(response::internal_error());
                     }
-                }
+                };
 
-                let bytes = Bytes::from(serde_json::to_vec(&request)?);
-                Request::from_parts(part, Body::from(bytes))
+                Request::from_parts(parts, Body::from(body))
             } else {
                 req
             };
             inner.call(req).await.map_err(|err| err.into())
         };
         Box::pin(res_fut)
+    }
+}
+
+fn process_batched_requests(
+    body: &[u8],
+    version: &Option<String>,
+    routes: &HashMap<String, MethodRouting>,
+    route_to_methods: &HashSet<String>,
+    disable_routing: bool,
+) -> serde_json::error::Result<String> {
+    let requests: Vec<&JsonRawValue> = serde_json::from_slice(body)?;
+    let mut processed_reqs = Vec::new();
+    for request in requests {
+        let req = process_single_request(
+            serde_json::from_str(request.get())?,
+            version,
+            routes,
+            route_to_methods,
+            disable_routing,
+        )?;
+        processed_reqs.push(JsonRawValue::from_string(req)?)
+    }
+    serde_json::to_string(&processed_reqs)
+}
+
+fn process_single_request(
+    body: &[u8],
+    version: &Option<String>,
+    routes: &HashMap<String, MethodRouting>,
+    route_to_methods: &HashSet<String>,
+    disable_routing: bool,
+) -> serde_json::error::Result<String> {
+    process_rpc_request(
+        serde_json::from_slice(body)?,
+        version,
+        routes,
+        route_to_methods,
+        disable_routing,
+    )
+}
+
+fn process_rpc_request(
+    mut request: RpcRequest,
+    version: &Option<String>,
+    routes: &HashMap<String, MethodRouting>,
+    route_to_methods: &HashSet<String>,
+    disable_routing: bool,
+) -> serde_json::error::Result<String> {
+    // Reject direct access to the old methods
+    if route_to_methods.contains(request.method.as_ref()) {
+        request.method = "INVALID_ROUTING".into();
+    }
+
+    // Modify the method name if routing is enabled
+    if !disable_routing {
+        if let Some(version) = version {
+            if let Some(route) = routes.get(request.method.as_ref()) {
+                if route.matches(version) {
+                    request.method = route.route_to.clone().into();
+                }
+            };
+        }
+    }
+    serde_json::to_string(&request)
+}
+
+// error responses borrowed from jsonrpsee
+mod response {
+    use jsonrpsee::core::__reexports::serde_json;
+    use jsonrpsee::types::error::{reject_too_big_request, ErrorCode};
+    use jsonrpsee::types::{ErrorResponse, Id};
+    const JSON: &str = "application/json; charset=utf-8";
+
+    pub(crate) fn too_large(limit: u32) -> hyper::Response<hyper::Body> {
+        let error = serde_json::to_string(&ErrorResponse::borrowed(
+            reject_too_big_request(limit),
+            Id::Null,
+        ))
+        .expect("built from known-good data; qed");
+        from_template(hyper::StatusCode::PAYLOAD_TOO_LARGE, error, JSON)
+    }
+
+    pub(crate) fn internal_error() -> hyper::Response<hyper::Body> {
+        let error = serde_json::to_string(&ErrorResponse::borrowed(
+            ErrorCode::InternalError.into(),
+            Id::Null,
+        ))
+        .expect("built from known-good data; qed");
+
+        from_template(hyper::StatusCode::INTERNAL_SERVER_ERROR, error, JSON)
+    }
+
+    pub(crate) fn malformed() -> hyper::Response<hyper::Body> {
+        let error = serde_json::to_string(&ErrorResponse::borrowed(
+            ErrorCode::ParseError.into(),
+            Id::Null,
+        ))
+        .expect("built from known-good data; qed");
+
+        from_template(hyper::StatusCode::BAD_REQUEST, error, JSON)
+    }
+
+    fn from_template<S: Into<hyper::Body>>(
+        status: hyper::StatusCode,
+        body: S,
+        content_type: &'static str,
+    ) -> hyper::Response<hyper::Body> {
+        hyper::Response::builder()
+            .status(status)
+            .header(
+                "content-type",
+                hyper::header::HeaderValue::from_static(content_type),
+            )
+            .body(body.into())
+            .expect("Unable to parse response body for type conversion")
     }
 }

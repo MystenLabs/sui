@@ -137,7 +137,7 @@ where
 
         let res_fut = async move {
             // Parse request to retrieve RPC method name.
-            let (rpc_name, req) = if is_json(req.headers().get(http::header::CONTENT_TYPE)) {
+            let (rpc_name, req) = if is_json(&req) {
                 let (part, body) = req.into_parts();
                 let bytes = body::to_bytes(body).await?;
                 #[derive(Deserialize)]
@@ -220,8 +220,10 @@ where
     }
 }
 
-pub fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
-    content_type
+pub fn is_json(request: &hyper::Request<hyper::Body>) -> bool {
+    request
+        .headers()
+        .get(http::header::CONTENT_TYPE)
         .and_then(|val| val.to_str().ok())
         .map_or(false, |content| {
             content.eq_ignore_ascii_case("application/json")
