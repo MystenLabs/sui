@@ -119,7 +119,7 @@ export function SendTokenForm({
                             actionDisabled={
                                 parsedAmount === balance ||
                                 queryResult.isLoading ||
-                                !maxToken 
+                                !maxToken
                             }
                         />
                     </div>
