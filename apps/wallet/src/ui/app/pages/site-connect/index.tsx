@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { CheckFill12 } from '@mysten/icons';
 import { formatAddress, type SuiAddress } from '@mysten/sui.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
+import { DAppPermissionsList } from '../../components/DAppPermissionsList';
 import { SummaryCard } from '../../components/SummaryCard';
 import { WalletListSelect } from '../../components/WalletListSelect';
 import { Text } from '../../shared/text';
@@ -19,15 +19,9 @@ import {
 } from '_redux/slices/permissions';
 import { FEATURES } from '_src/shared/experimentation/features';
 
-import type { PermissionType } from '_messages/payloads/permissions';
 import type { RootState } from '_redux/RootReducer';
 
 import st from './SiteConnectPage.module.scss';
-
-const permissionTypeToTxt: Record<PermissionType, string> = {
-    viewAccount: 'Share wallet address',
-    suggestTransactions: 'Suggest transactions to approve',
-};
 
 function SiteConnectPage() {
     const { requestID } = useParams();
@@ -138,25 +132,9 @@ function SiteConnectPage() {
                         <SummaryCard
                             header="Permissions requested"
                             body={
-                                <ul className={st.permissions}>
-                                    {permissionRequest.permissions.map(
-                                        (aPermission) => (
-                                            <li
-                                                key={aPermission}
-                                                className={st.permission}
-                                            >
-                                                <CheckFill12
-                                                    className={st.checkmark}
-                                                />
-                                                {
-                                                    permissionTypeToTxt[
-                                                        aPermission
-                                                    ]
-                                                }
-                                            </li>
-                                        )
-                                    )}
-                                </ul>
+                                <DAppPermissionsList
+                                    permissions={permissionRequest.permissions}
+                                />
                             }
                         />
                         {isMultiAccountEnabled ? (
