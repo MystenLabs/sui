@@ -2,176 +2,102 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
+import { useMutation } from '@tanstack/react-query';
 import cl from 'classnames';
-import { useCallback, useState } from 'react';
+import { useMemo } from 'react';
+import { toast } from 'react-hot-toast';
 
-import SuiApp, { SuiAppEmpty } from './SuiApp';
-import Button from '_app/shared/button';
-import ExplorerLink from '_components/explorer-link';
+import { useExplorerLink } from '../../hooks/useExplorerLink';
+import { permissionsSelectors } from '../../redux/slices/permissions';
+import { SuiApp, type DAppEntry } from './SuiApp';
+import { SuiAppEmpty } from './SuiAppEmpty';
+import { Button } from '_app/shared/ButtonUI';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
-import Icon, { SuiIcons } from '_components/icon';
-import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useAppSelector, useAppDispatch } from '_hooks';
+import { useAppDispatch, useAppSelector } from '_hooks';
 import { mintDemoNFT } from '_redux/slices/sui-objects';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { trackEvent } from '_src/shared/plausible';
-
-import type { SerializedError } from '@reduxjs/toolkit';
+import { prepareLinkToCompare } from '_src/shared/utils';
 
 import st from './Playground.module.scss';
 
-type DappEntry = {
-    name: string;
-    description: string;
-    link: string;
-    icon: string;
-    tags: string[];
-};
-
 function AppsPlayGround() {
-    const [mintInProgress, setMintInProgress] = useState(false);
-    const [mintStatus, setMintStatus] = useState<boolean | null>(null);
-    const [mintError, setMintError] = useState<string | null>(null);
     const dispatch = useAppDispatch();
-
-    // Get connected apps
-    const connectedApps = useAppSelector(({ permissions }) => permissions);
-
-    // Get curated apps
-    const dapps = useFeature<DappEntry[]>(FEATURES.WALLET_DAPPS).value ?? [];
-
-    // flag curated apps that are connected
-    const curatedDapps = dapps.map((app) => {
-        const connectedApp = connectedApps.entities
-            ? Object.values(connectedApps.entities)
-            : [];
-
-        const isConnected = connectedApp.find((connectedItem) => {
-            return (
-                connectedItem &&
-                new URL(connectedItem.origin).hostname ===
-                    new URL(app.link).hostname
-            );
-        });
-
-        return {
-            ...app,
-            permissions: isConnected?.permissions || [],
-            ...(isConnected
-                ? {
-                      disconnect: true,
-                      id: isConnected.id,
-                      // use the favicon from the connected app if it exists
-                      icon: isConnected.favIcon || app.icon,
-                      // instance where the origin has a trailing slash and the app.link does not
-                      link: isConnected.origin,
-                      pageLink: isConnected.pagelink,
-                  }
-                : {}),
-        };
-    });
-
-    const handleMint = useCallback(async () => {
-        setMintInProgress(true);
-        setMintError(null);
-        trackEvent('MintDevnetNFT');
-        try {
-            //TODO: add notification on success
+    const ecosystemApps =
+        useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value ?? [];
+    const mintMutation = useMutation({
+        mutationKey: ['mint-nft'],
+        mutationFn: async () => {
+            trackEvent('MintDevnetNFT');
             await dispatch(mintDemoNFT()).unwrap();
-        } catch (e) {
-            setMintStatus(false);
-            setMintError((e as SerializedError).message || null);
-        } finally {
-            setMintInProgress(false);
+        },
+        onSuccess: () => toast.success('Minted successfully'),
+        onError: () => toast.error('Failed to mint an NFT'),
+    });
+    const allPermissions = useAppSelector(permissionsSelectors.selectAll);
+    const linkToPermissionID = useMemo(() => {
+        const map = new Map<string, string>();
+        for (const aPermission of allPermissions) {
+            map.set(prepareLinkToCompare(aPermission.origin), aPermission.id);
+            if (aPermission.pagelink) {
+                map.set(
+                    prepareLinkToCompare(aPermission.pagelink),
+                    aPermission.id
+                );
+            }
         }
-    }, [dispatch]);
-
-    const mintStatusIcon =
-        mintStatus !== null ? (mintStatus ? 'check2' : 'x-lg') : null;
-
+        return map;
+    }, [allPermissions]);
+    const accountOnExplorerHref = useExplorerLink({
+        type: ExplorerLinkType.address,
+        useActiveAddress: true,
+    });
     return (
         <div className={cl(st.container)}>
             <h4 className={st.activeSectionTitle}>Playground</h4>
             <div className={st.groupButtons}>
                 <Button
-                    size="large"
-                    mode="outline"
-                    className={cl('btn', st.cta, st['mint-btn'])}
-                    onClick={handleMint}
-                    disabled={mintInProgress || mintStatus !== null}
-                >
-                    {mintInProgress ? <LoadingIndicator /> : 'Mint an NFT'}
-
-                    {!mintInProgress ? (
-                        mintStatusIcon ? (
-                            <Icon
-                                icon={mintStatusIcon}
-                                className={cl(st['mint-icon'], {
-                                    [st.success]: mintStatus,
-                                    [st.fail]: !mintStatus,
-                                })}
-                            />
-                        ) : (
-                            <Icon
-                                icon={SuiIcons.ArrowRight}
-                                className={cl(
-                                    st.arrowActionIcon,
-                                    st.angledArrow
-                                )}
-                            />
-                        )
-                    ) : null}
-                </Button>
-
-                <ExplorerLink
-                    className={cl('btn', st.cta, st.outline)}
-                    type={ExplorerLinkType.address}
-                    useActiveAddress={true}
-                    showIcon={false}
-                    track
-                >
-                    View account on Sui Explorer
-                    <Icon
-                        icon={SuiIcons.ArrowRight}
-                        className={cl(st.arrowActionIcon, st.angledArrow)}
-                    />
-                </ExplorerLink>
-                {mintError ? (
-                    <div className={st.error}>
-                        <strong>Minting NFT failed.</strong>
-                        <div>
-                            <small>{mintError}</small>
-                        </div>
-                    </div>
-                ) : null}
+                    size="tall"
+                    variant="outline"
+                    onClick={() => mintMutation.mutate()}
+                    loading={mintMutation.isLoading}
+                    text="Mint an NFT"
+                />
+                <Button
+                    size="tall"
+                    variant="outline"
+                    href={accountOnExplorerHref!}
+                    text="View account on Sui Explorer"
+                    onClick={() => {
+                        trackEvent('ViewExplorerAccount');
+                    }}
+                />
             </div>
-            {curatedDapps && curatedDapps.length ? (
-                <>
-                    <div className={st.desc}>
-                        <div className={st.title}>
-                            Builders in sui ecosystem
-                        </div>
+            <div className={st.desc}>
+                <div className={st.title}>Builders in sui ecosystem</div>
+                {ecosystemApps?.length ? (
+                    <>
                         Apps here are actively curated but do not indicate any
                         endorsement or relationship with Sui Wallet. Please
                         DYOR.
-                    </div>
-
-                    <div className={st.apps}>
-                        {curatedDapps.map((app, index) => (
-                            <SuiApp key={index} {...app} displaytype="full" />
-                        ))}
-                    </div>
-                </>
+                    </>
+                ) : null}
+            </div>
+            {ecosystemApps?.length ? (
+                <div className={st.apps}>
+                    {ecosystemApps.map((app) => (
+                        <SuiApp
+                            key={app.link}
+                            {...app}
+                            permissionID={linkToPermissionID.get(
+                                prepareLinkToCompare(app.link)
+                            )}
+                            displayType="full"
+                        />
+                    ))}
+                </div>
             ) : (
-                <>
-                    <div className={st.desc}>
-                        <div className={st.title}>
-                            Builders in sui ecosystem
-                        </div>
-                    </div>
-
-                    <SuiAppEmpty displaytype="full" />
-                </>
+                <SuiAppEmpty displayType="full" />
             )}
         </div>
     );
