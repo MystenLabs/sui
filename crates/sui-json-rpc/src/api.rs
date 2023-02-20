@@ -274,7 +274,7 @@ pub trait RpcFullNodeReadApi {
     #[method(name = "getLatestCheckpointSequenceNumber")]
     fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber>;
 
-    /// Return a checkpoint summary
+    /// Return a checkpoint
     #[method(name = "getCheckpoint")]
     fn get_checkpoint(
         &self,
