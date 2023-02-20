@@ -76,11 +76,10 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
 
     const totalSuiAmount = useMemo(() => {
         const amount = transferAmount.find(
-            ({ receiverAddress, coinType }) =>
-                receiverAddress === activeAddress && coinType === SUI_TYPE_ARG
+            ({ coinType }) => coinType === SUI_TYPE_ARG
         )?.amount;
         return amount ? Math.abs(amount) : null;
-    }, [activeAddress, transferAmount]);
+    }, [transferAmount]);
 
     const isSender = activeAddress === getTransactionSender(txn);
     const isStakeTxn =
@@ -167,9 +166,9 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                                                   <TxnAddress
                                                       address={recipientAddress}
                                                       label={
-                                                          amount > 0
-                                                              ? 'From'
-                                                              : 'To'
+                                                          isSender
+                                                              ? 'To'
+                                                              : 'From'
                                                       }
                                                   />
                                               </div>
