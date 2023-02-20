@@ -61,7 +61,7 @@ export const ErrorResponse = object({
 export class JsonRpcClient {
   private rpcClient: RpcClient;
 
-  constructor(url: string, tlsOptions?: TlsOptions, httpHeaders?: HttpHeaders) {
+  constructor(url: string, httpHeaders?: HttpHeaders, tlsOptions?: TlsOptions) {
     this.rpcClient = this.createRpcClient(url, httpHeaders, tlsOptions);
   }
 

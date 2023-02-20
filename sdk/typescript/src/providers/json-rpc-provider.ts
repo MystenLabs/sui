@@ -150,7 +150,11 @@ export class JsonRpcProvider extends Provider {
     }
 
     const opts = { ...DEFAULT_OPTIONS, ...options };
-    this.client = new JsonRpcClient(this.endpoints.fullNode, opts.tlsOptions);
+    this.client = new JsonRpcClient(
+      this.endpoints.fullNode,
+      undefined,
+      opts.tlsOptions,
+    );
     this.wsClient = new WebsocketClient(
       this.endpoints.fullNode,
       opts.skipDataValidation!,
