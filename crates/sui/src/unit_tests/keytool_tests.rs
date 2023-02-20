@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
 use crate::keytool::read_authority_keypair_from_file;
 use crate::keytool::read_keypair_from_file;
 
@@ -160,25 +162,23 @@ fn test_load_keystore_err() {
 #[test]
 fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
     // Test case matches with /mysten/sui/sdk/typescript/test/unit/cryptography/ed25519-keypair.test.ts
-    let mut keystore = Keystore::from(InMemKeystore::new(0));
-    KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
-        key_scheme: SignatureScheme::ED25519,
-        derivation_path: None,
+    const TEST_CASES: [[&str; 3]; 3] = [["film crazy soon outside stand loop subway crumble thrive popular green nuclear struggle pistol arm wife phrase warfare march wheat nephew ask sunny firm", "AN0JMHpDum3BhrVwnkylH0/HGRHBQ/fO/8+MYOawO8j6", "8867068daf9111ee013450eea1b1e10ffd62fc87"],
+    ["require decline left thought grid priority false tiny gasp angle royal system attack beef setup reward aunt skill wasp tray vital bounce inflict level", "AJrA997C1eVz6wYIp7bO8dpITSRBXpvg1m70/P3gusu2", "29bb131378438b6c7f50526e6a853a72ed97f10b"],
+    ["organ crash swim stick traffic remember army arctic mesh slice swear summer police vast chaos cradle squirrel hood useless evidence pet hub soap lake", "AAEMSIQeqyz09StSwuOW4MElQcZ+4jHW4/QcWlJEf5Yk", "6e5387db7249f6b0dc5b68eb095109157dc192a0"]];
+
+    for t in TEST_CASES {
+        let mut keystore = Keystore::from(InMemKeystore::new(0));
+        KeyToolCommand::Import {
+            mnemonic_phrase: t[0].to_string(),
+            key_scheme: SignatureScheme::ED25519,
+            derivation_path: None,
+        }
+        .execute(&mut keystore)?;
+        let kp = SuiKeyPair::decode_base64(t[1]).unwrap();
+        let addr = SuiAddress::from_str(t[2]).unwrap();
+        assert_eq!(SuiAddress::from(&kp.public()), addr);
+        assert!(keystore.addresses().contains(&addr));
     }
-    .execute(&mut keystore)?;
-    keystore.keys().iter().for_each(|pk| {
-        assert_eq!(
-            Hex::encode(pk.as_ref()),
-            "685b2d6f98784dd763249af21c92f588ca1be80c40a98c55bf7c91b74e5ac1e2"
-        );
-    });
-    keystore.addresses().iter().for_each(|addr| {
-        assert_eq!(
-            addr.to_string(),
-            "0x1a4623343cd42be47d67314fce0ad042f3c82685"
-        );
-    });
     Ok(())
 }
 
