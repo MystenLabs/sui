@@ -9024,6 +9024,7 @@ dependencies = [
  "once_cell",
  "schemars",
  "serde 1.0.152",
+ "tracing",
  "workspace-hack",
 ]
 

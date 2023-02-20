@@ -878,7 +878,7 @@ pub fn empty_for_testing() -> TemporaryStore<()> {
         (),
         InputObjects::new(Vec::new()),
         TransactionDigest::genesis(),
-        ProtocolConfig::get_for_min_version(),
+        &ProtocolConfig::get_for_min_version(),
     )
 }
 
@@ -889,6 +889,6 @@ pub fn with_input_objects_for_testing(input_objects: InputObjects) -> TemporaryS
         (),
         input_objects,
         TransactionDigest::genesis(),
-        ProtocolConfig::get_for_min_version(),
+        &ProtocolConfig::get_for_min_version(),
     )
 }
