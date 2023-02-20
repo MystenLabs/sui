@@ -747,10 +747,14 @@ impl CheckpointBuilder {
         // We must write cert and effects to the state sync tables so that state sync is able to
         // deliver to the transaction to CheckpointExecutor after it is included in a certified
         // checkpoint.
+        let certs = &self.state.database.perpetual_tables.certificates;
         let synced_txns = &self.state.database.perpetual_tables.synced_transactions;
         let synced_effects = &self.state.database.perpetual_tables.effects;
         synced_txns
             .batch()
+            .insert_batch(certs, [(*cert.digest(), cert.serializable_ref())])?
+            // TODO: checkpoint_executor assumes that un-executed transactions are only found in
+            // synced_transactions, so we must insert it there as well.
             .insert_batch(synced_txns, [(*cert.digest(), cert.serializable_ref())])?
             .insert_batch(
                 synced_effects,
