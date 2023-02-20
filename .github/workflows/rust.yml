@@ -38,11 +38,7 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+      - run: rustup toolchain install stable --profile minimal
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@nextest
       - name: cargo test
@@ -56,11 +52,7 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          components: clippy
-          override: true
+      - run: rustup toolchain install stable --profile minimal
       - uses: Swatinem/rust-cache@v2
       # See '.cargo/config' for list of enabled/disappled clippy lints
       - name: cargo clippy
@@ -70,12 +62,7 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          components: rustfmt
-          override: true
+      - run: rustup toolchain install nightly --profile minimal
       - name: rustfmt
         uses: actions-rs/cargo@v1
         with:
