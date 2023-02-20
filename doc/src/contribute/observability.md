@@ -220,3 +220,10 @@ For example, set `_RJEM_MALLOC_CONF` to:
 The preceding setting means: turn on profiling, sample every 2^19 or 512KB bytes allocated,
 and dump out the profile every 2^24 or 16MB of memory allocated. However, the automatic profiling is designed to produce files that are better named and at less intervals,
 so overriding the default configuration is not usually recommended.
+
+### Observable metrics monitor dashboard
+
+There are some fantastic Grafana-baesd metrics monitor dashboard for helping node operator manage their node more easily:
+- [SUI Fullnode Monitor Dashboard](https://grafana.com/grafana/dashboards/18141)
+
+**Note:** If you want to install dashboard above, just jump into the link and click `Copy ID to clipboard` bottom(on the right of the page). Then import a new dashboard by Dashboard ID in your Grafana site. For more detail you can see [Grafana official document](https://grafana.com/docs/grafana/latest/dashboards/manage-dashboards/#import-a-dashboard)
