@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use hyper::header::HeaderValue;
 use hyper::HeaderMap;
 use jsonrpsee::core::client::ClientT;
+use jsonrpsee::core::params::BatchRequestBuilder;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
@@ -137,6 +138,41 @@ async fn test_disable_routing() {
         )
         .await;
     assert!(response.is_err());
+
+    handle.stop().unwrap()
+}
+
+#[tokio::test]
+async fn test_rpc_backward_compatibility_batched_request() {
+    let mut builder = JsonRpcServerBuilder::new("1.5", &Registry::new()).unwrap();
+    builder.register_module(TestApiModule).unwrap();
+
+    let port = get_available_port("0.0.0.0");
+    let handle = builder
+        .start(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)))
+        .await
+        .unwrap();
+    let url = format!("http://0.0.0.0:{}", port);
+
+    // Test with un-versioned client
+    let client = HttpClientBuilder::default().build(&url).unwrap();
+
+    let mut builder = BatchRequestBuilder::default();
+    builder.insert("test_foo", rpc_params!(true)).unwrap();
+    builder.insert("test_foo", rpc_params!(true)).unwrap();
+    builder.insert("test_foo", rpc_params!(true)).unwrap();
+
+    let response = client.batch_request::<String>(builder).await.unwrap();
+    assert_eq!(3, response.num_successful_calls());
+
+    // try to access old method directly should fail
+    let mut builder = BatchRequestBuilder::default();
+    builder.insert("test_foo_1_5", rpc_params!(true)).unwrap();
+    builder.insert("test_foo", rpc_params!(true)).unwrap();
+    builder.insert("test_foo", rpc_params!(true)).unwrap();
+
+    let response = client.batch_request::<String>(builder).await.unwrap();
+    assert_eq!(2, response.num_successful_calls());
 
     handle.stop().unwrap()
 }

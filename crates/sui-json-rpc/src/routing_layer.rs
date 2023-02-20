@@ -153,7 +153,7 @@ fn process_batched_requests(
     let requests: Vec<&JsonRawValue> = serde_json::from_slice(body)?;
     let mut processed_reqs = Vec::new();
     for request in requests {
-        let req = process_single_request(
+        let req = process_rpc_request(
             serde_json::from_str(request.get())?,
             version,
             routes,
