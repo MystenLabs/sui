@@ -81,7 +81,6 @@ pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiS
         pending_validators: vec![],
         pending_removals: vec![],
         next_epoch_validators: vec![],
-        pending_delegation_switches: VecMap { contents: vec![] },
     };
     SuiSystemState {
         info: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),

@@ -11,7 +11,6 @@ module sui::staking_pool {
     use sui::object::{Self, ID, UID};
     use sui::locked_coin;
     use sui::coin;
-    use std::vector;
     use sui::table_vec::{Self, TableVec};
     use sui::linked_table::{Self, LinkedTable};
     use sui::math;
@@ -186,37 +185,6 @@ module sui::staking_pool {
         principal_withdraw_amount
     }
 
-    public(friend) fun cancel_delegation_request(pool: &mut StakingPool, staked_sui: StakedSui, ctx: &mut TxContext) {
-        let delegator = tx_context::sender(ctx);
-        let staked_sui_id = object::id(&staked_sui);
-        assert!(linked_table::contains(&mut pool.pending_delegations, staked_sui_id), EPENDING_DELEGATION_DOES_NOT_EXIST);
-
-        linked_table::remove(&mut pool.pending_delegations, staked_sui_id);
-
-        let StakedSui { 
-            id,
-            validator_address,
-            pool_starting_epoch,
-            delegation_request_epoch: _,
-            principal,
-            sui_token_lock
-        } = staked_sui;
-
-        // sanity check that the StakedSui is indeed from this pool. Should never fail.
-        assert!(
-            validator_address == pool.validator_address &&
-            pool_starting_epoch == pool.starting_epoch,
-            EWRONG_POOL
-        );
-        object::delete(id);
-        if (option::is_some(&sui_token_lock)) {
-            locked_coin::new_from_balance(principal, option::destroy_some(sui_token_lock), delegator, ctx);
-        } else {
-            transfer::transfer(coin::from_balance(principal, ctx), delegator);
-            option::destroy_none(sui_token_lock);
-        };
-    }
-
     /// Withdraw the requested amount of the principal SUI stored in the StakedSui object, as
     /// well as a proportional amount of pool tokens from the delegation object.
     /// For example, suppose the delegation object contains 15 pool tokens and the principal SUI 
@@ -296,8 +264,6 @@ module sui::staking_pool {
     }
 
     /// Called at epoch boundaries to mint new pool tokens to new delegators at the new exchange rate.
-    /// New delegators include both entirely new delegations and delegations switched to this staking pool
-    /// during the previous epoch.
     public(friend) fun process_pending_delegations(pool: &mut StakingPool, ctx: &mut TxContext) {
         while (!linked_table::is_empty(&pool.pending_delegations)) {
             let (staked_sui_id, PendingDelegationEntry { delegator, sui_amount }) =
@@ -305,31 +271,6 @@ module sui::staking_pool {
             mint_delegation_tokens_to_delegator(pool, delegator, sui_amount, staked_sui_id, ctx);
             pool.sui_balance = pool.sui_balance + sui_amount;
         };
-    }
-
-    /// Called by validator_set at epoch boundaries for delegation switches.
-    /// This function goes through the provided vector of pending withdraw entries, 
-    /// and for each entry, calls `withdraw_rewards_and_burn_pool_tokens` to withdraw
-    /// the rewards portion of the delegation and burn the pool tokens. We then aggregate
-    /// the delegator addresses and their rewards into vectors, as well as calculate 
-    /// the total amount of rewards SUI withdrawn. These three return values are then
-    /// used in `validator_set`'s delegation switching code to deposit the rewards part
-    /// into the new validator's staking pool.
-    public(friend) fun batch_withdraw_rewards_and_burn_pool_tokens(
-        pool: &mut StakingPool,
-        entries: TableVec<PendingWithdrawEntry>,
-    ) : (vector<address>, vector<Balance<SUI>>, u64) {
-        let (delegators, rewards, total_rewards_withdraw_amount) = (vector::empty(), vector::empty(), 0);
-        while (!table_vec::is_empty(&mut entries)) {
-            let PendingWithdrawEntry { delegator, principal_withdraw_amount, withdrawn_pool_tokens } 
-                = table_vec::pop_back(&mut entries);
-            let reward = withdraw_rewards_and_burn_pool_tokens(pool, principal_withdraw_amount, withdrawn_pool_tokens);
-            total_rewards_withdraw_amount = total_rewards_withdraw_amount + balance::value(&reward);
-            vector::push_back(&mut delegators, delegator);
-            vector::push_back(&mut rewards, reward);
-        };
-        table_vec::destroy_empty(entries);
-        (delegators, rewards, total_rewards_withdraw_amount)
     }
 
     /// This function does the following:

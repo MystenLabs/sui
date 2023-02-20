@@ -23,7 +23,6 @@ module sui::sui_system {
     use sui::epoch_time_lock;
     use sui::pay;
     use sui::event;
-    use sui::staking_pool;
 
     friend sui::genesis;
 
@@ -365,33 +364,6 @@ module sui::sui_system {
             ctx,
         );
     }
-
-    // Switch delegation from the current validator to a new one.
-    public entry fun request_switch_delegation(
-        self: &mut SuiSystemState,
-        delegation: Delegation,
-        staked_sui: StakedSui,
-        new_validator_address: address,
-        ctx: &mut TxContext,
-    ) {
-        validator_set::request_switch_delegation(
-            &mut self.validators, delegation, staked_sui, new_validator_address, ctx
-        );
-    }
-
-    /// Cancel a delegation requests sent during the current epoch.
-    public entry fun cancel_delegation_request(
-        self: &mut SuiSystemState,
-        staked_sui: StakedSui,
-        ctx: &mut TxContext,
-    ) {
-        // The delegation request has to have happened within the current epoch.
-        assert!(staking_pool::delegation_request_epoch(&staked_sui) == self.epoch, ESTAKED_SUI_FROM_WRONG_EPOCH);
-        validator_set::cancel_delegation_request(
-            &mut self.validators, staked_sui, ctx
-        );
-    }
-
 
     /// Report a validator as a bad or non-performant actor in the system.
     /// Succeeds iff both the sender and the input `validator_addr` are active validators
