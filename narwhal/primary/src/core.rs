@@ -358,6 +358,7 @@ impl Core {
         loop {
             let result = tokio::select! {
                 // We also receive here our new headers created by the `Proposer`.
+                // TODO: move logic into Proposer.
                 Some(header) = self.rx_headers.recv() => {
                     let (tx_cancel, rx_cancel) = oneshot::channel();
                     if let Some(cancel) = self.cancel_proposed_header {
@@ -387,6 +388,7 @@ impl Core {
                 },
 
                 // Process certificates formed after receiving enough votes.
+                // TODO: move logic into Proposer.
                 Some(result) = self.propose_header_tasks.join_next() => {
                     match result {
                         Ok(Ok(certificate)) => {

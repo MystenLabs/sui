@@ -23,7 +23,7 @@ use store::Store;
 use tokio::{
     sync::{broadcast, oneshot, watch},
     task::JoinSet,
-    time::sleep,
+    time::timeout,
 };
 use tracing::{debug, error, trace, warn};
 use types::{
@@ -68,7 +68,7 @@ struct Inner {
     tx_own_certificate_broadcast: broadcast::Sender<Certificate>,
     /// Get a signal when the commit round changes.
     rx_consensus_round_updates: watch::Receiver<Round>,
-    /// The genesis and its digests.
+    /// Genesis digests and contents.
     genesis: HashMap<CertificateDigest, Certificate>,
     /// The dag used for the external consensus
     dag: Option<Arc<Dag>>,
@@ -80,8 +80,15 @@ struct Inner {
     certificate_senders: Mutex<JoinSet<()>>,
     /// Aggregates certificates to use as parents for new headers.
     certificates_aggregators: Mutex<BTreeMap<Round, Box<CertificatesAggregator>>>,
-    /// Map of certificates pending to be accepted. This lock also ensures writing a certificate
-    /// into store and sending it to consensus is atomic.
+    /// Map of digest of certificate pending to be accepted, to channel for signalling the
+    /// certificate has been accepted.
+    /// The invariant is that if a certificate digest exists in the pending table, it must not
+    /// exist in the certificate store. Otherwise waiters will never get notified.
+    /// This lock also ensures writing a certificate into store and sending it to consensus is
+    /// atomic.
+    /// TODO: store certificate and accept it into the store immediately after its parents have
+    /// been accepted, instead of waiting for the next external attempt to accept the certificate.
+    /// TODO: use a lighter weight alternative to broadcast::channel.
     pending: tokio::sync::Mutex<HashMap<CertificateDigest, broadcast::Sender<()>>>,
 }
 
@@ -237,8 +244,9 @@ impl Synchronizer {
     }
 
     /// Validates the certificate and accepts it into the DAG, if the certificate can be verified
-    /// and has all parents in the certificate store. Otherwise if the certificate has missing
-    /// parents and cannot be accepted immediately, an error is returned.
+    /// and has all parents in the certificate store. Otherwise an error is returned.
+    /// If the certificate has missing parents and cannot be accepted immediately, the error would
+    /// contain a value that can be awaited on, for signaling when the certificate is accepted.
     pub async fn try_accept_certificate(
         &self,
         certificate: Certificate,
@@ -249,39 +257,33 @@ impl Synchronizer {
     }
 
     /// Validates the certificate and accepts it into the DAG, if the certificate can be verified
-    /// and has all parents in the certificate store. Otherwise if the certificate has missing
-    /// parents, wait until all parents are available to accept the certificate.
+    /// and has all parents in the certificate store.
+    /// If the certificate has missing parents, wait until all parents are available to accept the
+    /// certificate.
+    /// Otherwise returns an error.
     pub async fn wait_to_accept_certificate(
         &self,
         certificate: Certificate,
         network: &Network,
     ) -> DagResult<()> {
-        let digest = certificate.digest();
-        let result = self
+        match self
             .process_certificate_internal(certificate, network)
-            .await;
-        let mut receiver = match result {
-            Ok(()) => {
-                return Ok(());
+            .await
+        {
+            Err(DagError::Suspended(notify)) => {
+                let notify = notify.lock().unwrap().take();
+                notify
+                    .unwrap()
+                    .recv()
+                    .await
+                    .map_err(|_| DagError::ShuttingDown)
             }
-            Err(DagError::Suspended) => {
-                let mut pending = self.inner.pending.lock().await;
-                match pending.entry(digest) {
-                    hash_map::Entry::Occupied(entry) => entry.get().subscribe(),
-                    hash_map::Entry::Vacant(entry) => {
-                        let (tx, rx) = broadcast::channel(1);
-                        entry.insert(tx);
-                        rx
-                    }
-                }
-            }
-            result => {
-                return result;
-            }
-        };
-        receiver.recv().await.map_err(|_| DagError::ShuttingDown)
+            result => result,
+        }
     }
 
+    /// Accepts a certificate produced by this primary. This is not expected to fail unless
+    /// the primary is shutting down.
     pub async fn accept_own_certificate(
         &self,
         certificate: Certificate,
@@ -428,32 +430,47 @@ impl Synchronizer {
         if certificate.round() > self.inner.gc_round.load(Ordering::Acquire) + 1
             && !self.check_parents(&certificate).await?
         {
+            let rx = {
+                let mut pending = self.inner.pending.lock().await;
+                // This check is necessary to ensure the certificate has not been accepted while trying
+                // to acquire the pending lock.
+                if self.inner.certificate_store.contains(&digest)? {
+                    return Ok(());
+                }
+                self.inner
+                    .metrics
+                    .certificates_suspended
+                    .with_label_values(&["missing_parents"])
+                    .inc();
+                match pending.entry(digest) {
+                    hash_map::Entry::Occupied(entry) => entry.get().subscribe(),
+                    hash_map::Entry::Vacant(entry) => {
+                        let (tx, rx) = broadcast::channel(1);
+                        entry.insert(tx);
+                        rx
+                    }
+                }
+            };
             debug!(
                 "Processing certificate {:?} suspended: missing ancestors",
                 certificate
             );
-            self.inner
-                .metrics
-                .certificates_suspended
-                .with_label_values(&["missing_parents"])
-                .inc();
-            return Err(DagError::Suspended);
+            return Err(DagError::Suspended(Arc::new(std::sync::Mutex::new(Some(
+                rx,
+            )))));
         }
 
         self.accept_certificate_internal(certificate).await
     }
 
     async fn accept_certificate_internal(&self, certificate: Certificate) -> DagResult<()> {
+        let digest = certificate.digest();
+
         // This lock must be held for the scope of the function, to ensure the operations to write
         // certificate into storage and sending the certificate to consensus is atomic. Otherwise
         // it would be possible for certificates to be sent to consensus not in causal order,
         // leading to inconsistencies or consensus forks.
-        let digest = certificate.digest();
         let mut pending = self.inner.pending.lock().await;
-        if let Some(sender) = pending.remove(&digest) {
-            // Ignore error if there is no more listeners.
-            let _ = sender.send(());
-        }
 
         // Store the certificate. Afterwards, the certificate must be sent to consensus
         // or Narwhal needs to shutdown, to avoid insistencies certificate store and
@@ -505,9 +522,16 @@ impl Synchronizer {
             return Err(DagError::ShuttingDown);
         }
 
+        if let Some(sender) = pending.remove(&digest) {
+            // Ignore error if there is no more listeners.
+            let _ = sender.send(());
+        }
+
         Ok(())
     }
 
+    // TODO: allow multiple (<=10) outgoing requests concurrently, and multiple certificates
+    // per request.
     async fn push_certificates(
         network: Network,
         name: BLS12381PublicKey,
@@ -523,20 +547,30 @@ impl Synchronizer {
         let mut certificates = VecDeque::new();
         let mut failure_backoff = MIN_FAILURE_BACKOFF;
         loop {
-            if certificates.is_empty() {
-                match rx_own_certificate_broadcast.recv().await {
-                    Ok(cert) => certificates.push_back(cert),
-                    Err(broadcast::error::RecvError::Closed) => {
-                        trace!("Certificate sender {name} shutting down!");
-                        return;
-                    }
-                    Err(broadcast::error::RecvError::Lagged(e)) => {
-                        warn!("Certificate sender {name} lagging! {e}");
-                        // Re-run the loop to receive again.
+            let wait_timeout = if certificates.is_empty() {
+                MAX_FAILURE_BACKOFF
+            } else {
+                failure_backoff
+            };
+            match timeout(wait_timeout, rx_own_certificate_broadcast.recv()).await {
+                Ok(Ok(cert)) => certificates.push_back(cert),
+                Ok(Err(broadcast::error::RecvError::Closed)) => {
+                    trace!("Certificate sender {name} shutting down!");
+                    return;
+                }
+                Ok(Err(broadcast::error::RecvError::Lagged(e))) => {
+                    warn!("Certificate broadcaster {name} lagging! {e}");
+                    // Re-run the loop to receive again.
+                    continue;
+                }
+                Err(_) => {
+                    if certificates.is_empty() {
+                        // MAX_FAILURE_BACKOFF has elapsed without a certificate created.
+                        // This should rarely happen.
                         continue;
                     }
-                };
-            }
+                }
+            };
             // Get more certificates if available in the broadcast channel.
             loop {
                 match rx_own_certificate_broadcast.try_recv() {
@@ -556,6 +590,7 @@ impl Synchronizer {
                 };
             }
             // TODO: support sending an array of certificates.
+            // Only send the latest certificate.
             while certificates.len() > 1 {
                 certificates.pop_front();
             }
@@ -568,9 +603,8 @@ impl Synchronizer {
                     failure_backoff = MIN_FAILURE_BACKOFF;
                 }
                 Err(status) => {
-                    warn!("Failed to send certificate to {name}! {status:?}");
+                    debug!("Failed to send certificate to {name}! {status:?}");
                     failure_backoff = min(failure_backoff * 2, MAX_FAILURE_BACKOFF);
-                    sleep(failure_backoff).await;
                 }
             }
         }
@@ -596,7 +630,7 @@ impl Synchronizer {
         max_age: Round,
     ) -> DagResult<()> {
         if header.author == inner.name {
-            debug!("skipping sync_batches for header {header}: no need to store payload of our own workers");
+            debug!("skipping sync_batches for header {header}: no need to sync payload from own workers");
             return Ok(());
         }
 

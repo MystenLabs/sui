@@ -928,7 +928,7 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
             })?;
         let PrimaryMessage::Certificate(certificate) = request.into_body();
         self.synchronizer
-            .wait_to_accept_certificate(certificate, &network)
+            .try_accept_certificate(certificate, &network)
             .await
             .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
         Ok(anemo::Response::new(()))
