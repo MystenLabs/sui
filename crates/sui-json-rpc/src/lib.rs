@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 use sui_open_rpc::{Module, Project};
 
-use crate::metrics::MetricsLayer;
+use crate::metrics::MetricsLogger;
 use crate::routing_layer::RoutingLayer;
 
 pub mod api;
@@ -126,7 +126,7 @@ impl JsonRpcServerBuilder {
             })
             .unwrap_or(u32::MAX);
 
-        let metrics_layer = MetricsLayer::new(&self.registry, &methods_names);
+        let metrics_logger = MetricsLogger::new(&self.registry, &methods_names);
 
         let disable_routing = env::var("DISABLE_BACKWARD_COMPATIBILITY")
             .ok()
@@ -145,14 +145,14 @@ impl JsonRpcServerBuilder {
 
         let middleware = tower::ServiceBuilder::new()
             .layer(cors)
-            .layer(routing_layer)
-            .layer(metrics_layer);
+            .layer(routing_layer);
 
         let server = ServerBuilder::default()
             .max_response_body_size(MAX_REQUEST_SIZE)
             .max_connections(max_connection)
             .set_host_filtering(AllowHosts::Any)
             .set_middleware(middleware)
+            .set_logger(metrics_logger)
             .build(listen_address)
             .await?;
         let addr = server.local_addr()?;
