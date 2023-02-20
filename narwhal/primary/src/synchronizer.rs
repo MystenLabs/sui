@@ -5,7 +5,7 @@ use anemo::{Network, Request};
 use config::{Committee, Epoch, SharedCommittee, SharedWorkerCache, WorkerId};
 use consensus::dag::Dag;
 use crypto::{NetworkPublicKey, PublicKey};
-use fastcrypto::{bls12381::min_sig::BLS12381PublicKey, hash::Hash as _};
+use fastcrypto::hash::Hash as _;
 use mysten_metrics::spawn_monitored_task;
 use network::{anemo_ext::NetworkExt, RetryConfig};
 use parking_lot::Mutex;
@@ -170,18 +170,17 @@ impl Synchronizer {
         });
 
         // Start a task to recover parent certificates for proposer.
-        let weak_inner = Arc::downgrade(&inner);
+        let inner_proposer = inner.clone();
         spawn_monitored_task!(async move {
-            let Some(inner) = weak_inner.upgrade() else {
-                // this happens if Narwhal is shutting down.
-                return;
-            };
-            let last_round_certificates = inner
+            let last_round_certificates = inner_proposer
                 .certificate_store
                 .last_two_rounds_certs()
                 .expect("Failed recovering certificates in primary core");
             for certificate in last_round_certificates {
-                if let Err(e) = inner.append_certificate_in_aggregator(certificate).await {
+                if let Err(e) = inner_proposer
+                    .append_certificate_in_aggregator(certificate)
+                    .await
+                {
                     debug!("Failed to recover certificate, assuming Narwhal is shutting down. {e}");
                     return;
                 }
@@ -530,11 +529,12 @@ impl Synchronizer {
         Ok(())
     }
 
-    // TODO: allow multiple (<=10) outgoing requests concurrently, and multiple certificates
-    // per request.
+    /// Pushes new certificates received from the rx_own_certificate_broadcast channel
+    /// to the target peer continuously. Only exits when the primary is shutting down.
+    // TODO: allow sending multiple (<=10) outgoing requests concurrently.
     async fn push_certificates(
         network: Network,
-        name: BLS12381PublicKey,
+        name: PublicKey,
         network_key: NetworkPublicKey,
         mut rx_own_certificate_broadcast: broadcast::Receiver<Certificate>,
     ) {
@@ -572,7 +572,7 @@ impl Synchronizer {
                 }
             };
             // Get more certificates if available in the broadcast channel.
-            loop {
+            'recv: loop {
                 match rx_own_certificate_broadcast.try_recv() {
                     Ok(cert) => {
                         certificates.push_back(cert);
@@ -585,11 +585,11 @@ impl Synchronizer {
                         warn!("Certificate sender {name} lagging! {e}");
                     }
                     Err(broadcast::error::TryRecvError::Empty) => {
-                        break;
+                        break 'recv;
                     }
                 };
             }
-            // TODO: support sending an array of certificates.
+            // TODO: support sending multiple certificates concurrently.
             // Only send the latest certificate.
             while certificates.len() > 1 {
                 certificates.pop_front();
