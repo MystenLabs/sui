@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { fromB64 } from '@mysten/sui.js';
+import { bytesToHex } from '@noble/hashes/utils';
 import { useMutation } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 
 import { HideShowDisplayBox } from '../../HideShowDisplayBox';
@@ -24,10 +27,18 @@ export function ExportAccount() {
             return await backgroundClient.exportAccount(password, account);
         },
     });
+    const privateKey = useMemo(() => {
+        if (exportMutation.data?.privateKey) {
+            return `0x${bytesToHex(
+                fromB64(exportMutation.data.privateKey).slice(0, 32)
+            )}`;
+        }
+        return null;
+    }, [exportMutation.data?.privateKey]);
     if (!account) {
         return <Navigate to={accountUrl} replace />;
     }
-    if (exportMutation.data) {
+    if (privateKey) {
         return (
             <MenuLayout title="Your Private Key" back={accountUrl}>
                 <div className="flex flex-col flex-nowrap items-stretch gap-3">
@@ -36,7 +47,7 @@ export function ExportAccount() {
                         of your account.
                     </Alert>
                     <HideShowDisplayBox
-                        value={exportMutation.data.privateKey}
+                        value={privateKey}
                         copiedMessage="Private key copied"
                     />
                 </div>
