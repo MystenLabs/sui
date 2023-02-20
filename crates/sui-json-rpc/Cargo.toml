@@ -52,3 +52,4 @@ sui-sdk = { path = "../sui-sdk" }
 rand = "0.8.5"
 sui-macros = { path = "../sui-macros" }
 sui-simulator = { path = "../sui-simulator" }
+reqwest = "0.11.13"

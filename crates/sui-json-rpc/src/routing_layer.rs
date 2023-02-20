@@ -7,7 +7,6 @@ use hyper::{Body, Method, Request, Response};
 use jsonrpsee::core::__reexports::serde_json;
 use jsonrpsee::core::error::GenericTransportError;
 use jsonrpsee::core::http_helpers::read_body;
-use jsonrpsee::core::JsonRawValue;
 use jsonrpsee::types::Request as RpcRequest;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
@@ -96,6 +95,7 @@ where
             let req = if req.method() == Method::POST && is_json(&req) {
                 let (parts, body) = req.into_parts();
                 let (body, is_single) =
+                    // The body will be consumed if anything goes wrong here, returning error response if failed.
                     match read_body(&parts.headers, body, MAX_REQUEST_SIZE).await {
                         Ok(r) => r,
                         Err(GenericTransportError::TooLarge) => {
@@ -124,15 +124,6 @@ where
                         disable_routing,
                     )
                 };
-
-                let body = match body {
-                    Ok(body) => body,
-                    Err(e) => {
-                        tracing::error!("Internal error reading request body: {}", e);
-                        return Ok(response::internal_error());
-                    }
-                };
-
                 Request::from_parts(parts, Body::from(body))
             } else {
                 req
@@ -149,45 +140,35 @@ fn process_batched_requests(
     routes: &HashMap<String, MethodRouting>,
     route_to_methods: &HashSet<String>,
     disable_routing: bool,
-) -> serde_json::error::Result<String> {
-    let requests: Vec<&JsonRawValue> = serde_json::from_slice(body)?;
+) -> Vec<u8> {
+    let Ok(requests) = serde_json::from_slice::<Vec<&[u8]>>(body) else{
+        return body.to_vec();
+    };
     let mut processed_reqs = Vec::new();
     for request in requests {
-        let req = process_rpc_request(
-            serde_json::from_str(request.get())?,
-            version,
-            routes,
-            route_to_methods,
-            disable_routing,
-        )?;
-        processed_reqs.push(JsonRawValue::from_string(req)?)
+        let req =
+            process_single_request(request, version, routes, route_to_methods, disable_routing);
+        processed_reqs.push(req);
     }
-    serde_json::to_string(&processed_reqs)
+    if let Ok(request) = serde_json::to_vec(&processed_reqs) {
+        request
+    } else {
+        body.to_vec()
+    }
 }
 
+// try to process the rpc request, return the original values if fail to parse the request.
 fn process_single_request(
     body: &[u8],
     version: &Option<String>,
     routes: &HashMap<String, MethodRouting>,
     route_to_methods: &HashSet<String>,
     disable_routing: bool,
-) -> serde_json::error::Result<String> {
-    process_rpc_request(
-        serde_json::from_slice(body)?,
-        version,
-        routes,
-        route_to_methods,
-        disable_routing,
-    )
-}
+) -> Vec<u8> {
+    let Ok(mut request) = serde_json::from_slice::<RpcRequest>(body) else{
+        return body.to_vec();
+    };
 
-fn process_rpc_request(
-    mut request: RpcRequest,
-    version: &Option<String>,
-    routes: &HashMap<String, MethodRouting>,
-    route_to_methods: &HashSet<String>,
-    disable_routing: bool,
-) -> serde_json::error::Result<String> {
     // Reject direct access to the old methods
     if route_to_methods.contains(request.method.as_ref()) {
         request.method = "INVALID_ROUTING".into();
@@ -203,7 +184,11 @@ fn process_rpc_request(
             };
         }
     }
-    serde_json::to_string(&request)
+    if let Ok(result) = serde_json::to_vec(&request) {
+        result
+    } else {
+        body.to_vec()
+    }
 }
 
 // error responses borrowed from jsonrpsee
