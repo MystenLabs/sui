@@ -143,7 +143,7 @@ impl ConsensusState {
             .is_none()
     }
 
-    /// Update and clean up internal state base on committed certificates.
+    /// Update and clean up internal state after committing a certificate.
     pub fn update(&mut self, certificate: &Certificate, gc_depth: Round) {
         self.last_committed
             .entry(certificate.origin())
@@ -155,25 +155,25 @@ impl ConsensusState {
             .last_committed_round
             .with_label_values(&[])
             .set(self.last_committed_round as i64);
+        let elapsed = certificate.metadata.created_at.elapsed().as_secs_f64();
+        self.metrics
+            .certificate_commit_latency
+            .observe(certificate.metadata.created_at.elapsed().as_secs_f64());
 
         // NOTE: This log entry is used to compute performance.
         tracing::debug!(
             "Certificate {:?} took {} seconds to be committed at round {}",
             certificate.digest(),
-            certificate.metadata.created_at.elapsed().as_secs_f64(),
-            self.last_committed_round
+            elapsed,
+            certificate.round(),
         );
 
-        self.metrics
-            .certificate_commit_latency
-            .observe(certificate.metadata.created_at.elapsed().as_secs_f64());
-
-        // We purge all certificates past the gc depth
+        // Purge all certificates past the gc depth.
         self.dag
             .retain(|r, _| r + gc_depth >= self.last_committed_round);
-        // Also purge all certificates at and below last committed round of the certificate origin
+        // Also purge this certificate, and other certificates at the same origin below its round.
         self.dag.retain(|r, authorities| {
-            if r <= &self.last_committed_round {
+            if r <= &certificate.round() {
                 authorities.remove(&certificate.origin());
                 !authorities.is_empty()
             } else {
