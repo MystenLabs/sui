@@ -26,14 +26,13 @@ cfg-if = "1.0.0"
 mysten-metrics = { path = "../../crates/mysten-metrics" }
 mysten-util-mem = { path = "../../crates/mysten-util-mem" }
 store = { path = "../../crates/typed-store", package = "typed-store" }
-telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
-
 
 [dev-dependencies]
 bincode = "1.3.3"
 criterion = "0.4.0"
 futures = "0.3.24"
 indexmap = { version = "1.9.2", features = ["serde"] }
+telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 node = { path = "../node", package = "narwhal-node" }
 
