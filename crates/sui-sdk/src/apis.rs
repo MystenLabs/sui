@@ -13,10 +13,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc_types::{
-    Balance, Coin, CoinPage, DynamicFieldPage, EventPage, GetObjectDataResponse,
-    GetPastObjectDataResponse, GetRawObjectDataResponse, SuiCoinMetadata, SuiEventEnvelope,
-    SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedModule, SuiObjectInfo,
-    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
+    Balance, Checkpoint, CheckpointId, Coin, CoinPage, DynamicFieldPage, EventPage,
+    GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse, SuiCoinMetadata,
+    SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedModule,
+    SuiObjectInfo, SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{
@@ -28,10 +28,7 @@ use sui_types::event::EventID;
 use sui_types::messages::{
     CommitteeInfoResponse, ExecuteTransactionRequestType, TransactionData, VerifiedTransaction,
 };
-use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
-    CheckpointSummary,
-};
+use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary};
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
 
@@ -135,38 +132,9 @@ impl ReadApi {
             .await?)
     }
 
-    /// Return a checkpoint summary based on a checkpoint sequence number
-    pub async fn get_checkpoint(
-        &self,
-        seq_number: CheckpointSequenceNumber,
-    ) -> SuiRpcResult<Checkpoint> {
-        let summary = self.get_checkpoint_summary(seq_number).await?;
-        let content = self.get_checkpoint_contents(seq_number).await?;
-        Ok(Checkpoint { summary, content })
-    }
-
-    /// Return a checkpoint summary based on a checkpoint digest
-    pub async fn get_checkpoint_by_digest(
-        &self,
-        digest: CheckpointDigest,
-    ) -> SuiRpcResult<Checkpoint> {
-        let summary = self.get_checkpoint_summary_by_digest(digest).await?;
-        let content = self
-            .get_checkpoint_contents_by_digest(summary.content_digest)
-            .await?;
-        Ok(Checkpoint { summary, content })
-    }
-
-    /// Return a checkpoint summary based on checkpoint digest
-    pub async fn get_checkpoint_summary_by_digest(
-        &self,
-        digest: CheckpointDigest,
-    ) -> SuiRpcResult<CheckpointSummary> {
-        Ok(self
-            .api
-            .http
-            .get_checkpoint_summary_by_digest(digest)
-            .await?)
+    /// Return a checkpoint
+    pub async fn get_checkpoint(&self, id: CheckpointId) -> SuiRpcResult<Checkpoint> {
+        Ok(self.api.http.get_checkpoint(id).await?)
     }
 
     /// Return a checkpoint summary based on a checkpoint sequence number
@@ -185,30 +153,6 @@ impl ReadApi {
             .api
             .http
             .get_latest_checkpoint_sequence_number()
-            .await?)
-    }
-
-    /// Return contents of a checkpoint, namely a list of execution digests
-    pub async fn get_checkpoint_contents_by_digest(
-        &self,
-        digest: CheckpointContentsDigest,
-    ) -> SuiRpcResult<CheckpointContents> {
-        Ok(self
-            .api
-            .http
-            .get_checkpoint_contents_by_digest(digest)
-            .await?)
-    }
-
-    /// Return contents of a checkpoint based on its sequence number
-    pub async fn get_checkpoint_contents(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> SuiRpcResult<CheckpointContents> {
-        Ok(self
-            .api
-            .http
-            .get_checkpoint_contents(sequence_number)
             .await?)
     }
 
@@ -575,10 +519,4 @@ impl GovernanceApi {
     pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemState> {
         Ok(self.api.http.get_sui_system_state().await?)
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct Checkpoint {
-    pub summary: CheckpointSummary,
-    pub content: CheckpointContents,
 }

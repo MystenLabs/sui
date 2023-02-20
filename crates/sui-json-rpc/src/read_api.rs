@@ -16,10 +16,11 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::RpcModule;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    DevInspectResults, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
-    MoveFunctionArgType, ObjectValueKind, Page, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
-    SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionAuthSignersResponse,
-    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
+    Checkpoint, CheckpointId, DevInspectResults, DynamicFieldPage, GetObjectDataResponse,
+    GetPastObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
+    SuiTransactionAuthSignersResponse, SuiTransactionEffects, SuiTransactionResponse,
+    TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
@@ -38,6 +39,7 @@ use tracing::debug;
 
 use crate::api::RpcFullNodeReadApiServer;
 use crate::api::{cap_page_limit, RpcReadApiServer};
+use crate::error::Error;
 use crate::SuiRpcModule;
 
 // An implementation of the read portion of the JSON-RPC interface intended for use in
@@ -61,6 +63,21 @@ impl FullNodeApi {
             .get_sui_system_state_object()
             .map_err(|e| anyhow!("Unable to retrieve sui system state object: {e}"))?;
         Ok((sys_state.epoch, sys_state.reference_gas_price))
+    }
+
+    fn get_checkpoint_internal(&self, id: CheckpointId) -> Result<Checkpoint, Error> {
+        Ok(match id {
+            CheckpointId::SequenceNumber(seq) => {
+                let summary = self.state.get_checkpoint_summary_by_sequence_number(seq)?;
+                let content = self.state.get_checkpoint_contents(summary.content_digest)?;
+                (summary, content).into()
+            }
+            CheckpointId::Digest(digest) => {
+                let summary = self.state.get_checkpoint_summary_by_digest(digest)?;
+                let content = self.state.get_checkpoint_contents(summary.content_digest)?;
+                (summary, content).into()
+            }
+        })
     }
 }
 
@@ -387,6 +404,10 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
             .map_err(|e| {
                 anyhow!("Latest checkpoint sequence number was not found with error :{e}")
             })?)
+    }
+
+    fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
+        Ok(self.get_checkpoint_internal(id)?)
     }
 
     fn get_checkpoint_summary_by_digest(

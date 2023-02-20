@@ -548,6 +548,63 @@
       }
     },
     {
+      "name": "sui_getCheckpoint",
+      "tags": [
+        {
+          "name": "Full Node API"
+        }
+      ],
+      "description": "Return a checkpoint summary",
+      "params": [
+        {
+          "name": "id",
+          "description": "Checkpoint identifier, can use either checkpoint digest, or checkpoint sequence number as input.",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/CheckpointId"
+          }
+        }
+      ],
+      "result": {
+        "name": "Checkpoint",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Checkpoint"
+        }
+      },
+      "examples": [
+        {
+          "name": "Get checkpoint",
+          "params": [
+            {
+              "name": "id",
+              "value": 1000
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "epoch": 5000,
+              "sequenceNumber": 1000,
+              "digest": "G3pGMDciKzooy3YgygMNqDiRVbBYexo95ymqxqwuczLz",
+              "networkTotalTransactions": 792385,
+              "previousDigest": "G18VrHdiBVJ7zcyu3TwQbtHdCKNLF9pAEsMUHqXDQ8v5",
+              "epochRollingGasCostSummary": {
+                "computation_cost": 0,
+                "storage_cost": 0,
+                "storage_rebate": 0
+              },
+              "timestampMs": 1676911928,
+              "endOfEpochData": null,
+              "transactions": [
+                "4qBuxNt9KoyC4xUbY8jJMJfmonAnMgTjDG6Nq1F1jbbH"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "sui_getCheckpointContents",
       "tags": [
         {
@@ -3058,6 +3115,89 @@
           }
         }
       },
+      "Checkpoint": {
+        "type": "object",
+        "required": [
+          "digest",
+          "epoch",
+          "epochRollingGasCostSummary",
+          "networkTotalTransactions",
+          "sequenceNumber",
+          "timestampMs",
+          "transactions"
+        ],
+        "properties": {
+          "digest": {
+            "description": "Checkpoint digest",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CheckpointDigest"
+              }
+            ]
+          },
+          "endOfEpochData": {
+            "description": "Present only on the final checkpoint of the epoch.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EndOfEpochData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "epoch": {
+            "description": "Checkpoint's epoch ID",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "epochRollingGasCostSummary": {
+            "description": "The running total gas costs of all transactions included in the current epoch so far until this checkpoint.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GasCostSummary"
+              }
+            ]
+          },
+          "networkTotalTransactions": {
+            "description": "Total number of transactions committed since genesis, including those in this checkpoint.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "previousDigest": {
+            "description": "Digest of the previous checkpoint",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CheckpointDigest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sequenceNumber": {
+            "description": "Checkpoint sequence number",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "timestampMs": {
+            "description": "Timestamp of the checkpoint - number of milliseconds from the Unix epoch Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent checkpoints can have same timestamp if they originate from the same underlining consensus commit",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "transactions": {
+            "description": "Transaction digests",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TransactionDigest"
+            }
+          }
+        }
+      },
       "CheckpointContents": {
         "description": "CheckpointContents are the transactions included in an upcoming checkpoint. They must have already been causally ordered. Since the causal order algorithm is the same among validators, we expect all honest validators to come up with the same order for each checkpoint content.",
         "type": "object",
@@ -3092,6 +3232,18 @@
         "allOf": [
           {
             "$ref": "#/components/schemas/Sha3Digest"
+          }
+        ]
+      },
+      "CheckpointId": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          {
+            "$ref": "#/components/schemas/CheckpointDigest"
           }
         ]
       },

@@ -9,14 +9,14 @@ use jsonrpsee_proc_macros::rpc;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    Balance, CoinPage, DevInspectResults, DynamicFieldPage, EventPage, GetObjectDataResponse,
-    GetPastObjectDataResponse, GetRawObjectDataResponse, MoveFunctionArgType,
-    RPCTransactionRequestParams, SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter,
-    SuiExecuteTransactionResponse, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
-    SuiMoveNormalizedStruct, SuiObjectInfo, SuiTBlsSignObjectCommitmentType,
-    SuiTBlsSignRandomnessObjectResponse, SuiTransactionAuthSignersResponse,
-    SuiTransactionBuilderMode, SuiTransactionEffects, SuiTransactionResponse, SuiTypeTag,
-    TransactionBytes, TransactionsPage,
+    Balance, Checkpoint, CheckpointId, CoinPage, DevInspectResults, DynamicFieldPage, EventPage,
+    GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
+    MoveFunctionArgType, RPCTransactionRequestParams, SuiCoinMetadata, SuiEventEnvelope,
+    SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedFunction,
+    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
+    SuiTBlsSignObjectCommitmentType, SuiTBlsSignRandomnessObjectResponse,
+    SuiTransactionAuthSignersResponse, SuiTransactionBuilderMode, SuiTransactionEffects,
+    SuiTransactionResponse, SuiTypeTag, TransactionBytes, TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::balance::Supply;
@@ -273,6 +273,14 @@ pub trait RpcFullNodeReadApi {
     /// Return the sequence number of the latest checkpoint that has been executed
     #[method(name = "getLatestCheckpointSequenceNumber")]
     fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber>;
+
+    /// Return a checkpoint summary
+    #[method(name = "getCheckpoint")]
+    fn get_checkpoint(
+        &self,
+        /// Checkpoint identifier, can use either checkpoint digest, or checkpoint sequence number as input.
+        id: CheckpointId,
+    ) -> RpcResult<Checkpoint>;
 
     /// Return a checkpoint summary based on a checkpoint sequence number
     #[method(name = "getCheckpointSummary")]

@@ -16,7 +16,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
-use sui_sdk::apis::Checkpoint;
+use sui_sdk::rpc_types::Checkpoint;
 use sui_sdk::SuiClient;
 use sui_storage::default_db_options;
 use sui_types::base_types::{EpochId, SuiAddress};
@@ -75,16 +75,12 @@ pub struct CheckpointBlockProvider {
 #[async_trait]
 impl BlockProvider for CheckpointBlockProvider {
     async fn get_block_by_index(&self, index: u64) -> Result<BlockResponse, Error> {
-        let checkpoint = self.client.read_api().get_checkpoint(index).await?;
+        let checkpoint = self.client.read_api().get_checkpoint(index.into()).await?;
         self.create_block_response(checkpoint).await
     }
 
     async fn get_block_by_hash(&self, hash: BlockHash) -> Result<BlockResponse, Error> {
-        let checkpoint = self
-            .client
-            .read_api()
-            .get_checkpoint_by_digest(hash)
-            .await?;
+        let checkpoint = self.client.read_api().get_checkpoint(hash.into()).await?;
         self.create_block_response(checkpoint).await
     }
 
@@ -147,7 +143,7 @@ impl CheckpointBlockProvider {
         spawn_monitored_task!(async move {
             if f.index_store.is_empty() {
                 info!("Index Store is empty, indexing genesis block.");
-                let checkpoint = f.client.read_api().get_checkpoint(0).await.unwrap();
+                let checkpoint = f.client.read_api().get_checkpoint(0.into()).await.unwrap();
                 let resp = f.create_block_response(checkpoint).await.unwrap();
                 f.update_balance(resp.block).await.unwrap();
             } else {
@@ -174,11 +170,11 @@ impl CheckpointBlockProvider {
             .await?;
         if last_checkpoint < head {
             for seq in last_checkpoint + 1..=head {
-                let checkpoint = self.client.read_api().get_checkpoint(seq).await?;
-                let timestamp = UNIX_EPOCH + Duration::from_millis(checkpoint.summary.timestamp_ms);
+                let checkpoint = self.client.read_api().get_checkpoint(seq.into()).await?;
+                let timestamp = UNIX_EPOCH + Duration::from_millis(checkpoint.timestamp_ms);
                 info!(
                     "indexing checkpoint {seq} with {} txs, timestamp: {}",
-                    checkpoint.content.size(),
+                    checkpoint.transactions.len(),
                     DateTime::<Utc>::from(timestamp).format("%Y-%m-%d %H:%M:%S")
                 );
                 let resp = self.create_block_response(checkpoint).await?;
@@ -225,15 +221,11 @@ impl CheckpointBlockProvider {
     }
 
     async fn create_block_response(&self, checkpoint: Checkpoint) -> Result<BlockResponse, Error> {
-        let index = checkpoint.summary.sequence_number;
-        let hash = checkpoint.summary.digest();
+        let index = checkpoint.sequence_number;
+        let hash = checkpoint.digest;
         let mut transactions = vec![];
-        for digest in checkpoint.content.iter() {
-            let tx = self
-                .client
-                .read_api()
-                .get_transaction(digest.transaction)
-                .await?;
+        for digest in checkpoint.transactions.iter() {
+            let tx = self.client.read_api().get_transaction(*digest).await?;
             transactions.push(Transaction {
                 transaction_identifier: TransactionIdentifier {
                     hash: tx.certificate.transaction_digest,
@@ -245,14 +237,13 @@ impl CheckpointBlockProvider {
         }
 
         // previous digest should only be None for genesis block.
-        if checkpoint.summary.previous_digest.is_none() && index != 0 {
+        if checkpoint.previous_digest.is_none() && index != 0 {
             return Err(Error::DataError(format!(
                 "Previous digest is None for checkpoint [{index}], digest: [{hash:?}]"
             )));
         }
 
         let parent_block_identifier = checkpoint
-            .summary
             .previous_digest
             .map(|hash| BlockIdentifier {
                 index: index - 1,
@@ -264,7 +255,7 @@ impl CheckpointBlockProvider {
             block: Block {
                 block_identifier: BlockIdentifier { index, hash },
                 parent_block_identifier,
-                timestamp: checkpoint.summary.timestamp_ms,
+                timestamp: checkpoint.timestamp_ms,
                 transactions,
                 metadata: None,
             },
@@ -276,10 +267,14 @@ impl CheckpointBlockProvider {
         &self,
         seq_number: CheckpointSequenceNumber,
     ) -> Result<BlockIdentifier, Error> {
-        let checkpoint = self.client.read_api().get_checkpoint(seq_number).await?;
+        let checkpoint = self
+            .client
+            .read_api()
+            .get_checkpoint(seq_number.into())
+            .await?;
         Ok(BlockIdentifier {
-            index: checkpoint.summary.sequence_number,
-            hash: checkpoint.summary.digest(),
+            index: checkpoint.sequence_number,
+            hash: checkpoint.digest,
         })
     }
 
