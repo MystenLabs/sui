@@ -248,16 +248,26 @@ class Permissions {
         );
     }
 
-    public async delete(origin: string) {
+    public async delete(origin: string, specificAccounts: SuiAddress[] = []) {
         const allPermissions = await this.getPermissions();
-        if (origin in allPermissions) {
-            delete allPermissions[origin];
+        const thePermission = allPermissions[origin];
+        if (thePermission) {
+            const remainingAccounts = specificAccounts.length
+                ? thePermission.accounts.filter(
+                      (anAccount) => !specificAccounts.includes(anAccount)
+                  )
+                : [];
+            if (!remainingAccounts.length) {
+                delete allPermissions[origin];
+            } else {
+                thePermission.accounts = remainingAccounts;
+            }
             await Browser.storage.local.set({
                 [PERMISSIONS_STORAGE_KEY]: allPermissions,
             });
             this.#events.emit('connectedAccountsChanged', {
                 origin,
-                accounts: [],
+                accounts: remainingAccounts,
             });
         }
     }
