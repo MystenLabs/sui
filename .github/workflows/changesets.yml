@@ -50,6 +50,6 @@ jobs:
         with:
           # Generates src/version.ts file using genVersion
           # https://github.com/changesets/action#with-version-script
-          version: pnpm run codegen:version
+          version: pnpm changeset-version
         env:
           GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}

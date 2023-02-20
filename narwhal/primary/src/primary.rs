@@ -314,6 +314,7 @@ impl Primary {
             )
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 inbound_network_metrics,
+                parameters.anemo.excessive_message_size(),
             )))
             .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
             .layer(SetResponseHeaderLayer::overriding(
@@ -330,6 +331,7 @@ impl Primary {
             )
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 outbound_network_metrics,
+                parameters.anemo.excessive_message_size(),
             )))
             .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
             .layer(SetRequestHeaderLayer::overriding(

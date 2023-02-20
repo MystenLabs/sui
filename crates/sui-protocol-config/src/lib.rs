@@ -19,16 +19,70 @@ impl ProtocolVersion {
     // ensures that when a new network (such as a testnet) is created, its genesis committee will
     // use a protocol version that is actually supported by the binary.
     pub const MIN: Self = Self(MIN_PROTOCOL_VERSION);
+
     pub const MAX: Self = Self(MAX_PROTOCOL_VERSION);
 
+    #[cfg(not(msim))]
+    const MAX_ALLOWED: Self = Self::MAX;
+
+    // We create one additional "fake" version in simulator builds so that we can test upgrades.
+    #[cfg(msim)]
+    const MAX_ALLOWED: Self = Self(MAX_PROTOCOL_VERSION + 1);
+
     pub fn new(v: u64) -> Self {
-        assert!(v >= MIN_PROTOCOL_VERSION, "{:?}", v);
-        assert!(v <= MAX_PROTOCOL_VERSION, "{:?}", v);
+        assert!(v >= Self::MIN.0, "{:?}", v);
+        assert!(v <= Self::MAX_ALLOWED.0, "{:?}", v);
         Self(v)
     }
 
     pub fn as_u64(&self) -> u64 {
         self.0
+    }
+
+    // For serde deserialization - we don't define a Default impl because there isn't a single
+    // universally appropriate default value.
+    pub fn max() -> Self {
+        Self::MAX
+    }
+}
+
+impl std::ops::Sub<u64> for ProtocolVersion {
+    type Output = Self;
+    fn sub(self, rhs: u64) -> Self::Output {
+        Self::new(self.0 - rhs)
+    }
+}
+
+impl std::ops::Add<u64> for ProtocolVersion {
+    type Output = Self;
+    fn add(self, rhs: u64) -> Self::Output {
+        Self::new(self.0 + rhs)
+    }
+}
+
+/// Models the set of protocol versions supported by a validator.
+/// The `sui-node` binary will always use the SYSTEM_DEFAULT constant, but for testing we need
+/// to be able to inject arbitrary versions into SuiNode.
+#[derive(Debug, Clone, Copy)]
+pub struct SupportedProtocolVersions {
+    min: ProtocolVersion,
+    max: ProtocolVersion,
+}
+
+impl SupportedProtocolVersions {
+    pub const SYSTEM_DEFAULT: Self = Self {
+        min: ProtocolVersion::MIN,
+        max: ProtocolVersion::MAX,
+    };
+
+    pub fn new_for_testing(min: u64, max: u64) -> Self {
+        let min = ProtocolVersion::new(min);
+        let max = ProtocolVersion::new(max);
+        Self { min, max }
+    }
+
+    pub fn is_version_supported(&self, v: ProtocolVersion) -> bool {
+        v.0 >= self.min.0 && v.0 <= self.max.0
     }
 }
 
@@ -317,27 +371,50 @@ impl ProtocolConfig {
     // }
 }
 
+#[cfg(not(msim))]
 static POISON_VERSION_METHODS: AtomicBool = AtomicBool::new(false);
+
+// Use a thread local in sim tests for test isolation.
+#[cfg(msim)]
+thread_local! {
+    static POISON_VERSION_METHODS: AtomicBool = AtomicBool::new(false);
+}
 
 // Instantiations for each protocol version.
 impl ProtocolConfig {
     /// Get the value ProtocolConfig that are in effect during the given protocol version.
     pub fn get_for_version(version: ProtocolVersion) -> Self {
         // ProtocolVersion can be deserialized so we need to check it here as well.
-        assert!(version.0 >= MIN_PROTOCOL_VERSION, "{:?}", version);
-        assert!(version.0 <= MAX_PROTOCOL_VERSION, "{:?}", version);
+        assert!(version.0 >= ProtocolVersion::MIN.0, "{:?}", version);
+        assert!(version.0 <= ProtocolVersion::MAX_ALLOWED.0, "{:?}", version);
 
         Self::get_for_version_impl(version)
     }
 
+    #[cfg(not(msim))]
     pub fn poison_get_for_min_version() {
         POISON_VERSION_METHODS.store(true, Ordering::Relaxed);
+    }
+
+    #[cfg(not(msim))]
+    fn load_poison_get_for_min_version() -> bool {
+        POISON_VERSION_METHODS.load(Ordering::Relaxed)
+    }
+
+    #[cfg(msim)]
+    pub fn poison_get_for_min_version() {
+        POISON_VERSION_METHODS.with(|p| p.store(true, Ordering::Relaxed));
+    }
+
+    #[cfg(msim)]
+    fn load_poison_get_for_min_version() -> bool {
+        POISON_VERSION_METHODS.with(|p| p.load(Ordering::Relaxed))
     }
 
     /// Convenience to get the constants at the current minimum supported version.
     /// Mainly used by client code that may not yet be protocol-version aware.
     pub fn get_for_min_version() -> &'static Self {
-        if POISON_VERSION_METHODS.load(Ordering::Relaxed) {
+        if Self::load_poison_get_for_min_version() {
             panic!("get_for_min_version called on validator");
         }
 
@@ -350,7 +427,7 @@ impl ProtocolConfig {
     /// Convenience to get the constants at the current maximum supported version.
     /// Mainly used by genesis.
     pub fn get_for_max_version() -> &'static Self {
-        if POISON_VERSION_METHODS.load(Ordering::Relaxed) {
+        if Self::load_poison_get_for_min_version() {
             panic!("get_for_max_version called on validator");
         }
 
@@ -361,6 +438,16 @@ impl ProtocolConfig {
     }
 
     fn get_for_version_impl(version: ProtocolVersion) -> Self {
+        #[cfg(msim)]
+        {
+            // populate the fake simulator version # with a different base tx cost.
+            if version == ProtocolVersion::MAX_ALLOWED {
+                let mut config = Self::get_for_version_impl(version - 1);
+                config.base_tx_cost_fixed = Some(config.base_tx_cost_fixed() + 1000);
+                return config;
+            }
+        }
+
         // IMPORTANT: Never modify the value of any constant for a pre-existing protocol version.
         // To change the values here you must create a new protocol version with the new values!
         match version.0 {

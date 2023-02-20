@@ -352,6 +352,9 @@ pub struct SuiTransactionResponse {
     pub certificate: SuiCertifiedTransaction,
     pub effects: SuiTransactionEffects,
     pub timestamp_ms: Option<u64>,
+    /// The checkpoint number when this transaction was included and hence finalized.
+    /// This is only returned in the read api, not in the transaction execution api.
+    pub checkpoint: Option<CheckpointSequenceNumber>,
     pub parsed_data: Option<SuiParsedTransactionResponse>,
 }
 
@@ -568,6 +571,7 @@ impl TryInto<Object> for SuiObject<SuiRawData> {
     type Error = anyhow::Error;
 
     fn try_into(self) -> Result<Object, Self::Error> {
+        let protocol_config = ProtocolConfig::get_for_min_version();
         let data = match self.data {
             SuiRawData::MoveObject(o) => {
                 let struct_tag = parse_sui_struct_tag(o.type_())?;
@@ -577,11 +581,15 @@ impl TryInto<Object> for SuiObject<SuiRawData> {
                         o.has_public_transfer,
                         o.version,
                         o.bcs_bytes,
-                        ProtocolConfig::get_for_min_version(),
+                        protocol_config,
                     )?
                 })
             }
-            SuiRawData::Package(p) => Data::Package(MovePackage::new(p.id, &p.module_map)?),
+            SuiRawData::Package(p) => Data::Package(MovePackage::new(
+                p.id,
+                &p.module_map,
+                protocol_config.max_move_package_size(),
+            )?),
         };
         Ok(Object {
             data,
@@ -1537,13 +1545,20 @@ impl From<PayAllSui> for SuiPayAllSui {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
+#[serde(rename = "GasData", rename_all = "camelCase")]
+pub struct SuiGasData {
+    pub payment: SuiObjectRef,
+    pub owner: SuiAddress,
+    pub price: u64,
+    pub budget: u64,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
 #[serde(rename = "TransactionData", rename_all = "camelCase")]
 pub struct SuiTransactionData {
     pub transactions: Vec<SuiTransactionKind>,
     pub sender: SuiAddress,
-    pub gas_payment: SuiObjectRef,
-    pub gas_price: u64,
-    pub gas_budget: u64,
+    pub gas_data: SuiGasData,
 }
 
 impl Display for SuiTransactionData {
@@ -1559,9 +1574,10 @@ impl Display for SuiTransactionData {
             }
         }
         writeln!(writer, "Sender: {}", self.sender)?;
-        writeln!(writer, "Gas Payment: {}", self.gas_payment)?;
-        writeln!(writer, "Gas Price: {}", self.gas_price)?;
-        writeln!(writer, "Gas Budget: {}", self.gas_budget)?;
+        writeln!(writer, "Gas Payment: {}", self.gas_data.payment)?;
+        writeln!(writer, "Gas Owner: {}", self.gas_data.owner)?;
+        writeln!(writer, "Gas Price: {}", self.gas_data.price)?;
+        writeln!(writer, "Gas Budget: {}", self.gas_data.budget)?;
         write!(f, "{}", writer)
     }
 }
@@ -1581,10 +1597,13 @@ impl TryFrom<TransactionData> for SuiTransactionData {
         };
         Ok(Self {
             transactions,
-            sender: data.signer(),
-            gas_payment: data.gas().into(),
-            gas_price: data.gas_price,
-            gas_budget: data.gas_budget,
+            sender: data.sender(),
+            gas_data: SuiGasData {
+                payment: data.gas().into(),
+                owner: data.gas_owner(),
+                price: data.gas_price(),
+                budget: data.gas_budget(),
+            },
         })
     }
 }
@@ -1814,8 +1833,9 @@ pub struct SuiChangeEpoch {
 pub struct SuiCertifiedTransaction {
     pub transaction_digest: TransactionDigest,
     pub data: SuiTransactionData,
-    /// tx_signature is signed by the transaction sender, committing to the intent message containing the transaction data and intent.
-    pub tx_signature: GenericSignature,
+    /// tx_signatures is a list of signatures signed by transaction participants,
+    /// committing to the intent message containing the transaction data and intent.
+    pub tx_signatures: Vec<GenericSignature>,
     /// authority signature information, if available, is signed by an authority, applied on `data`.
     pub auth_sign_info: SuiAuthorityStrongQuorumSignInfo,
 }
@@ -1824,7 +1844,7 @@ impl Display for SuiCertifiedTransaction {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut writer = String::new();
         writeln!(writer, "Transaction Hash: {:?}", self.transaction_digest)?;
-        writeln!(writer, "Transaction Signature: {:?}", self.tx_signature)?;
+        writeln!(writer, "Transaction Signature: {:?}", self.tx_signatures)?;
         writeln!(
             writer,
             "Signed Authorities Bitmap: {:?}",
@@ -1844,7 +1864,7 @@ impl TryFrom<CertifiedTransaction> for SuiCertifiedTransaction {
         Ok(Self {
             transaction_digest: digest,
             data: data.intent_message.value.try_into()?,
-            tx_signature: data.tx_signature,
+            tx_signatures: data.tx_signatures,
             auth_sign_info: SuiAuthorityStrongQuorumSignInfo::from(&sig),
         })
     }
@@ -1955,6 +1975,9 @@ pub struct SuiTransactionEffects {
     // Object Refs of objects now deleted (the old refs).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deleted: Vec<SuiObjectRef>,
+    /// Object refs of objects previously wrapped in other objects but now deleted.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unwrapped_then_deleted: Vec<SuiObjectRef>,
     // Object refs of objects now wrapped in other objects.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub wrapped: Vec<SuiObjectRef>,
@@ -1989,6 +2012,7 @@ impl SuiTransactionEffects {
             mutated: to_owned_ref(effect.mutated),
             unwrapped: to_owned_ref(effect.unwrapped),
             deleted: to_sui_object_ref(effect.deleted),
+            unwrapped_then_deleted: to_sui_object_ref(effect.unwrapped_then_deleted),
             wrapped: to_sui_object_ref(effect.wrapped),
             gas_object: OwnedObjectRef {
                 owner: effect.gas_object.1,

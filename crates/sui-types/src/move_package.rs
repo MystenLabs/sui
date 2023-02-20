@@ -17,7 +17,6 @@ use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::Bytes;
 use std::collections::BTreeMap;
-use sui_protocol_config::ProtocolConfig;
 
 // TODO: robust MovePackage tests
 // #[cfg(test)]
@@ -55,14 +54,13 @@ impl MovePackage {
     pub fn new(
         id: ObjectID,
         module_map: &BTreeMap<String, Vec<u8>>,
+        max_move_package_size: u64,
     ) -> Result<Self, ExecutionError> {
         let pkg = Self {
             id,
             module_map: module_map.clone(),
         };
         let object_size = pkg.size() as u64;
-        // This assumes jkjk
-        let max_move_package_size = ProtocolConfig::get_for_min_version().max_move_package_size();
         if object_size > max_move_package_size {
             return Err(ExecutionErrorKind::MovePackageTooBig {
                 object_size,
@@ -75,6 +73,7 @@ impl MovePackage {
 
     pub fn from_module_iter<T: IntoIterator<Item = CompiledModule>>(
         iter: T,
+        max_move_package_size: u64,
     ) -> Result<Self, ExecutionError> {
         let mut iter = iter.into_iter().peekable();
         let id = ObjectID::from(
@@ -94,6 +93,7 @@ impl MovePackage {
                     (module.self_id().name().to_string(), bytes)
                 })
                 .collect(),
+            max_move_package_size,
         )
     }
 

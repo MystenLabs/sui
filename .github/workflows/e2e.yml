@@ -111,10 +111,9 @@ jobs:
         if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' }}
         run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm sdk test:e2e'
 
-      # Re-enable when it's more stable
-      # - name: Run Explorer e2e tests
-      #   if: ${{ needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'}}
-      #   run: pnpm explorer playwright test
+      - name: Run Explorer e2e tests
+        if: ${{ needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'}}
+        run: pnpm explorer playwright test
 
       # TODO: add wallet e2e when available
 

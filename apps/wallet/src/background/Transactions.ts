@@ -1,6 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+    type SignedTransaction,
+    type SuiTransactionResponse,
+} from '@mysten/sui.js';
+import { type SuiSignTransactionInput } from '@mysten/wallet-standard';
 import { filter, lastValueFrom, map, race, Subject, take } from 'rxjs';
 import { v4 as uuidV4 } from 'uuid';
 import Browser from 'webextension-polyfill';
@@ -24,12 +29,17 @@ function openTxWindow(txRequestID: string) {
 class Transactions {
     private _txResponseMessages = new Subject<TransactionRequestResponse>();
 
-    public async executeTransaction(
-        tx: TransactionDataType,
-        connection: ContentScriptConnection
-    ) {
-        const txRequest = this.createTransactionRequest(
+    public async executeOrSignTransaction(
+        {
             tx,
+            sign,
+        }:
+            | { tx: TransactionDataType; sign?: undefined }
+            | { tx?: undefined; sign: SuiSignTransactionInput },
+        connection: ContentScriptConnection
+    ): Promise<SuiTransactionResponse | SignedTransaction> {
+        const txRequest = this.createTransactionRequest(
+            tx ?? { type: 'v2', justSign: true, data: sign.transaction },
             connection.origin,
             connection.originFavIcon
         );
@@ -48,21 +58,28 @@ class Transactions {
                 take(1),
                 map(async (response) => {
                     if (response) {
-                        const { approved, txResult, tsResultError } = response;
+                        const { approved, txResult, txSigned, tsResultError } =
+                            response;
                         if (approved) {
                             txRequest.approved = approved;
                             txRequest.txResult = txResult;
                             txRequest.txResultError = tsResultError;
+                            txRequest.txSigned = txSigned;
                             await this.storeTransactionRequest(txRequest);
                             if (tsResultError) {
                                 throw new Error(
                                     `Transaction failed with the following error. ${tsResultError}`
                                 );
                             }
-                            if (!txResult) {
+                            if (sign && !txSigned) {
+                                throw new Error(
+                                    'Transaction signature is empty'
+                                );
+                            }
+                            if (tx && !txResult) {
                                 throw new Error(`Transaction result is empty`);
                             }
-                            return txResult;
+                            return tx ? txResult! : txSigned!;
                         }
                     }
                     await this.removeTransactionRequest(txRequest.id);

@@ -56,6 +56,7 @@ use sui_types::messages_checkpoint::{
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp,
 };
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::temporary_store::InnerTemporaryStore;
 use tokio::time::Instant;
 use typed_store::{retry_transaction_forever, Map};
@@ -224,7 +225,7 @@ pub struct AuthorityEpochTables {
 
     /// When we see certificate through consensus for the first time, we record
     /// user signature for this transaction here. This will be included in the checkpoint later.
-    user_signatures_for_checkpoints: DBMap<TransactionDigest, GenericSignature>,
+    user_signatures_for_checkpoints: DBMap<TransactionDigest, Vec<GenericSignature>>,
 
     /// Maps sequence number to checkpoint summary, used by CheckpointBuilder to build checkpoint within epoch
     builder_checkpoint_summary: DBMap<CheckpointSequenceNumber, CheckpointSummary>,
@@ -242,9 +243,7 @@ pub struct AuthorityEpochTables {
 /// Parameters of the epoch fixed at epoch start.
 #[derive(Default, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct EpochStartConfiguration {
-    pub epoch_id: EpochId,
-    pub epoch_start_timestamp_ms: CheckpointTimestamp,
-    // Current epoch committee can eventually move here too, though right now it is served from a different table
+    pub system_state: SuiSystemState,
 }
 
 impl AuthorityEpochTables {
@@ -325,7 +324,7 @@ impl AuthorityPerEpochStore {
         // is initialized during epoch change
         let epoch_start_configuration =
             if let Some(epoch_start_configuration) = epoch_start_configuration {
-                assert_eq!(epoch_start_configuration.epoch_id, epoch_id);
+                assert_eq!(epoch_start_configuration.epoch_id(), epoch_id);
                 tables
                     .epoch_start_configuration
                     .insert(&(), &epoch_start_configuration)
@@ -416,6 +415,12 @@ impl AuthorityPerEpochStore {
 
     pub fn epoch(&self) -> EpochId {
         self.committee.epoch
+    }
+
+    pub fn reference_gas_price(&self) -> u64 {
+        self.epoch_start_configuration
+            .system_state
+            .reference_gas_price
     }
 
     pub async fn acquire_tx_guard(&self, cert: &VerifiedCertificate) -> SuiResult<CertTxGuard> {
@@ -847,7 +852,7 @@ impl AuthorityPerEpochStore {
     pub async fn user_signatures_for_checkpoint(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<GenericSignature>> {
+    ) -> SuiResult<Vec<Vec<GenericSignature>>> {
         // todo - use NotifyRead::register_all might be faster
         for digest in digests {
             self.consensus_message_processed_notify(ConsensusTransactionKey::Certificate(*digest))
@@ -858,11 +863,11 @@ impl AuthorityPerEpochStore {
             .user_signatures_for_checkpoints
             .multi_get(digests)?;
         let mut result = Vec::with_capacity(digests.len());
-        for (signature, digest) in signatures.into_iter().zip(digests.iter()) {
-            let Some(signature) = signature else {
+        for (signatures, digest) in signatures.into_iter().zip(digests.iter()) {
+            let Some(signatures) = signatures else {
                 return Err(SuiError::from(format!("Can not find user signature for checkpoint for transaction {:?}", digest).as_str()));
             };
-            result.push(signature);
+            result.push(signatures);
         }
         Ok(result)
     }
@@ -1144,11 +1149,11 @@ impl AuthorityPerEpochStore {
     pub fn test_insert_user_signature(
         &self,
         digest: TransactionDigest,
-        signature: &GenericSignature,
+        signatures: Vec<GenericSignature>,
     ) {
         self.tables
             .user_signatures_for_checkpoints
-            .insert(&digest, signature)
+            .insert(&digest, &signatures)
             .unwrap();
         let key = ConsensusTransactionKey::Certificate(digest);
         self.tables
@@ -1182,7 +1187,7 @@ impl AuthorityPerEpochStore {
             .contains_key(certificate.digest())?);
         let batch = batch.insert_batch(
             &self.tables.user_signatures_for_checkpoints,
-            [(*certificate.digest(), certificate.tx_signature.clone())],
+            [(*certificate.digest(), certificate.tx_signatures.clone())],
         )?;
         self.finish_consensus_transaction_process_with_batch(batch, key, consensus_index)
     }
@@ -1726,6 +1731,14 @@ fn transactions_table_default_config() -> DBOptions {
 
 impl EpochStartConfiguration {
     pub fn epoch_data(&self) -> EpochData {
-        EpochData::new(self.epoch_id)
+        EpochData::new(self.epoch_id())
+    }
+
+    pub fn epoch_id(&self) -> EpochId {
+        self.system_state.epoch
+    }
+
+    pub fn epoch_start_timestamp_ms(&self) -> CheckpointTimestamp {
+        self.system_state.epoch_start_timestamp_ms
     }
 }

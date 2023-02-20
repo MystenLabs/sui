@@ -21,6 +21,7 @@ import {
   SuiEventEnvelope,
   SuiEventFilter,
   SuiExecuteTransactionResponse,
+  SuiExecuteTransactionResponse_v26,
   SuiMoveFunctionArgTypes,
   SuiMoveNormalizedFunction,
   SuiMoveNormalizedModule,
@@ -43,6 +44,7 @@ import {
   DevInspectResults,
   CoinMetadata,
   versionToString,
+  toSuiTransactionData,
   isValidTransactionDigest,
   isValidSuiAddress,
   isValidSuiObjectId,
@@ -78,6 +80,9 @@ import { UnserializedSignableTransaction } from '../signers/txn-data-serializers
 import { LocalTxnDataSerializer } from '../signers/txn-data-serializers/local-txn-data-serializer';
 import { toB64 } from '@mysten/bcs';
 import { SerializedSignature } from '../cryptography/signature';
+import { pkgVersion } from '../pkg-version';
+
+export const TARGETED_RPC_VERSION = '0.27.0';
 
 /**
  * Configuration options for the JsonRpcProvider. If the value of a field is not provided,
@@ -128,6 +133,7 @@ export class JsonRpcProvider extends Provider {
   protected wsClient: WebsocketClient;
   private rpcApiVersion: RpcApiVersion | undefined;
   private cacheExpiry: number | undefined;
+  private addedHeaders = false;
   /**
    * Establish a connection to a Sui RPC endpoint
    *
@@ -150,11 +156,24 @@ export class JsonRpcProvider extends Provider {
     }
 
     const opts = { ...DEFAULT_OPTIONS, ...options };
+
     this.client = new JsonRpcClient(
       this.endpoints.fullNode,
       undefined,
       opts.tlsOptions,
     );
+    // TODO: uncomment this when 0.27.0 is released. We cannot do this now because
+    // the current Devnet(0.26.0) does not support the header. And we need to make
+    // a request to RPC to know which version it is running. Therefore, we do not
+    // add headers here, instead we add headers in the first call of the `getRpcApiVersion`
+    // method
+    // this.client = new JsonRpcClient(this.endpoints.fullNode, {
+    //   'Client-Sdk-Type': 'typescript',
+    //   'Client-Sdk-Version': pkgVersion,
+    //   'Client-Target-Api-Version': TARGETED_RPC_VERSION,
+    // }, opts.tlsOptions,
+    //);
+    // TODO: add header for websocket request
     this.wsClient = new WebsocketClient(
       this.endpoints.fullNode,
       opts.skipDataValidation!,
@@ -178,8 +197,22 @@ export class JsonRpcProvider extends Provider {
         this.options.skipDataValidation,
       );
       this.rpcApiVersion = parseVersionFromString(resp.info.version);
+      // TODO: Remove this once 0.27.0 is released
+      if (
+        !this.addedHeaders &&
+        this.rpcApiVersion &&
+        !lt(versionToString(this.rpcApiVersion), '0.27.0')
+      ) {
+        this.client = new JsonRpcClient(this.endpoints.fullNode, {
+          'Client-Sdk-Type': 'typescript',
+          'Client-Sdk-Version': pkgVersion,
+          'Client-Target-Api-Version': TARGETED_RPC_VERSION,
+        });
+        this.addedHeaders = true;
+      }
       this.cacheExpiry =
-        Date.now() + (this.options.versionCacheTimoutInSeconds ?? 0);
+        // Date.now() is in milliseonds, but the timeout is in seconds
+        Date.now() + (this.options.versionCacheTimoutInSeconds ?? 0) * 1000;
       return this.rpcApiVersion;
     } catch (err) {
       console.warn('Error fetching version number of the RPC API', err);
@@ -673,6 +706,38 @@ export class JsonRpcProvider extends Provider {
     signature: SerializedSignature,
     requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert',
   ): Promise<SuiExecuteTransactionResponse> {
+    const version = this.rpcApiVersion;
+    if (version?.major === 0 && version?.minor <= 26) {
+      try {
+        let resp = await this.client.requestWithType(
+          'sui_executeTransactionSerializedSig',
+          [
+            typeof txnBytes === 'string' ? txnBytes : toB64(txnBytes),
+            signature,
+            requestType,
+          ],
+          SuiExecuteTransactionResponse_v26,
+          this.options.skipDataValidation,
+        );
+        let certificate = resp.certificate
+          ? {
+              transactionDigest: resp.certificate!.transactionDigest,
+              data: toSuiTransactionData(resp.certificate!.data),
+              txSignatures: [resp.certificate!.txSignature],
+              authSignInfo: resp.certificate!.authSignInfo,
+            }
+          : undefined;
+        return {
+          certificate: certificate,
+          effects: resp.effects,
+          confirmed_local_execution: resp.confirmed_local_execution,
+        };
+      } catch (err) {
+        throw new Error(
+          `Error executing transaction with request type: ${err}`,
+        );
+      }
+    }
     try {
       return await this.client.requestWithType(
         'sui_executeTransactionSerializedSig',

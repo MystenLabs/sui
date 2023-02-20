@@ -285,7 +285,9 @@ pub struct GenesisValidatorInfo {
 #[derive(Serialize, Deserialize)]
 pub struct GenesisChainParameters {
     pub timestamp_ms: u64,
-    // protocol version that the chain starts at.
+
+    /// protocol version that the chain starts at.
+    #[serde(default = "ProtocolVersion::max")]
     pub protocol_version: ProtocolVersion,
     // Most other parameters (e.g. initial gas schedule) should be derived from protocol_version.
 }
@@ -804,7 +806,7 @@ fn create_genesis_transaction(
         );
 
         let transaction_data = genesis_transaction.data().intent_message.value.clone();
-        let signer = transaction_data.signer();
+        let signer = transaction_data.sender();
         let gas = transaction_data.gas();
         let (inner_temp_store, effects, _execution_error) =
             sui_adapter::execution_engine::execute_transaction_to_effects::<
@@ -1157,7 +1159,7 @@ mod test {
         );
 
         let transaction_data = genesis_transaction.data().intent_message.value.clone();
-        let signer = transaction_data.signer();
+        let signer = transaction_data.sender();
         let gas = transaction_data.gas();
         let (_inner_temp_store, effects, _execution_error) =
             sui_adapter::execution_engine::execute_transaction_to_effects::<

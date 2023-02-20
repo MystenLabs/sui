@@ -42,7 +42,7 @@ use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
 
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 
 use sui_storage::{
     event_store::{EventStoreType, SqlEventStore},
@@ -96,6 +96,7 @@ pub struct ValidatorComponents {
     sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
 }
 use sui_json_rpc::governance_api::GovernanceReadApi;
+use sui_types::sui_system_state::SuiSystemState;
 
 pub struct SuiNode {
     config: NodeConfig,
@@ -121,6 +122,15 @@ impl SuiNode {
         config: &NodeConfig,
         registry_service: RegistryService,
     ) -> Result<Arc<SuiNode>> {
+        let mut config = config.clone();
+        if config.supported_protocol_versions.is_none() {
+            info!(
+                "populating config.supported_protocol_versions with default {:?}",
+                SupportedProtocolVersions::SYSTEM_DEFAULT
+            );
+            config.supported_protocol_versions = Some(SupportedProtocolVersions::SYSTEM_DEFAULT);
+        }
+
         // TODO: maybe have a config enum that takes care of this for us.
         let is_validator = config.consensus_config().is_some();
         let is_full_node = !is_validator;
@@ -160,11 +170,8 @@ impl SuiNode {
             .get_committee(&cur_epoch)?
             .expect("Committee of the current epoch must exist");
         let epoch_start_configuration = if cur_epoch == genesis.epoch() {
-            let checkpoint = genesis.checkpoint();
-            let summary = &checkpoint.summary;
             Some(EpochStartConfiguration {
-                epoch_id: summary.epoch,
-                epoch_start_timestamp_ms: summary.timestamp_ms,
+                system_state: genesis.sui_system_object(),
             })
         } else {
             None
@@ -213,11 +220,12 @@ impl SuiNode {
         };
 
         let (p2p_network, discovery_handle, state_sync_handle) =
-            Self::create_p2p_network(config, state_sync_store, &prometheus_registry)?;
+            Self::create_p2p_network(&config, state_sync_store, &prometheus_registry)?;
 
         let state = AuthorityState::new(
             config.protocol_public_key(),
             secret,
+            config.supported_protocol_versions.unwrap(),
             store,
             epoch_store.clone(),
             committee_store.clone(),
@@ -268,14 +276,14 @@ impl SuiNode {
         let json_rpc_service = build_server(
             state.clone(),
             &transaction_orchestrator.clone(),
-            config,
+            &config,
             &prometheus_registry,
         )
         .await?;
 
         let validator_components = if state.is_validator(&epoch_store) {
             let components = Self::construct_validator_components(
-                config,
+                &config,
                 state.clone(),
                 epoch_store.clone(),
                 checkpoint_store.clone(),
@@ -291,7 +299,7 @@ impl SuiNode {
         };
 
         let node = Self {
-            config: config.clone(),
+            config,
             validator_components: Mutex::new(validator_components),
             _json_rpc_service: json_rpc_service,
             state,
@@ -404,6 +412,7 @@ impl SuiNode {
                 )
                 .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                     Arc::new(inbound_network_metrics),
+                    config.p2p_config.excessive_message_size(),
                 )))
                 .service(routes);
 
@@ -415,6 +424,7 @@ impl SuiNode {
                 )
                 .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                     Arc::new(outbound_network_metrics),
+                    config.p2p_config.excessive_message_size(),
                 )))
                 .into_inner();
 
@@ -591,7 +601,7 @@ impl SuiNode {
             authority: config.protocol_public_key(),
             next_reconfiguration_timestamp_ms: epoch_store
                 .epoch_start_configuration()
-                .epoch_start_timestamp_ms
+                .epoch_start_timestamp_ms()
                 .checked_add(config.epoch_duration_ms)
                 .expect("Overflow calculating next_reconfiguration_timestamp_ms"),
             metrics: checkpoint_metrics.clone(),
@@ -790,11 +800,7 @@ impl SuiNode {
                 narwhal_manager.shutdown().await;
 
                 let new_epoch_store = self
-                    .reconfigure_state(
-                        &cur_epoch_store,
-                        next_epoch_committee,
-                        system_state.epoch_start_timestamp_ms,
-                    )
+                    .reconfigure_state(&cur_epoch_store, next_epoch_committee, system_state)
                     .await;
 
                 narwhal_epoch_data_remover
@@ -825,11 +831,7 @@ impl SuiNode {
                 }
             } else {
                 let new_epoch_store = self
-                    .reconfigure_state(
-                        &cur_epoch_store,
-                        next_epoch_committee,
-                        system_state.epoch_start_timestamp_ms,
-                    )
+                    .reconfigure_state(&cur_epoch_store, next_epoch_committee, system_state)
                     .await;
 
                 if self.state.is_validator(&new_epoch_store) {
@@ -859,15 +861,16 @@ impl SuiNode {
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
         next_epoch_committee: Committee,
-        epoch_start_timestamp_ms: u64,
+        sui_system_state: SuiSystemState,
     ) -> Arc<AuthorityPerEpochStore> {
         let next_epoch = next_epoch_committee.epoch();
         let new_epoch_store = self
             .state
             .reconfigure(
                 cur_epoch_store,
+                self.config.supported_protocol_versions.unwrap(),
                 next_epoch_committee,
-                epoch_start_timestamp_ms,
+                sui_system_state,
             )
             .await
             .expect("Reconfigure authority state cannot fail");

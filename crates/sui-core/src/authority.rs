@@ -50,6 +50,7 @@ use sui_json_rpc_types::{
     SuiTransactionEffects,
 };
 use sui_macros::nondeterministic;
+use sui_protocol_config::SupportedProtocolVersions;
 use sui_storage::indexes::{ObjectIndexChanges, MAX_GET_OWNED_OBJECT_SIZE};
 use sui_storage::write_ahead_log::WriteAheadLog;
 use sui_storage::{
@@ -923,7 +924,7 @@ impl AuthorityState {
             epoch_store.protocol_config(),
         );
         let transaction_data = certificate.data().intent_message.value.clone();
-        let signer = transaction_data.signer();
+        let signer = transaction_data.sender();
         let gas = transaction_data.gas();
         let (inner_temp_store, effects, _execution_error) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
@@ -982,7 +983,7 @@ impl AuthorityState {
             transaction_digest,
             epoch_store.protocol_config(),
         );
-        let signer = transaction.signer();
+        let signer = transaction.sender();
         let gas = transaction.gas();
         let (_inner_temp_store, effects, _execution_error) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
@@ -1131,10 +1132,8 @@ impl AuthorityState {
         let mut deleted_owners = vec![];
         let mut deleted_dynamic_fields = vec![];
         for (id, _, _) in &effects.deleted {
-            let Some(old_version) = modified_at_version.get(id) else{
-                error!("Error processing object owner index for tx [{:?}], cannot find modified at version for deleted object [{id}].", effects.transaction_digest);
-                continue;
-            };
+            let old_version = modified_at_version.get(id).unwrap();
+
             match self.get_owner_at_version(id, *old_version)? {
                 Owner::AddressOwner(addr) => deleted_owners.push((addr, *id)),
                 Owner::ObjectOwner(object_id) => {
@@ -1437,12 +1436,26 @@ impl AuthorityState {
         })
     }
 
+    fn check_protocol_version(
+        supported_protocol_versions: SupportedProtocolVersions,
+        current_version: ProtocolVersion,
+    ) {
+        info!("current protocol version is now {:?}", current_version);
+        info!("supported versions are: {:?}", supported_protocol_versions);
+        if !supported_protocol_versions.is_version_supported(current_version) {
+            panic!(
+                "Unsupported protocol version. The network is at {:?}, but this SuiNode only supports: {:?}",
+                current_version, supported_protocol_versions,
+            );
+        }
+    }
     // TODO: This function takes both committee and genesis as parameter.
     // Technically genesis already contains committee information. Could consider merging them.
     #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
     pub async fn new(
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
+        supported_protocol_versions: SupportedProtocolVersions,
         store: Arc<AuthorityStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         committee_store: Arc<CommitteeStore>,
@@ -1453,6 +1466,11 @@ impl AuthorityState {
         pruning_config: &AuthorityStorePruningConfig,
         genesis_objects: &[Object],
     ) -> Arc<Self> {
+        Self::check_protocol_version(
+            supported_protocol_versions,
+            epoch_store.committee().protocol_version,
+        );
+
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
         let move_vm = Arc::new(
@@ -1574,10 +1592,10 @@ impl AuthorityState {
         let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
         let index_store = Some(Arc::new(IndexStore::new(path.join("indexes"))));
 
-        // add the object_basics module
         let state = AuthorityState::new(
             secret.public().into(),
             secret.clone(),
+            SupportedProtocolVersions::SYSTEM_DEFAULT,
             store,
             epoch_store,
             epochs,
@@ -1693,9 +1711,12 @@ impl AuthorityState {
     pub async fn reconfigure(
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
+        supported_protocol_versions: SupportedProtocolVersions,
         new_committee: Committee,
-        epoch_start_timestamp_ms: u64,
+        sui_system_state: SuiSystemState,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
+        Self::check_protocol_version(supported_protocol_versions, new_committee.protocol_version);
+
         self.committee_store.insert_new_committee(&new_committee)?;
         let db = self.db();
         let mut execution_lock = db.execution_lock_for_reconfiguration().await;
@@ -1703,7 +1724,7 @@ impl AuthorityState {
             .await?;
         let new_epoch = new_committee.epoch;
         let new_epoch_store = self
-            .reopen_epoch_db(cur_epoch_store, new_committee, epoch_start_timestamp_ms)
+            .reopen_epoch_db(cur_epoch_store, new_committee, sui_system_state)
             .await?;
         assert_eq!(new_epoch_store.epoch(), new_epoch);
         self.transaction_manager.reconfigure(new_epoch);
@@ -2532,15 +2553,12 @@ impl AuthorityState {
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
         new_committee: Committee,
-        epoch_start_timestamp_ms: u64,
+        system_state: SuiSystemState,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         let new_epoch = new_committee.epoch;
         info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
 
-        let epoch_start_configuration = EpochStartConfiguration {
-            epoch_id: new_epoch,
-            epoch_start_timestamp_ms,
-        };
+        let epoch_start_configuration = EpochStartConfiguration { system_state };
         let new_epoch_store =
             cur_epoch_store.new_at_next_epoch(self.name, new_committee, epoch_start_configuration);
         self.db().perpetual_tables.set_recovery_epoch(new_epoch)?;

@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::usize;
 use sui_keys::keypair_file::{read_authority_keypair_from_file, read_keypair_from_file};
+use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::StakeUnit;
 use sui_types::crypto::AuthorityPublicKeyBytes;
@@ -89,6 +90,12 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub checkpoint_executor_config: CheckpointExecutorConfig,
+
+    /// In a `sui-node` binary, this is set to SupportedProtocolVersions::SYSTEM_DEFAULT
+    /// in sui-node/src/main.rs. It is present in the config so that it can be changed by tests in
+    /// order to test protocol upgrades.
+    #[serde(skip)]
+    pub supported_protocol_versions: Option<SupportedProtocolVersions>,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {

@@ -743,8 +743,8 @@ impl CheckpointBuilder {
                 {
                     continue;
                 }
-                let executed_epoch = self.state.database.transaction_executed_in_epoch(&digest)?;
-                if let Some(executed_epoch) = executed_epoch {
+                let executed_epoch = self.state.database.get_transaction_checkpoint(&digest)?;
+                if let Some((executed_epoch, _checkpoint)) = executed_epoch {
                     // Skip here if transaction was executed in previous epoch
                     //
                     // Do not skip if transaction was executed in this epoch -
@@ -1227,7 +1227,7 @@ mod tests {
             let signature = Signature::Ed25519SuiSignature(Default::default()).into();
             state
                 .epoch_store_for_testing()
-                .test_insert_user_signature(digest, &signature);
+                .test_insert_user_signature(digest, vec![signature]);
         }
 
         let (output, mut result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);

@@ -21,6 +21,7 @@ import {
   getObjectId,
   PayAllSuiTx,
   PayAllSuiTransaction,
+  TransactionData_v26,
 } from '../../src';
 import { CallArgSerializer } from '../../src/signers/txn-data-serializers/call-arg-serializer';
 import {
@@ -104,6 +105,7 @@ describe('Transaction Serialization and deserialization', () => {
         'An NFT created by the wallet Command Line Tool',
         'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
       ],
+      gasOwner: toolbox.address(),
       gasBudget: DEFAULT_GAS_BUDGET,
       gasPayment: coins[0].objectId,
     };
@@ -147,6 +149,7 @@ describe('Transaction Serialization and deserialization', () => {
         coins[2].objectId,
         validator_address,
       ],
+      gasOwner: toolbox.address(),
       gasBudget: DEFAULT_GAS_BUDGET,
       gasPayment: coins[3].objectId,
     };
@@ -219,13 +222,26 @@ describe('Transaction Serialization and deserialization', () => {
       },
     } as PaySuiTx;
 
-    const tx_data = {
-      sender: DEFAULT_RECIPIENT_2,
-      gasBudget: gasBudget,
-      gasPrice: 100,
-      kind: { Single: paySuiTx } as TransactionKind,
-      gasPayment: getObjectReference(coins[1]),
-    } as TransactionData;
+    const version = await localSerializer.getRpcApiVersion();
+    const tx_data =
+      version?.major === 0 && version?.minor <= 26
+        ? ({
+            sender: DEFAULT_RECIPIENT_2,
+            gasBudget: gasBudget,
+            gasPrice: 100,
+            kind: { Single: paySuiTx } as TransactionKind,
+            gasPayment: getObjectReference(coins[1]),
+          } as TransactionData_v26)
+        : ({
+            sender: DEFAULT_RECIPIENT_2,
+            kind: { Single: paySuiTx } as TransactionKind,
+            gasData: {
+              owner: DEFAULT_RECIPIENT_2,
+              budget: gasBudget,
+              price: 100,
+              payment: getObjectReference(coins[1]),
+            },
+          } as TransactionData);
 
     const serializedData = await localSerializer.serializeTransactionData(
       tx_data,
@@ -262,13 +278,26 @@ describe('Transaction Serialization and deserialization', () => {
       },
     } as PayAllSuiTx;
 
-    const tx_data = {
-      sender: DEFAULT_RECIPIENT_2,
-      gasBudget: gasBudget,
-      gasPrice: 100,
-      kind: { Single: payAllSui } as TransactionKind,
-      gasPayment: getObjectReference(coins[1]),
-    } as TransactionData;
+    const version = await localSerializer.getRpcApiVersion();
+    const tx_data =
+      version?.major === 0 && version?.minor <= 26
+        ? ({
+            sender: DEFAULT_RECIPIENT_2,
+            gasBudget: gasBudget,
+            gasPrice: 100,
+            kind: { Single: payAllSui } as TransactionKind,
+            gasPayment: getObjectReference(coins[1]),
+          } as TransactionData_v26)
+        : ({
+            sender: DEFAULT_RECIPIENT_2,
+            kind: { Single: payAllSui } as TransactionKind,
+            gasData: {
+              owner: DEFAULT_RECIPIENT_2,
+              budget: gasBudget,
+              price: 100,
+              payment: getObjectReference(coins[1]),
+            },
+          } as TransactionData);
 
     const serializedData = await localSerializer.serializeTransactionData(
       tx_data,
