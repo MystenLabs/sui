@@ -52,7 +52,7 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
-      - run: rustup toolchain install stable --profile minimal
+      - run: rustup toolchain install stable --profile default
       - uses: Swatinem/rust-cache@v2
       # See '.cargo/config' for list of enabled/disappled clippy lints
       - name: cargo clippy
@@ -62,7 +62,7 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
-      - run: rustup toolchain install nightly --profile minimal
+      - run: rustup toolchain install nightly --profile default
       - name: rustfmt
         uses: actions-rs/cargo@v1
         with:
