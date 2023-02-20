@@ -11,17 +11,16 @@ const dedupe = (arr: string[]) => Array.from(new Set(arr));
 export function useGetTransactionsByAddress(address: SuiAddress | null) {
     const rpc = useRpc();
 
-    const response = useQuery<SuiTransactionResponse[], Error>(
+    return useQuery<SuiTransactionResponse[], Error>(
         ['transactions-by-address', address],
         async () => {
-            if (!address) return [];
             // combine from and to transactions
             const [txnIdDs, fromTxnIds] = await Promise.all([
                 rpc.getTransactions({
-                    ToAddress: address,
+                    ToAddress: address!,
                 }),
                 rpc.getTransactions({
-                    FromAddress: address,
+                    FromAddress: address!,
                 }),
             ]);
             const resp = await rpc.getTransactionWithEffectsBatch(
@@ -35,5 +34,4 @@ export function useGetTransactionsByAddress(address: SuiAddress | null) {
         },
         { enabled: !!address, staleTime: 10 * 1000 }
     );
-    return response;
 }
