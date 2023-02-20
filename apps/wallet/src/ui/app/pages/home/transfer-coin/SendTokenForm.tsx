@@ -4,7 +4,7 @@
 import { ArrowRight16 } from '@mysten/icons';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { Field, Form, useFormikContext } from 'formik';
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useMemo } from 'react';
 
 import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, {
@@ -57,14 +57,17 @@ export function SendTokenForm({
     const [coinDecimals, { isLoading: isCoinDecimalsLoading }] =
         useCoinDecimals(coinType);
 
+    const parsedAmount = useMemo(() => {
+        return parseAmount(amount, coinDecimals);
+    }, [amount, coinDecimals]);
+
     useEffect(() => {
         if (!isCoinDecimalsLoading) {
-            const parsedAmount = parseAmount(amount, coinDecimals);
             onAmountChanged(parsedAmount);
-            // reset isPayAllSui to false if the amount is not equal to the balance
+            // set Max once parsedAmount is equal to balance
             // check against the balance instead of maxToken because the maxToken is formatted
-            if (parsedAmount !== (balance || 0n)) {
-                setFieldValue('isPayAllSui', false);
+            if (coinType === SUI_TYPE_ARG) {
+                setFieldValue('isPayAllSui', parsedAmount === (balance || 0n));
             }
             // seems changing the validationSchema doesn't rerun the validation for the form
             // trigger re-validation here when the amount to send is changed
@@ -79,6 +82,8 @@ export function SendTokenForm({
         validateForm,
         balance,
         setFieldValue,
+        parsedAmount,
+        coinType,
     ]);
 
     const [formattedGas] = useFormatCoin(gasCostEstimation, GAS_TYPE_ARG);
@@ -88,14 +93,13 @@ export function SendTokenForm({
         if (!maxToken) return;
         // for SUI coin type, set the amount to be the formatted maxToken
         // while for other coin type, set the amount to be the raw maxToken
-        const maxAmount =
-            coinType === SUI_TYPE_ARG ? maxToken : balance?.toString();
-        setFieldValue('amount', maxAmount);
+
+        setFieldValue('amount', maxToken);
         // For SUI coin type, set isPayAllSui to true
         if (coinType === SUI_TYPE_ARG) {
             setFieldValue('isPayAllSui', true);
         }
-    }, [balance, coinType, maxToken, setFieldValue]);
+    }, [coinType, maxToken, setFieldValue]);
 
     return (
         <BottomMenuLayout>
@@ -123,7 +127,7 @@ export function SendTokenForm({
                             allowDecimals
                             onActionClicked={setMaxToken}
                             actionDisabled={
-                                isPayAllSui ||
+                                parsedAmount === balance ||
                                 queryResult.isLoading ||
                                 !maxToken
                             }
