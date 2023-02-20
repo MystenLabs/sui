@@ -554,7 +554,7 @@
           "name": "Full Node API"
         }
       ],
-      "description": "Return a checkpoint summary",
+      "description": "Return a checkpoint",
       "params": [
         {
           "name": "id",
