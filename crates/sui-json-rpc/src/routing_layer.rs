@@ -169,21 +169,30 @@ fn process_single_request(
         return body.to_vec();
     };
 
+    let mut modified = false;
+
     // Reject direct access to the old methods
     if route_to_methods.contains(request.method.as_ref()) {
         request.method = "INVALID_ROUTING".into();
-    }
-
-    // Modify the method name if routing is enabled
-    if !disable_routing {
-        if let Some(version) = version {
-            if let Some(route) = routes.get(request.method.as_ref()) {
-                if route.matches(version) {
-                    request.method = route.route_to.clone().into();
-                }
-            };
+        modified = true;
+    } else {
+        // Modify the method name if routing is enabled
+        if !disable_routing {
+            if let Some(version) = version {
+                if let Some(route) = routes.get(request.method.as_ref()) {
+                    if route.matches(version) {
+                        request.method = route.route_to.clone().into();
+                        modified = true;
+                    }
+                };
+            }
         }
     }
+
+    if !modified {
+        return body.to_vec();
+    }
+
     if let Ok(result) = serde_json::to_vec(&request) {
         result
     } else {
