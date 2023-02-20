@@ -384,15 +384,15 @@ impl AuthorityStore {
     /// Returns None otherwise
     pub async fn execution_lock_for_certificate(
         &self,
-        certificate: &CertifiedTransaction,
+        certificate: &VerifiedExecutableTransaction,
     ) -> SuiResult<ExecutionLockReadGuard> {
         let lock = self.execution_lock.read().await;
-        if *lock == certificate.epoch() {
+        if *lock == certificate.auth_sig().epoch() {
             Ok(lock)
         } else {
             Err(SuiError::WrongEpoch {
                 expected_epoch: *lock,
-                actual_epoch: certificate.epoch(),
+                actual_epoch: certificate.auth_sig().epoch(),
             })
         }
     }

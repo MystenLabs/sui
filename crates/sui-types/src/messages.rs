@@ -1682,6 +1682,23 @@ pub type TxCertAndSignedEffects = (CertifiedTransaction, SignedTransactionEffect
 pub type VerifiedCertificate = VerifiedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 
+/// An ExecutableTransaction is a wrapper of a transaction with a CertificateProof that indicates
+/// there existed a valid certificate for this transaction, and hence it can be executed locally.
+/// This is an abstraction data structure to cover both the case where the transaction is
+/// certified or checkpointed when we schedule it for execution.
+pub type ExecutableTransaction = Envelope<SenderSignedData, CertificateProof>;
+pub type VerifiedExecutableTransaction = VerifiedEnvelope<SenderSignedData, CertificateProof>;
+pub type TrustedExecutableTransaction = TrustedEnvelope<SenderSignedData, CertificateProof>;
+
+impl VerifiedExecutableTransaction {
+    pub fn certificate_sig(&self) -> Option<&AuthorityStrongQuorumSignInfo> {
+        match self.auth_sig() {
+            CertificateProof::Certified(sig) => Some(sig),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum ObjectInfoRequestKind {
     /// Request the latest object state.
@@ -2624,17 +2641,6 @@ pub type VerifiedTransactionEffectsEnvelope<S> = VerifiedEnvelope<TransactionEff
 pub type VerifiedSignedTransactionEffects = VerifiedTransactionEffectsEnvelope<AuthoritySignInfo>;
 pub type VerifiedCertifiedTransactionEffects =
     VerifiedTransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
-
-pub type ValidExecutionDigests = Envelope<ExecutionDigests, CertificateProof>;
-pub type ValidTransactionEffectsDigest = Envelope<TransactionEffectsDigest, CertificateProof>;
-pub type ValidTransactionEffects = TransactionEffectsEnvelope<CertificateProof>;
-
-impl From<ValidExecutionDigests> for ValidTransactionEffectsDigest {
-    fn from(ved: ValidExecutionDigests) -> ValidTransactionEffectsDigest {
-        let (data, validity) = ved.into_data_and_sig();
-        ValidTransactionEffectsDigest::new(data.effects, validity)
-    }
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum InputObjectKind {

@@ -24,7 +24,8 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
     SenderSignedData, SharedInputObject, TransactionEffects, TrustedCertificate,
-    TrustedSignedTransactionEffects, VerifiedCertificate, VerifiedSignedTransaction,
+    TrustedExecutableTransaction, TrustedSignedTransactionEffects, VerifiedCertificate,
+    VerifiedExecutableTransaction, VerifiedSignedTransaction,
 };
 use sui_types::signature::GenericSignature;
 use tracing::{debug, info, trace, warn};
@@ -109,7 +110,10 @@ pub struct AuthorityPerEpochStore {
     /// A write-ahead/recovery log used to ensure we finish fully processing certs after errors or
     /// crashes.
     wal: Arc<
-        DBWriteAheadLog<TrustedCertificate, (InnerTemporaryStore, TrustedSignedTransactionEffects)>,
+        DBWriteAheadLog<
+            TrustedExecutableTransaction,
+            (InnerTemporaryStore, TrustedSignedTransactionEffects),
+        >,
     >,
 
     /// The moment when the current epoch started locally on this validator. Note that this
@@ -400,7 +404,10 @@ impl AuthorityPerEpochStore {
     pub fn wal(
         &self,
     ) -> &Arc<
-        DBWriteAheadLog<TrustedCertificate, (InnerTemporaryStore, TrustedSignedTransactionEffects)>,
+        DBWriteAheadLog<
+            TrustedExecutableTransaction,
+            (InnerTemporaryStore, TrustedSignedTransactionEffects),
+        >,
     > {
         &self.wal
     }
@@ -423,7 +430,10 @@ impl AuthorityPerEpochStore {
             .reference_gas_price
     }
 
-    pub async fn acquire_tx_guard(&self, cert: &VerifiedCertificate) -> SuiResult<CertTxGuard> {
+    pub async fn acquire_tx_guard(
+        &self,
+        cert: &VerifiedExecutableTransaction,
+    ) -> SuiResult<CertTxGuard> {
         let digest = cert.digest();
         let guard = self.wal.begin_tx(digest, cert.serializable_ref()).await?;
 
@@ -1378,7 +1388,7 @@ impl AuthorityPerEpochStore {
         {
             // The certificate has already been inserted into the pending_certificates table by
             // process_consensus_transaction() above.
-            transaction_manager.enqueue(vec![certificate], self)?;
+            transaction_manager.enqueue_certificates(vec![certificate], self)?;
         }
         Ok(())
     }

@@ -2150,7 +2150,9 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
 
         let epoch_store = authority_state.epoch_store_for_testing();
         let g = epoch_store
-            .acquire_tx_guard(&shared_object_cert)
+            .acquire_tx_guard(&VerifiedExecutableTransaction::new_from_certificate(
+                shared_object_cert.clone(),
+            ))
             .await
             .unwrap();
 
@@ -2163,7 +2165,7 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
         // explicitly doesn't do so.
         authority_state
             .transaction_manager()
-            .enqueue(vec![shared_object_cert.clone()], &epoch_store)
+            .enqueue_certificates(vec![shared_object_cert.clone()], &epoch_store)
             .unwrap();
         authority_state
             .execute_certificate(
@@ -4375,10 +4377,7 @@ async fn test_consensus_message_processed() {
                 .acquire_shared_locks_from_effects(&certificate, &effects1, authority2.db())
                 .await
                 .unwrap();
-            authority2
-                .try_execute_immediately(&certificate, &epoch_store)
-                .await
-                .unwrap();
+            authority2.try_execute_for_test(&certificate).await.unwrap();
             authority2
                 .database
                 .get_executed_effects(transaction_digest)

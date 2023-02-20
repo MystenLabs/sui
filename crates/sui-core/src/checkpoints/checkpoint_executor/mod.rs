@@ -30,6 +30,7 @@ use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use sui_config::node::CheckpointExecutorConfig;
 use sui_types::error::SuiResult;
+use sui_types::messages::VerifiedExecutableTransaction;
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
     messages::{TransactionEffects, VerifiedCertificate},
@@ -436,8 +437,18 @@ async fn execute_transactions(
                 .await?;
         }
     }
+    let executable_txns = synced_txns
+        .into_iter()
+        .map(|cert| {
+            VerifiedExecutableTransaction::new_from_checkpoint_to_be_replaced(
+                cert,
+                epoch_store.epoch(),
+                checkpoint_sequence,
+            )
+        })
+        .collect();
 
-    transaction_manager.enqueue(synced_txns, epoch_store)?;
+    transaction_manager.enqueue(executable_txns, epoch_store)?;
 
     // Once synced_txns have been awaited, all txns should have effects committed.
     let mut periods = 1;
