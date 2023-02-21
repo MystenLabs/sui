@@ -431,16 +431,12 @@ impl AuthorityStore {
                         digest, id
                     )
                     });
-                    if let Some(obj) = self.get_object_by_key(id, *version)? {
-                        result.push(obj);
-                    } else {
-                        // When this happens, other transactions that use smaller versions of
-                        // this shared object haven't finished execution.
-                        errors.push(SuiError::SharedObjectPriorVersionsPendingExecution {
-                            object_id: *id,
-                            version_not_ready: *version,
-                        });
-                    }
+                    let obj = self.get_object_by_key(id, *version)?.unwrap_or_else(|| {
+                        // TransactionManager should have waited for all dependencies to resolve before invoking
+                        // this transaction's execution.
+                        panic!("All dependencies of tx {:?} should have been executed now, but object (id: {}, version: {}) is absent", digest, *id, *version);
+                    });
+                    result.push(obj);
                     continue;
                 }
                 InputObjectKind::MovePackage(id) => self.get_object(id)?,
