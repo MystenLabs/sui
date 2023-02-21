@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it } from "vitest";
-import { getDisplay } from "../src/display";
+import { describe, it, expect } from 'vitest';
+import { getDisplay } from '../../../src/utils/display';
 
-describe("display", () => {
-  it("should display ", () => {
+describe('Display Access Test', () => {
+  it('Should work with fields and nested fields', () => {
+
     const test_obj = {
         name: 'Blurp',
         age: 'Beepo',

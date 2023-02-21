@@ -2,16 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Parser 
+ * Parser
  */
 
-const EXPR_START = "{";
-const EXPR_END = "}";
-const WHITESPACE = " ";
+const EXPR_START = '{';
+const EXPR_END = '}';
+const WHITESPACE = ' ';
 
-const PATH_SEPARATOR = ".";
-const FUN_PAREN_START = "(";
-const FUN_PAREN_END = ")";
+// Keeping these for future extensions.
+// Also to filter allow illegal symbols in the string.
+// const PATH_SEPARATOR = ".";
+// const FUN_PAREN_START = "(";
+// const FUN_PAREN_END = ")";
 
 /** Dumb type to shorten function signatures */
 type StrObj = { [key: string]: string };
@@ -36,7 +38,7 @@ class Reader {
   /** Read next char without moving cursor */
   public peek(): string | null {
     let el = this.str[this.cursor];
-    return (el == undefined) ? null : el;
+    return el == undefined ? null : el;
   }
 }
 
@@ -80,9 +82,9 @@ function parseTemplate(templateStr: string): {
   str: string;
   expressions: Expression[];
 } {
-  let str = "";
+  let str = '';
   let iter = new Reader(templateStr);
-  let char: string | null = "";
+  let char: string | null = '';
   let cursor = 0;
   let expressions = [];
 
@@ -114,7 +116,7 @@ function parseTemplate(templateStr: string): {
 function execute(
   target: string,
   expressions: Expression[],
-  source: { [key: string]: any }
+  source: { [key: string]: any },
 ): string {
   // sort expressions from the end to start; so the str position
   // stays the same, even after an expression was inserted.
@@ -140,8 +142,8 @@ function execute(
  * Returns the lengh of the expression and the expression contents (ignoring whitespaces).
  */
 function parseCurly(iter: Reader): { expr: string; len: number } {
-  let char: string | null = "";
-  let expr = "";
+  let char: string | null = '';
+  let expr = '';
   let len = 0;
 
   while (char !== null) {
@@ -158,7 +160,7 @@ function parseCurly(iter: Reader): { expr: string; len: number } {
 /**
  * Built-in functions. Need to be defined and processed separately.
  */
-type Builtin = "df" | "hex" | "base64";
+type Builtin = 'df' | 'hex' | 'base64';
 
 type ParsedExpression = {
   identifier: string;
@@ -175,11 +177,11 @@ type ParsedExpression = {
  *
  */
 function parseExpression(iter: string | Reader): ParsedExpression | null {
-  if (typeof iter === "string") {
+  if (typeof iter === 'string') {
     iter = new Reader(iter);
   }
 
-  let char: string | null = "";
+  let char: string | null = '';
   while (char !== null) {
     char = iter.peek();
 
@@ -187,7 +189,7 @@ function parseExpression(iter: string | Reader): ParsedExpression | null {
       let { identifier, len: _ } = parseIdent(iter);
       return {
         identifier,
-        next: parseExpression(iter)
+        next: parseExpression(iter),
       };
     }
 
@@ -205,8 +207,8 @@ function parseExpression(iter: string | Reader): ParsedExpression | null {
  * @returns
  */
 function parseIdent(iter: Reader): Identifier {
-  let char: string | null = "";
-  let identifier = "";
+  let char: string | null = '';
+  let identifier = '';
   let len = 0;
 
   while (char !== null) {
@@ -224,5 +226,5 @@ function parseIdent(iter: Reader): Identifier {
 
 /** Check whether  */
 function isLetter(char: string | null) {
-  return char !== null && /[a-z0-9]/i.test(char)
+  return char !== null && /[a-z0-9]/i.test(char);
 }
