@@ -49,7 +49,7 @@ pub struct RpcRoutingService<S> {
 
 impl<S> RpcRoutingService<S> {
     pub fn new(inner: S, routes: HashMap<String, MethodRouting>, disable_routing: bool) -> Self {
-        let route_to_methods = routes.iter().map(|(_, v)| v.route_to.clone()).collect();
+        let route_to_methods = routes.values().map(|v| v.route_to.clone()).collect();
         Self {
             inner,
             routes,
