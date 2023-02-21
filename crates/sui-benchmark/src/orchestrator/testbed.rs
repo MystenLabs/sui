@@ -10,7 +10,7 @@ use crossterm::{
 };
 use futures::future::try_join_all;
 use prettytable::{format, row, Table};
-use tokio::{task::JoinHandle, time::sleep};
+use tokio::time::sleep;
 
 use crate::{
     ensure,
@@ -18,7 +18,7 @@ use crate::{
         client::Client,
         error::{TestbedError, TestbedResult},
         settings::Settings,
-        ssh::{SshConnection, SshConnectionPool},
+        ssh::SshConnection,
         state::Instance,
     },
 };
@@ -32,8 +32,7 @@ pub struct Testbed<C> {
     client: C,
     /// The state of the testbed (reflecting accurately the state of the machines).
     instances: Vec<Instance>,
-    /// Pool of ssh connections (one connection per instance).
-    connections: SshConnectionPool,
+    /// Handle ssh connections to instances.
     ssh_manager: SshConnectionManager,
 }
 
@@ -41,14 +40,12 @@ impl<C: Client> Testbed<C> {
     /// Create a new testbed instance with the specified settings and client.
     pub async fn new(settings: Settings, client: C) -> TestbedResult<Self> {
         let instances = client.list_instances().await?;
-        let connections = SshConnectionPool::new(client.username().into(), settings.clone());
         let private_key_file = settings.ssh_private_key_file.clone().into();
         let ssh_manager = SshConnectionManager::new(client.username().into(), private_key_file);
         Ok(Self {
             settings,
             client,
             instances,
-            connections,
             ssh_manager,
         })
     }
@@ -135,10 +132,6 @@ impl<C: Client> Testbed<C> {
         // Wait until the instances are booted.
         self.ready().await?;
         self.instances = self.client.list_instances().await?;
-        println!(
-            "---> # INSTANCES RIGHT AFTER START: {}",
-            self.instances.len()
-        );
         Ok(())
     }
 
@@ -239,7 +232,7 @@ impl<C: Client> Testbed<C> {
 }
 
 impl<C> Testbed<C> {
-    pub async fn install(&mut self) -> TestbedResult<()> {
+    pub async fn install(&self) -> TestbedResult<()> {
         let url = self.settings.repository.url.clone();
         let name = self.settings.repository.name.clone();
         let command = [
@@ -265,17 +258,35 @@ impl<C> Testbed<C> {
         ]
         .join(" && ");
 
-        for instance in &self.instances {
-            self.connections
-                .execute(instance.ssh_address(), command.clone())
-                .await?;
-        }
+        let handles = self
+            .instances
+            .iter()
+            .cloned()
+            .map(|instance| {
+                let ssh_manager = self.ssh_manager.clone();
+                let command = command.clone();
+
+                tokio::spawn(async move {
+                    ssh_manager
+                        .connect(instance.ssh_address())
+                        .await?
+                        .execute(command)
+                        .map(|_| ())
+                        .map_err(TestbedError::from)
+                })
+            })
+            .collect::<Vec<_>>();
+
+        try_join_all(handles)
+            .await
+            .unwrap()
+            .into_iter()
+            .collect::<TestbedResult<_>>()?;
 
         Ok(())
     }
 
-    pub async fn update(&mut self) -> TestbedResult<()> {
-        let name = self.settings.repository.name.clone();
+    pub async fn update(&self) -> TestbedResult<()> {
         let branch = self.settings.repository.branch.clone();
         println!(
             "Updating {} instances (branch '{branch}')...",
@@ -283,54 +294,58 @@ impl<C> Testbed<C> {
         );
 
         let command = [
-            &format!("(cd {name} && git fetch -f)"),
-            &format!("(cd {name} && git checkout -f {branch})"),
-            &format!("(cd {name} && git pull -f)"),
+            &format!("git fetch -f"),
+            &format!("git checkout -f {branch}"),
+            &format!("git pull -f"),
             "source $HOME/.cargo/env",
-            &format!("(cd {name} && cargo build --release)"),
+            &format!("cargo build --release"),
         ]
         .join(" && ");
 
-        println!("Connecting to instances...");
-        let connections = try_join_all(
-            self.instances
-                .iter()
-                .map(|instance| {
-                    let private_key_file = self.settings.ssh_private_key_file.clone();
-                    SshConnection::new(instance.ssh_address(), "root", private_key_file)
-                })
-                .collect::<Vec<_>>(),
-        )
-        .await?;
+        let handles = self
+            .instances
+            .iter()
+            .cloned()
+            .map(|instance| {
+                let ssh_manager = self.ssh_manager.clone();
+                let command = command.clone();
+                let repo_name = self.settings.repository.name.clone();
 
-        println!("Fetching updates and recompiling code...");
-        try_join_all(
-            connections
-                .iter()
-                .map(|connection| connection.background_execute(command.clone()).unwrap())
-                .collect::<Vec<_>>(),
-        )
-        .await
-        .unwrap();
+                tokio::spawn(async move {
+                    ssh_manager
+                        .connect(instance.ssh_address())
+                        .await?
+                        .execute_from_path(command, repo_name)
+                        .map(|_| ())
+                        .map_err(TestbedError::from)
+                })
+            })
+            .collect::<Vec<_>>();
+
+        try_join_all(handles)
+            .await
+            .unwrap()
+            .into_iter()
+            .collect::<TestbedResult<_>>()?;
 
         println!("All instances are up to date.");
         Ok(())
     }
 
     pub async fn configure(&self) -> TestbedResult<()> {
+        println!("Generating and uploading configuration files...");
+
         // Generate the genesis configuration file and the keystore allowing access to gas objects.
         // TODO: There should be no need to generate these files locally; we can generate them
         // directly on the remote machines.
         let mut config = Config::new(&self.instances);
         config.print_files();
 
-        println!("Generating and uploading configuration files...");
         let handles = self
             .instances
             .iter()
             .cloned()
-            .enumerate()
-            .map(|(i, instance)| {
+            .map(|instance| {
                 let repo_name = self.settings.repository.name.clone();
                 let config_files = config.files();
                 let genesis_command = config.genesis_command();
@@ -350,16 +365,13 @@ impl<C> Testbed<C> {
                     }
 
                     // Generate the genesis files.
-                    connection.execute_from_path(genesis_command, repo_name.clone())?;
-
-                    let path = format!("~/.sui/sui-config/validator-config-{i}.yaml");
-                    let command =
-                        format!("cargo run --release --bin sui-node -- --config-path {path}");
-                    connection.execute_from_path(command, repo_name)?;
-                    Ok(())
+                    connection
+                        .execute_from_path(genesis_command, repo_name.clone())
+                        .map(|_| ())
+                        .map_err(TestbedError::from)
                 })
             })
-            .collect::<Vec<JoinHandle<TestbedResult<()>>>>();
+            .collect::<Vec<_>>();
 
         try_join_all(handles)
             .await
@@ -368,6 +380,47 @@ impl<C> Testbed<C> {
             .collect::<TestbedResult<_>>()?;
 
         println!("All instances are configured.");
+        Ok(())
+    }
+
+    pub async fn run(&self) -> TestbedResult<()> {
+        let branch = self.settings.repository.branch.clone();
+        println!(
+            "Running {} nodes (branch '{branch}')...",
+            self.instances.len()
+        );
+
+        let handles = self
+            .instances
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(i, instance)| {
+                let ssh_manager = self.ssh_manager.clone();
+                let repo_name = self.settings.repository.name.clone();
+
+                tokio::spawn(async move {
+                    let path = format!("~/.sui/sui-config/validator-config-{i}.yaml");
+                    let command =
+                        format!("cargo run --release --bin sui-node -- --config-path {path}");
+
+                    ssh_manager
+                        .connect(instance.ssh_address())
+                        .await?
+                        .execute_from_path(command, repo_name)
+                        .map(|_| ())
+                        .map_err(TestbedError::from)
+                })
+            })
+            .collect::<Vec<_>>();
+
+        try_join_all(handles)
+            .await
+            .unwrap()
+            .into_iter()
+            .collect::<TestbedResult<_>>()?;
+
+        println!("All validators are up and running.");
         Ok(())
     }
 }

@@ -1,56 +1,16 @@
 use std::{
-    collections::HashMap,
     io::{Read, Write},
     net::SocketAddr,
     path::{Path, PathBuf},
 };
 
 use ssh2::{Channel, Session};
-use tokio::{net::TcpStream, task::JoinHandle};
+use tokio::net::TcpStream;
 
 use crate::{
     ensure,
-    orchestrator::{
-        error::{SshError, SshResult},
-        settings::Settings,
-    },
+    orchestrator::error::{SshError, SshResult},
 };
-
-pub struct SshConnectionPool {
-    username: String,
-    settings: Settings,
-    connections: HashMap<SocketAddr, SshConnection>,
-}
-
-impl SshConnectionPool {
-    pub fn new(username: String, settings: Settings) -> Self {
-        Self {
-            username,
-            settings,
-            connections: HashMap::new(),
-        }
-    }
-
-    async fn reconnect(&mut self, address: SocketAddr) -> SshResult<&SshConnection> {
-        let private_key_file = self.settings.ssh_private_key_file.clone();
-        let connection = SshConnection::new(address, &self.username, private_key_file).await?;
-        self.connections.insert(address, connection);
-        let connection = self.connections.get(&address).unwrap();
-        Ok(connection)
-    }
-
-    pub async fn execute(
-        &mut self,
-        address: SocketAddr,
-        command: String,
-    ) -> SshResult<(String, String)> {
-        match self.connections.get(&address) {
-            Some(x) => x,
-            None => self.reconnect(address).await?,
-        }
-        .execute(command)
-    }
-}
 
 #[derive(Clone)]
 pub struct SshConnectionManager {
@@ -105,17 +65,6 @@ impl SshConnection {
         let channel = self.session.channel_session()?;
         let command = format!("(cd {:?} && {command})", path.as_ref());
         Self::execute_impl(channel, command)
-    }
-
-    pub fn background_execute(
-        &self,
-        command: String,
-    ) -> SshResult<JoinHandle<SshResult<(String, String)>>> {
-        let channel = self.session.channel_session()?;
-
-        Ok(tokio::spawn(
-            async move { Self::execute_impl(channel, command) },
-        ))
     }
 
     fn execute_impl(mut channel: Channel, command: String) -> SshResult<(String, String)> {
