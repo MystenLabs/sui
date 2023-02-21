@@ -24,9 +24,7 @@ use serde::{Deserialize, Serialize};
 use sui_types::accumulator::Accumulator;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority_aggregator::TransactionCertifier;
 use std::collections::HashSet;
-use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -35,7 +33,7 @@ use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
 use sui_types::error::SuiResult;
 use sui_types::gas::GasCostSummary;
-use sui_types::messages::{TransactionEffects, VerifiedExecutableTransaction};
+use sui_types::messages::TransactionEffects;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp, EndOfEpochData,
@@ -43,8 +41,7 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::sui_system_state::SuiSystemState;
 use tokio::sync::{watch, Notify};
-use tokio::time::Instant;
-use tracing::{debug, error, error_span, info, warn, Instrument};
+use tracing::{debug, error, info, warn};
 use typed_store::rocks::{DBMap, MetricConf, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::Map;
@@ -404,7 +401,6 @@ pub struct CheckpointBuilder {
     output: Box<dyn CheckpointOutput>,
     exit: watch::Receiver<()>,
     metrics: Arc<CheckpointMetrics>,
-    transaction_certifier: Box<dyn TransactionCertifier>,
     max_transactions_per_checkpoint: usize,
 }
 
@@ -438,7 +434,6 @@ impl CheckpointBuilder {
         exit: watch::Receiver<()>,
         notify_aggregator: Arc<Notify>,
         metrics: Arc<CheckpointMetrics>,
-        transaction_certifier: Box<dyn TransactionCertifier>,
         max_transactions_per_checkpoint: usize,
     ) -> Self {
         Self {
@@ -452,7 +447,6 @@ impl CheckpointBuilder {
             exit,
             notify_aggregator,
             metrics,
-            transaction_certifier,
             max_transactions_per_checkpoint,
         }
     }
@@ -737,76 +731,21 @@ impl CheckpointBuilder {
         &self,
         epoch_total_gas_cost: &GasCostSummary,
         epoch_start_timestamp_ms: CheckpointTimestamp,
-        effects: &mut Vec<TransactionEffects>,
+        checkpoint_effects: &mut Vec<TransactionEffects>,
         checkpoint: CheckpointSequenceNumber,
+        // TODO: Check whether we must use anyhow::Result or can we use SuiResult.
     ) -> anyhow::Result<SuiSystemState> {
-        let timer = Instant::now();
-        let cert = self
+        let (system_state, effects) = self
             .state
-            .create_advance_epoch_tx_cert(
+            .create_and_execute_advance_epoch_tx(
                 &self.epoch_store,
                 epoch_total_gas_cost,
+                checkpoint,
                 epoch_start_timestamp_ms,
-                Duration::from_secs(60), // TODO: Is 60s enough?
-                self.transaction_certifier.deref(),
             )
             .await?;
-        self.epoch_store
-            .record_epoch_last_transaction_cert_creation_time_metric(
-                timer.elapsed().as_millis() as i64
-            );
-        let executable_tx = VerifiedExecutableTransaction::new_from_checkpoint_to_be_replaced(
-            cert.clone(),
-            self.epoch_store.epoch(),
-            checkpoint,
-        );
-
-        let tx_digest = *executable_tx.digest();
-
-        let span = error_span!("augment_epoch_last_checkpoint", ?tx_digest);
-        let (system_state_obj, signed_effects) = self
-            .state
-            // Get the effects without committing execution to the db.
-            .get_change_epoch_tx_effects(&executable_tx, &self.epoch_store)
-            .instrument(span)
-            .await?;
-
-        // We must write cert and effects to the state sync tables so that state sync is able to
-        // deliver to the transaction to CheckpointExecutor after it is included in a certified
-        // checkpoint.
-        let txns = &self.state.database.perpetual_tables.executed_transactions;
-        let synced_txns = &self.state.database.perpetual_tables.synced_transactions;
-        let synced_effects = &self.state.database.perpetual_tables.effects;
-        synced_txns
-            .batch()
-            .insert_batch(
-                txns,
-                [(
-                    tx_digest,
-                    executable_tx.clone().into_unsigned().serializable_ref(),
-                )],
-            )?
-            // TODO: checkpoint_executor assumes that un-executed transactions are only found in
-            // synced_transactions, so we must insert it there as well.
-            .insert_batch(synced_txns, [(*cert.digest(), cert.serializable_ref())])?
-            .insert_batch(
-                synced_effects,
-                [(signed_effects.digest(), signed_effects.data())],
-            )?
-            .write()?;
-
-        debug!(
-            "Effects summary of the change epoch transaction: {:?}",
-            signed_effects.summary_for_debug()
-        );
-        self.epoch_store.record_is_safe_mode_metric(
-            self.state.get_sui_system_state_object().unwrap().safe_mode,
-        );
-        // The change epoch transaction cannot fail to execute.
-        // TODO: Audit the advance_epoch move call to make sure there is no way for it to fail.
-        assert!(signed_effects.status.is_ok());
-        effects.push(signed_effects.into_message());
-        Ok(system_state_obj)
+        checkpoint_effects.push(effects);
+        Ok(system_state)
     }
 
     /// For the given roots return complete list of effects to include in checkpoint
@@ -1056,7 +995,6 @@ impl CheckpointService {
         accumulator: Arc<StateAccumulator>,
         checkpoint_output: Box<dyn CheckpointOutput>,
         certified_checkpoint_output: Box<dyn CertifiedCheckpointOutput>,
-        transaction_certifier: Box<dyn TransactionCertifier>,
         metrics: Arc<CheckpointMetrics>,
         max_transactions_per_checkpoint: usize,
     ) -> (Arc<Self>, watch::Sender<()> /* The exit sender */) {
@@ -1076,7 +1014,6 @@ impl CheckpointService {
             exit_rcv.clone(),
             notify_aggregator.clone(),
             metrics.clone(),
-            transaction_certifier,
             max_transactions_per_checkpoint,
         );
 
@@ -1210,7 +1147,6 @@ impl PendingCheckpoint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::authority_aggregator::NetworkTransactionCertifier;
     use crate::state_accumulator::StateAccumulator;
     use async_trait::async_trait;
     use fastcrypto::traits::KeyPair;
@@ -1273,7 +1209,6 @@ mod tests {
             Arc::new(accumulator),
             Box::new(output),
             Box::new(certified_output),
-            Box::<NetworkTransactionCertifier>::default(),
             CheckpointMetrics::new_for_tests(),
             3,
         );

@@ -9,7 +9,7 @@ use sui_types::committee::EpochId;
 use sui_types::digests::TransactionEffectsDigest;
 use sui_types::message_envelope::Message;
 use sui_types::messages::TransactionEffects;
-use sui_types::messages::VerifiedCertificate;
+use sui_types::messages::VerifiedTransaction;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::CheckpointDigest;
@@ -95,21 +95,8 @@ impl ReadStore for RocksDbStore {
     fn get_transaction(
         &self,
         digest: &TransactionDigest,
-    ) -> Result<Option<VerifiedCertificate>, Self::Error> {
-        if let Some(transaction) = self.authority_store.get_certified_transaction(digest)? {
-            return Ok(Some(transaction));
-        }
-
-        if let Some(transaction) = self
-            .authority_store
-            .perpetual_tables
-            .synced_transactions
-            .get(digest)?
-        {
-            return Ok(Some(transaction.into()));
-        }
-
-        Ok(None)
+    ) -> Result<Option<VerifiedTransaction>, Self::Error> {
+        self.authority_store.get_transaction(digest)
     }
 
     fn get_transaction_effects(
@@ -160,11 +147,8 @@ impl WriteStore for RocksDbStore {
         Ok(())
     }
 
-    fn insert_transaction(&self, transaction: VerifiedCertificate) -> Result<(), Self::Error> {
-        self.authority_store
-            .perpetual_tables
-            .synced_transactions
-            .insert(transaction.digest(), transaction.serializable_ref())
+    fn insert_transaction(&self, transaction: VerifiedTransaction) -> Result<(), Self::Error> {
+        self.authority_store.insert_transaction(&transaction)
     }
 
     fn insert_transaction_effects(

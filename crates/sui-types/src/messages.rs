@@ -3015,6 +3015,7 @@ pub struct QuorumDriverRequest {
 
 #[derive(Debug, Clone)]
 pub struct QuorumDriverResponse {
+    // TODO: Change this to VerifiedTransaction.
     pub tx_cert: Option<VerifiedCertificate>,
     pub effects_cert: VerifiedCertifiedTransactionEffects,
 }

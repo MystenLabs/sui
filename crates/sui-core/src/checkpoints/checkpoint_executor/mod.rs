@@ -33,7 +33,7 @@ use sui_types::error::SuiResult;
 use sui_types::messages::VerifiedExecutableTransaction;
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
-    messages::{TransactionEffects, VerifiedCertificate},
+    messages::TransactionEffects,
     messages_checkpoint::{CheckpointSequenceNumber, EndOfEpochData, VerifiedCheckpoint},
 };
 use sui_types::{
@@ -411,13 +411,16 @@ async fn execute_transactions(
     let all_tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();
 
-    let synced_txns: Vec<VerifiedCertificate> = authority_store
-        .perpetual_tables
-        .synced_transactions
-        .multi_get(&all_tx_digests)?
+    let executable_txns: Vec<_> = authority_store
+        .multi_get_transactions(&all_tx_digests)?
         .into_iter()
-        .flatten()
-        .map(|tx| tx.into())
+        .map(|tx| {
+            VerifiedExecutableTransaction::new_from_checkpoint(
+                tx.expect("state-sync should have ensured that the transaction exists"),
+                epoch_store.epoch(),
+                checkpoint_sequence,
+            )
+        })
         .collect();
 
     let effects_digests: Vec<_> = execution_digests
@@ -439,27 +442,17 @@ async fn execute_transactions(
         })
         .collect();
 
-    for tx in synced_txns.clone() {
+    for tx in &executable_txns {
         if tx.contains_shared_object() {
             epoch_store
                 .acquire_shared_locks_from_effects(
-                    &tx,
+                    tx,
                     digest_to_effects.get(tx.digest()).unwrap(),
                     &authority_store,
                 )
                 .await?;
         }
     }
-    let executable_txns = synced_txns
-        .into_iter()
-        .map(|cert| {
-            VerifiedExecutableTransaction::new_from_checkpoint_to_be_replaced(
-                cert,
-                epoch_store.epoch(),
-                checkpoint_sequence,
-            )
-        })
-        .collect();
 
     transaction_manager.enqueue(executable_txns, &epoch_store)?;
 

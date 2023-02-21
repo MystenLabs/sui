@@ -20,11 +20,11 @@ use sui_storage::write_ahead_log::{DBWriteAheadLog, TxGuard, WriteAheadLog};
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::committee::Committee;
-use sui_types::crypto::AuthoritySignInfo;
+use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
-    SenderSignedData, SharedInputObject, TransactionEffects, TrustedCertificate,
+    SenderSignedData, SharedInputObject, TransactionData, TransactionEffects, TrustedCertificate,
     TrustedExecutableTransaction, TrustedSignedTransactionEffects, VerifiedCertificate,
     VerifiedExecutableTransaction, VerifiedSignedTransaction,
 };
@@ -143,6 +143,9 @@ pub struct AuthorityEpochTables {
     /// Signatures over transaction effects that were executed in the current epoch.
     /// Store this to avoid re-signing the same effects twice.
     effects_signatures: DBMap<TransactionDigest, AuthoritySignInfo>,
+
+    /// Signatures of transaction certificates that are executed locally.
+    pub(crate) transaction_cert_signatures: DBMap<TransactionDigest, AuthorityStrongQuorumSignInfo>,
 
     /// The two tables below manage shared object locks / versions. There are two ways they can be
     /// updated:
@@ -519,15 +522,25 @@ impl AuthorityPerEpochStore {
         Ok(self.tables.transactions.get(tx_digest)?.map(|t| t.into()))
     }
 
-    pub fn insert_effects_signature(
+    pub fn insert_tx_cert_and_effects_signature(
         &self,
         tx_digest: &TransactionDigest,
+        cert_sig: Option<&AuthorityStrongQuorumSignInfo>,
         effects_signature: &AuthoritySignInfo,
     ) -> SuiResult {
-        Ok(self
-            .tables
-            .effects_signatures
-            .insert(tx_digest, effects_signature)?)
+        let mut batch = self.tables.effects_signatures.batch();
+        if let Some(cert_sig) = cert_sig {
+            batch = batch.insert_batch(
+                &self.tables.transaction_cert_signatures,
+                [(tx_digest, cert_sig)],
+            )?;
+        }
+        batch = batch.insert_batch(
+            &self.tables.effects_signatures,
+            [(tx_digest, effects_signature)],
+        )?;
+        batch.write()?;
+        Ok(())
     }
 
     pub fn get_effects_signature(
@@ -535,6 +548,13 @@ impl AuthorityPerEpochStore {
         tx_digest: &TransactionDigest,
     ) -> SuiResult<Option<AuthoritySignInfo>> {
         Ok(self.tables.effects_signatures.get(tx_digest)?)
+    }
+
+    pub fn get_transaction_cert_sig(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Result<Option<AuthorityStrongQuorumSignInfo>, TypedStoreError> {
+        self.tables.transaction_cert_signatures.get(tx_digest)
     }
 
     pub fn multi_get_next_shared_object_versions<'a>(
@@ -688,7 +708,7 @@ impl AuthorityPerEpochStore {
     // successfully for each affected object id.
     async fn get_or_init_next_object_versions(
         &self,
-        certificate: &VerifiedCertificate,
+        tx_data: &TransactionData,
         objects_to_init: impl Iterator<Item = ObjectID> + Clone,
         parent_sync_store: impl ParentSync,
     ) -> SuiResult<Vec<SequenceNumber>> {
@@ -723,7 +743,7 @@ impl AuthorityPerEpochStore {
 
             // if the object has never been used before (in any epoch) the initial version comes
             // from the cert.
-            let initial_versions: HashMap<_, _> = certificate
+            let initial_versions: HashMap<_, _> = tx_data
                 .shared_input_objects()
                 .map(SharedInputObject::into_id_and_version)
                 .collect();
@@ -789,7 +809,7 @@ impl AuthorityPerEpochStore {
 
     pub async fn set_assigned_shared_object_versions(
         &self,
-        certificate: &VerifiedCertificate,
+        certificate: &VerifiedExecutableTransaction,
         assigned_versions: &Vec<(ObjectID, SequenceNumber)>,
         parent_sync_store: impl ParentSync,
     ) -> SuiResult {
@@ -801,7 +821,7 @@ impl AuthorityPerEpochStore {
             "set_assigned_shared_object_versions"
         );
         self.get_or_init_next_object_versions(
-            certificate,
+            certificate.data().transaction_data(),
             assigned_versions.iter().map(|(id, _)| *id),
             parent_sync_store,
         )
@@ -817,7 +837,7 @@ impl AuthorityPerEpochStore {
     /// Used by full nodes who don't listen to consensus, and validators who catch up by state sync.
     pub async fn acquire_shared_locks_from_effects(
         &self,
-        certificate: &VerifiedCertificate,
+        certificate: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
         parent_sync_store: impl ParentSync,
     ) -> SuiResult {
@@ -1042,7 +1062,11 @@ impl AuthorityPerEpochStore {
             .collect();
 
         let versions = self
-            .get_or_init_next_object_versions(certificate, ids.iter().copied(), &parent_sync_store)
+            .get_or_init_next_object_versions(
+                certificate.data().transaction_data(),
+                ids.iter().copied(),
+                &parent_sync_store,
+            )
             .await?;
 
         let mut input_object_keys = transaction_input_object_keys(certificate)?;
@@ -1790,12 +1814,6 @@ impl AuthorityPerEpochStore {
         self.metrics
             .epoch_first_checkpoint_ready_time_since_epoch_begin_ms
             .set(self.epoch_open_time.elapsed().as_millis() as i64);
-    }
-
-    pub(crate) fn record_epoch_last_transaction_cert_creation_time_metric(&self, elapsed_ms: i64) {
-        self.metrics
-            .epoch_last_transaction_cert_creation_time_ms
-            .set(elapsed_ms);
     }
 
     pub(crate) fn record_is_safe_mode_metric(&self, safe_mode: bool) {

@@ -91,7 +91,6 @@ use crate::authority::authority_per_epoch_store::{
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
 use crate::authority::authority_store::{ExecutionLockReadGuard, ObjectLockStatus};
 use crate::authority::authority_store_pruner::AuthorityStorePruner;
-use crate::authority_aggregator::TransactionCertifier;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
@@ -561,14 +560,14 @@ impl AuthorityState {
         }
     }
 
-    /// Executes a certificate that's known to have correct effects.
-    /// For such certificate, we don't have to wait for consensus to set shared object
+    /// Executes a transaction that's known to have correct effects.
+    /// For such transaction, we don't have to wait for consensus to set shared object
     /// locks because we already know the shared object versions based on the effects.
     /// This function can be called by a fullnode only.
     #[instrument(level = "trace", skip_all)]
     pub async fn fullnode_execute_certificate_with_effects(
         &self,
-        certificate: &VerifiedCertificate,
+        transaction: &VerifiedExecutableTransaction,
         // NOTE: the caller of this must promise to wait until it
         // knows for sure this tx is finalized, namely, it has seen a
         // CertifiedTransactionEffects or at least f+1 identifical effects
@@ -583,7 +582,7 @@ impl AuthorityState {
             .metrics
             .execute_certificate_with_effects_latency
             .start_timer();
-        let digest = *certificate.digest();
+        let digest = *transaction.digest();
         debug!("execute_certificate_with_effects");
         fp_ensure!(
             effects.data().transaction_digest == digest,
@@ -592,15 +591,16 @@ impl AuthorityState {
             }
         );
 
-        if certificate.contains_shared_object() {
+        if transaction.contains_shared_object() {
             epoch_store
-                .acquire_shared_locks_from_effects(certificate, effects.data(), &self.database)
+                .acquire_shared_locks_from_effects(transaction, effects.data(), &self.database)
                 .await?;
         }
 
         let expected_effects_digest = effects.digest();
 
-        self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store)?;
+        self.transaction_manager
+            .enqueue(vec![transaction.clone()], epoch_store)?;
 
         let observed_effects = self
             .database
@@ -616,7 +616,7 @@ impl AuthorityState {
         if &observed_effects_digest != expected_effects_digest {
             panic!(
                 "Locally executed effects do not match canonical effects! expected_effects_digest={:?} observed_effects_digest={:?} expected_effects={:?} observed_effects={:?} input_objects={:?}",
-                expected_effects_digest, observed_effects_digest, effects.data(), observed_effects, certificate.data().intent_message.value.input_objects()
+                expected_effects_digest, observed_effects_digest, effects.data(), observed_effects, transaction.data().transaction_data().input_objects()
             );
         }
         Ok(())
@@ -893,36 +893,6 @@ impl AuthorityState {
             .observe(certificate.data().intent_message.value.kind.batch_size() as f64);
 
         Ok(())
-    }
-
-    /// Executes the cert to effects without committing it to the database. The effects of the
-    /// change epoch tx are only written to the database after a certified checkpoint has been
-    /// formed and executed by CheckpointExecutor.
-    pub(crate) async fn get_change_epoch_tx_effects(
-        &self,
-        tx: &VerifiedExecutableTransaction,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<(SuiSystemState, VerifiedSignedTransactionEffects)> {
-        assert!(tx.inner().intent_message.value.kind.is_change_epoch_tx());
-
-        let digest = tx.digest();
-        // Even though we are not going to write any effects or objects to the db, we still acquire
-        // the proper locks. We may be racing with CheckpointExecutor, which could have received a
-        // certified checkpoint with the change epoch tx in it.
-        let _tx_lock = epoch_store.acquire_tx_lock(digest).await;
-        let execution_guard = self
-            .database
-            .execution_lock_for_executable_transaction(tx)
-            .await?;
-        let (temporary_store, effects) = self
-            .prepare_certificate(&execution_guard, tx, epoch_store)
-            .await?;
-
-        let system_obj = temporary_store
-            .get_sui_system_state_object()
-            .expect("change epoch tx must write to system object");
-
-        Ok((system_obj, effects))
     }
 
     /// prepare_certificate validates the transaction input, and executes the certificate,
@@ -2052,14 +2022,14 @@ impl AuthorityState {
         self.get_indexes()?.get_recent_transactions(count)
     }
 
-    pub async fn get_transaction(
+    pub async fn get_transaction_and_effects(
         &self,
         digest: TransactionDigest,
-    ) -> Result<(VerifiedCertificate, TransactionEffects), anyhow::Error> {
-        let cert = self.database.get_certified_transaction(&digest)?;
+    ) -> Result<(VerifiedTransaction, TransactionEffects), anyhow::Error> {
+        let transaction = self.database.get_transaction(&digest)?;
         let effects = self.database.get_executed_effects(&digest)?;
-        match (cert, effects) {
-            (Some(certificate), Some(effects)) => Ok((certificate, effects)),
+        match (transaction, effects) {
+            (Some(transaction), Some(effects)) => Ok((transaction, effects)),
             _ => Err(anyhow!(SuiError::TransactionNotFound { digest })),
         }
     }
@@ -2265,6 +2235,26 @@ impl AuthorityState {
             .expect("Cannot insert genesis object")
     }
 
+    pub fn get_certified_transaction(
+        &self,
+        tx_digest: &TransactionDigest,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Result<Option<VerifiedCertificate>, SuiError> {
+        let Some(cert_sig) = epoch_store.get_transaction_cert_sig(tx_digest)? else {
+            return Ok(None);
+        };
+        let Some(transaction) = self.database.get_transaction(tx_digest)? else {
+            return Ok(None);
+        };
+
+        Ok(Some(VerifiedCertificate::new_unchecked(
+            CertifiedTransaction::new_from_data_and_sig(
+                transaction.into_inner().into_data(),
+                cert_sig,
+            ),
+        )))
+    }
+
     /// Make a status response for a transaction
     pub fn get_transaction_status(
         &self,
@@ -2275,20 +2265,18 @@ impl AuthorityState {
         if let Some(effects) =
             self.get_signed_effects_and_maybe_resign(transaction_digest, epoch_store)?
         {
-            if let Some(cert) = self
-                .database
-                .get_certified_transaction(transaction_digest)?
-            {
-                let (tx, cert_sig) = cert.into_inner().into_data_and_sig();
+            if let Some(transaction) = self.database.get_transaction(transaction_digest)? {
+                let cert_sig = epoch_store.get_transaction_cert_sig(transaction_digest)?;
                 return Ok(Some((
-                    tx,
-                    TransactionStatus::Executed(Some(cert_sig), effects.into_inner()),
+                    transaction.into_message(),
+                    TransactionStatus::Executed(cert_sig, effects.into_inner()),
                 )));
+            } else {
+                // The read of effects and read of transaction are not atomic. It's possible that we reverted
+                // the transaction (during epoch change) in between the above two reads, and we end up
+                // having effects but not transaction. In this case, we just fall through.
+                debug!(tx_digest=?transaction_digest, "Signed effects exist but no transaction found");
             }
-            // The read of effects and read of cert are not atomic. It's possible that we reverted
-            // the transaction (during epoch change) in between the above two reads, and we end up
-            // having effects but not certs. In this case, we just fall through.
-            debug!(tx_digest=?transaction_digest, "Signed effects exist but no certificate");
         }
         if let Some(signed) = epoch_store.get_signed_transaction(transaction_digest)? {
             self.metrics.tx_already_processed.inc();
@@ -2416,6 +2404,8 @@ impl AuthorityState {
         &self,
         inner_temporary_store: InnerTemporaryStore,
         certificate: &VerifiedExecutableTransaction,
+        // TODO: A fullnode should not need to sign the effects. We should be able to make
+        // effects signature optional.
         signed_effects: &VerifiedSignedTransactionEffects,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
@@ -2424,12 +2414,11 @@ impl AuthorityState {
         let tx_digest = certificate.digest();
         // The insertion to epoch_store is not atomic with the insertion to the perpetual store. This is OK because
         // we insert to the epoch store first. And during lookups we always look up in the perpetual store first.
-        epoch_store.insert_effects_signature(tx_digest, signed_effects.auth_sig())?;
-        // TODO: This will eventually be done in the epoch_store atomically with the insertion of the effects signature.
-        if let Some(cert_sig) = certificate.certificate_sig() {
-            self.database
-                .insert_transaction_cert_sig(tx_digest, cert_sig)?;
-        }
+        epoch_store.insert_tx_cert_and_effects_signature(
+            tx_digest,
+            certificate.certificate_sig(),
+            signed_effects.auth_sig(),
+        )?;
 
         let effects_digest = signed_effects.digest();
         self.database
@@ -2532,14 +2521,16 @@ impl AuthorityState {
         self.database.get_latest_parent_entry(object_id)
     }
 
-    pub async fn create_advance_epoch_tx_cert(
+    /// Creates and execute the advance epoch transaction to effects without committing it to the database.
+    /// The effects of the change epoch tx are only written to the database after a certified checkpoint has been
+    /// formed and executed by CheckpointExecutor.
+    pub async fn create_and_execute_advance_epoch_tx(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         gas_cost_summary: &GasCostSummary,
+        checkpoint: CheckpointSequenceNumber,
         epoch_start_timestamp_ms: CheckpointTimestamp,
-        timeout: Duration,
-        transaction_certifier: &dyn TransactionCertifier,
-    ) -> anyhow::Result<VerifiedCertificate> {
+    ) -> anyhow::Result<(SuiSystemState, TransactionEffects)> {
         let next_epoch = epoch_store.epoch() + 1;
         debug!(
             ?next_epoch,
@@ -2557,13 +2548,48 @@ impl AuthorityState {
             gas_cost_summary.storage_rebate,
             epoch_start_timestamp_ms,
         );
-        // If we fail to sign the transaction locally for whatever reason, it's not recoverable.
-        self.handle_transaction_impl(tx.clone(), epoch_store)
+
+        let executable_tx = VerifiedExecutableTransaction::new_from_checkpoint(
+            tx.clone(),
+            epoch_store.epoch(),
+            checkpoint,
+        );
+
+        let tx_digest = executable_tx.digest();
+
+        let _tx_lock = epoch_store.acquire_tx_lock(tx_digest).await;
+        let execution_guard = self
+            .database
+            .execution_lock_for_executable_transaction(&executable_tx)
             .await?;
-        debug!(?next_epoch, "Successfully signed advance epoch transaction");
-        transaction_certifier
-            .create_certificate(&tx, &self.database, &self.committee_store, timeout)
-            .await
+        let (temporary_store, signed_effects) = self
+            .prepare_certificate(&execution_guard, &executable_tx, epoch_store)
+            .await?;
+
+        let system_obj = temporary_store
+            .get_sui_system_state_object()
+            .expect("change epoch tx must write to system object");
+
+        // We must write tx and effects to the state sync tables so that state sync is able to
+        // deliver to the transaction to CheckpointExecutor after it is included in a certified
+        // checkpoint.
+        let effects_digest = signed_effects.digest();
+        self.database
+            .insert_transaction_and_effects(&tx, &signed_effects, effects_digest)
+            .map_err(|err| {
+                let err: anyhow::Error = err.into();
+                err
+            })?;
+
+        debug!(
+            "Effects summary of the change epoch transaction: {:?}",
+            signed_effects.summary_for_debug()
+        );
+        epoch_store
+            .record_is_safe_mode_metric(self.get_sui_system_state_object().unwrap().safe_mode);
+        // The change epoch transaction cannot fail to execute.
+        assert!(signed_effects.status.is_ok());
+        Ok((system_obj, signed_effects.into_message()))
     }
 
     /// This function is called at the very end of the epoch.

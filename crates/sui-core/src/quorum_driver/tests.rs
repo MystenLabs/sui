@@ -65,15 +65,19 @@ async fn test_quorum_driver_submit_transaction() {
     // Test submit_transaction
     let qd_clone = quorum_driver_handler.clone();
     let handle = tokio::task::spawn(async move {
-        let QuorumDriverResponse {
-            tx_cert,
-            effects_cert,
-        } = qd_clone
+        let (
+            tx,
+            QuorumDriverResponse {
+                tx_cert,
+                effects_cert,
+            },
+        ) = qd_clone
             .subscribe_to_effects()
             .recv()
             .await
             .unwrap()
             .unwrap();
+        assert_eq!(tx.digest(), &digest);
         assert_eq!(*tx_cert.unwrap().digest(), digest);
         assert_eq!(effects_cert.data().transaction_digest, digest);
     });
@@ -98,15 +102,19 @@ async fn test_quorum_driver_submit_transaction_no_ticket() {
     );
     let qd_clone = quorum_driver_handler.clone();
     let handle = tokio::task::spawn(async move {
-        let QuorumDriverResponse {
-            tx_cert,
-            effects_cert,
-        } = qd_clone
+        let (
+            tx,
+            QuorumDriverResponse {
+                tx_cert,
+                effects_cert,
+            },
+        ) = qd_clone
             .subscribe_to_effects()
             .recv()
             .await
             .unwrap()
             .unwrap();
+        assert_eq!(tx.digest(), &digest);
         assert_eq!(*tx_cert.unwrap().digest(), digest);
         assert_eq!(effects_cert.data().transaction_digest, digest);
     });
@@ -147,15 +155,19 @@ async fn test_quorum_driver_with_given_notify_read() {
 
     let qd_clone = quorum_driver_handler.clone();
     let handle = tokio::task::spawn(async move {
-        let QuorumDriverResponse {
-            tx_cert,
-            effects_cert,
-        } = qd_clone
+        let (
+            tx,
+            QuorumDriverResponse {
+                tx_cert,
+                effects_cert,
+            },
+        ) = qd_clone
             .subscribe_to_effects()
             .recv()
             .await
             .unwrap()
             .unwrap();
+        assert_eq!(tx.digest(), &digest);
         assert_eq!(*tx_cert.unwrap().digest(), digest);
         assert_eq!(effects_cert.data().transaction_digest, digest);
     });
