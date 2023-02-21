@@ -161,7 +161,7 @@ async fn fail_to_verify_unpublished_root() -> anyhow::Result<()> {
     let b_pkg = {
         let fixtures = tempfile::tempdir()?;
         let b_src = copy_package(&fixtures, "b", [("b", SuiAddress::ZERO)]).await?;
-        compile_package(&b_src)
+        compile_package(b_src)
     };
 
     let client = context.get_client().await?;

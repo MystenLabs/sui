@@ -412,18 +412,8 @@ impl Builder {
             return built_genesis.clone();
         }
 
-        let objects = self
-            .objects
-            .clone()
-            .into_iter()
-            .map(|(_, o)| o)
-            .collect::<Vec<_>>();
-        let validators = self
-            .validators
-            .clone()
-            .into_iter()
-            .map(|(_, v)| v)
-            .collect::<Vec<_>>();
+        let objects = self.objects.clone().into_values().collect::<Vec<_>>();
+        let validators = self.validators.clone().into_values().collect::<Vec<_>>();
 
         self.built_genesis = Some(build_unsigned_genesis_data(
             &self.parameters,
@@ -486,11 +476,7 @@ impl Builder {
             }
         };
 
-        let validators = self
-            .validators
-            .into_iter()
-            .map(|(_, v)| v)
-            .collect::<Vec<_>>();
+        let validators = self.validators.into_values().collect::<Vec<_>>();
 
         // Ensure we have signatures from all validators
         assert_eq!(checkpoint.auth_signature.len(), validators.len() as u64);
@@ -605,16 +591,8 @@ impl Builder {
 
         // Verify it matches
         if let Some(loaded_genesis) = &loaded_genesis {
-            let objects = objects
-                .clone()
-                .into_iter()
-                .map(|(_, o)| o)
-                .collect::<Vec<_>>();
-            let validators = committee
-                .clone()
-                .into_iter()
-                .map(|(_, v)| v)
-                .collect::<Vec<_>>();
+            let objects = objects.clone().into_values().collect::<Vec<_>>();
+            let validators = committee.clone().into_values().collect::<Vec<_>>();
 
             let built = build_unsigned_genesis_data(&parameters, &validators, &objects);
             assert_eq!(
@@ -885,11 +863,7 @@ fn create_genesis_objects(
     )
     .unwrap();
 
-    store
-        .into_inner()
-        .into_iter()
-        .map(|(_id, object)| object)
-        .collect()
+    store.into_inner().into_values().collect()
 }
 
 fn process_package(

@@ -327,7 +327,7 @@ impl TestClusterBuilder {
             active_address,
             active_env: Default::default(),
         }
-        .save(&wallet_path)?;
+        .save(wallet_path)?;
 
         // Return network handle
         Ok(swarm)

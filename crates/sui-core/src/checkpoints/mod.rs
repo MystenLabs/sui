@@ -1222,7 +1222,7 @@ mod tests {
         for i in [10, 11, 12, 13] {
             store.insert(d(i), e(d(i), vec![], GasCostSummary::new(41, 42, 43)));
         }
-        let all_digests: Vec<_> = store.iter().map(|(k, _v)| *k).collect();
+        let all_digests: Vec<_> = store.keys().copied().collect();
         for digest in all_digests {
             let signature = Signature::Ed25519SuiSignature(Default::default()).into();
             state
@@ -1244,7 +1244,7 @@ mod tests {
             store,
             Box::new(output),
             Box::new(certified_output),
-            Box::new(NetworkTransactionCertifier::default()),
+            Box::<NetworkTransactionCertifier>::default(),
             CheckpointMetrics::new_for_tests(),
             3,
         );

@@ -201,15 +201,7 @@ where
     pub fn get_all_unique_values(&self) -> BTreeMap<K, (Vec<AuthorityName>, StakeUnit)> {
         self.stake_maps
             .iter()
-            .map(|(k, (_, s))| {
-                (
-                    k.clone(),
-                    (
-                        s.data.iter().map(|(name, _)| *name).collect(),
-                        s.total_votes,
-                    ),
-                )
-            })
+            .map(|(k, (_, s))| (k.clone(), (s.data.keys().copied().collect(), s.total_votes)))
             .collect()
     }
 }

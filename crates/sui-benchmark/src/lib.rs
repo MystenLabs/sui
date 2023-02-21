@@ -372,10 +372,9 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                             .ok_or(SuiError::UnknownSigner {
                                 signer: Some(pk.concise().to_string()),
                                 index: None,
-                                committee: self.committee.clone(),
+                                committee: Box::new(self.committee.clone()),
                             })
-                            .expect("Received signature from unknown validator")
-                            as u32,
+                            .expect("Received signature from unknown validator"),
                     );
                 }
                 let sigs: Vec<AuthoritySignature> = signatures.into_values().collect();

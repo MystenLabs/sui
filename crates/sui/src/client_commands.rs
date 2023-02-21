@@ -949,7 +949,7 @@ impl SuiClientCommands {
                 let intent_msg = IntentMessage::new(Intent::default(), data);
                 SuiClientCommandResult::SerializeTransferSui(
                     Base64::encode(bcs::to_bytes(&intent_msg)?.as_slice()),
-                    Base64::encode(&bcs::to_bytes(&data1).unwrap()),
+                    Base64::encode(bcs::to_bytes(&data1).unwrap()),
                 )
             }
 
