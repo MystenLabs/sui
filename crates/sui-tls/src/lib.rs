@@ -65,6 +65,27 @@ mod tests {
             .unwrap_err();
     }
 
+    #[test]
+    fn invalid_server_name() {
+        let mut rng = rand::thread_rng();
+        let keypair = Ed25519KeyPair::generate(&mut rng);
+        let public_key = keypair.public().to_owned();
+        let cert = SelfSignedCertificate::new(keypair.private(), "not-sui");
+
+        let (verifier, allowlist) = ValidatorCertVerifier::new();
+
+        allowlist.write().unwrap().insert(public_key);
+
+        // Allowed public key but the server-name in the cert is not the required "sui"
+        verifier
+            .verify_client_cert(
+                &cert.rustls_certificate(),
+                &[],
+                std::time::SystemTime::now(),
+            )
+            .unwrap_err();
+    }
+
     #[tokio::test]
     async fn axum_acceptor() {
         use fastcrypto::ed25519::Ed25519KeyPair;
