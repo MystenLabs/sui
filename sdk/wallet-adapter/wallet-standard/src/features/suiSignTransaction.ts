@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SignableTransaction, SignedTransaction } from "@mysten/sui.js";
+import { IdentifierString, WalletAccount } from "@wallet-standard/core";
 
 /** The latest API version of the signTransaction API. */
-export type SuiSignTransactionVersion = "1.0.0";
+export type SuiSignTransactionVersion = "2.0.0";
 
 /**
  * A Wallet Standard feature for signing a transaction, and returning the
@@ -25,6 +26,12 @@ export type SuiSignTransactionMethod = (
 
 /** Input for signing transactions. */
 export interface SuiSignTransactionInput {
+  /** Account to use. */
+  account: WalletAccount;
+
+  /** Chain to sign the transaction for: */
+  chain: IdentifierString;
+
   transaction: SignableTransaction;
   options?: SuiSignTransactionOptions;
 }
