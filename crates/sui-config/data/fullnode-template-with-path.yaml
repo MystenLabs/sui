@@ -17,6 +17,7 @@ authority-store-pruning-config:
   objects-pruning-initial-delay-secs: 3600
   num-latest-epoch-dbs-to-retain: 3
   epoch-db-pruning-period-secs: 3600
+  num-epochs-to-retain: 18446744073709551615
 
 protocol-key-pair:
   path: "protocol.key"

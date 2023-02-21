@@ -94,6 +94,10 @@ impl CheckpointStore {
         ))
     }
 
+    pub fn open_readonly(path: &Path) -> CheckpointStoreReadOnly {
+        Self::get_read_only_handle(path.to_path_buf(), None, None, MetricConf::default())
+    }
+
     pub fn insert_genesis_checkpoint(
         &self,
         checkpoint: VerifiedCheckpoint,
@@ -235,6 +239,15 @@ impl CheckpointStore {
         self.get_checkpoint_by_digest(&highest_executed.1)
     }
 
+    pub fn get_highest_pruned_checkpoint_seq_number(
+        &self,
+    ) -> Result<Option<CheckpointSequenceNumber>, TypedStoreError> {
+        self.watermarks
+            .get(&CheckpointWatermark::HighestPruned)?
+            .map(|(sequence_number, _)| Ok(sequence_number))
+            .transpose()
+    }
+
     pub fn get_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
@@ -310,6 +323,16 @@ impl CheckpointStore {
         }
     }
 
+    pub fn update_highest_pruned_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), TypedStoreError> {
+        self.watermarks.insert(
+            &CheckpointWatermark::HighestPruned,
+            &(checkpoint.sequence_number(), checkpoint.digest()),
+        )
+    }
+
     pub fn insert_checkpoint_contents(
         &self,
         contents: CheckpointContents,
@@ -362,6 +385,7 @@ pub enum CheckpointWatermark {
     HighestVerified,
     HighestSynced,
     HighestExecuted,
+    HighestPruned,
 }
 
 pub struct CheckpointBuilder {

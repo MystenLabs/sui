@@ -92,6 +92,7 @@ use crate::authority::authority_per_epoch_store::{
 };
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
 use crate::authority::authority_store::{ExecutionLockReadGuard, ObjectLockStatus};
+use crate::authority::authority_store_pruner::AuthorityStorePruner;
 use crate::authority_aggregator::TransactionCertifier;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
@@ -426,7 +427,8 @@ pub struct AuthorityState {
     tx_execution_shutdown: Mutex<Option<oneshot::Sender<()>>>,
 
     pub metrics: Arc<AuthorityMetrics>,
-    _pruner: AuthorityPerEpochStorePruner,
+    _objects_pruner: AuthorityStorePruner,
+    _authority_per_epoch_pruner: AuthorityPerEpochStorePruner,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1465,6 +1467,7 @@ impl AuthorityState {
         prometheus_registry: &Registry,
         pruning_config: &AuthorityStorePruningConfig,
         genesis_objects: &[Object],
+        epoch_duration_ms: u64,
     ) -> Arc<Self> {
         Self::check_protocol_version(
             supported_protocol_versions,
@@ -1493,7 +1496,13 @@ impl AuthorityState {
         ));
         let (tx_execution_shutdown, rx_execution_shutdown) = oneshot::channel();
 
-        let _pruner =
+        let _objects_pruner = AuthorityStorePruner::new(
+            store.perpetual_tables.clone(),
+            checkpoint_store.clone(),
+            pruning_config,
+            epoch_duration_ms,
+        );
+        let _authority_per_epoch_pruner =
             AuthorityPerEpochStorePruner::new(epoch_store.get_parent_path(), pruning_config);
 
         let state = Arc::new(AuthorityState {
@@ -1513,7 +1522,8 @@ impl AuthorityState {
             transaction_manager,
             tx_execution_shutdown: Mutex::new(Some(tx_execution_shutdown)),
             metrics,
-            _pruner,
+            _objects_pruner,
+            _authority_per_epoch_pruner,
         });
 
         prometheus_registry
@@ -1568,7 +1578,6 @@ impl AuthorityState {
                 None,
                 &genesis_committee,
                 genesis,
-                &AuthorityStorePruningConfig::default(),
             )
             .await
             .unwrap(),
@@ -1605,6 +1614,7 @@ impl AuthorityState {
             &registry,
             &AuthorityStorePruningConfig::default(),
             genesis.objects(),
+            10000,
         )
         .await;
 
