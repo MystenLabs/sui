@@ -196,6 +196,27 @@ impl ReadApiServer for ReadApi {
         })
     }
 
+    async fn get_transactions_batch(
+        &self,
+        digests: Vec<TransactionDigest>,
+    ) ->RpcResult<Vec<SuiTransactionResponse>> {
+        let txn_batch = self
+            .state
+            .get_transactions_batch(&digests)
+            .await
+            .tap_err(|err| debug!(txs_digests=?digests, "Failed to get batch: {:?}", err))?;
+        let mut responses: Vec<SuiTransactionResponse> = Vec::new();
+        for i in 0..txn_batch.len() {
+            responses.push(SuiTransactionResponse{
+                certificate: txn_batch[i].clone().0.try_into()?,
+                effects: SuiTransactionEffects::try_from(txn_batch[i].clone().1, self.state.module_cache.as_ref())?,
+                timestamp_ms: self.state.get_timestamp_ms(&digests[i]).await?,
+                parsed_data: None,
+            })
+        }
+        Ok(responses)
+    }
+
     async fn get_normalized_move_modules_by_package(
         &self,
         package: ObjectID,
