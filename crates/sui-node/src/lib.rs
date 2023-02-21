@@ -385,8 +385,14 @@ impl SuiNode {
         let mut checkpoint_seq = genesis.checkpoint().into_summary_and_sequence().0;
         let mut epoch = 0;
         let mut num_tx : usize = 0;
+        
+        let mut obj_stats = HashMap::new();
+        let mut hot_stats = HashMap::new();
+
+
         let mut num_tx_prev = num_tx;
         let mut now = Instant::now();
+
         loop {
             if let Some(checkpoint_summary) = checkpoint_store.get_checkpoint_by_sequence_number(checkpoint_seq)? {
 
@@ -405,6 +411,8 @@ impl SuiNode {
                     let tx_data = &cert.data().intent_message.value;
 
                     let mut input_object_data = Vec::new();
+                    let mut flag = false;
+
                     for kind in &input_object_kinds {
 
                         let obj = match kind {
@@ -413,6 +421,13 @@ impl SuiNode {
                             }
                         };
                         input_object_data.push(obj.1.clone());
+                        
+                        if !obj.1.is_immutable(){
+                            *obj_stats.entry(obj.0.0).or_insert(0) += 1;
+                            if obj_stats[&obj.0.0] >= 200 {
+                                *hot_stats.entry(obj.0.0).or_insert(200) += 1;
+                            }
+                        }
             
                     }
                     let gas_status = get_gas_status(&input_object_data, &tx_data).await?;
@@ -473,7 +488,12 @@ impl SuiNode {
                 if num_tx - num_tx_prev > 10_000 {
                     let elapsed = now.elapsed();
                     let num = num_tx - num_tx_prev;
-                    println!("Load checkpoint: {} TPS: {}", seq, 1000.0 * num as f64 / elapsed.as_millis() as f64);
+                    info!("Load checkpoint: {} TPS: {}", seq, 1000.0 * num as f64 / elapsed.as_millis() as f64);
+                    let max_depth = obj_stats.values().max();
+                    info!("Objects Accessed: {} Max depth: {:?}", obj_stats.len(), max_depth);
+                    info!("Hot Objects: {:?}", hot_stats);
+                    obj_stats.clear();
+                    hot_stats.clear();
                     num_tx_prev = num_tx;
                     now = Instant::now();
                 }
