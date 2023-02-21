@@ -183,35 +183,37 @@ ExecutionFailureStatus:
     16:
       CoinTooLarge: UNIT
     17:
-      NonEntryFunctionInvoked: UNIT
+      TotalAmountOverflow: UNIT
     18:
-      EntryTypeArityMismatch: UNIT
+      NonEntryFunctionInvoked: UNIT
     19:
+      EntryTypeArityMismatch: UNIT
+    20:
       EntryArgumentError:
         NEWTYPE:
           TYPENAME: EntryArgumentError
-    20:
+    21:
       EntryTypeArgumentError:
         NEWTYPE:
           TYPENAME: EntryTypeArgumentError
-    21:
+    22:
       CircularObjectOwnership:
         NEWTYPE:
           TYPENAME: CircularObjectOwnership
-    22:
+    23:
       InvalidChildObjectArgument:
         NEWTYPE:
           TYPENAME: InvalidChildObjectArgument
-    23:
+    24:
       InvalidSharedByValue:
         NEWTYPE:
           TYPENAME: InvalidSharedByValue
-    24:
+    25:
       TooManyChildObjects:
         STRUCT:
           - object:
               TYPENAME: ObjectID
-    25:
+    26:
       InvalidParentDeletion:
         STRUCT:
           - parent:
@@ -219,32 +221,32 @@ ExecutionFailureStatus:
           - kind:
               OPTION:
                 TYPENAME: DeleteKind
-    26:
+    27:
       InvalidParentFreezing:
         STRUCT:
           - parent:
               TYPENAME: ObjectID
-    27:
-      PublishErrorEmptyPackage: UNIT
     28:
-      PublishErrorNonZeroAddress: UNIT
+      PublishErrorEmptyPackage: UNIT
     29:
-      PublishErrorDuplicateModule: UNIT
+      PublishErrorNonZeroAddress: UNIT
     30:
-      SuiMoveVerificationError: UNIT
+      PublishErrorDuplicateModule: UNIT
     31:
+      SuiMoveVerificationError: UNIT
+    32:
       MovePrimitiveRuntimeError:
         NEWTYPE:
           OPTION:
             TYPENAME: MoveLocation
-    32:
+    33:
       MoveAbort:
         TUPLE:
           - TYPENAME: MoveLocation
           - U64
-    33:
-      VMVerificationOrDeserializationError: UNIT
     34:
+      VMVerificationOrDeserializationError: UNIT
+    35:
       VMInvariantViolation: UNIT
 ExecutionStatus:
   ENUM:
