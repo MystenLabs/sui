@@ -63,6 +63,11 @@ module sui::object {
         id_from_address(address::from_bytes(bytes))
     }
 
+    spec id_from_bytes {
+        aborts_if len(bytes) != 20;
+        ensures address::from_bytes(bytes) == result.bytes;
+    }
+
     /// Make an `ID` from an address.
     public fun id_from_address(bytes: address): ID {
         ID { bytes }
