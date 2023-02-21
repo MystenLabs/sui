@@ -1,6 +1,7 @@
 # IDE
 **/.history/
 **/.vscode/
+**/.idea/
 
 # OSX
 .DS_Store
