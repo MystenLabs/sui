@@ -104,12 +104,6 @@ export type RpcProviderOptions = {
    * Cache timeout in seconds for the RPC API Version
    */
   versionCacheTimoutInSeconds?: number;
-  /**
-   * URL to a faucet(optional). If you initialize `JsonRpcProvider`
-   * with a known `Network` value, this will be populated with a default
-   * value
-   */
-  faucetURL?: string;
 };
 
 const DEFAULT_OPTIONS: RpcProviderOptions = {
