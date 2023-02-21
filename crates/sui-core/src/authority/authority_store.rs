@@ -348,19 +348,20 @@ impl AuthorityStore {
                             epoch_store.get_shared_locks(digest)?.into_iter().collect(),
                         )
                     })?;
-                    match shared_locks.get(id) {
-                        Some(version) => {
-                            if !self.object_version_exists(id, *version)? {
-                                // When this happens, other transactions that use smaller versions of
-                                // this shared object haven't finished execution.
-                                missing.push(ObjectKey(*id, *version));
-                            }
-                        }
-                        None => {
-                            // Abort the function because the lock should have been set.
-                            return Err(SuiError::SharedObjectLockNotSetError);
-                        }
-                    };
+                    // If we can't find the locked version, it means
+                    // 1. either we have a bug that skips shared object verison assignment
+                    // 2. or we have some DB corruption
+                    let version = shared_locks.get(id).unwrap_or_else(|| {
+                        panic!(
+                        "Shared object locks should have been set. tx_digset: {:?}, obj id: {:?}",
+                        digest, id
+                    )
+                    });
+                    if !self.object_version_exists(id, *version)? {
+                        // When this happens, other transactions that use smaller versions of
+                        // this shared object haven't finished execution.
+                        missing.push(ObjectKey(*id, *version));
+                    }
                 }
                 InputObjectKind::MovePackage(id) => {
                     if !self.object_version_exists(id, PACKAGE_VERSION)? {
@@ -421,25 +422,26 @@ impl AuthorityStore {
                             epoch_store.get_shared_locks(digest)?.into_iter().collect(),
                         )
                     })?;
-                    match shared_locks.get(id) {
-                        Some(version) => {
-                            if let Some(obj) = self.get_object_by_key(id, *version)? {
-                                result.push(obj);
-                            } else {
-                                // When this happens, other transactions that use smaller versions of
-                                // this shared object haven't finished execution.
-                                errors.push(SuiError::SharedObjectPriorVersionsPendingExecution {
-                                    object_id: *id,
-                                    version_not_ready: *version,
-                                });
-                            }
-                            continue;
-                        }
-                        None => {
-                            errors.push(SuiError::SharedObjectLockNotSetError);
-                            continue;
-                        }
+                    // If we can't find the locked version, it means
+                    // 1. either we have a bug that skips shared object verison assignment
+                    // 2. or we have some DB corruption
+                    let version = shared_locks.get(id).unwrap_or_else(|| {
+                        panic!(
+                        "Shared object locks should have been set. tx_digset: {:?}, obj id: {:?}",
+                        digest, id
+                    )
+                    });
+                    if let Some(obj) = self.get_object_by_key(id, *version)? {
+                        result.push(obj);
+                    } else {
+                        // When this happens, other transactions that use smaller versions of
+                        // this shared object haven't finished execution.
+                        errors.push(SuiError::SharedObjectPriorVersionsPendingExecution {
+                            object_id: *id,
+                            version_not_ready: *version,
+                        });
                     }
+                    continue;
                 }
                 InputObjectKind::MovePackage(id) => self.get_object(id)?,
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {

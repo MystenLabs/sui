@@ -4214,8 +4214,8 @@ async fn make_test_transaction(
     unreachable!("couldn't form cert")
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
-async fn test_shared_object_transaction() {
+async fn prepare_authority_and_shared_object_cert(
+) -> (Arc<AuthorityState>, VerifiedCertificate, ObjectID) {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
     // Initialize an authority with a (owned) gas object and a shared object.
@@ -4225,7 +4225,6 @@ async fn test_shared_object_transaction() {
 
     let shared_object_id = ObjectID::random();
     let shared_object = {
-        use sui_types::object::MoveObject;
         let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, shared_object_id, 10);
         let owner = Owner::Shared {
             initial_shared_version: obj.version(),
@@ -4246,15 +4245,23 @@ async fn test_shared_object_transaction() {
         16,
     )
     .await;
-    let transaction_digest = certificate.digest();
+    (authority, certificate, shared_object_id)
+}
 
-    // Executing the certificate now fails since it was not sequenced.
-    let result = authority.try_execute_for_test(&certificate).await;
-    assert!(
-        matches!(result, Err(SuiError::TransactionInputObjectsErrors { .. })),
-        "{:#?}",
-        result
-    );
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[should_panic]
+async fn test_shared_object_transaction_shared_locks_not_set() {
+    let (authority, certificate, _) = prepare_authority_and_shared_object_cert().await;
+
+    // Executing the certificate now panics since it was not sequenced and shared locks are not set
+    let _ = authority.try_execute_for_test(&certificate).await;
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_shared_object_transaction_ok() {
+    let (authority, certificate, shared_object_id) =
+        prepare_authority_and_shared_object_cert().await;
+    let transaction_digest = certificate.digest();
 
     // Sequence the certificate to assign a sequence number to the shared object.
     send_consensus(&authority, &certificate).await;

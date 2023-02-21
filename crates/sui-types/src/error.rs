@@ -171,8 +171,6 @@ pub enum SuiError {
         effects_digests: Vec<TransactionEffectsDigest>,
         checkpoint: CheckpointSequenceNumber,
     },
-    #[error("The shared locks for this transaction have not yet been set.")]
-    SharedObjectLockNotSetError,
     #[error("The certificate needs to be sequenced by Narwhal before execution: {digest:?}")]
     CertificateNotSequencedError { digest: TransactionDigest },
 
