@@ -72,7 +72,7 @@ But contrary to a blockchain, Sui does not stop the flow of transactions in orde
 
 ## Transactions on single-owner objects
 
-[Many transactions](https://eprint.iacr.org/2019/611.pdf) such a coin/object transfers, NFT minting, and smart contract publushing can be expressed as operations on _single-owner_ objects that can only be touched by one address at a time. Sui can automatically recognize such transactions and leverage this observation to forgo [consensus](https://pmg.csail.mit.edu/papers/osdi99.pdf) and instead use simpler algorithms based on [Byzantine Consistent Broadcast](https://link.springer.com/book/10.1007/978-3-642-15260-3). See our list of potential [single-writer apps](single-writer-apps.md) for examples of real-world simple transactions.
+[Many transactions](https://eprint.iacr.org/2019/611.pdf) such as coin or object transfers, NFT minting, and smart contract publishing can be expressed as operations on _single-owner_ objects that can be used in transactions by only one address at a time. Sui automatically recognizes such transactions and leverages this observation to forgo [consensus](https://pmg.csail.mit.edu/papers/osdi99.pdf). Instead, Sui uses simpler algorithms based on [Byzantine Consistent Broadcast](https://link.springer.com/book/10.1007/978-3-642-15260-3). See our list of potential [single-writer apps](single-writer-apps.md) for examples of real-world simple transactions.
 
 These protocols are based on the [FastPay](https://arxiv.org/abs/2003.11506) design that comes with peer-reviewed security guarantees. In a nutshell, Sui takes the approach of taking a lock (or "stopping the world") only for the relevant piece of data rather than the whole chain, enabling massively parallel transaction submission and execution.
 
