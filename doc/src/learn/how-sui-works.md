@@ -88,7 +88,7 @@ Submitting a Sui transaction involves the following steps. These are transparent
 1. When a validator receives a certificate, the validator verifies the certificate. If the certificate is valid, the validator  then executes the embedded transaction and returns signed _transaction effects_ to the quorum driver. A transaction becomes _final_ after a quorum of validators receive and execute the corresponding certificate.
 1. Optionally, the quorum driver can collect an _effects certificate_ based on the previous step and return it to the sender.
 
-While this may sound like a lot of steps, this process allows each validator to peform the operations above in parallel without coordination--observe that no step above requires validators to communicate with each other! This massively reduces latency compared to a conventional blockchain that requires O(n^2) communication among validators before finality can be achieved.
+While this may sound like a lot of steps, this process allows each validator to perform the operations above in parallel without coordination--observe that none of the preceding steps require validators to communicate with each other! This significantly reduces latency compared to a conventional blockchain that requires O(n^2) communication among validators before achieving transaction finality.
 
 Finally, note that the role of quorum driver does not require access to any private keys, and can safely be delegated to a third party such as a Full node, an RPC provider, or a custodial wallet.
 
