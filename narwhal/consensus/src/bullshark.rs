@@ -4,7 +4,7 @@
 use crate::metrics::ConsensusMetrics;
 use crate::{
     consensus::{ConsensusProtocol, ConsensusState, Dag},
-    utils,
+    utils, ConsensusError,
 };
 use config::{Committee, Stake};
 use crypto::PublicKey;
@@ -12,7 +12,7 @@ use fastcrypto::traits::EncodeDecodeBase64;
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::time::Instant;
 use tracing::{debug, trace};
-use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round, StoreResult};
+use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round};
 
 #[cfg(test)]
 #[path = "tests/bullshark_tests.rs"]
@@ -55,7 +55,7 @@ impl ConsensusProtocol for Bullshark {
         &mut self,
         state: &mut ConsensusState,
         certificate: Certificate,
-    ) -> StoreResult<Vec<CommittedSubDag>> {
+    ) -> Result<Vec<CommittedSubDag>, ConsensusError> {
         debug!("Processing {:?}", certificate);
         let round = certificate.round();
 
@@ -63,10 +63,7 @@ impl ConsensusProtocol for Bullshark {
         self.log_error_if_missing_parents(&certificate, state);
 
         // Add the new certificate to the local storage.
-        if !state.try_insert(&certificate) {
-            // Certificate is not inserted. This operation is a no-op.
-            return Ok(Vec::new());
-        }
+        state.try_insert(&certificate)?;
 
         // Report last leader election if was unsuccessful
         if round > self.max_inserted_certificate_round && round % 2 == 0 {

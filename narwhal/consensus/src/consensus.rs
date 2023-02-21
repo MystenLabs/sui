@@ -19,7 +19,7 @@ use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{
     metered_channel, Certificate, CertificateDigest, CommittedSubDag, ConditionalBroadcastReceiver,
-    ConsensusStore, Round, StoreResult, Timestamp,
+    ConsensusStore, Round, Timestamp,
 };
 
 #[cfg(test)]
@@ -97,7 +97,7 @@ impl ConsensusState {
 
         let mut num_certs = 0;
         for cert in &certificates {
-            if Self::try_insert_in_dag(&mut dag, last_committed, cert) {
+            if Self::try_insert_in_dag(&mut dag, last_committed, cert).is_ok() {
                 info!("Inserted certificate: {:?}", cert);
                 num_certs += 1;
             }
@@ -112,7 +112,7 @@ impl ConsensusState {
     }
 
     /// Returns true if certificate is inserted in the dag.
-    pub fn try_insert(&mut self, certificate: &Certificate) -> bool {
+    pub fn try_insert(&mut self, certificate: &Certificate) -> Result<(), ConsensusError> {
         Self::try_insert_in_dag(&mut self.dag, &self.last_committed, certificate)
     }
 
@@ -121,7 +121,7 @@ impl ConsensusState {
         dag: &mut Dag,
         last_committed: &HashMap<PublicKey, Round>,
         certificate: &Certificate,
-    ) -> bool {
+    ) -> Result<(), ConsensusError> {
         let origin_last_committed_round = last_committed
             .get(&certificate.origin())
             .cloned()
@@ -131,16 +131,26 @@ impl ConsensusState {
                 "Ignoring certificate {:?} as it is at or before last committed round {} for this origin",
                 certificate, origin_last_committed_round
             );
-            return false;
+            return Err(ConsensusError::CertificatePassedCommit(
+                certificate.clone(),
+                origin_last_committed_round,
+            ));
         }
 
-        dag.entry(certificate.round())
-            .or_default()
-            .insert(
-                certificate.origin(),
-                (certificate.digest(), certificate.clone()),
-            )
-            .is_none()
+        if let Some((_, existing_certificate)) = dag.entry(certificate.round()).or_default().insert(
+            certificate.origin(),
+            (certificate.digest(), certificate.clone()),
+        ) {
+            // we want to error only if we try to insert a different certificate in the dag
+            if existing_certificate != certificate.clone() {
+                return Err(ConsensusError::CertificateAlreadyExistsForRound(
+                    existing_certificate,
+                    certificate.round(),
+                    certificate.clone(),
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// Update and clean up internal state after committing a certificate.
@@ -191,7 +201,7 @@ pub trait ConsensusProtocol {
         state: &mut ConsensusState,
         // The new certificate.
         certificate: Certificate,
-    ) -> StoreResult<Vec<CommittedSubDag>>;
+    ) -> Result<Vec<CommittedSubDag>, ConsensusError>;
 }
 
 pub struct Consensus<ConsensusProtocol> {
@@ -277,7 +287,7 @@ where
 
     async fn run_inner(mut self) -> Result<(), ConsensusError> {
         // Listen to incoming certificates.
-        loop {
+        'main: loop {
             tokio::select! {
 
                 _ = self.rx_shutdown.receiver.recv() => {
@@ -291,15 +301,18 @@ where
                         }
                         _ => {
                             tracing::debug!("Already moved to the next epoch");
-                            continue
+                            continue 'main;
                         }
                     }
 
                     // Process the certificate using the selected consensus protocol.
-                    let committed_sub_dags =
-                        self.protocol
-                            .process_certificate(&mut self.state, certificate)?;
-
+                    let committed_sub_dags = match self.protocol.process_certificate(&mut self.state, certificate) {
+                        Ok(subdags) => subdags,
+                        Err(ConsensusError::CertificatePassedCommit(_, _)) => {
+                            continue 'main;
+                        },
+                        Err(err) => return Err(err)
+                    };
 
                     // We extract a list of headers from this specific validator that
                     // have been agreed upon, and signal this back to the narwhal sub-system

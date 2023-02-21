@@ -21,7 +21,7 @@ pub use crate::consensus::Consensus;
 use store::StoreError;
 use thiserror::Error;
 
-use types::SequenceNumber;
+use types::{Certificate, Round, SequenceNumber};
 
 /// The default channel size used in the consensus and subscriber logic.
 pub const DEFAULT_CHANNEL_SIZE: usize = 1_000;
@@ -29,10 +29,16 @@ pub const DEFAULT_CHANNEL_SIZE: usize = 1_000;
 /// The number of shutdown receivers to create on startup. We need one per component loop.
 pub const NUM_SHUTDOWN_RECEIVERS: u64 = 25;
 
-#[derive(Clone, Debug, Error)]
-enum ConsensusError {
+#[derive(Clone, Debug, Error, PartialEq)]
+pub enum ConsensusError {
     #[error("Storage failure: {0}")]
     StoreError(#[from] StoreError),
+
+    #[error("Certificate {0:?} not inserted, is passed commit round {1}")]
+    CertificatePassedCommit(Certificate, Round),
+
+    #[error("Earlier certificate {0:?} already exists for round {1} when trying to insert {2:?}")]
+    CertificateAlreadyExistsForRound(Certificate, Round, Certificate),
 
     #[error("System shutting down")]
     ShuttingDown,

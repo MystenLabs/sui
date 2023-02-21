@@ -3,13 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     consensus::{ConsensusProtocol, ConsensusState, Dag},
-    utils,
+    utils, ConsensusError,
 };
 use config::{Committee, Stake};
 use fastcrypto::{hash::Hash, traits::EncodeDecodeBase64};
 use std::{collections::HashMap, sync::Arc};
 use tracing::debug;
-use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round, StoreResult};
+use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round};
 
 #[cfg(any(test))]
 #[path = "tests/tusk_tests.rs"]
@@ -29,7 +29,7 @@ impl ConsensusProtocol for Tusk {
         &mut self,
         state: &mut ConsensusState,
         certificate: Certificate,
-    ) -> StoreResult<Vec<CommittedSubDag>> {
+    ) -> Result<Vec<CommittedSubDag>, ConsensusError> {
         debug!("Processing {:?}", certificate);
         let round = certificate.round();
 
