@@ -91,6 +91,9 @@ pub struct NodeConfig {
     #[serde(default)]
     pub checkpoint_executor_config: CheckpointExecutorConfig,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metrics: Option<MetricsConfig>,
+
     /// In a `sui-node` binary, this is set to SupportedProtocolVersions::SYSTEM_DEFAULT
     /// in sui-node/src/main.rs. It is present in the config so that it can be changed by tests in
     /// order to test protocol upgrades.
@@ -323,6 +326,15 @@ impl AuthorityStorePruningConfig {
             num_epochs_to_retain: if cfg!(msim) { 1 } else { u64::MAX },
         }
     }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct MetricsConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub push_interval_seconds: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub push_url: Option<String>,
 }
 
 /// Publicly known information about a validator

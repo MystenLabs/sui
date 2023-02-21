@@ -240,6 +240,7 @@ impl<'a> FullnodeConfigBuilder<'a> {
             end_of_epoch_broadcast_channel_capacity:
                 default_end_of_epoch_broadcast_channel_capacity(),
             checkpoint_executor_config: Default::default(),
+            metrics: None,
             supported_protocol_versions: Some(SupportedProtocolVersions::SYSTEM_DEFAULT),
         })
     }
