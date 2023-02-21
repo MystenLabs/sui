@@ -540,7 +540,13 @@ fn check_recipients(recipients: &[SuiAddress], amounts: &[u64]) -> Result<(), Ex
 }
 
 fn check_total_coins(coins: &[Coin], amounts: &[u64]) -> Result<(u64, u64), ExecutionError> {
-    let total_amount: u64 = amounts.iter().sum();
+    let Some(total_amount) = amounts.iter().fold(Some(0u64), |acc, a| acc?.checked_add(*a)) else {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::TotalAmountOverflow,
+            "Attempting to pay a total amount that overflows u64".to_string(),
+        ));
+    };
+    // u64 overflow is impossible because the sum of all coin values is bounded by the total amount
     let total_coins = coins.iter().fold(0, |acc, c| acc + c.value());
     if total_amount > total_coins {
         return Err(ExecutionError::new_with_source(
@@ -627,10 +633,10 @@ fn pay<S>(
     );
 
     // double check that we didn't create or destroy money
-    debug_assert_eq!(
-        total_coins - coins.iter().fold(0, |acc, c| acc + c.value()),
-        total_amount
-    );
+    // u64 overflow is impossible because the sum of all coin values is bounded by the total amount
+    let left_coins = coins.iter().fold(0, |acc, c| acc + c.value());
+    debug_assert!(left_coins <= total_coins);
+    debug_assert_eq!(total_coins - left_coins, total_amount);
 
     // update the input coins to reflect the decrease in value.
     // if the input coin has value 0, delete it
@@ -840,6 +846,28 @@ fn test_pay_arity_mismatch() {
             .unwrap_err()
             .to_execution_status(),
         ExecutionFailureStatus::RecipientsAmountsArityMismatch
+    );
+}
+
+#[test]
+fn test_pay_amount_overflow() {
+    let coin_objects = vec![Object::new_gas_with_balance_and_owner_for_testing(
+        10,
+        SuiAddress::random_for_testing_only(),
+    )];
+    let recipients = vec![
+        SuiAddress::random_for_testing_only(),
+        SuiAddress::random_for_testing_only(),
+    ];
+    let amounts = vec![u64::MAX, 100u64];
+    let mut store: TemporaryStore<()> = temporary_store::empty_for_testing();
+    let mut ctx = TxContext::random_for_testing_only();
+
+    assert_eq!(
+        pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
+            .unwrap_err()
+            .to_execution_status(),
+        ExecutionFailureStatus::TotalAmountOverflow
     );
 }
 

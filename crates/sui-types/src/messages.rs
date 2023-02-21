@@ -1916,6 +1916,8 @@ pub enum ExecutionFailureStatus {
     /// In PaySui/PayAllSui, it means some input coins are not SUI coins.
     CoinTypeMismatch,
     CoinTooLarge,
+    /// The total amount of coins to be paid is larger than the maximum value of u64.
+    TotalAmountOverflow,
 
     //
     // MoveCall errors
@@ -2051,7 +2053,13 @@ impl Display for ExecutionFailureStatus {
                     f,
                     "Coin exceeds maximum value for a single coin"
                 )
-            }
+            },
+            ExecutionFailureStatus::TotalAmountOverflow => {
+                write!(
+                    f,
+                    "The total amount of coins to be paid is larger than the maximum value of u64"
+                )
+            },
             ExecutionFailureStatus::EmptyInputCoins => {
                 write!(f, "Expected a non-empty list of input Coin objects")
             }
