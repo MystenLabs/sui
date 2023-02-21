@@ -1934,8 +1934,6 @@ pub enum ExecutionFailureStatus {
     /// In PaySui/PayAllSui, it means some input coins are not SUI coins.
     CoinTypeMismatch,
     CoinTooLarge,
-    /// The total amount of coins to be paid is larger than the maximum value of u64.
-    TotalAmountOverflow,
 
     //
     // MoveCall errors
@@ -1976,6 +1974,11 @@ pub enum ExecutionFailureStatus {
     MoveAbort(MoveLocation, u64), // TODO func def + offset?
     VMVerificationOrDeserializationError,
     VMInvariantViolation,
+
+    /// The total amount of coins to be paid is larger than the maximum value of u64.
+    TotalAmountOverflow,
+    // NOTE: if you want to add a new enum,
+    // please add it at the end for Rust SDK backward compatibility.
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash)]
