@@ -5,7 +5,7 @@ import nacl from 'tweetnacl';
 import { ExportedKeypair, Keypair, PRIVATE_KEY_SIZE } from './keypair';
 import { Ed25519PublicKey } from './ed25519-publickey';
 import { isValidHardenedPath, mnemonicToSeedHex } from './mnemonics';
-import { derivePath, getPublicKey } from '../utils/ed25519-hd-key';
+import { derivePath } from '../utils/ed25519-hd-key';
 import { toB64 } from '@mysten/bcs';
 import { SignatureScheme } from './signature';
 
@@ -126,9 +126,8 @@ export class Ed25519Keypair implements Keypair {
       throw new Error('Invalid derivation path');
     }
     const { key } = derivePath(path, mnemonicToSeedHex(mnemonics));
-    const pubkey = getPublicKey(key, false);
 
-    return new Ed25519Keypair({ publicKey: pubkey, secretKey: key });
+    return Ed25519Keypair.fromSecretKey(key);
   }
 
   export(): ExportedKeypair {

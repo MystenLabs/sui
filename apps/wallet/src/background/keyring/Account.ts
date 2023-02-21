@@ -42,19 +42,14 @@ export class Account {
 
     async sign(data: Uint8Array): Promise<SerializedSignature> {
         const pubkey = this.#keypair.getPublicKey();
-        try {
-            // This is fine to hardcode useRecoverable = false because wallet does not support Secp256k1. Ed25519 does not use this parameter.
-            const signature = this.#keypair.signData(data, false);
-            const signatureScheme = this.#keypair.getKeyScheme();
-            return toSerializedSignature({
-                signature,
-                signatureScheme,
-                pubKey: pubkey,
-            });
-        } catch (e) {
-            console.error({ signErr: e });
-            throw e;
-        }
+        // This is fine to hardcode useRecoverable = false because wallet does not support Secp256k1. Ed25519 does not use this parameter.
+        const signature = this.#keypair.signData(data, false);
+        const signatureScheme = this.#keypair.getKeyScheme();
+        return toSerializedSignature({
+            signature,
+            signatureScheme,
+            pubKey: pubkey,
+        });
     }
 
     toJSON(): AccountSerialized {
