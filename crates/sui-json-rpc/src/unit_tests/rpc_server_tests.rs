@@ -616,11 +616,11 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     //test get_transaction_batch
     let response: Vec<SuiTransactionResponse> = http_client.get_transactions_batch(tx).await?;
     assert_eq!(5, response.len());
-    assert_eq!(response[0].certificate.transaction_digest == response[0].effects.transaction_digest, true);
+    assert_eq!(response[1].certificate.transaction_digest == response[1].effects.transaction_digest, true);
 
-    for r in response {
+    for i in 1..response.len() {
         assert!(tx_responses.iter().any(
-            |resp| matches!(resp, SuiExecuteTransactionResponse {effects, ..} if effects.effects.transaction_digest == r.effects.transaction_digest)
+            |resp| matches!(resp, SuiExecuteTransactionResponse {effects, ..} if effects.effects.transaction_digest == response[i].effects.transaction_digest)
         ))
     }
     println!("Response {}", response[0].effects.transaction_digest);
