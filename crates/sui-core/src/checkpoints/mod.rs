@@ -32,7 +32,7 @@ use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
-use sui_types::messages::TransactionEffects;
+use sui_types::messages::{TransactionEffects, VerifiedExecutableTransaction};
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
@@ -630,6 +630,7 @@ impl CheckpointBuilder {
                     &epoch_rolling_gas_cost_summary,
                     timestamp_ms,
                     &mut effects,
+                    sequence_number,
                 )
                 .await?;
             }
@@ -711,6 +712,7 @@ impl CheckpointBuilder {
         epoch_total_gas_cost: &GasCostSummary,
         epoch_start_timestamp_ms: CheckpointTimestamp,
         effects: &mut Vec<TransactionEffects>,
+        checkpoint: CheckpointSequenceNumber,
     ) -> anyhow::Result<()> {
         let timer = Instant::now();
         let cert = self
@@ -727,11 +729,17 @@ impl CheckpointBuilder {
             .record_epoch_last_transaction_cert_creation_time_metric(
                 timer.elapsed().as_millis() as i64
             );
+        let executable_tx = VerifiedExecutableTransaction::new_from_checkpoint_to_be_replaced(
+            cert,
+            self.epoch_store.epoch(),
+            checkpoint,
+        );
 
-        let span = error_span!("augment_epoch_last_checkpoint", tx_digest = ?cert.digest());
+        let span =
+            error_span!("augment_epoch_last_checkpoint", tx_digest = ?executable_tx.digest());
         let signed_effect = self
             .state
-            .try_execute_immediately(&cert, &self.epoch_store)
+            .try_execute_immediately(&executable_tx, &self.epoch_store)
             .instrument(span)
             .await?;
         debug!(

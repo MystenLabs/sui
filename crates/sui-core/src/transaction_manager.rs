@@ -7,8 +7,13 @@ use std::{
 };
 
 use parking_lot::RwLock;
-use sui_types::{base_types::ObjectID, committee::EpochId, storage::ObjectKey};
-use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
+use sui_types::{
+    base_types::ObjectID,
+    committee::EpochId,
+    messages::{VerifiedCertificate, VerifiedExecutableTransaction},
+    storage::ObjectKey,
+};
+use sui_types::{base_types::TransactionDigest, error::SuiResult};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, warn};
 
@@ -24,13 +29,13 @@ use crate::authority::{AuthorityMetrics, AuthorityStore};
 /// storage, committed objects are notified back to TransactionManager.
 pub struct TransactionManager {
     authority_store: Arc<AuthorityStore>,
-    tx_ready_certificates: UnboundedSender<VerifiedCertificate>,
+    tx_ready_certificates: UnboundedSender<VerifiedExecutableTransaction>,
     metrics: Arc<AuthorityMetrics>,
     inner: RwLock<Inner>,
 }
 
 struct PendingCertificate {
-    certificate: VerifiedCertificate,
+    certificate: VerifiedExecutableTransaction,
     missing: BTreeSet<ObjectKey>,
 }
 
@@ -75,7 +80,7 @@ impl TransactionManager {
     pub(crate) fn new(
         authority_store: Arc<AuthorityStore>,
         epoch_store: &AuthorityPerEpochStore,
-        tx_ready_certificates: UnboundedSender<VerifiedCertificate>,
+        tx_ready_certificates: UnboundedSender<VerifiedExecutableTransaction>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
         let transaction_manager = TransactionManager {
@@ -85,9 +90,21 @@ impl TransactionManager {
             tx_ready_certificates,
         };
         transaction_manager
-            .enqueue(epoch_store.all_pending_certificates().unwrap(), epoch_store)
+            .enqueue_certificates(epoch_store.all_pending_certificates().unwrap(), epoch_store)
             .expect("Initialize TransactionManager with pending certificates failed.");
         transaction_manager
+    }
+
+    pub(crate) fn enqueue_certificates(
+        &self,
+        certs: Vec<VerifiedCertificate>,
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiResult<()> {
+        let executable_txns = certs
+            .into_iter()
+            .map(VerifiedExecutableTransaction::new_from_certificate)
+            .collect();
+        self.enqueue(executable_txns, epoch_store)
     }
 
     /// Enqueues certificates into TransactionManager. Once all of the input objects are available
@@ -101,7 +118,7 @@ impl TransactionManager {
     /// have many callsites. Investigate the alternatives here.
     pub(crate) fn enqueue(
         &self,
-        certs: Vec<VerifiedCertificate>,
+        certs: Vec<VerifiedExecutableTransaction>,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<()> {
         let inner = &mut self.inner.write();
@@ -297,7 +314,7 @@ impl TransactionManager {
     }
 
     /// Sends the ready certificate for execution.
-    fn certificate_ready(&self, certificate: VerifiedCertificate) {
+    fn certificate_ready(&self, certificate: VerifiedExecutableTransaction) {
         self.metrics.transaction_manager_num_ready.inc();
         let _ = self.tx_ready_certificates.send(certificate);
     }

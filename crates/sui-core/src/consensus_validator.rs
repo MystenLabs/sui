@@ -110,7 +110,7 @@ impl TransactionValidator for SuiTxValidator {
         // It is unnecessary to write to pending_certificates table because the certs will be written
         // via Narwhal output.
         self.transaction_manager
-            .enqueue(owned_tx_certs, &self.epoch_store)
+            .enqueue_certificates(owned_tx_certs, &self.epoch_store)
             .wrap_err("Failed to schedule certificates for execution")
     }
 }

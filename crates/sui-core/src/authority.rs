@@ -140,8 +140,11 @@ pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
 // is above the threshold.
 pub(crate) const MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH: usize = 1000;
 
-type CertTxGuard<'a> =
-    DBTxGuard<'a, TrustedCertificate, (InnerTemporaryStore, TrustedSignedTransactionEffects)>;
+type CertTxGuard<'a> = DBTxGuard<
+    'a,
+    TrustedExecutableTransaction,
+    (InnerTemporaryStore, TrustedSignedTransactionEffects),
+>;
 
 pub type ReconfigConsensusMessage = (
     AuthorityKeyPair,
@@ -660,7 +663,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     pub(crate) async fn try_execute_immediately(
         &self,
-        certificate: &VerifiedCertificate,
+        certificate: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<VerifiedSignedTransactionEffects> {
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
@@ -690,8 +693,11 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedCertificate,
     ) -> SuiResult<VerifiedSignedTransactionEffects> {
-        self.try_execute_immediately(certificate, &self.epoch_store_for_testing())
-            .await
+        self.try_execute_immediately(
+            &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
+            &self.epoch_store_for_testing(),
+        )
+        .await
     }
 
     pub async fn notify_read_effects(
@@ -716,7 +722,7 @@ impl AuthorityState {
     pub(crate) async fn process_certificate(
         &self,
         tx_guard: CertTxGuard<'_>,
-        certificate: &VerifiedCertificate,
+        certificate: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<VerifiedSignedTransactionEffects> {
         let digest = *certificate.digest();
@@ -732,7 +738,7 @@ impl AuthorityState {
         }
         let execution_guard = self
             .database
-            .execution_lock_for_certificate(certificate)
+            .execution_lock_for_executable_transaction(certificate)
             .await;
         // Any caller that verifies the signatures on the certificate will have already checked the
         // epoch. But paths that don't verify sigs (e.g. execution from checkpoint, reading from db)
@@ -821,7 +827,7 @@ impl AuthorityState {
 
     async fn commit_cert_and_notify(
         &self,
-        certificate: &VerifiedCertificate,
+        certificate: &VerifiedExecutableTransaction,
         inner_temporary_store: InnerTemporaryStore,
         signed_effects: &VerifiedSignedTransactionEffects,
         tx_guard: CertTxGuard<'_>,
@@ -901,7 +907,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     async fn prepare_certificate(
         &self,
-        certificate: &VerifiedCertificate,
+        certificate: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(InnerTemporaryStore, VerifiedSignedTransactionEffects)> {
         let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
@@ -1090,7 +1096,8 @@ impl AuthorityState {
         &self,
         indexes: &IndexStore,
         digest: &TransactionDigest,
-        cert: &CertifiedTransaction,
+        // TODO: index_tx really just need the transaction data here.
+        cert: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
         timestamp_ms: u64,
     ) -> SuiResult<u64> {
@@ -1099,7 +1106,7 @@ impl AuthorityState {
             .tap_err(|e| warn!("{e}"))?;
 
         indexes.index_tx(
-            cert.sender_address(),
+            cert.data().intent_message.value.sender(),
             cert.data()
                 .intent_message
                 .value
@@ -1272,7 +1279,7 @@ impl AuthorityState {
     #[instrument(level = "debug", skip_all, err)]
     async fn post_process_one_tx(
         &self,
-        certificate: &CertifiedTransaction,
+        certificate: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
     ) -> SuiResult {
         if self.indexes.is_none() && self.event_handler.is_none() {
@@ -1636,7 +1643,8 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<()> {
         epoch_store.insert_pending_certificates(&certs)?;
-        self.transaction_manager.enqueue(certs, epoch_store)
+        self.transaction_manager
+            .enqueue_certificates(certs, epoch_store)
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
@@ -2369,7 +2377,7 @@ impl AuthorityState {
     pub(crate) async fn commit_certificate(
         &self,
         inner_temporary_store: InnerTemporaryStore,
-        certificate: &VerifiedCertificate,
+        certificate: &VerifiedExecutableTransaction,
         signed_effects: &VerifiedSignedTransactionEffects,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
@@ -2380,8 +2388,10 @@ impl AuthorityState {
         // we insert to the epoch store first. And during lookups we always look up in the perpetual store first.
         epoch_store.insert_effects_signature(tx_digest, signed_effects.auth_sig())?;
         // TODO: This will eventually be done in the epoch_store atomically with the insertion of the effects signature.
-        self.database
-            .insert_transaction_cert_sig(tx_digest, certificate.auth_sig())?;
+        if let Some(cert_sig) = certificate.certificate_sig() {
+            self.database
+                .insert_transaction_cert_sig(tx_digest, cert_sig)?;
+        }
 
         let effects_digest = signed_effects.digest();
         self.database
