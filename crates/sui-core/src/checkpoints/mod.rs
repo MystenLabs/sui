@@ -730,13 +730,14 @@ impl CheckpointBuilder {
                 timer.elapsed().as_millis() as i64
             );
         let executable_tx = VerifiedExecutableTransaction::new_from_checkpoint_to_be_replaced(
-            cert,
+            cert.clone(),
             self.epoch_store.epoch(),
             checkpoint,
         );
 
-        let span =
-            error_span!("augment_epoch_last_checkpoint", tx_digest = ?executable_tx.digest());
+        let tx_digest = *executable_tx.digest();
+
+        let span = error_span!("augment_epoch_last_checkpoint", ?tx_digest);
         let signed_effects = self
             .state
             // Get the effects without committing execution to the db.
@@ -747,12 +748,18 @@ impl CheckpointBuilder {
         // We must write cert and effects to the state sync tables so that state sync is able to
         // deliver to the transaction to CheckpointExecutor after it is included in a certified
         // checkpoint.
-        let certs = &self.state.database.perpetual_tables.certificates;
+        let txns = &self.state.database.perpetual_tables.executed_transactions;
         let synced_txns = &self.state.database.perpetual_tables.synced_transactions;
         let synced_effects = &self.state.database.perpetual_tables.effects;
         synced_txns
             .batch()
-            .insert_batch(certs, [(*cert.digest(), cert.serializable_ref())])?
+            .insert_batch(
+                txns,
+                [(
+                    tx_digest,
+                    executable_tx.clone().into_unsigned().serializable_ref(),
+                )],
+            )?
             // TODO: checkpoint_executor assumes that un-executed transactions are only found in
             // synced_transactions, so we must insert it there as well.
             .insert_batch(synced_txns, [(*cert.digest(), cert.serializable_ref())])?

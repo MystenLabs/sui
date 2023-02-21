@@ -902,27 +902,22 @@ impl AuthorityState {
     /// formed and executed by CheckpointExecutor.
     pub(crate) async fn get_change_epoch_tx_effects(
         &self,
-        certificate: &VerifiedCertificate,
+        tx: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<VerifiedSignedTransactionEffects> {
-        assert!(certificate
-            .inner()
-            .intent_message
-            .value
-            .kind
-            .is_change_epoch_tx());
+        assert!(tx.inner().intent_message.value.kind.is_change_epoch_tx());
 
-        let digest = certificate.digest();
+        let digest = tx.digest();
         // Even though we are not going to write any effects or objects to the db, we still acquire
         // the proper locks. We may be racing with CheckpointExecutor, which could have received a
         // certified checkpoint with the change epoch tx in it.
         let _tx_lock = epoch_store.acquire_tx_lock(digest).await;
         let execution_guard = self
             .database
-            .execution_lock_for_certificate(certificate)
+            .execution_lock_for_executable_transaction(tx)
             .await?;
         let (_, effects) = self
-            .prepare_certificate(&execution_guard, certificate, epoch_store)
+            .prepare_certificate(&execution_guard, tx, epoch_store)
             .await?;
         Ok(effects)
     }
