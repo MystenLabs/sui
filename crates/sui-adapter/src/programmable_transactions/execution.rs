@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt;
+use std::{collections::BTreeMap, fmt};
 
 use move_binary_format::{
     access::ModuleAccess,
     file_format::{AbilitySet, LocalIndex, Visibility},
+    CompiledModule,
 };
 use move_core_types::{
     account_address::AccountAddress,
-    identifier::{IdentStr, Identifier},
+    identifier::IdentStr,
     language_storage::{ModuleId, StructTag, TypeTag},
     value::{MoveStructLayout, MoveTypeLayout},
 };
@@ -39,7 +40,9 @@ use sui_verifier::{
     INIT_FN_NAME,
 };
 
-use crate::adapter::{convert_type_argument_error, validate_primitive_arg_string};
+use crate::adapter::{
+    convert_type_argument_error, generate_package_id, validate_primitive_arg_string,
+};
 
 use super::{context::*, types::*};
 
@@ -131,16 +134,20 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
                 type_arguments,
                 arguments,
             } = *move_call;
+            let module_id = ModuleId::new(package.into(), module);
             execute_move_call(
                 context,
-                package,
-                module,
-                function,
+                &module_id,
+                &function,
                 type_arguments,
                 arguments,
+                /* is_init */ false,
             )?
         }
-        Command::Publish(_) => todo!(),
+        Command::Publish(modules) => {
+            execute_move_publish(context, modules)?;
+            vec![]
+        }
     };
     context.push_command_results(results)?;
     Ok(())
@@ -149,26 +156,20 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
 /// Execute a single Move call
 fn execute_move_call<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
-    package: ObjectID,
-    module: Identifier,
-    function: Identifier,
+    module_id: &ModuleId,
+    function: &IdentStr,
     type_arguments: Vec<TypeTag>,
     arguments: Vec<Argument>,
+    is_init: bool,
 ) -> Result<Vec<Value>, ExecutionError> {
-    let module_id = ModuleId::new(package.into(), module);
     // check that the function is either an entry function or a valid public function
-    let (function_kind, signature, return_value_kinds) = check_visibility_and_signature(
-        context,
-        &module_id,
-        &function,
-        &type_arguments,
-        /* init */ false,
-    )?;
+    let (function_kind, signature, return_value_kinds) =
+        check_visibility_and_signature(context, module_id, function, &type_arguments, is_init)?;
     // build the arguments, storing meta data about by-mut-ref args
     let (tx_context_kind, by_mut_ref, serialized_arguments) = build_move_args(
         context,
-        &module_id,
-        &function,
+        module_id,
+        function,
         function_kind,
         &signature,
         &arguments,
@@ -179,8 +180,8 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>>(
         return_values,
     } = vm_move_call(
         context,
-        &module_id,
-        &function,
+        module_id,
+        function,
         type_arguments,
         tx_context_kind,
         serialized_arguments,
@@ -240,6 +241,44 @@ fn make_value(
     })
 }
 
+/// Publish Move modules and call the init functions
+fn execute_move_publish<E: fmt::Debug, S: StorageView<E>>(
+    context: &mut ExecutionContext<E, S>,
+    module_bytes: Vec<Vec<u8>>,
+) -> Result<(), ExecutionError> {
+    let modules = publish_and_verify_modules(context, module_bytes)?;
+    let modules_to_init = modules
+        .iter()
+        .filter_map(|module| {
+            for fdef in &module.function_defs {
+                let fhandle = module.function_handle_at(fdef.function);
+                let fname = module.identifier_at(fhandle.name);
+                if fname == INIT_FN_NAME {
+                    return Some(module.self_id());
+                }
+            }
+            None
+        })
+        .collect::<Vec<_>>();
+
+    context.new_package(modules)?;
+    for module_id in &modules_to_init {
+        let return_values = execute_move_call(
+            context,
+            module_id,
+            INIT_FN_NAME,
+            vec![],
+            vec![],
+            /* is_int */ true,
+        )?;
+        assert_invariant!(
+            return_values.is_empty(),
+            "init should not have return values"
+        )
+    }
+    Ok(())
+}
+
 /***************************************************************************************************
  * Move execution
  **************************************************************************************************/
@@ -247,7 +286,7 @@ fn make_value(
 fn vm_move_call<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     module_id: &ModuleId,
-    function: &Identifier,
+    function: &IdentStr,
     type_arguments: Vec<TypeTag>,
     tx_context_kind: TxContextKind,
     mut serialized_arguments: Vec<Vec<u8>>,
@@ -285,6 +324,59 @@ fn vm_move_call<E: fmt::Debug, S: StorageView<E>>(
     Ok(result)
 }
 
+/// - Deserializes the modules
+/// - Publishes them into the VM, which invokes the Move verifier
+/// - Run the Sui Verifier
+fn publish_and_verify_modules<E: fmt::Debug, S: StorageView<E>>(
+    context: &mut ExecutionContext<E, S>,
+    module_bytes: Vec<Vec<u8>>,
+) -> Result<Vec<CompiledModule>, ExecutionError> {
+    let mut modules = module_bytes
+        .iter()
+        .map(|b| {
+            CompiledModule::deserialize(b)
+                .map_err(|e| e.finish(move_binary_format::errors::Location::Undefined))
+        })
+        .collect::<move_binary_format::errors::VMResult<Vec<CompiledModule>>>()
+        .map_err(|e| context.convert_vm_error(e))?;
+
+    if modules.is_empty() {
+        return Err(ExecutionErrorKind::PublishErrorEmptyPackage.into());
+    }
+
+    // It should be fine that this does not go through context.fresh_id since the Move runtime
+    // does not to know about new packages created, since Move objects and Move packages cannot
+    // interact
+    let package_id = generate_package_id(&mut modules, context.tx_context)?;
+    // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
+    let new_module_bytes: Vec<_> = modules
+        .iter()
+        .map(|m| {
+            let mut bytes = Vec::new();
+            m.serialize(&mut bytes).unwrap();
+            bytes
+        })
+        .collect();
+    context
+        .session
+        .publish_module_bundle(
+            new_module_bytes,
+            AccountAddress::from(package_id),
+            // TODO: publish_module_bundle() currently doesn't charge gas.
+            // Do we want to charge there?
+            context.gas_status,
+        )
+        .map_err(|e| context.convert_vm_error(e))?;
+
+    // run the Sui verifier
+    for module in &modules {
+        // Run Sui bytecode verifier, which runs some additional checks that assume the Move
+        // bytecode verifier has passed.
+        sui_verifier::verifier::verify_module(module, &BTreeMap::new())?;
+    }
+    Ok(modules)
+}
+
 /***************************************************************************************************
  * Move signatures
  **************************************************************************************************/
@@ -315,7 +407,7 @@ enum ValueKind {
 fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     module_id: &ModuleId,
-    function: &Identifier,
+    function: &IdentStr,
     type_arguments: &[TypeTag],
     from_init: bool,
 ) -> Result<(FunctionKind, LoadedFunctionInstantiation, Vec<ValueKind>), ExecutionError> {
@@ -330,10 +422,9 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>>(
             .vm
             .load_module(module_id, context.state_view)
             .map_err(|e| context.convert_vm_error(e))?;
-        let function_str = function.as_ident_str();
         let module_id = module.self_id();
         let Some(fdef) = module.function_defs.iter().find(|fdef| {
-            module.identifier_at(module.function_handle_at(fdef.function).name) == function_str
+            module.identifier_at(module.function_handle_at(fdef.function).name) == function
         }) else {
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::FunctionNotFound,
@@ -350,7 +441,7 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>>(
             (Visibility::Public, false) => FunctionKind::NonEntry,
             (Visibility::Private, false) if from_init => {
                 assert_invariant!(
-                    function.as_ident_str() == INIT_FN_NAME,
+                    function == INIT_FN_NAME,
                     "module init specified non-init function"
                 );
                 FunctionKind::Init
@@ -387,7 +478,7 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>>(
 fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     _module_id: &ModuleId,
-    _function: &Identifier,
+    _function: &IdentStr,
     signature: &LoadedFunctionInstantiation,
 ) -> Result<Vec<ValueKind>, ExecutionError> {
     signature
@@ -447,7 +538,7 @@ type ArgInfo = (
 fn build_move_args<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     module_id: &ModuleId,
-    function: &Identifier,
+    function: &IdentStr,
     function_kind: FunctionKind,
     signature: &LoadedFunctionInstantiation,
     args: &[Argument],
@@ -458,11 +549,12 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>>(
         Some(t) => is_tx_context(context, t)?,
         None => TxContextKind::None,
     };
-    let num_args = if tx_ctx_kind != TxContextKind::None {
-        args.len() + 1
-    } else {
-        args.len()
-    };
+    // an init function can have one or two arguments, with the last one always being of type
+    // &mut TxContext and the additional (first) one representing a one time witness type (see
+    // one_time_witness verifier pass for additional explanation)
+    let has_one_time_witness = function_kind == FunctionKind::Init && parameters.len() == 2;
+    let has_tx_context = tx_ctx_kind != TxContextKind::None;
+    let num_args = args.len() + (has_one_time_witness as usize) + (has_tx_context as usize);
     if num_args != parameters.len() {
         let idx = std::cmp::min(parameters.len(), num_args) as LocalIndex;
         return Err(ExecutionError::new_with_source(
@@ -483,8 +575,17 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>>(
     let command_kind = CommandKind::MoveCall {
         package: (*module_id.address()).into(),
         module: module_id.name(),
-        function: function.as_ident_str(),
+        function,
     };
+    // an init function can have one or two arguments, with the last one always being of type
+    // &mut TxContext and the additional (first) one representing a one time witness type (see
+    // one_time_witness verifier pass for additional explanation)
+    if has_one_time_witness {
+        // one time witness type is a struct with a single bool filed which in bcs is encoded as
+        // 0x01
+        let bcs_true_value = vec![0x01];
+        serialized_args.push(bcs_true_value)
+    }
     for ((idx, arg), param_ty) in args.iter().copied().enumerate().zip(parameters) {
         let (value, non_ref_param_ty): (Value, &Type) = match param_ty {
             Type::MutableReference(inner) => {
@@ -525,7 +626,11 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>>(
                 (value, t)
             }
         };
-        if function_kind == FunctionKind::PrivateEntry && value.was_used_in_non_entry_move_call() {
+        if matches!(
+            function_kind,
+            FunctionKind::PrivateEntry | FunctionKind::Init
+        ) && value.was_used_in_non_entry_move_call()
+        {
             panic!("private entry taint failed")
         }
         check_param_type(context, idx, &value, non_ref_param_ty)?;

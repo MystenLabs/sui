@@ -15,7 +15,7 @@ use sui_types::{
     base_types::{ObjectID, SuiAddress, TxContext},
     error::{ExecutionError, ExecutionErrorKind},
     messages::{Argument, CallArg, EntryArgumentErrorKind, ObjectArg},
-    object::Owner,
+    object::{Object, Owner},
     storage::Storage,
 };
 
@@ -40,6 +40,8 @@ pub struct ExecutionContext<'vm, 'state, 'a, 'b, E: fmt::Debug, S: StorageView<E
     _object_owner_map: BTreeMap<ObjectID, Owner>,
     /// Additional transfers not from the Move runtime
     additional_transfers: Vec<(/* new owner */ SuiAddress, ObjectValue)>,
+    /// Newly published packages
+    new_packages: Vec<Object>,
     // runtime data
     /// The runtime value for the Gas coin, None if it has been taken/moved
     gas: Option<Value>,
@@ -104,6 +106,7 @@ where
             inputs,
             results: vec![],
             additional_transfers: vec![],
+            new_packages: vec![],
             borrowed: HashMap::new(),
             _e: PhantomData,
         })
@@ -316,6 +319,20 @@ where
 
     pub fn convert_vm_error(&self, error: VMError) -> ExecutionError {
         sui_types::error::convert_vm_error(error, self.vm, self.state_view)
+    }
+
+    pub fn new_package(
+        &mut self,
+        modules: Vec<move_binary_format::CompiledModule>,
+    ) -> Result<(), ExecutionError> {
+        // wrap the modules in an object, write it to the store
+        let package_object = Object::new_package(
+            modules,
+            self.tx_context.digest(),
+            self.protocol_config.max_move_package_size(),
+        )?;
+        self.new_packages.push(package_object);
+        Ok(())
     }
 }
 
