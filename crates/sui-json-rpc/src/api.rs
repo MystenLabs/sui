@@ -150,9 +150,11 @@ pub trait RpcReadApi {
         digest: TransactionDigest,
     ) -> RpcResult<SuiTransactionResponse>;
 
+    /// Return the transaction response objects in a batch
     #[method(name = "getTransactionsBatch")]
     async fn get_transactions_batch(
         &self,
+        /// array of the digests of the queried transactions
         digests: Vec<TransactionDigest>,
     ) -> RpcResult<Vec<SuiTransactionResponse>>;
 
