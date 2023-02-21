@@ -2008,8 +2008,7 @@ async fn test_handle_confirmation_transaction_ok() {
             .await
             .unwrap();
         authority_state
-            .database
-            .get_certified_transaction(&refx)
+            .get_certified_transaction(&refx, &authority_state.epoch_store_for_testing())
             .unwrap()
     };
     if let Some(certified_transaction) = opt_cert {
@@ -3029,7 +3028,7 @@ async fn test_store_revert_transfer_sui() {
         db.get_latest_parent_entry(gas_object_id).unwrap().unwrap(),
         (gas_object_ref, TransactionDigest::genesis()),
     );
-    assert!(db.get_certified_transaction(&tx_digest).unwrap().is_none());
+    assert!(db.get_transaction(&tx_digest).unwrap().is_none());
     assert!(!db.as_ref().is_tx_already_executed(&tx_digest).unwrap());
 }
 
@@ -4400,7 +4399,11 @@ async fn test_consensus_message_processed() {
         } else {
             let epoch_store = authority2.epoch_store_for_testing();
             epoch_store
-                .acquire_shared_locks_from_effects(&certificate, &effects1, authority2.db())
+                .acquire_shared_locks_from_effects(
+                    &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
+                    &effects1,
+                    authority2.db(),
+                )
                 .await
                 .unwrap();
             authority2.try_execute_for_test(&certificate).await.unwrap();

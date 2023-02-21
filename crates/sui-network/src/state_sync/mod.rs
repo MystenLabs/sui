@@ -1168,11 +1168,8 @@ where
                 && effects.digest() == digests.effects
                 && effects.transaction_digest == digests.transaction
             {
-                // TODO this should just be a bare Transaction type and not a TransactionCertificate
-                // since Certificates are intended to be ephemeral and thrown away at the end of an
-                // epoch
                 store
-                    .insert_transaction(sui_types::messages::VerifiedCertificate::new_unchecked(
+                    .insert_transaction(sui_types::messages::VerifiedTransaction::new_unchecked(
                         transaction,
                     ))
                     .expect("store operation should not fail");

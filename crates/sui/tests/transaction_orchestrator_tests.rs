@@ -75,7 +75,11 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let (_, _, executed_locally) = *result;
     assert!(executed_locally);
 
-    assert!(node.state().get_transaction(digest).await.is_ok());
+    assert!(node
+        .state()
+        .get_transaction_and_effects(digest)
+        .await
+        .is_ok());
 
     Ok(())
 }

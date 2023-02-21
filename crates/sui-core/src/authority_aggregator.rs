@@ -7,9 +7,7 @@ use crate::authority_client::{
     make_network_authority_client_sets_from_system_state, AuthorityAPI, NetworkAuthorityClient,
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
-use crate::test_authority_clients::LocalAuthorityClient;
 use crate::validator_info::make_committee;
-use async_trait::async_trait;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use mysten_metrics::monitored_future;
 use mysten_network::config::Config;
@@ -44,7 +42,7 @@ use std::time::Duration;
 use sui_types::committee::{CommitteeWithNetAddresses, StakeUnit};
 use tokio::time::{sleep, timeout};
 
-use crate::authority::{AuthorityState, AuthorityStore};
+use crate::authority::AuthorityStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregator};
 
@@ -464,93 +462,6 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
             safe_client_metrics_base,
             auth_agg_metrics,
         ))
-    }
-}
-
-/// This trait provides a method for an authority to get a certificate from the network
-/// for a specific transaction. In order to create a certificate, we need to create the network
-/// authority aggregator based on the Sui system state committee/network information. This is
-/// needed to create a certificate for the advance epoch transaction during reconfiguration.
-/// However to make testing easier, we sometimes want to use local authority clients that do not
-/// involve full-fledged network Sui nodes (e.g. when we want to abstract out Narwhal). In order
-/// to support both network clients and local clients, this trait is defined to hide the difference.
-#[async_trait]
-pub trait TransactionCertifier: Sync + Send + 'static {
-    /// This function first loads the Sui system state object from `self_state`, get the committee
-    /// information, creates an AuthorityAggregator, and use the aggregator to create a certificate
-    /// for the specified transaction.
-    async fn create_certificate(
-        &self,
-        transaction: &VerifiedTransaction,
-        self_store: &Arc<AuthorityStore>,
-        committee_store: &Arc<CommitteeStore>,
-        timeout: Duration,
-    ) -> anyhow::Result<VerifiedCertificate>;
-}
-
-#[derive(Default)]
-pub struct NetworkTransactionCertifier {}
-
-pub struct LocalTransactionCertifier {
-    /// Contains all the local authority states that we are aware of.
-    /// This can be utilized to also test validator set changes. We simply need to provide all
-    /// potential validators (both current and future) in this map for latter lookup.
-    state_map: BTreeMap<AuthorityName, Arc<AuthorityState>>,
-}
-
-impl LocalTransactionCertifier {
-    pub fn new(state_map: BTreeMap<AuthorityName, Arc<AuthorityState>>) -> Self {
-        Self { state_map }
-    }
-}
-
-#[async_trait]
-impl TransactionCertifier for NetworkTransactionCertifier {
-    async fn create_certificate(
-        &self,
-        transaction: &VerifiedTransaction,
-        self_store: &Arc<AuthorityStore>,
-        committee_store: &Arc<CommitteeStore>,
-        timeout: Duration,
-    ) -> anyhow::Result<VerifiedCertificate> {
-        let registry = Registry::new();
-        let sui_system_state = self_store.get_sui_system_state_object()?;
-        let net = AuthorityAggregator::new_from_system_state(
-            &sui_system_state,
-            committee_store,
-            SafeClientMetricsBase::new(&registry),
-            AuthAggMetrics::new(&registry),
-        )?;
-
-        net.authority_ask_for_cert_with_retry_and_timeout(transaction, self_store, timeout)
-            .await
-    }
-}
-
-#[async_trait]
-impl TransactionCertifier for LocalTransactionCertifier {
-    async fn create_certificate(
-        &self,
-        transaction: &VerifiedTransaction,
-        self_store: &Arc<AuthorityStore>,
-        committee_store: &Arc<CommitteeStore>,
-        timeout: Duration,
-    ) -> anyhow::Result<VerifiedCertificate> {
-        let sui_system_state = self_store.get_sui_system_state_object()?;
-        let committee = sui_system_state.get_current_epoch_committee().committee;
-        let clients: BTreeMap<_, _> = committee.names().map(|name|
-            // unwrap is fine because LocalAuthorityClient is only used for testing.
-           (*name, LocalAuthorityClient::new_from_authority(self.state_map.get(name).unwrap().clone()))
-        ).collect();
-        let net = AuthorityAggregator::new(
-            committee,
-            committee_store.clone(),
-            clients,
-            &Registry::new(),
-        );
-
-        net.authority_ask_for_cert_with_retry_and_timeout(transaction, self_store, timeout)
-            .await
     }
 }
 
@@ -1355,54 +1266,6 @@ where
             "handle_transaction_info_request_from_some_validators".to_string(),
         )
         .await
-    }
-
-    pub async fn authority_ask_for_cert_with_retry_and_timeout(
-        &self,
-        transaction: &VerifiedTransaction,
-        self_store: &Arc<AuthorityStore>,
-        timeout: Duration,
-    ) -> anyhow::Result<VerifiedCertificate> {
-        let result = tokio::time::timeout(timeout, async {
-            loop {
-                // We may have already executed this transaction somewhere else.
-                // If so, no need to try to get it from the network.
-                if let Ok(Some(cert)) = self_store.get_certified_transaction(transaction.digest()) {
-                    return cert;
-                }
-                match self.process_transaction(transaction.clone()).await {
-                    Ok(ProcessTransactionResult::Certified(cert))
-                    | Ok(ProcessTransactionResult::Executed(Some(cert), _)) => {
-                        return cert;
-                    }
-                    Ok(ProcessTransactionResult::Executed(None, _)) => {
-                        // Note: This will go away as soon as finalized transaction work finishes,
-                        // since we will no longer need a cert.
-                        debug!(
-                            "The network has executed this transaction, but no cert is available"
-                        );
-                    }
-                    Err(err) => {
-                        debug!("Did not create advance epoch transaction cert: {:?}", err);
-                    }
-                }
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }
-        })
-        .await;
-        match result {
-            Ok(cert) => {
-                debug!(
-                    "Successfully created advance epoch transaction cert: {:?}",
-                    cert
-                );
-                Ok(cert)
-            }
-            Err(err) => {
-                error!("Failed to create advance epoch transaction cert. Giving up");
-                Err(err.into())
-            }
-        }
     }
 }
 pub struct AuthorityAggregatorBuilder<'a> {

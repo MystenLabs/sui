@@ -15,7 +15,6 @@ use std::path::Path;
 use std::sync::Arc;
 use sui_storage::mutex_table::{LockGuard, MutexTable};
 use sui_types::accumulator::Accumulator;
-use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::message_envelope::Message;
 use sui_types::object::Owner;
 use sui_types::object::PACKAGE_VERSION;
@@ -122,8 +121,11 @@ impl AuthorityStore {
 
             store
                 .perpetual_tables
-                .synced_transactions
-                .insert(transaction.digest(), transaction.serializable_ref())
+                .transactions
+                .insert(
+                    transaction.digest(),
+                    transaction.clone().into_unsigned().serializable_ref(),
+                )
                 .unwrap();
 
             store
@@ -219,27 +221,6 @@ impl AuthorityStore {
         .await;
 
         Ok(result)
-    }
-
-    pub fn get_transaction_cert_sig(
-        &self,
-        tx_digest: &TransactionDigest,
-    ) -> Result<Option<AuthorityStrongQuorumSignInfo>, TypedStoreError> {
-        self.perpetual_tables
-            .transaction_cert_signatures
-            .get(tx_digest)
-    }
-
-    // TODO: Move this to epoch store.
-    pub fn insert_transaction_cert_sig(
-        &self,
-        tx_digest: &TransactionDigest,
-        sig: &AuthorityStrongQuorumSignInfo,
-    ) -> SuiResult {
-        self.perpetual_tables
-            .transaction_cert_signatures
-            .insert(tx_digest, sig)
-            .map_err(|e| e.into())
     }
 
     pub fn insert_finalized_transactions(
@@ -615,12 +596,12 @@ impl AuthorityStore {
     ) -> SuiResult {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
-        let mut write_batch = self.perpetual_tables.executed_transactions.batch();
+        let mut write_batch = self.perpetual_tables.transactions.batch();
 
         // Store the certificate indexed by transaction digest
         let transaction_digest = transaction.digest();
         write_batch = write_batch.insert_batch(
-            &self.perpetual_tables.executed_transactions,
+            &self.perpetual_tables.transactions,
             iter::once((transaction_digest, transaction.serializable_ref())),
         )?;
 
@@ -1013,12 +994,9 @@ impl AuthorityStore {
             return Ok(())
         };
 
-        let mut write_batch = self.perpetual_tables.executed_transactions.batch();
+        let mut write_batch = self.perpetual_tables.transactions.batch();
         write_batch = write_batch
-            .delete_batch(
-                &self.perpetual_tables.executed_transactions,
-                iter::once(tx_digest),
-            )?
+            .delete_batch(&self.perpetual_tables.transactions, iter::once(tx_digest))?
             .delete_batch(&self.perpetual_tables.effects, iter::once(effects.digest()))?
             .delete_batch(
                 &self.perpetual_tables.executed_effects,
@@ -1128,34 +1106,53 @@ impl AuthorityStore {
         }
     }
 
-    pub fn get_executed_transaction(
+    pub fn insert_transaction(&self, tx: &VerifiedTransaction) -> Result<(), TypedStoreError> {
+        self.perpetual_tables
+            .transactions
+            .insert(tx.digest(), tx.serializable_ref())
+    }
+
+    pub fn insert_transaction_and_effects(
+        &self,
+        tx: &VerifiedTransaction,
+        effects: &TransactionEffects,
+        // Pass in the effects digest to avoid re-computing it.
+        effects_digest: &TransactionEffectsDigest,
+    ) -> Result<(), TypedStoreError> {
+        #[cfg(debug_assertions)]
+        assert_eq!(&effects.digest(), effects_digest);
+
+        let mut write_batch = self.perpetual_tables.transactions.batch();
+        write_batch = write_batch
+            .insert_batch(
+                &self.perpetual_tables.transactions,
+                [(tx.digest(), tx.serializable_ref())],
+            )?
+            .insert_batch(&self.perpetual_tables.effects, [(effects_digest, effects)])?;
+
+        write_batch.write()?;
+        Ok(())
+    }
+
+    pub fn multi_get_transactions(
+        &self,
+        tx_digests: &[TransactionDigest],
+    ) -> Result<Vec<Option<VerifiedTransaction>>, SuiError> {
+        Ok(self
+            .perpetual_tables
+            .transactions
+            .multi_get(tx_digests)
+            .map(|v| v.into_iter().map(|v| v.map(|v| v.into())).collect())?)
+    }
+
+    pub fn get_transaction(
         &self,
         tx_digest: &TransactionDigest,
     ) -> Result<Option<VerifiedTransaction>, TypedStoreError> {
         self.perpetual_tables
-            .executed_transactions
+            .transactions
             .get(tx_digest)
-            .map(|v_opt| v_opt.map(|v| v.into()))
-    }
-
-    // TODO: This function will be moved to authority.rs since it will need to access the per-epoch store
-    // for the certificate signature.
-    pub fn get_certified_transaction(
-        &self,
-        tx_digest: &TransactionDigest,
-    ) -> Result<Option<VerifiedCertificate>, TypedStoreError> {
-        let Some(transaction) = self.get_executed_transaction(tx_digest)? else {
-            return Ok(None);
-        };
-        let Some(cert_sig) = self.get_transaction_cert_sig(tx_digest)? else {
-            return Ok(None);
-        };
-        Ok(Some(VerifiedCertificate::new_unchecked(
-            CertifiedTransaction::new_from_data_and_sig(
-                transaction.into_inner().into_data(),
-                cert_sig,
-            ),
-        )))
+            .map(|v| v.map(|v| v.into()))
     }
 
     pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {

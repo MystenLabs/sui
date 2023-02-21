@@ -364,17 +364,6 @@ impl<T: Message> VerifiedEnvelope<T, CertificateProof> {
         })
     }
 
-    // TODO: All callsites will eventually be replaced with new_from_checkpoint once
-    // we are ready.
-    pub fn new_from_checkpoint_to_be_replaced(
-        certificate: VerifiedEnvelope<T, AuthorityStrongQuorumSignInfo>,
-        _epoch: EpochId,
-        _checkpoint: CheckpointSequenceNumber,
-    ) -> Self {
-        Self::new_from_certificate(certificate)
-    }
-
-    // TODO: This is currently not used, but will be soon.
     pub fn new_from_checkpoint(
         transaction: VerifiedEnvelope<T, EmptySignInfo>,
         epoch: EpochId,

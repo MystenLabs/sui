@@ -118,7 +118,10 @@ impl CoinReadApi {
         object_struct_tag: StructTag,
     ) -> Result<Object, Error> {
         let publish_txn_digest = self.get_object(package_id).await?.previous_transaction;
-        let (_, effects) = self.state.get_transaction(publish_txn_digest).await?;
+        let (_, effects) = self
+            .state
+            .get_transaction_and_effects(publish_txn_digest)
+            .await?;
 
         let object_id = effects
             .events

@@ -8,8 +8,6 @@ use std::path::Path;
 use sui_storage::default_db_options;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
-use sui_types::crypto::AuthorityStrongQuorumSignInfo;
-use sui_types::messages::TrustedCertificate;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::{DBMap, DBOptions, MetricConf, ReadWriteOptions};
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
@@ -44,14 +42,11 @@ pub struct AuthorityPerpetualTables {
     #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
     pub(crate) owned_object_transaction_locks: DBMap<ObjectRef, Option<LockDetails>>,
 
-    /// This is a map between the transaction digest and the corresponding certificate for all
-    /// certificates that have been successfully executed by this authority.
-    #[default_options_override_fn = "certificates_table_default_config"]
-    pub(crate) executed_transactions: DBMap<TransactionDigest, TrustedTransaction>,
-
-    /// Signatures of transaction certificates that are executed locally.
-    /// TODO: This table will be move to the per-epoch store.
-    pub(crate) transaction_cert_signatures: DBMap<TransactionDigest, AuthorityStrongQuorumSignInfo>,
+    /// This is a map between the transaction digest and the corresponding transaction that's known to be
+    /// executable. This means that it may have been executed locally, or it may have been synced through
+    /// state-sync but hasn't been executed yet.
+    #[default_options_override_fn = "transactions_table_default_config"]
+    pub(crate) transactions: DBMap<TransactionDigest, TrustedTransaction>,
 
     /// The map between the object ref of objects processed at all versions and the transaction
     /// digest of the certificate that lead to the creation of this version of the object.
@@ -75,10 +70,6 @@ pub struct AuthorityPerpetualTables {
     /// to be executed, we wait for them to appear in this table. When we revert transactions, we remove them from both
     /// tables.
     pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsDigest>,
-
-    /// This is currently used by state-sync to store downloaded transaction certs.
-    /// TODO: This table will be merged with executed_transactions.
-    pub(crate) synced_transactions: DBMap<TransactionDigest, TrustedCertificate>,
 
     /// When transaction is executed via checkpoint executor, we store association here
     pub(crate) executed_transactions_to_checkpoint:
@@ -273,7 +264,7 @@ fn objects_table_default_config() -> DBOptions {
         },
     }
 }
-fn certificates_table_default_config() -> DBOptions {
+fn transactions_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
 fn effects_table_default_config() -> DBOptions {

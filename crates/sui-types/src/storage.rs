@@ -6,7 +6,7 @@ use crate::committee::{Committee, EpochId};
 use crate::digests::{CheckpointContentsDigest, CheckpointDigest, TransactionEffectsDigest};
 use crate::message_envelope::Message;
 use crate::messages::InputObjectKind::{ImmOrOwnedMoveObject, MovePackage, SharedMoveObject};
-use crate::messages::{SenderSignedData, TransactionEffects, VerifiedCertificate};
+use crate::messages::{SenderSignedData, TransactionEffects, VerifiedTransaction};
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, VerifiedCheckpoint,
 };
@@ -209,7 +209,7 @@ pub trait ReadStore {
     fn get_transaction(
         &self,
         digest: &TransactionDigest,
-    ) -> Result<Option<VerifiedCertificate>, Self::Error>;
+    ) -> Result<Option<VerifiedTransaction>, Self::Error>;
 
     fn get_transaction_effects(
         &self,
@@ -256,7 +256,7 @@ impl<T: ReadStore> ReadStore for &T {
     fn get_transaction(
         &self,
         digest: &TransactionDigest,
-    ) -> Result<Option<VerifiedCertificate>, Self::Error> {
+    ) -> Result<Option<VerifiedTransaction>, Self::Error> {
         ReadStore::get_transaction(*self, digest)
     }
 
@@ -278,7 +278,8 @@ pub trait WriteStore: ReadStore {
 
     fn insert_committee(&self, new_committee: Committee) -> Result<(), Self::Error>;
 
-    fn insert_transaction(&self, transaction: VerifiedCertificate) -> Result<(), Self::Error>;
+    // TODO: Make transaction and effects insert one atomic API
+    fn insert_transaction(&self, transaction: VerifiedTransaction) -> Result<(), Self::Error>;
     fn insert_transaction_effects(
         &self,
         transaction_effects: TransactionEffects,
@@ -305,7 +306,7 @@ impl<T: WriteStore> WriteStore for &T {
         WriteStore::insert_committee(*self, new_committee)
     }
 
-    fn insert_transaction(&self, transaction: VerifiedCertificate) -> Result<(), Self::Error> {
+    fn insert_transaction(&self, transaction: VerifiedTransaction) -> Result<(), Self::Error> {
         WriteStore::insert_transaction(*self, transaction)
     }
 
@@ -324,7 +325,7 @@ pub struct InMemoryStore {
     checkpoints: HashMap<CheckpointDigest, VerifiedCheckpoint>,
     sequence_number_to_digest: HashMap<CheckpointSequenceNumber, CheckpointDigest>,
     checkpoint_contents: HashMap<CheckpointContentsDigest, CheckpointContents>,
-    transactions: HashMap<TransactionDigest, VerifiedCertificate>,
+    transactions: HashMap<TransactionDigest, VerifiedTransaction>,
     effects: HashMap<TransactionEffectsDigest, TransactionEffects>,
 
     epoch_to_committee: Vec<Committee>,
@@ -335,7 +336,7 @@ impl InMemoryStore {
         &mut self,
         checkpoint: VerifiedCheckpoint,
         contents: CheckpointContents,
-        transactions: Vec<VerifiedCertificate>,
+        transactions: Vec<VerifiedTransaction>,
         effects: Vec<TransactionEffects>,
         committee: Committee,
     ) {
@@ -456,7 +457,7 @@ impl InMemoryStore {
         }
     }
 
-    pub fn get_transaction(&self, digest: &TransactionDigest) -> Option<&VerifiedCertificate> {
+    pub fn get_transaction(&self, digest: &TransactionDigest) -> Option<&VerifiedTransaction> {
         self.transactions.get(digest)
     }
 
@@ -467,7 +468,7 @@ impl InMemoryStore {
         self.effects.get(digest)
     }
 
-    pub fn insert_transaction(&mut self, transaction: VerifiedCertificate) {
+    pub fn insert_transaction(&mut self, transaction: VerifiedTransaction) {
         self.transactions.insert(*transaction.digest(), transaction);
     }
 
@@ -545,7 +546,7 @@ impl ReadStore for SharedInMemoryStore {
     fn get_transaction(
         &self,
         digest: &TransactionDigest,
-    ) -> Result<Option<VerifiedCertificate>, Self::Error> {
+    ) -> Result<Option<VerifiedTransaction>, Self::Error> {
         self.inner().get_transaction(digest).cloned().pipe(Ok)
     }
 
@@ -585,7 +586,7 @@ impl WriteStore for SharedInMemoryStore {
         Ok(())
     }
 
-    fn insert_transaction(&self, transaction: VerifiedCertificate) -> Result<(), Self::Error> {
+    fn insert_transaction(&self, transaction: VerifiedTransaction) -> Result<(), Self::Error> {
         self.inner_mut().insert_transaction(transaction);
         Ok(())
     }

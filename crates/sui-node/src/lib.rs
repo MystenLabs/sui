@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{ConsensusConfig, NodeConfig};
-use sui_core::authority_aggregator::{AuthorityAggregator, NetworkTransactionCertifier};
+use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_server::ValidatorService;
 use sui_core::checkpoints::checkpoint_executor;
 use sui_core::epoch::committee_store::CommitteeStore;
@@ -621,7 +621,6 @@ impl SuiNode {
             accumulator,
             checkpoint_output,
             Box::new(certified_checkpoint_output),
-            Box::<NetworkTransactionCertifier>::default(),
             checkpoint_metrics,
             max_tx_per_checkpoint,
         )
