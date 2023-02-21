@@ -344,7 +344,7 @@ where
 /// The following implementation provides two ways to construct a VerifiedEnvelope with CertificateProof.
 /// It is implemented in this file such that we could reuse the digest without having to
 /// recompute it.
-/// We allows converting a VerifiedCertificate into a VerifiedEnvelope with CertificateProof::Certificate;
+/// We allow converting a VerifiedCertificate into a VerifiedEnvelope with CertificateProof::Certificate;
 /// and converting a VerifiedTransaction along with checkpoint information into a VerifiedEnvelope
 /// with CertificateProof::Checkpoint.
 impl<T: Message> VerifiedEnvelope<T, CertificateProof> {

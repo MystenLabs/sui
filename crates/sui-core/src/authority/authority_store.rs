@@ -379,20 +379,20 @@ impl AuthorityStore {
         Ok(missing)
     }
 
-    /// Attempts to acquire execution lock for certificate
-    /// Returns the lock if certificate is matching current executed epoch
+    /// Attempts to acquire execution lock for an executable transaction.
+    /// Returns the lock if the transaction is matching current executed epoch
     /// Returns None otherwise
-    pub async fn execution_lock_for_certificate(
+    pub async fn execution_lock_for_executable_transaction(
         &self,
-        certificate: &VerifiedExecutableTransaction,
+        transaction: &VerifiedExecutableTransaction,
     ) -> SuiResult<ExecutionLockReadGuard> {
         let lock = self.execution_lock.read().await;
-        if *lock == certificate.auth_sig().epoch() {
+        if *lock == transaction.auth_sig().epoch() {
             Ok(lock)
         } else {
             Err(SuiError::WrongEpoch {
                 expected_epoch: *lock,
-                actual_epoch: certificate.auth_sig().epoch(),
+                actual_epoch: transaction.auth_sig().epoch(),
             })
         }
     }
