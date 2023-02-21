@@ -84,7 +84,7 @@ Submitting a Sui transaction involves the following steps. These are transparent
 
 1. Users send transactions to a *quorum driver*, such as a Full node, that broadcasts the transactions to a set of validators.
 1. Each Sui validator performs validity checks on transactions, and adds a signature to valid transactions. Each signature is weighted proportional to the amount staked with the validator. The combined weighting for all validators always equals 10,000. Therefore, the quorum threshold is always 6,667.
-1. The quroum driver collects signatures with a combined weight greater than or equal to 6,667 into a _certificate_ and broadcasts it to all Sui validators.
+1. The quorum driver collects signatures with a combined weight greater than or equal to 6,667 into a _certificate_ and broadcasts it to all Sui validators.
 1. Upon receiving a cerficate, the validator (afer checking its validity) executes the embedded transaction and returns signed _transaction effects_ to the quorum driver. A transaction is _final_ when a quorum of validators have received and executed its corresponding certificate.
 1. Optionally, the quorum driver can collect an _effects certificate_ based on the previous step and return it to the sender.
 
