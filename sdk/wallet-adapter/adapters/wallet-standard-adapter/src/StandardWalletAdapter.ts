@@ -99,6 +99,10 @@ export class StandardWalletAdapter implements WalletAdapter {
     }
   }
 
+  signMessage: WalletAdapter["signMessage"] = (message: Uint8Array) => {
+    return this.#wallet.features["sui:signMessage"].signMessage({ message });
+  };
+
   signTransaction: WalletAdapter["signTransaction"] = (transactionInput) => {
     const version = this.#wallet.features["sui:signTransaction"].version;
     if (!isFeatureCompatible(version, suiSignTransactionLatestVersion)) {
