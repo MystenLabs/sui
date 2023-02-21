@@ -1,13 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc, Mutex,
-};
+use std::cell::RefCell;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
@@ -395,7 +392,7 @@ impl ProtocolConfig {
         let ret = Self::get_for_version_impl(version);
 
         CONFIG_OVERRIDE.with(|ovr| {
-            if let Some(override_fn) = &*ovr.lock().unwrap() {
+            if let Some(override_fn) = &*ovr.borrow() {
                 warn!(
                     "overriding ProtocolConfig settings with custom settings (you should not see this log outside of tests"
                 );
@@ -428,32 +425,20 @@ impl ProtocolConfig {
 
     /// Convenience to get the constants at the current minimum supported version.
     /// Mainly used by client code that may not yet be protocol-version aware.
-    pub fn get_for_min_version() -> Arc<Self> {
+    pub fn get_for_min_version() -> Self {
         if Self::load_poison_get_for_min_version() {
             panic!("get_for_min_version called on validator");
         }
-
-        thread_local! {
-            static CONSTANTS: Lazy<Arc<ProtocolConfig>> =
-                Lazy::new(|| Arc::new(ProtocolConfig::get_for_version(ProtocolVersion::MIN)));
-        }
-
-        CONSTANTS.with(|c| (*c).clone())
+        ProtocolConfig::get_for_version(ProtocolVersion::MIN)
     }
 
     /// Convenience to get the constants at the current maximum supported version.
     /// Mainly used by genesis.
-    pub fn get_for_max_version() -> Arc<Self> {
+    pub fn get_for_max_version() -> Self {
         if Self::load_poison_get_for_min_version() {
             panic!("get_for_max_version called on validator");
         }
-
-        thread_local! {
-            static CONSTANTS: Lazy<Arc<ProtocolConfig>> =
-                Lazy::new(|| Arc::new(ProtocolConfig::get_for_version(ProtocolVersion::MAX)));
-        }
-
-        CONSTANTS.with(|c| (*c).clone())
+        ProtocolConfig::get_for_version(ProtocolVersion::MAX)
     }
 
     fn get_for_version_impl(version: ProtocolVersion) -> Self {
@@ -538,7 +523,7 @@ impl ProtocolConfig {
         override_fn: impl Fn(ProtocolVersion, Self) -> Self + Send + 'static,
     ) -> OverrideGuard {
         CONFIG_OVERRIDE.with(|ovr| {
-            let mut cur = ovr.lock().unwrap();
+            let mut cur = ovr.borrow_mut();
             assert!(cur.is_none(), "config override already present");
             *cur = Some(Box::new(override_fn));
             OverrideGuard
@@ -556,7 +541,7 @@ impl ProtocolConfig {
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;
 
 thread_local! {
-    static CONFIG_OVERRIDE: Mutex<Option<Box<OverrideFn>>> = Mutex::new(None);
+    static CONFIG_OVERRIDE: RefCell<Option<Box<OverrideFn>>> = RefCell::new(None);
 }
 
 #[must_use]
@@ -566,7 +551,7 @@ impl Drop for OverrideGuard {
     fn drop(&mut self) {
         info!("restoring override fn");
         CONFIG_OVERRIDE.with(|ovr| {
-            *ovr.lock().unwrap() = None;
+            *ovr.borrow_mut() = None;
         });
     }
 }

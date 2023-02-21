@@ -9021,7 +9021,6 @@ dependencies = [
 name = "sui-protocol-config"
 version = "0.1.0"
 dependencies = [
- "once_cell",
  "schemars",
  "serde 1.0.152",
  "tracing",
