@@ -91,7 +91,7 @@ struct TxnSummary {
 }
 
 static GENESIS: Lazy<Genesis> = Lazy::new(create_genesis_module_objects);
-static PROTOCOL_CONSTANTS: Lazy<&'static ProtocolConfig> =
+static PROTOCOL_CONSTANTS: Lazy<Arc<ProtocolConfig>> =
     Lazy::new(ProtocolConfig::get_for_max_version);
 
 struct Genesis {
