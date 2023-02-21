@@ -989,11 +989,21 @@ pub struct GasData {
     pub budget: u64,
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
+pub enum TransactionExpiration {
+    /// The transaction has no expiration
+    None,
+    /// Validators wont sign a transaction unless the expiration Epoch
+    /// is greater than or equal to the current epoch
+    Epoch(EpochId),
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct TransactionData {
     pub kind: TransactionKind,
     pub sender: SuiAddress,
     pub gas_data: GasData,
+    pub expiration: TransactionExpiration,
 }
 
 impl TransactionData {
@@ -1012,6 +1022,7 @@ impl TransactionData {
                 payment: gas_payment,
                 budget: gas_budget,
             },
+            expiration: TransactionExpiration::None,
         }
     }
     pub fn new(
@@ -1030,6 +1041,7 @@ impl TransactionData {
                 payment: gas_payment,
                 budget: gas_budget,
             },
+            expiration: TransactionExpiration::None,
         }
     }
 
@@ -1038,6 +1050,7 @@ impl TransactionData {
             kind,
             sender,
             gas_data,
+            expiration: TransactionExpiration::None,
         }
     }
 
