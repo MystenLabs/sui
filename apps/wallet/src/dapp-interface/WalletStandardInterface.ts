@@ -98,7 +98,8 @@ export class SuiWallet implements Wallet {
 
     get features(): ConnectFeature &
         EventsFeature &
-        SuiFeatures &
+        // TODO: Support SignMessage:
+        Omit<SuiFeatures, 'sui:signMessage'> &
         SuiWalletStakeFeature {
         return {
             'standard:connect': {
