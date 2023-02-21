@@ -351,7 +351,7 @@ pub enum MoveFunctionArgType {
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SuiTransactionResponse {
-    pub signed_transaction: SuiTransaction,
+    pub transaction: SuiTransaction,
     pub effects: SuiTransactionEffects,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timestamp_ms: Option<u64>,

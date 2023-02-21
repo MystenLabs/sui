@@ -514,7 +514,7 @@ impl RpcExampleProvider {
                 dependencies: vec![],
             },
             timestamp_ms: None,
-            signed_transaction: SuiTransaction {
+            transaction: SuiTransaction {
                 data: SuiTransactionData::try_from(data1).unwrap(),
                 tx_signatures: signatures.clone(),
             },

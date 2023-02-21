@@ -330,7 +330,7 @@ pub async fn transfer_coin(
     let (digest, gas, gas_used) = if let SuiClientCommandResult::Transfer(_, response) = res {
         (
             response.effects.transaction_digest,
-            response.signed_transaction.data.gas_data.payment,
+            response.transaction.data.gas_data.payment,
             response.effects.gas_used.computation_cost + response.effects.gas_used.storage_cost
                 - response.effects.gas_used.storage_rebate,
         )

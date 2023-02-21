@@ -121,19 +121,19 @@ pub fn commit_transactions(
 pub fn transaction_response_to_new_transaction(
     tx_resp: SuiTransactionResponse,
 ) -> Result<NewTransaction, IndexerError> {
-    let txn_json = serde_json::to_string(&tx_resp.signed_transaction).map_err(|err| {
+    let txn_json = serde_json::to_string(&tx_resp.transaction).map_err(|err| {
         IndexerError::InsertableParsingError(format!(
             "Failed converting transaction {:?} to JSON with error: {:?}",
-            tx_resp.signed_transaction, err
+            tx_resp.transaction, err
         ))
     })?;
     // canonical txn digest string is Base58 encoded
     let tx_digest = tx_resp.effects.transaction_digest.base58_encode();
-    let gas_budget = tx_resp.signed_transaction.data.gas_data.budget;
-    let gas_price = tx_resp.signed_transaction.data.gas_data.price;
-    let sender = tx_resp.signed_transaction.data.sender.to_string();
+    let gas_budget = tx_resp.transaction.data.gas_data.budget;
+    let gas_price = tx_resp.transaction.data.gas_data.price;
+    let sender = tx_resp.transaction.data.sender.to_string();
     let txn_kind_iter = tx_resp
-        .signed_transaction
+        .transaction
         .data
         .transactions
         .iter()

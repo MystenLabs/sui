@@ -50,6 +50,17 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
             .await
     }
 
+    // TODO: remove this or execute_transaction
+    async fn execute_transaction_serialized_sig(
+        &self,
+        tx_bytes: Base64,
+        signature: Base64,
+        request_type: ExecuteTransactionRequestType,
+    ) -> RpcResult<SuiTransactionResponse> {
+        self.execute_transaction(tx_bytes, signature, request_type)
+            .await
+    }
+
     async fn submit_transaction(
         &self,
         tx_bytes: Base64,
@@ -85,7 +96,7 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
             ExecuteTransactionResponse::EffectsCert(cert) => {
                 let (_, effects, is_executed_locally) = *cert;
                 Ok(SuiTransactionResponse {
-                    signed_transaction: tx,
+                    transaction: tx,
                     effects: SuiTransactionEffects::try_from(
                         effects.effects,
                         self.module_cache.as_ref(),

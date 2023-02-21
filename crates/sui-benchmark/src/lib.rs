@@ -538,7 +538,7 @@ impl ValidatorProxy for FullNodeProxy {
                 .await
             {
                 Ok(resp) => {
-                    let tx = resp.signed_transaction;
+                    let tx = resp.transaction;
                     let effects = ExecutionEffects::SuiTransactionEffects(resp.effects);
                     return Ok((Some(tx), effects));
                 }

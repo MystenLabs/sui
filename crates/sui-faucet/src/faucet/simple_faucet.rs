@@ -434,7 +434,7 @@ impl SimpleFaucet {
         number_of_coins: usize,
         recipient: &SuiAddress,
     ) -> Result<(TransactionDigest, Vec<ObjectID>, Vec<u64>), FaucetError> {
-        let txns = res.signed_transaction.data.transactions;
+        let txns = res.transaction.data.transactions;
         if txns.len() != 1 {
             panic!(
                 "PaySui Transaction should create one and exactly one txn, but got {:?}",

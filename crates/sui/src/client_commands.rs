@@ -1460,7 +1460,7 @@ fn unwrap_or<'a>(val: &'a Option<String>, default: &'a str) -> &'a str {
 fn write_transaction_response(response: &SuiTransactionResponse) -> Result<String, fmt::Error> {
     let mut writer = String::new();
     writeln!(writer, "{}", "----- Transaction Data ----".bold())?;
-    write!(writer, "{}", response.signed_transaction)?;
+    write!(writer, "{}", response.transaction)?;
     writeln!(writer, "{}", "----- Transaction Effects ----".bold())?;
     write!(writer, "{}", response.effects)?;
     Ok(writer)
