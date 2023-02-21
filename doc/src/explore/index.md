@@ -26,8 +26,5 @@ View the code for [Sui Wallet](https://github.com/MystenLabs/sui/tree/main/apps/
 
 To learn about how the implementation details for the Sui Monstar example prototype, see [Sui Prototypes](../explore/prototypes.md).
 
-To view the example prototypes, see:
-[Panzerdogs x Sui](../explore/panzerdogs.md) - an example of how the Sui infrastructure delivers a more integrated feedback loop between gameplay and NFT ownership.
-
 [SoWork x Sui](../explore/sowork.md) - building features on Sui to power creative employee rewards and custom NFT mints via SoWork's mapmaker.
 
