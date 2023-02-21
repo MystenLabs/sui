@@ -1580,7 +1580,7 @@ impl TryFrom<TransactionData> for SuiTransactionData {
 #[serde(rename = "Transaction", rename_all = "camelCase")]
 pub struct SuiTransaction {
     pub data: SuiTransactionData,
-    pub tx_signature: GenericSignature,
+    pub tx_signatures: Vec<GenericSignature>,
 }
 
 impl TryFrom<SenderSignedData> for SuiTransaction {
@@ -1589,7 +1589,7 @@ impl TryFrom<SenderSignedData> for SuiTransaction {
     fn try_from(data: SenderSignedData) -> Result<Self, Self::Error> {
         Ok(Self {
             data: data.intent_message.value.try_into()?,
-            tx_signature: data.tx_signature,
+            tx_signatures: data.tx_signatures,
         })
     }
 }
@@ -1597,7 +1597,7 @@ impl TryFrom<SenderSignedData> for SuiTransaction {
 impl Display for SuiTransaction {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut writer = String::new();
-        writeln!(writer, "Transaction Signature: {:?}", self.tx_signature)?;
+        writeln!(writer, "Transaction Signature: {:?}", self.tx_signatures)?;
         write!(writer, "{}", &self.data)?;
         write!(f, "{}", writer)
     }

@@ -9,11 +9,11 @@ use jsonrpsee_proc_macros::rpc;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    Balance, CoinPage, DevInspectResults, DynamicFieldPage, EventPage, GetObjectDataResponse,
-    GetPastObjectDataResponse, GetRawObjectDataResponse, MoveFunctionArgType,
-    RPCTransactionRequestParams, SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter,
-    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
-    SuiTBlsSignObjectCommitmentType, SuiTBlsSignRandomnessObjectResponse,
+    Balance, Checkpoint, CheckpointId, CoinPage, DevInspectResults, DynamicFieldPage, EventPage,
+    GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
+    MoveFunctionArgType, RPCTransactionRequestParams, SuiCoinMetadata, SuiEventEnvelope,
+    SuiEventFilter, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
+    SuiObjectInfo, SuiTBlsSignObjectCommitmentType, SuiTBlsSignRandomnessObjectResponse,
     SuiTransactionAuthSignersResponse, SuiTransactionBuilderMode, SuiTransactionEffects,
     SuiTransactionResponse, SuiTypeTag, TransactionBytes, TransactionsPage,
 };
@@ -685,7 +685,7 @@ pub trait TransactionExecutionApi {
         signatures: Vec<Base64>,
         /// The request type
         request_type: ExecuteTransactionRequestType,
-    ) -> RpcResult<SuiExecuteTransactionResponse>;
+    ) -> RpcResult<SuiTransactionResponse>;
 }
 
 pub fn cap_page_limit(limit: Option<usize>) -> usize {

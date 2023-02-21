@@ -19,7 +19,8 @@ use sui_json_rpc_types::{
     Checkpoint, CheckpointId, EventPage, MoveCallParams, OwnedObjectRef,
     RPCTransactionRequestParams, SuiData, SuiEvent, SuiEventEnvelope, SuiExecutionStatus,
     SuiGasCostSummary, SuiObject, SuiObjectInfo, SuiObjectRead, SuiObjectRef, SuiParsedData,
-    SuiPastObjectRead, SuiRawData, SuiRawMoveObject, SuiTransaction, SuiTransactionAuthSignersResponse, SuiTransactionData, SuiTransactionEffects,
+    SuiPastObjectRead, SuiRawData, SuiRawMoveObject, SuiTransaction,
+    SuiTransactionAuthSignersResponse, SuiTransactionData, SuiTransactionEffects,
     SuiTransactionResponse, TransactionBytes, TransactionsPage, TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
@@ -515,9 +516,10 @@ impl RpcExampleProvider {
             timestamp_ms: None,
             signed_transaction: SuiTransaction {
                 data: SuiTransactionData::try_from(data1).unwrap(),
-                tx_signature: signature.clone(),
+                tx_signatures: signatures.clone(),
             },
             confirmed_local_execution: None,
+            checkpoint: None,
         };
 
         (data2, signatures, recipient, obj_id, result, events)

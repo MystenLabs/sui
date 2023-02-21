@@ -421,7 +421,7 @@ impl QuorumDriver {
         let mut response: SuiTransactionResponse = self
             .api
             .http
-            .execute_transaction(tx_bytes, signatures, request_type.clone())
+            .submit_transaction(tx_bytes, signatures, request_type.clone())
             .await?;
 
         Ok(match request_type {
