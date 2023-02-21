@@ -379,15 +379,6 @@ pub enum SuiError {
         object_id: ObjectID,
         version: Option<SequenceNumber>,
     },
-    #[error(
-        "Transaction involving Shared Object {:?} at version {:?} is not ready for execution because prior transactions have yet to execute.",
-        object_id,
-        version_not_ready
-    )]
-    SharedObjectPriorVersionsPendingExecution {
-        object_id: ObjectID,
-        version_not_ready: SequenceNumber,
-    },
     #[error("Could not find the referenced object {:?} as the asked version {:?} is higher than the latest {:?}", object_id, asked_version, latest_version)]
     ObjectSequenceNumberTooHigh {
         object_id: ObjectID,
