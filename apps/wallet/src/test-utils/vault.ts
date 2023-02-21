@@ -15,28 +15,15 @@ export const testMnemonic =
     'loud eye weather change muffin brisk episode dance mirror smart image energy';
 export const testEntropySerialized = '842a27e29319123892f9ba8d9991c525';
 export const testEntropy = toEntropy(testEntropySerialized);
-export const testEd25519SerializedLegacy = Object.freeze({
+export const testEd25519Serialized = Object.freeze({
     schema: 'ED25519',
     privateKey:
         'a3R0jvXpEziZLHsbX1DogdyGm8AK87HScEK+JJHwaV99nEpOfYblbYS3ci9wP2DT5YZtE3e4v/HBsN39kRz60A==',
-} as const);
-
-export const testEd25519Legacy = fromExportedKeypair(
-    testEd25519SerializedLegacy
-);
-export const testEd25519AddressLegacy = `0x${testEd25519Legacy
-    .getPublicKey()
-    .toSuiAddress()}`;
-
-export const testEd25519Serialized = Object.freeze({
-    schema: 'ED25519',
-    privateKey: 'a3R0jvXpEziZLHsbX1DogdyGm8AK87HScEK+JJHwaV8=',
 } as const);
 export const testEd25519 = fromExportedKeypair(testEd25519Serialized);
 export const testEd25519Address = `0x${testEd25519
     .getPublicKey()
     .toSuiAddress()}`;
-
 export const testSecp256k1Serialized = Object.freeze({
     schema: 'Secp256k1',
     privateKey: '4DD3CUtZvbc9Ur69tTvKaLeIDptxNa9qZcpkyXWjVGY=',
