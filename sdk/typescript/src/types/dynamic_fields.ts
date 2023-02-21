@@ -25,7 +25,7 @@ export const DynamicFieldName = object({
 export type DynamicFieldName = Infer<typeof DynamicFieldName>;
 
 export const DynamicFieldInfo = object({
-  name: DynamicFieldName,
+  name: union([DynamicFieldName, string()]),
   type: DynamicFieldType,
   objectType: string(),
   objectId: ObjectId,
