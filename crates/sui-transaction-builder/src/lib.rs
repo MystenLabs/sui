@@ -29,6 +29,8 @@ use sui_types::messages::{
     Argument, CallArg, Command, InputObjectKind, ObjectArg, TransactionData, TransactionKind,
 };
 
+use move_binary_format::file_format::SignatureToken;
+
 use sui_types::governance::{
     ADD_DELEGATION_LOCKED_COIN_FUN_NAME, ADD_DELEGATION_MUL_COIN_FUN_NAME,
     WITHDRAW_DELEGATION_FUN_NAME,
@@ -339,6 +341,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         &self,
         id: ObjectID,
         objects: &mut BTreeMap<ObjectID, Object>,
+        expected_type: SignatureToken,
     ) -> Result<ObjectArg, anyhow::Error> {
         let response = self
             .0
@@ -356,7 +359,11 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                 id,
                 initial_shared_version,
                 // todo(RWLocks) - do we want to parametrise this?
-                mutable: true, // using mutable reference by default here.
+                mutable: match expected_type {
+                    // Only set mutable reference types to true
+                    SignatureToken::MutableReference(_) => true,
+                    _ => false,
+                },
             },
             Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
                 ObjectArg::ImmOrOwnedObject(obj_ref)
@@ -391,7 +398,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             ProtocolConfig::get_for_min_version().max_move_package_size(),
         )?;
 
-        let json_args = resolve_move_function_args(
+        let json_args_and_tokens = resolve_move_function_args(
             &package,
             module.clone(),
             function.clone(),
@@ -401,16 +408,19 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         )?;
         let mut check_args = Vec::new();
         let mut objects = BTreeMap::new();
-        for arg in json_args {
+        for (arg, expected_type) in json_args_and_tokens {
             check_args.push(match arg {
-                SuiJsonCallArg::Object(id) => {
-                    CheckCallArg::Object(self.get_object_arg(id, &mut objects).await?)
-                }
+                SuiJsonCallArg::Object(id) => CheckCallArg::Object(
+                    self.get_object_arg(id, &mut objects, expected_type).await?,
+                ),
                 SuiJsonCallArg::Pure(p) => CheckCallArg::Pure(p),
                 SuiJsonCallArg::ObjVec(v) => {
                     let mut object_ids = vec![];
                     for id in v {
-                        object_ids.push(self.get_object_arg(id, &mut objects).await?);
+                        object_ids.push(
+                            self.get_object_arg(id, &mut objects, expected_type.clone())
+                                .await?,
+                        );
                     }
                     CheckCallArg::ObjVec(object_ids)
                 }

@@ -9528,6 +9528,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "futures",
+ "move-binary-format",
  "move-core-types",
  "sui-adapter",
  "sui-json",
