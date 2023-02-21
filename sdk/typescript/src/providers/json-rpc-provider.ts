@@ -183,7 +183,7 @@ export class JsonRpcProvider extends Provider {
         this.rpcApiVersion &&
         !lt(versionToString(this.rpcApiVersion), '0.27.0')
       ) {
-        this.client = new JsonRpcClient(this.endpoints.fullNode, {
+        this.client = new JsonRpcClient(this.connection.fullnode, {
           'Client-Sdk-Type': 'typescript',
           'Client-Sdk-Version': pkgVersion,
           'Client-Target-Api-Version': TARGETED_RPC_VERSION,
