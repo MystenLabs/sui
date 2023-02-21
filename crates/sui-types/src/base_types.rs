@@ -5,16 +5,17 @@
 pub use crate::committee::EpochId;
 use crate::crypto::{
     AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SignatureScheme,
-    SuiPublicKey,
+    SuiPublicKey, SuiSignature,
 };
 pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
 use crate::epoch_data::EpochData;
-use crate::error::ExecutionError;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
+use crate::error::{ExecutionError, SuiResult};
 use crate::gas_coin::GasCoin;
 use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
+use crate::signature::GenericSignature;
 use crate::sui_serde::HexAccountAddress;
 use crate::sui_serde::Readable;
 use anyhow::anyhow;
