@@ -4,10 +4,10 @@
 use std::{
     collections::{BTreeMap, HashMap},
     fmt,
+    marker::PhantomData,
 };
 
 use move_binary_format::{errors::VMError, file_format::LocalIndex};
-use move_core_types::resolver::{ModuleResolver, ResourceResolver};
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use sui_cost_tables::bytecode_tables::GasStatus;
 use sui_protocol_config::ProtocolConfig;
@@ -16,25 +16,14 @@ use sui_types::{
     error::{ExecutionError, ExecutionErrorKind},
     messages::{Argument, CallArg, EntryArgumentErrorKind, ObjectArg},
     object::Owner,
-    storage::{ChildObjectResolver, ParentSync, Storage},
+    storage::Storage,
 };
 
 use crate::adapter::new_session;
 
 use super::types::*;
 
-pub struct ExecutionContext<
-    'vm,
-    'state,
-    'a,
-    'b,
-    E: fmt::Debug,
-    S: ResourceResolver<Error = E>
-        + ModuleResolver<Error = E>
-        + Storage
-        + ParentSync
-        + ChildObjectResolver,
-> {
+pub struct ExecutionContext<'vm, 'state, 'a, 'b, E: fmt::Debug, S: StorageView<E>> {
     pub protocol_config: &'a ProtocolConfig,
     /// The MoveVM
     pub vm: &'vm MoveVM,
@@ -63,15 +52,12 @@ pub struct ExecutionContext<
     /// Map of arguments that are currently borrowed in this command, true if the borrow is mutable
     /// This gets cleared out when new results are pushed, i.e. the end of a command
     borrowed: HashMap<Argument, /* mut */ bool>,
+    _e: PhantomData<E>,
 }
 impl<'vm, 'state, 'a, 'b, E, S> ExecutionContext<'vm, 'state, 'a, 'b, E, S>
 where
     E: fmt::Debug,
-    S: ResourceResolver<Error = E>
-        + ModuleResolver<Error = E>
-        + Storage
-        + ParentSync
-        + ChildObjectResolver,
+    S: StorageView<E>,
 {
     pub fn new(
         protocol_config: &'a ProtocolConfig,
@@ -119,6 +105,7 @@ where
             results: vec![],
             additional_transfers: vec![],
             borrowed: HashMap::new(),
+            _e: PhantomData,
         })
     }
 
@@ -211,7 +198,7 @@ where
         V::try_from_value(val)
     }
 
-    pub fn copy_arg<V: TryFromValue>(
+    pub fn clone_arg<V: TryFromValue>(
         &mut self,
         _arg_idx: usize,
         arg: Argument,
@@ -285,10 +272,7 @@ where
     }
 
     fn arg_is_mut_borrowed(&self, arg: &Argument) -> bool {
-        match self.borrowed.get(arg) {
-            None | Some(/* imm */ false) => false,
-            Some(true) => true,
-        }
+        matches!(self.borrowed.get(arg), Some(/* mut */ true))
     }
 
     fn borrow_mut(&mut self, arg: Argument) -> Result<&mut Option<Value>, ExecutionError> {

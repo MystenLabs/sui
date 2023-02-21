@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::file_format::AbilitySet;
-use move_core_types::{identifier::IdentStr, language_storage::StructTag};
+use move_core_types::{
+    identifier::IdentStr,
+    language_storage::StructTag,
+    resolver::{ModuleResolver, ResourceResolver},
+};
 use move_vm_types::loaded_data::runtime_types::Type;
 use serde::Deserialize;
 use sui_types::{
@@ -10,7 +14,23 @@ use sui_types::{
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
     object::{Data, MoveObject, Object, Owner},
+    storage::{ChildObjectResolver, ParentSync, Storage},
 };
+
+pub trait StorageView<E: std::fmt::Debug>:
+    ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync + ChildObjectResolver
+{
+}
+impl<
+        E: std::fmt::Debug,
+        T: ResourceResolver<Error = E>
+            + ModuleResolver<Error = E>
+            + Storage
+            + ParentSync
+            + ChildObjectResolver,
+    > StorageView<E> for T
+{
+}
 
 #[derive(Clone)]
 pub enum Value {

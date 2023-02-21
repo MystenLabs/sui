@@ -11,7 +11,6 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
-    resolver::{ModuleResolver, ResourceResolver},
     value::{MoveStructLayout, MoveTypeLayout},
 };
 use move_vm_runtime::{
@@ -31,7 +30,6 @@ use sui_types::{
         Argument, Command, EntryArgumentErrorKind, ProgrammableMoveCall, ProgrammableTransaction,
     },
     object::Owner,
-    storage::{ChildObjectResolver, ParentSync, Storage},
     SUI_FRAMEWORK_ADDRESS,
 };
 use sui_verifier::{
@@ -45,14 +43,7 @@ use crate::adapter::{convert_type_argument_error, validate_primitive_arg_string}
 
 use super::{context::*, types::*};
 
-pub fn execute<
-    E: fmt::Debug,
-    S: ResourceResolver<Error = E>
-        + ModuleResolver<Error = E>
-        + Storage
-        + ParentSync
-        + ChildObjectResolver,
->(
+pub fn execute<E: fmt::Debug, S: StorageView<E>>(
     protocol_config: &ProtocolConfig,
     vm: &MoveVM,
     state_view: &mut S,
@@ -78,14 +69,7 @@ pub fn execute<
 }
 
 /// Execute a single command
-fn execute_command<
-    E: fmt::Debug,
-    S: ResourceResolver<Error = E>
-        + ModuleResolver<Error = E>
-        + Storage
-        + ParentSync
-        + ChildObjectResolver,
->(
+fn execute_command<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     command: Command,
 ) -> Result<(), ExecutionError> {
@@ -96,7 +80,7 @@ fn execute_command<
                 .enumerate()
                 .map(|(idx, arg)| context.take_arg(CommandKind::TransferObjects, idx, arg))
                 .collect::<Result<_, _>>()?;
-            let addr: SuiAddress = context.copy_arg(objs.len(), addr_arg)?;
+            let addr: SuiAddress = context.clone_arg(objs.len(), addr_arg)?;
             for obj in objs {
                 obj.ensure_public_transfer_eligible()?;
                 context.transfer_object(obj, addr)?;
@@ -108,7 +92,7 @@ fn execute_command<
             let ObjectContents::Coin(coin) = &mut obj.contents else {
                 panic!("not a coin")
             };
-            let amount: u64 = context.copy_arg(1, amount_arg)?;
+            let amount: u64 = context.clone_arg(1, amount_arg)?;
             let new_coin_id = context.fresh_id()?;
             let new_coin = coin.split_coin(amount, UID::new(new_coin_id))?;
             let coin_type = obj.type_.clone();
@@ -163,14 +147,7 @@ fn execute_command<
 }
 
 /// Execute a single Move call
-fn execute_move_call<
-    E: fmt::Debug,
-    S: ResourceResolver<Error = E>
-        + ModuleResolver<Error = E>
-        + Storage
-        + ParentSync
-        + ChildObjectResolver,
->(
+fn execute_move_call<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     package: ObjectID,
     module: Identifier,
@@ -180,14 +157,14 @@ fn execute_move_call<
 ) -> Result<Vec<Value>, ExecutionError> {
     let module_id = ModuleId::new(package.into(), module);
     // check that the function is either an entry function or a valid public function
-    let (function_kind, signature, return_value_kinds) = check_visibility_and_signture(
+    let (function_kind, signature, return_value_kinds) = check_visibility_and_signature(
         context,
         &module_id,
         &function,
         &type_arguments,
         /* init */ false,
     )?;
-    // build the arguments, storying meta data about by-mut-ref args
+    // build the arguments, storing meta data about by-mut-ref args
     let (tx_context_kind, by_mut_ref, serialized_arguments) = build_move_args(
         context,
         &module_id,
@@ -267,14 +244,7 @@ fn make_value(
  * Move execution
  **************************************************************************************************/
 
-fn vm_move_call<
-    E: fmt::Debug,
-    S: ResourceResolver<Error = E>
-        + ModuleResolver<Error = E>
-        + Storage
-        + ParentSync
-        + ChildObjectResolver,
->(
+fn vm_move_call<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     module_id: &ModuleId,
     function: &Identifier,
@@ -342,14 +312,7 @@ enum ValueKind {
 /// - an entry function
 /// - a public function that does not return references
 /// - module init (only internal usage)
-fn check_visibility_and_signture<
-    E: fmt::Debug,
-    S: ResourceResolver<Error = E>
-        + ModuleResolver<Error = E>
-        + Storage
-        + ParentSync
-        + ChildObjectResolver,
->(
+fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     module_id: &ModuleId,
     function: &Identifier,
@@ -380,6 +343,7 @@ fn check_visibility_and_signture<
                 ),
             ));
         };
+        // TODO dev inspect
         match (fdef.visibility, fdef.is_entry) {
             (Visibility::Private | Visibility::Friend, true) => FunctionKind::PrivateEntry,
             (Visibility::Public, true) => FunctionKind::PublicEntry,
@@ -420,14 +384,7 @@ fn check_visibility_and_signture<
 
 /// Checks that the non-entry function does not return references. And marks the return values
 /// as object or non-object return values
-fn check_non_entry_signature<
-    E: fmt::Debug,
-    S: ResourceResolver<Error = E>
-        + ModuleResolver<Error = E>
-        + Storage
-        + ParentSync
-        + ChildObjectResolver,
->(
+fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     _module_id: &ModuleId,
     _function: &Identifier,
@@ -487,14 +444,7 @@ type ArgInfo = (
 
 /// Serializes the arguments into BCS values for Move. Performs the necessary type checking for
 /// each value
-fn build_move_args<
-    E: fmt::Debug,
-    S: ResourceResolver<Error = E>
-        + ModuleResolver<Error = E>
-        + Storage
-        + ParentSync
-        + ChildObjectResolver,
->(
+fn build_move_args<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     module_id: &ModuleId,
     function: &Identifier,
@@ -518,8 +468,9 @@ fn build_move_args<
         return Err(ExecutionError::new_with_source(
             ExecutionErrorKind::entry_argument_error(idx, EntryArgumentErrorKind::ArityMismatch),
             format!(
-                "Expected {:?} arguments calling function '{}', but found {:?}",
+                "Expected {:?} argument{} calling function '{}', but found {:?}",
                 parameters.len(),
+                if parameters.len() == 1 { "" } else { "s" },
                 function,
                 num_args
             ),
@@ -567,7 +518,7 @@ fn build_move_args<
                     .get_type_abilities(t)
                     .map_err(|e| context.convert_vm_error(e))?;
                 let value = if abilities.has_copy() {
-                    context.copy_arg(idx, arg)?
+                    context.clone_arg(idx, arg)?
                 } else {
                     context.take_arg(command_kind, idx, arg)?
                 };
@@ -597,14 +548,7 @@ fn build_move_args<
 }
 
 /// checks that the value is compatible with the specified type
-fn check_param_type<
-    E: fmt::Debug,
-    S: ResourceResolver<Error = E>
-        + ModuleResolver<Error = E>
-        + Storage
-        + ParentSync
-        + ChildObjectResolver,
->(
+fn check_param_type<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     idx: usize,
     value: &Value,
@@ -612,6 +556,7 @@ fn check_param_type<
 ) -> Result<(), ExecutionError> {
     let obj_ty;
     let ty = match value {
+        // TODO dev inspect
         Value::Raw(ValueType::Any, _) => {
             if !is_entry_primitive_type(context, param_ty)? {
                 let msg = format!(
@@ -651,20 +596,13 @@ fn check_param_type<
 
 /// If the type is a string, returns the name of the string type and the layout
 /// Otherwise, returns None
-fn is_string_arg<
-    E: fmt::Debug,
-    S: ResourceResolver<Error = E>
-        + ModuleResolver<Error = E>
-        + Storage
-        + ParentSync
-        + ChildObjectResolver,
->(
+fn is_string_arg<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     param_ty: &Type,
 ) -> Result<Option<StringInfo>, ExecutionError> {
     let Type::Struct(idx) = param_ty else { return Ok(None) };
     let Some(s) = context.session.get_struct_type(*idx) else {
-        invariant_violation!("Loaded struct unreachable")
+        invariant_violation!("Loaded struct not found")
     };
     let resolved_struct = get_struct_ident(&s);
     let string_name = if resolved_struct == RESOLVED_ASCII_STR {
@@ -691,14 +629,7 @@ type StringInfo = (
 // Returns Some(kind) if the type is a reference to the TxnContext. kind being Mutable with
 // a MutableReference, and Immutable otherwise.
 // Returns None for all other types
-pub fn is_tx_context<
-    E: fmt::Debug,
-    S: ResourceResolver<Error = E>
-        + ModuleResolver<Error = E>
-        + Storage
-        + ParentSync
-        + ChildObjectResolver,
->(
+pub fn is_tx_context<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     t: &Type,
 ) -> Result<TxContextKind, ExecutionError> {
@@ -709,7 +640,7 @@ pub fn is_tx_context<
     };
     let Type::Struct(idx) = &**inner else { return Ok(TxContextKind::None) };
     let Some(s) = context.session.get_struct_type(*idx) else {
-        invariant_violation!("Loaded struct unreachable")
+        invariant_violation!("Loaded struct not found")
     };
     let (module_addr, module_name, struct_name) = get_struct_ident(&s);
     let is_tx_context_type = module_addr == &SUI_FRAMEWORK_ADDRESS
@@ -727,14 +658,7 @@ pub fn is_tx_context<
 }
 
 /// Returns true iff it is a primitive, an ID, a String, or an option/vector of a valid type
-fn is_entry_primitive_type<
-    E: fmt::Debug,
-    S: ResourceResolver<Error = E>
-        + ModuleResolver<Error = E>
-        + Storage
-        + ParentSync
-        + ChildObjectResolver,
->(
+fn is_entry_primitive_type<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     param_ty: &Type,
 ) -> Result<bool, ExecutionError> {
@@ -742,7 +666,6 @@ fn is_entry_primitive_type<
     while let Some(cur) = stack.pop() {
         match cur {
             Type::Signer => return Ok(false),
-            // should already be covered, so maybe give an invariant violation?
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => return Ok(false),
             Type::Bool
             | Type::U8
@@ -755,19 +678,18 @@ fn is_entry_primitive_type<
             Type::Vector(inner) => stack.push(&**inner),
             Type::Struct(idx) => {
                 let Some(s) = context.session.get_struct_type(*idx) else {
-                    invariant_violation!("Loaded struct unreachable")
+                    invariant_violation!("Loaded struct not found")
                 };
                 let resolved_struct = get_struct_ident(&s);
-                let is_valid = resolved_struct == RESOLVED_SUI_ID
-                    || resolved_struct == RESOLVED_ASCII_STR
-                    || resolved_struct == RESOLVED_UTF8_STR;
-                if !is_valid {
+                if ![RESOLVED_SUI_ID, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR]
+                    .contains(&resolved_struct)
+                {
                     return Ok(false);
                 }
             }
             Type::StructInstantiation(idx, targs) => {
                 let Some(s) = context.session.get_struct_type(*idx) else {
-                    invariant_violation!("Loaded struct unreachable")
+                    invariant_violation!("Loaded struct not found")
                 };
                 let resolved_struct = get_struct_ident(&s);
                 // is option of a primitive
