@@ -38,7 +38,6 @@ import {
   TransactionEffects,
   DevInspectResults,
   CoinMetadata,
-  versionToString,
   toSuiTransactionData,
   isValidTransactionDigest,
   isValidSuiAddress,
@@ -60,7 +59,9 @@ import {
   CheckpointDigest,
   CheckPointContentsDigest,
   CommitteeInfo,
+  versionToString,
 } from '../types';
+import { lt } from '@suchipi/femver';
 import { DynamicFieldPage } from '../types/dynamic_fields';
 import {
   DEFAULT_CLIENT_OPTIONS,
@@ -69,7 +70,6 @@ import {
 } from '../rpc/websocket-client';
 import { ApiEndpoints, Network, NETWORK_TO_API } from '../utils/api-endpoints';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
-import { lt } from '@suchipi/femver';
 import { any, is, number, array } from 'superstruct';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import { LocalTxnDataSerializer } from '../signers/txn-data-serializers/local-txn-data-serializer';
@@ -692,7 +692,7 @@ export class JsonRpcProvider extends Provider {
     signature: SerializedSignature,
     requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert',
   ): Promise<SuiExecuteTransactionResponse> {
-    const version = this.rpcApiVersion;
+    const version = await this.getRpcApiVersion();
     if (version?.major === 0 && version?.minor <= 26) {
       try {
         let resp = await this.client.requestWithType(
@@ -789,11 +789,6 @@ export class JsonRpcProvider extends Provider {
 
   // Governance
   async getReferenceGasPrice(): Promise<number> {
-    const version = await this.getRpcApiVersion();
-    // TODO: clean up after 0.22.0 is deployed on both DevNet and TestNet
-    if (version && lt(versionToString(version), '0.22.0')) {
-      return 1;
-    }
     try {
       return await this.client.requestWithType(
         'sui_getReferenceGasPrice',
@@ -890,12 +885,6 @@ export class JsonRpcProvider extends Provider {
     epoch: number | null = null,
   ): Promise<DevInspectResults> {
     try {
-      const version = await this.getRpcApiVersion();
-      // TODO: remove after 0.24.0 is deployed in both DevNet and TestNet
-      if (version?.major === 0 && version?.minor < 24) {
-        return this.devInspectTransactionDeprecated(sender, tx, epoch);
-      }
-
       let devInspectTxBytes;
       if (typeof tx === 'string') {
         devInspectTxBytes = tx;
@@ -922,48 +911,6 @@ export class JsonRpcProvider extends Provider {
         `Error dev inspect transaction with request type: ${err}`,
       );
     }
-  }
-
-  async devInspectTransactionDeprecated(
-    sender: SuiAddress,
-    tx: UnserializedSignableTransaction | string | Uint8Array,
-    epoch: number | null = null,
-  ): Promise<DevInspectResults> {
-    let devInspectTxBytes;
-    if (typeof tx === 'string') {
-      devInspectTxBytes = tx;
-    } else if (tx instanceof Uint8Array) {
-      devInspectTxBytes = toB64(tx);
-    } else {
-      if (tx.kind === 'moveCall' && tx.data.gasBudget == null) {
-        const moveCall = tx.data;
-        const resp = await this.client.requestWithType(
-          'sui_devInspectMoveCall',
-          [
-            sender,
-            moveCall.packageObjectId,
-            moveCall.module,
-            moveCall.function,
-            moveCall.typeArguments,
-            moveCall.arguments,
-          ],
-          DevInspectResults,
-          this.options.skipDataValidation,
-        );
-        return resp;
-      }
-      devInspectTxBytes = toB64(
-        await new LocalTxnDataSerializer(this).serializeToBytes(sender, tx),
-      );
-    }
-
-    const resp = await this.client.requestWithType(
-      'sui_devInspectTransaction',
-      [devInspectTxBytes, epoch],
-      DevInspectResults,
-      this.options.skipDataValidation,
-    );
-    return resp;
   }
 
   async dryRunTransaction(txBytes: Uint8Array): Promise<TransactionEffects> {
