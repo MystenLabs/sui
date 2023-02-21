@@ -44,7 +44,7 @@ impl SshConnection {
         let tcp = TcpStream::connect(address).await?;
 
         let mut session = Session::new()?;
-        session.set_timeout(5_000);
+        session.set_timeout(120_000);
         session.set_tcp_stream(tcp);
         session.handshake()?;
         session.userauth_pubkey_file(username, None, private_key_file.as_ref(), None)?;
@@ -63,24 +63,30 @@ impl SshConnection {
         path: P,
     ) -> SshResult<(String, String)> {
         let channel = self.session.channel_session()?;
-        let command = format!("(cd {:?} && {command})", path.as_ref());
+        let command = format!("(cd {} && {command})", path.as_ref().display().to_string());
         Self::execute_impl(channel, command)
     }
 
     fn execute_impl(mut channel: Channel, command: String) -> SshResult<(String, String)> {
         channel.exec(&command)?;
+        // println!("{command}");
 
         let mut stdout = String::new();
         channel.read_to_string(&mut stdout)?;
+        // println!("{stdout}");
 
         let mut stderr = String::new();
         channel.stderr().read_to_string(&mut stderr)?;
+        // println!("{stderr}");
 
         channel.close()?;
         channel.wait_close()?;
 
         let exit_status = channel.exit_status()?;
-        ensure!(exit_status == 0, SshError::NonZeroExitCode(exit_status));
+        ensure!(
+            exit_status == 0,
+            SshError::NonZeroExitCode(exit_status, stderr.clone())
+        );
 
         Ok((stdout, stderr))
     }
@@ -90,5 +96,14 @@ impl SshConnection {
         let mut channel = self.session.scp_send(path.as_ref(), 0o644, size, None)?;
         channel.write_all(content).unwrap();
         Ok(())
+    }
+
+    pub fn download<P: AsRef<Path>>(&self, path: P) -> SshResult<String> {
+        let (mut channel, _stats) = self.session.scp_recv(path.as_ref())?;
+        // println!("2: {}", path.as_ref().display());
+        let mut content = String::new();
+        // println!("{content}");
+        channel.read_to_string(&mut content).unwrap();
+        Ok(content)
     }
 }

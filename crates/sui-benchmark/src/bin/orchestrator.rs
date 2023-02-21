@@ -1,5 +1,11 @@
+use std::time::Duration;
+
 use color_eyre::eyre::{Context, Result};
-use sui_benchmark::orchestrator::{client::VultrClient, settings::Settings, testbed::Testbed};
+use sui_benchmark::orchestrator::{
+    client::VultrClient,
+    settings::Settings,
+    testbed::{BenchmarkParameters, Testbed},
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -13,6 +19,13 @@ async fn main() -> Result<()> {
 
     let public_key = settings.load_ssh_public_key()?;
     client.upload_key(public_key).await?;
+
+    let parameters = BenchmarkParameters {
+        nodes: 4,
+        faults: 0,
+        load: 50,
+        duration: Duration::from_secs(60),
+    };
 
     let mut testbed = Testbed::new(settings, client)
         .await
@@ -36,9 +49,14 @@ async fn main() -> Result<()> {
     //     .wrap_err("Failed to install software on instances")?;
 
     // testbed
-    //     .configure()
+    //     .configure(&parameters)
     //     .await
     //     .wrap_err("Failed to install software on instances")?;
+
+    testbed
+        .run_benchmark(&parameters)
+        .await
+        .wrap_err("Failed to deploy instances")?;
 
     testbed.info();
     Ok(())

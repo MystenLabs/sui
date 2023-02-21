@@ -22,9 +22,9 @@ pub struct Config {
 }
 
 impl Config {
-    const GAS_OBJECT_ID_OFFSET: &'static str = "0x59931dcac57ba20d75321acaf55e8eb5a2c47e9f";
-    const GENESIS_CONFIG_FILE: &'static str = "benchmark-genesis.yml";
-    const GAS_KEYSTORE_FILE: &'static str = "gas.keystore";
+    pub const GAS_OBJECT_ID_OFFSET: &'static str = "0x59931dcac57ba20d75321acaf55e8eb5a2c47e9f";
+    pub const GENESIS_CONFIG_FILE: &'static str = "benchmark-genesis.yml";
+    pub const GAS_KEYSTORE_FILE: &'static str = "gas.keystore";
 
     pub fn new(instances: &[Instance]) -> Self {
         let mut rng = StdRng::seed_from_u64(0);
@@ -59,7 +59,7 @@ impl Config {
 
     pub fn genesis_command(&self) -> String {
         let genesis = format!("~/{}", Self::GENESIS_CONFIG_FILE);
-        format!("cargo run --release --bin sui -- genesis --from-config {genesis}")
+        format!("cargo run --release --bin sui -- genesis -f --from-config {genesis}")
     }
 
     // Generate a genesis configuration file suitable for benchmarks.

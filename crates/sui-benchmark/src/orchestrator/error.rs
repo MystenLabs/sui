@@ -55,8 +55,8 @@ pub enum SshError {
     #[error("Failed to connect to instance: {0:?}")]
     ConnectionError(#[from] std::io::Error),
 
-    #[error("Remote exec returned exit code: {0}")]
-    NonZeroExitCode(i32),
+    #[error("Remote execution returned exit code ({0}): {1}")]
+    NonZeroExitCode(i32, String),
 }
 
 pub type TestbedResult<T> = Result<T, TestbedError>;

@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{stdout, Read},
+    io::{stdout, Read, Write},
     time::Duration,
 };
 
@@ -24,6 +24,17 @@ use crate::{
 };
 
 use super::{config::Config, ssh::SshConnectionManager};
+
+pub struct BenchmarkParameters {
+    /// The committee size.
+    pub nodes: usize,
+    /// The number of (crash-)faults.
+    pub faults: usize,
+    /// The total load (tx/s) to submit to the system.
+    pub load: usize,
+    /// The duration of the benchmark.
+    pub duration: Duration,
+}
 
 pub struct Testbed<C> {
     /// The testbed's settings.
@@ -232,6 +243,26 @@ impl<C: Client> Testbed<C> {
 }
 
 impl<C> Testbed<C> {
+    pub fn select_instances(
+        &self,
+        parameters: &BenchmarkParameters,
+    ) -> TestbedResult<Vec<Instance>> {
+        // TODO: Select an equal number of instances per region.
+        let instances: Vec<_> = self
+            .instances
+            .iter()
+            .cloned()
+            .take(parameters.nodes)
+            .collect();
+
+        ensure!(
+            instances.len() == parameters.nodes,
+            TestbedError::InsufficientCapacity(format!("{}", parameters.nodes - instances.len()))
+        );
+
+        Ok(instances)
+    }
+
     pub async fn install(&self) -> TestbedResult<()> {
         let url = self.settings.repository.url.clone();
         let name = self.settings.repository.name.clone();
@@ -332,17 +363,19 @@ impl<C> Testbed<C> {
         Ok(())
     }
 
-    pub async fn configure(&self) -> TestbedResult<()> {
+    pub async fn configure(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
         println!("Generating and uploading configuration files...");
+
+        // Select instances to configure.
+        let instances = self.select_instances(parameters)?;
 
         // Generate the genesis configuration file and the keystore allowing access to gas objects.
         // TODO: There should be no need to generate these files locally; we can generate them
         // directly on the remote machines.
-        let mut config = Config::new(&self.instances);
+        let mut config = Config::new(&instances);
         config.print_files();
 
-        let handles = self
-            .instances
+        let handles = instances
             .iter()
             .cloned()
             .map(|instance| {
@@ -365,8 +398,9 @@ impl<C> Testbed<C> {
                     }
 
                     // Generate the genesis files.
+                    let command = ["source $HOME/.cargo/env", &genesis_command].join(" && ");
                     connection
-                        .execute_from_path(genesis_command, repo_name.clone())
+                        .execute_from_path(command, repo_name.clone())
                         .map(|_| ())
                         .map_err(TestbedError::from)
                 })
@@ -383,16 +417,58 @@ impl<C> Testbed<C> {
         Ok(())
     }
 
-    pub async fn run(&self) -> TestbedResult<()> {
-        let branch = self.settings.repository.branch.clone();
-        println!(
-            "Running {} nodes (branch '{branch}')...",
-            self.instances.len()
-        );
+    pub async fn kill(&self, cleanup: bool) -> TestbedResult<()> {
+        let command = if cleanup {
+            [
+                "(tmux kill-server || true)",
+                "(rm -rf *log* || true)",
+                "(rm -rf ~/.sui/sui_config/*_db || true)",
+            ]
+            .join(" ; ")
+        } else {
+            "tmux kill-server || true".into()
+        };
 
         let handles = self
             .instances
             .iter()
+            .cloned()
+            .map(|instance| {
+                let ssh_manager = self.ssh_manager.clone();
+                let command = command.clone();
+
+                tokio::spawn(async move {
+                    ssh_manager
+                        .connect(instance.ssh_address())
+                        .await?
+                        .execute(command)
+                        .map(|_| ())
+                        .map_err(TestbedError::from)
+                })
+            })
+            .collect::<Vec<_>>();
+
+        try_join_all(handles)
+            .await
+            .unwrap()
+            .into_iter()
+            .collect::<TestbedResult<_>>()?;
+
+        Ok(())
+    }
+
+    pub async fn run_nodes(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
+        self.kill(true).await?;
+
+        let instances = self.select_instances(parameters)?;
+
+        // Deploy the committee.
+        let branch = self.settings.repository.branch.clone();
+        println!("Running {} nodes (branch '{branch}')...", instances.len());
+
+        let handles = instances
+            .iter()
+            .skip(parameters.faults)
             .cloned()
             .enumerate()
             .map(|(i, instance)| {
@@ -400,9 +476,16 @@ impl<C> Testbed<C> {
                 let repo_name = self.settings.repository.name.clone();
 
                 tokio::spawn(async move {
-                    let path = format!("~/.sui/sui-config/validator-config-{i}.yaml");
-                    let command =
+                    let node = format!("node-{i}");
+                    let path = format!("~/.sui/sui_config/validator-config-{i}.yaml");
+                    let node_command =
                         format!("cargo run --release --bin sui-node -- --config-path {path}");
+                    let log_file = format!("~/{node}.log");
+                    let command = [
+                        "source $HOME/.cargo/env",
+                        &format!("tmux new -d -s \"{node}\" \"{node_command} |& tee {log_file}\""),
+                    ]
+                    .join(" && ");
 
                     ssh_manager
                         .connect(instance.ssh_address())
@@ -421,6 +504,141 @@ impl<C> Testbed<C> {
             .collect::<TestbedResult<_>>()?;
 
         println!("All validators are up and running.");
+        Ok(())
+    }
+
+    pub async fn run_clients(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
+        let instances = self.select_instances(parameters)?;
+        // Deploy the load generators.
+        println!("Setting up load generators...");
+
+        let handles = instances
+            .iter()
+            .cloned()
+            .take(1) // TODO: Each client should use a different gas object.
+            .enumerate()
+            .map(|(i, instance)| {
+                let ssh_manager = self.ssh_manager.clone();
+                let repo_name = self.settings.repository.name.clone();
+                // let load_share = parameters.load.clone() / (instances.len() - parameters.faults);
+                let load_share = parameters.load.clone();
+                let duration = parameters.duration.as_secs();
+
+                tokio::spawn(async move {
+                    let gas_id = Config::GAS_OBJECT_ID_OFFSET;
+                    let genesis = "~/.sui/sui_config/genesis.blob";
+                    let keystore = format!("~/{}", Config::GAS_KEYSTORE_FILE);
+
+                    let client = format!("client-{i}");
+                    let client_command = [
+                        "cargo run --release --bin stress --",
+                        "--log-path ~/stress.log --local false --num-client-threads 100",
+                        &format!("--num-transfer-accounts 2 --primary-gas-id {gas_id}"),
+                        &format!("--genesis-blob-path {genesis} --keystore-path {keystore}"),
+                        &format!("bench --target-qps {load_share} --num-workers 100"),
+                        &format!("--shared-counter 0 --run-duration {duration}s"),
+                        "--in-flight-ratio 50 --transfer-object 100 --delegation 0",
+                    ]
+                    .join(" ");
+                    let log_file = format!("~/{client}.log");
+                    let command = [
+                        "source $HOME/.cargo/env",
+                        &format!(
+                            "tmux new -d -s \"{client}\" \"{client_command} |& tee {log_file}\""
+                        ),
+                    ]
+                    .join(" && ");
+
+                    ssh_manager
+                        .connect(instance.ssh_address())
+                        .await?
+                        .execute_from_path(command, repo_name)
+                        .map(|_| ())
+                        .map_err(TestbedError::from)
+                })
+            })
+            .collect::<Vec<_>>();
+
+        try_join_all(handles)
+            .await
+            .unwrap()
+            .into_iter()
+            .collect::<TestbedResult<_>>()?;
+
+        println!("All load generators are up and running.");
+        Ok(())
+    }
+
+    pub async fn logs(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
+        println!("Download logs...");
+
+        let instances = self.select_instances(parameters)?;
+
+        let handles = instances
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(i, instance)| {
+                let ssh_manager = self.ssh_manager.clone();
+
+                tokio::spawn(async move {
+                    // Connect to the instance.
+                    let connection = ssh_manager.connect(instance.ssh_address()).await?;
+
+                    // Download the node's log file.
+                    let source = format!("node-{i}.log");
+                    let content = connection.download(&source)?;
+                    let mut file = File::create(&source).expect("Cannot open file");
+                    file.write_all(content.as_bytes())
+                        .expect("Cannot write file");
+
+                    // Download the client's log files.
+                    if i == 0 {
+                        let source = format!("client-{i}.log");
+                        let content = connection.download(source)?;
+                        println!("{content}");
+                    }
+
+                    Ok(())
+                })
+            })
+            .collect::<Vec<_>>();
+
+        try_join_all(handles)
+            .await
+            .unwrap()
+            .into_iter()
+            .collect::<TestbedResult<_>>()?;
+
+        println!("All instances are configured.");
+        Ok(())
+    }
+
+    pub async fn run_benchmark(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
+        // Cleanup the testbed.
+        self.kill(true).await?;
+
+        // Update the software on all instances.
+        self.update().await?;
+
+        // Deploy the validators.
+        self.run_nodes(parameters).await?;
+
+        // Deploy the load generators.
+        self.run_clients(parameters).await?;
+
+        // Wait for the benchmark to terminate.
+        // TODO: Detect when the load generator is done submitting transactions.
+        println!("Waiting for {}s...", parameters.duration.as_secs());
+        sleep(parameters.duration * 2).await;
+
+        // Kill the nodes and clients (without deleting the log files).
+        println!("Killing nodes and clients..");
+        self.kill(false).await?;
+
+        // Download the log files.
+        self.logs(parameters).await?;
+
         Ok(())
     }
 }

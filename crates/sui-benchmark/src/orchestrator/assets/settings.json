@@ -3,10 +3,10 @@
     "token_file": "/Users/alberto/.vultr",
     "ssh_private_key_file": "/Users/alberto/.ssh/vultr",
     "regions": ["atl", "lax"],
-    "specs": "vc2-1c-1gb",
+    "specs": "vhp-8c-16gb-intel",
     "repository": {
         "name": "sui",
         "url": "http://github.com/mystenlabs/sui",
-        "branch": "main"
+        "branch": "orchestrator"
     }
 }
