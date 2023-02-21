@@ -142,11 +142,12 @@ pub struct AuthorityEpochTables {
 
     /// The two tables below manage shared object locks / versions. There are two ways they can be
     /// updated:
-    /// 1. Upon receiving a certified transaction from consensus, the authority assigns the next
-    /// version to each shared object of the transaction. The next versions of the shared objects
-    /// are updated as well.
-    /// 2. Upon receiving a certified effect, the authority assigns the shared object versions from
-    /// the effect to the transaction of the effect. Next object versions are not updated.
+    /// 1. (validators only): Upon receiving a certified transaction from consensus, the authority
+    /// assigns the next version to each shared object of the transaction. The next versions of
+    /// the shared objects are updated as well.
+    /// 2. (fullnodes + validators): Upon receiving a certified effect from state sync, or
+    /// transaction orchestrator fast execution path, the node assigns the shared object
+    /// versions from the transaction effect. Next object versions are not updated.
     ///
     /// REQUIRED: all authorities must assign the same shared object versions for each transaction.
     assigned_shared_object_versions: DBMap<TransactionDigest, Vec<(ObjectID, SequenceNumber)>>,
@@ -739,7 +740,8 @@ impl AuthorityPerEpochStore {
     }
 
     /// Lock a sequence number for the shared objects of the input transaction based on the effects
-    /// of that transaction. Used by full nodes, which don't listen to consensus.
+    /// of that transaction.
+    /// Used by full nodes who don't listen to consensus, and validators who catch up by state sync.
     pub async fn acquire_shared_locks_from_effects(
         &self,
         certificate: &VerifiedCertificate,
