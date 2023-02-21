@@ -90,7 +90,7 @@ Submitting a Sui transaction involves the following steps. These are transparent
 
 While this may sound like a lot of steps, this process allows each validator to peform the operations above in parallel without coordination--observe that no step above requires validators to communicate with each other! This massively reduces latency compared to a conventional blockchain that requires O(n^2) communication among validators before finality can be achieved.
 
-Finally, we note that the role of quorum driver does not require access to any private keys and can safely be delegated to a third party (e.g., a full node, an RPC provider, a custodial wallet).
+Finally, note that the role of quorum driver does not require access to any private keys, and can safely be delegated to a third party such as a Full node, an RPC provider, or a custodial wallet.
 
 ## Transactions on shared objects
 
