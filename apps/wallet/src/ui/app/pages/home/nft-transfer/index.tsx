@@ -40,8 +40,8 @@ function NftTransferPage() {
     const { data: objectData, isLoading } = useGetObject(nftId!);
     const selectedNft = useMemo(() => {
         if (
-            !is(objectData?.details, SuiObject) ||
             !objectData ||
+            !is(objectData.details, SuiObject) ||
             !hasPublicTransfer(objectData.details)
         )
             return null;
