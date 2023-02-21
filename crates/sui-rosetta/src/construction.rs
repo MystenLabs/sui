@@ -64,7 +64,7 @@ pub async fn payloads(
         unsigned_transaction: Hex::from_bytes(&intent_msg_bytes),
         payloads: vec![SigningPayload {
             account_identifier: address.into(),
-            hex_bytes: Hex::encode(&bcs::to_bytes(&intent_msg)?),
+            hex_bytes: Hex::encode(bcs::to_bytes(&intent_msg)?),
             signature_type: Some(SignatureType::Ed25519),
         }],
     })

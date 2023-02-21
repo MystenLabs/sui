@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::legacy_empty_cost;
+use fastcrypto::error::FastCryptoError;
+use fastcrypto::hash::{Keccak256, Sha256};
+use fastcrypto::traits::RecoverableSignature;
 use fastcrypto::{
-    error::FastCryptoError,
-    hash::{Keccak256, Sha256},
-    secp256k1::{
-        recoverable::Secp256k1RecoverableSignature, Secp256k1PublicKey, Secp256k1Signature,
+    secp256r1::{
+        recoverable::Secp256r1RecoverableSignature, Secp256r1PublicKey, Secp256r1Signature,
     },
-    traits::{RecoverableSignature, ToFromBytes},
+    traits::ToFromBytes,
 };
 use move_binary_format::errors::PartialVMResult;
 use move_vm_runtime::native_functions::NativeContext;
@@ -22,7 +23,6 @@ use std::collections::VecDeque;
 
 pub const FAIL_TO_RECOVER_PUBKEY: u64 = 0;
 pub const INVALID_SIGNATURE: u64 = 1;
-pub const INVALID_PUBKEY: u64 = 2;
 
 pub const KECCAK256: u8 = 0;
 pub const SHA256: u8 = 1;
@@ -45,7 +45,7 @@ pub fn ecrecover(
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
     let cost = legacy_empty_cost();
 
-    let sig = match <Secp256k1RecoverableSignature as ToFromBytes>::from_bytes(&signature_ref) {
+    let sig = match <Secp256r1RecoverableSignature as ToFromBytes>::from_bytes(&signature_ref) {
         Ok(s) => s,
         Err(_) => return Ok(NativeResult::err(cost, INVALID_SIGNATURE)),
     };
@@ -65,33 +65,7 @@ pub fn ecrecover(
     }
 }
 
-pub fn decompress_pubkey(
-    _context: &mut NativeContext,
-    ty_args: Vec<Type>,
-    mut args: VecDeque<Value>,
-) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 1);
-
-    let pubkey = pop_arg!(args, VectorRef);
-    let pubkey_ref = pubkey.as_bytes_ref();
-
-    // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
-    let cost = legacy_empty_cost();
-
-    match Secp256k1PublicKey::from_bytes(&pubkey_ref) {
-        Ok(pubkey) => {
-            let uncompressed = &pubkey.pubkey.serialize_uncompressed();
-            Ok(NativeResult::ok(
-                cost,
-                smallvec![Value::vector_u8(uncompressed.to_vec())],
-            ))
-        }
-        Err(_) => Ok(NativeResult::err(cost, INVALID_PUBKEY)),
-    }
-}
-
-pub fn secp256k1_verify(
+pub fn secp256r1_verify(
     _context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
@@ -111,12 +85,12 @@ pub fn secp256k1_verify(
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/4086
     let cost = legacy_empty_cost();
 
-    let sig = match <Secp256k1Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) {
+    let sig = match <Secp256r1Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) {
         Ok(s) => s,
         Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
     };
 
-    let pk = match <Secp256k1PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
+    let pk = match <Secp256r1PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
         Ok(p) => p,
         Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
     };
