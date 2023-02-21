@@ -2141,8 +2141,8 @@ impl AuthorityState {
         &self,
         digests: &[TransactionDigest],
     ) -> Result<Vec<(VerifiedCertificate, TransactionEffects)>, anyhow::Error> {
-        let certs = self.database.multi_get_certified_transaction(&digests)?;
-        let effects = self.database.multi_get_executed_effects(&digests)?;
+        let certs = self.database.multi_get_certified_transaction(digests)?;
+        let effects = self.database.multi_get_executed_effects(digests)?;
         let mut response: Vec<(VerifiedCertificate, TransactionEffects)> = Vec::new();
 
         if certs.len() == effects.len() {
