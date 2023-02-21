@@ -4,13 +4,14 @@
 extern crate core;
 
 use std::collections::btree_map::Entry::Occupied;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use schemars::gen::{SchemaGenerator, SchemaSettings};
 use schemars::schema::SchemaObject;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use versions::Versioning;
 
 /// OPEN-RPC documentation following the OpenRPC specification <https://spec.open-rpc.org>
 /// The implementation is partial, only required fields and subset of optional fields
@@ -21,6 +22,9 @@ pub struct Project {
     info: Info,
     methods: Vec<Method>,
     components: Components,
+    // Method routing for backward compatibility, not part of the open rpc spec.
+    #[serde(skip)]
+    pub method_routing: HashMap<String, MethodRouting>,
 }
 
 impl Project {
@@ -57,6 +61,7 @@ impl Project {
                 content_descriptors: Default::default(),
                 schemas: Default::default(),
             },
+            method_routing: Default::default(),
         }
     }
 
@@ -69,6 +74,7 @@ impl Project {
         self.components
             .content_descriptors
             .extend(module.components.content_descriptors);
+        self.method_routing.extend(module.method_routing);
     }
 
     pub fn add_examples(&mut self, mut example_provider: BTreeMap<String, Vec<ExamplePairing>>) {
@@ -103,11 +109,13 @@ impl Project {
 pub struct Module {
     methods: Vec<Method>,
     components: Components,
+    method_routing: BTreeMap<String, MethodRouting>,
 }
 
 pub struct RpcModuleDocBuilder {
     schema_generator: SchemaGenerator,
     methods: BTreeMap<String, Method>,
+    method_routing: BTreeMap<String, MethodRouting>,
     content_descriptors: BTreeMap<String, ContentDescriptor>,
 }
 
@@ -137,6 +145,59 @@ struct Method {
     result: Option<ContentDescriptor>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     examples: Vec<ExamplePairing>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    deprecated: bool,
+}
+#[derive(Clone, Debug)]
+pub struct MethodRouting {
+    min: Option<Versioning>,
+    max: Option<Versioning>,
+    pub route_to: String,
+}
+
+impl MethodRouting {
+    pub fn le(version: &str, route_to: &str) -> Self {
+        Self {
+            min: None,
+            max: Some(Versioning::new(version).unwrap()),
+            route_to: route_to.to_string(),
+        }
+    }
+
+    pub fn eq(version: &str, route_to: &str) -> Self {
+        Self {
+            min: Some(Versioning::new(version).unwrap()),
+            max: Some(Versioning::new(version).unwrap()),
+            route_to: route_to.to_string(),
+        }
+    }
+
+    pub fn matches(&self, version: &str) -> bool {
+        let version = Versioning::new(version);
+        match (&version, &self.min, &self.max) {
+            (Some(version), None, Some(max)) => version <= max,
+            (Some(version), Some(min), None) => version >= min,
+            (Some(version), Some(min), Some(max)) => version >= min && version <= max,
+            (_, _, _) => false,
+        }
+    }
+}
+
+#[test]
+fn test_version_matching() {
+    let routing = MethodRouting::eq("1.5", "test");
+    assert!(routing.matches("1.5"));
+    assert!(!routing.matches("1.6"));
+    assert!(!routing.matches("1.4"));
+
+    let routing = MethodRouting::le("1.5", "test");
+    assert!(routing.matches("1.5"));
+    assert!(routing.matches("1.4.5"));
+    assert!(routing.matches("1.4"));
+    assert!(routing.matches("1.3"));
+
+    assert!(!routing.matches("1.6"));
+    assert!(!routing.matches("1.5.1"));
 }
 
 #[derive(Serialize, Deserialize, Default, Clone)]
@@ -194,6 +255,16 @@ struct Tag {
     description: Option<String>,
 }
 
+impl Tag {
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            summary: None,
+            description: None,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 struct Info {
@@ -242,6 +313,7 @@ impl Default for RpcModuleDocBuilder {
         Self {
             schema_generator,
             methods: BTreeMap::new(),
+            method_routing: Default::default(),
             content_descriptors: BTreeMap::new(),
         }
     }
@@ -261,6 +333,27 @@ impl RpcModuleDocBuilder {
                     .map(|(name, schema)| (name, schema.into_object()))
                     .collect::<BTreeMap<_, _>>(),
             },
+            method_routing: self.method_routing,
+        }
+    }
+
+    pub fn add_method_routing(
+        &mut self,
+        namespace: &str,
+        name: &str,
+        route_to: &str,
+        comparator: &str,
+        version: &str,
+    ) {
+        let name = format!("{namespace}_{name}");
+        let route_to = format!("{namespace}_{route_to}");
+        let routing = match comparator {
+            "<=" => MethodRouting::le(version, &route_to),
+            "=" => MethodRouting::eq(version, &route_to),
+            _ => panic!("Unsupported version comparator {comparator}"),
+        };
+        if self.method_routing.insert(name.clone(), routing).is_some() {
+            panic!("Routing for method [{name}] already exists.")
         }
     }
 
@@ -272,7 +365,37 @@ impl RpcModuleDocBuilder {
         result: Option<ContentDescriptor>,
         doc: &str,
         tag: Option<String>,
-        is_pubsub: bool,
+        deprecated: bool,
+    ) {
+        let tags = tag.map(|t| Tag::new(&t)).into_iter().collect::<Vec<_>>();
+        self.add_method_internal(namespace, name, params, result, doc, tags, deprecated)
+    }
+
+    pub fn add_subscription(
+        &mut self,
+        namespace: &str,
+        name: &str,
+        params: Vec<ContentDescriptor>,
+        result: Option<ContentDescriptor>,
+        doc: &str,
+        tag: Option<String>,
+        deprecated: bool,
+    ) {
+        let mut tags = tag.map(|t| Tag::new(&t)).into_iter().collect::<Vec<_>>();
+        tags.push(Tag::new("Websocket"));
+        tags.push(Tag::new("PubSub"));
+        self.add_method_internal(namespace, name, params, result, doc, tags, deprecated)
+    }
+
+    fn add_method_internal(
+        &mut self,
+        namespace: &str,
+        name: &str,
+        params: Vec<ContentDescriptor>,
+        result: Option<ContentDescriptor>,
+        doc: &str,
+        tags: Vec<Tag>,
+        deprecated: bool,
     ) {
         let description = if doc.trim().is_empty() {
             None
@@ -280,28 +403,6 @@ impl RpcModuleDocBuilder {
             Some(doc.trim().to_string())
         };
         let name = format!("{}_{}", namespace, name);
-        let mut tags = tag
-            .map(|t| Tag {
-                name: t,
-                summary: None,
-                description: None,
-            })
-            .into_iter()
-            .collect::<Vec<_>>();
-
-        if is_pubsub {
-            tags.push(Tag {
-                name: "Websocket".to_string(),
-                summary: None,
-                description: None,
-            });
-            tags.push(Tag {
-                name: "PubSub".to_string(),
-                summary: None,
-                description: None,
-            });
-        }
-
         self.methods.insert(
             name.clone(),
             Method {
@@ -311,6 +412,7 @@ impl RpcModuleDocBuilder {
                 result,
                 tags,
                 examples: Vec::new(),
+                deprecated,
             },
         );
     }

@@ -677,7 +677,7 @@ pub trait TransactionExecutionApi {
         request_type: ExecuteTransactionRequestType,
     ) -> RpcResult<SuiExecuteTransactionResponse>;
 
-    #[method(name = "executeTransactionSerializedSig")]
+    #[method(name = "executeTransactionSerializedSig", deprecated)]
     async fn execute_transaction_serialized_sig(
         &self,
         /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.

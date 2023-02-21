@@ -8773,6 +8773,7 @@ dependencies = [
  "mysten-metrics",
  "prometheus",
  "rand 0.8.5",
+ "reqwest",
  "scopeguard",
  "serde 1.0.152",
  "signature 1.6.4",
@@ -8988,6 +8989,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-types",
  "tokio",
+ "versions",
  "workspace-hack",
 ]
 
@@ -10603,6 +10605,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
+name = "versions"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee97e1d97bd593fb513912a07691b742361b3dd64ad56f2c694ea2dbfe0665d3"
+dependencies = [
+ "itertools",
+ "nom 7.1.2",
+]
+
+[[package]]
 name = "vte"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11676,6 +11688,7 @@ dependencies = [
  "vcpkg",
  "vec_map",
  "version_check",
+ "versions",
  "vte",
  "vte_generate_state_changes",
  "wait-timeout",
