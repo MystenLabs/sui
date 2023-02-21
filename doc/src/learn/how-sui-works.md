@@ -98,7 +98,7 @@ Many use-cases require *shared* objects that can be manipulated by two or more a
 
 For transactions involving one or more shared objects, the process is as described above up to step (4), where instead:
 1. When a validator receives a certificate and validates it, the validator uses Narwhal to submit the certificate to Bullshark for sequencing.
-1. Once the transaction has been sequenced, it is executed to produce effects using same flow as (5) above.
+2. After Sui sequences the transaction, it executes it to produce effects using same flow as (5) above.
 
 ## Scalability
 
