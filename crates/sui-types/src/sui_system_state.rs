@@ -419,7 +419,7 @@ impl SuiSystemState {
         result
     }
 
-    pub fn get_current_epoch_peer_id_to_authority_names(&self) -> HashMap<PeerId, AuthorityName> {
+    pub fn get_current_epoch_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId> {
         let mut result = HashMap::new();
         let _: () = self
             .validators
@@ -435,7 +435,7 @@ impl SuiSystemState {
 
                 let peer_id = PeerId(network_key.0.to_bytes());
 
-                result.insert(peer_id, name);
+                result.insert(name, peer_id);
             })
             .collect();
 

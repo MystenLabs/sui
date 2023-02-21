@@ -91,7 +91,7 @@ impl AuthorityServer {
         let consensus_adapter = ConsensusAdapter::new(
             consensus_client,
             state.name,
-            Box::new(ConnectionMonitorStatusForTests {}),
+            Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
             ConsensusAdapterMetrics::new_test(),
         );
 

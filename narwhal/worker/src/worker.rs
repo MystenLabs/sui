@@ -20,6 +20,7 @@ use anemo_tower::{
 use anemo_tower::{rate_limit, set_header::SetResponseHeaderLayer};
 use config::{Committee, Parameters, SharedWorkerCache, WorkerId};
 use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey, PublicKey};
+use dashmap::DashMap;
 use multiaddr::{Multiaddr, Protocol};
 use mysten_metrics::spawn_logged_monitored_task;
 use network::epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY};
@@ -324,7 +325,7 @@ impl Worker {
             network.downgrade(),
             network_connection_metrics,
             peer_types,
-            None,
+            Arc::new(DashMap::new()),
         );
 
         let network_admin_server_base_port = parameters
