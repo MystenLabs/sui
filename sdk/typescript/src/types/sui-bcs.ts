@@ -236,15 +236,25 @@ export type GasData = {
 };
 
 /**
+ * TransactionExpiration
+ *
+ * Indications the expiration time for a transaction.
+ */
+export type TransactionExpiration = { None: null } | { Epoch: number };
+
+/**
  * The TransactionData to be signed and sent to the RPC service.
  *
  * Field `sender` is made optional as it can be added during the signing
  * process and there's no need to define it sooner.
+ *
+ * Field `expiration` is made optional as it is defaulted to `None`.
  */
 export type TransactionData = {
   sender?: string;
   kind: TransactionKind;
   gasData: GasData;
+  expiration?: TransactionExpiration;
 };
 
 export const TRANSACTION_DATA_TYPE_TAG = Array.from('TransactionData::').map(
@@ -273,6 +283,7 @@ export function toTransactionData(
       budget: tx_data.gasBudget,
       price: tx_data.gasPrice,
     },
+    expiration: { None: null },
   };
 }
 
@@ -332,6 +343,10 @@ const BCS_SPEC = {
       Single: 'Transaction',
       Batch: 'vector<Transaction>',
     },
+    TransactionExpiration: {
+      None: null,
+      Epoch: BCS.U64,
+    },
   },
   structs: {
     SuiObjectRef: {
@@ -386,6 +401,7 @@ const BCS_SPEC = {
       kind: 'TransactionKind',
       sender: BCS.ADDRESS,
       gasData: 'GasData',
+      expiration: 'TransactionExpiration',
     },
     GasData: {
       payment: 'SuiObjectRef',

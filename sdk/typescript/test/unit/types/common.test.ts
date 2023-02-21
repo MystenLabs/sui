@@ -29,11 +29,12 @@ describe('Test common functions', () => {
           price: 1,
           budget: 100,
         },
+        expiration: { None: null },
       };
 
       const transactionDigest = generateTransactionDigest(transactionData, bcs);
       expect(transactionDigest).toEqual(
-        '3DBBCLZWejuZWVbGPHB3n4AtWjNf4gHWDUPV1hE45Kb9',
+        'AXCK8UzvhACvD9qQYsaeYV26WUCFwgJXs2bzAJyWBQvb',
       );
     });
   });
