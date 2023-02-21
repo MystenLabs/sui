@@ -584,7 +584,7 @@ impl TryInto<Object> for SuiObject<SuiRawData> {
                         o.has_public_transfer,
                         o.version,
                         o.bcs_bytes,
-                        protocol_config,
+                        &protocol_config,
                     )?
                 })
             }

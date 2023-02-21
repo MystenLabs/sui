@@ -204,7 +204,7 @@ impl SuiCostTable {
     }
 
     pub fn new_for_testing() -> Self {
-        Self::new(ProtocolConfig::get_for_max_version())
+        Self::new(&ProtocolConfig::get_for_max_version())
     }
 
     fn unmetered() -> Self {
