@@ -45,7 +45,8 @@ export function ModuleFunction({
     functionName,
     functionDetails,
 }: ModuleFunctionProps) {
-    const { isConnected, signAndExecuteTransaction } = useWalletKit();
+    const { isConnected, signAndExecuteTransaction, currentAccount } =
+        useWalletKit();
     const { handleSubmit, formState, register, control } = useZodForm({
         schema: argsSchema,
     });
@@ -68,15 +69,21 @@ export function ModuleFunction({
     );
     const execute = useMutation({
         mutationFn: async ({ params, types }: TypeOf<typeof argsSchema>) => {
+            if (!currentAccount) {
+                throw new Error('Current account not found');
+            }
             const result = await signAndExecuteTransaction({
-                kind: 'moveCall',
-                data: {
-                    packageObjectId: packageId,
-                    module: moduleName,
-                    function: functionName,
-                    arguments: params || [],
-                    typeArguments: types || [],
-                    gasBudget: 2000,
+                account: currentAccount,
+                transaction: {
+                    kind: 'moveCall',
+                    data: {
+                        packageObjectId: packageId,
+                        module: moduleName,
+                        function: functionName,
+                        arguments: params || [],
+                        typeArguments: types || [],
+                        gasBudget: 2000,
+                    },
                 },
             });
             if (getExecutionStatusType(result) === 'failure') {
