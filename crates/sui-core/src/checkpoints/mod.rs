@@ -730,29 +730,56 @@ impl CheckpointBuilder {
                 timer.elapsed().as_millis() as i64
             );
         let executable_tx = VerifiedExecutableTransaction::new_from_checkpoint_to_be_replaced(
-            cert,
+            cert.clone(),
             self.epoch_store.epoch(),
             checkpoint,
         );
 
-        let span =
-            error_span!("augment_epoch_last_checkpoint", tx_digest = ?executable_tx.digest());
-        let signed_effect = self
+        let tx_digest = *executable_tx.digest();
+
+        let span = error_span!("augment_epoch_last_checkpoint", ?tx_digest);
+        let signed_effects = self
             .state
-            .try_execute_immediately(&executable_tx, &self.epoch_store)
+            // Get the effects without committing execution to the db.
+            .get_change_epoch_tx_effects(&executable_tx, &self.epoch_store)
             .instrument(span)
             .await?;
+
+        // We must write cert and effects to the state sync tables so that state sync is able to
+        // deliver to the transaction to CheckpointExecutor after it is included in a certified
+        // checkpoint.
+        let txns = &self.state.database.perpetual_tables.executed_transactions;
+        let synced_txns = &self.state.database.perpetual_tables.synced_transactions;
+        let synced_effects = &self.state.database.perpetual_tables.effects;
+        synced_txns
+            .batch()
+            .insert_batch(
+                txns,
+                [(
+                    tx_digest,
+                    executable_tx.clone().into_unsigned().serializable_ref(),
+                )],
+            )?
+            // TODO: checkpoint_executor assumes that un-executed transactions are only found in
+            // synced_transactions, so we must insert it there as well.
+            .insert_batch(synced_txns, [(*cert.digest(), cert.serializable_ref())])?
+            .insert_batch(
+                synced_effects,
+                [(signed_effects.digest(), signed_effects.data())],
+            )?
+            .write()?;
+
         debug!(
             "Effects summary of the change epoch transaction: {:?}",
-            signed_effect.summary_for_debug()
+            signed_effects.summary_for_debug()
         );
         self.epoch_store.record_is_safe_mode_metric(
             self.state.get_sui_system_state_object().unwrap().safe_mode,
         );
         // The change epoch transaction cannot fail to execute.
         // TODO: Audit the advance_epoch move call to make sure there is no way for it to fail.
-        assert!(signed_effect.status.is_ok());
-        effects.push(signed_effect.into_message());
+        assert!(signed_effects.status.is_ok());
+        effects.push(signed_effects.into_message());
         Ok(())
     }
 

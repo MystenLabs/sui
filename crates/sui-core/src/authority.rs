@@ -784,15 +784,17 @@ impl AuthorityState {
         // non-transient (transaction input is invalid, move vm errors). However, all errors from
         // this function occur before we have written anything to the db, so we commit the tx
         // guard and rely on the client to retry the tx (if it was transient).
-        let (inner_temporary_store, signed_effects) =
-            match self.prepare_certificate(certificate, epoch_store).await {
-                Err(e) => {
-                    debug!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
-                    tx_guard.release();
-                    return Err(e);
-                }
-                Ok(res) => res,
-            };
+        let (inner_temporary_store, signed_effects) = match self
+            .prepare_certificate(&execution_guard, certificate, epoch_store)
+            .await
+        {
+            Err(e) => {
+                debug!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
+                tx_guard.release();
+                return Err(e);
+            }
+            Ok(res) => res,
+        };
 
         // Write tx output to WAL as first commit phase. In second phase
         // we write from WAL to permanent storage. The purpose of this scheme
@@ -895,6 +897,31 @@ impl AuthorityState {
         Ok(())
     }
 
+    /// Executes the cert to effects without committing it to the database. The effects of the
+    /// change epoch tx are only written to the database after a certified checkpoint has been
+    /// formed and executed by CheckpointExecutor.
+    pub(crate) async fn get_change_epoch_tx_effects(
+        &self,
+        tx: &VerifiedExecutableTransaction,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<VerifiedSignedTransactionEffects> {
+        assert!(tx.inner().intent_message.value.kind.is_change_epoch_tx());
+
+        let digest = tx.digest();
+        // Even though we are not going to write any effects or objects to the db, we still acquire
+        // the proper locks. We may be racing with CheckpointExecutor, which could have received a
+        // certified checkpoint with the change epoch tx in it.
+        let _tx_lock = epoch_store.acquire_tx_lock(digest).await;
+        let execution_guard = self
+            .database
+            .execution_lock_for_executable_transaction(tx)
+            .await?;
+        let (_, effects) = self
+            .prepare_certificate(&execution_guard, tx, epoch_store)
+            .await?;
+        Ok(effects)
+    }
+
     /// prepare_certificate validates the transaction input, and executes the certificate,
     /// returning effects, output objects, events, etc.
     ///
@@ -907,6 +934,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     async fn prepare_certificate(
         &self,
+        _execution_guard: &ExecutionLockReadGuard<'_>,
         certificate: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(InnerTemporaryStore, VerifiedSignedTransactionEffects)> {
