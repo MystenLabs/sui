@@ -134,7 +134,7 @@ export class JsonRpcProvider extends Provider {
   constructor(
     // TODO: Probably remove the default endpoint here:
     connection: Connection = devnetConnection,
-    public options: RpcProviderOptions = DEFAULT_OPTIONS
+    public options: RpcProviderOptions = DEFAULT_OPTIONS,
   ) {
     super();
 
