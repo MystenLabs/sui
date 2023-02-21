@@ -60,7 +60,7 @@ ssh2 = "0.9.4"
 prettytable-rs = "0.10"
 thiserror = "1.0.38"
 serde_yaml = "0.9.17"
-colored = "2.0.0"
+crossterm = "0.26.0"
 
 [target.'cfg(msim)'.dependencies]
 sui-macros = { path = "../sui-macros" }

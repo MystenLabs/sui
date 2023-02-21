@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     io::{Read, Write},
     net::SocketAddr,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use ssh2::{Channel, Session};
@@ -52,6 +52,25 @@ impl SshConnectionPool {
     }
 }
 
+#[derive(Clone)]
+pub struct SshConnectionManager {
+    username: String,
+    private_key_file: PathBuf,
+}
+
+impl SshConnectionManager {
+    pub fn new(username: String, private_key_file: PathBuf) -> Self {
+        Self {
+            username,
+            private_key_file,
+        }
+    }
+
+    pub async fn connect(&self, address: SocketAddr) -> SshResult<SshConnection> {
+        SshConnection::new(address, &self.username, self.private_key_file.clone()).await
+    }
+}
+
 pub struct SshConnection {
     session: Session,
 }
@@ -65,6 +84,7 @@ impl SshConnection {
         let tcp = TcpStream::connect(address).await?;
 
         let mut session = Session::new()?;
+        session.set_timeout(5_000);
         session.set_tcp_stream(tcp);
         session.handshake()?;
         session.userauth_pubkey_file(username, None, private_key_file.as_ref(), None)?;
@@ -74,6 +94,16 @@ impl SshConnection {
 
     pub fn execute(&self, command: String) -> SshResult<(String, String)> {
         let channel = self.session.channel_session()?;
+        Self::execute_impl(channel, command)
+    }
+
+    pub fn execute_from_path<P: AsRef<Path>>(
+        &self,
+        command: String,
+        path: P,
+    ) -> SshResult<(String, String)> {
+        let channel = self.session.channel_session()?;
+        let command = format!("(cd {:?} && {command})", path.as_ref());
         Self::execute_impl(channel, command)
     }
 

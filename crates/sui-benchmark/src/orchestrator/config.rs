@@ -23,6 +23,8 @@ pub struct Config {
 
 impl Config {
     const GAS_OBJECT_ID_OFFSET: &'static str = "0x59931dcac57ba20d75321acaf55e8eb5a2c47e9f";
+    const GENESIS_CONFIG_FILE: &'static str = "benchmark-genesis.yml";
+    const GAS_KEYSTORE_FILE: &'static str = "gas.keystore";
 
     pub fn new(instances: &[Instance]) -> Self {
         let mut rng = StdRng::seed_from_u64(0);
@@ -40,15 +42,24 @@ impl Config {
 
     pub fn print_files(&mut self) {
         let yaml = serde_yaml::to_string(&self.genesis_config).unwrap();
-        let path = PathBuf::from("./benchmark-genesis.yml");
+        let path = PathBuf::from(Self::GENESIS_CONFIG_FILE);
         fs::write(path, yaml).unwrap();
 
-        self.keystore.set_path(&PathBuf::from("./gas.keystore"));
+        let path = PathBuf::from(Self::GAS_KEYSTORE_FILE);
+        self.keystore.set_path(&path);
         self.keystore.save().unwrap();
     }
 
     pub fn files(&self) -> Vec<PathBuf> {
-        vec!["./benchmark-genesis.yml".into(), "./gas.keystore".into()]
+        vec![
+            Self::GENESIS_CONFIG_FILE.into(),
+            Self::GAS_KEYSTORE_FILE.into(),
+        ]
+    }
+
+    pub fn genesis_command(&self) -> String {
+        let genesis = format!("~/{}", Self::GENESIS_CONFIG_FILE);
+        format!("cargo run --release --bin sui -- genesis --from-config {genesis}")
     }
 
     // Generate a genesis configuration file suitable for benchmarks.
