@@ -344,7 +344,7 @@ impl AuthorityStore {
         digest: &TransactionDigest,
         objects: &[InputObjectKind],
         epoch_store: &AuthorityPerEpochStore,
-    ) -> Result<Vec<ObjectKey>, SuiError> {
+    ) -> Result<Vec<MissingInput>, SuiError> {
         let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
 
         let mut missing = Vec::new();
@@ -359,27 +359,28 @@ impl AuthorityStore {
                     // If we can't find the locked version, it means
                     // 1. either we have a bug that skips shared object version assignment
                     // 2. or we have some DB corruption
-                    let version = shared_locks.get(id).unwrap_or_else(|| {
+                    let Some(version) = shared_locks.get(id) else {
                         panic!(
-                        "Shared object locks should have been set. tx_digset: {:?}, obj id: {:?}",
-                        digest, id
-                    )
-                    });
+                            "Shared object locks should have been set. tx_digset: {digest:?}, obj \
+                             id: {id:?}",
+                        )
+                    };
+
                     if !self.object_version_exists(id, *version)? {
-                        // When this happens, other transactions that use smaller versions of
-                        // this shared object haven't finished execution.
-                        missing.push(ObjectKey(*id, *version));
+                        // When this happens, other transactions that use smaller versions of this
+                        // shared object haven't finished execution.
+                        missing.push(MissingInput::from(ObjectKey(*id, *version)));
                     }
                 }
                 InputObjectKind::MovePackage(id) => {
                     if !self.object_exists(*id)? {
                         // The cert cannot have been formed if the package was missing.
-                        missing.push(ObjectKey::max_for_id(id));
+                        missing.push(MissingInput::from(*id));
                     }
                 }
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
                     if self.get_object_by_key(&objref.0, objref.1)?.is_none() {
-                        missing.push(ObjectKey::from(objref));
+                        missing.push(MissingInput::from(objref));
                     }
                 }
             };
@@ -1251,4 +1252,41 @@ pub enum ObjectLockStatus {
 pub struct LockDetails {
     pub epoch: EpochId,
     pub tx_digest: TransactionDigest,
+}
+
+/// Identifies an input to a transaction that is missing in the store
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
+pub enum MissingInput {
+    /// Input is identified by just its ID, and not its version.
+    ByID(ObjectID),
+
+    /// Input is identified by its ID and version.
+    ByKey(ObjectKey),
+}
+
+impl MissingInput {
+    pub fn id(&self) -> ObjectID {
+        match self {
+            MissingInput::ByID(id) => *id,
+            MissingInput::ByKey(ObjectKey(id, _version)) => *id,
+        }
+    }
+}
+
+impl From<&ObjectRef> for MissingInput {
+    fn from((id, version, _digest): &ObjectRef) -> Self {
+        MissingInput::ByKey(ObjectKey(*id, *version))
+    }
+}
+
+impl From<ObjectKey> for MissingInput {
+    fn from(key: ObjectKey) -> Self {
+        MissingInput::ByKey(key)
+    }
+}
+
+impl From<ObjectID> for MissingInput {
+    fn from(id: ObjectID) -> Self {
+        MissingInput::ByID(id)
+    }
 }
