@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ArrowRight16 } from '@mysten/icons';
 import { Field, Formik, Form, ErrorMessage } from 'formik';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -13,6 +14,7 @@ import { Link } from '_src/ui/app/shared/Link';
 import FieldLabel from '_src/ui/app/shared/field-label';
 import { Heading } from '_src/ui/app/shared/heading';
 import PasswordInput from '_src/ui/app/shared/input/password';
+import { Text } from '_src/ui/app/shared/text';
 
 const validation = object({
     password: YupString().ensure().required().label('Password'),
@@ -20,12 +22,18 @@ const validation = object({
 
 export type PasswordExportDialogProps = {
     title: string;
+    continueLabel?: string;
+    finalStep?: boolean;
     onPasswordVerified: (password: string) => Promise<void> | void;
+    onBackClicked?: () => void;
 };
 
 export function PasswordInputDialog({
     title,
+    continueLabel = 'Continue',
+    finalStep = false,
     onPasswordVerified,
+    onBackClicked,
 }: PasswordExportDialogProps) {
     const navigate = useNavigate();
     const backgroundService = useBackgroundClient();
@@ -63,21 +71,36 @@ export function PasswordInputDialog({
                                 name="password"
                             />
                         </FieldLabel>
+                        <div className="text-center mt-4">
+                            <Text
+                                variant="p2"
+                                color="steel-dark"
+                                weight="normal"
+                            >
+                                This is the password you currently use to lock
+                                and unlock your Sui wallet.
+                            </Text>
+                        </div>
                     </div>
                     <div className="flex flex-col flex-nowrap gap-3.75 self-stretch">
                         <Button
                             type="submit"
                             variant="primary"
                             size="tall"
-                            text="Continue"
+                            text={continueLabel}
                             loading={isSubmitting}
                             disabled={!isValid}
+                            after={finalStep ? null : <ArrowRight16 />}
                         />
                         <Link
-                            text="Cancel"
+                            text="Go Back"
                             color="heroDark"
                             onClick={() => {
-                                navigate(-1);
+                                if (typeof onBackClicked === 'function') {
+                                    onBackClicked();
+                                } else {
+                                    navigate(-1);
+                                }
                             }}
                             disabled={isSubmitting}
                         />

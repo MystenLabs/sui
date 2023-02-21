@@ -308,6 +308,18 @@ export class Keyring {
                         id
                     )
                 );
+            } else if (
+                isKeyringPayload(payload, 'importPrivateKey') &&
+                payload.args
+            ) {
+                const imported = await this.importAccountKeypair(
+                    payload.args.keyPair,
+                    payload.args.password
+                );
+                if (!imported) {
+                    throw new Error('Duplicate account not imported');
+                }
+                uiConnection.send(createMessage({ type: 'done' }, id));
             }
         } catch (e) {
             uiConnection.send(

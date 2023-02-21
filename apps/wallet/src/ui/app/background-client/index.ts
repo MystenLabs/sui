@@ -5,6 +5,7 @@ import {
     type SerializedSignature,
     toB64,
     type SignedTransaction,
+    type ExportedKeypair,
 } from '@mysten/sui.js';
 import { lastValueFrom, map, take } from 'rxjs';
 
@@ -309,6 +310,18 @@ export class BackgroundClient {
                     );
                 })
             )
+        );
+    }
+
+    public async importPrivateKey(password: string, keyPair: ExportedKeypair) {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'importPrivateKey'>>({
+                    type: 'keyring',
+                    method: 'importPrivateKey',
+                    args: { password, keyPair },
+                })
+            ).pipe(take(1))
         );
     }
 
