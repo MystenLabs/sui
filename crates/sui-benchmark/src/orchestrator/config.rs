@@ -1,0 +1,100 @@
+use std::{fs, path::PathBuf};
+
+use move_core_types::account_address::AccountAddress;
+use rand::{rngs::StdRng, SeedableRng};
+use sui_config::{
+    genesis::GenesisChainParameters,
+    genesis_config::{
+        AccountConfig, GenesisConfig, ObjectConfigRange, ValidatorConfigInfo, ValidatorGenesisInfo,
+    },
+};
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
+use sui_types::{
+    base_types::SuiAddress,
+    crypto::{AuthorityKeyPair, KeypairTraits, NetworkKeyPair, SuiKeyPair},
+};
+
+use super::state::Instance;
+
+pub struct Config {
+    genesis_config: GenesisConfig,
+    keystore: FileBasedKeystore,
+}
+
+impl Config {
+    const GAS_OBJECT_ID_OFFSET: &'static str = "0x59931dcac57ba20d75321acaf55e8eb5a2c47e9f";
+
+    pub fn new(instances: &[Instance]) -> Self {
+        let mut rng = StdRng::seed_from_u64(0);
+        let gas_key = SuiKeyPair::Ed25519(NetworkKeyPair::generate(&mut rng));
+        let gas_address = SuiAddress::from(&gas_key.public());
+        let genesis_config = Self::make_genesis_config(instances, gas_address);
+        let mut keystore = FileBasedKeystore::default();
+        keystore.add_key(gas_key).unwrap();
+
+        Self {
+            genesis_config,
+            keystore,
+        }
+    }
+
+    pub fn print_files(&mut self) {
+        let yaml = serde_yaml::to_string(&self.genesis_config).unwrap();
+        let path = PathBuf::from("./benchmark-genesis.yml");
+        fs::write(path, yaml).unwrap();
+
+        self.keystore.set_path(&PathBuf::from("./gas.keystore"));
+        self.keystore.save().unwrap();
+    }
+
+    pub fn files(&self) -> Vec<PathBuf> {
+        vec!["./benchmark-genesis.yml".into(), "./gas.keystore".into()]
+    }
+
+    // Generate a genesis configuration file suitable for benchmarks.
+    fn make_genesis_config(instances: &[Instance], gas_address: SuiAddress) -> GenesisConfig {
+        let mut rng = StdRng::seed_from_u64(0);
+
+        // Set the validator's configs.
+        let validator_config_info: Vec<_> = instances
+            .iter()
+            .map(|instance| {
+                ValidatorConfigInfo {
+                    consensus_address: "/ip4/127.0.0.1/tcp/8083/http".parse().unwrap(),
+                    consensus_internal_worker_address: None,
+                    genesis_info: ValidatorGenesisInfo::from_base_ip(
+                        AuthorityKeyPair::generate(&mut rng), // key_pair
+                        NetworkKeyPair::generate(&mut rng),   // worker_key_pair
+                        SuiKeyPair::Ed25519(NetworkKeyPair::generate(&mut rng)), // account_key_pair
+                        NetworkKeyPair::generate(&mut rng),   // network_key_pair
+                        instance.main_ip.to_string(),
+                        500, // port_offset
+                    ),
+                }
+            })
+            .collect();
+
+        // Set the initial gas objects.
+        let account_config = AccountConfig {
+            address: Some(gas_address),
+            gas_objects: vec![],
+            gas_object_ranges: Some(vec![ObjectConfigRange {
+                offset: AccountAddress::from_hex_literal(Self::GAS_OBJECT_ID_OFFSET)
+                    .unwrap()
+                    .into(),
+                count: 5000,
+                gas_value: 18446744073709551615,
+            }]),
+        };
+
+        // Make the genesis configuration file.
+        GenesisConfig {
+            validator_config_info: Some(validator_config_info),
+            parameters: GenesisChainParameters::new(),
+            committee_size: instances.len(),
+            grpc_load_shed: None,
+            grpc_concurrency_limit: None,
+            accounts: vec![account_config],
+        }
+    }
+}

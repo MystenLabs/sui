@@ -48,6 +48,7 @@ pub mod drivers;
 pub mod embedded_reconfig_observer;
 pub mod fullnode_reconfig_observer;
 pub mod options;
+pub mod orchestrator;
 pub mod system_state_observer;
 pub mod util;
 pub mod workloads;
