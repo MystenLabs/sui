@@ -784,15 +784,17 @@ impl AuthorityState {
         // non-transient (transaction input is invalid, move vm errors). However, all errors from
         // this function occur before we have written anything to the db, so we commit the tx
         // guard and rely on the client to retry the tx (if it was transient).
-        let (inner_temporary_store, signed_effects) =
-            match self.prepare_certificate(certificate, epoch_store).await {
-                Err(e) => {
-                    debug!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
-                    tx_guard.release();
-                    return Err(e);
-                }
-                Ok(res) => res,
-            };
+        let (inner_temporary_store, signed_effects) = match self
+            .prepare_certificate(&execution_guard, certificate, epoch_store)
+            .await
+        {
+            Err(e) => {
+                debug!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
+                tx_guard.release();
+                return Err(e);
+            }
+            Ok(res) => res,
+        };
 
         // Write tx output to WAL as first commit phase. In second phase
         // we write from WAL to permanent storage. The purpose of this scheme
@@ -915,11 +917,13 @@ impl AuthorityState {
         // the proper locks. We may be racing with CheckpointExecutor, which could have received a
         // certified checkpoint with the change epoch tx in it.
         let _tx_lock = epoch_store.acquire_tx_lock(digest).await;
-        let _execution_guard = self
+        let execution_guard = self
             .database
             .execution_lock_for_certificate(certificate)
-            .await;
-        let (_, effects) = self.prepare_certificate(certificate, epoch_store).await?;
+            .await?;
+        let (_, effects) = self
+            .prepare_certificate(&execution_guard, certificate, epoch_store)
+            .await?;
         Ok(effects)
     }
 
@@ -935,6 +939,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     async fn prepare_certificate(
         &self,
+        _execution_guard: &ExecutionLockReadGuard<'_>,
         certificate: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(InnerTemporaryStore, VerifiedSignedTransactionEffects)> {
