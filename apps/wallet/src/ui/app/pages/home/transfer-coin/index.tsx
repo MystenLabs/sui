@@ -140,18 +140,18 @@ function TransferCoinPage() {
                     gasBudget: gasBudgetEstimationUnits,
                     inputCoins: allCoins.map((coin) => CoinAPI.getID(coin)),
                 });
-            } else {
-                const bigIntAmount = parseAmount(formData.amount, coinDecimals);
-                return signer.signAndExecuteTransaction(
-                    await CoinAPI.newPayTransaction(
-                        allCoins,
-                        coinType,
-                        bigIntAmount,
-                        formData.to,
-                        gasBudgetEstimationUnits
-                    )
-                );
             }
+
+            const bigIntAmount = parseAmount(formData.amount, coinDecimals);
+            return signer.signAndExecuteTransaction(
+                await CoinAPI.newPayTransaction(
+                    allCoins,
+                    coinType,
+                    bigIntAmount,
+                    formData.to,
+                    gasBudgetEstimationUnits
+                )
+            );
         },
         onSuccess: (response) => {
             const txDigest = getTransactionDigest(response!);
