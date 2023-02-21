@@ -82,7 +82,7 @@ Sui validates transactions individually, rather than batching them into traditio
 
 Submitting a Sui transaction involves the following steps. These are transparent to the transaction sender, but it's worth understanding what is happening behind the scenes:
 
-1. The user sends the transaction to a *quorum driver* (e.g., a full node) that broadcasts the transaction to a set of validators.
+1. Users send transactions to a *quorum driver*, such as a Full node, that broadcasts the transactions to a set of validators.
 1. Each Sui validator performs validity checks and (if successful) a signature on the transaction. Each signature has a weight proportional to the amount staked with the validator. The combined weight of all validators is always 10,000, and thus the quorum threshold is always 6,667.
 1. The quroum driver collects signatures with a combined weight greater than or equal to 6,667 into a _certificate_ and broadcasts it to all Sui validators.
 1. Upon receiving a cerficate, the validator (afer checking its validity) executes the embedded transaction and returns signed _transaction effects_ to the quorum driver. A transaction is _final_ when a quorum of validators have received and executed its corresponding certificate.
