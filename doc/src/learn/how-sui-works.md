@@ -6,11 +6,11 @@ This document is written for engineers, developers, and technical readers knowle
 
 ## Overview
 
-The Sui blockchain operates at a speed and scale previously thought unattainable. Sui assumes most blockchain transactions touch non-overlapping states, meaning that transactions can run in parallel. Sui optimizes for single-writer objects, allowing a design that forgoes consensus for simple transactions.
+The Sui blockchain is reshaping the industry by achieving unprecedented speed and scalability. Its innovative approach takes advantage of the fact that a large number of blockchain transactions involve non-overlapping states, which allows for parallel processing. Additionally, Sui optimizes for single-writer objects, removing the need for consensus in simple transactions.
 
-Instead of the traditional blockchain’s fire-and-forget broadcast, Sui's design enables a requestor or a proxy to proactively talk to validators to bring a transaction to finality. This results in near instant finality for simple transactions.
+Unlike traditional blockchains that rely on fire-and-forget broadcasts, Sui's design enables requestors or proxies to proactively communicate with validators to finalize transactions, resulting in near-instant finality. With such low latency, Sui is a key enabler to incorporating transactions into games and other settings that require real-time completion.
 
-With this low latency, Sui makes it easy to incorporate transactions into games and other settings that need completion in real time. Sui also supports smart contracts written in Move, a language designed for blockchains with strong inherent security and a more understandable programming model.
+Sui also supports smart contracts written in Move, a language designed for blockchains with strong inherent security and a more understandable programming model.
 
 In a world where the cost of bandwidth is diminishing steadily, we are creating an ecosystem of services that will find it easy, fun, and perhaps profitable to ensure transaction voting on behalf of users.
 
@@ -20,7 +20,7 @@ Become familiar with these key Sui concepts:
 
 * [Objects](../learn/objects.md) - Sui has programmable objects created and managed by Move packages (a.k.a. smart contracts). Move packages themselves are also objects. Thus, Sui objects can be partitioned into two categories: mutable data values and immutable packages.
 * [Transactions](../learn/transactions.md) - All updates to the Sui ledger happen via a transaction. This section describes the transaction types supported by Sui and explains how their execution changes the ledger.
-* [Validators](../learn/architecture/validators.md) - The Sui network is operated by a set of independent validators, each running its own instance of the Sui software on a separate machine (or a sharded cluster of machines operated by the same entity).
+* [Validators](../learn/architecture/validators.md) - The Sui network is operated by a set of independent validators, each running its own instance of the Sui software on a separate machine (or a cluster of machines operated by the same entity).
 
 ## Architecture
 
@@ -28,7 +28,7 @@ Sui is a distributed ledger that stores a collection of programmable [objects](.
 
 The ledger is updated via a [transaction](../learn/transactions.md) sent by a particular address. A transaction can create, destroy, and write objects, as well as transfer them to other addresses.
 
-Structurally, a transaction contains a set of input object references and a pointer to a Move code object that already exists in the ledger. Executing a transaction produces updates to the input objects and (if applicable) a set of freshly created objects along with their owners. A transaction whose sender is address *A* can accept objects owned by *A*, shared objects, and objects owned by other objects in the first two groups as input.
+Structurally, a transaction contains a set of input object references and a pointer to a Move code object that already exists in the ledger. Executing a transaction produces updates to the input objects and (if applicable) a set of freshly created objects along with their owner addresses. A transaction with address *A* as a sender can accept either (a) objects owned by *A*, (b) shared objects, or (c) objects that are owned by other objects which satsify case (a) or case (b).
 
 ```mermaid
 flowchart LR
@@ -47,17 +47,15 @@ flowchart LR
     AC2 <==>|Network TCP| Authority2
 ```
 
-Sui validators agree on and execute transactions in parallel with high throughput using [Byzantine Consistent Broadcast](https://en.wikipedia.org/wiki/Byzantine_fault).
+The validators on the Sui blockchain do not require consensus to process transactions involving exclusively owned objects. Instead, they execute transactions in parallel at high throughput, utilizing [Byzantine Consistent Broadcast](https://en.wikipedia.org/wiki/Byzantine_fault). For objects that involve shared objects, the validators employ [Bullshark](https://arxiv.org/abs/2209.05633) , a high-throughput DAG-base consensus protocol.
 
 ## System overview
 
 This section is written for a technical audience wishing to gain more insight about how Sui achieves its main performance and security objectives.
 
-Sui assumes the typical blockchain transaction is a user-to-user transfer or asset manipulation and optimizes for that scenario. As a result, Sui distinguishes between two types of assets (i) owned objects that can be modified only by their specific owner, and (ii) shared objects that have no specific owners and can be modified by more than one user. This distinction allows for a design that achieves very low latency by forgoing [consensus](architecture/consensus.md) for simple transactions involving only owned objects.
+Sui assumes the typical blockchain transaction is a user-to-user transfer or asset manipulation and optimizes for that scenario. As a result, Sui distinguishes between two types of assets (i) owned objects that can be modified only by their specific owner and hence should never be under contention, and (ii) shared objects that have no specific owners and can be modified by more than one user. This distinction allows for a design that achieves very low latency by forgoing [consensus](architecture/consensus.md) for simple transactions involving only owned objects.
 
-Sui mitigates a major hindrance to blockchain growth: [head-of-line blocking](https://en.wikipedia.org/wiki/Head-of-line_blocking). Blockchain nodes maintain an accumulator that represents the state of the entire blockchain, such as the latest certified transactions. Nodes participate in a consensus protocol to add an update to that state reflecting the transaction’s modification to blocks (add, remove, mutate). That consensus protocol leads to an agreement on the state of the blockchain before the increment, the validity and suitability of the state update itself, and the state of the blockchain after the increment. On a periodic basis, these increments are collected in the accumulator.
-
-In Sui, this [consensus](architecture/consensus.md)  protocol is required only when the transaction involves shared objects. For this, Sui offers the Narwhal DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus via Bullshark. When shared objects are involved, the Sui validators play the role of more active validators in other blockchains to totally order the transaction with respect to other transactions accessing shared objects.
+In Sui, [consensus](architecture/consensus.md) is only required when the transaction involves shared objects. For this, Sui employes the [Narwhal DAG-based mempool](https://arxiv.org/abs/2105.11827) and an efficient Byzantine Fault Tolerant (BFT) consensus via Bullshark. When shared objects are involved, the Sui validators play a similar role to validators in other blockchains and totally order transactions accessing shared objects.
 
 Because Sui focuses on managing specific objects rather than a single aggregation of state, it also reports on them in a unique way: (i) every object in Sui has a unique version number, and (ii) every new version is created from a transaction that may involve several dependencies, themselves versioned objects.
 
@@ -68,7 +66,7 @@ Sui guarantees transaction processing obeys [eventual consistency](https://en.wi
 * Eventual delivery - if one honest validator processes a transaction, all other honest validators will eventually do the same.
 * Convergence - two validators that have seen the same set of transactions share the same view of the system (reach the same state).
 
-But contrary to a blockchain, Sui does not stop the flow of transactions in order to witness the convergence.
+But contrary to a blockchain, Sui does not stop the flow of transactions in order to witness the convergence until the end of an epoch.
 
 ## Transactions on single-owner objects
 
