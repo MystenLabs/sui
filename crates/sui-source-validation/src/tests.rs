@@ -4,7 +4,6 @@
 use expect_test::expect;
 use move_core_types::account_address::AccountAddress;
 use std::collections::HashMap;
-use std::io::Write;
 use std::{fs, io, path::Path};
 use std::{path::PathBuf, str};
 use sui::client_commands::WalletContext;
@@ -26,21 +25,21 @@ async fn successful_verification() -> anyhow::Result<()> {
 
     let b_ref = {
         let fixtures = tempfile::tempdir()?;
-        let b_src = copy_package(&fixtures, "b", [("b", SuiAddress::ZERO)]).await?;
+        let b_src = copy_package(&fixtures, "b", SuiAddress::ZERO).await?;
         publish_package(context, sender, b_src).await
     };
 
     let b_pkg = {
         let fixtures = tempfile::tempdir()?;
-        let b_src = copy_package(&fixtures, "b", [("b", b_ref.0.into())]).await?;
+        let b_src = copy_package(&fixtures, "b", b_ref.0.into()).await?;
         compile_package(b_src)
     };
 
     let (a_pkg, a_ref) = {
         let fixtures = tempfile::tempdir()?;
         let b_id = b_ref.0.into();
-        copy_package(&fixtures, "b", [("b", b_id)]).await?;
-        let a_src = copy_package(&fixtures, "a", [("a", SuiAddress::ZERO), ("b", b_id)]).await?;
+        copy_package(&fixtures, "b", b_id).await?;
+        let a_src = copy_package(&fixtures, "a", SuiAddress::ZERO).await?;
         (
             compile_package(a_src.clone()),
             publish_package(context, sender, a_src).await,
@@ -96,9 +95,8 @@ async fn successful_verification_unpublished_deps() -> anyhow::Result<()> {
     let fixtures = tempfile::tempdir()?;
 
     let a_src = {
-        let zero = SuiAddress::ZERO;
-        copy_package(&fixtures, "b", [("b", zero)]).await?;
-        copy_package(&fixtures, "a", [("a", zero), ("b", zero)]).await?
+        copy_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        copy_package(&fixtures, "a", SuiAddress::ZERO).await?
     };
 
     let a_pkg = compile_package(a_src.clone());
@@ -117,6 +115,44 @@ async fn successful_verification_unpublished_deps() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn successful_verification_module_ordering() -> anyhow::Result<()> {
+    let mut cluster = TestClusterBuilder::new().build().await?;
+    let sender = cluster.get_address_0();
+    let context = &mut cluster.wallet;
+
+    // This package contains a module that refers to itself, and also to the sui framework.  Its
+    // self-address is `0x0` (i.e. compares lower than the framework's `0x2`) before publishing,
+    // and will be greater after publishing.
+    //
+    // This is a regression test for a source validation bug related to module order instability
+    // where the on-chain package (which is compiled with self-address = 0x0, and later substituted)
+    // orders module handles (references to other modules) differently to the package compiled as a
+    // dependency with its self-address already set as its published address.
+    let z_ref = {
+        let fixtures = tempfile::tempdir()?;
+        let z_src = copy_package(&fixtures, "z", SuiAddress::ZERO).await?;
+        publish_package(context, sender, z_src).await
+    };
+
+    let z_pkg = {
+        let fixtures = tempfile::tempdir()?;
+        let z_src = copy_package(&fixtures, "z", z_ref.0.into()).await?;
+        compile_package(z_src)
+    };
+
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
+
+    let verify_deps = false;
+    verifier
+        .verify_package(&z_pkg.package, verify_deps, SourceMode::Verify)
+        .await
+        .unwrap();
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn fail_verification_bad_address() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await?;
     let sender = cluster.get_address_0();
@@ -124,15 +160,15 @@ async fn fail_verification_bad_address() -> anyhow::Result<()> {
 
     let b_ref = {
         let fixtures = tempfile::tempdir()?;
-        let b_src = copy_package(&fixtures, "b", [("b", SuiAddress::ZERO)]).await?;
+        let b_src = copy_package(&fixtures, "b", SuiAddress::ZERO).await?;
         publish_package(context, sender, b_src).await
     };
 
     let (a_pkg, _) = {
         let fixtures = tempfile::tempdir()?;
         let b_id = b_ref.0.into();
-        copy_package(&fixtures, "b", [("b", b_id)]).await?;
-        let a_src = copy_package(&fixtures, "a", [("a", SuiAddress::ZERO), ("b", b_id)]).await?;
+        copy_package(&fixtures, "b", b_id).await?;
+        let a_src = copy_package(&fixtures, "a", SuiAddress::ZERO).await?;
         (
             compile_package(a_src.clone()),
             publish_package(context, sender, a_src).await,
@@ -160,7 +196,7 @@ async fn fail_to_verify_unpublished_root() -> anyhow::Result<()> {
 
     let b_pkg = {
         let fixtures = tempfile::tempdir()?;
-        let b_src = copy_package(&fixtures, "b", [("b", SuiAddress::ZERO)]).await?;
+        let b_src = copy_package(&fixtures, "b", SuiAddress::ZERO).await?;
         compile_package(b_src)
     };
 
@@ -193,15 +229,15 @@ async fn rpc_call_failed_during_verify() -> anyhow::Result<()> {
 
     let b_ref = {
         let fixtures = tempfile::tempdir()?;
-        let b_src = copy_package(&fixtures, "b", [("b", SuiAddress::ZERO)]).await?;
+        let b_src = copy_package(&fixtures, "b", SuiAddress::ZERO).await?;
         publish_package(context, sender, b_src).await
     };
 
     let (_a_pkg, a_ref) = {
         let fixtures = tempfile::tempdir()?;
         let b_id = b_ref.0.into();
-        copy_package(&fixtures, "b", [("b", b_id)]).await?;
-        let a_src = copy_package(&fixtures, "a", [("a", SuiAddress::ZERO), ("b", b_id)]).await?;
+        copy_package(&fixtures, "b", b_id).await?;
+        let a_src = copy_package(&fixtures, "a", SuiAddress::ZERO).await?;
         (
             compile_package(a_src.clone()),
             publish_package(context, sender, a_src).await,
@@ -252,8 +288,8 @@ async fn package_not_found() -> anyhow::Result<()> {
         let fixtures = tempfile::tempdir()?;
         let b_id = SuiAddress::random_for_testing_only();
         stable_addrs.insert(b_id, "<id>");
-        copy_package(&fixtures, "b", [("b", b_id)]).await?;
-        let a_src = copy_package(&fixtures, "a", [("a", SuiAddress::ZERO), ("b", b_id)]).await?;
+        copy_package(&fixtures, "b", b_id).await?;
+        let a_src = copy_package(&fixtures, "a", SuiAddress::ZERO).await?;
         compile_package(a_src)
     };
 
@@ -304,8 +340,8 @@ async fn dependency_is_an_object() -> anyhow::Result<()> {
     let a_pkg = {
         let fixtures = tempfile::tempdir()?;
         let b_id = SUI_SYSTEM_STATE_OBJECT_ID.into();
-        copy_package(&fixtures, "b", [("b", b_id)]).await?;
-        let a_src = copy_package(&fixtures, "a", [("a", SuiAddress::ZERO), ("b", b_id)]).await?;
+        copy_package(&fixtures, "b", b_id).await?;
+        let a_src = copy_package(&fixtures, "a", SuiAddress::ZERO).await?;
         compile_package(a_src)
     };
     let client = context.get_client().await?;
@@ -331,7 +367,7 @@ async fn module_not_found_on_chain() -> anyhow::Result<()> {
 
     let b_ref = {
         let fixtures = tempfile::tempdir()?;
-        let b_src = copy_package(&fixtures, "b", [("b", SuiAddress::ZERO)]).await?;
+        let b_src = copy_package(&fixtures, "b", SuiAddress::ZERO).await?;
         tokio::fs::remove_file(b_src.join("sources").join("c.move")).await?;
         publish_package(context, sender, b_src).await
     };
@@ -339,8 +375,8 @@ async fn module_not_found_on_chain() -> anyhow::Result<()> {
     let a_pkg = {
         let fixtures = tempfile::tempdir()?;
         let b_id = b_ref.0.into();
-        copy_package(&fixtures, "b", [("b", b_id)]).await?;
-        let a_src = copy_package(&fixtures, "a", [("a", SuiAddress::ZERO), ("b", b_id)]).await?;
+        copy_package(&fixtures, "b", b_id).await?;
+        let a_src = copy_package(&fixtures, "a", SuiAddress::ZERO).await?;
         compile_package(a_src)
     };
     let client = context.get_client().await?;
@@ -365,7 +401,7 @@ async fn module_not_found_locally() -> anyhow::Result<()> {
 
     let b_ref = {
         let fixtures = tempfile::tempdir()?;
-        let b_src = copy_package(&fixtures, "b", [("b", SuiAddress::ZERO)]).await?;
+        let b_src = copy_package(&fixtures, "b", SuiAddress::ZERO).await?;
         publish_package(context, sender, b_src).await
     };
 
@@ -373,8 +409,8 @@ async fn module_not_found_locally() -> anyhow::Result<()> {
         let fixtures = tempfile::tempdir()?;
         let b_id = b_ref.0.into();
         stable_addrs.insert(b_id, "b_id");
-        let b_src = copy_package(&fixtures, "b", [("b", b_id)]).await?;
-        let a_src = copy_package(&fixtures, "a", [("a", SuiAddress::ZERO), ("b", b_id)]).await?;
+        let b_src = copy_package(&fixtures, "b", b_id).await?;
+        let a_src = copy_package(&fixtures, "a", SuiAddress::ZERO).await?;
         tokio::fs::remove_file(b_src.join("sources").join("d.move")).await?;
         compile_package(a_src)
     };
@@ -401,7 +437,7 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
 
     let b_ref = {
         let fixtures = tempfile::tempdir()?;
-        let b_src = copy_package(&fixtures, "b", [("b", SuiAddress::ZERO)]).await?;
+        let b_src = copy_package(&fixtures, "b", SuiAddress::ZERO).await?;
 
         // Modify a module before publishing
         let c_path = b_src.join("sources").join("c.move");
@@ -417,8 +453,8 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
         let fixtures = tempfile::tempdir()?;
         let b_id = b_ref.0.into();
         stable_addrs.insert(b_id, "<b_id>");
-        copy_package(&fixtures, "b", [("b", b_id)]).await?;
-        let a_src = copy_package(&fixtures, "a", [("a", SuiAddress::ZERO), ("b", b_id)]).await?;
+        copy_package(&fixtures, "b", b_id).await?;
+        let a_src = copy_package(&fixtures, "a", SuiAddress::ZERO).await?;
 
         let compiled = compile_package(a_src.clone());
         // Modify a module before publishing
@@ -463,7 +499,7 @@ async fn multiple_failures() -> anyhow::Result<()> {
     // Publish package `b::b` on-chain without c.move.
     let b_ref = {
         let fixtures = tempfile::tempdir()?;
-        let b_src = copy_package(&fixtures, "b", [("b", SuiAddress::ZERO)]).await?;
+        let b_src = copy_package(&fixtures, "b", SuiAddress::ZERO).await?;
         tokio::fs::remove_file(b_src.join("sources").join("c.move")).await?;
         publish_package(context, sender, b_src).await
     };
@@ -471,7 +507,7 @@ async fn multiple_failures() -> anyhow::Result<()> {
     // Publish package `c::c` on-chain, unmodified.
     let c_ref = {
         let fixtures = tempfile::tempdir()?;
-        let c_src = copy_package(&fixtures, "c", [("c", SuiAddress::ZERO)]).await?;
+        let c_src = copy_package(&fixtures, "c", SuiAddress::ZERO).await?;
         publish_package(context, sender, c_src).await
     };
 
@@ -484,14 +520,9 @@ async fn multiple_failures() -> anyhow::Result<()> {
         let c_id = c_ref.0.into();
         stable_addrs.insert(b_id, "<b_id>");
         stable_addrs.insert(c_id, "<c_id>");
-        copy_package(&fixtures, "b", [("b", b_id)]).await?;
-        let c_src = copy_package(&fixtures, "c", [("c", c_id)]).await?;
-        let d_src = copy_package(
-            &fixtures,
-            "d",
-            [("d", SuiAddress::ZERO), ("b", b_id), ("c", c_id)],
-        )
-        .await?;
+        copy_package(&fixtures, "b", b_id).await?;
+        let c_src = copy_package(&fixtures, "c", c_id).await?;
+        let d_src = copy_package(&fixtures, "d", SuiAddress::ZERO).await?;
         tokio::fs::remove_file(c_src.join("sources").join("d.move")).await?; // delete local module in `c`
         compile_package(d_src)
     };
@@ -548,16 +579,24 @@ async fn publish_package_and_deps(
     publish_package_with_wallet(context, sender, package_bytes).await
 }
 
-/// Copy `package` from fixtures into `directory`, setting the named address mapping in the copied
-/// package's `Move.toml` according to `addresses`.
+/// Copy `package` from fixtures into `directory`, setting its named address in the copied package's
+/// `Move.toml` to `address`. (A fixture's self-address is assumed to match its package name).
 async fn copy_package<'s>(
     directory: impl AsRef<Path>,
     package: &str,
-    addresses: impl IntoIterator<Item = (&'s str, SuiAddress)>,
+    address: SuiAddress,
 ) -> io::Result<PathBuf> {
+    let cargo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let repo_root = {
+        let mut path = cargo_root.clone();
+        path.pop(); // sui-source-validation
+        path.pop(); // crates
+        path
+    };
+
     let dst = directory.as_ref().join(package);
     let src = {
-        let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let mut buf = cargo_root.clone();
         buf.push("fixture");
         buf.push(package);
         buf
@@ -567,16 +606,10 @@ async fn copy_package<'s>(
     tokio::fs::create_dir(&dst).await?;
 
     // Copy TOML
-    let dst_toml = dst.join("Move.toml");
-    tokio::fs::copy(src.join("Move.toml"), &dst_toml).await?;
-
-    {
-        let mut toml = fs::OpenOptions::new().append(true).open(dst_toml)?;
-        writeln!(toml, "[addresses]")?;
-        for (name, addr) in addresses {
-            writeln!(toml, "{name} = \"{addr}\"")?;
-        }
-    }
+    let mut toml = tokio::fs::read_to_string(src.join("Move.toml")).await?;
+    toml = toml.replace("$REPO_ROOT", &repo_root.to_string_lossy());
+    toml += &format!("[addresses]\n{package} = \"{address}\"");
+    tokio::fs::write(dst.join("Move.toml"), toml).await?;
 
     // Make destination source directory
     tokio::fs::create_dir(dst.join("sources")).await?;
