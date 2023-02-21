@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anemo::{Network, Request};
-use config::{Committee, Epoch, SharedCommittee, SharedWorkerCache, WorkerId};
+use config::{Committee, Epoch, SharedWorkerCache, WorkerId};
 use consensus::dag::Dag;
 use crypto::{NetworkPublicKey, PublicKey};
 use fastcrypto::hash::Hash as _;
@@ -125,7 +125,7 @@ pub struct Synchronizer {
 impl Synchronizer {
     pub fn new(
         name: PublicKey,
-        committee: SharedCommittee,
+        committee: Committee,
         worker_cache: SharedWorkerCache,
         gc_depth: Round,
         certificate_store: CertificateStore,
@@ -138,7 +138,7 @@ impl Synchronizer {
         dag: Option<Arc<Dag>>,
         metrics: Arc<PrimaryMetrics>,
     ) -> Self {
-        let committee: &Committee = &committee.load();
+        let committee: &Committee = &committee;
         let genesis = Self::make_genesis(committee);
         let highest_processed_round = certificate_store.highest_round_number();
         let highest_created_certificate = certificate_store.last_round(&name).unwrap();

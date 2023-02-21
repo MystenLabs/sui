@@ -26,7 +26,7 @@ use anemo_tower::{
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
 use async_trait::async_trait;
-use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId, WorkerInfo};
+use config::{Committee, Parameters, SharedWorkerCache, WorkerId, WorkerInfo};
 use consensus::dag::Dag;
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey, Signature};
 use fastcrypto::{
@@ -99,7 +99,7 @@ impl Primary {
         name: PublicKey,
         signer: KeyPair,
         network_signer: NetworkKeyPair,
-        committee: SharedCommittee,
+        committee: Committee,
         worker_cache: SharedWorkerCache,
         parameters: Parameters,
         header_store: Store<HeaderDigest, Header>,
@@ -216,7 +216,6 @@ impl Primary {
 
         // Spawn the network receiver listening to messages from the other primaries.
         let address = committee
-            .load()
             .primary(&name)
             .expect("Our public key or worker id is not in the committee");
         let address = address
@@ -280,7 +279,7 @@ impl Primary {
 
         let addr = network::multiaddr_to_address(&address).unwrap();
 
-        let epoch_string: String = committee.load().epoch.to_string();
+        let epoch_string: String = committee.epoch.to_string();
 
         let our_worker_peer_ids = worker_cache
             .load()
@@ -419,7 +418,6 @@ impl Primary {
 
         // Add other primaries
         let primaries = committee
-            .load()
             .others_primaries(&name)
             .into_iter()
             .map(|(_, address, network_key)| (network_key, address));
@@ -464,7 +462,7 @@ impl Primary {
 
         let core_handle = Core::spawn(
             name.clone(),
-            (**committee.load()).clone(),
+            committee.clone(),
             header_store.clone(),
             certificate_store.clone(),
             synchronizer.clone(),
@@ -481,7 +479,7 @@ impl Primary {
         // `Core` for further processing.
         let certificate_fetcher_handle = CertificateFetcher::spawn(
             name.clone(),
-            (**committee.load()).clone(),
+            committee.clone(),
             worker_cache.clone(),
             network.clone(),
             certificate_store.clone(),
@@ -497,7 +495,7 @@ impl Primary {
         // digests from our workers and sends it back to the `Core`.
         let proposer_handle = Proposer::spawn(
             name.clone(),
-            (**committee.load()).clone(),
+            committee.clone(),
             signature_service,
             proposer_store,
             parameters.header_num_of_batches_threshold,
@@ -554,7 +552,7 @@ impl Primary {
             // them from the primary peers by synchronizing also their batches.
             let block_synchronizer_handle = BlockSynchronizer::spawn(
                 name.clone(),
-                (**committee.load()).clone(),
+                committee.clone(),
                 worker_cache.clone(),
                 tx_shutdown.subscribe(),
                 rx_block_synchronizer_commands,
@@ -620,7 +618,6 @@ impl Primary {
             "Primary {} successfully booted on {}",
             name.encode_base64(),
             committee
-                .load()
                 .primary(&name)
                 .expect("Our public key or worker id is not in the committee")
         );
@@ -651,7 +648,7 @@ impl Primary {
 struct PrimaryReceiverHandler {
     /// The public key of this primary.
     name: PublicKey,
-    committee: SharedCommittee,
+    committee: Committee,
     worker_cache: SharedWorkerCache,
     synchronizer: Arc<Synchronizer>,
     /// Service to sign headers.
@@ -702,7 +699,7 @@ impl PrimaryReceiverHandler {
             })?;
 
         let header = &request.body().header;
-        let committee = self.committee.load();
+        let committee = self.committee.clone();
         header.verify(&committee, self.worker_cache.clone())?;
 
         // Vote request must come from the Header's author.
