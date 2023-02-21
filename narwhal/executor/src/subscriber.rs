@@ -194,7 +194,6 @@ impl<Network: SubscriberNetwork> Subscriber<Network> {
                         error!("tx_notifier closed: {}", e);
                         return Ok(());
                     }
-
                 },
 
                 _ = self.rx_shutdown.receiver.recv() => {
