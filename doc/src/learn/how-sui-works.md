@@ -80,7 +80,7 @@ Sui further expands this approach to more involved transactions that may explici
 
 Sui validates transactions individually, rather than batching them into traditional blocks. The key advantage of this approach is low latency; each successful transaction quickly obtains a certificate of finality that proves to anyone the transaction will be processed by the Sui network.
 
-Submitting a Sui transaction involves the following steps. These are transparent to the transaction sender, but it's worth understanding what is happening behind the scenes:
+Submitting a Sui transaction involves the following steps. These are transparent to the transaction sender, but it's worth understanding what happens behind the scenes:
 
 1. Users send transactions to a *quorum driver*, such as a Full node, that broadcasts the transactions to a set of validators.
 1. Each Sui validator performs validity checks and (if successful) a signature on the transaction. Each signature has a weight proportional to the amount staked with the validator. The combined weight of all validators is always 10,000, and thus the quorum threshold is always 6,667.
