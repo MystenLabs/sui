@@ -350,7 +350,9 @@ impl CheckpointStore {
         &self,
         epoch_id: EpochId,
     ) -> SuiResult<Option<VerifiedCheckpoint>> {
+        println!("A");
         let seq = self.epoch_last_checkpoint_map.get(&epoch_id)?;
+        println!("B {:?}", seq);
         let checkpoint = match seq {
             Some(seq) => self.get_checkpoint_by_sequence_number(seq)?,
             None => None,

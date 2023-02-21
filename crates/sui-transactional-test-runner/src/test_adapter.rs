@@ -621,7 +621,7 @@ impl<'a> SuiTestAdapter<'a> {
             &self.native_functions,
             gas_status,
             // TODO: Support different epochs in transactional tests.
-            &EpochData::genesis(),
+            &EpochData::new_test(),
             &PROTOCOL_CONSTANTS,
         );
 

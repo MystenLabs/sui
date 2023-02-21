@@ -167,6 +167,7 @@ impl SuiNode {
         let epoch_start_configuration = if cur_epoch == genesis.epoch() {
             Some(EpochStartConfiguration {
                 system_state: genesis.sui_system_object(),
+                epoch_digest: genesis.checkpoint().digest(),
             })
         } else {
             None

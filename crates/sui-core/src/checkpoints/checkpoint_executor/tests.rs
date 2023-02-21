@@ -155,6 +155,22 @@ pub async fn test_checkpoint_executor_cross_epoch() {
         &second_committee,
     );
 
+    authority_state
+        .checkpoint_store
+        .epoch_last_checkpoint_map
+        .insert(
+            &end_of_epoch_0_checkpoint.summary.epoch,
+            &end_of_epoch_0_checkpoint.sequence_number(),
+        )
+        .unwrap();
+    authority_state
+        .checkpoint_store
+        .certified_checkpoints
+        .insert(
+            &end_of_epoch_0_checkpoint.sequence_number(),
+            &end_of_epoch_0_checkpoint,
+        )
+        .unwrap();
     // sync end of epoch checkpoint
     let last_executed_checkpoint = next_epoch_checkpoints.last().cloned().unwrap();
     let (end_of_epoch_1_checkpoint, _third_committee) = sync_end_of_epoch_checkpoint(
