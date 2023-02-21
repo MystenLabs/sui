@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+  any,
   array,
   Infer,
   literal,
@@ -20,7 +21,7 @@ export type DynamicFieldType = Infer<typeof DynamicFieldType>;
 
 export const DynamicFieldName = object({
   type: string(),
-  value: object(),
+  value: any(),
 });
 export type DynamicFieldName = Infer<typeof DynamicFieldName>;
 
