@@ -36,7 +36,7 @@ function NftTransferPage() {
     const address = useAppSelector(({ account: { address } }) => address);
     const [showModal, setShowModal] = useState(true);
 
-    // verify that the nft is owned by the user and is trnasferable
+    // verify that the nft is owned by the user and is transferable
     const { data: objectData, isLoading } = useGetObject(nftId!);
     const selectedNft = useMemo(() => {
         if (
