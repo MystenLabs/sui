@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use arc_swap::ArcSwap;
 use bytes::Bytes;
 use dashmap::try_result::TryResult;
 use dashmap::DashMap;
@@ -43,7 +44,6 @@ use sui_simulator::anemo::PeerId;
 use sui_simulator::narwhal_network::connectivity::ConnectionStatus;
 use sui_types::base_types::AuthorityName;
 use sui_types::messages::ConsensusTransactionKind;
-use tokio::sync::mpsc::Receiver;
 use tokio::time::Duration;
 use tracing::{debug, error, info, warn};
 
@@ -186,31 +186,40 @@ impl CheckConnection for ConnectionMonitorStatusForTests {
     fn check_connection(&self, _authority: &AuthorityName) -> Option<ConnectionStatus> {
         Some(ConnectionStatus::Connected)
     }
+    fn update_mapping_for_epoch(
+        &self,
+        _authority_names_to_peer_ids: HashMap<AuthorityName, PeerId>,
+    ) {
+    }
 }
 
-pub trait CheckConnection {
+pub trait CheckConnection: Send + Sync {
     fn check_connection(&self, authority: &AuthorityName) -> Option<ConnectionStatus>;
+    fn update_mapping_for_epoch(&self, authority_names_to_peer_ids: HashMap<AuthorityName, PeerId>);
 }
 
 pub struct ConnectionMonitorStatus {
     /// Current connection statuses forwarded from the connection monitor
-    pub connection_statuses: Arc<DashMap<AuthorityName, ConnectionStatus>>,
-    /// Join handle for the Connection Monitor Listener
-    pub connection_monitor_listener_handle: JoinHandle<()>,
-}
-
-pub struct ConnectionMonitorListener {
-    /// Receiver from the Connection Monitor
-    receiver: Receiver<(PeerId, ConnectionStatus)>,
-    /// Map to look up the connection statuses as a latency aid during submit to consensus
-    pub current_connection_statuses: Arc<DashMap<AuthorityName, ConnectionStatus>>,
-    /// Map to populate the current connection statuses from the receiver
-    peer_id_to_authority_names: HashMap<PeerId, AuthorityName>,
+    pub connection_statuses: Arc<DashMap<PeerId, ConnectionStatus>>,
+    /// A map from authority name to peer id
+    pub authority_names_to_peer_ids: ArcSwap<HashMap<AuthorityName, PeerId>>,
 }
 
 impl CheckConnection for ConnectionMonitorStatus {
     fn check_connection(&self, authority: &AuthorityName) -> Option<ConnectionStatus> {
-        let res = match self.connection_statuses.try_get(authority) {
+        let mapping = self.authority_names_to_peer_ids.load_full();
+        let peer_id = match mapping.get(authority) {
+            Some(p) => p,
+            None => {
+                error!(
+                    "failed to find peer {:?} in connection monitor listener",
+                    authority
+                );
+                return None;
+            }
+        };
+
+        let res = match self.connection_statuses.try_get(peer_id) {
             TryResult::Present(c) => Some(c.value().clone()),
             TryResult::Absent => None,
             TryResult::Locked => {
@@ -220,58 +229,15 @@ impl CheckConnection for ConnectionMonitorStatus {
         };
         res
     }
-}
-
-impl ConnectionMonitorListener {
-    pub async fn spawn(
-        receiver: Receiver<(PeerId, ConnectionStatus)>,
-        peer_id_to_authority_names: HashMap<PeerId, AuthorityName>,
-    ) -> ConnectionMonitorStatus {
-        let connection_statuses = DashMap::with_capacity(peer_id_to_authority_names.len());
-        for (_, authority_name) in peer_id_to_authority_names.iter() {
-            // initialize all to connected as default,if we don't have a consensus monitor running so
-            // the fallback behavior is we submit to consensus once and not 2f+1 times
-            connection_statuses.insert(*authority_name, ConnectionStatus::Connected);
-        }
-        let current_connection_statuses = Arc::new(connection_statuses);
-
-        debug!(" spawning connection monitor listener");
-        ConnectionMonitorStatus {
-            connection_statuses: current_connection_statuses.clone(),
-            connection_monitor_listener_handle: spawn_monitored_task!(Self {
-                receiver,
-                current_connection_statuses,
-                peer_id_to_authority_names
-            }
-            .run()),
-        }
-    }
-
-    async fn run(&mut self) {
-        loop {
-            match self.receiver.recv().await {
-                Some((peer_id, connection_status)) => {
-                    debug!(
-                        "received message that the peer id {:?} has connection status {:?}",
-                        peer_id, connection_status
-                    );
-
-                    let authority_name = self
-                        .peer_id_to_authority_names
-                        .get(&peer_id)
-                        .expect("failed to find peer {:?} in connection monitor listener");
-                    self.current_connection_statuses
-                        .insert(*authority_name, connection_status);
-                    debug!(
-                        "connection statuses are now: {:?}",
-                        self.current_connection_statuses
-                    );
-                }
-                None => return,
-            }
-        }
+    fn update_mapping_for_epoch(
+        &self,
+        authority_names_to_peer_ids: HashMap<AuthorityName, PeerId>,
+    ) {
+        self.authority_names_to_peer_ids
+            .swap(Arc::new(authority_names_to_peer_ids));
     }
 }
+
 /// Submit Sui certificates to the consensus.
 #[allow(unused)]
 pub struct ConsensusAdapter {
@@ -282,7 +248,7 @@ pub struct ConsensusAdapter {
     /// Number of submitted transactions still inflight at this node.
     num_inflight_transactions: AtomicU64,
     /// A structure to check the connection statuses populated by the Connection Monitor Listener
-    connection_monitor_status: Box<dyn CheckConnection + Send + Sync>,
+    connection_monitor_status: Box<Arc<dyn CheckConnection>>,
     /// A structure to register metrics
     opt_metrics: OptArcConsensusAdapterMetrics,
 }
@@ -292,7 +258,7 @@ impl ConsensusAdapter {
     pub fn new(
         consensus_client: Box<dyn SubmitToConsensus>,
         authority: AuthorityName,
-        connection_monitor_status: Box<dyn CheckConnection + Send + Sync>,
+        connection_monitor_status: Box<Arc<dyn CheckConnection>>,
         opt_metrics: OptArcConsensusAdapterMetrics,
     ) -> Arc<Self> {
         let num_inflight_transactions = Default::default();
@@ -405,6 +371,7 @@ impl ConsensusAdapter {
         loop {
             if exclusions.contains(&i) {
                 // this authority was responsible for submission but did not submit after a long time
+                i += 1;
                 continue;
             }
             if our_position == i {

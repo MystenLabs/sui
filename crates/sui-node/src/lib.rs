@@ -2,21 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::metrics::GrpcMetrics;
-use anemo::{Network, PeerId};
+use anemo::Network;
 use anemo_tower::callback::CallbackLayer;
 use anemo_tower::trace::DefaultMakeSpan;
 use anemo_tower::trace::DefaultOnFailure;
 use anemo_tower::trace::TraceLayer;
 use anyhow::anyhow;
 use anyhow::Result;
+use arc_swap::ArcSwap;
 use checkpoint_executor::CheckpointExecutor;
+use dashmap::DashMap;
 use futures::TryFutureExt;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
 use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::Registry;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{ConsensusConfig, NodeConfig};
@@ -39,7 +40,6 @@ use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
-use tokio::sync::mpsc::Receiver;
 use tracing::debug;
 
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
@@ -73,7 +73,7 @@ use sui_core::checkpoints::{
     SubmitCheckpointToConsensus,
 };
 use sui_core::consensus_adapter::{
-    ConnectionMonitorListener, ConsensusAdapter, ConsensusAdapterMetrics,
+    CheckConnection, ConnectionMonitorStatus, ConsensusAdapter, ConsensusAdapterMetrics,
 };
 use sui_core::consensus_handler::ConsensusHandler;
 use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
@@ -113,11 +113,11 @@ pub struct SuiNode {
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     registry_service: RegistryService,
 
-    p2p_network: Network,
     _discovery: discovery::Handle,
     state_sync: state_sync::Handle,
     checkpoint_store: Arc<CheckpointStore>,
     accumulator: Arc<StateAccumulator>,
+    connection_monitor_status: Arc<ConnectionMonitorStatus>,
 
     end_of_epoch_channel: tokio::sync::broadcast::Sender<Committee>,
 
@@ -292,7 +292,45 @@ impl SuiNode {
         )
         .await?;
 
+<<<<<<< HEAD
         let accumulator = Arc::new(StateAccumulator::new(store));
+=======
+        let system_state = state
+            .get_sui_system_state_object()
+            .expect("Reading Sui system state object cannot fail");
+        // Spawn connectivity monitor for network
+
+        let peer_ids = system_state.get_current_epoch_peer_ids();
+
+        let authority_names_to_peer_ids =
+            system_state.get_current_epoch_authority_names_to_peer_ids();
+
+        let network_connection_metrics =
+            NetworkConnectionMetrics::new("sui", &registry_service.default_registry());
+
+        let connection_statuses = DashMap::with_capacity(authority_names_to_peer_ids.len());
+        for (_, authority_name) in authority_names_to_peer_ids.iter() {
+            // initialize all to connected as default,if we don't have a consensus monitor running so
+            // the fallback behavior is we submit to consensus once and not 2f+1 times
+            connection_statuses.insert(*authority_name, ConnectionStatus::Connected);
+        }
+
+        let connection_statuses = Arc::new(connection_statuses);
+        let authority_names_to_peer_ids = ArcSwap::from_pointee(authority_names_to_peer_ids);
+
+        let _connection_monitor_handle = narwhal_network::connectivity::ConnectionMonitor::spawn(
+            p2p_network.downgrade(),
+            network_connection_metrics,
+            peer_ids,
+            connection_statuses.clone(),
+        );
+
+        let connection_monitor_status = ConnectionMonitorStatus {
+            connection_statuses,
+            authority_names_to_peer_ids,
+        };
+
+        let connection_monitor_status = Arc::new(connection_monitor_status);
 
         let validator_components = if state.is_validator(&epoch_store) {
             let components = Self::construct_validator_components(
@@ -302,7 +340,7 @@ impl SuiNode {
                 checkpoint_store.clone(),
                 state_sync_handle.clone(),
                 accumulator.clone(),
-                p2p_network.clone(),
+   connection_monitor_status.clone(),
                 &registry_service,
             )
             .await?;
@@ -322,12 +360,12 @@ impl SuiNode {
             transaction_orchestrator,
             registry_service,
 
-            p2p_network,
             _discovery: discovery_handle,
             state_sync: state_sync_handle,
             checkpoint_store,
             accumulator,
             end_of_epoch_channel,
+            connection_monitor_status,
 
             #[cfg(msim)]
             sim_node: sui_simulator::runtime::NodeHandle::current(),
@@ -469,30 +507,9 @@ impl SuiNode {
         checkpoint_store: Arc<CheckpointStore>,
         state_sync_handle: state_sync::Handle,
         accumulator: Arc<StateAccumulator>,
-        p2p_network: Network,
+        connection_monitor_status: Arc<ConnectionMonitorStatus>,
         registry_service: &RegistryService,
     ) -> Result<ValidatorComponents> {
-        let system_state = state
-            .get_sui_system_state_object()
-            .expect("Reading Sui system state object cannot fail");
-        // Spawn connectivity monitor for network
-
-        let peer_ids = system_state.get_current_epoch_peer_ids();
-
-        let peer_ids_to_authority_names =
-            system_state.get_current_epoch_peer_id_to_authority_names();
-
-        let (connection_status_sender, connection_status_receiver) = channel(DEFAULT_CHANNEL_SIZE);
-
-        let network_connection_metrics =
-            NetworkConnectionMetrics::new("sui", &registry_service.default_registry());
-        let _connection_monitor_handle = narwhal_network::connectivity::ConnectionMonitor::spawn(
-            p2p_network.downgrade(),
-            network_connection_metrics,
-            peer_ids,
-            Some(connection_status_sender),
-        );
-
         let consensus_config = config
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
@@ -500,8 +517,7 @@ impl SuiNode {
         let consensus_adapter = Self::construct_consensus_adapter(
             consensus_config,
             state.name,
-            connection_status_receiver,
-            peer_ids_to_authority_names,
+            connection_monitor_status,
             &registry_service.default_registry(),
         )
         .await;
@@ -679,8 +695,7 @@ impl SuiNode {
     async fn construct_consensus_adapter(
         consensus_config: &ConsensusConfig,
         authority: AuthorityName,
-        connection_status_receiver: Receiver<(PeerId, ConnectionStatus)>,
-        peer_id_to_authority_names: HashMap<PeerId, AuthorityName>,
+        connection_monitor_status: Arc<ConnectionMonitorStatus>,
         prometheus_registry: &Registry,
     ) -> Arc<ConsensusAdapter> {
         const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
@@ -701,12 +716,6 @@ impl SuiNode {
 
         let ca_metrics = ConsensusAdapterMetrics::new(prometheus_registry);
         // The consensus adapter allows the authority to send user certificates through consensus.
-
-        let connection_monitor_status = ConnectionMonitorListener::spawn(
-            connection_status_receiver,
-            peer_id_to_authority_names,
-        )
-        .await;
 
         ConsensusAdapter::new(
             Box::new(consensus_client),
@@ -838,6 +847,15 @@ impl SuiNode {
                 "Finished executing all checkpoints in epoch. About to reconfigure the system."
             );
 
+            // We save the connection monitor status map regardless of validator / fullnode status
+            // so that we don't need to restart the connection monitor every epoch.
+            //  Update the mappings that will be used by the consensus adapter if it exists or is
+            // about to be created.
+            let authority_names_to_peer_ids =
+                system_state.get_current_epoch_authority_names_to_peer_ids();
+            self.connection_monitor_status
+                .update_mapping_for_epoch(authority_names_to_peer_ids);
+
             cur_epoch_store.record_epoch_reconfig_start_time_metric();
             let _ = self.end_of_epoch_channel.send(next_epoch_committee.clone());
 
@@ -907,7 +925,7 @@ impl SuiNode {
                             self.checkpoint_store.clone(),
                             self.state_sync.clone(),
                             self.accumulator.clone(),
-                            self.p2p_network.clone(),
+                            self.connection_monitor_status.clone(),
                             &self.registry_service,
                         )
                         .await?,
