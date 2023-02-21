@@ -132,7 +132,7 @@ class VaultStorageClass {
      * NOTE: make sure you verify the password before calling this method
      * @param keypair The keypair to import
      * @param password The password to be used to store the vault. Make sure to verify that it's the correct password (of the current vault) and then call this function. It doesn't verify the password see {@link VaultStorage.verifyPassword}.
-     * @returns True if the key was imported, false otherwise
+     * @returns The keyPair if the key was imported, false otherwise
      */
     public async importKeypair(keypair: ExportedKeypair, password: string) {
         if (!this.#vault) {
@@ -150,7 +150,7 @@ class VaultStorageClass {
         this.#vault.importedKeypairs.push(keypairToImport);
         await setToLocalStorage(VAULT_KEY, await this.#vault.encrypt(password));
         await this.updateSessionStorage();
-        return true;
+        return keypairToImport;
     }
 
     public getImportedKeys() {

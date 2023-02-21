@@ -186,7 +186,7 @@ describe('VaultStorage', () => {
                     testEd25519Serialized,
                     testDataVault2.password
                 )
-            ).toBe(true);
+            ).toBeTruthy();
             expect(VaultStorage.getImportedKeys()?.length).toBe(1);
             expect(setToLocalStorage).toHaveBeenCalledOnce();
             expect(setToSessionStorage).toHaveBeenCalledTimes(2);

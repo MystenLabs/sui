@@ -175,6 +175,11 @@ export class Keyring {
         }
         const added = await VaultStorage.importKeypair(keypair, password);
         if (added) {
+            const importedAccount = new Account({
+                type: 'imported',
+                keypair: added,
+            });
+            this.#accountsMap.set(importedAccount.address, importedAccount);
             this.notifyAccountsChanged();
         }
         return added;

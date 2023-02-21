@@ -8,6 +8,7 @@ import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
 import { VaultStorage } from './VaultStorage';
 import Alarm from '_src/background/Alarms';
 import {
+    testEd25519,
     testEd25519Serialized,
     testMnemonic,
     testSecp256k1,
@@ -139,12 +140,12 @@ describe('Keyring', () => {
                 const eventSpy = vi.fn();
                 k.on('accountsChanged', eventSpy);
                 vaultStorageMock.verifyPassword.mockResolvedValue(true);
-                vaultStorageMock.importKeypair.mockResolvedValue(true);
+                vaultStorageMock.importKeypair.mockResolvedValue(testEd25519);
                 const added = await k.importAccountKeypair(
                     testEd25519Serialized,
                     'correct password'
                 );
-                expect(added).toBe(true);
+                expect(added).toBeTruthy();
                 expect(eventSpy).toHaveBeenCalledOnce();
             });
 
