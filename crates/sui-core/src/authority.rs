@@ -2143,22 +2143,21 @@ impl AuthorityState {
     ) -> Result<Vec<(VerifiedCertificate, TransactionEffects)>, anyhow::Error> {
         let certs = self.database.multi_get_certified_transaction(&digests)?;
         let effects = self.database.multi_get_executed_effects(&digests)?;
-        let mut response: Vec<(VerifiedCertificate, TransactionEffects)>  = Vec::new();
+        let mut response: Vec<(VerifiedCertificate, TransactionEffects)> = Vec::new();
 
         if certs.len() == effects.len() {
-
             for i in 0..certs.len() {
-                match ( certs[i].clone(), effects[i].clone() ){
+                match (certs[i].clone(), effects[i].clone()) {
                     (Some(cert), Some(effect)) => response.push((cert, effect)),
                     _ => continue,
                 }
             }
         }
 
-        if response.is_empty(){
+        if response.is_empty() {
             Err(anyhow!(SuiError::NoBatchesFoundError))
         } else {
-        Ok(response)
+            Ok(response)
         }
     }
 
