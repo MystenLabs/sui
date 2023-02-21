@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::metrics::GrpcMetrics;
+use crate::syncoexec::MemoryBackedStore;
 use anemo::Network;
 use anemo_tower::callback::CallbackLayer;
 use anemo_tower::trace::DefaultMakeSpan;
@@ -16,9 +17,18 @@ use mysten_network::server::ServerBuilder;
 use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::Registry;
+use sui_adapter::execution_engine;
+use sui_core::authority::TemporaryStore;
+use sui_core::transaction_input_checker::get_gas_status;
+use sui_types::MOVE_STDLIB_ADDRESS;
+use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::message_envelope::Message;
+use sui_types::messages::InputObjectKind;
+use sui_types::messages::InputObjects;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority_aggregator::{AuthorityAggregator, NetworkTransactionCertifier};
 use sui_core::authority_server::ValidatorService;
@@ -31,6 +41,9 @@ use sui_core::{
     authority::{AuthorityState, AuthorityStore},
     authority_client::NetworkAuthorityClient,
 };
+
+use sui_adapter::{adapter, execution_mode};
+
 use sui_json_rpc::bcs_api::BcsApiImpl;
 use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
@@ -65,6 +78,7 @@ use typed_store::DBMetrics;
 pub mod admin;
 mod handle;
 pub mod metrics;
+pub mod syncoexec;
 pub use handle::SuiNodeHandle;
 use narwhal_config::SharedWorkerCache;
 use narwhal_types::TransactionsClient;
@@ -316,6 +330,182 @@ impl SuiNode {
 
         Ok(node)
     }
+
+    pub async fn start_synco(
+        config: &NodeConfig,
+        registry_service: RegistryService,
+    ) -> Result<()> {
+        // TODO: maybe have a config enum that takes care of this for us.
+        let prometheus_registry = registry_service.default_registry();
+
+        info!(node =? config.protocol_public_key(),
+            "Initializing sui-node listening on {}", config.network_address
+        );
+
+        // Initialize metrics to track db usage before creating any stores
+        DBMetrics::init(&prometheus_registry);
+        mysten_metrics::init_metrics(&prometheus_registry);
+
+        let genesis = config.genesis()?;
+
+        let genesis_committee = genesis.committee()?;
+        let committee_store = Arc::new(CommitteeStore::new(
+            config.db_path().join("epochs"),
+            &genesis_committee,
+            None,
+        ));
+        let (_checkpoint_sender, checkpoint_receiver) = mpsc::channel(100);
+        let store = Arc::new(
+            AuthorityStore::open(
+                &config.db_path().join("store"),
+                None,
+                genesis,
+                &committee_store,
+                &config.authority_store_pruning_config,
+                checkpoint_receiver,
+            )
+            .await?,
+        );
+        
+        let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
+
+        let native_functions =
+            sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+        let move_vm = Arc::new(
+            adapter::new_move_vm(native_functions.clone())
+                .expect("We defined natives to not fail here"),
+        );
+
+        let mut memory_store = MemoryBackedStore::new();
+        for obj in genesis.objects() {
+            memory_store.objects.insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
+
+        }
+
+        let mut checkpoint_seq = genesis.checkpoint().into_summary_and_sequence().0;
+        let mut epoch = 0;
+        let mut num_tx : usize = 0;
+        let mut num_tx_prev = num_tx;
+        let mut now = Instant::now();
+        loop {
+            if let Some(checkpoint_summary) = checkpoint_store.get_checkpoint_by_sequence_number(checkpoint_seq)? {
+
+                checkpoint_seq += 1;
+                let (seq, _summary) = checkpoint_summary.into_summary_and_sequence();
+                let contents = checkpoint_store.get_checkpoint_contents(&_summary.content_digest)?.expect("Contents must exist");
+
+                if contents.size() > 0 {
+                    num_tx += contents.size();
+                    // println!("Checkpoint: {:?} Txs: {}", seq, contents.size() );
+                }
+                for tx_digest in contents.iter() {
+                    // println!("Digest: {:?}", tx_digest);
+                    let cert = store.read_certificate(&tx_digest.transaction)?.expect("Transaction exists");
+                    let input_object_kinds = cert.data().intent_message.value.input_objects()?;
+                    let tx_data = &cert.data().intent_message.value;
+
+                    let mut input_object_data = Vec::new();
+                    for kind in &input_object_kinds {
+
+                        let obj = match kind {
+                            InputObjectKind::MovePackage(id) | InputObjectKind::SharedMoveObject { id, .. } | InputObjectKind::ImmOrOwnedMoveObject( (id, _, _) ) => {
+                                memory_store.objects.get(id).expect("Object missing?")
+                            }
+                        };
+                        input_object_data.push(obj.1.clone());
+            
+                    }
+                    let gas_status = get_gas_status(&input_object_data, &tx_data).await?;
+
+                    let input_objects = InputObjects::new(input_object_kinds.into_iter().zip(input_object_data.into_iter()).collect());
+                    let shared_object_refs = input_objects.filter_shared_objects();
+                    let transaction_dependencies = input_objects.transaction_dependencies();
+
+                    let temporary_store =
+                        TemporaryStore::new(&memory_store, input_objects, *cert.digest());
+                    
+                    let transaction_data = cert.data().intent_message.value.clone();
+                    let signer = transaction_data.signer();
+                    let gas = transaction_data.gas();
+                    let (inner_temp_store, effects, _execution_error) =
+                        execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
+                            shared_object_refs,
+                            temporary_store,
+                            transaction_data.kind,
+                            signer,
+                            gas,
+                            *cert.digest(),
+                            transaction_dependencies,
+                            &move_vm,
+                            &native_functions,
+                            gas_status,
+                            epoch,
+                        );
+                    
+                    // Critical check: are the effects the same?
+                    if effects.digest() != tx_digest.effects {
+                        let old_effects = store.get_effects(&tx_digest.transaction).expect("Effects must exist");
+                        println!("Past effects: {:?}", old_effects);
+                        println!("New effects: {:?}", effects);
+                    }
+                    assert!(effects.digest() == tx_digest.effects, "Effects digest mismatch");
+
+
+
+                    // And now we mutate the store.
+                    // First delete:
+                    for obj_del in &inner_temp_store.deleted {
+                        memory_store.objects.remove(obj_del.0);
+                    }
+                    for (obj_add_id, (oref, obj, _))  in inner_temp_store.written {
+                        memory_store.objects.insert(obj_add_id, (oref, obj));
+                    }
+
+                }
+
+                if _summary.end_of_epoch_data.is_some() {
+                    println!("END OF EPOCH");
+                    epoch += 1;
+
+                }
+
+                // A bit of printing.
+                if num_tx - num_tx_prev > 10_000 {
+                    let elapsed = now.elapsed();
+                    let num = num_tx - num_tx_prev;
+                    println!("Load checkpoint: {} TPS: {}", seq, 1000.0 * num as f64 / elapsed.as_millis() as f64);
+                    num_tx_prev = num_tx;
+                    now = Instant::now();
+                }
+            }
+            else {
+                break;
+            }
+
+        }
+        
+        // ensure genesis txn was executed
+        //if epoch_store.epoch() == 0 {
+        //    let txn = &genesis.transaction();
+        //    let span = error_span!("genesis_txn", tx_digest = ?txn.digest());
+        //    state
+        //        .execute_certificate(
+        //            &genesis
+        //                .transaction()
+        //                .clone()
+        //                .verify(epoch_store.committee())
+        //                .unwrap(),
+        //            &epoch_store,
+        //        )
+        //        .instrument(span)
+        //        .await
+        //        .unwrap();
+        // }
+
+        info!("SuiNode started!");
+        Ok(())
+    }
+
 
     pub fn subscribe_to_epoch_change(&self) -> tokio::sync::broadcast::Receiver<Committee> {
         self.end_of_epoch_channel.subscribe()

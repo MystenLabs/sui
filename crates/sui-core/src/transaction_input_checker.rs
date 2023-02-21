@@ -19,8 +19,8 @@ use sui_types::{
 };
 use tracing::instrument;
 
-async fn get_gas_status(
-    store: &AuthorityStore,
+pub async fn get_gas_status(
+    objects: &Vec<Object>,
     transaction: &TransactionData,
 ) -> SuiResult<SuiGasStatus<'static>> {
     let tx_kind = &transaction.kind;
@@ -33,7 +33,7 @@ async fn get_gas_status(
     let extra_gas_object_refs = gas_object_refs.into_iter().skip(1).collect();
 
     check_gas(
-        store,
+        objects,
         gas_object_ref,
         transaction.gas_budget,
         transaction.gas_price,
@@ -54,9 +54,10 @@ pub async fn check_transaction_input(
     transaction
         .validity_check()
         .map_err(SuiError::into_transaction_input_error)?;
-    let gas_status = get_gas_status(store, transaction).await?;
+    
     let input_objects = transaction.input_objects()?;
     let objects = store.check_input_objects(&input_objects)?;
+    let gas_status = get_gas_status(&objects, transaction).await?;
     let input_objects = check_objects(transaction, input_objects, objects).await?;
     Ok((gas_status, input_objects))
 }
@@ -114,7 +115,7 @@ pub async fn check_certificate_input(
     epoch_store: &AuthorityPerEpochStore,
     cert: &VerifiedCertificate,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
-    let gas_status = get_gas_status(store, &cert.data().intent_message.value).await?;
+    
     let input_object_kinds = cert.data().intent_message.value.input_objects()?;
     let tx_data = &cert.data().intent_message.value;
     let input_object_data = if tx_data.kind.is_change_epoch_tx() {
@@ -124,12 +125,16 @@ pub async fn check_certificate_input(
     } else {
         store.check_sequenced_input_objects(cert.digest(), &input_object_kinds, epoch_store)?
     };
+
+    let gas_status = get_gas_status(&input_object_data, &cert.data().intent_message.value).await?;
+
     let input_objects = check_objects(
         &cert.data().intent_message.value,
         input_object_kinds,
         input_object_data,
     )
     .await?;
+
     Ok((gas_status, input_objects))
 }
 
@@ -139,7 +144,7 @@ pub async fn check_certificate_input(
 /// that will be used in the entire lifecycle of the transaction execution.
 #[instrument(level = "trace", skip_all)]
 async fn check_gas(
-    store: &AuthorityStore,
+    objects: &Vec<Object>,
     gas_payment: &ObjectRef,
     gas_budget: u64,
     computation_gas_price: u64,
@@ -149,11 +154,11 @@ async fn check_gas(
     if tx_kind.is_system_tx() {
         Ok(SuiGasStatus::new_unmetered())
     } else {
-        let gas_object = store.get_object_by_key(&gas_payment.0, gas_payment.1)?;
+        let gas_object = objects.iter().find(|o| o.id() == gas_payment.0);
         let gas_object = gas_object.ok_or(SuiError::ObjectNotFound {
             object_id: gas_payment.0,
             version: Some(gas_payment.1),
-        })?;
+        })?.clone();
 
         // If the transaction is TransferSui, we ensure that the gas balance is enough to cover
         // both gas budget and the transfer amount.
@@ -170,11 +175,11 @@ async fn check_gas(
         if tx_kind.is_pay_sui_tx() {
             let mut additional_objs = vec![];
             for obj_ref in additional_objects_for_gas_payment.iter() {
-                let obj = store.get_object_by_key(&obj_ref.0, obj_ref.1)?;
+                let obj =  objects.iter().find(|o| o.id() == obj_ref.0);
                 let obj = obj.ok_or(SuiError::ObjectNotFound {
                     object_id: obj_ref.0,
                     version: Some(obj_ref.1),
-                })?;
+                })?.clone();
                 additional_objs.push(obj);
             }
             gas::check_gas_balance(
