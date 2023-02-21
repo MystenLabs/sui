@@ -132,49 +132,45 @@ function TransferCoinPage() {
             trackEvent('TransferCoins', {
                 props: { coinType },
             });
-            try {
-                let response;
-                // Use payAllSui if sendMax is true and the token type is SUI
-                if (formData.isPayAllSui && coinType === SUI_TYPE_ARG) {
-                    response = await signer.payAllSui({
-                        recipient: formData.to,
-                        gasBudget: gasBudgetEstimationUnits,
-                        inputCoins: allCoins.map((coin) => CoinAPI.getID(coin)),
-                    });
-                } else {
-                    const bigIntAmount = parseAmount(
-                        formData.amount,
-                        coinDecimals
-                    );
-                    response = await signer.signAndExecuteTransaction(
-                        await CoinAPI.newPayTransaction(
-                            allCoins,
-                            coinType,
-                            bigIntAmount,
-                            formData.to,
-                            gasBudgetEstimationUnits
-                        )
-                    );
-                }
 
-                const txDigest = getTransactionDigest(response);
-                const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
-                    txDigest
-                )}&from=transactions`;
-
-                return navigate(receiptUrl);
-            } catch (e) {
-                const errorMsg = (e as SerializedError).message || null;
-                toast.error(
-                    <div className="max-w-xs overflow-hidden flex flex-col">
-                        {errorMsg ? (
-                            <small className="text-ellipsis overflow-hidden">
-                                {errorMsg}
-                            </small>
-                        ) : null}
-                    </div>
+            // Use payAllSui if sendMax is true and the token type is SUI
+            if (formData.isPayAllSui && coinType === SUI_TYPE_ARG) {
+                return signer.payAllSui({
+                    recipient: formData.to,
+                    gasBudget: gasBudgetEstimationUnits,
+                    inputCoins: allCoins.map((coin) => CoinAPI.getID(coin)),
+                });
+            } else {
+                const bigIntAmount = parseAmount(formData.amount, coinDecimals);
+                return signer.signAndExecuteTransaction(
+                    await CoinAPI.newPayTransaction(
+                        allCoins,
+                        coinType,
+                        bigIntAmount,
+                        formData.to,
+                        gasBudgetEstimationUnits
+                    )
                 );
             }
+        },
+        onSuccess: (response) => {
+            const txDigest = getTransactionDigest(response!);
+            const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
+                txDigest
+            )}&from=transactions`;
+            return navigate(receiptUrl);
+        },
+        onError: (e) => {
+            const errorMsg = (e as SerializedError).message || null;
+            toast.error(
+                <div className="max-w-xs overflow-hidden flex flex-col">
+                    {errorMsg ? (
+                        <small className="text-ellipsis overflow-hidden">
+                            {errorMsg}
+                        </small>
+                    ) : null}
+                </div>
+            );
         },
     });
 
