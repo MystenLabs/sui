@@ -4,6 +4,7 @@
 import {
   ExecuteTransactionRequestType,
   SignableTransaction,
+  SignedMessage,
   SignedTransaction,
   SuiAddress,
   SuiTransactionResponse,
@@ -27,6 +28,7 @@ export interface WalletAdapter {
     event: E,
     callback: WalletAdapterEvents[E]
   ) => () => void;
+  signMessage(message: Uint8Array): Promise<SignedMessage>;
   signTransaction(transaction: SignableTransaction): Promise<SignedTransaction>;
   /**
    * Suggest a transaction for the user to sign. Supports all valid transaction types.

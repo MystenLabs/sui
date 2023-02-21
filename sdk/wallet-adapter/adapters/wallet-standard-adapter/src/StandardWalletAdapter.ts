@@ -89,6 +89,10 @@ export class StandardWalletAdapter implements WalletAdapter {
     }
   }
 
+  async signMessage(message: Uint8Array) {
+    return this.#wallet.features["sui:signMessage"].signMessage({ message });
+  }
+
   async signTransaction(transaction: SignableTransaction) {
     return this.#wallet.features["sui:signTransaction"].signTransaction({
       transaction,
