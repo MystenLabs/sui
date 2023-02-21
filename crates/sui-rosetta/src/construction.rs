@@ -231,7 +231,7 @@ pub async fn metadata(
             let coins = context
                 .client
                 .coin_read_api()
-                .select_coins(*sender, None, *amount as u128, *locked_until_epoch, vec![])
+                .select_coins(*sender, None, *amount, *locked_until_epoch, vec![])
                 .await?
                 .into_iter()
                 .map(|coin| coin.object_ref())

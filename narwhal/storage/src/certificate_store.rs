@@ -608,7 +608,7 @@ mod test {
         let mut certs = Vec::new();
         for r in &rounds {
             let mut c = cert.clone();
-            c.header.round = *r as u64;
+            c.header.round = *r;
             certs.push(c);
         }
 

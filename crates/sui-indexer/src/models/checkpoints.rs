@@ -124,7 +124,7 @@ pub fn create_checkpoint(
             - previous_checkpoint_commit.total_transactions_from_genesis as f32)
             / ((checkpoint_summary.timestamp_ms - previous_checkpoint_commit.timestamp_ms as u64)
                 as f32
-                / 1000.0) as f32;
+                / 1000.0);
 
         checkpoint_transaction_count = checkpoint_summary.network_total_transactions as i64
             - previous_checkpoint_commit.total_transactions_from_genesis;

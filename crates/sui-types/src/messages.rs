@@ -354,15 +354,15 @@ pub struct ProgrammableTransaction {
 pub enum Command {
     /// A call to either an entry or a public Move function
     MoveCall(Box<ProgrammableMoveCall>),
-    /// (Vec<forall T:key+store. T>, address)
+    /// `(Vec<forall T:key+store. T>, address)`
     /// It sends n-objects to the specified address. These objects must have store
     /// (public transfer) and either the previous owner must be an address or the object must
     /// be newly created.
     TransferObjects(Vec<Argument>, Argument),
-    /// (&mut Coin<T>, u64) -> Coin<T>
+    /// `(&mut Coin<T>, u64)` -> `Coin<T>`
     /// It splits off some amount into a new coin
     SplitCoin(Argument, Argument),
-    /// (&mut Coin<T>, Vec<Coin<T>>)
+    /// `(&mut Coin<T>, Vec<Coin<T>>)`
     /// It merges n-coins into the first coin
     MergeCoins(Argument, Vec<Argument>),
     /// Publishes a Move package

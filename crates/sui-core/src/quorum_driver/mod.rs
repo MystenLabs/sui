@@ -608,8 +608,8 @@ where
         self.quorum_driver.submit_transaction(transaction).await
     }
 
-    /// Create a new QuorumDriverHandler based on the same AuthorityAggregator.
-    /// Note: the new QuorumDriverHandler will have a new ArcSwap<AuthorityAggregator>
+    /// Create a new `QuorumDriverHandler` based on the same AuthorityAggregator.
+    /// Note: the new `QuorumDriverHandler` will have a new `ArcSwap<AuthorityAggregator>`
     /// that is NOT tied to the original one. So if there are multiple QuorumDriver(Handler)
     /// then all of them need to do reconfigs on their own.
     pub fn clone_new(&self) -> Self {

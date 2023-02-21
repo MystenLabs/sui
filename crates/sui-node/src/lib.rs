@@ -612,7 +612,7 @@ impl SuiNode {
             Box::new(state.db()),
             checkpoint_output,
             Box::new(certified_checkpoint_output),
-            Box::new(NetworkTransactionCertifier::default()),
+            Box::<NetworkTransactionCertifier>::default(),
             checkpoint_metrics,
             max_tx_per_checkpoint,
         )

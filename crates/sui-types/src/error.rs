@@ -63,7 +63,6 @@ macro_rules! exit_main {
 #[derive(
     Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr, IntoStaticStr,
 )]
-#[allow(clippy::large_enum_variant)]
 pub enum SuiError {
     // Object misuse issues
     #[error("Error checking transaction input objects: {:?}", errors)]
@@ -118,7 +117,7 @@ pub enum SuiError {
     UnknownSigner {
         signer: Option<String>,
         index: Option<u32>,
-        committee: Committee,
+        committee: Box<Committee>,
     },
     #[error(
         "Validator {:?} responded multiple signatures for the same message, conflicting: {:?}",
@@ -415,15 +414,6 @@ pub enum SuiError {
     ByzantineAuthoritySuspicion {
         authority: AuthorityName,
         reason: String,
-    },
-    #[error(
-        "Sync from authority failed. From {xsource:?} to {destination:?}, digest {tx_digest:?}: {error:?}",
-    )]
-    PairwiseSyncFailed {
-        xsource: AuthorityName,
-        destination: AuthorityName,
-        tx_digest: TransactionDigest,
-        error: Box<SuiError>,
     },
     #[error("Storage error")]
     StorageError(#[from] TypedStoreError),
@@ -804,7 +794,7 @@ pub fn convert_vm_error<
             debug_assert!(offset.is_some(), "Move should set the location on aborts");
             let (function, instruction) = offset.unwrap_or((0, 0));
             let function_name = vm.load_module(id, state_view).ok().map(|module| {
-                let fdef = module.function_def_at(FunctionDefinitionIndex(function as u16));
+                let fdef = module.function_def_at(FunctionDefinitionIndex(function));
                 let fhandle = module.function_handle_at(fdef.function);
                 module.identifier_at(fhandle.name).to_string()
             });
@@ -831,8 +821,7 @@ pub fn convert_vm_error<
                         );
                         let (function, instruction) = offset.unwrap_or((0, 0));
                         let function_name = vm.load_module(id, state_view).ok().map(|module| {
-                            let fdef =
-                                module.function_def_at(FunctionDefinitionIndex(function as u16));
+                            let fdef = module.function_def_at(FunctionDefinitionIndex(function));
                             let fhandle = module.function_handle_at(fdef.function);
                             module.identifier_at(fhandle.name).to_string()
                         });

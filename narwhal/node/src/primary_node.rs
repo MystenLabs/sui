@@ -317,7 +317,7 @@ impl PrimaryNodeInner {
         }
         consensus_metrics
             .recovered_consensus_output
-            .inc_by(num_sub_dags as u64);
+            .inc_by(num_sub_dags);
 
         // Spawn the consensus core who only sequences transactions.
         let ordering_engine = Bullshark::new(

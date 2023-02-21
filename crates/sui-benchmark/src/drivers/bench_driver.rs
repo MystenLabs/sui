@@ -318,7 +318,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                         _ = stat_interval.tick() => {
                             if tx_cloned
                                 .try_send(Stats {
-                                    id: i as usize,
+                                    id: i,
                                     num_no_gas,
                                     num_in_flight,
                                     num_submitted,
@@ -464,7 +464,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                 // send stats one last time
                 if tx_cloned
                     .try_send(Stats {
-                        id: i as usize,
+                        id: i,
                         num_no_gas,
                         num_in_flight,
                         num_submitted,

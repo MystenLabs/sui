@@ -60,8 +60,8 @@ impl Proposer for NarwhalProposer {
         if let Some(dag) = &self.dag {
             let result = match dag.rounds(key).await {
                 Ok(r) => Ok(RoundsResponse {
-                    oldest_round: *r.start() as u64,
-                    newest_round: *r.end() as u64,
+                    oldest_round: *r.start(),
+                    newest_round: *r.end(),
                 }),
                 Err(err) => Err(Status::internal(format!("Couldn't retrieve rounds: {err}"))),
             };

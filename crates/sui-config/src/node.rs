@@ -673,19 +673,18 @@ mod tests {
         let network_key_pair: NetworkKeyPair =
             get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
 
-        write_authority_keypair_to_file(&protocol_key_pair, &PathBuf::from("protocol.key"))
-            .unwrap();
+        write_authority_keypair_to_file(&protocol_key_pair, PathBuf::from("protocol.key")).unwrap();
         write_keypair_to_file(
             &SuiKeyPair::Ed25519(worker_key_pair.copy()),
-            &PathBuf::from("worker.key"),
+            PathBuf::from("worker.key"),
         )
         .unwrap();
         write_keypair_to_file(
             &SuiKeyPair::Ed25519(network_key_pair.copy()),
-            &PathBuf::from("network.key"),
+            PathBuf::from("network.key"),
         )
         .unwrap();
-        write_keypair_to_file(&account_key_pair, &PathBuf::from("account.key")).unwrap();
+        write_keypair_to_file(&account_key_pair, PathBuf::from("account.key")).unwrap();
 
         const TEMPLATE: &str = include_str!("../data/fullnode-template-with-path.yaml");
         let template: NodeConfig = serde_yaml::from_str(TEMPLATE).unwrap();
