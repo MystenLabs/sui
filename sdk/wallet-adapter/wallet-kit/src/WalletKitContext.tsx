@@ -77,7 +77,11 @@ export function WalletKitProvider({
 type UseWalletKit = WalletKitCoreState &
   Pick<
     WalletKitCore,
-    "connect" | "disconnect" | "signTransaction" | "signAndExecuteTransaction"
+    | "connect"
+    | "disconnect"
+    | "signMessage"
+    | "signTransaction"
+    | "signAndExecuteTransaction"
   >;
 
 export function useWalletKit(): UseWalletKit {
@@ -95,6 +99,7 @@ export function useWalletKit(): UseWalletKit {
     () => ({
       connect: walletKit.connect,
       disconnect: walletKit.disconnect,
+      signMessage: walletKit.signMessage,
       signTransaction: walletKit.signTransaction,
       signAndExecuteTransaction: walletKit.signAndExecuteTransaction,
       ...state,
