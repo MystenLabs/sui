@@ -24,8 +24,8 @@ use std::collections::VecDeque;
 pub const FAIL_TO_RECOVER_PUBKEY: u64 = 0;
 pub const INVALID_SIGNATURE: u64 = 1;
 
-pub const KECCAK256: u8 = 3;
-pub const SHA256: u8 = 4;
+pub const KECCAK256: u8 = 0;
+pub const SHA256: u8 = 1;
 
 pub fn ecrecover(
     _context: &mut NativeContext,

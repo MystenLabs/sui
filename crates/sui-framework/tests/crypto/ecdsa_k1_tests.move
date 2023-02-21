@@ -15,13 +15,13 @@ module sui::ecdsa_k1_tests {
         // recover with keccak256 hash
         let sig = x"7e4237ebfbc36613e166bfc5f6229360a9c1949242da97ca04867e4de57b2df30c8340bcb320328cf46d71bda51fcb519e3ce53b348eec62de852e350edbd88600";
         let pubkey_bytes = x"02337cca2171fdbfcfd657fa59881f46269f1e590b5ffab6023686c7ad2ecc2c1c";
-        let pubkey = ecdsa_k1::secp256k1_ecrecover(&sig, &msg, 3);
+        let pubkey = ecdsa_k1::secp256k1_ecrecover(&sig, &msg, 0);
         assert!(pubkey == pubkey_bytes, 0);
 
         // recover with sha256 hash
         let sig = x"e5847245b38548547f613aaea3421ad47f5b95a222366fb9f9b8c57568feb19c7077fc31e7d83e00acc1347d08c3e1ad50a4eeb6ab044f25c861ddc7be5b8f9f01";
         let pubkey_bytes = x"02337cca2171fdbfcfd657fa59881f46269f1e590b5ffab6023686c7ad2ecc2c1c";
-        let pubkey = ecdsa_k1::secp256k1_ecrecover(&sig, &msg, 4);
+        let pubkey = ecdsa_k1::secp256k1_ecrecover(&sig, &msg, 1);
         assert!(pubkey == pubkey_bytes, 0);
     }
 
@@ -30,7 +30,7 @@ module sui::ecdsa_k1_tests {
     fun test_ecrecover_pubkey_fail_to_recover() {
         let msg = x"00";
         let sig = x"0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-        ecdsa_k1::secp256k1_ecrecover(&sig, &msg, 4);
+        ecdsa_k1::secp256k1_ecrecover(&sig, &msg, 1);
     }
 
     #[test]
@@ -39,7 +39,7 @@ module sui::ecdsa_k1_tests {
         let msg = b"Hello, world!";
         // incorrect length sig
         let sig = x"7e4237ebfbc36613e166bfc5f6229360a9c1949242da97ca04867e4de57b2df30c8340bcb320328cf46d71bda51fcb519e3ce53b348eec62de852e350edbd886";
-        ecdsa_k1::secp256k1_ecrecover(&sig, &msg, 4);
+        ecdsa_k1::secp256k1_ecrecover(&sig, &msg, 1);
     }
 
     #[test]
@@ -47,11 +47,11 @@ module sui::ecdsa_k1_tests {
         let msg = b"Hello, world!";
         let pk = x"02337cca2171fdbfcfd657fa59881f46269f1e590b5ffab6023686c7ad2ecc2c1c";
         let sig = x"7e4237ebfbc36613e166bfc5f6229360a9c1949242da97ca04867e4de57b2df30c8340bcb320328cf46d71bda51fcb519e3ce53b348eec62de852e350edbd88600";
-        let verify = ecdsa_k1::secp256k1_verify(&sig, &pk, &msg, 3);
+        let verify = ecdsa_k1::secp256k1_verify(&sig, &pk, &msg, 0);
         assert!(verify == false, 0);
         
         let sig_1 = x"7e4237ebfbc36613e166bfc5f6229360a9c1949242da97ca04867e4de57b2df30c8340bcb320328cf46d71bda51fcb519e3ce53b348eec62de852e350edbd88601";
-        let verify_1 = ecdsa_k1::secp256k1_verify(&sig_1, &pk, &msg, 3);
+        let verify_1 = ecdsa_k1::secp256k1_verify(&sig_1, &pk, &msg, 0);
         assert!(verify_1 == false, 0);
     }
 
@@ -61,13 +61,13 @@ module sui::ecdsa_k1_tests {
         // verify with keccak256 hash
         let pk = x"02337cca2171fdbfcfd657fa59881f46269f1e590b5ffab6023686c7ad2ecc2c1c";
         let sig = x"7e4237ebfbc36613e166bfc5f6229360a9c1949242da97ca04867e4de57b2df30c8340bcb320328cf46d71bda51fcb519e3ce53b348eec62de852e350edbd886";
-        let verify = ecdsa_k1::secp256k1_verify(&sig, &pk, &msg, 3);
+        let verify = ecdsa_k1::secp256k1_verify(&sig, &pk, &msg, 0);
         assert!(verify == true, 0);
         
         // verify with sha256 hash
         let sig = x"e5847245b38548547f613aaea3421ad47f5b95a222366fb9f9b8c57568feb19c7077fc31e7d83e00acc1347d08c3e1ad50a4eeb6ab044f25c861ddc7be5b8f9f";
         let pk = x"02337cca2171fdbfcfd657fa59881f46269f1e590b5ffab6023686c7ad2ecc2c1c";
-        let verify = ecdsa_k1::secp256k1_verify(&sig, &pk, &msg, 4);
+        let verify = ecdsa_k1::secp256k1_verify(&sig, &pk, &msg, 1);
         assert!(verify == true, 0);
     }
 
@@ -76,12 +76,12 @@ module sui::ecdsa_k1_tests {
         let msg = b"Hello, world!";
         let sig = x"e5847245b38548547f613aaea3421ad47f5b95a222366fb9f9b8c57568feb19c7077fc31e7d83e00acc1347d08c3e1ad50a4eeb6ab044f25c861ddc7be5b8f9f";
         let pk = x"02337cca2171fdbfcfd657fa59881f46269f1e590b5ffab6023686c7ad2ecc2c";
-        let verify = ecdsa_k1::secp256k1_verify(&sig, &pk, &msg, 4);
+        let verify = ecdsa_k1::secp256k1_verify(&sig, &pk, &msg, 1);
         assert!(verify == false, 0);
 
         let sig = x"e5847245b38548547f613aaea3421ad47f5b95a222366fb9f9b8c57568feb19c7077fc31e7d83e00acc1347d08c3e1ad50a4eeb6ab044f25c861ddc7be5b8f9f";
         let pk = x"02337cca2171fdbfcfd657fa59881f46269f1e590b5ffab6023686c7ad2ecc2c1c";
-        let verify = ecdsa_k1::secp256k1_verify(&sig, &pk, &msg, 5);
+        let verify = ecdsa_k1::secp256k1_verify(&sig, &pk, &msg, 2);
         assert!(verify == false, 0);
     }
 
@@ -107,7 +107,7 @@ module sui::ecdsa_k1_tests {
             *v = (*v - 1) % 2;
         };
 
-        let pubkey = ecdsa_k1::secp256k1_ecrecover(&sig, &msg, 3);
+        let pubkey = ecdsa_k1::secp256k1_ecrecover(&sig, &msg, 0);
 
         let uncompressed = ecdsa_k1::decompress_pubkey(&pubkey);
 

@@ -41,10 +41,10 @@ Error if the signature is invalid.
 
 <a name="0x2_ecdsa_r1_KECCAK256"></a>
 
-Hash function name that are valid for ecrecover and secp256r1_verify.
+Hash function name that are valid for ecrecover and secp256k1_verify.
 
 
-<pre><code><b>const</b> <a href="ecdsa_r1.md#0x2_ecdsa_r1_KECCAK256">KECCAK256</a>: u8 = 3;
+<pre><code><b>const</b> <a href="ecdsa_r1.md#0x2_ecdsa_r1_KECCAK256">KECCAK256</a>: u8 = 0;
 </code></pre>
 
 
@@ -53,7 +53,7 @@ Hash function name that are valid for ecrecover and secp256r1_verify.
 
 
 
-<pre><code><b>const</b> <a href="ecdsa_r1.md#0x2_ecdsa_r1_SHA256">SHA256</a>: u8 = 4;
+<pre><code><b>const</b> <a href="ecdsa_r1.md#0x2_ecdsa_r1_SHA256">SHA256</a>: u8 = 1;
 </code></pre>
 
 

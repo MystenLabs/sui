@@ -10,8 +10,8 @@ module sui::ecdsa_k1 {
     const EInvalidSignature: u64 = 1;
     
     /// Hash function name that are valid for ecrecover and secp256k1_verify. 
-    const KECCAK256: u8 = 3;
-    const SHA256: u8 = 4;
+    const KECCAK256: u8 = 0;
+    const SHA256: u8 = 1;
     
     /// @param signature: A 65-bytes signature in form (r, s, v) that is signed using
     /// Secp256k1. Reference implementation on signature generation using RFC6979:
