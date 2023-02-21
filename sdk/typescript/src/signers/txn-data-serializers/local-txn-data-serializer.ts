@@ -376,6 +376,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         budget: originalTx.data.gasBudget!,
         owner: signerAddress,
       },
+      expiration: { None: null },
     };
   }
 
