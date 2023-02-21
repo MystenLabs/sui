@@ -372,8 +372,8 @@ impl AuthorityPerEpochStore {
         self.parent_path.clone()
     }
 
-    /// Returns &Arc<EpochStartConfiguration>
-    /// User can treat this Arc as &EpochStartConfiguration, or clone the Arc to pass as owned object
+    /// Returns `&Arc<EpochStartConfiguration>`
+    /// User can treat this `Arc` as `&EpochStartConfiguration`, or clone the Arc to pass as owned object
     pub fn epoch_start_configuration(&self) -> &Arc<EpochStartConfiguration> {
         &self.epoch_start_configuration
     }

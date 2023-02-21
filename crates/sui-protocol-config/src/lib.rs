@@ -95,9 +95,9 @@ impl SupportedProtocolVersions {
 ///
 /// To add a new field to this struct, use the following procedure:
 /// - Advance the protocol version.
-/// - Add the field as a private Option<T> to the struct.
-/// - Initialize the field to None in prior protocol versions.
-/// - Initialize the field to Some(val) for your new protocol version.
+/// - Add the field as a private `Option<T>` to the struct.
+/// - Initialize the field to `None` in prior protocol versions.
+/// - Initialize the field to `Some(val)` for your new protocol version.
 /// - Add a public getter that simply unwraps the field.
 ///
 /// This way, if the constant is accessed in a protocol version in which it is not defined, the

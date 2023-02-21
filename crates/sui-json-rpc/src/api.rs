@@ -375,7 +375,7 @@ pub trait RpcTransactionBuilder {
         amount: Option<u64>,
     ) -> RpcResult<TransactionBytes>;
 
-    /// Send Coin<T> to a list of addresses, where `T` can be any coin type, following a list of amounts,
+    /// Send `Coin<T>` to a list of addresses, where `T` can be any coin type, following a list of amounts,
     /// The object specified in the `gas` field will be used to pay the gas fee for the transaction.
     /// The gas object can not appear in `input_coins`. If the gas object is not specified, the RPC server
     /// will auto-select one.
