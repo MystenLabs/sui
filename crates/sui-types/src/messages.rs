@@ -6,7 +6,7 @@ use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    Ed25519SuiSignature, EmptySignInfo, Signature,
+    Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignatureInner, ToFromBytes,
 };
 use crate::gas::GasCostSummary;
 use crate::intent::{Intent, IntentMessage};
@@ -21,7 +21,6 @@ use crate::{
 };
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::encoding::Base64;
-use fastcrypto::traits::Signer;
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::file_format::{CodeOffset, LocalIndex, TypeParameterIndex};
@@ -355,15 +354,15 @@ pub struct ProgrammableTransaction {
 pub enum Command {
     /// A call to either an entry or a public Move function
     MoveCall(Box<ProgrammableMoveCall>),
-    /// (Vec<forall T:key+store. T>, address)
+    /// `(Vec<forall T:key+store. T>, address)`
     /// It sends n-objects to the specified address. These objects must have store
     /// (public transfer) and either the previous owner must be an address or the object must
     /// be newly created.
     TransferObjects(Vec<Argument>, Argument),
-    /// (&mut Coin<T>, u64) -> Coin<T>
+    /// `(&mut Coin<T>, u64)` -> `Coin<T>`
     /// It splits off some amount into a new coin
     SplitCoin(Argument, Argument),
-    /// (&mut Coin<T>, Vec<Coin<T>>)
+    /// `(&mut Coin<T>, Vec<Coin<T>>)`
     /// It merges n-coins into the first coin
     MergeCoins(Argument, Vec<Argument>),
     /// Publishes a Move package
@@ -371,7 +370,7 @@ pub enum Command {
 }
 
 /// An argument to a programmable transaction command
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub enum Argument {
     /// The gas coin. The gas coin can only be used by-ref, except for with
     /// `TransferObjects`, which can use it by-value.
@@ -983,12 +982,28 @@ impl Display for TransactionKind {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct GasData {
+    pub payment: ObjectRef,
+    pub owner: SuiAddress,
+    pub price: u64,
+    pub budget: u64,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
+pub enum TransactionExpiration {
+    /// The transaction has no expiration
+    None,
+    /// Validators wont sign a transaction unless the expiration Epoch
+    /// is greater than or equal to the current epoch
+    Epoch(EpochId),
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct TransactionData {
     pub kind: TransactionKind,
-    sender: SuiAddress,
-    gas_payment: ObjectRef,
-    pub gas_price: u64,
-    pub gas_budget: u64,
+    pub sender: SuiAddress,
+    pub gas_data: GasData,
+    pub expiration: TransactionExpiration,
 }
 
 impl TransactionData {
@@ -1001,12 +1016,15 @@ impl TransactionData {
         TransactionData {
             kind,
             sender,
-            gas_price: DUMMY_GAS_PRICE,
-            gas_payment,
-            gas_budget,
+            gas_data: GasData {
+                price: DUMMY_GAS_PRICE,
+                owner: sender,
+                payment: gas_payment,
+                budget: gas_budget,
+            },
+            expiration: TransactionExpiration::None,
         }
     }
-
     pub fn new(
         kind: TransactionKind,
         sender: SuiAddress,
@@ -1017,9 +1035,22 @@ impl TransactionData {
         TransactionData {
             kind,
             sender,
-            gas_price,
-            gas_payment,
-            gas_budget,
+            gas_data: GasData {
+                price: gas_price,
+                owner: sender,
+                payment: gas_payment,
+                budget: gas_budget,
+            },
+            expiration: TransactionExpiration::None,
+        }
+    }
+
+    pub fn new_with_gas_data(kind: TransactionKind, sender: SuiAddress, gas_data: GasData) -> Self {
+        TransactionData {
+            kind,
+            sender,
+            gas_data,
+            expiration: TransactionExpiration::None,
         }
     }
 
@@ -1240,16 +1271,41 @@ impl TransactionData {
         Self::new(kind, sender, gas_payment, gas_budget, gas_price)
     }
 
-    pub fn gas(&self) -> ObjectRef {
-        self.gas_payment
-    }
-
-    pub fn signer(&self) -> SuiAddress {
+    pub fn sender(&self) -> SuiAddress {
         self.sender
     }
 
+    /// Transaction signer and Gas owner
+    pub fn signers(&self) -> Vec<SuiAddress> {
+        let mut signers = vec![self.sender];
+        if self.gas_owner() != self.sender {
+            signers.push(self.gas_owner());
+        }
+        signers
+    }
+
+    pub fn gas_data(&self) -> &GasData {
+        &self.gas_data
+    }
+
+    pub fn gas_owner(&self) -> SuiAddress {
+        self.gas_data.owner
+    }
+
+    pub fn gas(&self) -> ObjectRef {
+        self.gas_data.payment
+    }
+
     pub fn gas_payment_object_ref(&self) -> &ObjectRef {
-        &self.gas_payment
+        &self.gas_data.payment
+    }
+
+    pub fn gas_price(&self) -> u64 {
+        self.gas_data.price
+    }
+
+    pub fn gas_budget(&self) -> u64 {
+        self.gas_data.budget
     }
 
     pub fn contains_shared_object(&self) -> bool {
@@ -1282,7 +1338,38 @@ impl TransactionData {
     }
 
     pub fn validity_check(&self) -> SuiResult {
-        Self::validity_check_impl(&self.kind, &self.gas_payment)
+        Self::validity_check_impl(&self.kind, self.gas_payment_object_ref())?;
+        self.check_sponsorship()
+    }
+
+    /// Check if the transaction is compliant with sponsorship.
+    fn check_sponsorship(&self) -> SuiResult {
+        // Not a sponsored transaction, nothing to check
+        if self.gas_owner() == self.sender() {
+            return Ok(());
+        }
+        let allow_sponsored_tx = match &self.kind {
+            // For the sake of simplicity, we do not allow batched transaction
+            // to be sponsored.
+            TransactionKind::Batch(_b) => false,
+            TransactionKind::Single(s) => match s {
+                SingleTransactionKind::Call(_)
+                | SingleTransactionKind::TransferObject(_)
+                | SingleTransactionKind::Pay(_)
+                | SingleTransactionKind::Publish(_) => true,
+                SingleTransactionKind::TransferSui(_)
+                | SingleTransactionKind::PaySui(_)
+                | SingleTransactionKind::PayAllSui(_)
+                | SingleTransactionKind::ChangeEpoch(_)
+                | SingleTransactionKind::ConsensusCommitPrologue(_)
+                | SingleTransactionKind::ProgrammableTransaction(_)
+                | SingleTransactionKind::Genesis(_) => false,
+            },
+        };
+        if allow_sponsored_tx {
+            return Ok(());
+        }
+        Err(SuiError::UnsupportedSponsoredTransactionKind)
     }
 
     pub fn validity_check_impl(kind: &TransactionKind, gas_payment: &ObjectRef) -> SuiResult {
@@ -1311,8 +1398,8 @@ impl TransactionData {
                 fp_ensure!(
                     valid,
                     SuiError::InvalidBatchTransaction {
-                        error: "Batch transaction contains non-batchable transactions. Only Call \
-                        and TransferObject are allowed"
+                        error: "Batch transaction contains non-batchable transactions. Only Call,
+                        Pay and TransferObject are allowed"
                             .to_string()
                     }
                 );
@@ -1329,15 +1416,52 @@ impl TransactionData {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct SenderSignedData {
     pub intent_message: IntentMessage<TransactionData>,
-    pub tx_signature: GenericSignature,
+    /// A list of signatures signed by all transaction participants.
+    /// 1. non participant signature must not be present.
+    /// 2. signature order does not matter.
+    pub tx_signatures: Vec<GenericSignature>,
 }
 
 impl SenderSignedData {
-    pub fn new(tx_data: TransactionData, intent: Intent, tx_signature: GenericSignature) -> Self {
+    pub fn new(
+        tx_data: TransactionData,
+        intent: Intent,
+        tx_signatures: Vec<GenericSignature>,
+    ) -> Self {
         Self {
             intent_message: IntentMessage::new(intent, tx_data),
-            tx_signature,
+            tx_signatures,
         }
+    }
+
+    pub fn new_from_sender_signature(
+        tx_data: TransactionData,
+        intent: Intent,
+        tx_signature: Signature,
+    ) -> Self {
+        Self {
+            intent_message: IntentMessage::new(intent, tx_data),
+            tx_signatures: vec![tx_signature.into()],
+        }
+    }
+
+    // This function does not check validity of the signature
+    // or perform any de-dup checks.
+    pub fn add_signature(&mut self, new_signature: Signature) {
+        self.tx_signatures.push(new_signature.into());
+    }
+
+    fn get_signer_sig_mapping(&self) -> SuiResult<BTreeMap<SuiAddress, &GenericSignature>> {
+        let mut mapping = BTreeMap::new();
+        for sig in &self.tx_signatures {
+            let address = sig.try_into()?;
+            mapping.insert(address, sig);
+        }
+        Ok(mapping)
+    }
+
+    pub fn transaction_data(&self) -> &TransactionData {
+        &self.intent_message.value
     }
 }
 
@@ -1352,8 +1476,32 @@ impl Message for SenderSignedData {
         if self.intent_message.value.kind.is_system_tx() {
             return Ok(());
         }
-        self.tx_signature
-            .verify_secure_generic(&self.intent_message, self.intent_message.value.sender)
+
+        // Verify signatures. Steps are ordered in asc complexity order to minimize abuse.
+        let signers = self.intent_message.value.signers();
+        // Signature number needs to match
+        fp_ensure!(
+            self.tx_signatures.len() == signers.len(),
+            SuiError::SignerSignatureNumberMismatch {
+                actual: self.tx_signatures.len(),
+                expected: signers.len()
+            }
+        );
+        // All required signers need to be sign.
+        let present_sigs = self.get_signer_sig_mapping()?;
+        for s in signers {
+            if !present_sigs.contains_key(&s) {
+                return Err(SuiError::SignerSignatureAbsent {
+                    signer: s.to_string(),
+                });
+            }
+        }
+
+        // Verify all present signatures.
+        for (signer, signature) in present_sigs {
+            signature.verify_secure_generic(&self.intent_message, signer)?;
+        }
+        Ok(())
     }
 }
 
@@ -1405,32 +1553,52 @@ impl Transaction {
     pub fn from_data_and_signer(
         data: TransactionData,
         intent: Intent,
-        signer: &dyn Signer<Signature>,
+        signers: Vec<&dyn Signer<Signature>>,
     ) -> Self {
-        let data1 = data.clone();
-        let intent1 = intent.clone();
-        let intent_msg = IntentMessage::new(intent, data);
-        let signature = Signature::new_secure(&intent_msg, signer);
-        Self::new(SenderSignedData::new(data1, intent1, signature.into()))
+        let intent_msg = IntentMessage::new(intent.clone(), data.clone());
+        let mut signatures = Vec::with_capacity(signers.len());
+        for signer in signers {
+            signatures.push(Signature::new_secure(&intent_msg, signer));
+        }
+        Self::from_data(data, intent, signatures)
     }
 
-    pub fn from_data(data: TransactionData, intent: Intent, signature: Signature) -> Self {
-        Self::from_generic_sig_data(data, intent, signature.into())
+    pub fn from_data(data: TransactionData, intent: Intent, signatures: Vec<Signature>) -> Self {
+        Self::from_generic_sig_data(
+            data,
+            intent,
+            signatures.into_iter().map(|s| s.into()).collect(),
+        )
+    }
+
+    // FIXME move this to another place
+    pub fn signature_from_signer(
+        data: TransactionData,
+        intent: Intent,
+        signer: &dyn Signer<Signature>,
+    ) -> Signature {
+        let intent_msg = IntentMessage::new(intent, data);
+        Signature::new_secure(&intent_msg, signer)
     }
 
     pub fn from_generic_sig_data(
         data: TransactionData,
         intent: Intent,
-        signature: GenericSignature,
+        signatures: Vec<GenericSignature>,
     ) -> Self {
-        Self::new(SenderSignedData::new(data, intent, signature))
+        Self::new(SenderSignedData::new(data, intent, signatures))
     }
 
-    /// Returns the Base64 encoded tx_bytes and the Base64 encoded [enum GenericSignature].
-    pub fn to_tx_bytes_and_signature(&self) -> (Base64, Base64) {
+    /// Returns the Base64 encoded tx_bytes
+    /// and a list of Base64 encoded [enum GenericSignature].
+    pub fn to_tx_bytes_and_signatures(&self) -> (Base64, Vec<Base64>) {
         (
             Base64::from_bytes(&bcs::to_bytes(&self.data().intent_message.value).unwrap()),
-            Base64::from_bytes(self.data().tx_signature.as_ref()),
+            self.data()
+                .tx_signatures
+                .iter()
+                .map(|s| Base64::from_bytes(s.as_ref()))
+                .collect(),
         )
     }
 }
@@ -1481,9 +1649,14 @@ impl VerifiedTransaction {
                     0,
                 )
             })
-            .pipe(|data| SenderSignedData {
-                intent_message: IntentMessage::new(Intent::default(), data),
-                tx_signature: GenericSignature::Signature(Ed25519SuiSignature::default().into()),
+            .pipe(|data| {
+                SenderSignedData::new_from_sender_signature(
+                    data,
+                    Intent::default(),
+                    Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
+                        .unwrap()
+                        .into(),
+                )
             })
             .pipe(Transaction::new)
             .pipe(Self::new_from_verified)
@@ -1510,6 +1683,7 @@ impl VerifiedSignedTransaction {
 /// A transaction that is signed by a sender but not yet by an authority.
 pub type Transaction = Envelope<SenderSignedData, EmptySignInfo>;
 pub type VerifiedTransaction = VerifiedEnvelope<SenderSignedData, EmptySignInfo>;
+pub type TrustedTransaction = TrustedEnvelope<SenderSignedData, EmptySignInfo>;
 
 /// A transaction that is signed by a sender and also by an authority.
 pub type SignedTransaction = Envelope<SenderSignedData, AuthoritySignInfo>;
@@ -1520,6 +1694,23 @@ pub type TxCertAndSignedEffects = (CertifiedTransaction, SignedTransactionEffect
 
 pub type VerifiedCertificate = VerifiedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
+
+/// An ExecutableTransaction is a wrapper of a transaction with a CertificateProof that indicates
+/// there existed a valid certificate for this transaction, and hence it can be executed locally.
+/// This is an abstraction data structure to cover both the case where the transaction is
+/// certified or checkpointed when we schedule it for execution.
+pub type ExecutableTransaction = Envelope<SenderSignedData, CertificateProof>;
+pub type VerifiedExecutableTransaction = VerifiedEnvelope<SenderSignedData, CertificateProof>;
+pub type TrustedExecutableTransaction = TrustedEnvelope<SenderSignedData, CertificateProof>;
+
+impl VerifiedExecutableTransaction {
+    pub fn certificate_sig(&self) -> Option<&AuthorityStrongQuorumSignInfo> {
+        match self.auth_sig() {
+            CertificateProof::Certified(sig) => Some(sig),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum ObjectInfoRequestKind {
@@ -1755,6 +1946,7 @@ pub enum ExecutionFailureStatus {
     /// In pay transaction, it means the input coins' types are not the same;
     /// In PaySui/PayAllSui, it means some input coins are not SUI coins.
     CoinTypeMismatch,
+    CoinTooLarge,
 
     //
     // MoveCall errors
@@ -1795,6 +1987,11 @@ pub enum ExecutionFailureStatus {
     MoveAbort(MoveLocation, u64), // TODO func def + offset?
     VMVerificationOrDeserializationError,
     VMInvariantViolation,
+
+    /// The total amount of coins to be paid is larger than the maximum value of u64.
+    TotalAmountOverflow,
+    // NOTE: if you want to add a new enum,
+    // please add it at the end for Rust SDK backward compatibility.
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash)]
@@ -1885,6 +2082,18 @@ impl Display for ExecutionFailureStatus {
                     "Coin type check failed in pay/pay_sui/pay_all_sui transaction"
                 )
             }
+            ExecutionFailureStatus::CoinTooLarge => {
+                write!(
+                    f,
+                    "Coin exceeds maximum value for a single coin"
+                )
+            },
+            ExecutionFailureStatus::TotalAmountOverflow => {
+                write!(
+                    f,
+                    "The total amount of coins to be paid is larger than the maximum value of u64"
+                )
+            },
             ExecutionFailureStatus::EmptyInputCoins => {
                 write!(f, "Expected a non-empty list of input Coin objects")
             }
@@ -2240,6 +2449,8 @@ pub struct TransactionEffects {
     pub unwrapped: Vec<(ObjectRef, Owner)>,
     /// Object Refs of objects now deleted (the old refs).
     pub deleted: Vec<ObjectRef>,
+    /// Object refs of objects previously wrapped in other objects but now deleted.
+    pub unwrapped_then_deleted: Vec<ObjectRef>,
     /// Object refs of objects now wrapped in other objects.
     pub wrapped: Vec<ObjectRef>,
     /// The updated gas object reference. Have a dedicated field for convenient access.
@@ -2266,6 +2477,21 @@ impl TransactionEffects {
                     .iter()
                     .map(|(r, o)| (r, o, WriteKind::Unwrap)),
             )
+    }
+
+    /// Return an iterator that iterates through all deleted objects, including deleted,
+    /// unwrapped_then_deleted, and wrapped objects. In other words, all objects that
+    /// do not exist in the object state after this transaction.
+    pub fn all_deleted(&self) -> impl Iterator<Item = (&ObjectRef, DeleteKind)> + Clone {
+        self.deleted
+            .iter()
+            .map(|r| (r, DeleteKind::Normal))
+            .chain(
+                self.unwrapped_then_deleted
+                    .iter()
+                    .map(|r| (r, DeleteKind::UnwrapThenDelete)),
+            )
+            .chain(self.wrapped.iter().map(|r| (r, DeleteKind::Wrap)))
     }
 
     pub fn execution_digests(&self) -> ExecutionDigests {
@@ -2392,6 +2618,7 @@ impl Default for TransactionEffects {
             mutated: Vec::new(),
             unwrapped: Vec::new(),
             deleted: Vec::new(),
+            unwrapped_then_deleted: Vec::new(),
             wrapped: Vec::new(),
             gas_object: (
                 random_object_ref(),
@@ -2430,17 +2657,6 @@ pub type VerifiedTransactionEffectsEnvelope<S> = VerifiedEnvelope<TransactionEff
 pub type VerifiedSignedTransactionEffects = VerifiedTransactionEffectsEnvelope<AuthoritySignInfo>;
 pub type VerifiedCertifiedTransactionEffects =
     VerifiedTransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
-
-pub type ValidExecutionDigests = Envelope<ExecutionDigests, CertificateProof>;
-pub type ValidTransactionEffectsDigest = Envelope<TransactionEffectsDigest, CertificateProof>;
-pub type ValidTransactionEffects = TransactionEffectsEnvelope<CertificateProof>;
-
-impl From<ValidExecutionDigests> for ValidTransactionEffectsDigest {
-    fn from(ved: ValidExecutionDigests) -> ValidTransactionEffectsDigest {
-        let (data, validity) = ved.into_data_and_sig();
-        ValidTransactionEffectsDigest::new(data.effects, validity)
-    }
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum InputObjectKind {

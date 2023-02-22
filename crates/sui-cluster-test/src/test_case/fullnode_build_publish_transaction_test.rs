@@ -33,8 +33,9 @@ impl TestCaseImpl for FullNodeBuildPublishTransactionTest {
         let data = ctx
             .build_transaction_remotely("sui_publish", params)
             .await?;
-        let (_, effects) = ctx.sign_and_execute(data, "publish basics package").await;
-        effects
+        let response = ctx.sign_and_execute(data, "publish basics package").await;
+        response
+            .effects
             .created
             .iter()
             .find(|obj_ref| obj_ref.owner == Owner::Immutable)

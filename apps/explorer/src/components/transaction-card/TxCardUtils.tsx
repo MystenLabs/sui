@@ -11,10 +11,10 @@ import {
     getTransferSuiTransaction,
     SUI_TYPE_ARG,
     type GetTxnDigestsResponse,
-    type CertifiedTransaction,
     type ExecutionStatusType,
     type TransactionKindName,
     type JsonRpcProvider,
+    getTransactionSender,
 } from '@mysten/sui.js';
 import { Fragment } from 'react';
 
@@ -179,12 +179,10 @@ export const getDataOnTxDigests = (
             .map((txEff) => {
                 const digest = transactions.filter(
                     (transactionId) =>
-                        transactionId ===
-                        getTransactionDigest(txEff.certificate)
+                        transactionId === getTransactionDigest(txEff)
                 )[0];
-                const res: CertifiedTransaction = txEff.certificate;
                 // TODO: handle multiple transactions
-                const txns = getTransactions(res);
+                const txns = getTransactions(txEff);
                 if (txns.length > 1) {
                     console.error(
                         'Handling multiple transactions is not yet supported',
@@ -215,8 +213,8 @@ export const getDataOnTxDigests = (
                     suiAmount,
                     coinType: transfer?.coinType || null,
                     kind: txKind,
-                    From: res.data.sender,
-                    timestamp_ms: txEff.timestamp_ms,
+                    From: getTransactionSender(txEff),
+                    timestamp_ms: txEff.timestamp_ms || txEff.timestampMs,
                     ...(recipient
                         ? {
                               To: recipient,

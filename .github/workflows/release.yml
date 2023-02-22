@@ -52,6 +52,7 @@ jobs:
           echo BIN_SUI_NODE="target/release/sui-node" >> $GITHUB_OUTPUT
           echo BIN_SUI_TOOL="target/release/sui-tool" >> $GITHUB_OUTPUT
           echo BIN_SUI_FAUCET="target/release/sui-faucet" >> $GITHUB_OUTPUT
+          echo BIN_SUI_TEST_VALIDATOR="target/release/sui-test-validator" >> $GITHUB_OUTPUT
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v3
@@ -62,6 +63,7 @@ jobs:
             ${{ steps.build.outputs.BIN_SUI_NODE }}
             ${{ steps.build.outputs.BIN_SUI_TOOL }}
             ${{ steps.build.outputs.BIN_SUI_FAUCET }}
+            ${{ steps.build.outputs.BIN_SUI_TEST_VALIDATOR }}
 
       - name: Publish binaries
         uses: softprops/action-gh-release@v1
@@ -72,5 +74,6 @@ jobs:
             ${{ steps.build.outputs.BIN_SUI_NODE }}
             ${{ steps.build.outputs.BIN_SUI_TOOL }}
             ${{ steps.build.outputs.BIN_SUI_FAUCET }}
+            ${{ steps.build.outputs.BIN_SUI_TEST_VALIDATOR }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

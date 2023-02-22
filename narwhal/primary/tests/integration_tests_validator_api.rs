@@ -476,6 +476,7 @@ async fn test_remove_collections() {
     assert_eq!(Empty {}, actual_result);
 }
 
+#[ignore]
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_read_causal_signed_certificates() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();

@@ -178,7 +178,31 @@ impl Parameters {
     }
 
     fn default_min_header_delay() -> Duration {
-        Duration::from_secs_f64(1.8)
+        Duration::from_secs_f64(0.5)
+    }
+
+    fn default_gc_depth() -> u64 {
+        50
+    }
+
+    fn default_sync_retry_delay() -> Duration {
+        Duration::from_millis(5_000)
+    }
+
+    fn default_sync_retry_nodes() -> usize {
+        3
+    }
+
+    fn default_batch_size() -> usize {
+        500_000
+    }
+
+    fn default_max_batch_delay() -> Duration {
+        Duration::from_millis(100)
+    }
+
+    fn default_max_concurrent_requests() -> usize {
+        500_000
     }
 }
 
@@ -221,6 +245,22 @@ pub struct AnemoParameters {
     /// Per-peer rate-limits (in requests/sec) for the WorkerToWorker service.
     pub report_batch_rate_limit: Option<NonZeroU32>,
     pub request_batch_rate_limit: Option<NonZeroU32>,
+
+    /// Size in bytes above which network messages are considered excessively large. Excessively
+    /// large messages will still be handled, but logged and reported in metrics for debugging.
+    ///
+    /// If unspecified, this will default to 8 MiB.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub excessive_message_size: Option<usize>,
+}
+
+impl AnemoParameters {
+    pub fn excessive_message_size(&self) -> usize {
+        const EXCESSIVE_MESSAGE_SIZE: usize = 8 << 20;
+
+        self.excessive_message_size
+            .unwrap_or(EXCESSIVE_MESSAGE_SIZE)
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -363,18 +403,18 @@ impl Default for BlockSynchronizerParameters {
 impl Default for Parameters {
     fn default() -> Self {
         Self {
-            header_num_of_batches_threshold: 32,
-            max_header_num_of_batches: 1000,
-            max_header_delay: Duration::from_millis(100),
-            min_header_delay: Duration::from_millis(100),
-            gc_depth: 50,
-            sync_retry_delay: Duration::from_millis(5_000),
-            sync_retry_nodes: 3,
-            batch_size: 500_000,
-            max_batch_delay: Duration::from_millis(100),
+            header_num_of_batches_threshold: Parameters::default_header_num_of_batches_threshold(),
+            max_header_num_of_batches: Parameters::default_max_header_num_of_batches(),
+            max_header_delay: Parameters::default_max_header_delay(),
+            min_header_delay: Parameters::default_min_header_delay(),
+            gc_depth: Parameters::default_gc_depth(),
+            sync_retry_delay: Parameters::default_sync_retry_delay(),
+            sync_retry_nodes: Parameters::default_sync_retry_nodes(),
+            batch_size: Parameters::default_batch_size(),
+            max_batch_delay: Parameters::default_max_batch_delay(),
             block_synchronizer: BlockSynchronizerParameters::default(),
             consensus_api_grpc: ConsensusAPIGrpcParameters::default(),
-            max_concurrent_requests: 500_000,
+            max_concurrent_requests: Parameters::default_max_concurrent_requests(),
             prometheus_metrics: PrometheusMetricsParameters::default(),
             network_admin_server: NetworkAdminServerParameters::default(),
             anemo: AnemoParameters::default(),

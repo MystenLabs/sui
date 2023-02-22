@@ -110,7 +110,7 @@ impl TransactionValidator for SuiTxValidator {
         // It is unnecessary to write to pending_certificates table because the certs will be written
         // via Narwhal output.
         self.transaction_manager
-            .enqueue(owned_tx_certs, &self.epoch_store)
+            .enqueue_certificates(owned_tx_certs, &self.epoch_store)
             .wrap_err("Failed to schedule certificates for execution")
     }
 }
@@ -209,7 +209,7 @@ mod tests {
             .into_iter()
             .map(|mut cert| {
                 // set it to an all-zero user signature
-                cert.tx_signature =
+                cert.tx_signatures[0] =
                     GenericSignature::Signature(sui_types::crypto::Signature::Ed25519SuiSignature(
                         Ed25519SuiSignature::default(),
                     ));

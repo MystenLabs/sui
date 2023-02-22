@@ -19,18 +19,22 @@ describe('Test common functions', () => {
           },
         },
         sender: 'cba4a48bb0f8b586c167e5dcefaa1c5e96ab3f08',
-        gasPayment: {
-          objectId: '2fab642a835afc9d68d296f50c332c9d32b5a0d5',
-          version: 7,
-          digest: 'lGmQDt2ch1/4HwdgOlHmeeZZvCHUjfrKvBOND/c67n4=',
+        gasData: {
+          owner: 'cba4a48bb0f8b586c167e5dcefaa1c5e96ab3f08',
+          payment: {
+            objectId: '2fab642a835afc9d68d296f50c332c9d32b5a0d5',
+            version: 7,
+            digest: 'lGmQDt2ch1/4HwdgOlHmeeZZvCHUjfrKvBOND/c67n4=',
+          },
+          price: 1,
+          budget: 100,
         },
-        gasPrice: 1,
-        gasBudget: 100,
+        expiration: { None: null },
       };
 
       const transactionDigest = generateTransactionDigest(transactionData, bcs);
       expect(transactionDigest).toEqual(
-        'HZaXLHhraTyRJjQAEbaEn9ruT1LrjUMG9Sq9EeGY2JLZ',
+        'AXCK8UzvhACvD9qQYsaeYV26WUCFwgJXs2bzAJyWBQvb',
       );
     });
   });

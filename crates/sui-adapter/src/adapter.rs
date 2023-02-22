@@ -94,7 +94,7 @@ pub fn new_session<
 >(
     vm: &'v MoveVM,
     state_view: &'r S,
-    input_objects: BTreeMap<ObjectID, (/* by_value */ bool, Owner)>,
+    input_objects: BTreeMap<ObjectID, Owner>,
     is_metered: bool,
     protocol_config: &ProtocolConfig,
 ) -> Session<'r, 'v, S> {
@@ -221,7 +221,7 @@ fn execute_internal<
 ) -> Result<Mode::ExecutionResult, ExecutionError> {
     let input_objects = object_data
         .iter()
-        .map(|(id, (owner, _))| (*id, (by_value_objects.contains(id), *owner)))
+        .map(|(id, (owner, _))| (*id, *owner))
         .collect();
     let mut session = new_session(
         vm,
@@ -307,7 +307,7 @@ fn execute_internal<
         deletions,
         user_events,
         loaded_child_objects,
-    } = object_runtime.finish()?;
+    } = object_runtime.finish(by_value_objects)?;
     let session = new_session(
         vm,
         &*state_view,
@@ -428,7 +428,11 @@ pub fn store_package_and_init_modules<
 
     // wrap the modules in an object, write it to the store
     // The call to unwrap() will go away once we remove address owner from Immutable objects.
-    let package_object = Object::new_package(modules, ctx.digest())?;
+    let package_object = Object::new_package(
+        modules,
+        ctx.digest(),
+        protocol_config.max_move_package_size(),
+    )?;
     let id = package_object.id();
     let changes = BTreeMap::from([(
         id,
@@ -993,7 +997,15 @@ fn validate_primitive_arg(
 
     // we already checked the type above and struct layout for this type is guaranteed to exist
     let string_struct_layout = type_layout.unwrap();
+    validate_primitive_arg_string(arg, idx, string_struct, string_struct_layout)
+}
 
+pub fn validate_primitive_arg_string(
+    arg: &[u8],
+    idx: LocalIndex,
+    string_struct: (&AccountAddress, &IdentStr, &IdentStr),
+    string_struct_layout: MoveTypeLayout,
+) -> Result<(), ExecutionError> {
     let string_move_value =
         MoveValue::simple_deserialize(arg, &string_struct_layout).map_err(|_| {
             ExecutionError::new_with_source(
@@ -1454,7 +1466,7 @@ fn missing_unwrapped_msg(id: &ObjectID) -> String {
     )
 }
 
-fn convert_type_argument_error<
+pub fn convert_type_argument_error<
     'r,
     E: Debug,
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E>,

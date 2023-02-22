@@ -285,7 +285,9 @@ pub struct GenesisValidatorInfo {
 #[derive(Serialize, Deserialize)]
 pub struct GenesisChainParameters {
     pub timestamp_ms: u64,
-    // protocol version that the chain starts at.
+
+    /// protocol version that the chain starts at.
+    #[serde(default = "ProtocolVersion::max")]
     pub protocol_version: ProtocolVersion,
     // Most other parameters (e.g. initial gas schedule) should be derived from protocol_version.
 }
@@ -410,18 +412,8 @@ impl Builder {
             return built_genesis.clone();
         }
 
-        let objects = self
-            .objects
-            .clone()
-            .into_iter()
-            .map(|(_, o)| o)
-            .collect::<Vec<_>>();
-        let validators = self
-            .validators
-            .clone()
-            .into_iter()
-            .map(|(_, v)| v)
-            .collect::<Vec<_>>();
+        let objects = self.objects.clone().into_values().collect::<Vec<_>>();
+        let validators = self.validators.clone().into_values().collect::<Vec<_>>();
 
         self.built_genesis = Some(build_unsigned_genesis_data(
             &self.parameters,
@@ -484,11 +476,7 @@ impl Builder {
             }
         };
 
-        let validators = self
-            .validators
-            .into_iter()
-            .map(|(_, v)| v)
-            .collect::<Vec<_>>();
+        let validators = self.validators.into_values().collect::<Vec<_>>();
 
         // Ensure we have signatures from all validators
         assert_eq!(checkpoint.auth_signature.len(), validators.len() as u64);
@@ -603,16 +591,8 @@ impl Builder {
 
         // Verify it matches
         if let Some(loaded_genesis) = &loaded_genesis {
-            let objects = objects
-                .clone()
-                .into_iter()
-                .map(|(_, o)| o)
-                .collect::<Vec<_>>();
-            let validators = committee
-                .clone()
-                .into_iter()
-                .map(|(_, v)| v)
-                .collect::<Vec<_>>();
+            let objects = objects.clone().into_values().collect::<Vec<_>>();
+            let validators = committee.clone().into_values().collect::<Vec<_>>();
 
             let built = build_unsigned_genesis_data(&parameters, &validators, &objects);
             assert_eq!(
@@ -804,7 +784,7 @@ fn create_genesis_transaction(
         );
 
         let transaction_data = genesis_transaction.data().intent_message.value.clone();
-        let signer = transaction_data.signer();
+        let signer = transaction_data.sender();
         let gas = transaction_data.gas();
         let (inner_temp_store, effects, _execution_error) =
             sui_adapter::execution_engine::execute_transaction_to_effects::<
@@ -883,11 +863,7 @@ fn create_genesis_objects(
     )
     .unwrap();
 
-    store
-        .into_inner()
-        .into_iter()
-        .map(|(_id, object)| object)
-        .collect()
+    store.into_inner().into_values().collect()
 }
 
 fn process_package(
@@ -1157,7 +1133,7 @@ mod test {
         );
 
         let transaction_data = genesis_transaction.data().intent_message.value.clone();
-        let signer = transaction_data.signer();
+        let signer = transaction_data.sender();
         let gas = transaction_data.gas();
         let (_inner_temp_store, effects, _execution_error) =
             sui_adapter::execution_engine::execute_transaction_to_effects::<

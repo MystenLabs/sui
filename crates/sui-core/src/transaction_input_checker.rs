@@ -6,15 +6,13 @@ use crate::authority::AuthorityStore;
 use std::collections::HashSet;
 use sui_types::base_types::ObjectRef;
 use sui_types::gas::SuiCostTable;
-use sui_types::messages::TransactionKind;
+use sui_types::messages::{TransactionKind, VerifiedExecutableTransaction};
 use sui_types::{
     base_types::{SequenceNumber, SuiAddress},
     error::{SuiError, SuiResult},
     fp_ensure,
     gas::{self, SuiGasStatus},
-    messages::{
-        InputObjectKind, InputObjects, SingleTransactionKind, TransactionData, VerifiedCertificate,
-    },
+    messages::{InputObjectKind, InputObjects, SingleTransactionKind, TransactionData},
     object::{Object, Owner},
 };
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
@@ -38,8 +36,8 @@ async fn get_gas_status(
         store,
         epoch_store,
         gas_object_ref,
-        transaction.gas_budget,
-        transaction.gas_price,
+        transaction.gas_budget(),
+        transaction.gas_price(),
         &transaction.kind,
         extra_gas_object_refs,
     )
@@ -118,11 +116,11 @@ pub(crate) async fn check_dev_inspect_input(
 pub async fn check_certificate_input(
     store: &AuthorityStore,
     epoch_store: &AuthorityPerEpochStore,
-    cert: &VerifiedCertificate,
+    cert: &VerifiedExecutableTransaction,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
-    let gas_status = get_gas_status(store, epoch_store, &cert.data().intent_message.value).await?;
-    let input_object_kinds = cert.data().intent_message.value.input_objects()?;
     let tx_data = &cert.data().intent_message.value;
+    let gas_status = get_gas_status(store, epoch_store, tx_data).await?;
+    let input_object_kinds = tx_data.input_objects()?;
     let input_object_data = if tx_data.kind.is_change_epoch_tx() {
         // When changing the epoch, we update a the system object, which is shared, without going
         // through sequencing, so we must bypass the sequence checks here.
@@ -130,12 +128,7 @@ pub async fn check_certificate_input(
     } else {
         store.check_sequenced_input_objects(cert.digest(), &input_object_kinds, epoch_store)?
     };
-    let input_objects = check_objects(
-        &cert.data().intent_message.value,
-        input_object_kinds,
-        input_object_data,
-    )
-    .await?;
+    let input_objects = check_objects(tx_data, input_object_kinds, input_object_data).await?;
     Ok((gas_status, input_objects))
 }
 
@@ -171,6 +164,13 @@ async fn check_gas(
             TransactionKind::Single(SingleTransactionKind::PaySui(t)) => t.amounts.iter().sum(),
             _ => 0,
         };
+        let reference_gas_price = epoch_store.reference_gas_price();
+        if computation_gas_price < reference_gas_price {
+            return Err(SuiError::GasPriceUnderRGP {
+                gas_price: computation_gas_price,
+                reference_gas_price,
+            });
+        }
         let protocol_config = epoch_store.protocol_config();
         let cost_table = SuiCostTable::new(protocol_config);
         let storage_gas_price = protocol_config.storage_gas_price();
@@ -266,9 +266,15 @@ async fn check_objects(
         if transfer_object_ids.contains(&object.id()) {
             object.ensure_public_transfer_eligible()?;
         }
+        // For Gas Object, we check the object is owned by gas owner
+        let owner_address = if object.id() == transaction.gas_payment_object_ref().0 {
+            transaction.gas_owner()
+        } else {
+            transaction.sender()
+        };
         // Check if the object contents match the type of lock we need for
         // this object.
-        match check_one_object(&transaction.signer(), object_kind, &object) {
+        match check_one_object(&owner_address, object_kind, &object) {
             Ok(()) => all_objects.push((object_kind, object)),
             Err(e) => {
                 errors.push(e);
@@ -292,7 +298,7 @@ async fn check_objects(
 /// The logic to check one object against a reference, and return the object if all is well
 /// or an error if not.
 fn check_one_object(
-    sender: &SuiAddress,
+    owner: &SuiAddress,
     object_kind: InputObjectKind,
     object: &Object,
 ) -> SuiResult {
@@ -339,12 +345,12 @@ fn check_one_object(
                 Owner::Immutable => {
                     // Nothing else to check for Immutable.
                 }
-                Owner::AddressOwner(owner) => {
-                    // Check the owner is the transaction sender.
+                Owner::AddressOwner(actual_owner) => {
+                    // Check the owner is correct.
                     fp_ensure!(
-                        sender == &owner,
+                        owner == &actual_owner,
                         SuiError::IncorrectSigner {
-                            error: format!("Object {:?} is owned by account address {:?}, but signer address is {:?}", object_id, owner, sender),
+                            error: format!("Object {:?} is owned by account address {:?}, but given owner/signer address is {:?}", object_id, actual_owner, owner),
                         }
                     );
                 }

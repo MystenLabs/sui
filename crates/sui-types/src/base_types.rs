@@ -20,16 +20,17 @@ use std::str::FromStr;
 pub use crate::committee::EpochId;
 use crate::crypto::{
     AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SignatureScheme,
-    SuiPublicKey,
+    SuiPublicKey, SuiSignature,
 };
 pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
 use crate::epoch_data::EpochData;
-use crate::error::ExecutionError;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
+use crate::error::{ExecutionError, SuiResult};
 use crate::gas_coin::GasCoin;
 use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
+use crate::signature::GenericSignature;
 use crate::sui_serde::Readable;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::{HashFunction, Sha3_256};
@@ -280,6 +281,25 @@ impl From<MultiSigPublicKey> for SuiAddress {
         // OK to access slice because Sha3_256 should never be shorter than SUI_ADDRESS_LENGTH.
         res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
         SuiAddress(res)
+    }
+}
+
+impl TryFrom<&GenericSignature> for SuiAddress {
+    type Error = SuiError;
+    fn try_from(sig: &GenericSignature) -> SuiResult<Self> {
+        Ok(match sig {
+            GenericSignature::Signature(sig) => {
+                let scheme = sig.scheme();
+                let pub_key_bytes = sig.public_key_bytes();
+                let pub_key = PublicKey::try_from_bytes(scheme, pub_key_bytes).map_err(|e| {
+                    SuiError::InvalidSignature {
+                        error: e.to_string(),
+                    }
+                })?;
+                SuiAddress::from(&pub_key)
+            }
+            GenericSignature::MultiSig(ms) => ms.multisig_pk.clone().into(),
+        })
     }
 }
 

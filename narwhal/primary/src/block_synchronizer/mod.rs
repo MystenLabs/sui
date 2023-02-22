@@ -822,10 +822,8 @@ impl BlockSynchronizer {
             .iter()
             .map(|c| (c.digest(), c.clone()))
             .collect();
-        let block_ids: Vec<CertificateDigest> = certificates_by_id
-            .iter()
-            .map(|(id, _)| id.to_owned())
-            .collect();
+        let block_ids: Vec<CertificateDigest> =
+            certificates_by_id.keys().map(|id| id.to_owned()).collect();
 
         let get_payload_availability_fn =
             move |mut client: PrimaryToPrimaryClient<network::anemo_ext::WaitingPeer>, request| {

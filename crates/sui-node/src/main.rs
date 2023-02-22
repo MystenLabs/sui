@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use sui_config::{Config, NodeConfig};
 use sui_node::metrics;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::SupportedProtocolVersions;
 use sui_telemetry::send_telemetry_event;
 use tokio::task;
 use tokio::time::sleep;
@@ -45,11 +45,17 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Ensure that a validator never calls get_for_min_version.
-    ProtocolConfig::poison_get_for_min_version();
+    // Ensure that a validator never calls get_for_min_version/get_for_max_version.
+    // TODO: re-enable after we figure out how to eliminate crashes in prod because of this.
+    // ProtocolConfig::poison_get_for_min_version();
 
     let args = Args::parse();
     let mut config = NodeConfig::load(&args.config_path)?;
+    assert!(
+        config.supported_protocol_versions.is_none(),
+        "supported_protocol_versions cannot be read from the config file"
+    );
+    config.supported_protocol_versions = Some(SupportedProtocolVersions::SYSTEM_DEFAULT);
 
     let registry_service = metrics::start_prometheus_server(config.metrics_address);
     let prometheus_registry = registry_service.default_registry();
@@ -64,11 +70,17 @@ async fn main() -> Result<()> {
         .init();
 
     info!("Sui Node version: {VERSION}");
+    info!(
+        "Supported protocol versions: {:?}",
+        config.supported_protocol_versions
+    );
 
     info!(
         "Started Prometheus HTTP endpoint at {}",
         config.metrics_address
     );
+
+    metrics::start_metrics_push_task(&config, registry_service.clone());
 
     if let Some(listen_address) = args.listen_address {
         config.network_address = listen_address;

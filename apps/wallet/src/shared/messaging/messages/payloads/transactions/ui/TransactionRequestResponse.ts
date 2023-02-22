@@ -3,7 +3,7 @@
 
 import { isBasePayload } from '_payloads';
 
-import type { SuiTransactionResponse } from '@mysten/sui.js';
+import type { SignedTransaction, SuiTransactionResponse } from '@mysten/sui.js';
 import type { BasePayload, Payload } from '_payloads';
 
 export interface TransactionRequestResponse extends BasePayload {
@@ -12,6 +12,7 @@ export interface TransactionRequestResponse extends BasePayload {
     approved: boolean;
     txResult?: SuiTransactionResponse;
     tsResultError?: string;
+    txSigned?: SignedTransaction;
 }
 
 export function isTransactionRequestResponse(

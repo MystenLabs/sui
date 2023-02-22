@@ -9,6 +9,9 @@ import {
     getTotalGasUsed,
     getExecutionStatusError,
     SUI_TYPE_ARG,
+    getTransactions,
+    getTransactionSender,
+    getTransactionDigest,
 } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
@@ -36,11 +39,13 @@ type ReceiptCardProps = {
 };
 
 function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
-    const { timestamp_ms, certificate, effects } = txn;
+    const { effects } = txn;
+    const timestamp = txn.timestamp_ms || txn.timestampMs;
     const executionStatus = getExecutionStatusType(txn);
     const error = useMemo(() => getExecutionStatusError(txn), [txn]);
     const isSuccessful = executionStatus === 'success';
-    const txnKind = getTransactionKindName(certificate.data.transactions[0]);
+    const [transaction] = getTransactions(txn);
+    const txnKind = getTransactionKindName(transaction);
 
     const recipientAddress = useGetTxnRecipientAddress({
         txn,
@@ -48,14 +53,13 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
     });
 
     const objectId = useMemo(() => {
-        const transferId = getTransferObjectTransaction(
-            certificate.data.transactions[0]
-        )?.objectRef?.objectId;
+        const transferId =
+            getTransferObjectTransaction(transaction)?.objectRef?.objectId;
 
         return transferId
             ? transferId
             : getTxnEffectsEventID(effects, activeAddress)[0];
-    }, [activeAddress, certificate.data.transactions, effects]);
+    }, [activeAddress, transaction, effects]);
 
     const gasTotal = getTotalGasUsed(txn);
 
@@ -78,7 +82,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
         return amount ? Math.abs(amount) : null;
     }, [activeAddress, transferAmount]);
 
-    const isSender = activeAddress === certificate.data.sender;
+    const isSender = activeAddress === getTransactionSender(txn);
     const isStakeTxn =
         moveCallLabel === 'Staked' || moveCallLabel === 'Unstaked';
 
@@ -93,9 +97,9 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
             <div className="flex mt-2.5 justify-center items-start">
                 <StatusIcon status={isSuccessful} />
             </div>
-            {timestamp_ms && (
+            {timestamp && (
                 <div className="my-3 flex justify-center">
-                    <DateCard timestamp={timestamp_ms} size="md" />
+                    <DateCard timestamp={timestamp} size="md" />
                 </div>
             )}
 
@@ -181,7 +185,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                 <div className="flex gap-1.5 w-full py-3.5">
                     <ExplorerLink
                         type={ExplorerLinkType.transaction}
-                        transactionID={certificate.transactionDigest}
+                        transactionID={getTransactionDigest(txn)}
                         title="View on Sui Explorer"
                         className="text-sui-dark text-p4 font-semibold no-underline uppercase tracking-wider"
                         showIcon={false}
