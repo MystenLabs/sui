@@ -967,14 +967,11 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let (
         tx,
         QuorumDriverResponse {
-            tx_cert: certified_txn,
             effects_cert: certified_txn_effects,
         },
     ) = rx.recv().await.unwrap().unwrap();
-    let (ct, cte, is_executed_locally) = *res;
+    let (cte, is_executed_locally) = *res;
     assert_eq!(*tx.digest(), digest);
-    assert_eq!(*ct.unwrap().digest(), digest);
-    assert_eq!(*certified_txn.unwrap().digest(), digest);
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(is_executed_locally);
     // verify that the node has sequenced and executed the txn
@@ -996,14 +993,11 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let (
         tx,
         QuorumDriverResponse {
-            tx_cert: certified_txn,
             effects_cert: certified_txn_effects,
         },
     ) = rx.recv().await.unwrap().unwrap();
-    let (ct, cte, is_executed_locally) = *res;
+    let (cte, is_executed_locally) = *res;
     assert_eq!(*tx.digest(), digest);
-    assert_eq!(*ct.unwrap().digest(), digest);
-    assert_eq!(*certified_txn.unwrap().digest(), digest);
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(!is_executed_locally);
     wait_for_tx(digest, node.state().clone()).await;

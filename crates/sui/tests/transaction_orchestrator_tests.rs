@@ -72,7 +72,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
     let ExecuteTransactionResponse::EffectsCert(result) = res;
-    let (_, _, executed_locally) = *result;
+    let (_, executed_locally) = *result;
     assert!(executed_locally);
 
     assert!(node
@@ -250,7 +250,7 @@ async fn test_tx_across_epoch_boundaries() {
                 {
                     Ok(ExecuteTransactionResponse::EffectsCert(res)) => {
                         info!(?tx_digest, "tx result: ok");
-                        let (_, effects_cert, _) = *res;
+                        let (effects_cert, _) = *res;
                         result_tx.send(effects_cert).await.unwrap();
                     }
                     Err(QuorumDriverError::TimeoutBeforeFinality) => {

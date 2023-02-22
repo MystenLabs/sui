@@ -368,7 +368,6 @@ where
             .await
             .map_err(QuorumDriverInternalError::CertificateError)?;
         let response = QuorumDriverResponse {
-            tx_cert: Some(certificate),
             effects_cert: effects,
         };
 
@@ -692,15 +691,12 @@ where
                     debug!(?tx_digest, "Transaction processing succeeded");
                     tx_cert
                 }
-                Ok(ProcessTransactionResult::Executed(tx_cert, effects_cert)) => {
+                Ok(ProcessTransactionResult::Executed(effects_cert)) => {
                     debug!(
                         ?tx_digest,
                         "Transaction processing succeeded with effects directly"
                     );
-                    let response = QuorumDriverResponse {
-                        tx_cert,
-                        effects_cert,
-                    };
+                    let response = QuorumDriverResponse { effects_cert };
                     quorum_driver.notify(&transaction, &Ok(response), old_retry_times + 1);
                     return;
                 }
@@ -720,15 +716,9 @@ where
         };
 
         let response = match quorum_driver.process_certificate(tx_cert.clone()).await {
-            Ok(QuorumDriverResponse {
-                tx_cert,
-                effects_cert,
-            }) => {
+            Ok(QuorumDriverResponse { effects_cert }) => {
                 debug!(?tx_digest, "Certificate processing succeeded");
-                QuorumDriverResponse {
-                    tx_cert,
-                    effects_cert,
-                }
+                QuorumDriverResponse { effects_cert }
             }
             // Note: non retryable failure when processing a cert
             // should be very rare.

@@ -222,10 +222,7 @@ struct ProcessCertificateState {
 #[derive(Debug)]
 pub enum ProcessTransactionResult {
     Certified(VerifiedCertificate),
-    Executed(
-        Option<VerifiedCertificate>,
-        VerifiedCertifiedTransactionEffects,
-    ),
+    Executed(VerifiedCertifiedTransactionEffects),
 }
 
 impl ProcessTransactionResult {
@@ -1051,7 +1048,6 @@ where
                         let ct =
                             CertifiedTransactionEffects::new_from_data_and_sig(effects, cert_sig);
                         Ok(Some(ProcessTransactionResult::Executed(
-                            certificate,
                             ct.verify(&self.committee)?,
                         )))
                     }
@@ -1214,21 +1210,15 @@ where
     pub async fn execute_transaction(
         &self,
         transaction: &VerifiedTransaction,
-    ) -> Result<
-        (
-            Option<VerifiedCertificate>,
-            VerifiedCertifiedTransactionEffects,
-        ),
-        anyhow::Error,
-    > {
+    ) -> Result<VerifiedCertifiedTransactionEffects, anyhow::Error> {
         let result = self
             .process_transaction(transaction.clone())
             .instrument(tracing::debug_span!("process_tx"))
             .await?;
         let cert = match result {
             ProcessTransactionResult::Certified(cert) => cert,
-            ProcessTransactionResult::Executed(cert, effects) => {
-                return Ok((cert, effects));
+            ProcessTransactionResult::Executed(effects) => {
+                return Ok(effects);
             }
         };
         self.metrics.total_tx_certificates_created.inc();
@@ -1237,7 +1227,7 @@ where
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
 
-        Ok((Some(cert), response))
+        Ok(response)
     }
 
     /// This function tries to get SignedTransaction OR CertifiedTransaction from
