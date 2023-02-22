@@ -972,7 +972,6 @@ impl AuthorityState {
                 *certificate.digest(),
                 transaction_dependencies,
                 &self.move_vm,
-                &self._native_functions,
                 gas_status,
                 &epoch_store.epoch_start_configuration().epoch_data(),
                 epoch_store.protocol_config(),
@@ -1021,6 +1020,13 @@ impl AuthorityState {
         );
         let signer = transaction.sender();
         let gas = transaction.gas();
+        let move_vm = Arc::new(
+            adapter::new_move_vm(
+                self._native_functions.clone(),
+                epoch_store.protocol_config(),
+            )
+            .expect("We defined natives to not fail here"),
+        );
         let (_inner_temp_store, effects, _execution_error) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
                 shared_object_refs,
@@ -1030,8 +1036,7 @@ impl AuthorityState {
                 gas,
                 transaction_digest,
                 transaction_dependencies,
-                &self.move_vm,
-                &self._native_functions,
+                &move_vm,
                 gas_status,
                 &epoch_store.epoch_start_configuration().epoch_data(),
                 epoch_store.protocol_config(),
@@ -1097,6 +1102,13 @@ impl AuthorityState {
             SuiCostTable::new(protocol_config),
         );
         gas_status.charge_min_tx_gas()?;
+        let move_vm = Arc::new(
+            adapter::new_move_vm(
+                self._native_functions.clone(),
+                epoch_store.protocol_config(),
+            )
+            .expect("We defined natives to not fail here"),
+        );
         let (_inner_temp_store, effects, execution_result) =
             execution_engine::execute_transaction_to_effects::<execution_mode::DevInspect, _>(
                 shared_object_refs,
@@ -1106,8 +1118,7 @@ impl AuthorityState {
                 gas_object_ref,
                 transaction_digest,
                 transaction_dependencies,
-                &self.move_vm,
-                &self._native_functions,
+                &move_vm,
                 gas_status,
                 &EpochData::new(epoch), /* TODO(epoch_data): this needs to be figured out */
                 protocol_config,
