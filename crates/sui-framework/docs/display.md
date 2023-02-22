@@ -16,6 +16,7 @@ More entry functions might be added in the future depending on the use cases.
 
 -  [Resource `Display`](#0x2_display_Display)
 -  [Struct `DisplayCreated`](#0x2_display_DisplayCreated)
+-  [Struct `VersionUpdated`](#0x2_display_VersionUpdated)
 -  [Constants](#@Constants_0)
 -  [Function `add_owned`](#0x2_display_add_owned)
 -  [Function `empty`](#0x2_display_empty)
@@ -24,9 +25,13 @@ More entry functions might be added in the future depending on the use cases.
 -  [Function `create_and_share`](#0x2_display_create_and_share)
 -  [Function `create_and_keep`](#0x2_display_create_and_keep)
 -  [Function `create_with_fields`](#0x2_display_create_with_fields)
+-  [Function `update_version`](#0x2_display_update_version)
 -  [Function `add`](#0x2_display_add)
 -  [Function `add_multiple`](#0x2_display_add_multiple)
 -  [Function `edit`](#0x2_display_edit)
+-  [Function `remove`](#0x2_display_remove)
+-  [Function `version`](#0x2_display_version)
+-  [Function `fields`](#0x2_display_fields)
 -  [Function `add_internal`](#0x2_display_add_internal)
 
 
@@ -95,8 +100,7 @@ the property names have a priority over their types.
 <code>version: u64</code>
 </dt>
 <dd>
- Version that updates on every change after the object was
- published. Newly published object has version 0.
+ Version that can only be updated manually by the Publisher.
 </dd>
 </dl>
 
@@ -127,6 +131,46 @@ would be as simple as looking for the first event with <code><a href="display.md
 <dl>
 <dt>
 <code>id: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_display_VersionUpdated"></a>
+
+## Struct `VersionUpdated`
+
+Version of Display got updated -
+
+
+<pre><code><b>struct</b> <a href="display.md#0x2_display_VersionUpdated">VersionUpdated</a>&lt;T: key&gt; <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>id: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>version: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>fields: <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<a href="_String">string::String</a>, <a href="_String">string::String</a>&gt;</code>
 </dt>
 <dd>
 
@@ -368,6 +412,39 @@ Create a new Display<T> object with a set of fields.
 
 </details>
 
+<a name="0x2_display_update_version"></a>
+
+## Function `update_version`
+
+Manually bump the version and emit an event with the updated version's contents.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_update_version">update_version</a>&lt;T: key&gt;(pub: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>, d: &<b>mut</b> <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_update_version">update_version</a>&lt;T: key&gt;(
+    pub: &Publisher, d: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;
+) {
+    <b>assert</b>!(is_package&lt;T&gt;(pub), <a href="display.md#0x2_display_ENotOwner">ENotOwner</a>);
+    d.version = d.version + 1;
+    <a href="event.md#0x2_event_emit">event::emit</a>(<a href="display.md#0x2_display_VersionUpdated">VersionUpdated</a>&lt;T&gt; {
+        version: d.version,
+        fields: *&d.fields,
+        id: <a href="object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&d.id),
+    })
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_display_add"></a>
 
 ## Function `add`
@@ -385,7 +462,6 @@ Sets a custom <code>name</code> field with the <code>value</code>.
 
 
 <pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_add">add</a>&lt;T: key&gt;(pub: &Publisher, d: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, name: String, value: String) {
-    d.version = d.version + 1;
     <b>assert</b>!(is_package&lt;T&gt;(pub), <a href="display.md#0x2_display_ENotOwner">ENotOwner</a>);
     <a href="display.md#0x2_display_add_internal">add_internal</a>(d, name, value)
 }
@@ -414,7 +490,6 @@ Sets multiple <code>fields</code> with <code>values</code>.
 <pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_add_multiple">add_multiple</a>&lt;T: key&gt;(
     pub: &Publisher, d: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, fields: <a href="">vector</a>&lt;String&gt;, values: <a href="">vector</a>&lt;String&gt;
 ) {
-    d.version = d.version + 1;
     <b>let</b> len = <a href="_length">vector::length</a>(&fields);
     <b>assert</b>!(is_package&lt;T&gt;(pub), <a href="display.md#0x2_display_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(len == <a href="_length">vector::length</a>(&values), <a href="display.md#0x2_display_EVecLengthMismatch">EVecLengthMismatch</a>);
@@ -449,10 +524,85 @@ TODO (long run): version changes;
 
 
 <pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_edit">edit</a>&lt;T: key&gt;(pub: &Publisher, d: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, name: String, value: String) {
-    d.version = d.version + 1;
     <b>assert</b>!(is_package&lt;T&gt;(pub), <a href="display.md#0x2_display_ENotOwner">ENotOwner</a>);
     <b>let</b> (_k, _v) = <a href="vec_map.md#0x2_vec_map_remove">vec_map::remove</a>(&<b>mut</b> d.fields, &name);
     <a href="display.md#0x2_display_add_internal">add_internal</a>(d, name, value)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_display_remove"></a>
+
+## Function `remove`
+
+Remove the key from the Display.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_remove">remove</a>&lt;T: key&gt;(pub: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>, d: &<b>mut</b> <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;, name: <a href="_String">string::String</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_remove">remove</a>&lt;T: key&gt;(pub: &Publisher, d: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, name: String) {
+    <b>assert</b>!(is_package&lt;T&gt;(pub), <a href="display.md#0x2_display_ENotOwner">ENotOwner</a>);
+    <a href="vec_map.md#0x2_vec_map_remove">vec_map::remove</a>(&<b>mut</b> d.fields, &name);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_display_version"></a>
+
+## Function `version`
+
+Read the <code>version</code> field.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_version">version</a>&lt;T: key&gt;(d: &<a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_version">version</a>&lt;T: key&gt;(d: &<a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;): u64 {
+    d.version
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_display_fields"></a>
+
+## Function `fields`
+
+Read the <code>fields</code> field.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_fields">fields</a>&lt;T: key&gt;(d: &<a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;): &<a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<a href="_String">string::String</a>, <a href="_String">string::String</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_fields">fields</a>&lt;T: key&gt;(d: &<a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;): &VecMap&lt;String, String&gt; {
+    &d.fields
 }
 </code></pre>
 

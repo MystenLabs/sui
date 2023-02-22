@@ -53,8 +53,7 @@ module sui::display {
         /// Contains fields for display. Currently supported
         /// fields are: name, link, image and description.
         fields: VecMap<String, String>,
-        /// Version that updates on every change after the object was
-        /// published. Newly published object has version 0.
+        /// Version that can only be updated manually by the Publisher.
         version: u64
     }
 
@@ -66,6 +65,13 @@ module sui::display {
     /// would be as simple as looking for the first event with `Display<T>`.
     struct DisplayCreated<phantom T: key> has copy, drop {
         id: ID
+    }
+
+    /// Version of Display got updated -
+    struct VersionUpdated<phantom T: key> has copy, drop {
+        id: ID,
+        version: u64,
+        fields: VecMap<String, String>,
     }
 
     // === Initializer Functions ===
@@ -138,11 +144,23 @@ module sui::display {
         share(display)
     }
 
+    /// Manually bump the version and emit an event with the updated version's contents.
+    entry public fun update_version<T: key>(
+        pub: &Publisher, d: &mut Display<T>
+    ) {
+        assert!(is_package<T>(pub), ENotOwner);
+        d.version = d.version + 1;
+        event::emit(VersionUpdated<T> {
+            version: d.version,
+            fields: *&d.fields,
+            id: object::uid_to_inner(&d.id),
+        })
+    }
+
     // === Entry functions: Add/Modify fields ===
 
     /// Sets a custom `name` field with the `value`.
     entry public fun add<T: key>(pub: &Publisher, d: &mut Display<T>, name: String, value: String) {
-        d.version = d.version + 1;
         assert!(is_package<T>(pub), ENotOwner);
         add_internal(d, name, value)
     }
@@ -151,7 +169,6 @@ module sui::display {
     entry public fun add_multiple<T: key>(
         pub: &Publisher, d: &mut Display<T>, fields: vector<String>, values: vector<String>
     ) {
-        d.version = d.version + 1;
         let len = vector::length(&fields);
         assert!(is_package<T>(pub), ENotOwner);
         assert!(len == vector::length(&values), EVecLengthMismatch);
@@ -166,10 +183,27 @@ module sui::display {
     /// Change the value of the field.
     /// TODO (long run): version changes;
     entry public fun edit<T: key>(pub: &Publisher, d: &mut Display<T>, name: String, value: String) {
-        d.version = d.version + 1;
         assert!(is_package<T>(pub), ENotOwner);
         let (_k, _v) = vec_map::remove(&mut d.fields, &name);
         add_internal(d, name, value)
+    }
+
+    /// Remove the key from the Display.
+    entry public fun remove<T: key>(pub: &Publisher, d: &mut Display<T>, name: String) {
+        assert!(is_package<T>(pub), ENotOwner);
+        vec_map::remove(&mut d.fields, &name);
+    }
+
+    // === Access fields ===
+
+    /// Read the `version` field.
+    public fun version<T: key>(d: &Display<T>): u64 {
+        d.version
+    }
+
+    /// Read the `fields` field.
+    public fun fields<T: key>(d: &Display<T>): &VecMap<String, String> {
+        &d.fields
     }
 
     /// Private method for inserting fields without security checks.
