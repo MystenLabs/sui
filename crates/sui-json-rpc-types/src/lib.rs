@@ -1460,7 +1460,7 @@ pub struct SuiPay {
     pub recipients: Vec<SuiAddress>,
     /// The amounts each recipient will receive.
     /// Must be the same length as amounts
-    pub amounts: Vec<u64>,
+    pub amounts: Vec<String>,
 }
 
 impl From<Pay> for SuiPay {
@@ -1469,7 +1469,7 @@ impl From<Pay> for SuiPay {
         SuiPay {
             coins,
             recipients: p.recipients,
-            amounts: p.amounts,
+            amounts: p.amounts.iter().map(|x| x.to_string()).collect(),
         }
     }
 }
@@ -1492,7 +1492,7 @@ pub struct SuiPaySui {
     pub recipients: Vec<SuiAddress>,
     /// The amounts each recipient will receive.
     /// Must be the same length as amounts
-    pub amounts: Vec<u64>,
+    pub amounts: Vec<String>,
 }
 
 impl From<PaySui> for SuiPaySui {
@@ -1501,7 +1501,7 @@ impl From<PaySui> for SuiPaySui {
         SuiPaySui {
             coins,
             recipients: p.recipients,
-            amounts: p.amounts,
+            amounts: p.amounts.iter().map(|x| x.to_string()).collect(),
         }
     }
 }

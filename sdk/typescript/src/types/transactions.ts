@@ -60,14 +60,14 @@ export type SuiConsensusCommitPrologue = Infer<
 export const Pay = object({
   coins: array(SuiObjectRef),
   recipients: array(SuiAddress),
-  amounts: array(number()),
+  amounts: array(string()),
 });
 export type Pay = Infer<typeof Pay>;
 
 export const PaySui = object({
   coins: array(SuiObjectRef),
   recipients: array(SuiAddress),
-  amounts: array(number()),
+  amounts: array(string()),
 });
 export type PaySui = Infer<typeof PaySui>;
 

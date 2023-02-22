@@ -113,13 +113,23 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
         signer: SuiAddress,
         input_coins: Vec<ObjectID>,
         recipients: Vec<SuiAddress>,
-        amounts: Vec<u64>,
+        amounts: Vec<String>,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
         let data = self
             .builder
-            .pay(signer, input_coins, recipients, amounts, gas, gas_budget)
+            .pay(
+                signer,
+                input_coins,
+                recipients,
+                amounts
+                    .iter()
+                    .map(|a| a.parse::<u64>().map_err(|err| anyhow::anyhow!(err)))
+                    .collect::<Result<_, _>>()?,
+                gas,
+                gas_budget,
+            )
             .await?;
         Ok(TransactionBytes::from_data(data)?)
     }
@@ -129,12 +139,21 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
         signer: SuiAddress,
         input_coins: Vec<ObjectID>,
         recipients: Vec<SuiAddress>,
-        amounts: Vec<u64>,
+        amounts: Vec<String>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
         let data = self
             .builder
-            .pay_sui(signer, input_coins, recipients, amounts, gas_budget)
+            .pay_sui(
+                signer,
+                input_coins,
+                recipients,
+                amounts
+                    .iter()
+                    .map(|a| a.parse::<u64>().map_err(|err| anyhow::anyhow!(err)))
+                    .collect::<Result<Vec<u64>, _>>()?,
+                gas_budget,
+            )
             .await?;
         Ok(TransactionBytes::from_data(data)?)
     }

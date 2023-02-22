@@ -235,14 +235,19 @@ impl Operations {
         let mut aggregated_recipients: HashMap<SuiAddress, u64> = HashMap::new();
 
         for (recipient, amount) in recipients {
-            *aggregated_recipients.entry(*recipient).or_default() += *amount
+            let a = amount.parse::<u64>().unwrap();
+            *aggregated_recipients.entry(*recipient).or_default() += a;
         }
 
         let mut pay_operations = aggregated_recipients
             .into_iter()
             .map(|(recipient, amount)| Operation::pay_sui(status, recipient, amount.into()))
             .collect::<Vec<_>>();
-        let total_paid = tx.amounts.iter().sum::<u64>();
+        let total_paid = tx
+            .amounts
+            .iter()
+            .map(|a| a.parse::<u64>().unwrap())
+            .sum::<u64>();
         pay_operations.push(Operation::pay_sui(status, sender, -(total_paid as i128)));
         pay_operations
     }

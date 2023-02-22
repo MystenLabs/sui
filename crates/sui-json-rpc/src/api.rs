@@ -381,7 +381,7 @@ pub trait RpcTransactionBuilder {
         /// the recipients' addresses, the length of this vector must be the same as amounts.
         recipients: Vec<SuiAddress>,
         /// the amounts to be transferred to recipients, following the same order
-        amounts: Vec<u64>,
+        amounts: Vec<String>,
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
@@ -407,7 +407,7 @@ pub trait RpcTransactionBuilder {
         /// the recipients' addresses, the length of this vector must be the same as amounts.
         recipients: Vec<SuiAddress>,
         /// the amounts to be transferred to recipients, following the same order
-        amounts: Vec<u64>,
+        amounts: Vec<String>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;

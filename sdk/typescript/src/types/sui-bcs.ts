@@ -307,7 +307,7 @@ const BCS_SPEC = {
     struct: {
       coins: 'vector<SuiObjectRef>',
       recipients: 'vector<address>',
-      amounts: 'vector<string>',
+      amounts: 'vector<u64>',
     },
   },
 
@@ -315,7 +315,7 @@ const BCS_SPEC = {
     struct: {
       coins: 'vector<SuiObjectRef>',
       recipients: 'vector<address>',
-      amounts: 'vector<string>',
+      amounts: 'vector<u64>',
     },
   },
 

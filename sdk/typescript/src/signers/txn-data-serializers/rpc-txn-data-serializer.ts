@@ -177,7 +177,6 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
         TransactionBytes,
         this.skipDataValidation,
       );
-      console.log(resp)
       return new Base64DataBuffer(resp.txBytes);
     } catch (e) {
       throw new Error(

@@ -485,7 +485,11 @@ impl SimpleFaucet {
             Ok((
                 res.certificate.transaction_digest,
                 coin_ids,
-                amounts.clone(),
+                amounts
+                    .clone()
+                    .iter()
+                    .map(|x| x.parse::<u64>().unwrap())
+                    .collect(),
             ))
         } else {
             panic!("Expect SuiTransactionKind::PaySui(SuiPaySui) to send coins to address {} but got txn {:?}", recipient, txn);
