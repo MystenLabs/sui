@@ -14,6 +14,8 @@ import {
   RawSigner,
   SUI_SYSTEM_STATE_OBJECT_ID,
   fromB64,
+  SuiMoveObject,
+  SuiObject,
 } from '../../../src';
 import { retry } from 'ts-retry-promise';
 import { FaucetRateLimitError } from '../../../src/rpc/faucet-client';

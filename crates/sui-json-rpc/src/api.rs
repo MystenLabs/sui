@@ -12,9 +12,8 @@ use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, CoinPage, DevInspectResults, DynamicFieldPage, EventPage,
     GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
     MoveFunctionArgType, RPCTransactionRequestParams, SuiCoinMetadata, SuiEventEnvelope,
-    SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedFunction,
-    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
-    SuiTBlsSignObjectCommitmentType, SuiTBlsSignRandomnessObjectResponse,
+    SuiEventFilter, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
+    SuiObjectInfo, SuiTBlsSignObjectCommitmentType, SuiTBlsSignRandomnessObjectResponse,
     SuiTransactionAuthSignersResponse, SuiTransactionBuilderMode, SuiTransactionEffects,
     SuiTransactionResponse, SuiTypeTag, TransactionBytes, TransactionsPage,
 };
@@ -665,7 +664,6 @@ pub trait TransactionExecutionApi {
     ///     makes sure this node is aware of this transaction when client fires subsequent queries.
     ///     However if the node fails to execute the transaction locally in a timely manner,
     ///     a bool type in the response is set to false to indicated the case.
-    // TODO(joyqvq): remove this and rename executeTransactionSerializedSig to executeTransaction
     #[method(name = "executeTransaction")]
     async fn execute_transaction(
         &self,
@@ -675,7 +673,7 @@ pub trait TransactionExecutionApi {
         signature: Base64,
         /// The request type
         request_type: ExecuteTransactionRequestType,
-    ) -> RpcResult<SuiExecuteTransactionResponse>;
+    ) -> RpcResult<SuiTransactionResponse>;
 
     #[method(name = "executeTransactionSerializedSig", deprecated)]
     async fn execute_transaction_serialized_sig(
@@ -686,7 +684,7 @@ pub trait TransactionExecutionApi {
         signature: Base64,
         /// The request type
         request_type: ExecuteTransactionRequestType,
-    ) -> RpcResult<SuiExecuteTransactionResponse>;
+    ) -> RpcResult<SuiTransactionResponse>;
 
     // TODO: migrate above two rpc calls to this one eventually.
     #[method(name = "submitTransaction")]
@@ -698,7 +696,7 @@ pub trait TransactionExecutionApi {
         signatures: Vec<Base64>,
         /// The request type
         request_type: ExecuteTransactionRequestType,
-    ) -> RpcResult<SuiExecuteTransactionResponse>;
+    ) -> RpcResult<SuiTransactionResponse>;
 }
 
 pub fn cap_page_limit(limit: Option<usize>) -> usize {

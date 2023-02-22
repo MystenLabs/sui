@@ -11,7 +11,7 @@ use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 use colored::Colorize;
-use fastcrypto::encoding::{Base64, Encoding};
+use fastcrypto::encoding::{Base64, Encoding, Hex};
 use itertools::Itertools;
 use move_binary_format::file_format::{Ability, AbilitySet, StructTypeParameter, Visibility};
 use move_binary_format::normalized::{
@@ -44,12 +44,10 @@ use sui_types::event::{EventEnvelope, EventType};
 use sui_types::filter::EventFilter;
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
-use sui_types::message_envelope::Message;
 use sui_types::messages::{
-    CallArg, CertifiedTransaction, EffectsFinalityInfo, ExecuteTransactionResponse,
-    ExecutionStatus, FinalizedEffects, GenesisObject, InputObjectKind, MoveModulePublish,
-    ObjectArg, Pay, PayAllSui, PaySui, SingleTransactionKind, TransactionData, TransactionEffects,
-    TransactionKind, VerifiedCertificate,
+    CallArg, EffectsFinalityInfo, ExecutionStatus, GenesisObject, InputObjectKind,
+    MoveModulePublish, ObjectArg, Pay, PayAllSui, PaySui, SenderSignedData, SingleTransactionKind,
+    TransactionData, TransactionEffects, TransactionKind,
 };
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointDigest, CheckpointSequenceNumber, CheckpointSummary,
@@ -350,15 +348,18 @@ pub enum MoveFunctionArgType {
     Object(ObjectValueKind),
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiTransactionResponse {
-    pub certificate: SuiCertifiedTransaction,
+    pub transaction: SuiTransaction,
     pub effects: SuiTransactionEffects,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timestamp_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confirmed_local_execution: Option<bool>,
     /// The checkpoint number when this transaction was included and hence finalized.
     /// This is only returned in the read api, not in the transaction execution api.
     pub checkpoint: Option<CheckpointSequenceNumber>,
-    pub parsed_data: Option<SuiParsedTransactionResponse>,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
@@ -417,42 +418,6 @@ pub enum SuiTBlsSignObjectCommitmentType {
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub struct SuiTBlsSignRandomnessObjectResponse {
     pub signature: fastcrypto_tbls::types::RawSignature,
-}
-
-#[allow(clippy::large_enum_variant)]
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
-pub struct SuiExecuteTransactionResponse {
-    // If this transaction was already finalized previously, there is no guarantee that a
-    // certificate is still available.
-    pub certificate: Option<SuiCertifiedTransaction>,
-    pub effects: SuiFinalizedEffects,
-    // If the transaction is confirmed to be executed locally
-    // before this response.
-    pub confirmed_local_execution: bool,
-}
-
-impl SuiExecuteTransactionResponse {
-    pub fn from_execute_transaction_response(
-        resp: ExecuteTransactionResponse,
-        resolver: &impl GetModule,
-    ) -> Result<Self, anyhow::Error> {
-        Ok(match resp {
-            ExecuteTransactionResponse::EffectsCert(cert) => {
-                let (certificate, effects, is_executed_locally) = *cert;
-                let certificate: Option<SuiCertifiedTransaction> = match certificate {
-                    Some(c) => Some(c.try_into()?),
-                    None => None,
-                };
-                let effects: SuiFinalizedEffects =
-                    SuiFinalizedEffects::try_from(effects, resolver)?;
-                SuiExecuteTransactionResponse {
-                    certificate,
-                    effects,
-                    confirmed_local_execution: is_executed_locally,
-                }
-            }
-        })
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
@@ -1611,6 +1576,33 @@ impl TryFrom<TransactionData> for SuiTransactionData {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
+#[serde(rename = "Transaction", rename_all = "camelCase")]
+pub struct SuiTransaction {
+    pub data: SuiTransactionData,
+    pub tx_signatures: Vec<GenericSignature>,
+}
+
+impl TryFrom<SenderSignedData> for SuiTransaction {
+    type Error = anyhow::Error;
+
+    fn try_from(data: SenderSignedData) -> Result<Self, Self::Error> {
+        Ok(Self {
+            data: data.intent_message.value.try_into()?,
+            tx_signatures: data.tx_signatures,
+        })
+    }
+}
+
+impl Display for SuiTransaction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut writer = String::new();
+        writeln!(writer, "Transaction Signature: {:?}", self.tx_signatures)?;
+        write!(writer, "{}", &self.data)?;
+        write!(f, "{}", writer)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SuiGenesisTransaction {
     pub objects: Vec<ObjectID>,
@@ -1773,14 +1765,14 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
                         CallArg::Pure(p) => SuiJsonValue::from_bcs_bytes(&p),
                         CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))
                         | CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
-                            SuiJsonValue::new(Value::String(id.to_hex_literal()))
+                            SuiJsonValue::new(Value::String(Hex::encode(id)))
                         }
                         CallArg::ObjVec(vec) => SuiJsonValue::new(Value::Array(
                             vec.iter()
                                 .map(|obj_arg| match obj_arg {
                                     ObjectArg::ImmOrOwnedObject((id, _, _))
                                     | ObjectArg::SharedObject { id, .. } => {
-                                        Value::String(id.to_hex_literal())
+                                        Value::String(Hex::encode(id))
                                     }
                                 })
                                 .collect(),
@@ -1829,56 +1821,6 @@ pub struct SuiChangeEpoch {
     pub computation_charge: u64,
     pub storage_rebate: u64,
     pub epoch_start_timestamp_ms: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "CertifiedTransaction", rename_all = "camelCase")]
-pub struct SuiCertifiedTransaction {
-    pub transaction_digest: TransactionDigest,
-    pub data: SuiTransactionData,
-    /// tx_signatures is a list of signatures signed by transaction participants,
-    /// committing to the intent message containing the transaction data and intent.
-    pub tx_signatures: Vec<GenericSignature>,
-    /// authority signature information, if available, is signed by an authority, applied on `data`.
-    pub auth_sign_info: SuiAuthorityStrongQuorumSignInfo,
-}
-
-impl Display for SuiCertifiedTransaction {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut writer = String::new();
-        writeln!(writer, "Transaction Hash: {:?}", self.transaction_digest)?;
-        writeln!(writer, "Transaction Signature: {:?}", self.tx_signatures)?;
-        writeln!(
-            writer,
-            "Signed Authorities Bitmap: {:?}",
-            self.auth_sign_info.signers_map
-        )?;
-        write!(writer, "{}", &self.data)?;
-        write!(f, "{}", writer)
-    }
-}
-
-impl TryFrom<CertifiedTransaction> for SuiCertifiedTransaction {
-    type Error = anyhow::Error;
-
-    fn try_from(cert: CertifiedTransaction) -> Result<Self, Self::Error> {
-        let digest = *cert.digest();
-        let (data, sig) = cert.into_data_and_sig();
-        Ok(Self {
-            transaction_digest: digest,
-            data: data.intent_message.value.try_into()?,
-            tx_signatures: data.tx_signatures,
-            auth_sign_info: SuiAuthorityStrongQuorumSignInfo::from(&sig),
-        })
-    }
-}
-
-impl TryFrom<VerifiedCertificate> for SuiCertifiedTransaction {
-    type Error = anyhow::Error;
-    fn try_from(cert: VerifiedCertificate) -> Result<Self, Self::Error> {
-        let cert: CertifiedTransaction = cert.into();
-        cert.try_into()
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -1932,21 +1874,6 @@ impl Display for SuiFinalizedEffects {
         }
 
         write!(f, "{}", writer)
-    }
-}
-
-impl SuiFinalizedEffects {
-    fn try_from(
-        effects: FinalizedEffects,
-        resolver: &impl GetModule,
-    ) -> Result<Self, anyhow::Error> {
-        let digest = effects.effects.digest();
-        // We should always have a signature here.
-        Ok(Self {
-            transaction_effects_digest: digest,
-            effects: SuiTransactionEffects::try_from(effects.effects, resolver)?,
-            finality_info: effects.finality_info.into(),
-        })
     }
 }
 

@@ -264,10 +264,10 @@
         }
       ],
       "result": {
-        "name": "SuiExecuteTransactionResponse",
+        "name": "SuiTransactionResponse",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/SuiExecuteTransactionResponse"
+          "$ref": "#/components/schemas/SuiTransactionResponse"
         }
       },
       "examples": [
@@ -290,8 +290,7 @@
           "result": {
             "name": "Result",
             "value": {
-              "certificate": {
-                "transactionDigest": "7VjbrWg5vG11wLUkvAQwWGSPNxPNH1qw98o1e4Rjx1em",
+              "transaction": {
                 "data": {
                   "transactions": [
                     {
@@ -319,21 +318,7 @@
                 },
                 "txSignatures": [
                   "ALHyla2pZUPDolq3E5yOc8ojGuimSKwYLfAha9mP5KOtvJQl/s+t3u3cv3fz4wDBqprobPV7vW6ze79237ujGQwgZe9Z6CbTODIzbq3ZFq53AzRXBmnyBDiKgDwkZI8sdA=="
-                ],
-                "authSignInfo": {
-                  "epoch": 0,
-                  "signature": "wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                  "signers_map": [
-                    58,
-                    48,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0
-                  ]
-                }
+                ]
               },
               "effects": {
                 "status": {
@@ -394,9 +379,7 @@
                   }
                 ]
               },
-              "timestamp_ms": null,
-              "checkpoint": null,
-              "parsed_data": null
+              "checkpoint": null
             }
           }
         }
@@ -436,10 +419,10 @@
         }
       ],
       "result": {
-        "name": "SuiExecuteTransactionResponse",
+        "name": "SuiTransactionResponse",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/SuiExecuteTransactionResponse"
+          "$ref": "#/components/schemas/SuiTransactionResponse"
         }
       },
       "deprecated": true
@@ -970,13 +953,13 @@
             {
               "name": "query",
               "value": {
-                "Transaction": "8iMCefpmntJtAwXY7wVbQbMFDSUYTgDsAgfY2sUBKJDM"
+                "Transaction": "BqjGUp6Ek8UxWdKkdfm2bmeDivvuEEUBHXvCD2GrfczB"
               }
             },
             {
               "name": "cursor",
               "value": {
-                "txDigest": "8iMCefpmntJtAwXY7wVbQbMFDSUYTgDsAgfY2sUBKJDM",
+                "txDigest": "BqjGUp6Ek8UxWdKkdfm2bmeDivvuEEUBHXvCD2GrfczB",
                 "eventSeq": 10
               }
             },
@@ -1558,14 +1541,13 @@
           "params": [
             {
               "name": "digest",
-              "value": "Cqxa8ZrwLpL4Ecs3ziJQpjy4ruPx9vwiyygvxj3xhRum"
+              "value": "8Mq8H9SdaUWPZHJKsoontxhv6YLAGWW81ccbxvjhVCeZ"
             }
           ],
           "result": {
             "name": "Result",
             "value": {
-              "certificate": {
-                "transactionDigest": "Cqxa8ZrwLpL4Ecs3ziJQpjy4ruPx9vwiyygvxj3xhRum",
+              "transaction": {
                 "data": {
                   "transactions": [
                     {
@@ -1593,21 +1575,7 @@
                 },
                 "txSignatures": [
                   "AFdT/wKbbIKMyRE8mj08LUrd3mp0R3krdfADLA+bqJzUbiaXmL4+OvXVRqYgCbVVxJKHDrr1NIGTLUzgpdR4xQG6hmV5ZkKODtgnokS0vmNHVDWXWuuoOmN18GDl2YAdDg=="
-                ],
-                "authSignInfo": {
-                  "epoch": 0,
-                  "signature": "wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                  "signers_map": [
-                    58,
-                    48,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0
-                  ]
-                }
+                ]
               },
               "effects": {
                 "status": {
@@ -1668,9 +1636,7 @@
                   }
                 ]
               },
-              "timestamp_ms": null,
-              "checkpoint": null,
-              "parsed_data": null
+              "checkpoint": null
             }
           }
         }
@@ -1707,7 +1673,7 @@
           "params": [
             {
               "name": "digest",
-              "value": "2uFaBTdFBY6B7hgPEY7xSk8GT4kTJWJs1yXtvXBCWjf3"
+              "value": "F2DJnFZQjRD5DLgHeQ9C4HMuh6ssP98QJTWBXpUbTVz9"
             }
           ],
           "result": {
@@ -2641,10 +2607,10 @@
         }
       ],
       "result": {
-        "name": "SuiExecuteTransactionResponse",
+        "name": "SuiTransactionResponse",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/SuiExecuteTransactionResponse"
+          "$ref": "#/components/schemas/SuiTransactionResponse"
         }
       },
       "examples": [
@@ -2669,8 +2635,7 @@
           "result": {
             "name": "Result",
             "value": {
-              "certificate": {
-                "transactionDigest": "Ew8MVt67nHtZQfuZwwAq3yfg4J3MmTTXp5AD3Ssa5wTw",
+              "transaction": {
                 "data": {
                   "transactions": [
                     {
@@ -2698,21 +2663,7 @@
                 },
                 "txSignatures": [
                   "ANgH1IBtGjHZZtLZ22RgN+TW3u0OBaMRWFi3zKk2mQ2+jlexYCSLN6VouUq3Fy6nletdAInp2UWcgTl4MktwlQttqSk/XTlS5stFH/W02Kxeyb0TWYjhlUjBKhMcXPgTNg=="
-                ],
-                "authSignInfo": {
-                  "epoch": 0,
-                  "signature": "wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                  "signers_map": [
-                    58,
-                    48,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0
-                  ]
-                }
+                ]
               },
               "effects": {
                 "status": {
@@ -2773,9 +2724,7 @@
                   }
                 ]
               },
-              "timestamp_ms": null,
-              "checkpoint": null,
-              "parsed_data": null
+              "checkpoint": null
             }
           }
         }
@@ -3083,38 +3032,6 @@
       "Base64": {
         "description": "Base64 encoding",
         "type": "string"
-      },
-      "CertifiedTransaction": {
-        "type": "object",
-        "required": [
-          "authSignInfo",
-          "data",
-          "transactionDigest",
-          "txSignatures"
-        ],
-        "properties": {
-          "authSignInfo": {
-            "description": "authority signature information, if available, is signed by an authority, applied on `data`.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SuiAuthorityStrongQuorumSignInfo"
-              }
-            ]
-          },
-          "data": {
-            "$ref": "#/components/schemas/TransactionData"
-          },
-          "transactionDigest": {
-            "$ref": "#/components/schemas/TransactionDigest"
-          },
-          "txSignatures": {
-            "description": "tx_signatures is a list of signatures signed by transaction participants, committing to the intent message containing the transaction data and intent.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/GenericSignature"
-            }
-          }
-        }
       },
       "Checkpoint": {
         "type": "object",
@@ -5878,31 +5795,6 @@
           }
         }
       },
-      "SuiExecuteTransactionResponse": {
-        "type": "object",
-        "required": [
-          "confirmed_local_execution",
-          "effects"
-        ],
-        "properties": {
-          "certificate": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CertifiedTransaction"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "confirmed_local_execution": {
-            "type": "boolean"
-          },
-          "effects": {
-            "$ref": "#/components/schemas/FinalizedEffects"
-          }
-        }
-      },
       "SuiExecutionResult": {
         "type": "object",
         "properties": {
@@ -6254,137 +6146,6 @@
           "Friend"
         ]
       },
-      "SuiParsedMergeCoinResponse": {
-        "type": "object",
-        "required": [
-          "updatedCoin",
-          "updatedGas"
-        ],
-        "properties": {
-          "updatedCoin": {
-            "description": "The updated original coin object after merge",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/Object"
-              }
-            ]
-          },
-          "updatedGas": {
-            "description": "The updated gas payment object after deducting payment",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/Object"
-              }
-            ]
-          }
-        }
-      },
-      "SuiParsedPublishResponse": {
-        "type": "object",
-        "required": [
-          "createdObjects",
-          "package",
-          "updatedGas"
-        ],
-        "properties": {
-          "createdObjects": {
-            "description": "List of Move objects created as part of running the module initializers in the package",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Object"
-            }
-          },
-          "package": {
-            "description": "The newly published package object reference.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ObjectRef"
-              }
-            ]
-          },
-          "updatedGas": {
-            "description": "The updated gas payment object after deducting payment",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/Object"
-              }
-            ]
-          }
-        }
-      },
-      "SuiParsedSplitCoinResponse": {
-        "type": "object",
-        "required": [
-          "newCoins",
-          "updatedCoin",
-          "updatedGas"
-        ],
-        "properties": {
-          "newCoins": {
-            "description": "All the newly created coin objects generated from the split",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Object"
-            }
-          },
-          "updatedCoin": {
-            "description": "The updated original coin object after split",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/Object"
-              }
-            ]
-          },
-          "updatedGas": {
-            "description": "The updated gas payment object after deducting payment",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/Object"
-              }
-            ]
-          }
-        }
-      },
-      "SuiParsedTransactionResponse": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "Publish"
-            ],
-            "properties": {
-              "Publish": {
-                "$ref": "#/components/schemas/SuiParsedPublishResponse"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "MergeCoin"
-            ],
-            "properties": {
-              "MergeCoin": {
-                "$ref": "#/components/schemas/SuiParsedMergeCoinResponse"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "SplitCoin"
-            ],
-            "properties": {
-              "SplitCoin": {
-                "$ref": "#/components/schemas/SuiParsedSplitCoinResponse"
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
       "SuiSystemState": {
         "description": "Rust version of the Move sui::sui_system::SuiSystemState type",
         "type": "object",
@@ -6519,13 +6280,10 @@
       "SuiTransactionResponse": {
         "type": "object",
         "required": [
-          "certificate",
-          "effects"
+          "effects",
+          "transaction"
         ],
         "properties": {
-          "certificate": {
-            "$ref": "#/components/schemas/CertifiedTransaction"
-          },
           "checkpoint": {
             "description": "The checkpoint number when this transaction was included and hence finalized. This is only returned in the read api, not in the transaction execution api.",
             "type": [
@@ -6535,26 +6293,25 @@
             "format": "uint64",
             "minimum": 0.0
           },
+          "confirmedLocalExecution": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "effects": {
             "$ref": "#/components/schemas/TransactionEffects"
           },
-          "parsed_data": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SuiParsedTransactionResponse"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "timestamp_ms": {
+          "timestampMs": {
             "type": [
               "integer",
               "null"
             ],
             "format": "uint64",
             "minimum": 0.0
+          },
+          "transaction": {
+            "$ref": "#/components/schemas/Transaction"
           }
         }
       },
@@ -6618,6 +6375,24 @@
         "properties": {
           "contents": {
             "$ref": "#/components/schemas/Table"
+          }
+        }
+      },
+      "Transaction": {
+        "type": "object",
+        "required": [
+          "data",
+          "txSignatures"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TransactionData"
+          },
+          "txSignatures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GenericSignature"
+            }
           }
         }
       },
