@@ -429,8 +429,12 @@ pub(crate) fn make_anemo_config() -> anemo_cli::Config {
             "PrimaryToPrimary",
             anemo_cli::ServiceInfo::new()
                 .add_method(
-                    "SendMessage",
-                    anemo_cli::ron_method!(PrimaryToPrimaryClient, send_message, PrimaryMessage),
+                    "SendCertificate",
+                    anemo_cli::ron_method!(
+                        PrimaryToPrimaryClient,
+                        send_certificate,
+                        SendCertificateRequest
+                    ),
                 )
                 .add_method(
                     "RequestVote",

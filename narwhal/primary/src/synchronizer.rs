@@ -30,8 +30,8 @@ use types::{
     ensure,
     error::{DagError, DagResult},
     metered_channel::Sender,
-    BatchDigest, Certificate, CertificateDigest, Header, PrimaryMessage, PrimaryToPrimaryClient,
-    PrimaryToWorkerClient, Round, WorkerSynchronizeMessage,
+    BatchDigest, Certificate, CertificateDigest, Header, PrimaryToPrimaryClient,
+    PrimaryToWorkerClient, Round, SendCertificateRequest, WorkerSynchronizeMessage,
 };
 
 use crate::{aggregators::CertificatesAggregator, metrics::PrimaryMetrics};
@@ -595,9 +595,9 @@ impl Synchronizer {
                 certificates.pop_front();
             }
             let cert = certificates.front().unwrap().clone();
-            let request =
-                Request::new(PrimaryMessage::Certificate(cert)).with_timeout(PUSH_TIMEOUT);
-            match client.send_message(request).await {
+            let request = Request::new(SendCertificateRequest { certificate: cert })
+                .with_timeout(PUSH_TIMEOUT);
+            match client.send_certificate(request).await {
                 Ok(_) => {
                     certificates.pop_front();
                     failure_backoff = MIN_FAILURE_BACKOFF;

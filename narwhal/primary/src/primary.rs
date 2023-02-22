@@ -58,7 +58,6 @@ use tokio::{
 use tower::ServiceBuilder;
 use tracing::{debug, error, info, instrument, warn};
 
-pub use types::PrimaryMessage;
 use types::{
     ensure,
     error::{DagError, DagResult},
@@ -67,8 +66,9 @@ use types::{
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
     HeaderDigest, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
     PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
-    RequestVoteResponse, Round, Vote, VoteInfo, WorkerInfoResponse, WorkerOthersBatchMessage,
-    WorkerOurBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
+    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, Vote, VoteInfo,
+    WorkerInfoResponse, WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerToPrimary,
+    WorkerToPrimaryServer,
 };
 
 #[cfg(any(test))]
@@ -246,13 +246,13 @@ impl Primary {
         ));
 
         // Apply other rate limits from configuration as needed.
-        if let Some(limit) = parameters.anemo.send_message_rate_limit {
-            primary_service = primary_service.add_layer_for_send_message(InboundRequestLayer::new(
-                rate_limit::RateLimitLayer::new(
+        if let Some(limit) = parameters.anemo.send_certificate_rate_limit {
+            primary_service = primary_service.add_layer_for_send_certificate(
+                InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
                     governor::Quota::per_second(limit),
                     rate_limit::WaitMode::Block,
-                ),
-            ));
+                )),
+            );
         }
         if let Some(limit) = parameters.anemo.get_payload_availability_rate_limit {
             primary_service = primary_service.add_layer_for_get_payload_availability(
@@ -912,10 +912,10 @@ impl PrimaryReceiverHandler {
 
 #[async_trait]
 impl PrimaryToPrimary for PrimaryReceiverHandler {
-    async fn send_message(
+    async fn send_certificate(
         &self,
-        request: anemo::Request<PrimaryMessage>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        request: anemo::Request<SendCertificateRequest>,
+    ) -> Result<anemo::Response<SendCertificateResponse>, anemo::rpc::Status> {
         let network = request
             .extensions()
             .get::<anemo::NetworkRef>()
@@ -925,12 +925,12 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                     "Unable to access network to send child RPCs".to_owned(),
                 )
             })?;
-        let PrimaryMessage::Certificate(certificate) = request.into_body();
+        let certificate = request.into_body().certificate;
         self.synchronizer
             .try_accept_certificate(certificate, &network)
             .await
             .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
-        Ok(anemo::Response::new(()))
+        Ok(anemo::Response::new(SendCertificateResponse {}))
     }
 
     async fn request_vote(
