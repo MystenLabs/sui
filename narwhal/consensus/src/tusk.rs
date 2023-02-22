@@ -122,7 +122,7 @@ impl ConsensusProtocol for Tusk {
             debug!("Latest commit of {}: Round {}", name.encode_base64(), round);
         }
 
-        Ok((Outcome::Committed, committed_sub_dags))
+        Ok((Outcome::Commit, committed_sub_dags))
     }
 }
 

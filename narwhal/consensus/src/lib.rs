@@ -43,10 +43,25 @@ pub enum ConsensusError {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Outcome {
+    // Certificate has not been inserted to DAG since it's bellow the latest commit round
+    // for this authority.
     CertificateBelowCommitRound,
+
+    // Certificate processed is of an even round, so the previous one is an odd round and
+    // no leader election takes process.
     NoLeaderElectedForOddRound,
+
+    // Leader has been elected, but it's below the latest commit round, so commit happens.
     LeaderBelowCommitRound,
+
+    // Tried to do a leader election, but leader was not found for the round, not commit will
+    // take place.
     LeaderNotFound,
+
+    // Leader has been found,  but there was no enough support from the children nodes, so leader
+    // can't be used to commit.
     NotEnoughSupportForLeader,
-    Committed,
+
+    // Processed Certificate triggered a commit.
+    Commit,
 }

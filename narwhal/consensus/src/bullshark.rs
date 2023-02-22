@@ -225,7 +225,7 @@ impl ConsensusProtocol for Bullshark {
             .committed_certificates
             .observe(total_committed_certificates as f64);
 
-        Ok((Outcome::Committed, committed_sub_dags))
+        Ok((Outcome::Commit, committed_sub_dags))
     }
 }
 
