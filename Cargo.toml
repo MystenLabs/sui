@@ -6,8 +6,6 @@ members = [
     "crates/mysten-util-mem",
     "crates/mysten-util-mem-derive",
     "crates/prometheus-closure-metric",
-    "crates/sui-macros",
-    "crates/sui-proc-macros",
     "crates/sui-protocol-constants",
     "crates/telemetry-subscribers",
     "crates/typed-store",

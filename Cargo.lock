@@ -130,7 +130,7 @@ dependencies = [
  "serde_json",
  "tap",
  "tokio",
- "tokio-util 0.7.4",
+ "tokio-util",
  "tower",
  "tracing",
  "webpki",
@@ -382,11 +382,6 @@ dependencies = [
  "quote 1.0.26",
  "syn 1.0.107",
 ]
-
-[[package]]
-name = "async-task"
-version = "4.3.0"
-source = "git+https://github.com/mystenmark/async-task?rev=4e45b26e11126b191701b9b2ce5e2346b8d7682f#4e45b26e11126b191701b9b2ce5e2346b8d7682f"
 
 [[package]]
 name = "async-trait"
@@ -1990,12 +1985,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1435fa1053d8b2fbbe9be7e97eca7f33d37b28409959813daefc1446a14247f1"
 
 [[package]]
-name = "downcast-rs"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ea835d29036a4087793836fa931b08837ad5e957da9e23886b29586fb9b6650"
-
-[[package]]
 name = "dyn-clone"
 version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2078,29 +2067,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9852635589dc9f9ea1b6fe9f05b50ef208c85c834a562f0c6abb1c475736ec2b"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "env_logger"
-version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a12e6657c4c97ebab115a42dcee77225f7f482cdd841cf7088c657a42e9e00e7"
-dependencies = [
- "atty",
- "humantime",
- "log",
- "regex",
- "termcolor",
-]
-
-[[package]]
-name = "erasable"
-version = "1.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f11890ce181d47a64e5d1eb4b6caba0e7bae911a356723740d058a5d0340b7d"
-dependencies = [
- "autocfg",
- "scopeguard",
 ]
 
 [[package]]
@@ -2515,7 +2481,7 @@ dependencies = [
  "indexmap",
  "slab",
  "tokio",
- "tokio-util 0.7.4",
+ "tokio-util",
  "tracing",
 ]
 
@@ -3211,47 +3177,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "msim"
-version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=8190dcd907e45755d48ab14992f8df5ac31dacc9#8190dcd907e45755d48ab14992f8df5ac31dacc9"
-dependencies = [
- "ahash 0.7.6",
- "async-task",
- "bincode",
- "bytes",
- "cc",
- "downcast-rs",
- "env_logger",
- "erasable",
- "futures",
- "lazy_static",
- "libc",
- "msim-macros",
- "naive-timer",
- "pin-project-lite",
- "rand",
- "real_tokio",
- "serde",
- "socket2",
- "tap",
- "tokio-util 0.7.7",
- "toml",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "msim-macros"
-version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=8190dcd907e45755d48ab14992f8df5ac31dacc9#8190dcd907e45755d48ab14992f8df5ac31dacc9"
-dependencies = [
- "darling",
- "proc-macro2 1.0.54",
- "quote 1.0.26",
- "syn 1.0.107",
-]
-
-[[package]]
 name = "multiaddr"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3383,12 +3308,6 @@ dependencies = [
  "syn 1.0.107",
  "synstructure",
 ]
-
-[[package]]
-name = "naive-timer"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "034a0ad7deebf0c2abcf2435950a6666c3c15ea9d8fad0c0f48efa8a7f843fed"
 
 [[package]]
 name = "narwhal-config"
@@ -3527,6 +3446,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tokio-util",
  "tonic",
  "tracing",
  "typed-store",
@@ -3560,6 +3480,8 @@ dependencies = [
  "serde",
  "thiserror",
  "tokio",
+ "tokio-util",
+ "tonic",
  "tower",
  "tracing",
 ]
@@ -3609,6 +3531,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "tracing",
  "tracing-log",
  "tracing-subscriber",
@@ -3666,6 +3589,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tokio-util",
  "tonic",
  "tower",
  "tracing",
@@ -3691,6 +3615,8 @@ dependencies = [
  "tap",
  "tempfile",
  "tokio",
+ "tokio-util",
+ "tonic",
  "tracing",
  "typed-store",
 ]
@@ -3722,6 +3648,7 @@ dependencies = [
  "telemetry-subscribers",
  "tempfile",
  "tokio",
+ "tokio-util",
  "tonic",
  "tracing",
  "typed-store",
@@ -3766,6 +3693,7 @@ dependencies = [
  "serde_with",
  "thiserror",
  "tokio",
+ "tokio-util",
  "tonic",
  "tonic-build",
  "tracing",
@@ -3808,6 +3736,8 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tokio-stream",
+ "tokio-util",
  "tonic",
  "tower",
  "tracing",
@@ -4775,25 +4705,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "real_tokio"
-version = "1.27.0"
-source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=18a0ac61aea1c2da68b3b9483fc3bf4bc54a5eca#18a0ac61aea1c2da68b3b9483fc3bf4bc54a5eca"
-dependencies = [
- "autocfg",
- "bytes",
- "libc",
- "memchr",
- "mio",
- "num_cpus",
- "parking_lot",
- "pin-project-lite",
- "signal-hook-registry",
- "socket2",
- "tokio-macros 2.0.0 (git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=18a0ac61aea1c2da68b3b9483fc3bf4bc54a5eca)",
- "windows-sys 0.45.0",
-]
-
-[[package]]
 name = "redox_syscall"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5553,26 +5464,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
-name = "sui-macros"
-version = "0.7.0"
-dependencies = [
- "futures",
- "once_cell",
- "sui-proc-macros",
-]
-
-[[package]]
-name = "sui-proc-macros"
-version = "0.7.0"
-dependencies = [
- "msim-macros",
- "proc-macro2 1.0.49",
- "quote 1.0.23",
- "syn 1.0.107",
-]
-
-[[package]]
-name = "sui-protocol-config"
+name = "sui-protocol-constants"
 version = "0.1.0"
 
 [[package]]
@@ -5846,7 +5738,7 @@ dependencies = [
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
- "tokio-macros 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-macros",
  "tracing",
  "windows-sys 0.45.0",
 ]
@@ -5873,13 +5765,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "tokio-macros"
-version = "2.0.0"
-source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=18a0ac61aea1c2da68b3b9483fc3bf4bc54a5eca#18a0ac61aea1c2da68b3b9483fc3bf4bc54a5eca"
+name = "tokio-native-tls"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7d995660bd2b7f8c1568414c1126076c13fbb725c40112dc0120b78eb9b717b"
 dependencies = [
- "proc-macro2 1.0.54",
- "quote 1.0.26",
- "syn 2.0.10",
+ "native-tls",
+ "tokio",
 ]
 
 [[package]]
@@ -5915,23 +5807,6 @@ dependencies = [
  "futures-sink",
  "pin-project-lite",
  "tokio",
- "tracing",
-]
-
-[[package]]
-name = "tokio-util"
-version = "0.7.7"
-source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=18a0ac61aea1c2da68b3b9483fc3bf4bc54a5eca#18a0ac61aea1c2da68b3b9483fc3bf4bc54a5eca"
-dependencies = [
- "bytes",
- "futures-core",
- "futures-io",
- "futures-sink",
- "futures-util",
- "hashbrown",
- "pin-project-lite",
- "real_tokio",
- "slab",
  "tracing",
 ]
 
@@ -6000,7 +5875,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-stream",
- "tokio-util 0.7.4",
+ "tokio-util",
  "tower",
  "tower-layer",
  "tower-service",
@@ -6050,7 +5925,7 @@ dependencies = [
  "rand",
  "slab",
  "tokio",
- "tokio-util 0.7.4",
+ "tokio-util",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -6255,7 +6130,6 @@ dependencies = [
  "eyre",
  "fdlimit",
  "hdrhistogram",
- "msim",
  "num_cpus",
  "once_cell",
  "ouroboros",
@@ -6266,7 +6140,6 @@ dependencies = [
  "rocksdb",
  "rstest",
  "serde",
- "sui-macros",
  "syn 1.0.107",
  "tap",
  "tempfile",
