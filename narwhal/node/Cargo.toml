@@ -60,17 +60,11 @@ structopt = "0.3.26"
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 
 [features]
-benchmark = ["worker/benchmark", "primary/benchmark", "consensus/benchmark"]
 trace_transaction = ["worker/trace_transaction"]
 
 [[bin]]
 name = "narwhal-node"
 path = "src/main.rs"
-
-[[bin]]
-name = "narwhal-benchmark-client"
-path = "src/benchmark_client.rs"
-required-features = ["benchmark"]
 
 [[example]]
 name = "narwhal-generate-format"

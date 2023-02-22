@@ -23,5 +23,3 @@ protobuf-src = "1.1.0"
 [build-dependencies]
 tonic-build = "0.8.2"
 
-[features]
-benchmark = []

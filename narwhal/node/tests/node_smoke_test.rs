@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use config::Export;
-use std::time::{Duration, Instant};
+use std::{
+    thread,
+    time::{Duration, Instant},
+};
 use test_utils::{temp_dir, CommitteeFixture};
 
 const TEST_DURATION: Duration = Duration::from_secs(3);
@@ -49,6 +52,8 @@ fn test_primary_no_consensus() {
 
     let workers_file_path = format!("{config_path}/smoke_test_workers.json");
     worker_cache.export(&workers_file_path).unwrap();
+
+    thread::sleep(Duration::from_millis(500)); // no idea why this is now needed :-/
 
     let mut child = std::process::Command::new("cargo")
         .current_dir("..")
@@ -133,6 +138,8 @@ fn test_primary_with_consensus() {
 
     let workers_file_path = format!("{config_path}/smoke_test_workers.json");
     worker_cache.export(&workers_file_path).unwrap();
+
+    thread::sleep(Duration::from_millis(500)); // no idea why this is now needed :-/
 
     let mut child = std::process::Command::new("cargo")
         .current_dir("..")

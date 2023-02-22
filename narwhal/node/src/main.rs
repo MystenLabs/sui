@@ -31,11 +31,7 @@ use std::sync::Arc;
 use storage::NodeStorage;
 use telemetry_subscribers::TelemetryGuards;
 use tokio::sync::mpsc::channel;
-#[cfg(feature = "benchmark")]
-use tracing::subscriber::set_global_default;
 use tracing::{info, warn};
-#[cfg(feature = "benchmark")]
-use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 use worker::TrivialTransactionValidator;
 
 #[tokio::main]
@@ -167,15 +163,7 @@ async fn main() -> Result<(), eyre::Report> {
                 _ => unreachable!(),
             };
 
-            // In benchmarks, transactions are not deserializable => many errors at the debug level
-            // Moreover, we need RFC 3339 timestamps to parse properly => we use a custom subscriber.
-            cfg_if::cfg_if! {
-                if #[cfg(feature = "benchmark")] {
-                    setup_benchmark_telemetry(tracing_level, network_tracing_level)?;
-                } else {
-                    let _guard = setup_telemetry(tracing_level, network_tracing_level, Some(&registry));
-                }
-            }
+            let _guard = setup_telemetry(tracing_level, network_tracing_level, Some(&registry));
             run(
                 sub_matches,
                 committee,
@@ -212,30 +200,6 @@ fn setup_telemetry(
 
     let (guard, _handle) = config.init();
     guard
-}
-
-#[cfg(feature = "benchmark")]
-fn setup_benchmark_telemetry(
-    tracing_level: &str,
-    network_tracing_level: &str,
-) -> Result<(), eyre::Report> {
-    let custom_directive = "narwhal_executor=info";
-    let filter = EnvFilter::builder()
-        .with_default_directive(LevelFilter::INFO.into())
-        .parse(format!(
-            "{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level},{custom_directive}"
-        ))?;
-
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or(filter);
-
-    let timer = tracing_subscriber::fmt::time::UtcTime::rfc_3339();
-    let subscriber_builder = tracing_subscriber::fmt::Subscriber::builder()
-        .with_env_filter(env_filter)
-        .with_timer(timer)
-        .with_ansi(false);
-    let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
-    set_global_default(subscriber).expect("Failed to set subscriber");
-    Ok(())
 }
 
 // Runs either a worker or a primary.

@@ -57,11 +57,3 @@ anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "0e0ef705
 [features]
 default = []
 test = []
-
-[[bench]]
-name = "batch_digest"
-harness = false
-
-[[bench]]
-name = "verify_certificate"
-harness = false

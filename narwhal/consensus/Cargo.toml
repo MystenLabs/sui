@@ -41,13 +41,8 @@ pprof = { version = "0.11.0", features = ["criterion", "flamegraph"]}
 
 [features]
 default = ["rand"]
-benchmark = []
 pprof = []
 
 [lib]
 bench = false
 
-[[bench]]
-name = "process_certificates"
-harness = false
-required-features = ["benchmark", "pprof"]
