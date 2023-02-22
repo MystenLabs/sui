@@ -77,7 +77,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
 
     assert!(node
         .state()
-        .get_transaction_and_effects(digest)
+        .get_executed_transaction_and_effects(digest)
         .await
         .is_ok());
 

@@ -2045,7 +2045,7 @@ impl AuthorityState {
         self.get_indexes()?.get_recent_transactions(count)
     }
 
-    pub async fn get_transaction_and_effects(
+    pub async fn get_executed_transaction_and_effects(
         &self,
         digest: TransactionDigest,
     ) -> Result<(VerifiedTransaction, TransactionEffects), anyhow::Error> {
@@ -2596,9 +2596,8 @@ impl AuthorityState {
         // We must write tx and effects to the state sync tables so that state sync is able to
         // deliver to the transaction to CheckpointExecutor after it is included in a certified
         // checkpoint.
-        let effects_digest = signed_effects.digest();
         self.database
-            .insert_transaction_and_effects(&tx, &signed_effects, effects_digest)
+            .insert_transaction_and_effects(&tx, signed_effects.data())
             .map_err(|err| {
                 let err: anyhow::Error = err.into();
                 err

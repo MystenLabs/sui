@@ -120,7 +120,7 @@ impl CoinReadApi {
         let publish_txn_digest = self.get_object(package_id).await?.previous_transaction;
         let (_, effects) = self
             .state
-            .get_transaction_and_effects(publish_txn_digest)
+            .get_executed_transaction_and_effects(publish_txn_digest)
             .await?;
 
         let object_id = effects

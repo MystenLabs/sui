@@ -278,10 +278,9 @@ pub trait WriteStore: ReadStore {
 
     fn insert_committee(&self, new_committee: Committee) -> Result<(), Self::Error>;
 
-    // TODO: Make transaction and effects insert one atomic API
-    fn insert_transaction(&self, transaction: VerifiedTransaction) -> Result<(), Self::Error>;
-    fn insert_transaction_effects(
+    fn insert_transaction_and_effects(
         &self,
+        transaction: VerifiedTransaction,
         transaction_effects: TransactionEffects,
     ) -> Result<(), Self::Error>;
 }
@@ -306,15 +305,12 @@ impl<T: WriteStore> WriteStore for &T {
         WriteStore::insert_committee(*self, new_committee)
     }
 
-    fn insert_transaction(&self, transaction: VerifiedTransaction) -> Result<(), Self::Error> {
-        WriteStore::insert_transaction(*self, transaction)
-    }
-
-    fn insert_transaction_effects(
+    fn insert_transaction_and_effects(
         &self,
+        transaction: VerifiedTransaction,
         transaction_effects: TransactionEffects,
     ) -> Result<(), Self::Error> {
-        WriteStore::insert_transaction_effects(*self, transaction_effects)
+        WriteStore::insert_transaction_and_effects(*self, transaction, transaction_effects)
     }
 }
 
@@ -345,11 +341,8 @@ impl InMemoryStore {
         self.insert_checkpoint_contents(contents);
         self.update_highest_synced_checkpoint(&checkpoint);
 
-        for transaction in transactions {
-            self.insert_transaction(transaction);
-        }
-        for effect in effects {
-            self.insert_transaction_effects(effect);
+        for (transaction, effect) in transactions.into_iter().zip(effects) {
+            self.insert_transaction_and_effects(transaction, effect);
         }
     }
 
@@ -468,12 +461,14 @@ impl InMemoryStore {
         self.effects.get(digest)
     }
 
-    pub fn insert_transaction(&mut self, transaction: VerifiedTransaction) {
+    pub fn insert_transaction_and_effects(
+        &mut self,
+        transaction: VerifiedTransaction,
+        transaction_effects: TransactionEffects,
+    ) {
         self.transactions.insert(*transaction.digest(), transaction);
-    }
-
-    pub fn insert_transaction_effects(&mut self, effects: TransactionEffects) {
-        self.effects.insert(effects.digest(), effects);
+        self.effects
+            .insert(transaction_effects.digest(), transaction_effects);
     }
 }
 
@@ -586,17 +581,13 @@ impl WriteStore for SharedInMemoryStore {
         Ok(())
     }
 
-    fn insert_transaction(&self, transaction: VerifiedTransaction) -> Result<(), Self::Error> {
-        self.inner_mut().insert_transaction(transaction);
-        Ok(())
-    }
-
-    fn insert_transaction_effects(
+    fn insert_transaction_and_effects(
         &self,
+        transaction: VerifiedTransaction,
         transaction_effects: TransactionEffects,
     ) -> Result<(), Self::Error> {
         self.inner_mut()
-            .insert_transaction_effects(transaction_effects);
+            .insert_transaction_and_effects(transaction, transaction_effects);
         Ok(())
     }
 }
