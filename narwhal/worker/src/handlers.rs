@@ -4,7 +4,7 @@
 use anemo::types::response::StatusCode;
 use anyhow::Result;
 use async_trait::async_trait;
-use config::{SharedCommittee, SharedWorkerCache, WorkerId};
+use config::{Committee, SharedWorkerCache, WorkerId};
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -86,7 +86,7 @@ pub struct PrimaryReceiverHandler<V> {
     // The id of this worker.
     pub id: WorkerId,
     // The committee information.
-    pub committee: SharedCommittee,
+    pub committee: Committee,
     // The worker information cache.
     pub worker_cache: SharedWorkerCache,
     // The batch store
