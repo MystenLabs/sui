@@ -191,13 +191,3 @@ impl Logger for MetricsLogger {
             .dec();
     }
 }
-
-fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
-    content_type
-        .and_then(|val| val.to_str().ok())
-        .map_or(false, |content| {
-            content.eq_ignore_ascii_case("application/json")
-                || content.eq_ignore_ascii_case("application/json; charset=utf-8")
-                || content.eq_ignore_ascii_case("application/json;charset=utf-8")
-        })
-}
