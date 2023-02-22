@@ -1762,7 +1762,7 @@ impl AuthorityState {
         cur_epoch_store: &AuthorityPerEpochStore,
         supported_protocol_versions: SupportedProtocolVersions,
         new_committee: Committee,
-        sui_system_state: SuiSystemState,
+        epoch_start_configuration: EpochStartConfiguration,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         Self::check_protocol_version(supported_protocol_versions, new_committee.protocol_version);
 
@@ -1773,7 +1773,7 @@ impl AuthorityState {
             .await?;
         let new_epoch = new_committee.epoch;
         let new_epoch_store = self
-            .reopen_epoch_db(cur_epoch_store, new_committee, sui_system_state)
+            .reopen_epoch_db(cur_epoch_store, new_committee, epoch_start_configuration)
             .await?;
         assert_eq!(new_epoch_store.epoch(), new_epoch);
         self.transaction_manager.reconfigure(new_epoch);
@@ -2658,19 +2658,14 @@ impl AuthorityState {
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
         new_committee: Committee,
-        system_state: SuiSystemState,
+        epoch_start_configuration: EpochStartConfiguration,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         let new_epoch = new_committee.epoch;
         info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
-
-        let last_checkpoint = self
-            .checkpoint_store
-            .get_epoch_last_checkpoint(cur_epoch_store.epoch())?
-            .expect("Could not load last checkpoint for current epoch");
-        let epoch_start_configuration = EpochStartConfiguration {
-            system_state,
-            epoch_digest: last_checkpoint.digest(),
-        };
+        assert_eq!(
+            epoch_start_configuration.system_state.epoch,
+            new_committee.epoch
+        );
         let new_epoch_store =
             cur_epoch_store.new_at_next_epoch(self.name, new_committee, epoch_start_configuration);
         self.db().perpetual_tables.set_recovery_epoch(new_epoch)?;

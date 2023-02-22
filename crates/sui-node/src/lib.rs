@@ -864,16 +864,27 @@ impl SuiNode {
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
         next_epoch_committee: Committee,
-        sui_system_state: SuiSystemState,
+        system_state: SuiSystemState,
     ) -> Arc<AuthorityPerEpochStore> {
         let next_epoch = next_epoch_committee.epoch();
+
+        let last_checkpoint = self
+            .checkpoint_store
+            .get_epoch_last_checkpoint(cur_epoch_store.epoch())
+            .expect("Error loading last checkpoint for current epoch")
+            .expect("Could not load last checkpoint for current epoch");
+        let epoch_start_configuration = EpochStartConfiguration {
+            system_state,
+            epoch_digest: last_checkpoint.digest(),
+        };
+
         let new_epoch_store = self
             .state
             .reconfigure(
                 cur_epoch_store,
                 self.config.supported_protocol_versions.unwrap(),
                 next_epoch_committee,
-                sui_system_state,
+                epoch_start_configuration,
             )
             .await
             .expect("Reconfigure authority state cannot fail");

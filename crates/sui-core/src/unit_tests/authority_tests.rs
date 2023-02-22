@@ -1749,7 +1749,6 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_transaction_expiration() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
@@ -1761,7 +1760,7 @@ async fn test_transaction_expiration() {
         .committee()
         .to_owned();
     committee.epoch = 1;
-    let sui_system_state = SuiSystemState {
+    let system_state = SuiSystemState {
         epoch: 1,
         ..Default::default()
     };
@@ -1771,7 +1770,10 @@ async fn test_transaction_expiration() {
             &authority_state.epoch_store_for_testing(),
             SupportedProtocolVersions::SYSTEM_DEFAULT,
             committee,
-            sui_system_state,
+            EpochStartConfiguration {
+                system_state,
+                ..Default::default()
+            },
         )
         .await
         .unwrap();
