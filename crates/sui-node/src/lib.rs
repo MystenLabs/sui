@@ -423,6 +423,15 @@ impl SuiNode {
         Ok(())
     }
 
+    pub fn clear_override_protocol_upgrade_buffer_stake(&self) -> SuiResult {
+        self.state.clear_override_protocol_upgrade_buffer_stake()
+    }
+
+    pub fn set_override_protocol_upgrade_buffer_stake(&self, buffer_stake_bps: u64) -> SuiResult {
+        self.state
+            .set_override_protocol_upgrade_buffer_stake(buffer_stake_bps)
+    }
+
     // Testing-only API to start epoch close process.
     // For production code, please use the non-testing version.
     pub async fn close_epoch_for_testing(&self) -> SuiResult {
