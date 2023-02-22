@@ -396,7 +396,7 @@ export abstract class Provider {
   /**
    * Returns checkpoint summary based on a checkpoint digest
    * @param digest - The checkpoint digest
-   * @deprecated - Use `getCheckpoint` instead
+   * @deprecated - Prefer `getCheckpoint` instead
    */
   abstract getCheckpointSummaryByDigest(
     digest: CheckpointDigest,
@@ -405,7 +405,7 @@ export abstract class Provider {
   /**
    * Return contents of a checkpoint, namely a list of execution digests
    * @param sequence_number - The sequence number of the desired checkpoint contents
-   * @deprecated - Use `getCheckpoint` instead
+   * @deprecated - Prefer `getCheckpoint` instead
    */
   abstract getCheckpointContents(
     sequenceNumber: number,
