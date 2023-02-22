@@ -23,7 +23,7 @@ async fn main() -> Result<()> {
     let parameters = BenchmarkParameters {
         nodes: 4,
         faults: 0,
-        load: 50,
+        load: 600,
         duration: Duration::from_secs(60),
     };
 
@@ -36,27 +36,27 @@ async fn main() -> Result<()> {
     //     .await
     //     .wrap_err("Failed to populate tested")?;
 
-    // testbed.stop().await.wrap_err("Failed to stop tested")?;
+    testbed
+        .install()
+        .await
+        .wrap_err("Failed to install software on instances")?;
 
-    // testbed
-    //     .install()
-    //     .await
-    //     .wrap_err("Failed to install software on instances")?;
-
-    // testbed
-    //     .update()
-    //     .await
-    //     .wrap_err("Failed to install software on instances")?;
+    testbed
+        .update()
+        .await
+        .wrap_err("Failed to install software on instances")?;
 
     // testbed
     //     .configure(&parameters)
     //     .await
     //     .wrap_err("Failed to install software on instances")?;
 
-    testbed
-        .run_benchmark(&parameters)
-        .await
-        .wrap_err("Failed to deploy instances")?;
+    // testbed
+    //     .run_benchmark(&parameters)
+    //     .await
+    //     .wrap_err("Failed to deploy instances")?;
+
+    // testbed.stop().await.wrap_err("Failed to stop tested")?;
 
     testbed.info();
     Ok(())

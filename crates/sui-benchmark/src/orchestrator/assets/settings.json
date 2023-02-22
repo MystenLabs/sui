@@ -2,7 +2,11 @@
     "testbed": "alberto",
     "token_file": "/Users/alberto/.vultr",
     "ssh_private_key_file": "/Users/alberto/.ssh/vultr",
+<<<<<<< HEAD
     "regions": ["atl", "lax"],
+=======
+    "regions": ["lhr", "atl", "lax"],
+>>>>>>> 5a1ad39b93 (Benchmark lifecycle)
     "specs": "vhp-8c-16gb-intel",
     "repository": {
         "name": "sui",

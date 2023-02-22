@@ -330,6 +330,7 @@ impl<C> Testbed<C> {
             &format!("git pull -f"),
             "source $HOME/.cargo/env",
             &format!("cargo build --release"),
+            // &format!("tmux new -d -s \"update\" \"cargo build --release\""),
         ]
         .join(" && ");
 
@@ -418,16 +419,14 @@ impl<C> Testbed<C> {
     }
 
     pub async fn kill(&self, cleanup: bool) -> TestbedResult<()> {
-        let command = if cleanup {
-            [
-                "(tmux kill-server || true)",
-                "(rm -rf *log* || true)",
-                "(rm -rf ~/.sui/sui_config/*_db || true)",
-            ]
-            .join(" ; ")
-        } else {
-            "tmux kill-server || true".into()
-        };
+        let mut command = vec![
+            "(tmux kill-server || true)",
+            "(rm -rf ~/.sui/sui_config/*_db || true)",
+        ];
+        if cleanup {
+            command.push("(rm -rf *log* || true)");
+        }
+        let command = command.join(" ; ");
 
         let handles = self
             .instances
@@ -619,7 +618,7 @@ impl<C> Testbed<C> {
         self.kill(true).await?;
 
         // Update the software on all instances.
-        self.update().await?;
+        // self.update().await?;
 
         // Deploy the validators.
         self.run_nodes(parameters).await?;
@@ -630,7 +629,7 @@ impl<C> Testbed<C> {
         // Wait for the benchmark to terminate.
         // TODO: Detect when the load generator is done submitting transactions.
         println!("Waiting for {}s...", parameters.duration.as_secs());
-        sleep(parameters.duration * 2).await;
+        sleep(parameters.duration * 5).await;
 
         // Kill the nodes and clients (without deleting the log files).
         println!("Killing nodes and clients..");
