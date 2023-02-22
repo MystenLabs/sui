@@ -256,49 +256,6 @@ export const SuiFinalizedEffects = object({
 });
 export type SuiFinalizedEffects = Infer<typeof SuiFinalizedEffects>;
 
-export const SuiTransactionData_v26 = object({
-  transactions: array(SuiTransactionKind),
-  sender: SuiAddress,
-  gasPayment: SuiObjectRef,
-  // TODO: remove optional after 0.21.0 is released
-  gasPrice: optional(number()),
-  gasBudget: number(),
-});
-export type SuiTransactionData_v26 = Infer<typeof SuiTransactionData_v26>;
-
-export function toSuiTransactionData(
-  tx_data: SuiTransactionData_v26,
-): SuiTransactionData {
-  return {
-    transactions: tx_data.transactions,
-    sender: tx_data.sender,
-    gasData: {
-      payment: tx_data.gasPayment,
-      owner: tx_data.sender,
-      budget: tx_data.gasBudget,
-      price: tx_data.gasPrice!,
-    },
-  };
-}
-
-export const CertifiedTransaction_v26 = object({
-  transactionDigest: TransactionDigest,
-  data: SuiTransactionData_v26,
-  txSignature: string(),
-  authSignInfo: AuthorityQuorumSignInfo,
-});
-export type CertifiedTransaction_v26 = Infer<typeof CertifiedTransaction_v26>;
-
-export const SuiExecuteTransactionResponse_v26 = object({
-  certificate: optional(CertifiedTransaction_v26),
-  effects: SuiFinalizedEffects,
-  confirmed_local_execution: boolean(),
-});
-
-export type SuiExecuteTransactionResponse_v26 = Infer<
-  typeof SuiExecuteTransactionResponse_v26
->;
-
 // TODO: Remove after devnet 0.28.0
 
 export type GatewayTxSeqNumber = number;
@@ -388,9 +345,7 @@ export const SuiTransactionResponse = object({
   // TODO: Remove optional after devnet 0.28.0
   transaction: optional(SuiTransaction),
   // TODO: Remove after devnet 0.28.0
-  certificate: optional(
-    union([CertifiedTransaction, CertifiedTransaction_v26]),
-  ),
+  certificate: optional(CertifiedTransaction),
   effects: TransactionEffects,
   // TODO: Remove after devnet 0.28.0
   timestamp_ms: optional(union([number(), literal(null)])),
@@ -433,7 +388,7 @@ export type SuiExecuteTransactionResponse = Infer<
 
 export function getCertifiedTransaction(
   tx: SuiTransactionResponse | SuiExecuteTransactionResponse,
-): CertifiedTransaction | CertifiedTransaction_v26 | undefined {
+): CertifiedTransaction | undefined {
   if ('certificate' in tx) {
     return tx.certificate;
   } else if ('EffectsCert' in tx) {
@@ -445,7 +400,6 @@ export function getCertifiedTransaction(
 export function getTransactionDigest(
   tx:
     | CertifiedTransaction
-    | CertifiedTransaction_v26
     | SuiTransactionResponse
     | SuiExecuteTransactionResponse,
 ): TransactionDigest {
@@ -457,7 +411,7 @@ export function getTransactionDigest(
 }
 
 export function getTransactionSignature(
-  tx: SuiTransactionResponse | CertifiedTransaction | CertifiedTransaction_v26,
+  tx: SuiTransactionResponse | CertifiedTransaction,
 ): string[] {
   const certificateOrTx =
     'certificate' in tx
@@ -468,10 +422,6 @@ export function getTransactionSignature(
 
   if ('txSignatures' in certificateOrTx) {
     return certificateOrTx.txSignatures;
-  }
-
-  if ('txSignature' in certificateOrTx) {
-    return [certificateOrTx.txSignature];
   }
 
   return [];
@@ -499,17 +449,7 @@ export function getGasData(
   }
 
   if ('certificate' in tx) {
-    const data = tx.certificate!.data;
-    if ('gasData' in data) {
-      return data.gasData;
-    } else {
-      return {
-        payment: data.gasPayment,
-        budget: data.gasBudget,
-        owner: data.sender,
-        price: data.gasPrice!,
-      };
-    }
+    return tx.certificate!.data.gasData;
   }
 
   return tx.transaction!.data.gasData;
