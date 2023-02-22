@@ -53,11 +53,7 @@ export class JsonRpcClient {
   private rpcClient: RpcClient;
 
   constructor(url: string, httpHeaders?: HttpHeaders) {
-    this.rpcClient = this.createRpcClient(url, httpHeaders);
-  }
-
-  private createRpcClient(url: string, httpHeaders?: HttpHeaders): RpcClient {
-    const client = new RpcClient(
+    this.rpcClient = new RpcClient(
       async (
         request: any,
         callback: (arg0: Error | null, arg1?: string | undefined) => void,
@@ -65,12 +61,18 @@ export class JsonRpcClient {
         const options = {
           method: 'POST',
           body: request,
-          headers: Object.assign(
-            {
-              'Content-Type': 'application/json',
-            },
-            httpHeaders || {},
-          ),
+          headers: {
+            'Content-Type': 'application/json',
+            ...httpHeaders,
+            // TODO: uncomment this when 0.27.0 is released. We cannot do this now because
+            // the current Devnet(0.26.0) does not support the header. And we need to make
+            // a request to RPC to know which version it is running. Therefore, we do not
+            // add headers here, instead we add headers in the first call of the `getRpcApiVersion`
+            // method
+            //   'Client-Sdk-Type': 'typescript',
+            //   'Client-Sdk-Version': pkgVersion,
+            //   'Client-Target-Api-Version': TARGETED_RPC_VERSION,
+          },
         };
 
         try {
@@ -92,8 +94,6 @@ export class JsonRpcClient {
       },
       {},
     );
-
-    return client;
   }
 
   async requestWithType<T>(
