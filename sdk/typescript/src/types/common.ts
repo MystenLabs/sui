@@ -10,7 +10,7 @@ import {
   union,
   unknown,
 } from 'superstruct';
-import { CallArg, TransactionData, TransactionData_v26 } from './sui-bcs';
+import { CallArg, TransactionData } from './sui-bcs';
 import { sha256Hash } from '../cryptography/hash';
 import { BCS, fromB58, toB58 } from '@mysten/bcs';
 
@@ -123,7 +123,7 @@ export function normalizeSuiObjectId(
  * @param publicKey public key
  */
 export function generateTransactionDigest(
-  data: TransactionData | TransactionData_v26,
+  data: TransactionData,
   bcs: BCS,
 ): string {
   const txBytes = bcs.ser('TransactionData', data).toBytes();
