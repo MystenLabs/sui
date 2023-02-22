@@ -8,11 +8,12 @@ use crate::{
 };
 use config::{Committee, Stake};
 use crypto::PublicKey;
+use fastcrypto::hash::Hash;
 use fastcrypto::traits::EncodeDecodeBase64;
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::time::Instant;
 use tracing::{debug, trace};
-use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusReputationScore, ConsensusStore, Round, StoreResult};
+use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round, StoreResult};
 
 #[cfg(test)]
 #[path = "tests/bullshark_tests.rs"]
@@ -50,9 +51,7 @@ pub struct Bullshark {
     pub max_inserted_certificate_round: Round,
     /// The number of committed subdags that will trigger the schedule change and reputation
     /// score reset.
-    pub change_schedule_every_committed_subdags: u64,
-    /// The last calculated consensus reputation score
-    pub last_consensus_reputation_score: ConsensusReputationScore
+    pub change_schedule_every_committed_sub_dags: u64,
 }
 
 impl ConsensusProtocol for Bullshark {
@@ -174,6 +173,25 @@ impl ConsensusProtocol for Bullshark {
                 sub_dag_index: next_sub_dag_index,
             };
 
+            // update the score for the previous leader. If no previous leader exists,
+            // then this is the first time we commit a leader, so no score update takes place
+            if let Some(previous_leader) = state.last_committed_leader {
+                for certificate in sub_dag.certificates.iter() {
+                    // TODO: we could iterate only the certificates of the round above the previous leader's round
+                    if certificate
+                        .header
+                        .parents
+                        .iter()
+                        .find(|digest| digest == previous_leader)
+                        .is_some()
+                    {
+                        state
+                            .last_consensus_reputation_score
+                            .add_score(certificate.origin(), 1);
+                    }
+                }
+            }
+
             // Persist the update.
             self.store
                 .write_consensus_state(&state.last_committed, &sub_dag)?;
@@ -181,6 +199,7 @@ impl ConsensusProtocol for Bullshark {
 
             // Increase the global consensus index.
             state.latest_sub_dag_index = next_sub_dag_index;
+            state.last_committed_leader = Some(sub_dag.leader.digest());
 
             committed_sub_dags.push(sub_dag);
         }
@@ -241,6 +260,7 @@ impl Bullshark {
         store: Arc<ConsensusStore>,
         gc_depth: Round,
         metrics: Arc<ConsensusMetrics>,
+        change_schedule_every_committed_sub_dags: u64,
     ) -> Self {
         Self {
             committee,
@@ -250,6 +270,7 @@ impl Bullshark {
             last_leader_election: LastRound::default(),
             max_inserted_certificate_round: 0,
             metrics,
+            change_schedule_every_committed_sub_dags,
         }
     }
 

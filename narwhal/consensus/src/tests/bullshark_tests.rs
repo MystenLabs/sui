@@ -22,6 +22,8 @@ use types::PreSubscribedBroadcastSender;
 // the leader of round 2.
 #[tokio::test]
 async fn commit_one() {
+    const CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS: u64 = 100;
+
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     // Make certificates for rounds 1 and 2.
@@ -53,7 +55,13 @@ async fn commit_one() {
     let cert_store = make_certificate_store(&test_utils::temp_dir());
     let gc_depth = 50;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth, metrics.clone());
+    let bullshark = Bullshark::new(
+        committee.clone(),
+        store.clone(),
+        gc_depth,
+        metrics.clone(),
+        CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+    );
 
     let _consensus_handle = Consensus::spawn(
         committee,
@@ -91,6 +99,8 @@ async fn commit_one() {
 // rounds 2, 4, and 6.
 #[tokio::test]
 async fn dead_node() {
+    const CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS: u64 = 100;
+
     // Make the certificates.
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
@@ -118,7 +128,13 @@ async fn dead_node() {
     let cert_store = make_certificate_store(&test_utils::temp_dir());
     let gc_depth = 50;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth, metrics.clone());
+    let bullshark = Bullshark::new(
+        committee.clone(),
+        store.clone(),
+        gc_depth,
+        metrics.clone(),
+        CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+    );
 
     let _consensus_handle = Consensus::spawn(
         committee,
@@ -162,6 +178,7 @@ async fn dead_node() {
 // round 4 does. The leader of rounds 2 and 4 should thus be committed (because they are linked).
 #[tokio::test]
 async fn not_enough_support() {
+    const CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS: u64 = 100;
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let mut keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
@@ -238,7 +255,13 @@ async fn not_enough_support() {
     let cert_store = make_certificate_store(&test_utils::temp_dir());
     let gc_depth = 50;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth, metrics.clone());
+    let bullshark = Bullshark::new(
+        committee.clone(),
+        store.clone(),
+        gc_depth,
+        metrics.clone(),
+        CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+    );
 
     let _consensus_handle = Consensus::spawn(
         committee,
@@ -288,6 +311,7 @@ async fn not_enough_support() {
 // and reappears from round 3.
 #[tokio::test]
 async fn missing_leader() {
+    const CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS: u64 = 100;
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let mut keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
@@ -328,7 +352,13 @@ async fn missing_leader() {
     let cert_store = make_certificate_store(&test_utils::temp_dir());
     let gc_depth = 50;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth, metrics.clone());
+    let bullshark = Bullshark::new(
+        committee.clone(),
+        store.clone(),
+        gc_depth,
+        metrics.clone(),
+        CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+    );
 
     let _consensus_handle = Consensus::spawn(
         committee,
@@ -377,6 +407,7 @@ async fn committed_round_after_restart() {
     let committee = fixture.committee();
     let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
     let epoch = committee.epoch();
+    const CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS: u64 = 100;
 
     // Make certificates for rounds 1 to 11.
     let genesis = Certificate::genesis(&committee)
@@ -399,7 +430,13 @@ async fn committed_round_after_restart() {
         let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
         let gc_depth = 50;
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-        let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth, metrics.clone());
+        let bullshark = Bullshark::new(
+            committee.clone(),
+            store.clone(),
+            gc_depth,
+            metrics.clone(),
+            CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+        );
 
         let handle = Consensus::spawn(
             committee.clone(),
@@ -565,6 +602,7 @@ async fn restart_with_new_committee() {
     let fixture = CommitteeFixture::builder().build();
     let mut committee = fixture.committee();
     let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    const CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS: u64 = 100;
 
     // Run for a few epochs.
     for epoch in 0..5 {
@@ -579,7 +617,13 @@ async fn restart_with_new_committee() {
         let cert_store = make_certificate_store(&test_utils::temp_dir());
         let gc_depth = 50;
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-        let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth, metrics.clone());
+        let bullshark = Bullshark::new(
+            committee.clone(),
+            store.clone(),
+            gc_depth,
+            metrics.clone(),
+            CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+        );
 
         let handle = Consensus::spawn(
             committee.clone(),

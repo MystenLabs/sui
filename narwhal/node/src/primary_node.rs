@@ -325,6 +325,7 @@ impl PrimaryNodeInner {
             store.consensus_store.clone(),
             parameters.gc_depth,
             consensus_metrics.clone(),
+            100,
         );
         let consensus_handles = Consensus::spawn(
             committee.clone(),

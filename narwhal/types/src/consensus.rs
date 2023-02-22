@@ -63,9 +63,26 @@ impl CommittedSubDag {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ConsensusReputationScore {
     pub scores_per_authority: HashMap<PublicKey, u64>,
+}
+
+impl ConsensusReputationScore {
+    /// Adds the provided `score` to the existing score for the provided `authority`
+    pub fn add_score(&mut self, authority: PublicKey, score: u64) {
+        let total_score = self
+            .scores_per_authority
+            .get(&authority)
+            .map(|value| value + score)
+            .unwrap_or(score);
+        self.scores_per_authority.insert(authority, total_score);
+    }
+
+    /// Clear the scores for all authorities
+    fn clear(&mut self) {
+        self.scores_per_authority.clear();
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -153,6 +170,28 @@ impl ConsensusStore {
             .map(|(seq, _)| seq)
             .unwrap_or_default();
         s
+    }
+
+    /// Returns thet latest subdag committed. If none is committed yet, then
+    /// None is returned instead.
+    pub fn get_latest_sub_dag(&self) -> Option<CommittedSubDagShell> {
+        self.committed_sub_dags_by_index
+            .iter()
+            .skip_to_last()
+            .next()
+            .map(|(_, subdag)| subdag)
+    }
+
+    /// Returns the subdag by the specified index. If found Some is returned with the result,
+    /// otherwise None is returned instead.
+    pub fn get_sub_dag_by_index(
+        &self,
+        index: &SequenceNumber,
+    ) -> StoreResult<Option<CommittedSubDagShell>> {
+        match self.committed_sub_dags_by_index.get(index)? {
+            None => Ok(None),
+            Some(sub_dag) => Ok(Some(sub_dag)),
+        }
     }
 
     /// Load all the sub dags committed with sequence number of at least `from`.
