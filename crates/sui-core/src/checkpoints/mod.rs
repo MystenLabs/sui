@@ -33,7 +33,7 @@ use std::time::Duration;
 use sui_types::base_types::{EpochId, TransactionDigest};
 use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::SuiResult;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::{TransactionEffects, VerifiedExecutableTransaction};
 use sui_types::messages_checkpoint::{
@@ -42,7 +42,7 @@ use sui_types::messages_checkpoint::{
     VerifiedCheckpoint,
 };
 use sui_types::sui_system_state::SuiSystemState;
-use tokio::sync::{mpsc, watch, Notify};
+use tokio::sync::{watch, Notify};
 use tokio::time::Instant;
 use tracing::{debug, error, error_span, info, warn, Instrument};
 use typed_store::rocks::{DBMap, MetricConf, TypedStoreError};
@@ -1105,24 +1105,6 @@ impl CheckpointService {
         });
         (service, exit_snd)
     }
-
-    /// Used by internal systems that want to subscribe to checkpoints.
-    /// Returned sender will contain all checkpoints starting from(inclusive) given sequence number
-    /// CheckpointSequenceNumber::default() can be used to start from the beginning
-    pub fn subscribe_checkpoints(
-        &self,
-        from_sequence: CheckpointSequenceNumber,
-    ) -> mpsc::Receiver<(CheckpointSummary, CheckpointContents)> {
-        let (sender, receiver) = mpsc::channel(8);
-        let tailer = CheckpointTailer {
-            sender,
-            sequence: from_sequence,
-            tables: self.tables.clone(),
-            notify: self.notify_aggregator.clone(),
-        };
-        spawn_monitored_task!(tailer.run());
-        receiver
-    }
 }
 
 impl CheckpointServiceNotify for CheckpointService {
@@ -1219,52 +1201,6 @@ impl CheckpointServiceNotify for CheckpointServiceNoop {
     }
 }
 
-struct CheckpointTailer {
-    sequence: CheckpointSequenceNumber,
-    sender: mpsc::Sender<(CheckpointSummary, CheckpointContents)>,
-    tables: Arc<CheckpointStore>,
-    notify: Arc<Notify>,
-}
-
-impl CheckpointTailer {
-    async fn run(mut self) {
-        loop {
-            match self.do_run().await {
-                Err(err) => {
-                    error!(
-                        "Error while tailing checkpoint, will retry in 1s: {:?}",
-                        err
-                    );
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                }
-                Ok(true) => {}
-                Ok(false) => return,
-            }
-            self.notify.notified().await;
-        }
-    }
-
-    // Returns Ok(false) if sender channel is closed
-    async fn do_run(&mut self) -> SuiResult<bool> {
-        loop {
-            let summary = self.tables.certified_checkpoints.get(&self.sequence)?;
-            let Some(summary) = summary else { return Ok(true); };
-            let content = self
-                .tables
-                .checkpoint_content
-                .get(&summary.content_digest())?;
-            let Some(content) = content else {
-                return Err(SuiError::from("Checkpoint summary for sequence {} exists, but content does not. This should not happen"));
-            };
-            if self.sender.send((summary.summary, content)).await.is_err() {
-                return Ok(false);
-            }
-
-            self.sequence += 1;
-        }
-    }
-}
-
 impl PendingCheckpoint {
     pub fn height(&self) -> CheckpointCommitHeight {
         self.details.commit_height
@@ -1342,7 +1278,6 @@ mod tests {
             3,
         );
 
-        let mut tailer = checkpoint_service.subscribe_checkpoints(0);
         checkpoint_service
             .notify_checkpoint(&epoch_store, p(0, vec![4]))
             .unwrap();
@@ -1413,12 +1348,6 @@ mod tests {
         let c2sc = certified_result.recv().await.unwrap();
         assert_eq!(c1sc.summary.sequence_number, 0);
         assert_eq!(c2sc.summary.sequence_number, 1);
-
-        let (t1s, _content) = tailer.recv().await.unwrap();
-        let (t2s, _content) = tailer.recv().await.unwrap();
-
-        assert_eq!(t1s.sequence_number, 0);
-        assert_eq!(t2s.sequence_number, 1);
     }
 
     #[async_trait]
