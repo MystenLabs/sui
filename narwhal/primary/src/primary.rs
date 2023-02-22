@@ -480,7 +480,6 @@ impl Primary {
         let certificate_fetcher_handle = CertificateFetcher::spawn(
             name.clone(),
             committee.clone(),
-            worker_cache.clone(),
             network.clone(),
             certificate_store.clone(),
             rx_consensus_round_updates,
