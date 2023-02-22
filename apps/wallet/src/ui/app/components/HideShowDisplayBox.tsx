@@ -5,7 +5,6 @@ import { Copy16, EyeClose16, EyeOpen16 } from '@mysten/icons';
 import { useState } from 'react';
 
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
-import { Button } from '../shared/ButtonUI';
 import { Link } from '../shared/Link';
 import { Text } from '../shared/text';
 
@@ -48,10 +47,15 @@ export function HideShowDisplayBox({
                     />
                 </div>
                 <div>
-                    <Button
-                        variant="plain"
-                        size="tiny"
-                        text={valueHidden ? <EyeClose16 /> : <EyeOpen16 />}
+                    <Link
+                        color="steelDark"
+                        text={
+                            valueHidden ? (
+                                <EyeClose16 className="block" />
+                            ) : (
+                                <EyeOpen16 className="block" />
+                            )
+                        }
                         onClick={() => setValueHidden((v) => !v)}
                     />
                 </div>
