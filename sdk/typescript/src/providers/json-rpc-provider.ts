@@ -97,12 +97,19 @@ export type RpcProviderOptions = {
   skipDataValidation?: boolean;
   /**
    * Configuration options for the websocket connection
+   * TODO: Move to connection.
    */
   socketOptions?: WebsocketClientOptions;
   /**
    * Cache timeout in seconds for the RPC API Version
    */
   versionCacheTimeoutInSeconds?: number;
+
+  /** Allow defining a custom RPC client to use */
+  rpcClient?: JsonRpcClient;
+
+  /** Allow defining a custom websocket client to use */
+  websocketClient?: WebsocketClient;
 };
 
 const DEFAULT_OPTIONS: RpcProviderOptions = {
@@ -146,12 +153,15 @@ export class JsonRpcProvider extends Provider {
     //   'Client-Target-Api-Version': TARGETED_RPC_VERSION,
     // });
     // TODO: add header for websocket request
-    this.client = new JsonRpcClient(this.connection.fullnode);
-    this.wsClient = new WebsocketClient(
-      this.connection.websocket,
-      opts.skipDataValidation!,
-      opts.socketOptions,
-    );
+    this.client = opts.rpcClient ?? new JsonRpcClient(this.connection.fullnode);
+
+    this.wsClient =
+      opts.websocketClient ??
+      new WebsocketClient(
+        this.connection.websocket,
+        opts.skipDataValidation!,
+        opts.socketOptions,
+      );
   }
 
   async getRpcApiVersion(): Promise<RpcApiVersion | undefined> {
