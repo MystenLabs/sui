@@ -32,12 +32,19 @@ export function PasswordInputDialog({
     return (
         <Formik
             initialValues={{ password: '' }}
-            onSubmit={async ({ password }) => {
+            onSubmit={async ({ password }, { setFieldError }) => {
                 try {
                     await backgroundService.verifyPassword(password);
-                    await onPasswordVerified(password);
+                    try {
+                        await onPasswordVerified(password);
+                    } catch (e) {
+                        toast.error((e as Error).message || 'Wrong password');
+                    }
                 } catch (e) {
-                    toast.error((e as Error).message || 'Wrong password');
+                    setFieldError(
+                        'password',
+                        (e as Error).message || 'Wrong password'
+                    );
                 }
             }}
             validationSchema={validation}
