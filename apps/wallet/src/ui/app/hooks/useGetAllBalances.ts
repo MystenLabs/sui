@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useRpc } from '_hooks';
 
-export function useGetAllBalance(address?: SuiAddress | null) {
+export function useGetAllBalances(address?: SuiAddress | null) {
     const rpc = useRpc();
     return useQuery(
         ['get-all-balance', address],

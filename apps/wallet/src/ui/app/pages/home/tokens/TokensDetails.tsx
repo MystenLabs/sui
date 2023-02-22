@@ -9,15 +9,11 @@ import { CoinActivitiesCard } from './CoinActivityCard';
 import { TokenIconLink } from './TokenIconLink';
 import CoinBalance from './coin-balance';
 import IconLink from './icon-link';
+import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { SuiIcons } from '_font-icons/output/sui-icons';
-import {
-    useAppSelector,
-    useObjectsState,
-    useGetAllBalance,
-    useGetCoinBalance,
-} from '_hooks';
+import { useAppSelector, useGetAllBalances, useGetCoinBalance } from '_hooks';
 import { Coin } from '_redux/slices/sui-objects/Coin';
 import { AccountSelector } from '_src/ui/app/components/AccountSelector';
 import PageTitle from '_src/ui/app/shared/PageTitle';
@@ -38,13 +34,27 @@ const emptyWalletDescription = (
 function MyTokens() {
     const accountAddress = useAppSelector(({ account }) => account.address);
     const { data: balance, isLoading: loadingBalances } =
-        useGetAllBalance(accountAddress);
+        useGetAllBalances(accountAddress);
+
+    const hasSuiToken = useMemo(() => {
+        return (
+            !!balance?.find(({ coinType }) => coinType === SUI_TYPE_ARG) ||
+            false
+        );
+    }, [balance]);
+
     return (
         <Loading loading={loadingBalances}>
             {balance?.length ? (
-                <>
-                    <div className={st.title}>MY COINS</div>
-                    <div className={st.otherCoins}>
+                <div className="flex flex-1 justify-start gap-2 flex-col w-full">
+                    <Text
+                        variant="caption"
+                        color="steel-dark"
+                        weight="semibold"
+                    >
+                        MY COINS
+                    </Text>
+                    <div className="flex flex-col w-full justify-center divide-y divide-solid divide-steel/20 divide-x-0">
                         {balance.map(({ coinType, totalBalance }) => (
                             <CoinBalance
                                 type={coinType}
@@ -53,24 +63,26 @@ function MyTokens() {
                             />
                         ))}
                     </div>
-                </>
-            ) : (
+                </div>
+            ) : null}
+            {!hasSuiToken ? (
                 <div className={st.emptyWallet}>
                     <FaucetRequestButton trackEventSource="home" />
                     {emptyWalletDescription}
                 </div>
-            )}
+            ) : null}
         </Loading>
     );
 }
 
 function TokenDetails({ coinType }: TokenDetailsProps) {
-    const { loading, error, showError } = useObjectsState();
     const activeCoinType = coinType || SUI_TYPE_ARG;
     const accountAddress = useAppSelector(({ account }) => account.address);
-    const { data: coinBalance, isLoading: loadingBalances } = useGetCoinBalance(
-        { address: accountAddress, coinType: activeCoinType }
-    );
+    const {
+        data: coinBalance,
+        isLoading: loadingBalances,
+        error,
+    } = useGetCoinBalance(activeCoinType, accountAddress);
 
     const tokenBalance = useMemo(() => {
         return coinBalance?.totalBalance || BigInt(0);
@@ -86,17 +98,17 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
             {coinType && <PageTitle title={coinSymbol} back="/tokens" />}
 
             <div className={st.container} data-testid="coin-page">
-                {showError && error ? (
-                    <Alert className={st.alert}>
+                {error instanceof Error ? (
+                    <Alert>
                         <div>
                             <strong>Sync error (data might be outdated)</strong>
+                            <small>{error?.message}</small>
                         </div>
-                        <small>{error.message}</small>
                     </Alert>
                 ) : null}
                 {!coinType && <AccountSelector />}
                 <div className={st.balanceContainer}>
-                    <Loading loading={loading || loadingBalances}>
+                    <Loading loading={loadingBalances}>
                         <CoinBalance
                             balance={tokenBalance}
                             type={activeCoinType}

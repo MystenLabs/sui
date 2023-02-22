@@ -43,7 +43,8 @@ function TransferNFTForm({
 
     const accountAddress = useAppSelector(({ account }) => account.address);
     const { data: coinBalance, isLoading: loadingBalances } = useGetCoinBalance(
-        { address: accountAddress, coinType: SUI_TYPE_ARG }
+        SUI_TYPE_ARG,
+        accountAddress
     );
 
     const maxGasCoinBalance = useMemo(

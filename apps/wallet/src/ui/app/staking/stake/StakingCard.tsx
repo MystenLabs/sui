@@ -56,7 +56,7 @@ function StakingCard() {
     const coinType = SUI_TYPE_ARG;
     const accountAddress = useAppSelector(({ account }) => account.address);
     const { data: suiBalance, isLoading: loadingSuiBalances } =
-        useGetCoinBalance({ address: accountAddress, coinType });
+        useGetCoinBalance(coinType, accountAddress);
 
     const coinBalance = useMemo(() => {
         if (!suiBalance) return BigInt(0);
