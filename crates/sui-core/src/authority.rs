@@ -540,6 +540,14 @@ impl AuthorityState {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
+        // Checks to see if the transaciton has expired
+        if match &transaction.inner().data().transaction_data().expiration {
+            TransactionExpiration::None => false,
+            TransactionExpiration::Epoch(epoch) => *epoch < epoch_store.epoch(),
+        } {
+            return Err(SuiError::TransactionExpired);
+        }
+
         let signed = self
             .handle_transaction_impl(transaction, &epoch_store)
             .await;
