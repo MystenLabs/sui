@@ -24,13 +24,6 @@ describe('Transaction Reading API', () => {
     expect(getTransactionDigest(txn)).toEqual(digest);
   });
 
-  it('Get Transaction Auth Signers', async () => {
-    const resp = await toolbox.provider.getTransactions('All', null, 1);
-    const digest = resp.data[0];
-    const res = await toolbox.provider.getTransactionAuthSigners(digest);
-    expect(res.signers.length).greaterThan(0);
-  });
-
   it('Get Transactions', async () => {
     const resp = await toolbox.provider.getTransactionsForAddress(
       toolbox.address(),

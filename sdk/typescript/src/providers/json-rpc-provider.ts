@@ -44,7 +44,6 @@ import {
   isValidSuiObjectId,
   normalizeSuiAddress,
   normalizeSuiObjectId,
-  SuiTransactionAuthSignersResponse,
   CoinMetadataStruct,
   PaginatedCoins,
   GetObjectDataResponse,
@@ -103,13 +102,13 @@ export type RpcProviderOptions = {
   /**
    * Cache timeout in seconds for the RPC API Version
    */
-  versionCacheTimoutInSeconds?: number;
+  versionCacheTimeoutInSeconds?: number;
 };
 
 const DEFAULT_OPTIONS: RpcProviderOptions = {
   skipDataValidation: true,
   socketOptions: DEFAULT_CLIENT_OPTIONS,
-  versionCacheTimoutInSeconds: 600,
+  versionCacheTimeoutInSeconds: 600,
 };
 
 export class JsonRpcProvider extends Provider {
@@ -185,8 +184,8 @@ export class JsonRpcProvider extends Provider {
         this.addedHeaders = true;
       }
       this.cacheExpiry =
-        // Date.now() is in milliseonds, but the timeout is in seconds
-        Date.now() + (this.options.versionCacheTimoutInSeconds ?? 0) * 1000;
+        // Date.now() is in milliseconds, but the timeout is in seconds
+        Date.now() + (this.options.versionCacheTimeoutInSeconds ?? 0) * 1000;
       return this.rpcApiVersion;
     } catch (err) {
       console.warn('Error fetching version number of the RPC API', err);
@@ -757,21 +756,6 @@ export class JsonRpcProvider extends Provider {
       throw new Error(
         `Error fetching transaction digests in range: ${err} for range ${start}-${end}`,
       );
-    }
-  }
-
-  async getTransactionAuthSigners(
-    digest: TransactionDigest,
-  ): Promise<SuiTransactionAuthSignersResponse> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getTransactionAuthSigners',
-        [digest],
-        SuiTransactionAuthSignersResponse,
-        this.options.skipDataValidation,
-      );
-    } catch (err) {
-      throw new Error(`Error fetching transaction auth signers: ${err}`);
     }
   }
 

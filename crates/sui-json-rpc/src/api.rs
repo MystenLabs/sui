@@ -14,8 +14,8 @@ use sui_json_rpc_types::{
     MoveFunctionArgType, RPCTransactionRequestParams, SuiCoinMetadata, SuiEventEnvelope,
     SuiEventFilter, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
     SuiObjectInfo, SuiTBlsSignObjectCommitmentType, SuiTBlsSignRandomnessObjectResponse,
-    SuiTransactionAuthSignersResponse, SuiTransactionBuilderMode, SuiTransactionEffects,
-    SuiTransactionResponse, SuiTypeTag, TransactionBytes, TransactionsPage,
+    SuiTransactionBuilderMode, SuiTransactionEffects, SuiTransactionResponse, SuiTypeTag,
+    TransactionBytes, TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::balance::Supply;
@@ -148,14 +148,6 @@ pub trait RpcReadApi {
         /// the digest of the queried transaction
         digest: TransactionDigest,
     ) -> RpcResult<SuiTransactionResponse>;
-
-    /// Return the authority public keys that commits to the authority signature of the transaction.
-    #[method(name = "getTransactionAuthSigners")]
-    async fn get_transaction_auth_signers(
-        &self,
-        /// the digest of the queried transaction
-        digest: TransactionDigest,
-    ) -> RpcResult<SuiTransactionAuthSignersResponse>;
 
     /// Return the object information for a specified object
     #[method(name = "getObject")]

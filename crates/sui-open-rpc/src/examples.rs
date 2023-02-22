@@ -6,7 +6,6 @@ use std::ops::Range;
 use std::str::FromStr;
 
 use fastcrypto::traits::EncodeDecodeBase64;
-use fastcrypto::traits::KeyPair;
 use move_core_types::identifier::Identifier;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -19,17 +18,15 @@ use sui_json_rpc_types::{
     Checkpoint, CheckpointId, EventPage, MoveCallParams, OwnedObjectRef,
     RPCTransactionRequestParams, SuiData, SuiEvent, SuiEventEnvelope, SuiExecutionStatus,
     SuiGasCostSummary, SuiObject, SuiObjectInfo, SuiObjectRead, SuiObjectRef, SuiParsedData,
-    SuiPastObjectRead, SuiRawData, SuiRawMoveObject, SuiTransaction,
-    SuiTransactionAuthSignersResponse, SuiTransactionData, SuiTransactionEffects,
-    SuiTransactionResponse, TransactionBytes, TransactionsPage, TransferObjectParams,
+    SuiPastObjectRead, SuiRawData, SuiRawMoveObject, SuiTransaction, SuiTransactionData,
+    SuiTransactionEffects, SuiTransactionResponse, TransactionBytes, TransactionsPage,
+    TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectType, SequenceNumber, SuiAddress, TransactionDigest,
 };
-use sui_types::crypto::{
-    get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
-};
+use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair};
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
@@ -78,7 +75,6 @@ impl RpcExampleProvider {
             self.get_raw_object(),
             self.get_total_transaction_number(),
             self.get_transaction(),
-            self.get_transaction_auth_signers(),
             self.get_transactions(),
             self.get_events(),
             self.execute_transaction_example(),
@@ -369,32 +365,6 @@ impl RpcExampleProvider {
             vec![ExamplePairing::new(
                 "Return the transaction response object for specified transaction digest",
                 vec![("digest", json!(result.effects.transaction_digest))],
-                json!(result),
-            )],
-        )
-    }
-
-    fn get_transaction_auth_signers(&mut self) -> Examples {
-        let (_, _, _, _, tx_result, _) = self.get_transfer_data_response();
-        let sec1: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
-        let sec2: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([1; 32])).1;
-        let sec3: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([2; 32])).1;
-
-        let result = SuiTransactionAuthSignersResponse {
-            signers: vec![
-                AuthorityPublicKeyBytes::from(sec1.public()),
-                AuthorityPublicKeyBytes::from(sec2.public()),
-                AuthorityPublicKeyBytes::from(sec3.public()),
-            ],
-        };
-        Examples::new(
-            "sui_getTransactionAuthSigners",
-            vec![ExamplePairing::new(
-                "Return the list of authorities that committed to the authority signature of the specified transaction digest",
-                vec![(
-                    "digest",
-                    json!(tx_result.effects.transaction_digest),
-                )],
                 json!(result),
             )],
         )
