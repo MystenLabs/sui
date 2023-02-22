@@ -10,7 +10,6 @@ use fastcrypto::traits::KeyPair;
 use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
 use move_core_types::language_storage::ModuleId;
-use move_vm_runtime::native_functions::NativeFunctionTable;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
 use std::collections::BTreeMap;
@@ -582,8 +581,8 @@ impl Builder {
 
         let unsigned_genesis_file = path.join(GENESIS_BUILDER_UNSIGNED_GENESIS_FILE);
         let loaded_genesis = if unsigned_genesis_file.exists() {
-            let unsinged_genesis_bytes = fs::read(unsigned_genesis_file)?;
-            let loaded_genesis: GenesisTuple = bcs::from_bytes(&unsinged_genesis_bytes)?;
+            let unsigned_genesis_bytes = fs::read(unsigned_genesis_file)?;
+            let loaded_genesis: GenesisTuple = bcs::from_bytes(&unsigned_genesis_bytes)?;
             Some(loaded_genesis)
         } else {
             None
@@ -779,7 +778,7 @@ fn create_genesis_transaction(
             sui_types::SUI_FRAMEWORK_ADDRESS,
         );
         let move_vm = std::sync::Arc::new(
-            adapter::new_move_vm(native_functions.clone(), protocol_config)
+            adapter::new_move_vm(native_functions, protocol_config)
                 .expect("We defined natives to not fail here"),
         );
 
@@ -799,7 +798,6 @@ fn create_genesis_transaction(
                 *genesis_transaction.digest(),
                 Default::default(),
                 &move_vm,
-                &native_functions,
                 SuiGasStatus::new_unmetered(),
                 &EpochData::genesis(),
                 protocol_config,
@@ -841,7 +839,7 @@ fn create_genesis_objects(
     for modules in modules {
         process_package(
             &mut store,
-            &native_functions,
+            &move_vm,
             genesis_ctx,
             modules.to_owned(),
             &protocol_config,
@@ -868,8 +866,7 @@ fn create_genesis_objects(
 
 fn process_package(
     store: &mut InMemoryStorage,
-    // mv: &MoveVM,
-    native_functions: &NativeFunctionTable,
+    vm: &MoveVM,
     ctx: &mut TxContext,
     modules: Vec<CompiledModule>,
     protocol_config: &ProtocolConfig,
@@ -911,19 +908,18 @@ fn process_package(
         protocol_config,
     );
     let package_id = ObjectID::from(*modules[0].self_id().address());
-    let natives = native_functions.clone();
     let mut gas_status = SuiGasStatus::new_unmetered();
-    let vm = adapter::verify_and_link(
+    adapter::verify_and_link(
+        vm,
         &temporary_store,
         &modules,
         package_id,
-        natives,
         gas_status.create_move_gas_status(),
         protocol_config,
     )?;
     adapter::store_package_and_init_modules(
         &mut temporary_store,
-        &vm,
+        vm,
         modules,
         ctx,
         gas_status.create_move_gas_status(),
@@ -1128,7 +1124,7 @@ mod test {
             sui_types::SUI_FRAMEWORK_ADDRESS,
         );
         let move_vm = std::sync::Arc::new(
-            adapter::new_move_vm(native_functions.clone(), &protocol_config)
+            adapter::new_move_vm(native_functions, &protocol_config)
                 .expect("We defined natives to not fail here"),
         );
 
@@ -1148,7 +1144,6 @@ mod test {
                 *genesis_transaction.digest(),
                 Default::default(),
                 &move_vm,
-                &native_functions,
                 SuiGasStatus::new_unmetered(),
                 &EpochData::genesis(),
                 &protocol_config,

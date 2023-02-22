@@ -10,9 +10,11 @@ use sui_indexer::errors::IndexerError;
 use sui_indexer::metrics::IndexerCheckpointHandlerMetrics;
 use sui_indexer::models::checkpoint_logs::{commit_checkpoint_log, read_checkpoint_log};
 use sui_indexer::models::checkpoints::{
-    commit_checkpoint, create_checkpoint, read_previous_checkpoint, Checkpoint,
+    commit_checkpoint, create_checkpoint, get_previous_checkpoint, Checkpoint,
 };
 use sui_indexer::{get_pg_pool_connection, PgConnectionPool};
+use sui_json_rpc_types::CheckpointId;
+
 pub struct CheckpointHandler {
     rpc_client: SuiClient,
     pg_connection_pool: Arc<PgConnectionPool>,
@@ -42,7 +44,7 @@ impl CheckpointHandler {
 
         if next_cursor_sequence_number != 0 {
             let temp_checkpoint =
-                read_previous_checkpoint(&mut pg_pool_conn, next_cursor_sequence_number - 1);
+                get_previous_checkpoint(&mut pg_pool_conn, next_cursor_sequence_number - 1);
             match temp_checkpoint {
                 Ok(checkpoint) => previous_checkpoint_commit = checkpoint,
                 Err(err) => {
@@ -61,10 +63,12 @@ impl CheckpointHandler {
                 .full_node_read_request_latency
                 .start_timer();
 
+            let next_cursor_checkpoint_id =
+                CheckpointId::SequenceNumber(next_cursor_sequence_number as u64);
             let mut checkpoint = self
                 .rpc_client
                 .read_api()
-                .get_checkpoint_summary(next_cursor_sequence_number as u64)
+                .get_checkpoint(next_cursor_checkpoint_id.clone())
                 .await;
             // this happens very often b/c checkpoint indexing is faster than checkpoint
             // generation. Ideally we will want to differentiate between a real error and
@@ -74,7 +78,7 @@ impl CheckpointHandler {
                 checkpoint = self
                     .rpc_client
                     .read_api()
-                    .get_checkpoint_summary(next_cursor_sequence_number as u64)
+                    .get_checkpoint(next_cursor_checkpoint_id.clone())
                     .await;
             }
             request_guard.stop_and_record();
