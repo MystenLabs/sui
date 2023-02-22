@@ -18,8 +18,4 @@ If your changes are not user-facing and not a breaking change, you can skip the 
 - [ ] breaking change for on-chain data layout
 - [ ] necessitate either a data wipe or data migration
 
-### Persona affected
-
-Reference: [go/sui-persona](http://go/sui-persona)
-
 ### Release notes
