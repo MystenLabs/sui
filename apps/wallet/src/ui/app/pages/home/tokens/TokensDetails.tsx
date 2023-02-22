@@ -22,12 +22,6 @@ type TokenDetailsProps = {
     coinType?: string;
 };
 
-const emptyWalletDescription = (
-    <Text variant="p2" color="gray-80" weight="normal">
-        To conduct transactions on the Sui network, you need SUI in your wallet.
-    </Text>
-);
-
 function MyTokens() {
     const accountAddress = useAppSelector(({ account }) => account.address);
     const { data: balance, isLoading: loadingBalances } =
@@ -40,7 +34,7 @@ function MyTokens() {
     return (
         <Loading loading={loadingBalances}>
             {balance?.length ? (
-                <div className="flex flex-1 justify-start gap-2 flex-col w-full mt-6">
+                <div className="flex flex-1 justify-start flex-col w-full mt-6">
                     <Text
                         variant="caption"
                         color="steel-darker"
@@ -62,7 +56,10 @@ function MyTokens() {
             {noSuiToken ? (
                 <div className="flex flex-col flex-nowrap justify-center items-center gap-2 text-center mt-6 px-2.5">
                     <FaucetRequestButton trackEventSource="home" />
-                    {emptyWalletDescription}
+                    <Text variant="p2" color="gray-80" weight="normal">
+                        To conduct transactions on the Sui network, you need SUI
+                        in your wallet.
+                    </Text>
                 </div>
             ) : null}
         </Loading>
