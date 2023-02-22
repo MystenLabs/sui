@@ -325,10 +325,14 @@ impl<C> Testbed<C> {
 
     pub async fn update(&self) -> TestbedResult<()> {
         let branch = self.settings.repository.branch.clone();
-        print!(
-            "Updating {} instances (branch '{branch}')...",
-            self.instances.len()
-        );
+        crossterm::execute!(
+            stdout(),
+            Print(format!(
+                "Updating {} instances (branch '{branch}')..",
+                self.instances.len()
+            ))
+        )
+        .unwrap();
 
         let command = [
             &format!("git fetch -f"),
@@ -543,7 +547,10 @@ impl<C> Testbed<C> {
         self.kill(true).await?;
 
         // Update the software on all instances.
-        // self.update().await?;
+        self.update().await?;
+
+        // Configure all instances.
+        self.configure(parameters).await?;
 
         // Deploy the validators.
         self.run_nodes(parameters).await?;

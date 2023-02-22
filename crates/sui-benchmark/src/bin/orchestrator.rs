@@ -24,12 +24,14 @@ async fn main() -> Result<()> {
         nodes: 4,
         faults: 0,
         load: 600,
-        duration: Duration::from_secs(60),
+        duration: Duration::from_secs(120),
     };
 
-    let mut testbed = Testbed::new(settings, client)
+    let testbed = Testbed::new(settings, client)
         .await
         .wrap_err("Failed to crate testbed")?;
+
+    testbed.info();
 
     // testbed
     //     .populate(2)
@@ -43,16 +45,6 @@ async fn main() -> Result<()> {
 
     // testbed.kill(true).await.wrap_err("Failed to kill tested")?;
 
-    // testbed
-    //     .update()
-    //     .await
-    //     .wrap_err("Failed to install software on instances")?;
-
-    testbed
-        .configure(&parameters)
-        .await
-        .wrap_err("Failed to install software on instances")?;
-
     testbed
         .run_benchmark(&parameters)
         .await
@@ -62,6 +54,5 @@ async fn main() -> Result<()> {
 
     // testbed.stop().await.wrap_err("Failed to stop tested")?;
 
-    testbed.info();
     Ok(())
 }
