@@ -53,6 +53,9 @@ module sui::display {
         /// Contains fields for display. Currently supported
         /// fields are: name, link, image and description.
         fields: VecMap<String, String>,
+        /// Version that updates on every change after the object was
+        /// published. Newly published object has version 0.
+        version: u64
     }
 
     /// Event: emitted when a new Display object has been created for type T.
@@ -91,7 +94,8 @@ module sui::display {
 
         Display {
             id: uid,
-            fields: vec_map::empty()
+            fields: vec_map::empty(),
+            version: 0,
         }
     }
 
@@ -138,6 +142,7 @@ module sui::display {
 
     /// Sets a custom `name` field with the `value`.
     entry public fun add<T: key>(pub: &Publisher, d: &mut Display<T>, name: String, value: String) {
+        d.version = d.version + 1;
         assert!(is_package<T>(pub), ENotOwner);
         add_internal(d, name, value)
     }
@@ -146,6 +151,7 @@ module sui::display {
     entry public fun add_multiple<T: key>(
         pub: &Publisher, d: &mut Display<T>, fields: vector<String>, values: vector<String>
     ) {
+        d.version = d.version + 1;
         let len = vector::length(&fields);
         assert!(is_package<T>(pub), ENotOwner);
         assert!(len == vector::length(&values), EVecLengthMismatch);
@@ -160,8 +166,9 @@ module sui::display {
     /// Change the value of the field.
     /// TODO (long run): version changes;
     entry public fun edit<T: key>(pub: &Publisher, d: &mut Display<T>, name: String, value: String) {
+        d.version = d.version + 1;
         assert!(is_package<T>(pub), ENotOwner);
-        let (_k, _v) = vec_map::remove(name);
+        let (_k, _v) = vec_map::remove(&mut d.fields, &name);
         add_internal(d, name, value)
     }
 
