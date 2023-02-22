@@ -166,23 +166,16 @@ impl ConsensusProtocol for Bullshark {
                 sequence.push(x);
             }
 
-            let next_sub_dag_index = state.latest_sub_dag_index + 1;
-            let sub_dag = CommittedSubDag {
-                certificates: sequence,
-                leader: leader.clone(),
-                sub_dag_index: next_sub_dag_index,
-            };
-
             // update the score for the previous leader. If no previous leader exists,
             // then this is the first time we commit a leader, so no score update takes place
             if let Some(previous_leader) = state.last_committed_leader {
-                for certificate in sub_dag.certificates.iter() {
+                for certificate in sequence.iter() {
                     // TODO: we could iterate only the certificates of the round above the previous leader's round
                     if certificate
                         .header
                         .parents
                         .iter()
-                        .find(|digest| digest == previous_leader)
+                        .find(|digest| **digest == previous_leader)
                         .is_some()
                     {
                         state
@@ -191,6 +184,14 @@ impl ConsensusProtocol for Bullshark {
                     }
                 }
             }
+
+            let next_sub_dag_index = state.latest_sub_dag_index + 1;
+            let sub_dag = CommittedSubDag {
+                certificates: sequence,
+                leader: leader.clone(),
+                sub_dag_index: next_sub_dag_index,
+                reputation_score: state.last_consensus_reputation_score.clone(),
+            };
 
             // Persist the update.
             self.store

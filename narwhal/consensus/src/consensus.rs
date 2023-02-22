@@ -79,14 +79,15 @@ impl ConsensusState {
             .expect("error when recovering DAG from store");
         metrics.recovered_consensus_state.inc();
 
-        let (latest_sub_dag_index, last_committed_leader) = latest_sub_dag
-            .map(|s| (s.sub_dag_index, Some(s.leader)))
-            .unwrap_or_default();
+        let (latest_sub_dag_index, last_consensus_reputation_score, last_committed_leader) =
+            latest_sub_dag
+                .map(|s| (s.sub_dag_index, s.reputation_score, Some(s.leader)))
+                .unwrap_or_default();
 
         Self {
             last_committed_round,
             last_committed: recover_last_committed,
-            last_consensus_reputation_score: Default::default(),
+            last_consensus_reputation_score,
             latest_sub_dag_index,
             last_committed_leader,
             dag,

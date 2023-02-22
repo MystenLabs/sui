@@ -33,6 +33,8 @@ pub struct CommittedSubDag {
     pub leader: Certificate,
     /// The index associated with this CommittedSubDag
     pub sub_dag_index: SequenceNumber,
+    /// The so far calculated reputation score for nodes
+    pub reputation_score: ConsensusReputationScore,
 }
 
 impl CommittedSubDag {
@@ -63,7 +65,7 @@ impl CommittedSubDag {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ConsensusReputationScore {
     pub scores_per_authority: HashMap<PublicKey, u64>,
 }
@@ -93,6 +95,8 @@ pub struct CommittedSubDagShell {
     pub leader: CertificateDigest,
     /// Sequence number of the CommittedSubDag
     pub sub_dag_index: SequenceNumber,
+    /// The so far calculated reputation score for nodes
+    pub reputation_score: ConsensusReputationScore,
 }
 
 impl CommittedSubDagShell {
@@ -101,6 +105,7 @@ impl CommittedSubDagShell {
             certificates: sub_dag.certificates.iter().map(|x| x.digest()).collect(),
             leader: sub_dag.leader.digest(),
             sub_dag_index: sub_dag.sub_dag_index,
+            reputation_score: sub_dag.reputation_score.clone(),
         }
     }
 }
