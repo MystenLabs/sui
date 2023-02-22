@@ -263,18 +263,9 @@
         "fileName": "explore/tutorials"
       },
       {
-        "label": "Prototypes",
-        "fileName": "explore/prototypes"
-      },
-      {
         "label": "Examples",
         "fileName": "explore/examples"
       },
-      {
-        "label": "SoWork x Sui",
-        "fileName": "explore/sowork"
-      }
-    ],
     "contribute": [
       {
         "label": "Frequently Asked Questions",
