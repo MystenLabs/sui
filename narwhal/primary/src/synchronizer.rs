@@ -117,6 +117,7 @@ impl Inner {
 /// - Triggering fetching for certificates and batches.
 /// - Broadcasting created certificates.
 /// `Synchronizer` contains most of the certificate processing logic in Narwhal.
+#[derive(Clone)]
 pub struct Synchronizer {
     /// Internal data that are thread safe.
     inner: Arc<Inner>,
@@ -251,7 +252,18 @@ impl Synchronizer {
         certificate: Certificate,
         network: &Network,
     ) -> DagResult<()> {
-        self.process_certificate_internal(certificate, network)
+        self.process_certificate_internal(certificate, network, true)
+            .await
+    }
+
+    /// Tries to accept a certificate that is already sanitized.
+    // TODO: produce a different type after sanitize, e.g. VerifiedCertificate.
+    pub async fn try_accept_sanitized_certificate(
+        &self,
+        certificate: Certificate,
+        network: &Network,
+    ) -> DagResult<()> {
+        self.process_certificate_internal(certificate, network, false)
             .await
     }
 
@@ -266,7 +278,7 @@ impl Synchronizer {
         network: &Network,
     ) -> DagResult<()> {
         match self
-            .process_certificate_internal(certificate, network)
+            .process_certificate_internal(certificate, network, true)
             .await
         {
             Err(DagError::Suspended(notify)) => {
@@ -290,7 +302,7 @@ impl Synchronizer {
     ) -> DagResult<()> {
         // Process the new certificate.
         match self
-            .process_certificate_internal(certificate.clone(), network)
+            .process_certificate_internal(certificate.clone(), network, false)
             .await
         {
             Ok(()) => Ok(()),
@@ -343,7 +355,8 @@ impl Synchronizer {
             .collect()
     }
 
-    async fn sanitize_certificate(&self, certificate: &Certificate) -> DagResult<()> {
+    /// Checks if the certificate is valid and can potentially be accepted into the DAG.
+    pub fn sanitize_certificate(&self, certificate: &Certificate) -> DagResult<()> {
         ensure!(
             self.inner.committee.epoch() == certificate.epoch(),
             DagError::InvalidEpoch {
@@ -367,6 +380,7 @@ impl Synchronizer {
         &self,
         certificate: Certificate,
         network: &Network,
+        sanitize: bool,
     ) -> DagResult<()> {
         let digest = certificate.digest();
         if self.inner.certificate_store.contains(&digest)? {
@@ -375,7 +389,9 @@ impl Synchronizer {
             return Ok(());
         }
 
-        self.sanitize_certificate(&certificate).await?;
+        if sanitize {
+            self.sanitize_certificate(&certificate)?;
+        }
 
         debug!(
             "Processing certificate {:?} round:{:?}",
