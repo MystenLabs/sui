@@ -28,7 +28,7 @@ Sui is a distributed ledger that stores a collection of programmable [objects](.
 
 The ledger is updated via a [transaction](../learn/transactions.md) sent by a particular address. A transaction can create, destroy, and write objects, as well as transfer them to other addresses.
 
-Structurally, a transaction contains a set of input object references and a pointer to a Move code object that already exists in the ledger. Executing a transaction produces updates to the input objects and (if applicable) a set of freshly created objects along with their owner addresses. A transaction with address *A* as a sender can accept either (a) objects owned by *A*, (b) shared objects, or (c) objects that are owned by other objects which satsify case (a) or case (b).
+Structurally, a transaction contains a set of input object references and a pointer to a Move code object that already exists in the ledger. Executing a transaction produces updates to the input objects and (if applicable) a set of freshly created objects along with their owner addresses. A transaction with address *A* as a sender can accept either (a) objects owned by *A*, (b) shared objects, or (c) objects that are owned by other objects which satisfy case (a) or case (b).
 
 ```mermaid
 flowchart LR
