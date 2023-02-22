@@ -88,7 +88,7 @@ jobs:
         with:
           version: 7
 
-      # checkout and build the current branch
+      # checkout current branch
       - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
         with:
           clean: false
@@ -96,12 +96,12 @@ jobs:
       - name: Download sui binary from latest devnet release
         uses: wei/wget@v1
         with:
-          args: -O $PWD/target/debug/sui https://github.com/MystenLabs/sui/releases/latest/download/sui
+          args: -O target/debug/sui https://github.com/MystenLabs/sui/releases/latest/download/sui
 
       - name: Download sui-test-validator binary from latest devnet release
         uses: wei/wget@v1
         with:
-          args: -O $PWD/target/debug/sui-test-validator https://github.com/MystenLabs/sui/releases/latest/download/sui-test-validator
+          args: -O target/debug/sui-test-validator https://github.com/MystenLabs/sui/releases/latest/download/sui-test-validator
 
       - name: Install Nodejs
         uses: actions/setup-node@8c91899e586c5b171469028077307d293428b516 # pin@v3
