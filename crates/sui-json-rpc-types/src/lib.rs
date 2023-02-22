@@ -31,8 +31,8 @@ use serde_with::serde_as;
 use sui_json::SuiJsonValue;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{
-    AuthorityName, ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
-    TransactionDigest, TransactionEffectsDigest,
+    ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
+    TransactionEffectsDigest,
 };
 use sui_types::coin::CoinMetadata;
 use sui_types::committee::EpochId;
@@ -360,11 +360,6 @@ pub struct SuiTransactionResponse {
     /// The checkpoint number when this transaction was included and hence finalized.
     /// This is only returned in the read api, not in the transaction execution api.
     pub checkpoint: Option<CheckpointSequenceNumber>,
-}
-
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
-pub struct SuiTransactionAuthSignersResponse {
-    pub signers: Vec<AuthorityName>,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
