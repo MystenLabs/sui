@@ -10,10 +10,9 @@ use fastcrypto::encoding::Base64;
 use fastcrypto::traits::ToFromBytes;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
-use move_bytecode_utils::module_cache::SyncModuleCache;
 use mysten_metrics::spawn_monitored_task;
 use std::sync::Arc;
-use sui_core::authority::{AuthorityState, AuthorityStore, ResolverWrapper};
+use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_json_rpc_types::{DevInspectResults, SuiTransactionEffects, SuiTransactionResponse};
@@ -29,19 +28,16 @@ use sui_types::signature::GenericSignature;
 pub struct TransactionExecutionApi {
     state: Arc<AuthorityState>,
     transaction_orchestrator: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
-    module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
 }
 
 impl TransactionExecutionApi {
     pub fn new(
         state: Arc<AuthorityState>,
         transaction_orchestrator: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
-        module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
     ) -> Self {
         Self {
             state,
             transaction_orchestrator,
-            module_cache,
         }
     }
 }
@@ -103,12 +99,16 @@ impl WriteApiServer for TransactionExecutionApi {
         match response {
             ExecuteTransactionResponse::EffectsCert(cert) => {
                 let (effects, is_executed_locally) = *cert;
+                let module_cache = self
+                    .state
+                    .load_epoch_store_one_call_per_task()
+                    .module_cache()
+                    .clone();
+                let effects =
+                    SuiTransactionEffects::try_from(effects.effects, module_cache.as_ref())?;
                 Ok(SuiTransactionResponse {
                     transaction: tx,
-                    effects: SuiTransactionEffects::try_from(
-                        effects.effects,
-                        self.module_cache.as_ref(),
-                    )?,
+                    effects,
                     timestamp_ms: None,
                     confirmed_local_execution: Some(is_executed_locally),
                     checkpoint: None,

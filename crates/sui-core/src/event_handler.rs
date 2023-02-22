@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use core::time::Duration;
+use move_bytecode_utils::module_cache::SyncModuleCache;
 use std::sync::Arc;
 
-use move_bytecode_utils::module_cache::SyncModuleCache;
 use tokio_stream::Stream;
 use tracing::{debug, error, instrument, trace, warn};
 
@@ -28,19 +28,14 @@ mod event_handler_tests;
 pub const EVENT_DISPATCH_BUFFER_SIZE: usize = 1000;
 
 pub struct EventHandler {
-    module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
     event_streamer: Streamer<EventEnvelope, EventFilter>,
     pub(crate) event_store: Arc<EventStoreType>,
 }
 
 impl EventHandler {
-    pub fn new(
-        event_store: Arc<EventStoreType>,
-        module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
-    ) -> Self {
+    pub fn new(event_store: Arc<EventStoreType>) -> Self {
         let streamer = Streamer::spawn(EVENT_DISPATCH_BUFFER_SIZE);
         Self {
-            module_cache,
             event_streamer: streamer,
             event_store,
         }
@@ -66,6 +61,7 @@ impl EventHandler {
         effects: &TransactionEffects,
         timestamp_ms: u64,
         seq_num: u64,
+        module_cache: &SyncModuleCache<ResolverWrapper<AuthorityStore>>,
     ) -> SuiResult {
         let res: Result<Vec<_>, _> = effects
             .events
@@ -78,6 +74,7 @@ impl EventHandler {
                     event_num.try_into().unwrap(),
                     seq_num,
                     timestamp_ms,
+                    module_cache,
                 )
             })
             .collect();
@@ -118,14 +115,14 @@ impl EventHandler {
         event_num: u64,
         seq_num: u64,
         timestamp_ms: u64,
+        module_cache: &SyncModuleCache<ResolverWrapper<AuthorityStore>>,
     ) -> Result<EventEnvelope, SuiError> {
         let json_value = match event {
             Event::MoveEvent {
                 type_, contents, ..
             } => {
                 debug!(event =? event, "Process MoveEvent.");
-                let move_struct =
-                    Event::move_event_to_move_struct(type_, contents, self.module_cache.as_ref())?;
+                let move_struct = Event::move_event_to_move_struct(type_, contents, module_cache)?;
                 // Convert into `SuiMoveStruct` which is a mirror of MoveStruct but with additional type supports, (e.g. ascii::String).
                 let sui_move_struct = SuiMoveStruct::from(move_struct);
                 Some(sui_move_struct.to_json_value())

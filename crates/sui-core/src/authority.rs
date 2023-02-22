@@ -8,13 +8,10 @@ use chrono::prelude::*;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::KeyPair;
-use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::ModuleId;
-use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::parser::parse_struct_tag;
-use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::Mutex;
 use prometheus::{
@@ -84,7 +81,7 @@ use sui_types::{
     fp_ensure,
     messages::*,
     object::{Object, ObjectFormatOptions, ObjectRead},
-    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
+    SUI_FRAMEWORK_ADDRESS,
 };
 
 use crate::authority::authority_per_epoch_store::{
@@ -97,7 +94,7 @@ use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::execution_driver::execution_process;
-use crate::module_cache_gauge::ModuleCacheGauge;
+use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
 use crate::{
     event_handler::EventHandler, transaction_input_checker, transaction_manager::TransactionManager,
@@ -402,18 +399,12 @@ pub struct AuthorityState {
     /// The signature key of the authority.
     pub secret: StableSyncAuthoritySigner,
 
-    /// Move native functions that are available to invoke
-    pub(crate) _native_functions: NativeFunctionTable,
-    pub(crate) move_vm: Arc<MoveVM>,
-
     /// The database
     pub database: Arc<AuthorityStore>, // TODO: remove pub
 
     epoch_store: ArcSwap<AuthorityPerEpochStore>,
 
     indexes: Option<Arc<IndexStore>>,
-
-    pub module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
 
     pub event_handler: Option<Arc<EventHandler>>,
     pub(crate) checkpoint_store: Arc<CheckpointStore>,
@@ -868,7 +859,7 @@ impl AuthorityState {
 
         // index certificate
         let _ = self
-            .post_process_one_tx(certificate, effects)
+            .post_process_one_tx(certificate, effects, epoch_store)
             .await
             .tap_err(|e| error!("tx post processing failed: {e}"));
 
@@ -942,7 +933,7 @@ impl AuthorityState {
                 gas,
                 *certificate.digest(),
                 transaction_dependencies,
-                &self.move_vm,
+                epoch_store.move_vm(),
                 gas_status,
                 &epoch_store.epoch_start_configuration().epoch_data(),
                 epoch_store.protocol_config(),
@@ -990,7 +981,7 @@ impl AuthorityState {
         let gas = transaction.gas();
         let move_vm = Arc::new(
             adapter::new_move_vm(
-                self._native_functions.clone(),
+                epoch_store.native_functions().clone(),
                 epoch_store.protocol_config(),
             )
             .expect("We defined natives to not fail here"),
@@ -1009,7 +1000,7 @@ impl AuthorityState {
                 &epoch_store.epoch_start_configuration().epoch_data(),
                 epoch_store.protocol_config(),
             );
-        SuiTransactionEffects::try_from(effects, self.module_cache.as_ref())
+        SuiTransactionEffects::try_from(effects, epoch_store.module_cache().as_ref())
     }
 
     /// The object ID for gas can be any object ID, even for an uncreated object
@@ -1072,7 +1063,7 @@ impl AuthorityState {
         gas_status.charge_min_tx_gas()?;
         let move_vm = Arc::new(
             adapter::new_move_vm(
-                self._native_functions.clone(),
+                epoch_store.native_functions().clone(),
                 epoch_store.protocol_config(),
             )
             .expect("We defined natives to not fail here"),
@@ -1091,7 +1082,11 @@ impl AuthorityState {
                 &epoch_store.epoch_start_configuration().epoch_data(),
                 protocol_config,
             );
-        DevInspectResults::new(effects, execution_result, self.module_cache.as_ref())
+        DevInspectResults::new(
+            effects,
+            execution_result,
+            epoch_store.module_cache().as_ref(),
+        )
     }
 
     pub fn is_tx_already_executed(&self, digest: &TransactionDigest) -> SuiResult<bool> {
@@ -1107,9 +1102,10 @@ impl AuthorityState {
         cert: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
         timestamp_ms: u64,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<u64> {
         let changes = self
-            .process_object_index(effects)
+            .process_object_index(effects, epoch_store)
             .tap_err(|e| warn!("{e}"))?;
 
         indexes.index_tx(
@@ -1138,6 +1134,7 @@ impl AuthorityState {
     fn process_object_index(
         &self,
         effects: &TransactionEffects,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Result<ObjectIndexChanges, SuiError> {
         let modified_at_version = effects
             .modified_at_versions
@@ -1215,7 +1212,7 @@ impl AuthorityState {
                     let Some(o) = self.database.get_object_by_key(&oref.0, oref.1)? else{
                         continue;
                     };
-                    let Some(df_info) = self.try_create_dynamic_field_info(&o)? else{
+                    let Some(df_info) = self.try_create_dynamic_field_info(&o, epoch_store)? else{
                         // Skip indexing for non dynamic field objects.
                         continue;
                     };
@@ -1233,7 +1230,11 @@ impl AuthorityState {
         })
     }
 
-    fn try_create_dynamic_field_info(&self, o: &Object) -> SuiResult<Option<DynamicFieldInfo>> {
+    fn try_create_dynamic_field_info(
+        &self,
+        o: &Object,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<Option<DynamicFieldInfo>> {
         // Skip if not a move object
         let Some(move_object) =  o.data.try_as_move().cloned() else {
             return Ok(None);
@@ -1244,7 +1245,7 @@ impl AuthorityState {
         }
         let move_struct = move_object.to_move_struct_with_resolver(
             ObjectFormatOptions::default(),
-            self.module_cache.as_ref(),
+            epoch_store.module_cache().as_ref(),
         )?;
 
         let (name_value, type_, object_id) =
@@ -1295,6 +1296,7 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         if self.indexes.is_none() && self.event_handler.is_none() {
             return Ok(());
@@ -1312,6 +1314,7 @@ impl AuthorityState {
                     certificate,
                     effects,
                     timestamp_ms,
+                    epoch_store,
                 )
                 .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
                 .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"));
@@ -1319,7 +1322,12 @@ impl AuthorityState {
             // Emit events
             if let (Some(event_handler), Ok(seq)) = (&self.event_handler, res) {
                 event_handler
-                    .process_events(effects, timestamp_ms, seq)
+                    .process_events(
+                        effects,
+                        timestamp_ms,
+                        seq,
+                        epoch_store.module_cache().as_ref(),
+                    )
                     .await
                     .tap_ok(|_| {
                         self.metrics
@@ -1397,7 +1405,7 @@ impl AuthorityState {
             })?;
 
         let layout = match request.object_format_options {
-            Some(format) => object.get_layout(format, self.module_cache.as_ref())?,
+            Some(format) => object.get_layout(format, epoch_store.module_cache().as_ref())?,
             None => None,
         };
 
@@ -1508,15 +1516,8 @@ impl AuthorityState {
             epoch_store.committee().protocol_version,
         );
 
-        let native_functions =
-            sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-        let move_vm = Arc::new(
-            adapter::new_move_vm(native_functions.clone(), epoch_store.protocol_config())
-                .expect("We defined natives to not fail here"),
-        );
-        let module_cache = Arc::new(SyncModuleCache::new(ResolverWrapper(store.clone())));
         let event_handler = event_store.map(|es| {
-            let handler = EventHandler::new(es, module_cache.clone());
+            let handler = EventHandler::new(es);
             handler.regular_cleanup_task();
             Arc::new(handler)
         });
@@ -1542,14 +1543,9 @@ impl AuthorityState {
         let state = Arc::new(AuthorityState {
             name,
             secret,
-            _native_functions: native_functions,
-            move_vm,
             epoch_store: ArcSwap::new(epoch_store.clone()),
             database: store.clone(),
             indexes,
-            // `module_cache` uses a separate in-mem cache from `event_handler`
-            // this is because they largely deal with different types of MoveStructs
-            module_cache,
             event_handler,
             checkpoint_store,
             committee_store,
@@ -1559,10 +1555,6 @@ impl AuthorityState {
             _objects_pruner,
             _authority_per_epoch_pruner,
         });
-
-        prometheus_registry
-            .register(Box::new(ModuleCacheGauge::new(&state.module_cache)))
-            .unwrap();
 
         // Process tx recovery log first, so that checkpoint recovery (below)
         // doesn't observe partially-committed txes.
@@ -1580,7 +1572,7 @@ impl AuthorityState {
         ));
 
         state
-            .create_owner_index_if_empty(genesis_objects)
+            .create_owner_index_if_empty(genesis_objects, &epoch_store)
             .expect("Error indexing genesis objects.");
 
         state
@@ -1617,6 +1609,7 @@ impl AuthorityState {
             .unwrap(),
         );
         let registry = Registry::new();
+        let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             genesis_committee.clone(),
@@ -1624,6 +1617,8 @@ impl AuthorityState {
             None,
             EpochMetrics::new(&registry),
             Some(Default::default()),
+            store.clone(),
+            cache_metrics,
         );
 
         let epochs = Arc::new(CommitteeStore::new(
@@ -1652,8 +1647,9 @@ impl AuthorityState {
         )
         .await;
 
+        let epoch_store = state.epoch_store_for_testing();
         state
-            .create_owner_index_if_empty(genesis.objects())
+            .create_owner_index_if_empty(genesis.objects(), &epoch_store)
             .unwrap();
 
         state
@@ -1724,7 +1720,11 @@ impl AuthorityState {
         Ok(())
     }
 
-    fn create_owner_index_if_empty(&self, genesis_objects: &[Object]) -> SuiResult {
+    fn create_owner_index_if_empty(
+        &self,
+        genesis_objects: &[Object],
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult {
         let Some(index_store) = &self.indexes else{
             return Ok(())
         };
@@ -1742,7 +1742,7 @@ impl AuthorityState {
                 )),
                 Owner::ObjectOwner(object_id) => {
                     let id = o.id();
-                    let Some(info) = self.try_create_dynamic_field_info(o)? else{
+                    let Some(info) = self.try_create_dynamic_field_info(o, epoch_store)? else{
                         continue;
                     };
                     new_dynamic_fields.push(((ObjectID::from(object_id), id), info));
@@ -1867,7 +1867,14 @@ impl AuthorityState {
                         Some(object) => {
                             let layout = object.get_layout(
                                 ObjectFormatOptions::default(),
-                                self.module_cache.as_ref(),
+                                // threading the epoch_store through this API does not
+                                // seem possible, so we just read it from the state (self) and fetch
+                                // the module cache out of it.
+                                // Notice that no matter what module cache we get things
+                                // should work
+                                self.load_epoch_store_one_call_per_task()
+                                    .module_cache()
+                                    .as_ref(),
                             )?;
                             Ok(ObjectRead::Exists(obj_ref, object, layout))
                         }
@@ -1925,7 +1932,12 @@ impl AuthorityState {
                         Some(object) => {
                             let layout = object.get_layout(
                                 ObjectFormatOptions::default(),
-                                self.module_cache.as_ref(),
+                                // threading the epoch_store through this API does not
+                                // seem possible, so we just read it from the state (self) and fetch
+                                // the module cache out of it.
+                                // Notice that no matter what module cache we get things
+                                // should work
+                                self.epoch_store.load().module_cache().as_ref(),
                             )?;
                             let obj_ref = object.compute_object_reference();
                             PastObjectRead::VersionFound(obj_ref, object, layout)
@@ -1946,7 +1958,12 @@ impl AuthorityState {
                         Some(object) => {
                             let layout = object.get_layout(
                                 ObjectFormatOptions::default(),
-                                self.module_cache.as_ref(),
+                                // threading the epoch_store through this API does not
+                                // seem possible, so we just read it from the state (self) and fetch
+                                // the module cache out of it.
+                                // Notice that no matter what module cache we get things
+                                // should work
+                                self.epoch_store.load().module_cache().as_ref(),
                             )?;
                             Ok(PastObjectRead::VersionFound(obj_ref, object, layout))
                         }
@@ -2266,8 +2283,16 @@ impl AuthorityState {
             } = &mut event.1.event
             {
                 let struct_tag = parse_struct_tag(type_)?;
-                let event =
-                    Event::move_event_to_move_struct(&struct_tag, bcs, &*self.module_cache)?;
+                let event = Event::move_event_to_move_struct(
+                    &struct_tag,
+                    bcs,
+                    // threading the epoch_store through this API does not
+                    // seem possible, so we just read it from the state (self) and fetch
+                    // the module cache out of it.
+                    // Notice that no matter what module cache we get things
+                    // should work
+                    &**self.epoch_store.load().module_cache(),
+                )?;
                 let (_, event) = type_and_fields_from_move_struct(&struct_tag, event);
                 *fields = Some(event)
             }
@@ -2764,8 +2789,12 @@ impl AuthorityState {
             epoch_start_configuration.system_state.epoch,
             new_committee.epoch
         );
-        let new_epoch_store =
-            cur_epoch_store.new_at_next_epoch(self.name, new_committee, epoch_start_configuration);
+        let new_epoch_store = cur_epoch_store.new_at_next_epoch(
+            self.name,
+            new_committee,
+            epoch_start_configuration,
+            self.db(),
+        );
         self.db().perpetual_tables.set_recovery_epoch(new_epoch)?;
         self.epoch_store.store(new_epoch_store.clone());
         cur_epoch_store.epoch_terminated().await;
