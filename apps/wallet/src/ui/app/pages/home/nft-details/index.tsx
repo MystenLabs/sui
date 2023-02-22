@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { hasPublicTransfer } from '@mysten/sui.js';
+import { formatAddress, hasPublicTransfer } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useMemo } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
@@ -13,12 +13,7 @@ import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import NFTDisplayCard from '_components/nft-display';
-import {
-    useAppSelector,
-    useMiddleEllipsis,
-    useNFTBasicData,
-    useObjectsState,
-} from '_hooks';
+import { useAppSelector, useNFTBasicData, useObjectsState } from '_hooks';
 import { createAccountNftByIdSelector } from '_redux/slices/account';
 import ExternalLink from '_src/ui/app/components/external-link';
 import PageTitle from '_src/ui/app/shared/PageTitle';
@@ -70,7 +65,6 @@ function NFTDetailsPage() {
     );
     const selectedNft = useAppSelector(nftSelector);
     const isTransferable = !!selectedNft && hasPublicTransfer(selectedNft);
-    const shortAddress = useMiddleEllipsis(nftId);
     const { nftFields, fileExtensionType, filePath } =
         useNFTBasicData(selectedNft);
     const { loading } = useObjectsState();
@@ -142,7 +136,7 @@ function NFTDetailsPage() {
                                                         className="text-sui-dark no-underline font-mono"
                                                         showIcon={false}
                                                     >
-                                                        {shortAddress}
+                                                        {formatAddress(nftId)}
                                                     </ExplorerLink>
                                                 ) : null,
                                             },
