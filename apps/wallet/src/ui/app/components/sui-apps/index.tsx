@@ -32,7 +32,7 @@ function AppsPlayGround() {
             await dispatch(mintDemoNFT()).unwrap();
         },
         onSuccess: () => toast.success('Minted successfully'),
-        onError: () => toast.error('Failed to mint an NFT'),
+        onError: () => toast.error('Minting failed. Try again in a bit.'),
     });
     const allPermissions = useAppSelector(permissionsSelectors.selectAll);
     const linkToPermissionID = useMemo(() => {
