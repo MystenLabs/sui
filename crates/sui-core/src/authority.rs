@@ -863,7 +863,7 @@ impl AuthorityState {
         // REQUIRED: this must be called before tx_guard.commit_tx() (below), to ensure
         // TransactionManager can get the notifications after the node crashes and restarts.
         self.transaction_manager
-            .objects_committed(output_keys, epoch_store);
+            .objects_available(output_keys, epoch_store);
 
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
