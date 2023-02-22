@@ -33,15 +33,22 @@ class SentryRPCClient extends JsonRpcClient {
         this.#url = url;
     }
 
-    async request(method: string, args: any[]) {
+    async #withRequest(
+        name: string,
+        data: Record<string, any>,
+        handler: () => Promise<any>
+    ) {
         const transaction = Sentry.startTransaction({
-            name: method,
+            name,
             op: 'http.rpc-request',
-            data: { url: this.#url, args },
+            data: data,
+            tags: {
+                url: this.#url,
+            },
         });
 
         try {
-            const res = await super.request(method, args);
+            const res = await handler();
             const status: SpanStatusType = 'ok';
             transaction.setStatus(status);
             return res;
@@ -54,25 +61,16 @@ class SentryRPCClient extends JsonRpcClient {
         }
     }
 
-    async batchRequest(requests: RpcParams[]) {
-        const transaction = Sentry.startTransaction({
-            name: 'batch',
-            op: 'http.rpc-request',
-            data: { url: this.#url, requests },
-        });
+    async request(method: string, args: any[]) {
+        return this.#withRequest(method, { args }, () =>
+            super.request(method, args)
+        );
+    }
 
-        try {
-            const res = await super.batchRequest(requests);
-            const status: SpanStatusType = 'ok';
-            transaction.setStatus(status);
-            return res;
-        } catch (e) {
-            const status: SpanStatusType = 'internal_error';
-            transaction.setStatus(status);
-            throw e;
-        } finally {
-            transaction.finish();
-        }
+    async batchRequest(requests: RpcParams[]) {
+        return this.#withRequest('batch', { requests }, () =>
+            super.batchRequest(requests)
+        );
     }
 }
 
@@ -89,8 +87,8 @@ export const DefaultRpcClient = (network: Network | string) => {
 
     const provider = new JsonRpcProvider(connection, {
         rpcClient:
-            // If the network is a known network, then attach the sentry RPC client for instrumentation:
-            network in Network
+            // If the network is a known network, and not localnet, attach the sentry RPC client for instrumentation:
+            network in Network && network !== Network.LOCAL
                 ? new SentryRPCClient(connection.fullnode)
                 : undefined,
     });
