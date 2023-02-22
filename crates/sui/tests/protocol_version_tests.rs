@@ -64,7 +64,7 @@ async fn test_protocol_version_upgrade() {
     sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
     let test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(5000)
+        .with_epoch_duration_ms(10000)
         .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(1, 2))
         .build()
         .await
@@ -83,7 +83,7 @@ async fn test_protocol_version_upgrade_one_laggard() {
     sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
     let test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(5000)
+        .with_epoch_duration_ms(10000)
         .with_supported_protocol_version_callback(Arc::new(|idx, name| {
             if name.is_some() && idx == 0 {
                 // first validator only does not support version 2.
@@ -105,7 +105,7 @@ async fn test_protocol_version_upgrade_no_quorum() {
     sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
     let test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(5000)
+        .with_epoch_duration_ms(10000)
         .with_supported_protocol_version_callback(Arc::new(|idx, name| {
             if name.is_some() && idx <= 1 {
                 // two validators don't support version 2, so we never advance to 2.
