@@ -65,8 +65,6 @@ import {
   WebsocketClient,
   WebsocketClientOptions,
 } from '../rpc/websocket-client';
-import { ApiEndpoints, Network, NETWORK_TO_API } from '../utils/api-endpoints';
-
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
 import { any, is, number, array } from 'superstruct';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
@@ -74,6 +72,7 @@ import { LocalTxnDataSerializer } from '../signers/txn-data-serializers/local-tx
 import { toB64 } from '@mysten/bcs';
 import { SerializedSignature } from '../cryptography/signature';
 import { pkgVersion } from '../pkg-version';
+
 import { Connection, devnetConnection } from '../rpc/connection';
 
 export const TARGETED_RPC_VERSION = '0.27.0';
