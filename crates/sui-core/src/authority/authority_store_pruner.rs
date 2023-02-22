@@ -3,11 +3,10 @@
 
 use crate::checkpoints::CheckpointStore;
 use mysten_metrics::monitored_scope;
-use std::cmp::max;
-use std::collections::HashMap;
+use rand::distributions::{Distribution, Uniform};
 use std::{sync::Arc, time::Duration};
 use sui_config::node::AuthorityStorePruningConfig;
-use sui_types::base_types::SequenceNumber;
+use sui_types::digests::CheckpointDigest;
 use sui_types::messages::TransactionEffects;
 use sui_types::object::Object;
 use sui_types::{
@@ -18,6 +17,7 @@ use tokio::{
     sync::oneshot::{self, Sender},
     time::{self, Instant},
 };
+use tracing::debug;
 use tracing::log::{error, info};
 use typed_store::rocks::DBMap;
 use typed_store::Map;
@@ -25,6 +25,8 @@ use typed_store::Map;
 use super::authority_store_tables::AuthorityPerpetualTables;
 
 const MAX_OPS_IN_ONE_WRITE_BATCH: u64 = 10000;
+const MAX_TRANSACTIONS_IN_ONE_BATCH: usize = 1000;
+const MAX_CHECKPOINTS_IN_ONE_BATCH: usize = 200;
 
 pub struct AuthorityStorePruner {
     _objects_pruner_cancel_handle: oneshot::Sender<()>,
@@ -131,33 +133,18 @@ impl AuthorityStorePruner {
     fn handle_checkpoint(
         checkpoint_effects: impl IntoIterator<Item = TransactionEffects>,
         objects: &DBMap<ObjectKey, Object>,
-    ) -> anyhow::Result<usize> {
+    ) -> anyhow::Result<()> {
         let _scope = monitored_scope("ObjectsLivePruner");
-        let mut pruned = 0;
-        let mut wb = objects.batch();
-        let mut updates = HashMap::new();
+        let mut batch = vec![];
 
         for effects in checkpoint_effects {
-            for (object_id, seq_number) in effects.modified_at_versions {
-                updates
-                    .entry(object_id)
-                    .and_modify(|version| *version = max(*version, seq_number))
-                    .or_insert(seq_number);
+            for (object_id, version) in effects.modified_at_versions {
+                batch.push(ObjectKey(object_id, version));
             }
         }
-        for (object_id, version) in updates {
-            let object_key = ObjectKey(object_id, version);
-            let iter = objects.iter().skip_prior_to(&object_key)?.reverse();
-            let mut start_range = object_key;
-            let end_range = ObjectKey(object_key.0, SequenceNumber::from(object_key.1.value() + 1));
-            for (key, _) in iter.take_while(|(key, _)| key.0 == object_key.0) {
-                start_range = key;
-                pruned += 1;
-            }
-            wb = wb.delete_range(objects, &start_range, &end_range)?;
-        }
-        wb.write()?;
-        Ok(pruned)
+        debug!("update length is {}", batch.len());
+        objects.batch().delete_batch(objects, batch)?.write()?;
+        Ok(())
     }
 
     fn process_checkpoints(
@@ -165,20 +152,33 @@ impl AuthorityStorePruner {
         checkpoint_store: &Arc<CheckpointStore>,
         num_epochs_to_retain: u64,
     ) -> anyhow::Result<()> {
-        let mut pruned_seq_number = checkpoint_store
+        let mut checkpoint_number = checkpoint_store
             .get_highest_pruned_checkpoint_seq_number()?
             .unwrap_or_default();
+        let mut checkpoint_digest = CheckpointDigest::random();
         let current_epoch = checkpoint_store
             .get_highest_executed_checkpoint()?
             .map(|c| c.epoch())
             .unwrap_or_default();
+        let mut checkpoints_in_batch = 0;
+        let mut batch_effects = vec![];
+        let mut network_total_transactions = 0;
+
         loop {
-            let Some(checkpoint) = checkpoint_store.get_checkpoint_by_sequence_number(pruned_seq_number + 1)?
-                else {return Ok(());};
+            let start = Instant::now();
+            let Some(checkpoint) = checkpoint_store.get_checkpoint_by_sequence_number(checkpoint_number + 1)? else {break;};
             // checkpoint's epoch is too new. Skipping for now
             if current_epoch < checkpoint.epoch() + num_epochs_to_retain {
-                return Ok(());
+                break;
             }
+            checkpoint_number = checkpoint.sequence_number();
+            checkpoint_digest = checkpoint.digest();
+            checkpoints_in_batch += 1;
+            if network_total_transactions == checkpoint.summary.network_total_transactions {
+                continue;
+            }
+            network_total_transactions = checkpoint.summary.network_total_transactions;
+
             let content = checkpoint_store
                 .get_checkpoint_contents(&checkpoint.content_digest())?
                 .ok_or_else(|| anyhow::anyhow!("checkpoint content data is missing"))?;
@@ -189,25 +189,56 @@ impl AuthorityStorePruner {
             if effects.iter().any(|effect| effect.is_none()) {
                 return Err(anyhow::anyhow!("transaction effects data is missing"));
             }
-            Self::handle_checkpoint(effects.into_iter().flatten(), &perpetual_db.objects)?;
-            checkpoint_store.update_highest_pruned_checkpoint(&checkpoint)?;
-            pruned_seq_number += 1;
+            batch_effects.extend(effects.into_iter().flatten());
+
+            if batch_effects.len() >= MAX_TRANSACTIONS_IN_ONE_BATCH
+                || checkpoints_in_batch >= MAX_CHECKPOINTS_IN_ONE_BATCH
+            {
+                let mutation_start = Instant::now();
+                let pruned = Self::handle_checkpoint(batch_effects, &perpetual_db.objects)?;
+                checkpoint_store
+                    .update_highest_pruned_checkpoint(checkpoint_number, checkpoint_digest)?;
+                batch_effects = vec![];
+                checkpoints_in_batch = 0;
+                debug!(
+                    "live pruner mutation. Elapsed: {:?}. Pruned {:?}",
+                    Instant::now().duration_since(mutation_start).as_nanos(),
+                    pruned
+                );
+            }
+            debug!(
+                "live pruner. Current epoch {}. Checkpoint epoch: {}. Checkpoint number: {:?}. Execution time: {:?}",
+                current_epoch,
+                checkpoint.epoch(),
+                checkpoint.sequence_number(),
+                Instant::now().duration_since(start).as_nanos(),
+            );
         }
+        if !batch_effects.is_empty() {
+            Self::handle_checkpoint(batch_effects, &perpetual_db.objects)?;
+            checkpoint_store
+                .update_highest_pruned_checkpoint(checkpoint_number, checkpoint_digest)?;
+        }
+        Ok(())
     }
 
     fn setup_objects_pruning(
-        num_versions_to_retain: u64,
+        _num_versions_to_retain: u64,
         pruning_timeperiod: Duration,
         pruning_initial_delay: Duration,
-        num_epochs_to_retain: u64,
+        mut num_epochs_to_retain: u64,
         epoch_duration_ms: u64,
         perpetual_db: Arc<AuthorityPerpetualTables>,
         checkpoint_store: Arc<CheckpointStore>,
     ) -> Sender<()> {
         let (sender, mut recv) = tokio::sync::oneshot::channel();
-        info!(
-            "Starting object pruning service with num_versions_to_retain={num_versions_to_retain}"
-        );
+        let num_versions_to_retain = u64::MAX;
+        let mut rng = rand::thread_rng();
+        if Uniform::from(0..2).sample(&mut rng) == 0 {
+            num_epochs_to_retain = 1;
+        }
+
+        debug!("Starting object pruning service with num_epochs_to_retain={num_epochs_to_retain}");
         let mut prune_interval =
             tokio::time::interval_at(Instant::now() + pruning_initial_delay, pruning_timeperiod);
         prune_interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
@@ -234,7 +265,7 @@ impl AuthorityStorePruner {
                     },
                     _ = live_prune_interval.tick(), if num_epochs_to_retain != u64::MAX => {
                         match Self::process_checkpoints(&perpetual_db, &checkpoint_store, num_epochs_to_retain) {
-                            Ok(()) => info!("Pruned checkpoints"),
+                            Ok(()) => debug!("Pruned checkpoints"),
                             Err(err) => error!("Failed to prune objects: {:?}", err),
                         }
                     },

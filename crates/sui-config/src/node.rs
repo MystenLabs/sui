@@ -146,7 +146,8 @@ pub fn default_concurrency_limit() -> Option<usize> {
 
 pub fn default_epoch_duration_ms() -> u64 {
     // 24 Hrs
-    24 * 60 * 60 * 1000
+    // 24 * 60 * 60 * 1000
+    360000
 }
 
 pub fn default_end_of_epoch_broadcast_channel_capacity() -> usize {

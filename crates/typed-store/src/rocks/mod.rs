@@ -527,9 +527,9 @@ impl MetricConf {
     pub fn with_sampling(read_interval: SamplingInterval) -> Self {
         Self {
             db_name_override: None,
-            read_sample_interval: read_interval,
+            read_sample_interval: read_interval.clone(),
             write_sample_interval: SamplingInterval::default(),
-            iter_latency_sample_interval: SamplingInterval::default(),
+            iter_latency_sample_interval: read_interval,
             iter_bytes_sample_interval: SamplingInterval::default(),
         }
     }
