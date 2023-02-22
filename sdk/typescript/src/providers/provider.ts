@@ -356,7 +356,7 @@ export abstract class Provider {
    */
   abstract getDynamicFieldObject(
     parent_object_id: ObjectId,
-    name: DynamicFieldName,
+    name: string | DynamicFieldName,
   ): Promise<GetObjectDataResponse>;
 
   /**

@@ -209,7 +209,7 @@ export class VoidProvider extends Provider {
 
   getDynamicFieldObject(
     _parent_object_id: ObjectId,
-    _name: DynamicFieldName,
+    _name: string | DynamicFieldName,
   ): Promise<GetObjectDataResponse> {
     throw this.newError('getDynamicFieldObject');
   }
