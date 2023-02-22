@@ -51,7 +51,7 @@ use sui_storage::{
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::quorum_driver_types::QuorumDriverEffectsQueueResult;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::broadcast;
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
@@ -66,7 +66,6 @@ use narwhal_types::TransactionsClient;
 use sui_core::authority::authority_per_epoch_store::{
     AuthorityPerEpochStore, EpochStartConfiguration,
 };
-use sui_core::checkpoints::checkpoint_executor::CheckpointExecutionMessage;
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
     SubmitCheckpointToConsensus,
@@ -153,15 +152,12 @@ impl SuiNode {
             &genesis_committee,
             None,
         ));
-        let (checkpoint_sender, checkpoint_receiver) = mpsc::channel(10);
         let store = Arc::new(
             AuthorityStore::open(
                 &config.db_path().join("store"),
                 None,
                 genesis,
                 &committee_store,
-                &config.authority_store_pruning_config,
-                checkpoint_receiver,
             )
             .await?,
         );
@@ -235,6 +231,7 @@ impl SuiNode {
             &prometheus_registry,
             &config.authority_store_pruning_config,
             genesis.objects(),
+            config.epoch_duration_ms,
         )
         .await;
 
@@ -319,9 +316,7 @@ impl SuiNode {
         info!("SuiNode started!");
         let node = Arc::new(node);
         let node_copy = node.clone();
-        spawn_monitored_task!(async move {
-            Self::monitor_reconfiguration(node_copy, checkpoint_sender).await
-        });
+        spawn_monitored_task!(async move { Self::monitor_reconfiguration(node_copy).await });
 
         Ok(node)
     }
@@ -617,7 +612,7 @@ impl SuiNode {
             Box::new(state.db()),
             checkpoint_output,
             Box::new(certified_checkpoint_output),
-            Box::new(NetworkTransactionCertifier::default()),
+            Box::<NetworkTransactionCertifier>::default(),
             checkpoint_metrics,
             max_tx_per_checkpoint,
         )
@@ -739,10 +734,7 @@ impl SuiNode {
 
     /// This function waits for a signal from the checkpoint executor to indicate that on-chain
     /// epoch has changed. Upon receiving such signal, we reconfigure the entire system.
-    pub async fn monitor_reconfiguration(
-        self: Arc<Self>,
-        checkpoint_sender: mpsc::Sender<CheckpointExecutionMessage>,
-    ) -> Result<()> {
+    pub async fn monitor_reconfiguration(self: Arc<Self>) -> Result<()> {
         let mut checkpoint_executor = CheckpointExecutor::new(
             self.state_sync.subscribe_to_synced_checkpoints(),
             self.checkpoint_store.clone(),
@@ -750,7 +742,6 @@ impl SuiNode {
             self.state.transaction_manager().clone(),
             self.config.checkpoint_executor_config.clone(),
             &self.registry_service.default_registry(),
-            checkpoint_sender,
         );
 
         loop {

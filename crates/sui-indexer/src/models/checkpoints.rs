@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::errors::IndexerError;
 use crate::schema::checkpoints;
 use crate::schema::checkpoints::dsl::{checkpoints as checkpoints_table, sequence_number};
-// use crate::utils::log_errors_to_pg;
-use crate::errors::IndexerError;
 use crate::PgPoolConnection;
 
 use chrono::NaiveDateTime;
+use diesel::dsl::max;
 use diesel::prelude::*;
 use diesel::result::Error;
 
@@ -124,7 +124,7 @@ pub fn create_checkpoint(
             - previous_checkpoint_commit.total_transactions_from_genesis as f32)
             / ((checkpoint_summary.timestamp_ms - previous_checkpoint_commit.timestamp_ms as u64)
                 as f32
-                / 1000.0) as f32;
+                / 1000.0);
 
         checkpoint_transaction_count = checkpoint_summary.network_total_transactions as i64
             - previous_checkpoint_commit.total_transactions_from_genesis;
@@ -191,6 +191,26 @@ pub fn read_previous_checkpoint(
     checkpoint_read_result.map_err(|e| {
         IndexerError::PostgresReadError(format!(
             "Failed reading previous checkpoint in PostgresDB with error {:?}",
+            e
+        ))
+    })
+}
+
+pub fn get_latest_checkpoint_sequence_number(
+    pg_pool_conn: &mut PgPoolConnection,
+) -> Result<i64, IndexerError> {
+    let latest_checkpoint_sequence_number_read_result: Result<i64, Error> = pg_pool_conn
+        .build_transaction()
+        .read_only()
+        .run::<_, Error, _>(|conn| {
+            checkpoints_table
+                .select(max(sequence_number))
+                .first::<Option<i64>>(conn)
+                .map(|o| o.unwrap_or(0))
+        });
+    latest_checkpoint_sequence_number_read_result.map_err(|e| {
+        IndexerError::PostgresReadError(format!(
+            "Failed reading latest checkpoint sequence number in PostgresDB with error {:?}",
             e
         ))
     })

@@ -354,15 +354,15 @@ pub struct ProgrammableTransaction {
 pub enum Command {
     /// A call to either an entry or a public Move function
     MoveCall(Box<ProgrammableMoveCall>),
-    /// (Vec<forall T:key+store. T>, address)
+    /// `(Vec<forall T:key+store. T>, address)`
     /// It sends n-objects to the specified address. These objects must have store
     /// (public transfer) and either the previous owner must be an address or the object must
     /// be newly created.
     TransferObjects(Vec<Argument>, Argument),
-    /// (&mut Coin<T>, u64) -> Coin<T>
+    /// `(&mut Coin<T>, u64)` -> `Coin<T>`
     /// It splits off some amount into a new coin
     SplitCoin(Argument, Argument),
-    /// (&mut Coin<T>, Vec<Coin<T>>)
+    /// `(&mut Coin<T>, Vec<Coin<T>>)`
     /// It merges n-coins into the first coin
     MergeCoins(Argument, Vec<Argument>),
     /// Publishes a Move package
@@ -989,11 +989,21 @@ pub struct GasData {
     pub budget: u64,
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
+pub enum TransactionExpiration {
+    /// The transaction has no expiration
+    None,
+    /// Validators wont sign a transaction unless the expiration Epoch
+    /// is greater than or equal to the current epoch
+    Epoch(EpochId),
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct TransactionData {
     pub kind: TransactionKind,
     pub sender: SuiAddress,
     pub gas_data: GasData,
+    pub expiration: TransactionExpiration,
 }
 
 impl TransactionData {
@@ -1012,6 +1022,7 @@ impl TransactionData {
                 payment: gas_payment,
                 budget: gas_budget,
             },
+            expiration: TransactionExpiration::None,
         }
     }
     pub fn new(
@@ -1030,6 +1041,7 @@ impl TransactionData {
                 payment: gas_payment,
                 budget: gas_budget,
             },
+            expiration: TransactionExpiration::None,
         }
     }
 
@@ -1038,6 +1050,7 @@ impl TransactionData {
             kind,
             sender,
             gas_data,
+            expiration: TransactionExpiration::None,
         }
     }
 
@@ -1670,6 +1683,7 @@ impl VerifiedSignedTransaction {
 /// A transaction that is signed by a sender but not yet by an authority.
 pub type Transaction = Envelope<SenderSignedData, EmptySignInfo>;
 pub type VerifiedTransaction = VerifiedEnvelope<SenderSignedData, EmptySignInfo>;
+pub type TrustedTransaction = TrustedEnvelope<SenderSignedData, EmptySignInfo>;
 
 /// A transaction that is signed by a sender and also by an authority.
 pub type SignedTransaction = Envelope<SenderSignedData, AuthoritySignInfo>;
@@ -1680,6 +1694,23 @@ pub type TxCertAndSignedEffects = (CertifiedTransaction, SignedTransactionEffect
 
 pub type VerifiedCertificate = VerifiedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
+
+/// An ExecutableTransaction is a wrapper of a transaction with a CertificateProof that indicates
+/// there existed a valid certificate for this transaction, and hence it can be executed locally.
+/// This is an abstraction data structure to cover both the case where the transaction is
+/// certified or checkpointed when we schedule it for execution.
+pub type ExecutableTransaction = Envelope<SenderSignedData, CertificateProof>;
+pub type VerifiedExecutableTransaction = VerifiedEnvelope<SenderSignedData, CertificateProof>;
+pub type TrustedExecutableTransaction = TrustedEnvelope<SenderSignedData, CertificateProof>;
+
+impl VerifiedExecutableTransaction {
+    pub fn certificate_sig(&self) -> Option<&AuthorityStrongQuorumSignInfo> {
+        match self.auth_sig() {
+            CertificateProof::Certified(sig) => Some(sig),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum ObjectInfoRequestKind {
@@ -1956,6 +1987,11 @@ pub enum ExecutionFailureStatus {
     MoveAbort(MoveLocation, u64), // TODO func def + offset?
     VMVerificationOrDeserializationError,
     VMInvariantViolation,
+
+    /// The total amount of coins to be paid is larger than the maximum value of u64.
+    TotalAmountOverflow,
+    // NOTE: if you want to add a new enum,
+    // please add it at the end for Rust SDK backward compatibility.
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash)]
@@ -2051,7 +2087,13 @@ impl Display for ExecutionFailureStatus {
                     f,
                     "Coin exceeds maximum value for a single coin"
                 )
-            }
+            },
+            ExecutionFailureStatus::TotalAmountOverflow => {
+                write!(
+                    f,
+                    "The total amount of coins to be paid is larger than the maximum value of u64"
+                )
+            },
             ExecutionFailureStatus::EmptyInputCoins => {
                 write!(f, "Expected a non-empty list of input Coin objects")
             }
@@ -2615,17 +2657,6 @@ pub type VerifiedTransactionEffectsEnvelope<S> = VerifiedEnvelope<TransactionEff
 pub type VerifiedSignedTransactionEffects = VerifiedTransactionEffectsEnvelope<AuthoritySignInfo>;
 pub type VerifiedCertifiedTransactionEffects =
     VerifiedTransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
-
-pub type ValidExecutionDigests = Envelope<ExecutionDigests, CertificateProof>;
-pub type ValidTransactionEffectsDigest = Envelope<TransactionEffectsDigest, CertificateProof>;
-pub type ValidTransactionEffects = TransactionEffectsEnvelope<CertificateProof>;
-
-impl From<ValidExecutionDigests> for ValidTransactionEffectsDigest {
-    fn from(ved: ValidExecutionDigests) -> ValidTransactionEffectsDigest {
-        let (data, validity) = ved.into_data_and_sig();
-        ValidTransactionEffectsDigest::new(data.effects, validity)
-    }
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum InputObjectKind {

@@ -100,7 +100,7 @@ pub async fn test_checkpoint_executor_crash_recovery() {
 #[tokio::test]
 pub async fn test_checkpoint_executor_cross_epoch() {
     let buffer_size = 10;
-    let num_to_sync_per_epoch = (buffer_size * 2) as usize;
+    let num_to_sync_per_epoch = buffer_size * 2;
     let tempdir = tempdir().unwrap();
     let checkpoint_store = CheckpointStore::new(tempdir.path());
 

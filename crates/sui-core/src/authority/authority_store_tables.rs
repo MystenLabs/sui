@@ -7,6 +7,7 @@ use rocksdb::Options;
 use std::path::Path;
 use sui_storage::default_db_options;
 use sui_types::base_types::SequenceNumber;
+use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::messages::TrustedCertificate;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::{DBMap, DBOptions, MetricConf, ReadWriteOptions};
@@ -43,11 +44,13 @@ pub struct AuthorityPerpetualTables {
     pub(crate) owned_object_transaction_locks: DBMap<ObjectRef, Option<LockDetails>>,
 
     /// This is a map between the transaction digest and the corresponding certificate for all
-    /// certificates that have been successfully processed by this authority. This set of certificates
-    /// along with the genesis allows the reconstruction of all other state, and a full sync to this
-    /// authority.
+    /// certificates that have been successfully executed by this authority.
     #[default_options_override_fn = "certificates_table_default_config"]
-    pub(crate) certificates: DBMap<TransactionDigest, TrustedCertificate>,
+    pub(crate) executed_transactions: DBMap<TransactionDigest, TrustedTransaction>,
+
+    /// Signatures of transaction certificates that are executed locally.
+    /// TODO: This table will be move to the per-epoch store.
+    pub(crate) transaction_cert_signatures: DBMap<TransactionDigest, AuthorityStrongQuorumSignInfo>,
 
     /// The map between the object ref of objects processed at all versions and the transaction
     /// digest of the certificate that lead to the creation of this version of the object.
@@ -72,6 +75,8 @@ pub struct AuthorityPerpetualTables {
     /// tables.
     pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
+    /// This is currently used by state-sync to store downloaded transaction certs.
+    /// TODO: This table will be merged with executed_transactions.
     pub(crate) synced_transactions: DBMap<TransactionDigest, TrustedCertificate>,
 
     /// When transaction is executed via checkpoint executor, we store association here

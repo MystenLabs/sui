@@ -409,11 +409,13 @@ impl AuthorityPublicKeyBytes {
 where {
         AuthorityPublicKeyBytes(bytes)
     }
+}
 
-    // this is probably derivable, but we'd rather have it explicitly laid out for instructional purposes,
-    // see [#34](https://github.com/MystenLabs/narwhal/issues/34)
+// this is probably derivable, but we'd rather have it explicitly laid out for instructional purposes,
+// see [#34](https://github.com/MystenLabs/narwhal/issues/34)
+impl Default for AuthorityPublicKeyBytes {
     #[allow(dead_code)]
-    pub fn default() -> Self {
+    fn default() -> Self {
         Self([0u8; AuthorityPublicKey::LENGTH])
     }
 }
@@ -1155,7 +1157,7 @@ impl AuthoritySignInfoTrait for AuthoritySignInfo {
             SuiError::UnknownSigner {
                 signer: Some(self.authority.concise().to_string()),
                 index: None,
-                committee: committee.clone()
+                committee: Box::new(committee.clone())
             }
         );
 
@@ -1332,7 +1334,7 @@ impl<const STRONG_THRESHOLD: bool> AuthoritySignInfoTrait
                     .ok_or(SuiError::UnknownSigner {
                         signer: None,
                         index: Some(authority_index),
-                        committee: committee.clone(),
+                        committee: Box::new(committee.clone()),
                     })?;
 
             // Update weight.
@@ -1342,7 +1344,7 @@ impl<const STRONG_THRESHOLD: bool> AuthoritySignInfoTrait
                 SuiError::UnknownSigner {
                     signer: Some(authority.concise().to_string()),
                     index: Some(authority_index),
-                    committee: committee.clone()
+                    committee: Box::new(committee.clone()),
                 }
             );
             weight += voting_rights;
@@ -1393,8 +1395,8 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
                     .ok_or(SuiError::UnknownSigner {
                         signer: Some(pk.concise().to_string()),
                         index: None,
-                        committee: committee.clone(),
-                    })? as u32,
+                        committee: Box::new(committee.clone()),
+                    })?,
             );
         }
         let sigs: Vec<AuthoritySignature> = signatures.into_values().collect();

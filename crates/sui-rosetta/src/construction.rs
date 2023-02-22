@@ -129,15 +129,13 @@ pub async fn submit(
         )
         .await?;
 
-    if let Some(effect) = response.effects {
-        if let SuiExecutionStatus::Failure { error } = effect.status {
-            return Err(Error::TransactionExecutionError(error));
-        }
+    if let SuiExecutionStatus::Failure { error } = response.effects.status {
+        return Err(Error::TransactionExecutionError(error));
     }
 
     Ok(TransactionIdentifierResponse {
         transaction_identifier: TransactionIdentifier {
-            hash: response.tx_digest,
+            hash: response.effects.transaction_digest,
         },
         metadata: None,
     })
@@ -199,7 +197,7 @@ pub async fn metadata(
         .await?
         .reference_gas_price;
 
-    let (tx_metadata, gas) = match &option.internal_operation {
+    let (tx_metadata, gas, budget) = match &option.internal_operation {
         InternalOperation::PaySui {
             sender, amounts, ..
         } => {
@@ -220,7 +218,7 @@ pub async fn metadata(
                 .collect::<Vec<_>>();
             // gas is always the first coin for pay_sui
             let gas = sender_coins[0];
-            (TransactionMetadata::PaySui(sender_coins), gas)
+            (TransactionMetadata::PaySui(sender_coins), gas, 1000)
         }
         InternalOperation::Delegation {
             sender,
@@ -231,7 +229,7 @@ pub async fn metadata(
             let coins = context
                 .client
                 .coin_read_api()
-                .select_coins(*sender, None, *amount as u128, *locked_until_epoch, vec![])
+                .select_coins(*sender, None, *amount, *locked_until_epoch, vec![])
                 .await?
                 .into_iter()
                 .map(|coin| coin.object_ref())
@@ -246,7 +244,7 @@ pub async fn metadata(
                     Some(*amount as u64),
                     *validator,
                     None,
-                    2000,
+                    13000,
                 )
                 .await?;
 
@@ -256,9 +254,11 @@ pub async fn metadata(
                     locked_until_epoch: *locked_until_epoch,
                 },
                 data.gas(),
+                13000,
             )
         }
     };
+
     // get gas estimation from dry-run, this will also return any tx error.
     let data = option
         .internal_operation
@@ -266,8 +266,8 @@ pub async fn metadata(
             tx_metadata: tx_metadata.clone(),
             sender,
             gas,
-            gas_price,
-            budget: 1000,
+            gas_price: 1,
+            budget,
         })?;
     let dry_run = context.client.read_api().dry_run_transaction(data).await?;
 

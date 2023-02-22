@@ -2004,7 +2004,10 @@ async fn test_handle_confirmation_transaction_ok() {
             .parent(&(object_id, new_account.version(), new_account.digest()))
             .await
             .unwrap();
-        authority_state.read_certificate(&refx).await.unwrap()
+        authority_state
+            .database
+            .get_certified_transaction(&refx)
+            .unwrap()
     };
     if let Some(certified_transaction) = opt_cert {
         // valid since our test authority should not update its certificate set
@@ -2147,7 +2150,9 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
 
         let epoch_store = authority_state.epoch_store_for_testing();
         let g = epoch_store
-            .acquire_tx_guard(&shared_object_cert)
+            .acquire_tx_guard(&VerifiedExecutableTransaction::new_from_certificate(
+                shared_object_cert.clone(),
+            ))
             .await
             .unwrap();
 
@@ -2160,7 +2165,7 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
         // explicitly doesn't do so.
         authority_state
             .transaction_manager()
-            .enqueue(vec![shared_object_cert.clone()], &epoch_store)
+            .enqueue_certificates(vec![shared_object_cert.clone()], &epoch_store)
             .unwrap();
         authority_state
             .execute_certificate(
@@ -2670,6 +2675,7 @@ async fn test_authority_persist() {
             &registry,
             &AuthorityStorePruningConfig::default(),
             &[], // no genesis objects
+            10000,
         )
         .await
     }
@@ -2685,15 +2691,9 @@ async fn test_authority_persist() {
 
     // Create an authority
     let store = Arc::new(
-        AuthorityStore::open_with_committee_for_testing(
-            &path,
-            None,
-            &committee,
-            &genesis,
-            &AuthorityStorePruningConfig::default(),
-        )
-        .await
-        .unwrap(),
+        AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis)
+            .await
+            .unwrap(),
     );
     let authority = init_state(committee, authority_key, store).await;
 
@@ -2717,15 +2717,9 @@ async fn test_authority_persist() {
     let (genesis, authority_key) = init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
     let committee = genesis.committee().unwrap();
     let store = Arc::new(
-        AuthorityStore::open_with_committee_for_testing(
-            &path,
-            None,
-            &committee,
-            &genesis,
-            &AuthorityStorePruningConfig::default(),
-        )
-        .await
-        .unwrap(),
+        AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis)
+            .await
+            .unwrap(),
     );
     let authority2 = init_state(committee, authority_key, store).await;
     let obj2 = authority2.get_object(&object_id).await.unwrap().unwrap();
@@ -4220,8 +4214,8 @@ async fn make_test_transaction(
     unreachable!("couldn't form cert")
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
-async fn test_shared_object_transaction() {
+async fn prepare_authority_and_shared_object_cert(
+) -> (Arc<AuthorityState>, VerifiedCertificate, ObjectID) {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
     // Initialize an authority with a (owned) gas object and a shared object.
@@ -4231,7 +4225,6 @@ async fn test_shared_object_transaction() {
 
     let shared_object_id = ObjectID::random();
     let shared_object = {
-        use sui_types::object::MoveObject;
         let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, shared_object_id, 10);
         let owner = Owner::Shared {
             initial_shared_version: obj.version(),
@@ -4252,15 +4245,23 @@ async fn test_shared_object_transaction() {
         16,
     )
     .await;
-    let transaction_digest = certificate.digest();
+    (authority, certificate, shared_object_id)
+}
 
-    // Executing the certificate now fails since it was not sequenced.
-    let result = authority.try_execute_for_test(&certificate).await;
-    assert!(
-        matches!(result, Err(SuiError::TransactionInputObjectsErrors { .. })),
-        "{:#?}",
-        result
-    );
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[should_panic]
+async fn test_shared_object_transaction_shared_locks_not_set() {
+    let (authority, certificate, _) = prepare_authority_and_shared_object_cert().await;
+
+    // Executing the certificate now panics since it was not sequenced and shared locks are not set
+    let _ = authority.try_execute_for_test(&certificate).await;
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_shared_object_transaction_ok() {
+    let (authority, certificate, shared_object_id) =
+        prepare_authority_and_shared_object_cert().await;
+    let transaction_digest = certificate.digest();
 
     // Sequence the certificate to assign a sequence number to the shared object.
     send_consensus(&authority, &certificate).await;
@@ -4383,10 +4384,7 @@ async fn test_consensus_message_processed() {
                 .acquire_shared_locks_from_effects(&certificate, &effects1, authority2.db())
                 .await
                 .unwrap();
-            authority2
-                .try_execute_immediately(&certificate, &epoch_store)
-                .await
-                .unwrap();
+            authority2.try_execute_for_test(&certificate).await.unwrap();
             authority2
                 .database
                 .get_executed_effects(transaction_digest)

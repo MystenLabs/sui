@@ -80,6 +80,8 @@ async fn main() -> Result<()> {
         config.metrics_address
     );
 
+    metrics::start_metrics_push_task(&config, registry_service.clone());
+
     if let Some(listen_address) = args.listen_address {
         config.network_address = listen_address;
     }

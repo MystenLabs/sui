@@ -16,6 +16,8 @@ import {
     getTotalGasUsed,
     getExecutionStatusError,
     type SuiTransactionResponse,
+    getGasData,
+    getTransactionDigest,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
@@ -295,9 +297,9 @@ function TransactionView({
 }: {
     transaction: SuiTransactionResponse;
 }) {
-    const txnDetails = getTransactions(transaction.certificate)[0];
+    const [txnDetails] = getTransactions(transaction);
     const txKindName = getTransactionKindName(txnDetails);
-    const sender = getTransactionSender(transaction.certificate);
+    const sender = getTransactionSender(transaction);
     const gasUsed = transaction?.effects.gasUsed;
 
     const [gasFeesExpanded, setGasFeesExpanded] = useState(false);
@@ -358,36 +360,11 @@ function TransactionView({
         content: [
             {
                 label: 'Signature',
-                value: getTransactionSignature(transaction.certificate),
+                value: getTransactionSignature(transaction),
                 monotypeClass: true,
             },
         ],
     };
-
-    let validatorSignatureData;
-    if (Array.isArray(transaction.certificate.authSignInfo.signature)) {
-        validatorSignatureData = {
-            title: 'Validator Signatures',
-            content: transaction.certificate.authSignInfo.signature.map(
-                (validatorSign, index) => ({
-                    label: `Signature #${index + 1}`,
-                    value: validatorSign,
-                    monotypeClass: true,
-                })
-            ),
-        };
-    } else {
-        validatorSignatureData = {
-            title: 'Aggregated Validator Signature',
-            content: [
-                {
-                    label: `Signature`,
-                    value: transaction.certificate.authSignInfo.signature,
-                    monotypeClass: true,
-                },
-            ],
-        };
-    }
 
     const createdMutateData = generateMutatedCreated(transaction);
 
@@ -443,25 +420,20 @@ function TransactionView({
 
     const txError = getExecutionStatusError(transaction);
 
-    const gasPrice =
-        ('gasData' in transaction.certificate.data
-            ? transaction.certificate.data.gasData.price
-            : transaction.certificate.data.gasPrice) || 1;
-    const gasPayment =
-        'gasData' in transaction.certificate.data
-            ? transaction.certificate.data.gasData.payment
-            : transaction.certificate.data.gasPayment;
-    const gasBudget =
-        'gasData' in transaction.certificate.data
-            ? transaction.certificate.data.gasData.budget
-            : transaction.certificate.data.gasBudget;
+    const gasData = getGasData(transaction);
+
+    const gasPrice = gasData.price || 1;
+    const gasPayment = gasData.payment;
+    const gasBudget = gasData.budget;
+
+    const timestamp = transaction.timestamp_ms || transaction.timestampMs;
 
     return (
         <div className={clsx(styles.txdetailsbg)}>
             <div className="mt-5 mb-10">
                 <PageHeader
                     type={txKindName}
-                    title={transaction.certificate.transactionDigest}
+                    title={getTransactionDigest(transaction)}
                     status={getExecutionStatusType(transaction)}
                 />
                 {txError && (
@@ -481,7 +453,7 @@ function TransactionView({
                         <div
                             className={styles.txgridcomponent}
                             // TODO: Change to test ID
-                            id={transaction.certificate.transactionDigest}
+                            id={getTransactionDigest(transaction)}
                         >
                             {typearguments && (
                                 <section
@@ -509,15 +481,13 @@ function TransactionView({
                                         <StatAmount
                                             amount={formattedAmount}
                                             symbol={symbol}
-                                            date={transaction.timestamp_ms}
+                                            date={timestamp}
                                         />
                                     </section>
                                 ) : (
-                                    transaction.timestamp_ms && (
+                                    timestamp && (
                                         <div className="mb-3">
-                                            <DateCard
-                                                date={transaction.timestamp_ms}
-                                            />
+                                            <DateCard date={timestamp} />
                                         </div>
                                     )
                                 )}
@@ -671,7 +641,6 @@ function TransactionView({
                     <TabPanel>
                         <div className={styles.txgridcomponent}>
                             <ItemView data={transactionSignatureData} />
-                            <ItemView data={validatorSignatureData} />
                         </div>
                     </TabPanel>
                 </TabPanels>

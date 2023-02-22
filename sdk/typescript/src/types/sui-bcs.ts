@@ -236,15 +236,25 @@ export type GasData = {
 };
 
 /**
+ * TransactionExpiration
+ *
+ * Indications the expiration time for a transaction.
+ */
+export type TransactionExpiration = { None: null } | { Epoch: number };
+
+/**
  * The TransactionData to be signed and sent to the RPC service.
  *
  * Field `sender` is made optional as it can be added during the signing
  * process and there's no need to define it sooner.
+ *
+ * Field `expiration` is made optional as it is defaulted to `None`.
  */
 export type TransactionData = {
   sender?: string;
   kind: TransactionKind;
   gasData: GasData;
+  expiration?: TransactionExpiration;
 };
 
 export const TRANSACTION_DATA_TYPE_TAG = Array.from('TransactionData::').map(
@@ -273,6 +283,7 @@ export function toTransactionData(
       budget: tx_data.gasBudget,
       price: tx_data.gasPrice,
     },
+    expiration: { None: null },
   };
 }
 
@@ -332,6 +343,10 @@ const BCS_SPEC = {
       Single: 'Transaction',
       Batch: 'vector<Transaction>',
     },
+    TransactionExpiration: {
+      None: null,
+      Epoch: BCS.U64,
+    },
   },
   structs: {
     SuiObjectRef: {
@@ -386,6 +401,7 @@ const BCS_SPEC = {
       kind: 'TransactionKind',
       sender: BCS.ADDRESS,
       gasData: 'GasData',
+      expiration: 'TransactionExpiration',
     },
     GasData: {
       payment: 'SuiObjectRef',
@@ -399,41 +415,6 @@ const BCS_SPEC = {
       txSignatures: 'vector<vector<u8>>',
     },
   },
-  aliases: {
-    ObjectDigest: BCS.BASE64,
-  },
-};
-
-const BCS_0_23_SPEC = {
-  structs: {
-    ...BCS_SPEC.structs,
-    MoveCallTx: {
-      package: 'SuiObjectRef',
-      module: BCS.STRING,
-      function: BCS.STRING,
-      typeArguments: 'vector<TypeTag>',
-      arguments: 'vector<CallArg>',
-    },
-    SharedObjectRef: {
-      objectId: BCS.ADDRESS,
-      initialSharedVersion: BCS.U64,
-    },
-  },
-  enums: BCS_SPEC.enums,
-  aliases: {
-    ObjectDigest: BCS.BASE64,
-  },
-};
-
-const BCS_0_24_SPEC = {
-  structs: {
-    ...BCS_SPEC.structs,
-    SharedObjectRef: {
-      objectId: BCS.ADDRESS,
-      initialSharedVersion: BCS.U64,
-    },
-  },
-  enums: BCS_SPEC.enums,
   aliases: {
     ObjectDigest: BCS.BASE64,
   },
@@ -465,22 +446,10 @@ const bcs = new BCS({ ...getSuiMoveConfig(), types: BCS_SPEC });
 registerUTF8String(bcs);
 
 // ========== Backward Compatibility (remove after v0.24 deploys) ===========
-const bcs_0_23 = new BCS({ ...getSuiMoveConfig(), types: BCS_0_23_SPEC });
-registerUTF8String(bcs_0_23);
-
-const bcs_0_24 = new BCS({ ...getSuiMoveConfig(), types: BCS_0_24_SPEC });
-registerUTF8String(bcs_0_24);
-
 const bcs_0_26 = new BCS({ ...getSuiMoveConfig(), types: BCS_0_26_SPEC });
 registerUTF8String(bcs_0_26);
 
 export function bcsForVersion(v?: RpcApiVersion) {
-  if (v?.major === 0 && v?.minor < 24) {
-    return bcs_0_23;
-  }
-  if (v?.major === 0 && v?.minor === 24) {
-    return bcs_0_24;
-  }
   if (v?.major === 0 && v?.minor <= 26) {
     return bcs_0_26;
   }

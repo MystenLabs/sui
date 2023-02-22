@@ -997,7 +997,15 @@ fn validate_primitive_arg(
 
     // we already checked the type above and struct layout for this type is guaranteed to exist
     let string_struct_layout = type_layout.unwrap();
+    validate_primitive_arg_string(arg, idx, string_struct, string_struct_layout)
+}
 
+pub fn validate_primitive_arg_string(
+    arg: &[u8],
+    idx: LocalIndex,
+    string_struct: (&AccountAddress, &IdentStr, &IdentStr),
+    string_struct_layout: MoveTypeLayout,
+) -> Result<(), ExecutionError> {
     let string_move_value =
         MoveValue::simple_deserialize(arg, &string_struct_layout).map_err(|_| {
             ExecutionError::new_with_source(
@@ -1458,7 +1466,7 @@ fn missing_unwrapped_msg(id: &ObjectID) -> String {
     )
 }
 
-fn convert_type_argument_error<
+pub fn convert_type_argument_error<
     'r,
     E: Debug,
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E>,

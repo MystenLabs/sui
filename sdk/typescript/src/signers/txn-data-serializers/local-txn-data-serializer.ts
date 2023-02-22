@@ -181,13 +181,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         break;
       case 'moveCall':
         const moveCall = unserializedTxn.data as MoveCallTransaction;
-        const api = await this.provider.getRpcApiVersion();
-
-        // TODO: remove after 0.24.0 is deployed for devnet and testnet
-        const pkg =
-          api?.major === 0 && api?.minor < 24
-            ? (await this.provider.getObjectRef(moveCall.packageObjectId))!
-            : normalizeSuiObjectId(moveCall.packageObjectId);
+        const pkg = normalizeSuiObjectId(moveCall.packageObjectId);
 
         tx = {
           Call: {
@@ -382,6 +376,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         budget: originalTx.data.gasBudget!,
         owner: signerAddress,
       },
+      expiration: { None: null },
     };
   }
 

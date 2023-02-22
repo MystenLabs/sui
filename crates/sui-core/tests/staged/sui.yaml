@@ -246,6 +246,8 @@ ExecutionFailureStatus:
       VMVerificationOrDeserializationError: UNIT
     34:
       VMInvariantViolation: UNIT
+    35:
+      TotalAmountOverflow: UNIT
 ExecutionStatus:
   ENUM:
     0:

@@ -91,6 +91,9 @@ pub struct NodeConfig {
     #[serde(default)]
     pub checkpoint_executor_config: CheckpointExecutorConfig,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metrics: Option<MetricsConfig>,
+
     /// In a `sui-node` binary, this is set to SupportedProtocolVersions::SYSTEM_DEFAULT
     /// in sui-node/src/main.rs. It is present in the config so that it can be changed by tests in
     /// order to test protocol upgrades.
@@ -284,6 +287,7 @@ pub struct AuthorityStorePruningConfig {
     pub objects_pruning_initial_delay_secs: u64,
     pub num_latest_epoch_dbs_to_retain: usize,
     pub epoch_db_pruning_period_secs: u64,
+    pub num_epochs_to_retain: u64,
 }
 
 impl Default for AuthorityStorePruningConfig {
@@ -294,6 +298,7 @@ impl Default for AuthorityStorePruningConfig {
             objects_pruning_initial_delay_secs: 60 * 60,
             num_latest_epoch_dbs_to_retain: usize::MAX,
             epoch_db_pruning_period_secs: u64::MAX,
+            num_epochs_to_retain: u64::MAX,
         }
     }
 }
@@ -308,6 +313,7 @@ impl AuthorityStorePruningConfig {
             objects_pruning_initial_delay_secs: 60 * 60,
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
+            num_epochs_to_retain: if cfg!(msim) { 1 } else { u64::MAX },
         }
     }
     pub fn fullnode_config() -> Self {
@@ -317,8 +323,18 @@ impl AuthorityStorePruningConfig {
             objects_pruning_initial_delay_secs: 60 * 60,
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
+            num_epochs_to_retain: if cfg!(msim) { 1 } else { u64::MAX },
         }
     }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct MetricsConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub push_interval_seconds: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub push_url: Option<String>,
 }
 
 /// Publicly known information about a validator
@@ -669,19 +685,18 @@ mod tests {
         let network_key_pair: NetworkKeyPair =
             get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
 
-        write_authority_keypair_to_file(&protocol_key_pair, &PathBuf::from("protocol.key"))
-            .unwrap();
+        write_authority_keypair_to_file(&protocol_key_pair, PathBuf::from("protocol.key")).unwrap();
         write_keypair_to_file(
             &SuiKeyPair::Ed25519(worker_key_pair.copy()),
-            &PathBuf::from("worker.key"),
+            PathBuf::from("worker.key"),
         )
         .unwrap();
         write_keypair_to_file(
             &SuiKeyPair::Ed25519(network_key_pair.copy()),
-            &PathBuf::from("network.key"),
+            PathBuf::from("network.key"),
         )
         .unwrap();
-        write_keypair_to_file(&account_key_pair, &PathBuf::from("account.key")).unwrap();
+        write_keypair_to_file(&account_key_pair, PathBuf::from("account.key")).unwrap();
 
         const TEMPLATE: &str = include_str!("../data/fullnode-template-with-path.yaml");
         let template: NodeConfig = serde_yaml::from_str(TEMPLATE).unwrap();

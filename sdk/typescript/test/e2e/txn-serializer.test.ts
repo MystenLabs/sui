@@ -43,7 +43,7 @@ describe('Transaction Serialization and deserialization', () => {
     toolbox = await setup();
     localSerializer = new LocalTxnDataSerializer(toolbox.provider);
     rpcSerializer = new RpcTxnDataSerializer(
-      toolbox.provider.endpoints.fullNode,
+      toolbox.provider.connection.fullnode,
     );
     const signer = new RawSigner(toolbox.keypair, toolbox.provider);
     const packagePath = __dirname + '/./data/serializer';
@@ -241,6 +241,7 @@ describe('Transaction Serialization and deserialization', () => {
               price: 100,
               payment: getObjectReference(coins[1]),
             },
+            expiration: { None: null },
           } as TransactionData);
 
     const serializedData = await localSerializer.serializeTransactionData(
@@ -297,6 +298,7 @@ describe('Transaction Serialization and deserialization', () => {
               price: 100,
               payment: getObjectReference(coins[1]),
             },
+            expiration: { None: null },
           } as TransactionData);
 
     const serializedData = await localSerializer.serializeTransactionData(

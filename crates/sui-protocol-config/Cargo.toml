@@ -8,6 +8,6 @@ edition = "2021"
 
 [dependencies]
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-once_cell = "1.16"
 serde = { version = "1.0.144", features = ["derive"] }
 schemars = "0.8.10"
+tracing = "0.1.36"

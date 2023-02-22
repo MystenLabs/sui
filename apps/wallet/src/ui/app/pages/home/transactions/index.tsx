@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { getTransactionDigest } from '@mysten/sui.js';
 import { memo } from 'react';
 
 import { ErrorBoundary } from '_components/error-boundary';
@@ -40,9 +41,7 @@ function TransactionsPage() {
                 <Loading loading={isLoading}>
                     {txns?.length && activeAddress ? (
                         txns.map((txn) => (
-                            <ErrorBoundary
-                                key={txn.certificate.transactionDigest}
-                            >
+                            <ErrorBoundary key={getTransactionDigest(txn)}>
                                 <TransactionCard
                                     txn={txn}
                                     address={activeAddress}

@@ -1035,9 +1035,9 @@ impl DBBatch {
         Ok(())
     }
     /// Deletes a range of keys between `from` (inclusive) and `to` (non-inclusive)
-    pub fn delete_range_non_consuming<'a, K: Serialize, V>(
+    pub fn delete_range_non_consuming<K: Serialize, V>(
         &mut self,
-        db: &'a DBMap<K, V>,
+        db: &DBMap<K, V>,
         from: &K,
         to: &K,
     ) -> Result<(), TypedStoreError> {
@@ -1096,9 +1096,9 @@ impl DBBatch {
     }
 
     /// Deletes a range of keys between `from` (inclusive) and `to` (non-inclusive)
-    pub fn delete_range<'a, K: Serialize, V>(
+    pub fn delete_range<K: Serialize, V>(
         mut self,
-        db: &'a DBMap<K, V>,
+        db: &DBMap<K, V>,
         from: &K,
         to: &K,
     ) -> Result<Self, TypedStoreError> {
@@ -1518,7 +1518,7 @@ where
         };
         let key_buf = be_fix_int_ser(key)?;
         self.rocksdb
-            .delete_cf(&self.cf(), &key_buf, &self.opts.writeopts())?;
+            .delete_cf(&self.cf(), key_buf, &self.opts.writeopts())?;
         if report_metrics.is_some() {
             self.db_metrics
                 .op_metrics
@@ -1939,7 +1939,7 @@ pub fn list_tables(path: std::path::PathBuf) -> eyre::Result<Vec<String>> {
     const DB_DEFAULT_CF_NAME: &str = "default";
 
     let opts = rocksdb::Options::default();
-    rocksdb::DBWithThreadMode::<rocksdb::MultiThreaded>::list_cf(&opts, &path)
+    rocksdb::DBWithThreadMode::<rocksdb::MultiThreaded>::list_cf(&opts, path)
         .map_err(|e| e.into())
         .map(|q| {
             q.iter()

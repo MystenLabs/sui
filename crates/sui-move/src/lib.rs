@@ -2,26 +2,39 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
+#[cfg(feature = "unit_test")]
 use move_cli::base::test::UnitTestResult;
 use move_package::BuildConfig;
+#[cfg(feature = "unit_test")]
 use move_unit_test::UnitTestingConfig;
 use std::path::PathBuf;
 
+#[cfg(feature = "build")]
 pub mod build;
+#[cfg(feature = "coverage")]
 pub mod coverage;
+#[cfg(feature = "disassemble")]
 pub mod disassemble;
 pub mod new;
+#[cfg(feature = "prove")]
 pub mod prove;
+#[cfg(feature = "unit_test")]
 pub mod unit_test;
 
 #[derive(Parser)]
 pub enum Command {
+    #[cfg(feature = "build")]
     Build(build::Build),
+    #[cfg(feature = "coverage")]
     Coverage(coverage::Coverage),
+    #[cfg(feature = "disassemble")]
     Disassemble(disassemble::Disassemble),
     New(new::New),
+    #[cfg(feature = "prove")]
     Prove(prove::Prove),
+    #[cfg(feature = "unit_test")]
     Test(unit_test::Test),
+    #[cfg(feature = "calibrate")]
     CalibrateCosts(Calib),
 }
 #[derive(Parser)]
@@ -34,15 +47,20 @@ pub struct Calib {
 
 pub fn execute_move_command(
     package_path: Option<PathBuf>,
-    build_config: BuildConfig,
+    #[allow(unused_variables)] build_config: BuildConfig,
     command: Command,
 ) -> anyhow::Result<()> {
     match command {
+        #[cfg(feature = "build")]
         Command::Build(c) => c.execute(package_path, build_config),
+        #[cfg(feature = "coverage")]
         Command::Coverage(c) => c.execute(package_path, build_config),
+        #[cfg(feature = "disassemble")]
         Command::Disassemble(c) => c.execute(package_path, build_config),
         Command::New(c) => c.execute(package_path),
+        #[cfg(feature = "prove")]
         Command::Prove(c) => c.execute(package_path, build_config),
+        #[cfg(feature = "unit_test")]
         Command::Test(c) => {
             let unit_test_config = UnitTestingConfig {
                 gas_limit: c.test.gas_limit,
@@ -65,6 +83,7 @@ pub fn execute_move_command(
 
             Ok(())
         }
+        #[cfg(feature = "calibrate")]
         Command::CalibrateCosts(c) => {
             sui_framework::cost_calib::run_calibration(c.runs, c.summarize);
             Ok(())

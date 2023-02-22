@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
+use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 pub const MIN_PROTOCOL_VERSION: u64 = 1;
@@ -95,9 +96,9 @@ impl SupportedProtocolVersions {
 ///
 /// To add a new field to this struct, use the following procedure:
 /// - Advance the protocol version.
-/// - Add the field as a private Option<T> to the struct.
-/// - Initialize the field to None in prior protocol versions.
-/// - Initialize the field to Some(val) for your new protocol version.
+/// - Add the field as a private `Option<T>` to the struct.
+/// - Initialize the field to `None` in prior protocol versions.
+/// - Initialize the field to `Some(val)` for your new protocol version.
 /// - Add a public getter that simply unwraps the field.
 ///
 /// This way, if the constant is accessed in a protocol version in which it is not defined, the
@@ -388,7 +389,18 @@ impl ProtocolConfig {
         assert!(version.0 >= ProtocolVersion::MIN.0, "{:?}", version);
         assert!(version.0 <= ProtocolVersion::MAX_ALLOWED.0, "{:?}", version);
 
-        Self::get_for_version_impl(version)
+        let ret = Self::get_for_version_impl(version);
+
+        CONFIG_OVERRIDE.with(|ovr| {
+            if let Some(override_fn) = &*ovr.borrow() {
+                warn!(
+                    "overriding ProtocolConfig settings with custom settings (you should not see this log outside of tests"
+                );
+                override_fn(version, ret)
+            } else {
+                ret
+            }
+        })
     }
 
     #[cfg(not(msim))]
@@ -413,28 +425,20 @@ impl ProtocolConfig {
 
     /// Convenience to get the constants at the current minimum supported version.
     /// Mainly used by client code that may not yet be protocol-version aware.
-    pub fn get_for_min_version() -> &'static Self {
+    pub fn get_for_min_version() -> Self {
         if Self::load_poison_get_for_min_version() {
             panic!("get_for_min_version called on validator");
         }
-
-        static CONSTANTS: Lazy<ProtocolConfig> =
-            Lazy::new(|| ProtocolConfig::get_for_version(ProtocolVersion::MIN));
-
-        &CONSTANTS
+        ProtocolConfig::get_for_version(ProtocolVersion::MIN)
     }
 
     /// Convenience to get the constants at the current maximum supported version.
     /// Mainly used by genesis.
-    pub fn get_for_max_version() -> &'static Self {
+    pub fn get_for_max_version() -> Self {
         if Self::load_poison_get_for_min_version() {
             panic!("get_for_max_version called on validator");
         }
-
-        static CONSTANTS: Lazy<ProtocolConfig> =
-            Lazy::new(|| ProtocolConfig::get_for_version(ProtocolVersion::MAX));
-
-        &CONSTANTS
+        ProtocolConfig::get_for_version(ProtocolVersion::MAX)
     }
 
     fn get_for_version_impl(version: ProtocolVersion) -> Self {
@@ -510,5 +514,44 @@ impl ProtocolConfig {
             // },
             _ => panic!("unsupported version {:?}", version),
         }
+    }
+
+    /// Override one or more settings in the config, for testing.
+    /// This must be called at the beginning of the test, before get_for_(min|max)_version is
+    /// called, since those functions cache their return value.
+    pub fn apply_overrides_for_testing(
+        override_fn: impl Fn(ProtocolVersion, Self) -> Self + Send + 'static,
+    ) -> OverrideGuard {
+        CONFIG_OVERRIDE.with(|ovr| {
+            let mut cur = ovr.borrow_mut();
+            assert!(cur.is_none(), "config override already present");
+            *cur = Some(Box::new(override_fn));
+            OverrideGuard
+        })
+    }
+}
+
+// Setters for tests
+impl ProtocolConfig {
+    pub fn set_max_function_definitions_for_testing(&mut self, m: usize) {
+        self.max_function_definitions = Some(m)
+    }
+}
+
+type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;
+
+thread_local! {
+    static CONFIG_OVERRIDE: RefCell<Option<Box<OverrideFn>>> = RefCell::new(None);
+}
+
+#[must_use]
+pub struct OverrideGuard;
+
+impl Drop for OverrideGuard {
+    fn drop(&mut self) {
+        info!("restoring override fn");
+        CONFIG_OVERRIDE.with(|ovr| {
+            *ovr.borrow_mut() = None;
+        });
     }
 }
