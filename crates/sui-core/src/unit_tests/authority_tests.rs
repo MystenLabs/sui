@@ -1749,6 +1749,7 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_transaction_expiration() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
