@@ -21,7 +21,7 @@ members = [
     "narwhal/node",
     "narwhal/primary",
     "narwhal/storage",
-    # "narwhal/test-utils",
+    "narwhal/test-utils",
     "narwhal/types",
     "narwhal/worker",
 ]
