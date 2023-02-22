@@ -39,6 +39,7 @@ use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
+use tracing::debug;
 
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 
@@ -601,6 +602,15 @@ impl SuiNode {
         accumulator: Arc<StateAccumulator>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
     ) -> (Arc<CheckpointService>, watch::Sender<()>) {
+        debug!(
+            "Starting checkpoint service with epoch start timestamp {}
+            and epoch duration {}",
+            epoch_store
+                .epoch_start_configuration()
+                .epoch_start_timestamp_ms(),
+            config.epoch_duration_ms
+        );
+
         let checkpoint_output = Box::new(SubmitCheckpointToConsensus {
             sender: consensus_adapter,
             signer: state.secret.clone(),
