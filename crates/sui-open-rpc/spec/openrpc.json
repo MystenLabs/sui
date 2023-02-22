@@ -157,7 +157,7 @@
       "name": "sui_devInspectTransaction",
       "tags": [
         {
-          "name": "Read API"
+          "name": "Write API"
         }
       ],
       "description": "Runs the transaction in dev-inspect mode. Which allows for nearly any transaction (or Move call) with any arguments. Detailed results are provided, including both the transaction effects and any return values.",
@@ -208,7 +208,7 @@
       "name": "sui_dryRunTransaction",
       "tags": [
         {
-          "name": "Read API"
+          "name": "Write API"
         }
       ],
       "description": "Return transaction execution effects including the gas cost summary, while the effects are not committed to the chain.",
@@ -233,7 +233,7 @@
       "name": "sui_executeTransaction",
       "tags": [
         {
-          "name": "Transaction Execution API"
+          "name": "Write API"
         }
       ],
       "description": "Execute the transaction and wait for results if desired. Request types: 1. WaitForEffectsCert: waits for TransactionEffectsCert and then return to client.     This mode is a proxy for transaction finality. 2. WaitForLocalExecution: waits for TransactionEffectsCert and make sure the node     executed the transaction locally before returning the client. The local execution     makes sure this node is aware of this transaction when client fires subsequent queries.     However if the node fails to execute the transaction locally in a timely manner,     a bool type in the response is set to false to indicated the case.",
@@ -390,7 +390,7 @@
       "name": "sui_executeTransactionSerializedSig",
       "tags": [
         {
-          "name": "Transaction Execution API"
+          "name": "Write API"
         }
       ],
       "params": [
@@ -2528,7 +2528,7 @@
       "name": "sui_submitTransaction",
       "tags": [
         {
-          "name": "Transaction Execution API"
+          "name": "Write API"
         }
       ],
       "params": [
