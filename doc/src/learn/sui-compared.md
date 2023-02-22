@@ -12,7 +12,7 @@ Here are Sui's key features:
 
 ## Traditional blockchains
 
-Traditional blockchain validators collectively build a shared accumulator: a representation of the state of the blockchain, a chain to which they add increments over time, called blocks. In blockchains that offer deterministic finality, every time validators want to make an incremental addition to the blockchain, i.e., a block proposal, they sequence the proposal. This protocol lets them form an agreement over the current state of the chain, whether the proposed increment is valid, and what the state of the chain will be after the new addition. 
+Traditional blockchain validators collectively build a shared accumulator: a cryptographicly binding representation of the state of the blockchain, a chain to which they add increments over time, called blocks. In blockchains that offer deterministic finality, every time validators want to make an incremental addition to the blockchain, i.e., a block proposal, they sequence the proposal. This protocol lets them form an agreement over the current state of the chain, whether the proposed increment is valid, and what the state of the chain will be after the new addition. 
 
 This method of maintaining common state over time has known practical success over the last 14 years or so, using a wealth of theory from the last 50 years of research in the field of Byzantine Fault Tolerant distributed systems. 
 
@@ -20,7 +20,7 @@ Yet it is inherently sequential: increments to the chain are added one at a time
 
 ## Sui's approach to validating new transactions
 
-A lot of transactions do not have complex interdependencies with other, arbitrary parts of the state of the blockchain. Often financial users just want to send an asset to a recipient, and the only data required to gauge whether this simple transaction is admissible is a fresh view of the sender's address. Hence Sui takes the approach of only taking a lock - or "stopping the world" - for the relevant piece of data rather than the whole chain -- in this case, the address of the sender, which can only send one transaction at a time.
+A large number transactions do not have complex interdependencies with each other, since they operate on disconected parts of the state. Often financial users just want to send an asset to a recipient, and the only data required to gauge whether this simple transaction is admissible is a fresh view of the sender's address. Hence Sui takes the approach of only taking a lock - or "stopping the world" - for the relevant piece of data rather than the whole chain -- in this case, the address of the sender, which can only send one transaction at a time.
 
 Sui further expands this approach to more involved transactions that may explicitly depend on multiple elements under their sender's control, using an [object model](../learn/objects.md) and leveraging [Move](../build/move/index.md)'s strong ownership model. By requiring that dependencies be explicit, Sui applies a "multi-lane" approach to transaction validation, making sure those independent transaction flows can progress without impediment from the others.
 
@@ -29,15 +29,16 @@ This doesn't mean that Sui as a platform never orders transactions with respect 
 
 ## A collaborative approach to transaction submission
 
-Sui validates transactions individually, rather than batching them in the traditional blocks. The key advantage of this approach is low latency; each successful transaction quickly obtains a certificate of finality that proves to anyone that the transaction will be processed by the Sui network.
+Sui validates transactions individually, rather than batching them in the traditional blocks. The key advantage of this approach is low latency; each successful transaction quickly obtains a certificate of finality that proves to anyone that the transaction will persists its effects on the Sui network.
 
 But the process of submitting a transaction is a bit more involved. That little more work occurs on the network. (With bandwidth getting cheaper, this is less of a concern.) Whereas a usual blockchain can accept a bunch of transactions from the same author in a fire-and-forget mode, Sui transaction submission follows these steps:
 
 1. Sender broadcasts a transaction to all Sui validators.
-1. Sui validators send individual votes on this transaction to the sender.
-1. Each vote has a certain weight since each validator has weight based upon the rules of [Proof of Stake](https://en.wikipedia.org/wiki/Proof_of_work).
-1. Sender collects a Byzantine-resistant-majority of these votes into a *certificate* and broadcasts it to all Sui validators, thereby ensuring *finality*, or assurance the transaction will not be dropped (revoked).
-1. Optionally, the sender collects a certificate detailing the effects of the transaction.
+2. Sui validators send individual votes on this transaction to the sender.
+3. Each vote has a certain weight since each validator has weight based upon the rules of [Proof of Stake](https://en.wikipedia.org/wiki/Proof_of_work).
+4. Sender collects a Byzantine-resistant-majority of these votes into a *certificate* and broadcasts it to all Sui validators. 
+5. The validators execute the transaction and sign the results. When the client receives a Byzantine-resistant-majority of the results *finality* is reached, ie., assurance the transaction will not be dropped (revoked).
+6. Optionally, the sender assembles the votes to a certificate detailing the effects of the transaction.
 
 While those steps demand more of the sender, performing them efficiently can still yield a cryptographic proof of finality with minimum latency. Aside from crafting the original transaction itself, the session management for a transaction does not require access to any private keys and can be delegated to a third party.
 
