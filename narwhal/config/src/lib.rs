@@ -178,7 +178,7 @@ impl Parameters {
     }
 
     fn default_min_header_delay() -> Duration {
-        Duration::from_secs_f64(1.8)
+        Duration::from_secs_f64(0.5)
     }
 }
 
@@ -381,8 +381,8 @@ impl Default for Parameters {
         Self {
             header_num_of_batches_threshold: 32,
             max_header_num_of_batches: 1000,
-            max_header_delay: Duration::from_millis(100),
-            min_header_delay: Duration::from_millis(100),
+            max_header_delay: Duration::from_millis(2000),
+            min_header_delay: Duration::from_millis(500),
             gc_depth: 50,
             sync_retry_delay: Duration::from_millis(5_000),
             sync_retry_nodes: 3,
