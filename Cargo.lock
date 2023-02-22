@@ -9370,6 +9370,7 @@ dependencies = [
  "bcs",
  "bincode",
  "byteorder",
+ "criterion",
  "derive_more",
  "enum_dispatch",
  "eyre",

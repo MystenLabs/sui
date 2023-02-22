@@ -3560,7 +3560,8 @@
         "type": "object",
         "required": [
           "next_epoch_committee",
-          "next_epoch_protocol_version"
+          "next_epoch_protocol_version",
+          "root_state_digest"
         ],
         "properties": {
           "next_epoch_committee": {
@@ -3589,6 +3590,17 @@
                 "$ref": "#/components/schemas/ProtocolVersion"
               }
             ]
+          },
+          "root_state_digest": {
+            "description": "The digest of the union of all checkpoint accumulators, representing the state of the system at the end of the epoch.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            },
+            "maxItems": 32,
+            "minItems": 32
           }
         }
       },
