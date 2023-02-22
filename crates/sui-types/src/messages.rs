@@ -2999,13 +2999,7 @@ pub type IsTransactionExecutedLocally = bool;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ExecuteTransactionResponse {
-    EffectsCert(
-        Box<(
-            Option<CertifiedTransaction>,
-            FinalizedEffects,
-            IsTransactionExecutedLocally,
-        )>,
-    ),
+    EffectsCert(Box<(FinalizedEffects, IsTransactionExecutedLocally)>),
 }
 
 #[derive(Clone, Debug)]
@@ -3015,8 +3009,6 @@ pub struct QuorumDriverRequest {
 
 #[derive(Debug, Clone)]
 pub struct QuorumDriverResponse {
-    // TODO: Change this to VerifiedTransaction.
-    pub tx_cert: Option<VerifiedCertificate>,
     pub effects_cert: VerifiedCertifiedTransactionEffects,
 }
 

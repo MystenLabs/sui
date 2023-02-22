@@ -355,7 +355,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                     .execute_bench_transaction(b.0.clone().into())
                                     .then(|res| async move  {
                                         match res {
-                                            Ok((_, effects)) => {
+                                            Ok(effects) => {
                                                 let new_version = effects.mutated().iter().find(|(object_ref, _)| {
                                                     object_ref.0 == b.1.get_object_id()
                                                 }).map(|x| x.0).unwrap();
@@ -403,7 +403,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                     .execute_bench_transaction(tx.clone().into())
                                 .then(|res| async move {
                                     match res {
-                                        Ok((_, effects)) => {
+                                        Ok(effects) => {
                                             let new_version = effects.mutated().iter().find(|(object_ref, _)| {
                                                 object_ref.0 == payload.get_object_id()
                                             }).map(|x| x.0).unwrap();

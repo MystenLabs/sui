@@ -210,13 +210,9 @@ where
             Err(err) => Err(err),
             Ok(response) => {
                 good_response_metrics.inc();
-                let QuorumDriverResponse {
-                    tx_cert,
-                    effects_cert,
-                } = response;
+                let QuorumDriverResponse { effects_cert } = response;
                 if !wait_for_local_execution {
                     return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        tx_cert.map(|cert| cert.into()),
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
                         false,
                     ))));
@@ -235,12 +231,10 @@ where
                 .await
                 {
                     Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        tx_cert.map(|cert| cert.into()),
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
                         true,
                     )))),
                     Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        tx_cert.map(|cert| cert.into()),
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
                         false,
                     )))),
@@ -346,13 +340,7 @@ where
     ) {
         loop {
             match effects_receiver.recv().await {
-                Ok(Ok((
-                    transaction,
-                    QuorumDriverResponse {
-                        tx_cert: _,
-                        effects_cert,
-                    },
-                ))) => {
+                Ok(Ok((transaction, QuorumDriverResponse { effects_cert }))) => {
                     let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
                         transaction,
                         effects_cert.executed_epoch,
