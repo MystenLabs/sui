@@ -365,7 +365,6 @@ impl AuthorityStore {
                 }
                 InputObjectKind::MovePackage(id) => {
                     if !self.object_version_exists(id, PACKAGE_VERSION)? {
-                        // The cert cannot have been formed if immutable inputs were missing.
                         missing.push(ObjectKey(*id, PACKAGE_VERSION));
                     }
                 }
@@ -404,6 +403,9 @@ impl AuthorityStore {
 
     /// When making changes, please see if get_missing_input_objects() above needs
     /// similar changes as well.
+    ///
+    /// Before this function is invoked, TransactionManager must ensure all depended
+    /// objects are present. Thus any missing object will panic.
     pub fn check_sequenced_input_objects(
         &self,
         digest: &TransactionDigest,
@@ -413,7 +415,6 @@ impl AuthorityStore {
         let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
 
         let mut result = Vec::new();
-        let mut errors = Vec::new();
         for kind in objects {
             let obj = match kind {
                 InputObjectKind::SharedMoveObject { id, .. } => {
@@ -431,30 +432,22 @@ impl AuthorityStore {
                         digest, id
                     )
                     });
-                    let obj = self.get_object_by_key(id, *version)?.unwrap_or_else(|| {
-                        // TransactionManager should have waited for all dependencies to resolve before invoking
-                        // this transaction's execution.
-                        panic!("All dependencies of tx {:?} should have been executed now, but object (id: {}, version: {}) is absent", digest, *id, *version);
-                    });
-                    result.push(obj);
-                    continue;
+                    self.get_object_by_key(id, *version)?.unwrap_or_else(|| {
+                        panic!("All dependencies of tx {:?} should have been executed now, but Shared Object id: {}, version: {} is absent", digest, *id, *version);
+                    })
                 }
-                InputObjectKind::MovePackage(id) => self.get_object(id)?,
+                InputObjectKind::MovePackage(id) => self.get_object(id)?.unwrap_or_else(|| {
+                    panic!("All dependencies of tx {:?} should have been executed now, but Move Package id: {} is absent", digest, id);
+                }),
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
-                    self.get_object_by_key(&objref.0, objref.1)?
+                    self.get_object_by_key(&objref.0, objref.1)?.unwrap_or_else(|| {
+                        panic!("All dependencies of tx {:?} should have been executed now, but Immutable or Owned Object id: {}, version: {} is absent", digest, objref.0, objref.1);
+                    })
                 }
             };
-            // SharedMoveObject should not reach here
-            match obj {
-                Some(obj) => result.push(obj),
-                None => errors.push(kind.object_not_found_error()),
-            }
+            result.push(obj);
         }
-        if !errors.is_empty() {
-            Err(SuiError::TransactionInputObjectsErrors { errors })
-        } else {
-            Ok(result)
-        }
+        Ok(result)
     }
 
     /// Read the transactionDigest that is the parent of an object reference
