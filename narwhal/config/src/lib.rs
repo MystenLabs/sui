@@ -238,7 +238,7 @@ impl NetworkAdminServerParameters {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct AnemoParameters {
     /// Per-peer rate-limits (in requests/sec) for the PrimaryToPrimary service.
-    pub send_message_rate_limit: Option<NonZeroU32>,
+    pub send_certificate_rate_limit: Option<NonZeroU32>,
     pub get_payload_availability_rate_limit: Option<NonZeroU32>,
     pub get_certificates_rate_limit: Option<NonZeroU32>,
 

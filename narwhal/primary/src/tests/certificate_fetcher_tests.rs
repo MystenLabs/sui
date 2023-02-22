@@ -30,8 +30,8 @@ use types::{
     BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
     HeaderDigest, Metadata, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
-    PreSubscribedBroadcastSender, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
-    RequestVoteRequest, RequestVoteResponse, Round,
+    PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
+    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse,
 };
 
 pub struct NetworkProxy {
@@ -41,12 +41,12 @@ pub struct NetworkProxy {
 
 #[async_trait]
 impl PrimaryToPrimary for NetworkProxy {
-    async fn send_message(
+    async fn send_certificate(
         &self,
-        request: anemo::Request<PrimaryMessage>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        request: anemo::Request<SendCertificateRequest>,
+    ) -> Result<anemo::Response<SendCertificateResponse>, anemo::rpc::Status> {
         unimplemented!(
-            "FetchCertificateProxy::send_message() is unimplemented!! {:#?}",
+            "FetchCertificateProxy::send_certificate() is unimplemented!! {:#?}",
             request
         );
     }
