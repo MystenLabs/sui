@@ -83,13 +83,15 @@ export function SendTokenForm({
         if (!maxToken) return;
         // for SUI coin type, set the amount to be the formatted maxToken
         // while for other coin type, set the amount to be the raw maxToken
+        const maxAmount =
+            coinType === SUI_TYPE_ARG ? maxToken : balance?.toString();
+        setFieldValue('amount', maxAmount);
 
-        setFieldValue('amount', maxToken);
         // For SUI coin type, set isPayAllSui to true
         if (coinType === SUI_TYPE_ARG) {
             setFieldValue('isPayAllSui', true);
         }
-    }, [coinType, maxToken, setFieldValue]);
+    }, [balance, coinType, maxToken, setFieldValue]);
 
     return (
         <BottomMenuLayout>
@@ -119,7 +121,8 @@ export function SendTokenForm({
                             actionDisabled={
                                 parsedAmount === balance ||
                                 queryResult.isLoading ||
-                                !maxToken
+                                !maxToken ||
+                                !gasCostEstimation
                             }
                         />
                     </div>

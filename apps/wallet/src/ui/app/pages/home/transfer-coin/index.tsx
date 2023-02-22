@@ -73,7 +73,10 @@ function TransferCoinPage() {
     );
     const allCoins = useAppSelector(accountCoinsSelector);
     const allCoinsOfTransferType = useMemo(
-        () => allCoins.filter((aCoin) => aCoin.type === coinType),
+        () =>
+            allCoins.filter(
+                ({ type }) => CoinAPI.getCoinType(type) === coinType
+            ),
         [allCoins, coinType]
     );
     const [currentStep, setCurrentStep] = useState<number>(DEFAULT_FORM_STEP);
@@ -138,7 +141,12 @@ function TransferCoinPage() {
                 return signer.payAllSui({
                     recipient: formData.to,
                     gasBudget: gasBudgetEstimationUnits,
-                    inputCoins: allCoins.map((coin) => CoinAPI.getID(coin)),
+                    inputCoins: allCoins
+                        .filter(
+                            ({ type }) =>
+                                CoinAPI.getCoinType(type) === SUI_TYPE_ARG
+                        )
+                        .map((coin) => CoinAPI.getID(coin)),
                 });
             }
 
