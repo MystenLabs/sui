@@ -904,7 +904,7 @@ impl AuthorityState {
         &self,
         tx: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<VerifiedSignedTransactionEffects> {
+    ) -> SuiResult<(SuiSystemState, VerifiedSignedTransactionEffects)> {
         assert!(tx.inner().intent_message.value.kind.is_change_epoch_tx());
 
         let digest = tx.digest();
@@ -916,10 +916,15 @@ impl AuthorityState {
             .database
             .execution_lock_for_executable_transaction(tx)
             .await?;
-        let (_, effects) = self
+        let (temporary_store, effects) = self
             .prepare_certificate(&execution_guard, tx, epoch_store)
             .await?;
-        Ok(effects)
+
+        let system_obj = temporary_store
+            .get_sui_system_state_object()
+            .expect("change epoch tx must write to system object");
+
+        Ok((system_obj, effects))
     }
 
     /// prepare_certificate validates the transaction input, and executes the certificate,
