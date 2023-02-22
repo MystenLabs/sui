@@ -61,7 +61,7 @@ import {
   versionToString,
 } from '../types';
 import { lt } from '@suchipi/femver';
-import { DynamicFieldPage } from '../types/dynamic_fields';
+import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
   DEFAULT_CLIENT_OPTIONS,
   WebsocketClient,
@@ -930,7 +930,7 @@ export class JsonRpcProvider extends Provider {
 
   async getDynamicFieldObject(
     parent_object_id: ObjectId,
-    name: string,
+    name: string | DynamicFieldName,
   ): Promise<GetObjectDataResponse> {
     try {
       const resp = await this.client.requestWithType(

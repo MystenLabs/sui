@@ -37,7 +37,7 @@ fn test_to_json_value() {
         MoveStruct::simple_deserialize(&event_bytes, &TestEvent::layout())
             .unwrap()
             .into();
-    let json_value = sui_move_struct.to_json_value().unwrap();
+    let json_value = sui_move_struct.to_json_value();
     assert_eq!(
         Some(&json!("1000000")),
         json_value.pointer("/coins/0/balance")
