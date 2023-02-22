@@ -1,13 +1,13 @@
 ## Description 
 
-Describe the changes or additions included in thiis PR.
+Describe the changes or additions included in this PR.
 
 ## Test Plan 
 
 How did you test the new or updated feature?
 
 ---
-If your changes are not user-facing and not a breaking change, you can skip the following section. Otherwise, please indicate what changed, and then add to the Release Notes seection as hightlighted during the release process
+If your changes are not user-facing and not a breaking change, you can skip the following section. Otherwise, please indicate what changed, and then add to the Release Notes section as highlighted during the release process.
 
 ### Type of Change (Check all that apply)
 
