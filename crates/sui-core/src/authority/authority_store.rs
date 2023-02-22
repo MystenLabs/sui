@@ -358,7 +358,7 @@ impl AuthorityStore {
                         )
                     })?;
                     // If we can't find the locked version, it means
-                    // 1. either we have a bug that skips shared object verison assignment
+                    // 1. either we have a bug that skips shared object version assignment
                     // 2. or we have some DB corruption
                     let version = shared_locks.get(id).unwrap_or_else(|| {
                         panic!(
@@ -433,7 +433,7 @@ impl AuthorityStore {
                         )
                     })?;
                     // If we can't find the locked version, it means
-                    // 1. either we have a bug that skips shared object verison assignment
+                    // 1. either we have a bug that skips shared object version assignment
                     // 2. or we have some DB corruption
                     let version = shared_locks.get(id).unwrap_or_else(|| {
                         panic!(
@@ -993,6 +993,9 @@ impl AuthorityStore {
             debug!("Not reverting {:?} as it was not executed", tx_digest);
             return Ok(())
         };
+
+        // We should never be reverting shared object transactions.
+        assert!(effects.shared_objects.is_empty());
 
         let mut write_batch = self.perpetual_tables.transactions.batch();
         write_batch = write_batch
