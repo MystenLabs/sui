@@ -5,7 +5,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use crate::execution_mode::{self, ExecutionMode};
 use move_core_types::language_storage::{ModuleId, StructTag};
-use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
+use move_vm_runtime::move_vm::MoveVM;
 use sui_types::base_types::SequenceNumber;
 use tracing::{debug, instrument};
 
@@ -65,7 +65,6 @@ pub fn execute_transaction_to_effects<
     transaction_digest: TransactionDigest,
     mut transaction_dependencies: BTreeSet<TransactionDigest>,
     move_vm: &Arc<MoveVM>,
-    native_functions: &NativeFunctionTable,
     gas_status: SuiGasStatus,
     epoch_data: &EpochData,
     protocol_config: &ProtocolConfig,
@@ -82,7 +81,6 @@ pub fn execute_transaction_to_effects<
         gas_object_ref.0,
         &mut tx_ctx,
         move_vm,
-        native_functions,
         gas_status,
         protocol_config,
     );
@@ -144,7 +142,6 @@ fn execute_transaction<
     gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
-    native_functions: &NativeFunctionTable,
     mut gas_status: SuiGasStatus,
     protocol_config: &ProtocolConfig,
 ) -> (
@@ -161,7 +158,6 @@ fn execute_transaction<
             gas_object_id,
             tx_ctx,
             move_vm,
-            native_functions,
             &mut gas_status,
             protocol_config,
         );
@@ -194,7 +190,6 @@ fn execution_loop<
     gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
-    native_functions: &NativeFunctionTable,
     gas_status: &mut SuiGasStatus,
     protocol_config: &ProtocolConfig,
 ) -> Result<Mode::ExecutionResults, ExecutionError> {
@@ -291,7 +286,6 @@ fn execution_loop<
                 adapter::publish(
                     temporary_store,
                     move_vm,
-                    native_functions.clone(),
                     modules,
                     tx_ctx,
                     gas_status.create_move_gas_status(),
