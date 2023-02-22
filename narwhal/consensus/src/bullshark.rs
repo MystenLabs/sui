@@ -4,7 +4,7 @@
 use crate::metrics::ConsensusMetrics;
 use crate::{
     consensus::{ConsensusProtocol, ConsensusState, Dag},
-    utils, ConsensusError,
+    utils, ConsensusError, Outcome,
 };
 use config::{Committee, Stake};
 use crypto::PublicKey;
@@ -55,7 +55,7 @@ impl ConsensusProtocol for Bullshark {
         &mut self,
         state: &mut ConsensusState,
         certificate: Certificate,
-    ) -> Result<Vec<CommittedSubDag>, ConsensusError> {
+    ) -> Result<(Outcome, Vec<CommittedSubDag>), ConsensusError> {
         debug!("Processing {:?}", certificate);
         let round = certificate.round();
 
@@ -63,7 +63,10 @@ impl ConsensusProtocol for Bullshark {
         self.log_error_if_missing_parents(&certificate, state);
 
         // Add the new certificate to the local storage.
-        state.try_insert(&certificate)?;
+        if !state.try_insert(&certificate)? {
+            // Certificate has not been added to the dag since it's below commit round
+            return Ok((Outcome::CertificateBelowCommitRound, vec![]));
+        }
 
         // Report last leader election if was unsuccessful
         if round > self.max_inserted_certificate_round && round % 2 == 0 {
@@ -91,14 +94,14 @@ impl ConsensusProtocol for Bullshark {
 
         // We only elect leaders for even round numbers.
         if r % 2 != 0 || r < 2 {
-            return Ok(Vec::new());
+            return Ok((Outcome::NoLeaderElectedForOddRound, Vec::new()));
         }
 
         // Get the certificate's digest of the leader. If we already ordered this leader,
         // there is nothing to do.
         let leader_round = r;
         if leader_round <= state.last_committed_round {
-            return Ok(Vec::new());
+            return Ok((Outcome::LeaderBelowCommitRound, Vec::new()));
         }
         let (leader_digest, leader) = match Self::leader(&self.committee, leader_round, &state.dag)
         {
@@ -109,7 +112,7 @@ impl ConsensusProtocol for Bullshark {
                     leader_has_support: false,
                 };
                 // leader has not been found - we don't have any certificate
-                return Ok(Vec::new());
+                return Ok((Outcome::LeaderNotFound, Vec::new()));
             }
         };
 
@@ -133,7 +136,7 @@ impl ConsensusProtocol for Bullshark {
         // a leader block means committing all its dependencies.
         if stake < self.committee.validity_threshold() {
             debug!("Leader {:?} does not have enough support", leader);
-            return Ok(Vec::new());
+            return Ok((Outcome::NotEnoughSupportForLeader, Vec::new()));
         }
 
         self.last_leader_election.leader_has_support = true;
@@ -222,7 +225,7 @@ impl ConsensusProtocol for Bullshark {
             .committed_certificates
             .observe(total_committed_certificates as f64);
 
-        Ok(committed_sub_dags)
+        Ok((Outcome::Committed, committed_sub_dags))
     }
 }
 

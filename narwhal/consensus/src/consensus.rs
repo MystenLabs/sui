@@ -4,7 +4,7 @@
 
 #![allow(clippy::mutable_key_type)]
 
-use crate::{metrics::ConsensusMetrics, ConsensusError, SequenceNumber};
+use crate::{metrics::ConsensusMetrics, ConsensusError, Outcome, SequenceNumber};
 use config::Committee;
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
@@ -112,7 +112,7 @@ impl ConsensusState {
     }
 
     /// Returns true if certificate is inserted in the dag.
-    pub fn try_insert(&mut self, certificate: &Certificate) -> Result<(), ConsensusError> {
+    pub fn try_insert(&mut self, certificate: &Certificate) -> Result<bool, ConsensusError> {
         Self::try_insert_in_dag(&mut self.dag, &self.last_committed, certificate)
     }
 
@@ -121,7 +121,7 @@ impl ConsensusState {
         dag: &mut Dag,
         last_committed: &HashMap<PublicKey, Round>,
         certificate: &Certificate,
-    ) -> Result<(), ConsensusError> {
+    ) -> Result<bool, ConsensusError> {
         let origin_last_committed_round = last_committed
             .get(&certificate.origin())
             .cloned()
@@ -131,10 +131,7 @@ impl ConsensusState {
                 "Ignoring certificate {:?} as it is at or before last committed round {} for this origin",
                 certificate, origin_last_committed_round
             );
-            return Err(ConsensusError::CertificatePassedCommit(
-                certificate.clone(),
-                origin_last_committed_round,
-            ));
+            return Ok(false);
         }
 
         if let Some((_, existing_certificate)) = dag.entry(certificate.round()).or_default().insert(
@@ -143,14 +140,13 @@ impl ConsensusState {
         ) {
             // we want to error only if we try to insert a different certificate in the dag
             if existing_certificate != certificate.clone() {
-                return Err(ConsensusError::CertificateAlreadyExistsForRound(
-                    existing_certificate,
-                    certificate.round(),
+                return Err(ConsensusError::CertificateEquivocation(
                     certificate.clone(),
+                    existing_certificate,
                 ));
             }
         }
-        Ok(())
+        Ok(true)
     }
 
     /// Update and clean up internal state after committing a certificate.
@@ -201,7 +197,7 @@ pub trait ConsensusProtocol {
         state: &mut ConsensusState,
         // The new certificate.
         certificate: Certificate,
-    ) -> Result<Vec<CommittedSubDag>, ConsensusError>;
+    ) -> Result<(Outcome, Vec<CommittedSubDag>), ConsensusError>;
 }
 
 pub struct Consensus<ConsensusProtocol> {
@@ -306,13 +302,7 @@ where
                     }
 
                     // Process the certificate using the selected consensus protocol.
-                    let committed_sub_dags = match self.protocol.process_certificate(&mut self.state, certificate) {
-                        Ok(subdags) => subdags,
-                        Err(ConsensusError::CertificatePassedCommit(_, _)) => {
-                            continue 'main;
-                        },
-                        Err(err) => return Err(err)
-                    };
+                    let (_, committed_sub_dags) = self.protocol.process_certificate(&mut self.state, certificate)?;
 
                     // We extract a list of headers from this specific validator that
                     // have been agreed upon, and signal this back to the narwhal sub-system

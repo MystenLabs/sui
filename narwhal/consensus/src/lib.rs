@@ -21,7 +21,7 @@ pub use crate::consensus::Consensus;
 use store::StoreError;
 use thiserror::Error;
 
-use types::{Certificate, Round, SequenceNumber};
+use types::{Certificate, SequenceNumber};
 
 /// The default channel size used in the consensus and subscriber logic.
 pub const DEFAULT_CHANNEL_SIZE: usize = 1_000;
@@ -34,12 +34,19 @@ pub enum ConsensusError {
     #[error("Storage failure: {0}")]
     StoreError(#[from] StoreError),
 
-    #[error("Certificate {0:?} not inserted, is passed commit round {1}")]
-    CertificatePassedCommit(Certificate, Round),
-
-    #[error("Earlier certificate {0:?} already exists for round {1} when trying to insert {2:?}")]
-    CertificateAlreadyExistsForRound(Certificate, Round, Certificate),
+    #[error("Certificate {0:?} equivocates with earlier certificate {1:?}")]
+    CertificateEquivocation(Certificate, Certificate),
 
     #[error("System shutting down")]
     ShuttingDown,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Outcome {
+    CertificateBelowCommitRound,
+    NoLeaderElectedForOddRound,
+    LeaderBelowCommitRound,
+    LeaderNotFound,
+    NotEnoughSupportForLeader,
+    Committed,
 }

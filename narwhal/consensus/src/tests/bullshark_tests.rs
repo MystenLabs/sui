@@ -484,7 +484,7 @@ async fn delayed_certificates_are_rejected() {
     // Populate DAG with the rounds up to round 5 so we trigger commits
     let mut all_subdags = Vec::new();
     for certificate in certificates.clone() {
-        let committed_subdags = bullshark
+        let (_, committed_subdags) = bullshark
             .process_certificate(&mut state, certificate)
             .unwrap();
         all_subdags.extend(committed_subdags);
@@ -496,19 +496,11 @@ async fn delayed_certificates_are_rejected() {
     // now populate again the certificates of round 2 and 3
     // Since we committed everything of rounds <= 4, then those certificates should get rejected.
     for certificate in certificates.iter().filter(|c| c.round() <= 3) {
-        let err = bullshark
+        let (outcome, _) = bullshark
             .process_certificate(&mut state, certificate.clone())
-            .unwrap_err();
+            .unwrap();
 
-        let origin = state
-            .last_committed
-            .get(&certificate.origin())
-            .unwrap_or(&0);
-
-        assert_eq!(
-            err,
-            ConsensusError::CertificatePassedCommit(certificate.clone(), *origin)
-        );
+        assert_eq!(outcome, Outcome::CertificateBelowCommitRound);
     }
 }
 
@@ -558,8 +550,8 @@ async fn submitting_equivocating_certificate_should_error() {
             .process_certificate(&mut state, certificate.clone())
             .unwrap_err();
         match err {
-            ConsensusError::CertificateAlreadyExistsForRound(_, round, _) => {
-                assert_eq!(round, certificate.round());
+            ConsensusError::CertificateEquivocation(this_cert, _) => {
+                assert_eq!(this_cert, certificate);
             }
             err => panic!("Unexpected error returned: {err}"),
         }
