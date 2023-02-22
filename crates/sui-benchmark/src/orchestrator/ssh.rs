@@ -149,7 +149,7 @@ impl SshConnection {
         Ok(Self { session })
     }
 
-    pub fn with_timeout(mut self, timeout: &Option<Duration>) -> Self {
+    pub fn with_timeout(self, timeout: &Option<Duration>) -> Self {
         let duration = match timeout {
             Some(value) => value,
             None => &Self::DEFAULT_TIMEOUT,

@@ -10,7 +10,7 @@ use sui_config::{
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
 use sui_types::{
-    base_types::SuiAddress,
+    base_types::{ObjectID, SuiAddress},
     crypto::{AuthorityKeyPair, KeypairTraits, NetworkKeyPair, SuiKeyPair},
 };
 
@@ -22,15 +22,17 @@ pub struct Config {
 }
 
 impl Config {
-    pub const GAS_OBJECT_ID_OFFSET: &'static str = "0x59931dcac57ba20d75321acaf55e8eb5a2c47e9f";
+    // pub const GAS_OBJECT_ID_OFFSET: &'static str = "0x59931dcac57ba20d75321acaf55e8eb5a2c47e9f";
     pub const GENESIS_CONFIG_FILE: &'static str = "benchmark-genesis.yml";
     pub const GAS_KEYSTORE_FILE: &'static str = "gas.keystore";
 
     pub fn new(instances: &[Instance]) -> Self {
         let mut rng = StdRng::seed_from_u64(0);
+
         let gas_key = SuiKeyPair::Ed25519(NetworkKeyPair::generate(&mut rng));
         let gas_address = SuiAddress::from(&gas_key.public());
         let genesis_config = Self::make_genesis_config(instances, gas_address);
+
         let mut keystore = FileBasedKeystore::default();
         keystore.add_key(gas_key).unwrap();
 
@@ -38,6 +40,13 @@ impl Config {
             genesis_config,
             keystore,
         }
+    }
+
+    pub fn gas_object_id_offsets(quantity: usize) -> Vec<String> {
+        let mut rng = StdRng::seed_from_u64(0);
+        (0..quantity)
+            .map(|_| format!("{:#x}", ObjectID::random_from_rng(&mut rng)))
+            .collect()
     }
 
     pub fn print_files(&mut self) {
@@ -85,17 +94,21 @@ impl Config {
             })
             .collect();
 
+        // Generate the genesis gas objects.
+        let genesis_gas_objects = Self::gas_object_id_offsets(instances.len())
+            .iter()
+            .map(|id| ObjectConfigRange {
+                offset: AccountAddress::from_hex_literal(id).unwrap().into(),
+                count: 5000,
+                gas_value: 18446744073709551615,
+            })
+            .collect();
+
         // Set the initial gas objects.
         let account_config = AccountConfig {
             address: Some(gas_address),
             gas_objects: vec![],
-            gas_object_ranges: Some(vec![ObjectConfigRange {
-                offset: AccountAddress::from_hex_literal(Self::GAS_OBJECT_ID_OFFSET)
-                    .unwrap()
-                    .into(),
-                count: 5000,
-                gas_value: 18446744073709551615,
-            }]),
+            gas_object_ranges: Some(genesis_gas_objects),
         };
 
         // Make the genesis configuration file.

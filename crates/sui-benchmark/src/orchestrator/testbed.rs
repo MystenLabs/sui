@@ -216,7 +216,6 @@ impl<C: Client> Testbed<C> {
     }
 
     pub async fn ready(&self) -> TestbedResult<()> {
-        println!("Waiting for connections...");
         let mut waiting = 0;
         loop {
             let duration = Duration::from_secs(5);
@@ -274,11 +273,13 @@ impl<C> Testbed<C> {
         loop {
             sleep(Duration::from_secs(5)).await;
 
-            let ssh_command = SshCommand::new(move |_| "tmux ls".into());
+            let ssh_command = SshCommand::new(move |_| "(tmux ls || true)".into());
             let result = self.ssh_manager.execute(instances, ssh_command).await?;
-            println!("{result:?}");
 
-            if result.iter().all(|(stdout, _)| stdout.contains(command_id)) {
+            if result
+                .iter()
+                .all(|(stdout, _)| !stdout.contains(command_id))
+            {
                 break;
             }
         }
@@ -334,15 +335,15 @@ impl<C> Testbed<C> {
             &format!("git checkout -f {branch}"),
             &format!("git pull -f"),
             "source $HOME/.cargo/env",
-            // &format!("cargo build --release"),
-            &format!("tmux new -d -s \"update\" \"cargo build --release\""),
+            &format!("cargo build --release"),
         ]
         .join(" && ");
 
+        let id = "update";
         let repo_name = self.settings.repository.name.clone();
         let ssh_command = SshCommand::new(move |_| command.clone())
-            .with_execute_from_path(repo_name.into())
-            .with_timeout(Duration::from_secs(900));
+            .run_background(id.into())
+            .with_execute_from_path(repo_name.into());
         self.ssh_manager
             .execute(&self.instances, ssh_command)
             .await?;
@@ -459,13 +460,14 @@ impl<C> Testbed<C> {
         print!("Setting up load generators...");
 
         // Select the instances to run.
-        let instances = vec![self.select_instances(parameters)?[0].clone()];
+        let instances = self.select_instances(parameters)?;
 
         // Deploy the load generators.
-        let load_share = parameters.load.clone();
+        let committee_size = instances.len();
+        let load_share = parameters.load.clone() / committee_size;
         let duration = parameters.duration.as_secs();
-        let command = move |_i: usize| -> String {
-            let gas_id = Config::GAS_OBJECT_ID_OFFSET;
+        let command = move |i: usize| -> String {
+            let gas_id = Config::gas_object_id_offsets(committee_size)[i].clone();
             let genesis = "~/.sui/sui_config/genesis.blob";
             let keystore = format!("~/{}", Config::GAS_KEYSTORE_FILE);
 
@@ -509,19 +511,17 @@ impl<C> Testbed<C> {
                     // Connect to the instance.
                     let connection = ssh_manager.connect(instance.ssh_address()).await?;
 
-                    // Download the node's log file.
+                    // Download the node log files.
                     let content = connection.download("node.log")?;
                     let mut file = File::create(&format!("node-{i}.log"))
                         .expect("Cannot open file to dump log");
                     file.write_all(content.as_bytes())
                         .expect("Cannot write file");
 
-                    // Download the client's log files.
-                    if i == 0 {
-                        let source = format!("client.log");
-                        let content = connection.download(source)?;
-                        println!("{content}");
-                    }
+                    // Download the clients log files.
+                    let source = format!("client.log");
+                    let content = connection.download(source)?;
+                    println!("{content}");
 
                     Ok(())
                 })
@@ -552,9 +552,8 @@ impl<C> Testbed<C> {
         self.run_clients(parameters).await?;
 
         // Wait for the benchmark to terminate.
-        // TODO: Detect when the load generator is done submitting transactions.
         println!("Waiting for {}s...", parameters.duration.as_secs());
-        sleep(parameters.duration * 5).await;
+        self.wait_for_command(&self.instances, "client").await?;
 
         // Kill the nodes and clients (without deleting the log files).
         self.kill(false).await?;
