@@ -132,12 +132,12 @@ impl WriteApiServer for TransactionExecutionApi {
         gas_price: Option<u64>,
         epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults> {
-        let (mut current_epoch, mut reference_gas_price) = (0, 0);
         // Only fetch from DB if necessary
-        if gas_price.is_none() || epoch.is_none() {
-            (current_epoch, reference_gas_price) =
-                self.get_sui_system_state_object_epoch_and_gas_price()?
-        }
+        let reference_gas_price = if gas_price.is_none() || epoch.is_none() {
+            self.get_sui_system_state_object_epoch_and_gas_price()?.1
+        } else {
+            0
+        };
         let tx_kind: TransactionKind =
             bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
         Ok(self
@@ -146,7 +146,6 @@ impl WriteApiServer for TransactionExecutionApi {
                 sender_address,
                 tx_kind,
                 gas_price.unwrap_or(reference_gas_price),
-                epoch.unwrap_or(current_epoch),
             )
             .await?)
     }

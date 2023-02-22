@@ -422,13 +422,13 @@ impl TxContext {
         Self::new(
             &SuiAddress::random_for_testing_only(),
             &TransactionDigest::random(),
-            &EpochData::genesis(),
+            &EpochData::new_test(),
         )
     }
 
     // for testing
     pub fn with_sender_for_testing_only(sender: &SuiAddress) -> Self {
-        Self::new(sender, &TransactionDigest::random(), &EpochData::genesis())
+        Self::new(sender, &TransactionDigest::random(), &EpochData::new_test())
     }
 }
 

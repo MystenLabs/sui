@@ -662,11 +662,11 @@ impl Builder {
     }
 }
 
-fn get_genesis_context() -> TxContext {
+fn get_genesis_context(epoch_data: &EpochData) -> TxContext {
     TxContext::new(
         &SuiAddress::default(),
         &TransactionDigest::genesis(),
-        &EpochData::genesis(),
+        epoch_data,
     )
 }
 
@@ -676,8 +676,9 @@ fn build_unsigned_genesis_data(
     objects: &[Object],
 ) -> GenesisTuple {
     let protocol_config = ProtocolConfig::get_for_version(parameters.protocol_version);
+    let epoch_data = EpochData::new_genesis(parameters.timestamp_ms);
 
-    let mut genesis_ctx = get_genesis_context();
+    let mut genesis_ctx = get_genesis_context(&epoch_data);
 
     // Get Move and Sui Framework
     let modules = [
@@ -695,7 +696,7 @@ fn build_unsigned_genesis_data(
     );
 
     let (genesis_transaction, genesis_effects, objects) =
-        create_genesis_transaction(objects, &protocol_config);
+        create_genesis_transaction(objects, &protocol_config, &epoch_data);
     let (checkpoint, checkpoint_contents) =
         create_genesis_checkpoint(parameters, &genesis_transaction, &genesis_effects);
 
@@ -736,6 +737,7 @@ fn create_genesis_checkpoint(
 fn create_genesis_transaction(
     objects: Vec<Object>,
     protocol_config: &ProtocolConfig,
+    epoch_data: &EpochData,
 ) -> (Transaction, TransactionEffects, Vec<Object>) {
     let genesis_transaction = {
         let genesis_objects = objects
@@ -799,7 +801,7 @@ fn create_genesis_transaction(
                 Default::default(),
                 &move_vm,
                 SuiGasStatus::new_unmetered(),
-                &EpochData::genesis(),
+                epoch_data,
                 protocol_config,
             );
         assert!(inner_temp_store.objects.is_empty());
@@ -1145,7 +1147,7 @@ mod test {
                 Default::default(),
                 &move_vm,
                 SuiGasStatus::new_unmetered(),
-                &EpochData::genesis(),
+                &EpochData::new_test(),
                 &protocol_config,
             );
 

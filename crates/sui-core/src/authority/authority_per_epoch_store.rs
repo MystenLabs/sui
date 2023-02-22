@@ -54,7 +54,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
-    CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointDigest, CheckpointSequenceNumber,
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp,
 };
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
@@ -261,6 +261,11 @@ pub struct AuthorityEpochTables {
 #[derive(Default, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct EpochStartConfiguration {
     pub system_state: SuiSystemState,
+    /// epoch_digest is defined as following
+    /// (1) For the genesis epoch it is set to 0
+    /// (2) For all other epochs it is a digest of the last checkpoint of a previous epoch
+    /// Note that this is in line with how epoch start timestamp is defined
+    pub epoch_digest: CheckpointDigest,
 }
 
 impl AuthorityEpochTables {
@@ -1834,7 +1839,11 @@ fn transactions_table_default_config() -> DBOptions {
 
 impl EpochStartConfiguration {
     pub fn epoch_data(&self) -> EpochData {
-        EpochData::new(self.epoch_id())
+        EpochData::new(
+            self.epoch_id(),
+            self.epoch_start_timestamp_ms(),
+            self.epoch_digest(),
+        )
     }
 
     pub fn epoch_id(&self) -> EpochId {
@@ -1843,5 +1852,9 @@ impl EpochStartConfiguration {
 
     pub fn epoch_start_timestamp_ms(&self) -> CheckpointTimestamp {
         self.system_state.epoch_start_timestamp_ms
+    }
+
+    pub fn epoch_digest(&self) -> CheckpointDigest {
+        self.epoch_digest
     }
 }

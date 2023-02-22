@@ -100,7 +100,6 @@ use crate::{
     event_handler::EventHandler, transaction_input_checker, transaction_manager::TransactionManager,
 };
 use sui_adapter::execution_engine;
-use sui_types::epoch_data::EpochData;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -415,7 +414,7 @@ pub struct AuthorityState {
     pub module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
 
     pub event_handler: Option<Arc<EventHandler>>,
-    checkpoint_store: Arc<CheckpointStore>,
+    pub(crate) checkpoint_store: Arc<CheckpointStore>,
 
     committee_store: Arc<CommitteeStore>,
 
@@ -1023,7 +1022,6 @@ impl AuthorityState {
         sender: SuiAddress,
         transaction_kind: TransactionKind,
         gas_price: u64,
-        epoch: EpochId,
     ) -> Result<DevInspectResults, anyhow::Error> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
         if !self.is_fullnode(&epoch_store) {
@@ -1093,7 +1091,7 @@ impl AuthorityState {
                 transaction_dependencies,
                 &move_vm,
                 gas_status,
-                &EpochData::new(epoch), /* TODO(epoch_data): this needs to be figured out */
+                &epoch_store.epoch_start_configuration().epoch_data(),
                 protocol_config,
             );
         DevInspectResults::new(effects, execution_result, self.module_cache.as_ref())
@@ -2651,7 +2649,14 @@ impl AuthorityState {
         let new_epoch = new_committee.epoch;
         info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
 
-        let epoch_start_configuration = EpochStartConfiguration { system_state };
+        let last_checkpoint = self
+            .checkpoint_store
+            .get_epoch_last_checkpoint(cur_epoch_store.epoch())?
+            .expect("Could not load last checkpoint for current epoch");
+        let epoch_start_configuration = EpochStartConfiguration {
+            system_state,
+            epoch_digest: last_checkpoint.digest(),
+        };
         let new_epoch_store =
             cur_epoch_store.new_at_next_epoch(self.name, new_committee, epoch_start_configuration);
         self.db().perpetual_tables.set_recovery_epoch(new_epoch)?;

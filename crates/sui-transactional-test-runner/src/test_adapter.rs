@@ -616,7 +616,7 @@ impl<'a> SuiTestAdapter<'a> {
             &self.vm,
             gas_status,
             // TODO: Support different epochs in transactional tests.
-            &EpochData::genesis(),
+            &EpochData::new_test(),
             &PROTOCOL_CONSTANTS,
         );
 
