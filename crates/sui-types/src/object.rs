@@ -16,10 +16,10 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 
+use crate::base_types::ObjectIDParseError;
 use crate::crypto::{deterministic_random_account_key, sha3_hash};
 use crate::error::{ExecutionError, ExecutionErrorKind};
 use crate::error::{SuiError, SuiResult};
-use crate::messages::InputObjectKind;
 use crate::move_package::MovePackage;
 use crate::{
     base_types::{
@@ -27,7 +27,7 @@ use crate::{
     },
     gas_coin::GasCoin,
 };
-use sui_protocol_constants::*;
+use sui_protocol_config::ProtocolConfig;
 
 pub const GAS_VALUE_FOR_TESTING: u64 = 1_000_000_u64;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
@@ -76,15 +76,32 @@ impl MoveObject {
         has_public_transfer: bool,
         version: SequenceNumber,
         contents: Vec<u8>,
+        protocol_config: &ProtocolConfig,
+    ) -> Result<Self, ExecutionError> {
+        Self::new_from_execution_with_limit(
+            type_,
+            has_public_transfer,
+            version,
+            contents,
+            protocol_config.max_move_object_size(),
+        )
+    }
+
+    unsafe fn new_from_execution_with_limit(
+        type_: StructTag,
+        has_public_transfer: bool,
+        version: SequenceNumber,
+        contents: Vec<u8>,
+        max_move_object_size: u64,
     ) -> Result<Self, ExecutionError> {
         // coins should always have public transfer, as they always should have store.
         // Thus, type_ == GasCoin::type_() ==> has_public_transfer
         debug_assert!(type_ != GasCoin::type_() || has_public_transfer);
-        if contents.len() as u64 > MAX_MOVE_OBJECT_SIZE {
+        if contents.len() as u64 > max_move_object_size {
             return Err(ExecutionError::from_kind(
                 ExecutionErrorKind::MoveObjectTooBig {
                     object_size: contents.len() as u64,
-                    max_object_size: MAX_MOVE_OBJECT_SIZE,
+                    max_object_size: max_move_object_size,
                 },
             ));
         }
@@ -99,11 +116,12 @@ impl MoveObject {
     pub fn new_gas_coin(version: SequenceNumber, id: ObjectID, value: u64) -> Self {
         // unwrap safe because coins are always smaller than the max object size
         unsafe {
-            Self::new_from_execution(
+            Self::new_from_execution_with_limit(
                 GasCoin::type_(),
                 true,
                 version,
                 GasCoin::new(id, value).to_bcs_bytes(),
+                256,
             )
             .unwrap()
         }
@@ -117,11 +135,12 @@ impl MoveObject {
     ) -> Self {
         // unwrap safe because coins are always smaller than the max object size
         unsafe {
-            Self::new_from_execution(
+            Self::new_from_execution_with_limit(
                 coin_type,
                 true,
                 version,
                 GasCoin::new(id, value).to_bcs_bytes(),
+                256,
             )
             .unwrap()
         }
@@ -131,8 +150,12 @@ impl MoveObject {
         self.has_public_transfer
     }
     pub fn id(&self) -> ObjectID {
+        Self::id_opt(&self.contents).unwrap()
+    }
+
+    pub fn id_opt(contents: &[u8]) -> Result<ObjectID, ObjectIDParseError> {
         // TODO: Ensure safe index to to parse ObjectID. https://github.com/MystenLabs/sui/issues/6278
-        ObjectID::try_from(&self.contents[0..ID_END_INDEX]).unwrap()
+        ObjectID::try_from(&contents[0..ID_END_INDEX])
     }
 
     pub fn version(&self) -> SequenceNumber {
@@ -148,12 +171,24 @@ impl MoveObject {
     }
 
     /// Update the contents of this object but does not increment its version
-    pub fn update_contents(&mut self, new_contents: Vec<u8>) -> Result<(), ExecutionError> {
-        if new_contents.len() as u64 > MAX_MOVE_OBJECT_SIZE {
+    pub fn update_contents(
+        &mut self,
+        new_contents: Vec<u8>,
+        protocol_config: &ProtocolConfig,
+    ) -> Result<(), ExecutionError> {
+        self.update_contents_with_limit(new_contents, protocol_config.max_move_object_size())
+    }
+
+    fn update_contents_with_limit(
+        &mut self,
+        new_contents: Vec<u8>,
+        max_move_object_size: u64,
+    ) -> Result<(), ExecutionError> {
+        if new_contents.len() as u64 > max_move_object_size {
             return Err(ExecutionError::from_kind(
                 ExecutionErrorKind::MoveObjectTooBig {
                     object_size: new_contents.len() as u64,
-                    max_object_size: MAX_MOVE_OBJECT_SIZE,
+                    max_object_size: max_move_object_size,
                 },
             ));
         }
@@ -167,6 +202,12 @@ impl MoveObject {
         debug_assert_eq!(self.id(), old_id);
 
         Ok(())
+    }
+
+    /// Update a coin object without requiring the current ProtocolConfig.
+    /// Asserts that the gas object is not unexpectedly large.
+    pub fn update_coin_contents(&mut self, new_contents: Vec<u8>) {
+        self.update_contents_with_limit(new_contents, 256).unwrap()
     }
 
     /// Sets the version of this object to a new value which is assumed to be higher (and checked to
@@ -412,13 +453,28 @@ impl Object {
     pub fn new_package(
         modules: Vec<CompiledModule>,
         previous_transaction: TransactionDigest,
+        max_move_package_size: u64,
     ) -> Result<Self, ExecutionError> {
         Ok(Object {
-            data: Data::Package(MovePackage::from_module_iter(modules)?),
+            data: Data::Package(MovePackage::from_module_iter(
+                modules,
+                max_move_package_size,
+            )?),
             owner: Owner::Immutable,
             previous_transaction,
             storage_rebate: 0,
         })
+    }
+
+    pub fn new_package_for_testing(
+        modules: Vec<CompiledModule>,
+        previous_transaction: TransactionDigest,
+    ) -> Result<Self, ExecutionError> {
+        Self::new_package(
+            modules,
+            previous_transaction,
+            ProtocolConfig::get_for_max_version().max_move_package_size(),
+        )
     }
 
     pub fn is_immutable(&self) -> bool {
@@ -480,21 +536,6 @@ impl Object {
 
     pub fn digest(&self) -> ObjectDigest {
         ObjectDigest::new(sha3_hash(self))
-    }
-
-    pub fn input_object_kind(&self) -> InputObjectKind {
-        match &self.owner {
-            Owner::Shared {
-                initial_shared_version,
-                ..
-            } => InputObjectKind::SharedMoveObject {
-                id: self.id(),
-                initial_shared_version: *initial_shared_version,
-            },
-            Owner::ObjectOwner(_) | Owner::AddressOwner(_) | Owner::Immutable => {
-                InputObjectKind::ImmOrOwnedMoveObject(self.compute_object_reference())
-            }
-        }
     }
 
     /// Approximate size of the object in bytes. This is used for gas metering.

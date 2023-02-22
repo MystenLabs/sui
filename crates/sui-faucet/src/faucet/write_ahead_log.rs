@@ -34,7 +34,12 @@ pub struct Entry {
 
 impl WriteAheadLog {
     pub(crate) fn open(path: &Path) -> Self {
-        Self::open_tables_read_write(path.to_path_buf(), None, None)
+        Self::open_tables_read_write(
+            path.to_path_buf(),
+            typed_store::rocks::MetricConf::default(),
+            None,
+            None,
+        )
     }
 
     /// Mark `coin` as reserved for transaction `tx` sending coin to `recipient`. Fails if `coin` is

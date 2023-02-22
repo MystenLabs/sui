@@ -1,30 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { memo } from 'react';
-
-import LoadingIndicator from './LoadingIndicator';
+import LoadingIndicator, {
+    type LoadingIndicatorProps,
+} from './LoadingIndicator';
 
 import type { ReactNode } from 'react';
 
 type LoadingProps = {
     loading: boolean;
     children: ReactNode | ReactNode[];
-    className?: string;
-};
+} & LoadingIndicatorProps;
 
-const Loading = ({ loading, children, className }: LoadingProps) => {
+const Loading = ({ loading, children, ...indicatorProps }: LoadingProps) => {
     return loading ? (
-        className ? (
-            <div className={className}>
-                <LoadingIndicator />
-            </div>
-        ) : (
-            <LoadingIndicator />
-        )
+        <div className="flex justify-center items-center h-full">
+            <LoadingIndicator {...indicatorProps} />
+        </div>
     ) : (
         <>{children}</>
     );
 };
 
-export default memo(Loading);
+export default Loading;

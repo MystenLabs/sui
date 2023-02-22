@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-  Base64DataBuffer,
   DEFAULT_SECP256K1_DERIVATION_PATH,
+  PRIVATE_KEY_SIZE,
   Secp256k1Keypair,
 } from '../../../src';
 import { describe, it, expect } from 'vitest';
@@ -24,10 +24,14 @@ export const VALID_SECP256K1_PUBLIC_KEY = [
 ];
 
 // Invalid private key with incorrect length
-export const INVALID_SECP256K1_SECRET_KEY = Uint8Array.from(Array(31).fill(1));
+export const INVALID_SECP256K1_SECRET_KEY = Uint8Array.from(
+  Array(PRIVATE_KEY_SIZE - 1).fill(1),
+);
 
 // Invalid public key with incorrect length
-export const INVALID_SECP256K1_PUBLIC_KEY = Uint8Array.from(Array(32).fill(1));
+export const INVALID_SECP256K1_PUBLIC_KEY = Uint8Array.from(
+  Array(PRIVATE_KEY_SIZE).fill(1),
+);
 
 const TEST_MNEMONIC =
   'result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss';
@@ -59,28 +63,47 @@ describe('secp256k1-keypair', () => {
 
   it('generate keypair from random seed', () => {
     const keypair = Secp256k1Keypair.fromSeed(
-      Uint8Array.from(Array(32).fill(8))
+      Uint8Array.from(Array(PRIVATE_KEY_SIZE).fill(8)),
     );
     expect(keypair.getPublicKey().toBase64()).toEqual(
-      'A/mR+UTR4ZVKf8i5v2Lg148BX0wHdi1QXiDmxFJgo2Yb'
+      'A/mR+UTR4ZVKf8i5v2Lg148BX0wHdi1QXiDmxFJgo2Yb',
     );
   });
 
   it('signature of data is valid', async () => {
     const keypair = new Secp256k1Keypair();
-    const signData = new Base64DataBuffer(
-      new TextEncoder().encode('hello world')
-    );
+    const signData = new TextEncoder().encode('hello world');
 
-    const msgHash = await secp.utils.sha256(signData.getData());
-    const sig = keypair.signData(signData);
-    const pubkey = secp.recoverPublicKey(
-      msgHash,
-      Signature.fromCompact(sig.getData().slice(0, 64)),
-      sig.getData()[64],
-      true
+    const msgHash = await secp.utils.sha256(signData);
+    const sig = keypair.signData(signData, false);
+    expect(
+      secp.verify(
+        Signature.fromCompact(sig),
+        msgHash,
+        keypair.getPublicKey().toBytes(),
+      ),
+    ).toBeTruthy();
+  });
+
+  it('signature of data is same as rust implementation', async () => {
+    const secret_key = new Uint8Array(VALID_SECP256K1_SECRET_KEY);
+    const keypair = Secp256k1Keypair.fromSecretKey(secret_key);
+    const signData = new TextEncoder().encode('Hello, world!');
+
+    const msgHash = await secp.utils.sha256(signData);
+    const sig = keypair.signData(signData, false);
+
+    // Assert the signature is the same as the rust implementation. See https://github.com/MystenLabs/fastcrypto/blob/0436d6ef11684c291b75c930035cb24abbaf581e/fastcrypto/src/tests/secp256k1_tests.rs#L115
+    expect(Buffer.from(sig).toString('hex')).toEqual(
+      '25d450f191f6d844bf5760c5c7b94bc67acc88be76398129d7f43abdef32dc7f7f1a65b7d65991347650f3dd3fa3b3a7f9892a0608521cbcf811ded433b31f8b',
     );
-    expect(toB64(pubkey)).toEqual(keypair.getPublicKey().toBase64());
+    expect(
+      secp.verify(
+        Signature.fromCompact(sig),
+        msgHash,
+        keypair.getPublicKey().toBytes(),
+      ),
+    ).toBeTruthy();
   });
 
   it('invalid mnemonics to derive secp256k1 keypair', () => {
@@ -93,14 +116,14 @@ describe('secp256k1-keypair', () => {
     // Test case generated against rust: /sui/crates/sui/src/unit_tests/keytool_tests.rs#L149
     const keypair = Secp256k1Keypair.deriveKeypair(
       DEFAULT_SECP256K1_DERIVATION_PATH,
-      TEST_MNEMONIC
+      TEST_MNEMONIC,
     );
 
     expect(keypair.getPublicKey().toBase64()).toEqual(
-      'A+NxdDVYKrM9LjFdIem8ThlQCh/EyM3HOhU2WJF3SxMf'
+      'A+NxdDVYKrM9LjFdIem8ThlQCh/EyM3HOhU2WJF3SxMf',
     );
     expect(keypair.getPublicKey().toSuiAddress()).toEqual(
-      'ed17b3f435c03ff69c2cdc6d394932e68375f20f'
+      'ed17b3f435c03ff69c2cdc6d394932e68375f20f',
     );
   });
 

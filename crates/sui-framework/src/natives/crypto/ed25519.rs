@@ -3,8 +3,7 @@
 use crate::legacy_empty_cost;
 use fastcrypto::{
     ed25519::{Ed25519PublicKey, Ed25519Signature},
-    traits::ToFromBytes,
-    Verifier,
+    traits::{ToFromBytes, VerifyingKey},
 };
 use move_binary_format::errors::PartialVMResult;
 use move_vm_runtime::native_functions::NativeContext;

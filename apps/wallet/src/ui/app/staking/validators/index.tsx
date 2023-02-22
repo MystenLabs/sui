@@ -40,11 +40,8 @@ export function Validators() {
             closeIcon={SuiIcons.Close}
             closeOverlay={close}
         >
-            <div className="w-full flex flex-col flex-nowrap h-full overflow-x-scroll">
-                <Loading
-                    loading={isLoading}
-                    className="flex justify-center w-full items-center h-full"
-                >
+            <div className="w-full flex flex-col flex-nowrap">
+                <Loading loading={isLoading}>
                     {isError ? (
                         <Alert className="mb-2">
                             <strong>{error?.message}</strong>

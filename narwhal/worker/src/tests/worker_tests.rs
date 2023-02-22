@@ -11,16 +11,19 @@ use fastcrypto::{
     hash::Hash,
 };
 use futures::stream::FuturesOrdered;
+use futures::StreamExt;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY, NUM_SHUTDOWN_RECEIVERS};
 use prometheus::Registry;
 use std::time::Duration;
 use storage::NodeStorage;
 use store::rocks;
+use store::rocks::MetricConf;
+use store::rocks::ReadWriteOptions;
 use test_utils::{batch, temp_dir, test_network, transaction, CommitteeFixture};
 use tokio::sync::watch;
 use types::{
-    MockWorkerToPrimary, MockWorkerToWorker, PreSubscribedBroadcastSender, TransactionsClient,
-    WorkerBatchMessage, WorkerToPrimaryServer, WorkerToWorkerClient,
+    MockWorkerToPrimary, MockWorkerToWorker, PreSubscribedBroadcastSender, TransactionProto,
+    TransactionsClient, WorkerBatchMessage, WorkerToPrimaryServer, WorkerToWorkerClient,
 };
 
 // A test validator that rejects every transaction / batch
@@ -54,7 +57,14 @@ async fn reject_invalid_clients_transactions() {
     };
 
     // Create a new test store.
-    let db = rocks::DBMap::<BatchDigest, Batch>::open(temp_dir(), None, Some("batches")).unwrap();
+    let db = rocks::DBMap::<BatchDigest, Batch>::open(
+        temp_dir(),
+        MetricConf::default(),
+        None,
+        Some("batches"),
+        &ReadWriteOptions::default(),
+    )
+    .unwrap();
     let store = Store::new(db);
 
     let registry = Registry::new();
@@ -141,7 +151,14 @@ async fn handle_clients_transactions() {
     };
 
     // Create a new test store.
-    let db = rocks::DBMap::<BatchDigest, Batch>::open(temp_dir(), None, Some("batches")).unwrap();
+    let db = rocks::DBMap::<BatchDigest, Batch>::open(
+        temp_dir(),
+        MetricConf::default(),
+        None,
+        Some("batches"),
+        &ReadWriteOptions::default(),
+    )
+    .unwrap();
     let store = Store::new(db);
 
     let registry = Registry::new();
@@ -279,7 +296,13 @@ async fn get_network_peers_from_admin_server() {
         rx_consensus_round_updates,
         /* dag */
         Some(Arc::new(
-            Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
+            Dag::new(
+                &committee,
+                rx_new_certificates,
+                consensus_metrics,
+                tx_shutdown.subscribe(),
+            )
+            .1,
         )),
         NetworkModel::Asynchronous,
         &mut tx_shutdown,
@@ -395,7 +418,13 @@ async fn get_network_peers_from_admin_server() {
         rx_consensus_round_updates,
         /* dag */
         Some(Arc::new(
-            Dag::new(&committee, rx_new_certificates_2, consensus_metrics).1,
+            Dag::new(
+                &committee,
+                rx_new_certificates_2,
+                consensus_metrics,
+                tx_shutdown.subscribe(),
+            )
+            .1,
         )),
         NetworkModel::Asynchronous,
         &mut tx_shutdown_2,

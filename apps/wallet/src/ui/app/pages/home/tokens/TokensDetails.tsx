@@ -1,23 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeature } from '@growthbook/growthbook-react';
 import cl from 'classnames';
 import { useMemo } from 'react';
 
+import { CoinActivitiesCard } from './CoinActivityCard';
+import { TokenIconLink } from './TokenIconLink';
 import CoinBalance from './coin-balance';
 import IconLink from './icon-link';
-import FaucetRequestButton from '_app/shared/faucet/request-button';
-import PageTitle from '_app/shared/page-title';
-import AccountAddress from '_components/account-address';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
-import RecentTransactions from '_components/transactions-card/RecentTransactions';
 import { SuiIcons } from '_font-icons/output/sui-icons';
 import { useAppSelector, useObjectsState } from '_hooks';
 import { accountAggregateBalancesSelector } from '_redux/slices/account';
 import { GAS_TYPE_ARG, Coin } from '_redux/slices/sui-objects/Coin';
-import { FEATURES } from '_src/shared/experimentation/features';
+import { AccountSelector } from '_src/ui/app/components/AccountSelector';
+import PageTitle from '_src/ui/app/shared/PageTitle';
+import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
 
 import st from './TokensPage.module.scss';
 
@@ -45,7 +44,7 @@ function MyTokens({
     loading,
 }: TokensProps) {
     return (
-        <Loading loading={loading} className={st.othersLoader}>
+        <Loading loading={loading}>
             {allCoinTypes.length ? (
                 <>
                     <div className={st.title}>MY COINS</div>
@@ -67,12 +66,8 @@ function MyTokens({
                 </>
             ) : (
                 <div className={st.emptyWallet}>
-                    <div className={st.emptyWalletIcon} />
-                    <div className={st.emptyWalletTitle}>
-                        Your wallet contains no SUI.
-                    </div>
-                    {emptyWalletDescription}
                     <FaucetRequestButton trackEventSource="home" />
+                    {emptyWalletDescription}
                 </div>
             )}
         </Loading>
@@ -82,6 +77,7 @@ function MyTokens({
 function TokenDetails({ coinType }: TokenDetailsProps) {
     const { loading, error, showError } = useObjectsState();
     const activeCoinType = coinType || GAS_TYPE_ARG;
+    const accountAddress = useAppSelector(({ account }) => account.address);
     const balances = useAppSelector(accountAggregateBalancesSelector);
     const tokenBalance = balances[activeCoinType] || BigInt(0);
     const allCoinTypes = useMemo(() => Object.keys(balances), [balances]);
@@ -93,28 +89,20 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
         [activeCoinType]
     );
 
-    const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
-
     return (
         <>
-            {coinType && (
-                <PageTitle
-                    title={coinSymbol}
-                    backLink="/tokens"
-                    hideBackLabel={true}
-                />
-            )}
+            {coinType && <PageTitle title={coinSymbol} back="/tokens" />}
 
             <div className={st.container} data-testid="coin-page">
                 {showError && error ? (
                     <Alert className={st.alert}>
-                        <strong>Sync error (data might be outdated).</strong>{' '}
+                        <div>
+                            <strong>Sync error (data might be outdated)</strong>
+                        </div>
                         <small>{error.message}</small>
                     </Alert>
                 ) : null}
-                {!coinType && (
-                    <AccountAddress showLink={false} copyable mode="faded" />
-                )}
+                {!coinType && <AccountSelector />}
                 <div className={st.balanceContainer}>
                     <Loading loading={loading}>
                         <CoinBalance
@@ -151,15 +139,8 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                     />
                 </div>
 
-                {activeCoinType === GAS_TYPE_ARG ? (
-                    <div className={st.staking}>
-                        <IconLink
-                            icon={SuiIcons.Union}
-                            to="/stake"
-                            disabled={!stakingEnabled}
-                            text="Stake & Earn SUI"
-                        />
-                    </div>
+                {activeCoinType === GAS_TYPE_ARG && accountAddress ? (
+                    <TokenIconLink accountAddress={accountAddress} />
                 ) : null}
 
                 {!coinType ? (
@@ -175,7 +156,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                             {coinSymbol} activity
                         </div>
                         <div className={st.txContent}>
-                            <RecentTransactions coinType={activeCoinType} />
+                            <CoinActivitiesCard coinType={activeCoinType} />
                         </div>
                     </>
                 )}

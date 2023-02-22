@@ -16,7 +16,7 @@ Understand:
 - [Sui Objects](../../learn/objects.md)
 
 Install:
-- [Sui binaries](../install.md#binaries)
+- [Sui binaries](../install.md#install-or-update-sui-binaries)
 - [Sui source code](../install.md#source-code)
 
 ## Chapters
@@ -30,6 +30,6 @@ Install:
 - [Chapter 4: Object Wrapping](../../build/programming-with-objects/ch4-object-wrapping.md)
   - Wrapping objects in another object.
 - [Chapter 5: Dynamic Fields](../../build/programming-with-objects/ch5-dynamic-fields.md)
-  - Extending objects with fields keyed on other object that can be dynamically added, accessed, and removed.
+  - Extending objects with fields that reference other objects, and that you can add, access, and remove dynamically.
 - [Chapter 6: Collections](../../build/programming-with-objects/ch6-collections.md)
   - Working with objects in on-chain homogeneous and heterogeneous key-value stores built on top of dynamic fields.

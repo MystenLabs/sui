@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+  ExecuteTransactionRequestType,
   SignableTransaction,
+  SignedTransaction,
   SuiAddress,
   SuiTransactionResponse,
 } from "@mysten/sui.js";
@@ -25,11 +27,15 @@ export interface WalletAdapter {
     event: E,
     callback: WalletAdapterEvents[E]
   ) => () => void;
+  signTransaction(transaction: SignableTransaction): Promise<SignedTransaction>;
   /**
    * Suggest a transaction for the user to sign. Supports all valid transaction types.
    */
   signAndExecuteTransaction(
-    transaction: SignableTransaction
+    transaction: SignableTransaction,
+    options?: {
+      requestType?: ExecuteTransactionRequestType;
+    }
   ): Promise<SuiTransactionResponse>;
 
   getAccounts: () => Promise<SuiAddress[]>;

@@ -127,19 +127,33 @@ impl Coin {
     }
 
     // Shift balance of coins_to_merge to this coin.
-    // Related coin objects need to be updated in temporary_store to presist the changes,
+    // Related coin objects need to be updated in temporary_store to persist the changes,
     // including deleting the coin objects that have been merged.
-    pub fn merge_coins(&mut self, coins_to_merge: &mut [Coin]) {
-        let total_coins = coins_to_merge.iter().fold(0, |acc, c| acc + c.value());
+    pub fn merge_coins(&mut self, coins_to_merge: &mut [Coin]) -> Result<(), ExecutionError> {
+        let Some(total_coins) =
+            coins_to_merge.iter().fold(Some(0u64), |acc, c| acc?.checked_add(c.value())) else {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::CoinTooLarge,
+                    format!("Coin {} exceeds maximum value", self.id())
+                ))
+            };
+
         for coin in coins_to_merge.iter_mut() {
             // unwrap() is safe because balance value is the same as coin value
             coin.balance.withdraw(coin.value()).unwrap();
         }
-        self.balance = Balance::new(self.value() + total_coins);
+        let Some(new_balance) = self.value().checked_add(total_coins) else {
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::CoinTooLarge,
+                format!("Coin {} exceeds maximum value", self.id())
+            ))
+        };
+        self.balance = Balance::new(new_balance);
+        Ok(())
     }
 
     // Split amount out of this coin to a new coin.
-    // Related coin objects need to be updated in temporary_store to presist the changes,
+    // Related coin objects need to be updated in temporary_store to persist the changes,
     // including creating the coin object related to the newly created coin.
     pub fn split_coin(&mut self, amount: u64, new_coin_id: UID) -> Result<Coin, ExecutionError> {
         self.balance.withdraw(amount)?;
@@ -202,8 +216,7 @@ pub fn update_input_coins<S>(
     let new_contents = bcs::to_bytes(gas_coin).expect("Coin serialization should not fail");
     // unwrap is safe because we checked that it was a coin object above.
     let move_obj = gas_coin_obj.data.try_as_move_mut().unwrap();
-    // unwrap is safe because size of coin contents should never change
-    move_obj.update_contents(new_contents).unwrap();
+    move_obj.update_coin_contents(new_contents);
     if let Some(recipient) = recipient {
         gas_coin_obj.transfer(recipient);
     }

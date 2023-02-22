@@ -68,7 +68,7 @@ module sui::address_tests {
         assert!(address::from_u256(255) == @0xff, 0);
         assert!(address::from_u256(256) == @0x100, 0);
         assert!(address::from_u256(address::max() - 1) == @0xfffffffffffffffffffffffffffffffffffffffe, 0);
-        assert!(address::from_u256(address::max()) == @0xffffffffffffffffffffffffffffffffffffffff, 0);                                                       
+        assert!(address::from_u256(address::max()) == @0xffffffffffffffffffffffffffffffffffffffff, 0);
     }
 
     #[expected_failure(abort_code = sui::address::EU256TooBigToConvertToAddress)]
@@ -82,7 +82,7 @@ module sui::address_tests {
     fun from_u256_tests_too_many_bytes2(): address {
         let u256_max = 115792089237316195423570985008687907853269984665640564039457584007913129639935;
         address::from_u256(u256_max)
-    } 
+    }
 
     #[test]
     fun to_bytes_ok() {

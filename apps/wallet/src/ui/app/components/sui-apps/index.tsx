@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeature } from '@growthbook/growthbook-react';
 import cl from 'classnames';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import SuiApp, { SuiAppEmpty } from './SuiApp';
 import Button from '_app/shared/button';
@@ -11,13 +12,21 @@ import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useAppSelector, useAppDispatch } from '_hooks';
-import { getCuratedApps } from '_redux/slices/dapps';
 import { mintDemoNFT } from '_redux/slices/sui-objects';
+import { FEATURES } from '_src/shared/experimentation/features';
 import { trackEvent } from '_src/shared/plausible';
 
 import type { SerializedError } from '@reduxjs/toolkit';
 
 import st from './Playground.module.scss';
+
+type DappEntry = {
+    name: string;
+    description: string;
+    link: string;
+    icon: string;
+    tags: string[];
+};
 
 function AppsPlayGround() {
     const [mintInProgress, setMintInProgress] = useState(false);
@@ -25,20 +34,14 @@ function AppsPlayGround() {
     const [mintError, setMintError] = useState<string | null>(null);
     const dispatch = useAppDispatch();
 
-    useEffect(() => {
-        dispatch(getCuratedApps());
-    }, [dispatch, mintStatus]);
-
     // Get connected apps
     const connectedApps = useAppSelector(({ permissions }) => permissions);
 
     // Get curated apps
-    const connectedAppResp = useAppSelector(({ curatedApps }) => curatedApps);
-
-    const curatedApps = connectedAppResp.curatedApps;
+    const dapps = useFeature<DappEntry[]>(FEATURES.WALLET_DAPPS).value ?? [];
 
     // flag curated apps that are connected
-    const curatedDapps = curatedApps.map((app) => {
+    const curatedDapps = dapps.map((app) => {
         const connectedApp = connectedApps.entities
             ? Object.values(connectedApps.entities)
             : [];
@@ -165,7 +168,6 @@ function AppsPlayGround() {
                         <div className={st.title}>
                             Builders in sui ecosystem
                         </div>
-                        {connectedAppResp.error && 'Something went wrong'}
                     </div>
 
                     <SuiAppEmpty displaytype="full" />

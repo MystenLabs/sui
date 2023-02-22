@@ -58,7 +58,7 @@ It bundles React in production mode and optimizes the build for the best perform
 
 ### `pnpm explorer lint`
 
-Run linting check (prettier/eslint/stylelint).
+Run linting check (prettier/eslint).
 
 ### `pnpm explorer lint:fix`
 

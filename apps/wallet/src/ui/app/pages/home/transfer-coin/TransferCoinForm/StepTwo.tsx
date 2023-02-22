@@ -65,7 +65,7 @@ function StepTwo({
         <Form className={st.container} autoComplete="off" noValidate={true}>
             <Content>
                 <div className={st.labelDirection}>
-                    Enter or search the address of the recepient below to start
+                    Enter or search the address of the recipient below to start
                     sending coins.
                 </div>
                 <div className={cl(st.group, st.address)}>

@@ -568,7 +568,7 @@ module defi::pool_tests {
         // Try small values
         assert!(pool::get_input_price(10, 1000, 1000, 0) == 9, 0);
 
-        // Even with 0 comission there's this small loss of 1
+        // Even with 0 commission there's this small loss of 1
         assert!(pool::get_input_price(10000, max_val, max_val, 0) == 9999, 0);
         assert!(pool::get_input_price(1000, max_val, max_val, 0) == 999, 0);
         assert!(pool::get_input_price(100, max_val, max_val, 0) == 99, 0);

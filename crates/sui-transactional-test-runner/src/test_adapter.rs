@@ -37,14 +37,17 @@ use std::{
     sync::Arc,
 };
 use sui_adapter::execution_engine;
-use sui_adapter::{adapter::new_move_vm, execution_mode, genesis};
+use sui_adapter::{adapter::new_move_vm, execution_mode};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_types::temporary_store::TemporaryStore;
+use sui_protocol_config::ProtocolConfig;
+use sui_types::clock::Clock;
+use sui_types::epoch_data::EpochData;
+use sui_types::gas::SuiCostTable;
+use sui_types::id::UID;
+use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
-    base_types::{
-        ObjectDigest, ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH,
-    },
+    base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
     crypto::{get_key_pair_from_rng, AccountKeyPair},
     event::Event,
     gas,
@@ -52,9 +55,12 @@ use sui_types::{
         ExecutionStatus, InputObjects, TransactionData, TransactionEffects, VerifiedTransaction,
     },
     object::{self, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
-    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
+    object::{MoveObject, Owner},
+    MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+    SUI_FRAMEWORK_ADDRESS,
 };
-use sui_types::{in_memory_storage::InMemoryStorage, object::PACKAGE_VERSION};
+use sui_types::{gas::SuiGasStatus, temporary_store::TemporaryStore};
+
 pub(crate) type FakeID = u64;
 
 // initial value for fake object ID mapping
@@ -82,6 +88,95 @@ struct TxnSummary {
     written: Vec<ObjectID>,
     deleted: Vec<ObjectID>,
     events: Vec<Event>,
+}
+
+static GENESIS: Lazy<Genesis> = Lazy::new(create_genesis_module_objects);
+static PROTOCOL_CONSTANTS: Lazy<ProtocolConfig> = Lazy::new(ProtocolConfig::get_for_max_version);
+
+struct Genesis {
+    pub objects: Vec<Object>,
+    pub packages: Vec<Object>,
+    pub modules: Vec<Vec<CompiledModule>>,
+}
+
+pub fn clone_genesis_compiled_modules() -> Vec<Vec<CompiledModule>> {
+    GENESIS.modules.clone()
+}
+
+pub fn clone_genesis_packages() -> Vec<Object> {
+    GENESIS.packages.clone()
+}
+
+pub fn clone_genesis_objects() -> Vec<Object> {
+    GENESIS.objects.clone()
+}
+
+pub fn get_framework_object_ref() -> ObjectRef {
+    GENESIS
+        .packages
+        .iter()
+        .find(|o| o.id() == SUI_FRAMEWORK_ADDRESS.into())
+        .unwrap()
+        .compute_object_reference()
+}
+
+/// Create and return objects wrapping the genesis modules for sui
+fn create_genesis_module_objects() -> Genesis {
+    let sui_modules = sui_framework::get_sui_framework();
+    let std_modules = sui_framework::get_move_stdlib();
+    let objects = vec![create_clock()];
+    // SAFETY: unwraps safe because genesis packages should never exceed max size
+    let packages = vec![
+        Object::new_package(
+            std_modules.clone(),
+            TransactionDigest::genesis(),
+            PROTOCOL_CONSTANTS.max_move_package_size(),
+        )
+        .unwrap(),
+        Object::new_package(
+            sui_modules.clone(),
+            TransactionDigest::genesis(),
+            PROTOCOL_CONSTANTS.max_move_package_size(),
+        )
+        .unwrap(),
+    ];
+    let modules = vec![std_modules, sui_modules];
+    Genesis {
+        objects,
+        packages,
+        modules,
+    }
+}
+
+fn create_clock() -> Object {
+    // SAFETY: unwrap safe because genesis objects should be serializable
+    let contents = bcs::to_bytes(&Clock {
+        id: UID::new(SUI_CLOCK_OBJECT_ID),
+        timestamp_ms: 0,
+    })
+    .unwrap();
+
+    // SAFETY: Whether `Clock` has public transfer or not is statically known, and unwrap safe
+    // because genesis objects should never exceed max size
+    let move_object = unsafe {
+        let has_public_transfer = false;
+        MoveObject::new_from_execution(
+            Clock::type_(),
+            has_public_transfer,
+            SUI_CLOCK_OBJECT_SHARED_VERSION,
+            contents,
+            &PROTOCOL_CONSTANTS,
+        )
+        .unwrap()
+    };
+
+    Object::new_move(
+        move_object,
+        Owner::Shared {
+            initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+        },
+        TransactionDigest::genesis(),
+    )
 }
 
 impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
@@ -145,7 +240,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
 
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-        let mut objects = genesis::clone_genesis_packages();
+        let mut objects = clone_genesis_packages();
+        objects.extend(clone_genesis_objects());
         let mut account_objects = BTreeMap::new();
         for (account, (addr, _)) in &accounts {
             let obj = Object::with_id_owner_for_testing(ObjectID::new(rng.gen()), *addr);
@@ -154,7 +250,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         }
 
         let mut test_adapter = Self {
-            vm: Arc::new(new_move_vm(native_functions.clone()).unwrap()),
+            vm: Arc::new(new_move_vm(native_functions.clone(), &PROTOCOL_CONSTANTS).unwrap()),
             storage: Arc::new(InMemoryStorage::new(objects)),
             native_functions,
             compiled_state: CompiledState::new(
@@ -285,17 +381,12 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             .map(|arg| arg.into_call_args(self))
             .collect::<anyhow::Result<_>>()?;
         let package_id = ObjectID::from(*module_id.address());
-        let package_ref = match self.storage.get_object(&package_id) {
-            Some(obj) => obj.compute_object_reference(),
-            // object not found
-            None => (package_id, PACKAGE_VERSION, ObjectDigest::new([0; 32])),
-        };
 
         let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
         let data = |sender, gas_payment| {
             TransactionData::new_move_call_with_dummy_gas_price(
                 sender,
-                package_ref,
+                package_id,
                 module_id.name().to_owned(),
                 function.to_owned(),
                 type_args,
@@ -423,6 +514,14 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let output = self.object_summary_output(&summary, false);
                 Ok(output)
             }
+            SuiSubcommand::ConsensusCommitPrologue(ConsensusCommitPrologueCommand {
+                timestamp_ms,
+            }) => {
+                let transaction = VerifiedTransaction::new_consensus_commit_prologue(timestamp_ms);
+                let summary = self.execute_txn(transaction, GAS_VALUE_FOR_TESTING)?;
+                let output = self.object_summary_output(&summary, false);
+                Ok(output)
+            }
         }
     }
 }
@@ -461,7 +560,13 @@ impl<'a> SuiTestAdapter<'a> {
         transaction: VerifiedTransaction,
         gas_budget: u64,
     ) -> anyhow::Result<TxnSummary> {
-        let gas_status = gas::start_gas_metering(gas_budget, 1, 1).unwrap();
+        let gas_status = if transaction.inner().is_system_tx() {
+            SuiGasStatus::new_unmetered()
+        } else {
+            gas::start_gas_metering(gas_budget, 1, 1, SuiCostTable::new(&PROTOCOL_CONSTANTS))
+                .unwrap()
+        };
+
         let transaction_digest = TransactionDigest::new(self.rng.gen());
         let objects_by_kind = transaction
             .data()
@@ -479,8 +584,15 @@ impl<'a> SuiTestAdapter<'a> {
         let input_objects = InputObjects::new(objects_by_kind);
         let transaction_dependencies = input_objects.transaction_dependencies();
         let shared_object_refs: Vec<_> = input_objects.filter_shared_objects();
-        let temporary_store =
-            TemporaryStore::new(self.storage.clone(), input_objects, transaction_digest);
+        let temporary_store = TemporaryStore::new(
+            self.storage.clone(),
+            input_objects,
+            transaction_digest,
+            &PROTOCOL_CONSTANTS,
+        );
+        let transaction_data = transaction.into_inner().into_data().intent_message.value;
+        let signer = transaction_data.sender();
+        let gas = transaction_data.gas();
         let (
             inner,
             TransactionEffects {
@@ -500,14 +612,17 @@ impl<'a> SuiTestAdapter<'a> {
         ) = execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
             shared_object_refs,
             temporary_store,
-            transaction.into_inner().into_data().intent_message.value,
+            transaction_data.kind,
+            signer,
+            gas,
             transaction_digest,
             transaction_dependencies,
             &self.vm,
             &self.native_functions,
             gas_status,
             // TODO: Support different epochs in transactional tests.
-            0,
+            &EpochData::genesis(),
+            &PROTOCOL_CONSTANTS,
         );
 
         let mut created_ids: Vec<_> = created.iter().map(|((id, _, _), _)| *id).collect();

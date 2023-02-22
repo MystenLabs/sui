@@ -15,9 +15,17 @@ import {
   OBJECT_MODULE_NAME,
   SuiJsonValue,
   SuiMoveNormalizedType,
+  SuiObjectRef,
   SUI_FRAMEWORK_ADDRESS,
 } from '../../types';
-import { bcs, CallArg, MoveCallTx, ObjectArg } from '../../types/sui-bcs';
+import {
+  bcsForVersion,
+  CallArg,
+  isPureArg,
+  MoveCallTx,
+  ObjectArg,
+  PureArg,
+} from '../../types/sui-bcs';
 import { MoveCallTransaction } from './txn-data-serializer';
 
 const MOVE_CALL_SER_ERROR = 'Move call argument serialization error:';
@@ -27,6 +35,9 @@ const STD_ASCII_STRUCT_NAME = 'String';
 
 const STD_UTF8_MODULE_NAME = 'string';
 const STD_UTF8_STRUCT_NAME = 'String';
+
+const STD_OPTION_MODULE_NAME = 'option';
+const STD_OPTION_STRUCT_NAME = 'Option';
 
 const RESOLVED_SUI_ID = {
   address: SUI_FRAMEWORK_ADDRESS,
@@ -45,6 +56,12 @@ const RESOLVED_UTF8_STR = {
   name: STD_UTF8_STRUCT_NAME,
 };
 
+const RESOLVED_STD_OPTION = {
+  address: MOVE_STDLIB_ADDRESS,
+  module: STD_OPTION_MODULE_NAME,
+  name: STD_OPTION_STRUCT_NAME,
+};
+
 const isTypeFunc = (type: string) => (t: any) => typeof t === type;
 const isSameStruct = (a: any, b: any) =>
   a.address === b.address && a.module === b.module && a.name === b.name;
@@ -60,7 +77,7 @@ export class CallArgSerializer {
           ? Array.from(arg.ObjVec).map((a) => ({
               Object: a,
             }))
-          : arg
+          : arg,
       )
       .flat()
       .map((arg) => {
@@ -78,24 +95,24 @@ export class CallArgSerializer {
   }
 
   async serializeMoveCallArguments(
-    txn: MoveCallTransaction
+    txn: MoveCallTransaction,
   ): Promise<CallArg[]> {
     const userParams = await this.extractNormalizedFunctionParams(
       txn.packageObjectId,
       txn.module,
-      txn.function
+      txn.function,
     );
 
     if (userParams.length !== txn.arguments.length) {
       throw new Error(
         `${MOVE_CALL_SER_ERROR} expect ${userParams.length} ` +
-          `arguments, received ${txn.arguments.length} arguments`
+          `arguments, received ${txn.arguments.length} arguments`,
       );
     }
     return Promise.all(
       userParams.map(async (param, i) =>
-        this.newCallArg(param, txn.arguments[i])
-      )
+        this.newCallArg(param, txn.arguments[i]),
+      ),
     );
   }
 
@@ -104,27 +121,30 @@ export class CallArgSerializer {
    */
   async deserializeCallArgs(txn: MoveCallTx): Promise<SuiJsonValue[]> {
     const userParams = await this.extractNormalizedFunctionParams(
-      txn.Call.package.objectId,
+      txn.Call.package,
       txn.Call.module,
-      txn.Call.function
+      txn.Call.function,
     );
 
     return Promise.all(
       userParams.map(async (param, i) =>
-        this.deserializeCallArg(param, txn.Call.arguments[i])
-      )
+        this.deserializeCallArg(param, txn.Call.arguments[i]),
+      ),
     );
   }
 
   private async extractNormalizedFunctionParams(
-    packageId: ObjectId,
+    // TODO: Restrict to just `ObjectId` once 0.24.0 has deployed
+    packageId: ObjectId | SuiObjectRef,
     module: string,
-    functionName: string
+    functionName: string,
   ) {
     const normalized = await this.provider.getNormalizedMoveFunction(
-      normalizeSuiObjectId(packageId),
+      normalizeSuiObjectId(
+        typeof packageId === 'string' ? packageId : packageId.objectId,
+      ),
       module,
-      functionName
+      functionName,
     );
     const params = normalized.parameters;
     // Entry functions can have a mutable reference to an instance of the TxContext
@@ -137,21 +157,26 @@ export class CallArgSerializer {
   async newObjectArg(objectId: string): Promise<ObjectArg> {
     const object = await this.provider.getObject(objectId);
     const initialSharedVersion = getSharedObjectInitialVersion(object);
-    if (initialSharedVersion) {
-      return { Shared: { objectId, initialSharedVersion } };
-    }
 
+    const mutable = true; // Defaulted to True to match current behavior.
+    if (initialSharedVersion) {
+      return { Shared: { objectId, initialSharedVersion, mutable } };
+    }
     return { ImmOrOwned: getObjectReference(object)! };
   }
 
   private async newCallArg(
     expectedType: SuiMoveNormalizedType,
-    argVal: SuiJsonValue
+    argVal: SuiJsonValue | PureArg,
   ): Promise<CallArg> {
+    if (isPureArg(argVal)) {
+      return argVal;
+    }
     const serType = this.getPureSerializationType(expectedType, argVal);
+    const version = await this.provider.getRpcApiVersion();
     if (serType !== undefined) {
       return {
-        Pure: bcs.ser(serType, argVal).toBytes(),
+        Pure: bcsForVersion(version).ser(serType, argVal).toBytes(),
       };
     }
 
@@ -165,8 +190,8 @@ export class CallArgSerializer {
           `${MOVE_CALL_SER_ERROR} expect the argument to be an object id string, got ${JSON.stringify(
             argVal,
             null,
-            2
-          )}`
+            2,
+          )}`,
         );
       }
       return { Object: await this.newObjectArg(argVal) };
@@ -180,19 +205,19 @@ export class CallArgSerializer {
     ) {
       if (!Array.isArray(argVal)) {
         throw new Error(
-          `Expect ${argVal} to be a array, received ${typeof argVal}`
+          `Expect ${argVal} to be a array, received ${typeof argVal}`,
         );
       }
       return {
         ObjVec: await Promise.all(
-          argVal.map((arg) => this.newObjectArg(arg as string))
+          argVal.map((arg) => this.newObjectArg(arg as string)),
         ),
       };
     }
 
     throw new Error(
       `Unknown call arg type ${JSON.stringify(expectedType, null, 2)} ` +
-        `for value ${JSON.stringify(argVal, null, 2)}`
+        `for value ${JSON.stringify(argVal, null, 2)}`,
     );
   }
 
@@ -205,18 +230,19 @@ export class CallArgSerializer {
 
   private async deserializeCallArg(
     expectedType: SuiMoveNormalizedType,
-    argVal: CallArg
+    argVal: CallArg,
   ): Promise<SuiJsonValue> {
     if ('Object' in argVal) {
       return this.extractIdFromObjectArg(argVal.Object);
     } else if ('ObjVec' in argVal) {
       return Array.from(argVal.ObjVec).map((o) =>
-        this.extractIdFromObjectArg(o)
+        this.extractIdFromObjectArg(o),
       );
     }
 
     const serType = this.getPureSerializationType(expectedType, undefined);
-    return bcs.de(serType!, Uint8Array.from(argVal.Pure));
+    const version = await this.provider.getRpcApiVersion();
+    return bcsForVersion(version).de(serType!, Uint8Array.from(argVal.Pure));
   }
 
   /**
@@ -228,7 +254,7 @@ export class CallArgSerializer {
    */
   private getPureSerializationType(
     normalizedType: SuiMoveNormalizedType,
-    argVal: SuiJsonValue | undefined
+    argVal: SuiJsonValue | undefined,
   ): string | undefined {
     const allowedTypes = [
       'Address',
@@ -252,7 +278,7 @@ export class CallArgSerializer {
         this.checkArgVal(
           (t: any) => typeof t === 'string' && isValidSuiAddress(t),
           argVal,
-          'valid SUI address'
+          'valid SUI address',
         );
       }
       return normalizedType.toLowerCase();
@@ -261,8 +287,8 @@ export class CallArgSerializer {
         `${MOVE_CALL_SER_ERROR} unknown pure normalized type ${JSON.stringify(
           normalizedType,
           null,
-          2
-        )}`
+          2,
+        )}`,
       );
     }
 
@@ -276,13 +302,13 @@ export class CallArgSerializer {
 
       if (argVal !== undefined && !Array.isArray(argVal)) {
         throw new Error(
-          `Expect ${argVal} to be a array, received ${typeof argVal}`
+          `Expect ${argVal} to be a array, received ${typeof argVal}`,
         );
       }
       const innerType = this.getPureSerializationType(
         normalizedType.Vector,
         // undefined when argVal is empty
-        argVal ? argVal[0] : undefined
+        argVal ? argVal[0] : undefined,
       );
       if (innerType === undefined) {
         return undefined;
@@ -297,6 +323,11 @@ export class CallArgSerializer {
         return 'utf8string';
       } else if (isSameStruct(normalizedType.Struct, RESOLVED_SUI_ID)) {
         return 'address';
+      } else if (isSameStruct(normalizedType.Struct, RESOLVED_STD_OPTION)) {
+        const optionToVec: SuiMoveNormalizedType = {
+          Vector: normalizedType.Struct.type_arguments[0],
+        };
+        return this.getPureSerializationType(optionToVec, argVal);
       }
     }
 
@@ -306,14 +337,14 @@ export class CallArgSerializer {
   private checkArgVal(
     check: (t: any) => boolean,
     argVal: SuiJsonValue | undefined,
-    expectedType: string
+    expectedType: string,
   ) {
     if (argVal === undefined) {
       return;
     }
     if (!check(argVal)) {
       throw new Error(
-        `Expect ${argVal} to be ${expectedType}, received ${typeof argVal}`
+        `Expect ${argVal} to be ${expectedType}, received ${typeof argVal}`,
       );
     }
   }

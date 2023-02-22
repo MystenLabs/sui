@@ -14,13 +14,13 @@ import {
     useInteractions,
     FloatingPortal,
     arrow,
-} from '@floating-ui/react-dom-interactions';
+} from '@floating-ui/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRef, useState } from 'react';
 
 import Icon, { SuiIcons } from '_components/icon';
 
-import type { Placement } from '@floating-ui/react-dom-interactions';
+import type { Placement } from '@floating-ui/react';
 import type { ReactNode, CSSProperties } from 'react';
 
 const TOOLTIP_DELAY = 150;
@@ -106,7 +106,7 @@ export function Tooltip({ tip, children, placement = 'top' }: TooltipProps) {
                 <AnimatePresence>
                     {open ? (
                         <motion.div
-                            className="pointer-events-none left-0 top-0 z-50 text-subtitleSmall font-semibold text-white"
+                            className="pointer-events-none left-0 top-0 z-50 text-subtitleSmall font-semibold text-white leading-130"
                             initial={{
                                 opacity: 0,
                                 scale: 0,
@@ -131,6 +131,7 @@ export function Tooltip({ tip, children, placement = 'top' }: TooltipProps) {
                                 top: y ?? 0,
                                 left: x ?? 0,
                                 width: 'max-content',
+                                maxWidth: '200px',
                             }}
                             {...getFloatingProps({ ref: floating })}
                         >

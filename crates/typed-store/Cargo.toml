@@ -19,13 +19,16 @@ num_cpus = "1.14.0"
 prometheus = "0.13.3"
 hdrhistogram = "7.5.1"
 # deactivation of bzip2 due to https://github.com/rust-rocksdb/rust-rocksdb/issues/609
-rocksdb = { version = "0.19.0", features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"], default-features = false }
+rocksdb = { version = "0.20.1", features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"], default-features = false }
 serde = { version = "1.0.140", features = ["derive"] }
 thiserror = "1.0.37"
 tokio = { workspace = true, features = ["full", "test-util"] }
 tracing = "0.1.37"
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 sui-macros = { path = "../sui-macros" }
+ouroboros = "0.15.5"
+rand = "0.8.5"
+async-trait = "0.1.57"
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 tempfile = "3.3.0"
@@ -36,3 +39,8 @@ rstest = "0.16.0"
 rand = "0.8.5"
 syn = { version = "1.0.104", features = ["derive"] }
 typed-store-derive = {path = "../typed-store-derive"}
+
+# Most packages should depend on sui-simulator instead of directly on msim, but for typed-store
+# that creates a circular dependency.
+[target.'cfg(msim)'.dependencies]
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "d9f001161fb8c8362c8644013bb7dc1572bbeb45", package = "msim" }

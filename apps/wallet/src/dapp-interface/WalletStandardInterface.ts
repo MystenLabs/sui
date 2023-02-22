@@ -4,7 +4,10 @@
 import {
     SUI_CHAINS,
     ReadonlyWalletAccount,
-    type SuiSignAndExecuteTransactionFeature,
+    SUI_DEVNET_CHAIN,
+    SUI_TESTNET_CHAIN,
+    SUI_LOCALNET_CHAIN,
+    type SuiFeatures,
     type SuiSignAndExecuteTransactionMethod,
     type ConnectFeature,
     type ConnectMethod,
@@ -12,6 +15,7 @@ import {
     type EventsFeature,
     type EventsOnMethod,
     type EventsListeners,
+    type SuiSignTransactionMethod,
 } from '@mysten/wallet-standard';
 import mitt, { type Emitter } from 'mitt';
 import { filter, map, type Observable } from 'rxjs';
@@ -19,7 +23,6 @@ import { filter, map, type Observable } from 'rxjs';
 import { mapToPromise } from './utils';
 import { createMessage } from '_messages';
 import { WindowMessageStream } from '_messaging/WindowMessageStream';
-import { type Payload } from '_payloads';
 import {
     type AcquirePermissionsRequest,
     type AcquirePermissionsResponse,
@@ -27,17 +30,22 @@ import {
     type HasPermissionsResponse,
     ALL_PERMISSION_TYPES,
 } from '_payloads/permissions';
+import { API_ENV } from '_src/shared/api-env';
 import { isWalletStatusChangePayload } from '_src/shared/messaging/messages/payloads/wallet-status-change';
 
 import type { SuiAddress } from '@mysten/sui.js/src';
-import type { EventsChangeProperties } from '@mysten/wallet-standard';
+import type { BasePayload, Payload } from '_payloads';
 import type { GetAccount } from '_payloads/account/GetAccount';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
+import type { SetNetworkPayload } from '_payloads/network';
 import type {
     StakeRequest,
     ExecuteTransactionRequest,
     ExecuteTransactionResponse,
+    SignTransactionRequest,
+    SignTransactionResponse,
 } from '_payloads/transactions';
+import type { NetworkEnvType } from '_src/background/NetworkEnv';
 
 type WalletEventsMap = {
     [E in keyof EventsListeners]: Parameters<EventsListeners[E]>[0];
@@ -53,13 +61,23 @@ type SuiWalletStakeFeature = {
         stake: (input: StakeInput) => Promise<void>;
     };
 };
+type ChainType = Wallet['chains'][number];
+const API_ENV_TO_CHAIN: Record<
+    Exclude<API_ENV, API_ENV.customRPC>,
+    ChainType
+> = {
+    [API_ENV.local]: SUI_LOCALNET_CHAIN,
+    [API_ENV.devNet]: SUI_DEVNET_CHAIN,
+    [API_ENV.testNet]: SUI_TESTNET_CHAIN,
+};
 
 export class SuiWallet implements Wallet {
     readonly #events: Emitter<WalletEventsMap>;
     readonly #version = '1.0.0' as const;
     readonly #name = name;
-    #account: ReadonlyWalletAccount | null;
+    #accounts: ReadonlyWalletAccount[];
     #messagesStream: WindowMessageStream;
+    #activeChain: ChainType | null = null;
 
     get version() {
         return this.#version;
@@ -80,7 +98,7 @@ export class SuiWallet implements Wallet {
 
     get features(): ConnectFeature &
         EventsFeature &
-        SuiSignAndExecuteTransactionFeature &
+        SuiFeatures &
         SuiWalletStakeFeature {
         return {
             'standard:connect': {
@@ -91,8 +109,12 @@ export class SuiWallet implements Wallet {
                 version: '1.0.0',
                 on: this.#on,
             },
-            'sui:signAndExecuteTransaction': {
+            'sui:signTransaction': {
                 version: '1.0.0',
+                signTransaction: this.#signTransaction,
+            },
+            'sui:signAndExecuteTransaction': {
+                version: '1.1.0',
                 signAndExecuteTransaction: this.#signAndExecuteTransaction,
             },
             'suiWallet:stake': {
@@ -103,42 +125,56 @@ export class SuiWallet implements Wallet {
     }
 
     get accounts() {
-        return this.#account ? [this.#account] : [];
+        return this.#accounts;
     }
 
-    #setAccount(address: SuiAddress | null) {
-        if (!address) {
-            this.#account = null;
-            return;
-        }
-        this.#account = new ReadonlyWalletAccount({
-            address,
-            // TODO: Expose public key instead of address:
-            publicKey: new Uint8Array(),
-            chains: SUI_CHAINS,
-            features: ['sui:signAndExecuteTransaction'],
-        });
+    #setAccounts(addresses: SuiAddress[]) {
+        this.#accounts = addresses.map(
+            (address) =>
+                new ReadonlyWalletAccount({
+                    address,
+                    // TODO: Expose public key instead of address:
+                    publicKey: new Uint8Array(),
+                    chains: this.#activeChain ? [this.#activeChain] : [],
+                    features: ['sui:signAndExecuteTransaction'],
+                })
+        );
     }
 
     constructor() {
         this.#events = mitt();
-        this.#account = null;
+        this.#accounts = [];
         this.#messagesStream = new WindowMessageStream(
             'sui_in-page',
             'sui_content-script'
         );
         this.#messagesStream.messages.subscribe(({ payload }) => {
             if (isWalletStatusChangePayload(payload)) {
-                const { accounts } = payload;
-                let change: EventsChangeProperties = {};
-                if (accounts) {
-                    const [address = null] = accounts;
-                    if (address !== this.#account?.address) {
-                        this.#setAccount(address);
-                        change = { accounts: this.accounts };
+                const { network, accounts } = payload;
+                if (network) {
+                    this.#setActiveChain(network);
+                    if (!accounts) {
+                        // in case an accounts change exists skip updating chains of current accounts
+                        // accounts will be updated in the if block below
+                        this.#accounts = this.#accounts.map(
+                            ({ address, features, icon, label, publicKey }) =>
+                                new ReadonlyWalletAccount({
+                                    address,
+                                    publicKey,
+                                    chains: this.#activeChain
+                                        ? [this.#activeChain]
+                                        : [],
+                                    features,
+                                    label,
+                                    icon,
+                                })
+                        );
                     }
                 }
-                this.#events.emit('change', change);
+                if (accounts) {
+                    this.#setAccounts(accounts);
+                }
+                this.#events.emit('change', { accounts: this.accounts });
             }
         });
         this.#connected();
@@ -150,24 +186,14 @@ export class SuiWallet implements Wallet {
     };
 
     #connected = async () => {
+        this.#setActiveChain(await this.#getActiveNetwork());
         if (!(await this.#hasPermissions(['viewAccount']))) {
             return;
         }
-        const accounts = await mapToPromise(
-            this.#send<GetAccount, GetAccountResponse>({
-                type: 'get-account',
-            }),
-            (response) => response.accounts
-        );
-
-        const [address] = accounts;
-
-        if (address) {
-            const account = this.#account;
-            if (!account || account.address !== address) {
-                this.#setAccount(address);
-                this.#events.emit('change', { accounts: this.accounts });
-            }
+        const accounts = await this.#getAccounts();
+        this.#setAccounts(accounts);
+        if (this.#accounts.length) {
+            this.#events.emit('change', { accounts: this.accounts });
         }
     };
 
@@ -190,6 +216,16 @@ export class SuiWallet implements Wallet {
         return { accounts: this.accounts };
     };
 
+    #signTransaction: SuiSignTransactionMethod = async (input) => {
+        return mapToPromise(
+            this.#send<SignTransactionRequest, SignTransactionResponse>({
+                type: 'sign-transaction-request',
+                transaction: input,
+            }),
+            (response) => response.result
+        );
+    };
+
     #signAndExecuteTransaction: SuiSignAndExecuteTransactionMethod = async (
         input
     ) => {
@@ -199,6 +235,7 @@ export class SuiWallet implements Wallet {
                 transaction: {
                     type: 'v2',
                     data: input.transaction,
+                    options: input.options,
                 },
             }),
             (response) => response.result
@@ -220,6 +257,29 @@ export class SuiWallet implements Wallet {
             }),
             ({ result }) => result
         );
+    }
+
+    #getAccounts() {
+        return mapToPromise(
+            this.#send<GetAccount, GetAccountResponse>({
+                type: 'get-account',
+            }),
+            (response) => response.accounts
+        );
+    }
+
+    #getActiveNetwork() {
+        return mapToPromise(
+            this.#send<BasePayload, SetNetworkPayload>({
+                type: 'get-network',
+            }),
+            ({ network }) => network
+        );
+    }
+
+    #setActiveChain({ env }: NetworkEnvType) {
+        this.#activeChain =
+            env === API_ENV.customRPC ? 'sui:unknown' : API_ENV_TO_CHAIN[env];
     }
 
     #send<

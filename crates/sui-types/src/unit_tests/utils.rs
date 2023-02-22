@@ -2,17 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::traits::KeyPair as KeypairTraits;
-use signature::Signer;
 
+use crate::crypto::Signer;
 use crate::{
-    base_types::{dbg_addr, ObjectID},
-    committee::Committee,
+    base_types::{dbg_addr, ExecutionDigests, ObjectID},
+    committee::{Committee, ProtocolVersion},
     crypto::{
         get_key_pair, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
         AuthorityPublicKeyBytes, Signature,
     },
+    gas::GasCostSummary,
     intent::Intent,
     messages::{Transaction, TransactionData, VerifiedTransaction},
+    messages_checkpoint::{
+        CertifiedCheckpointSummary, CheckpointContents, SignedCheckpointSummary,
+    },
     object::Object,
 };
 use std::collections::BTreeMap;
@@ -40,7 +44,7 @@ where
         keys.push(inner_authority_key);
     }
 
-    let committee = Committee::new(0, authorities).unwrap();
+    let committee = Committee::new(0, ProtocolVersion::MIN, authorities).unwrap();
     (keys, committee)
 }
 
@@ -66,9 +70,47 @@ pub fn to_sender_signed_transaction(
     data: TransactionData,
     signer: &dyn Signer<Signature>,
 ) -> VerifiedTransaction {
+    to_sender_signed_transaction_with_multi_signers(data, vec![signer])
+}
+
+pub fn to_sender_signed_transaction_with_multi_signers(
+    data: TransactionData,
+    signers: Vec<&dyn Signer<Signature>>,
+) -> VerifiedTransaction {
     VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
         data,
         Intent::default(),
-        signer,
+        signers,
     ))
+}
+
+pub fn mock_certified_checkpoint<'a>(
+    keys: impl Iterator<Item = &'a AuthorityKeyPair>,
+    committee: Committee,
+    seq_num: u64,
+) -> CertifiedCheckpointSummary {
+    let contents = CheckpointContents::new_with_causally_ordered_transactions(
+        [ExecutionDigests::random()].into_iter(),
+    );
+
+    let signed_checkpoints: Vec<_> = keys
+        .map(|k| {
+            let name = k.public().into();
+
+            SignedCheckpointSummary::new(
+                committee.epoch,
+                seq_num,
+                0,
+                name,
+                k,
+                &contents,
+                None,
+                GasCostSummary::default(),
+                None,
+                0,
+            )
+        })
+        .collect();
+
+    CertifiedCheckpointSummary::aggregate(signed_checkpoints, &committee).expect("Cert is OK")
 }

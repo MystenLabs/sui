@@ -31,22 +31,24 @@ impl TestCaseImpl for SharedCounterTest {
         let address = ctx.get_wallet_address();
         let (package_ref, (counter_id, initial_counter_version, _)) =
             publish_basics_package_and_make_counter(wallet_context, address).await;
-        let (tx_cert, effects) =
-            increment_counter(wallet_context, address, None, package_ref, counter_id).await;
+        let response =
+            increment_counter(wallet_context, address, None, package_ref.0, counter_id).await;
         assert_eq!(
-            effects.status,
+            response.effects.status,
             SuiExecutionStatus::Success,
             "Increment counter txn failed: {:?}",
-            effects.status
+            response.effects.status
         );
 
-        effects
+        response
+            .effects
             .shared_objects
             .iter()
             .find(|o| o.object_id == counter_id)
             .expect("Expect obj {counter_id} in shared_objects");
 
-        let counter_version = effects
+        let counter_version = response
+            .effects
             .mutated
             .iter()
             .find_map(|obj| {
@@ -65,7 +67,7 @@ impl TestCaseImpl for SharedCounterTest {
             .expect("Expect obj {counter_id} in mutated");
 
         // Verify fullnode observes the txn
-        ctx.let_fullnode_sync(vec![tx_cert.transaction_digest], 5)
+        ctx.let_fullnode_sync(vec![response.effects.transaction_digest], 5)
             .await;
 
         let counter_object = ObjectChecker::new(counter_id)

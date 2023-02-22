@@ -23,13 +23,15 @@ pub mod accumulator;
 pub mod balance;
 pub mod base_types;
 pub mod certificate_proof;
-pub mod chain_id;
+pub mod clock;
 pub mod coin;
 pub mod collection_types;
 pub mod committee;
 pub mod crypto;
+pub mod digests;
 pub mod dynamic_field;
 pub mod event;
+pub mod filter;
 pub mod gas;
 pub mod gas_coin;
 pub mod governance;
@@ -40,17 +42,18 @@ pub mod message_envelope;
 pub mod messages;
 pub mod messages_checkpoint;
 pub mod move_package;
+pub mod multisig;
 pub mod object;
 pub mod query;
 pub mod quorum_driver_types;
+pub mod signature;
 pub mod signature_seed;
 pub mod storage;
 pub mod sui_serde;
 pub mod sui_system_state;
 pub mod temporary_store;
 
-pub mod filter;
-
+pub mod epoch_data;
 #[path = "./unit_tests/utils.rs"]
 pub mod utils;
 
@@ -67,6 +70,10 @@ pub const SUI_FRAMEWORK_OBJECT_ID: ObjectID = ObjectID::from_single_byte(2);
 /// 0x5: hardcoded object ID for the singleton sui system state object.
 pub const SUI_SYSTEM_STATE_OBJECT_ID: ObjectID = ObjectID::from_single_byte(5);
 pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
+
+/// 0x6: hardcoded object ID for the singleton clock object.
+pub const SUI_CLOCK_OBJECT_ID: ObjectID = ObjectID::from_single_byte(6);
+pub const SUI_CLOCK_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
 
 const fn get_hex_address_two() -> AccountAddress {
     let mut addr = [0u8; AccountAddress::LENGTH];

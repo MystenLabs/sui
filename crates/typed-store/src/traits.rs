@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{borrow::Borrow, collections::BTreeMap, error::Error};
 
@@ -93,6 +94,50 @@ where
 
     /// Try to catch up with primary when running as secondary
     fn try_catch_up_with_primary(&self) -> Result<(), Self::Error>;
+}
+
+#[async_trait]
+pub trait AsyncMap<'a, K, V>
+where
+    K: Serialize + DeserializeOwned + ?Sized + std::marker::Sync,
+    V: Serialize + DeserializeOwned + std::marker::Sync + std::marker::Send,
+{
+    type Error: Error;
+    type Iterator: Iterator<Item = (K, V)>;
+    type Keys: Iterator<Item = K>;
+    type Values: Iterator<Item = V>;
+
+    /// Returns true if the map contains a value for the specified key.
+    async fn contains_key(&self, key: &K) -> Result<bool, Self::Error>;
+
+    /// Returns the value for the given key from the map, if it exists.
+    async fn get(&self, key: &K) -> Result<Option<V>, Self::Error>;
+
+    /// Returns the raw value (bincode serialized bytes) for the given key from the map, if it exists.
+    async fn get_raw_bytes(&self, key: &K) -> Result<Option<Vec<u8>>, Self::Error>;
+
+    /// Returns true if the map is empty, otherwise false.
+    async fn is_empty(&self) -> bool;
+
+    /// Returns an iterator visiting each key-value pair in the map.
+    async fn iter(&'a self) -> Self::Iterator;
+
+    /// Returns an iterator over each key in the map.
+    async fn keys(&'a self) -> Self::Keys;
+
+    /// Returns an iterator over each value in the map.
+    async fn values(&'a self) -> Self::Values;
+
+    /// Returns a vector of values corresponding to the keys provided, non-atomically.
+    async fn multi_get<J>(
+        &self,
+        keys: impl IntoIterator<Item = J> + std::marker::Send,
+    ) -> Result<Vec<Option<V>>, Self::Error>
+    where
+        J: Borrow<K>;
+
+    /// Try to catch up with primary when running as secondary
+    async fn try_catch_up_with_primary(&self) -> Result<(), Self::Error>;
 }
 
 pub struct TableSummary {

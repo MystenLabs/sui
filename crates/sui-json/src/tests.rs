@@ -152,12 +152,12 @@ fn test_basic_args_linter_pure_args_bad() {
                 Value::from(bad_hex_val),
                 MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
             ),
-            // u8 vector from heterogenous array
+            // u8 vector from heterogeneous array
             (
                 json!([1, 2, 3, true, 5, 6, 7]),
                 MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
             ),
-            // U64 deep nest, bad because heterogenous array
+            // U64 deep nest, bad because heterogeneous array
             (
                 json!([[[9, 53, 434], [0], [300]], [], [300, 4, 5, 6, 7]]),
                 MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U64)))),
@@ -401,9 +401,12 @@ fn test_basic_args_linter_pure_args_good() {
 fn test_basic_args_linter_top_level() {
     let path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sui_programmability/examples/nfts");
-    let compiled_modules = BuildConfig::default().build(path).unwrap().into_modules();
+    let compiled_modules = BuildConfig::new_for_testing()
+        .build(path)
+        .unwrap()
+        .into_modules();
     let example_package =
-        Object::new_package(compiled_modules, TransactionDigest::genesis()).unwrap();
+        Object::new_package_for_testing(compiled_modules, TransactionDigest::genesis()).unwrap();
     let example_package = example_package.data.try_as_package().unwrap();
 
     let module = Identifier::new("geniteam").unwrap();
@@ -518,9 +521,12 @@ fn test_basic_args_linter_top_level() {
     // Test with vecu8 as address
     let path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sui_programmability/examples/basics");
-    let compiled_modules = BuildConfig::default().build(path).unwrap().into_modules();
+    let compiled_modules = BuildConfig::new_for_testing()
+        .build(path)
+        .unwrap()
+        .into_modules();
     let example_package =
-        Object::new_package(compiled_modules, TransactionDigest::genesis()).unwrap();
+        Object::new_package_for_testing(compiled_modules, TransactionDigest::genesis()).unwrap();
     let framework_pkg = example_package.data.try_as_package().unwrap();
 
     let module = Identifier::new("object_basics").unwrap();
@@ -614,9 +620,12 @@ fn test_basic_args_linter_top_level() {
     // Test with object vector  args
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../sui-core/src/unit_tests/data/entry_point_vector");
-    let compiled_modules = BuildConfig::default().build(path).unwrap().into_modules();
+    let compiled_modules = BuildConfig::new_for_testing()
+        .build(path)
+        .unwrap()
+        .into_modules();
     let example_package =
-        Object::new_package(compiled_modules, TransactionDigest::genesis()).unwrap();
+        Object::new_package_for_testing(compiled_modules, TransactionDigest::genesis()).unwrap();
     let example_package = example_package.data.try_as_package().unwrap();
 
     let module = Identifier::new("entry_point_vector").unwrap();
@@ -677,6 +686,19 @@ fn test_convert_number_from_bcs() {
     let bcs_bytes = [160u8, 134, 1, 0];
     let value = SuiJsonValue::from_bcs_bytes(&bcs_bytes).unwrap();
     assert_eq!(100000, value.0.as_u64().unwrap());
+}
+
+#[test]
+fn test_no_address_zero_trimming() {
+    let bcs_bytes = bcs::to_bytes(
+        &AccountAddress::from_str("0x0000011111111111111111111111111111111111").unwrap(),
+    )
+    .unwrap();
+    let value = SuiJsonValue::from_bcs_bytes(&bcs_bytes).unwrap();
+    assert_eq!(
+        "0x0000011111111111111111111111111111111111",
+        value.0.as_str().unwrap()
+    );
 }
 
 #[test]

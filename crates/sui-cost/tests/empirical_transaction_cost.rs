@@ -4,11 +4,8 @@
 use insta::assert_json_snapshot;
 use std::{collections::BTreeMap, path::PathBuf};
 use sui_config::NetworkConfig;
-use sui_config::ValidatorInfo;
 use sui_core::test_utils::make_transfer_object_transaction;
 use sui_core::test_utils::make_transfer_sui_transaction;
-use sui_cost::estimator::estimate_transaction_computation_cost;
-use sui_cost::estimator::CommonTransactionCosts;
 use sui_types::base_types::SuiAddress;
 use sui_types::coin::PAY_JOIN_FUNC_NAME;
 use sui_types::coin::PAY_MODULE_NAME;
@@ -16,20 +13,52 @@ use sui_types::coin::PAY_SPLIT_VEC_FUNC_NAME;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::messages::VerifiedTransaction;
 use sui_types::object::{generate_test_gas_objects, Object};
+use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use sui_types::{
     gas::GasCostSummary,
     messages::{CallArg, ExecutionStatus, ObjectArg},
 };
+use test_utils::authority::spawn_test_authorities;
 use test_utils::messages::move_transaction_with_type_tags;
-use test_utils::transaction::get_framework_object;
 use test_utils::transaction::make_publish_package;
 use test_utils::{
-    authority::{spawn_test_authorities, test_authority_configs},
+    authority::test_authority_configs,
     messages::move_transaction,
     transaction::{
         publish_counter_package, submit_shared_object_transaction, submit_single_owner_transaction,
     },
 };
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use serde::{Deserialize, Serialize};
+use strum_macros::Display;
+use strum_macros::EnumString;
+
+#[derive(
+    Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Ord, PartialOrd, Clone, Display, EnumString,
+)]
+pub enum CommonTransactionCosts {
+    Publish,
+    MergeCoin,
+    SplitCoin(usize),
+    TransferWholeCoin,
+    TransferWholeSuiCoin,
+    TransferPortionSuiCoin,
+    SharedCounterCreate,
+    SharedCounterAssertValue,
+    SharedCounterIncrement,
+}
+
+impl CommonTransactionCosts {
+    pub fn is_shared_object_tx(&self) -> bool {
+        matches!(
+            self,
+            CommonTransactionCosts::SharedCounterAssertValue
+                | CommonTransactionCosts::SharedCounterIncrement
+        )
+    }
+}
 
 const TEST_DATA_DIR: &str = "tests/data/";
 
@@ -42,27 +71,16 @@ const TEST_DATA_DIR: &str = "tests/data/";
 #[tokio::test]
 async fn test_good_snapshot() -> Result<(), anyhow::Error> {
     let mut common_costs_actual: BTreeMap<String, GasCostSummary> = BTreeMap::new();
-    let mut common_costs_estimate: BTreeMap<String, GasCostSummary> = BTreeMap::new();
 
-    run_actual_and_estimate_costs()
-        .await?
-        .iter()
-        .for_each(|(k, (actual, estimate))| {
-            common_costs_actual.insert(k.clone().to_string(), actual.clone());
-            common_costs_estimate.insert(k.clone().to_string(), estimate.clone());
-        });
+    run_actual_costs().await?.iter().for_each(|(k, actual)| {
+        common_costs_actual.insert(k.to_string(), actual.clone());
+    });
     assert_json_snapshot!(common_costs_actual);
-    assert_json_snapshot!(common_costs_estimate);
 
     Ok(())
 }
 
-async fn split_n_tx(
-    n: u64,
-    coin: &Object,
-    gas: &Object,
-    validator_info: &[ValidatorInfo],
-) -> VerifiedTransaction {
+async fn split_n_tx(n: u64, coin: &Object, gas: &Object) -> VerifiedTransaction {
     let split_amounts = vec![10u64; n as usize];
     let type_args = vec![coin.get_move_template_type().unwrap()];
 
@@ -70,9 +88,7 @@ async fn split_n_tx(
         gas.clone(),
         PAY_MODULE_NAME.as_str(),
         PAY_SPLIT_VEC_FUNC_NAME.as_str(),
-        get_framework_object(validator_info)
-            .await
-            .compute_object_reference(),
+        SUI_FRAMEWORK_OBJECT_ID,
         &type_args,
         vec![
             CallArg::Object(ObjectArg::ImmOrOwnedObject(coin.compute_object_reference())),
@@ -111,6 +127,7 @@ async fn create_txes(
         None,
         sender,
         keypair,
+        None,
     );
     let partial_sui_coin_tx = make_transfer_sui_transaction(
         gas_objects.pop().unwrap().compute_object_reference(),
@@ -118,6 +135,7 @@ async fn create_txes(
         Some(100),
         sender,
         keypair,
+        None,
     );
     ret.insert(
         CommonTransactionCosts::TransferWholeSuiCoin,
@@ -137,6 +155,7 @@ async fn create_txes(
         sender,
         keypair,
         SuiAddress::default(),
+        None,
     );
 
     ret.insert(CommonTransactionCosts::TransferWholeCoin, whole_coin_tx);
@@ -151,9 +170,7 @@ async fn create_txes(
         gas_objects.pop().unwrap(),
         PAY_MODULE_NAME.as_str(),
         PAY_JOIN_FUNC_NAME.as_str(),
-        get_framework_object(configs.validator_set())
-            .await
-            .compute_object_reference(),
+        SUI_FRAMEWORK_OBJECT_ID,
         &type_args,
         vec![
             CallArg::Object(ObjectArg::ImmOrOwnedObject(c1.compute_object_reference())),
@@ -171,9 +188,7 @@ async fn create_txes(
     for n in 0..4 {
         let gas = gas_objects.pop().unwrap();
         let coin = gas_objects.pop().unwrap();
-        let split_tx = split_n_tx(n, &gas, &coin, configs.validator_set())
-            .await
-            .clone();
+        let split_tx = split_n_tx(n, &gas, &coin).await.clone();
         ret.insert(CommonTransactionCosts::SplitCoin(n as usize), split_tx);
     }
 
@@ -182,8 +197,9 @@ async fn create_txes(
     // Using the `counter` example
     //
 
-    let package_ref =
-        publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
+    let package_id = publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set())
+        .await
+        .0;
 
     // Make a transaction to create a counter.
     tokio::task::yield_now().await;
@@ -191,7 +207,7 @@ async fn create_txes(
         gas_objects.pop().unwrap(),
         "counter",
         "create",
-        package_ref,
+        package_id,
         /* arguments */ Vec::default(),
     );
     let effects =
@@ -201,6 +217,7 @@ async fn create_txes(
     let counter_object_arg = ObjectArg::SharedObject {
         id: counter_id,
         initial_shared_version: counter_initial_shared_version,
+        mutable: true,
     };
 
     ret.insert(CommonTransactionCosts::SharedCounterCreate, transaction);
@@ -211,7 +228,7 @@ async fn create_txes(
         gas_objects.pop().unwrap(),
         "counter",
         "assert_value",
-        package_ref,
+        package_id,
         vec![
             CallArg::Object(counter_object_arg),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
@@ -229,7 +246,7 @@ async fn create_txes(
         gas_objects.pop().unwrap(),
         "counter",
         "increment",
-        package_ref,
+        package_id,
         vec![CallArg::Object(counter_object_arg)],
     );
 
@@ -238,8 +255,8 @@ async fn create_txes(
     ret
 }
 
-async fn run_actual_and_estimate_costs(
-) -> Result<BTreeMap<CommonTransactionCosts, (GasCostSummary, GasCostSummary)>, anyhow::Error> {
+async fn run_actual_costs(
+) -> Result<BTreeMap<CommonTransactionCosts, GasCostSummary>, anyhow::Error> {
     let mut ret = BTreeMap::new();
     let gas_objects = generate_test_gas_objects();
     let (sender, keypair) = deterministic_random_account_key();
@@ -247,7 +264,7 @@ async fn run_actual_and_estimate_costs(
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
     let configs = test_authority_configs();
-    let handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
+    let _ = spawn_test_authorities(gas_objects.clone(), &configs).await;
     // Publish the move package to all authorities and get the new package ref.
     tokio::task::yield_now().await;
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
@@ -255,40 +272,19 @@ async fn run_actual_and_estimate_costs(
     let tx_map = create_txes(sender, &keypair, &gas_objects, &configs).await;
     for (tx_type, tx) in tx_map {
         let gas_used = if tx_type.is_shared_object_tx() {
-            submit_shared_object_transaction(tx.clone(), configs.validator_set())
+            submit_shared_object_transaction(tx, configs.validator_set())
                 .await
                 .unwrap()
                 .gas_cost_summary()
                 .clone()
         } else {
-            submit_single_owner_transaction(tx.clone(), configs.validator_set())
+            submit_single_owner_transaction(tx, configs.validator_set())
                 .await
                 .gas_cost_summary()
                 .clone()
         };
 
-        let gas_estimate = handles[0]
-            .with_async(|node| async move {
-                let state = node.state();
-                estimate_transaction_computation_cost(
-                    tx.into_inner().into_data().intent_message.value,
-                    state.clone(),
-                    None,
-                    None,
-                    None,
-                    None,
-                )
-                .await
-                .unwrap()
-            })
-            .await;
-        ret.insert(tx_type.clone(), (gas_used.clone(), gas_estimate.clone()));
-
-        // Check that the estimates are not less than actual
-        assert!(gas_used.computation_cost <= gas_estimate.computation_cost);
-        assert!(gas_used.storage_cost <= gas_estimate.storage_cost);
-        // Rebate should be less since this is returned
-        assert!(gas_used.storage_rebate >= gas_estimate.storage_rebate);
+        ret.insert(tx_type, gas_used);
     }
     Ok(ret)
 }

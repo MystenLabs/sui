@@ -10,7 +10,7 @@ edition = "2021"
 anemo.workspace = true
 anemo-tower.workspace = true
 arc-swap = "1.5.1"
-axum = "0.5.16"
+axum = "0.6.2"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 clap = { version = "3.2.17", features = ["derive"] }
 multiaddr = "0.17.0"
@@ -21,26 +21,28 @@ parking_lot = "0.12.1"
 futures = "0.3.23"
 chrono = "0.4.23"
 tower = "0.4.13"
+git-version = "0.3.5"
+const-str = "0.5.3"
+reqwest = { version = "0.11.13", default_features= false, features = ["blocking", "json", "rustls-tls"] }
 
+sui-tls = { path = "../sui-tls" }
 sui-config = { path = "../sui-config" }
 sui-core = { path = "../sui-core" }
 sui-storage = { path = "../sui-storage" }
 sui-network = { path = "../sui-network" }
 sui-json-rpc = { path = "../sui-json-rpc" }
+sui-protocol-config = { path = "../sui-protocol-config" }
 sui-telemetry = { path = "../sui-telemetry" }
 sui-types = { path = "../sui-types" }
 mysten-metrics = { path = "../mysten-metrics" }
 narwhal-network = { path = "../../narwhal/network" }
 narwhal-types = { path = "../../narwhal/types" }
 narwhal-config = { path = "../../narwhal/config" }
-prometheus-closure-metric = { path = "../prometheus-closure-metric" }
 typed-store.workspace = true
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true
+fastcrypto.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-
-[dev-dependencies]
-reqwest = { version = "0.11.13", features = ["blocking", "json"] }
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator = { path = "../sui-simulator" }

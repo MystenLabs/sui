@@ -3,22 +3,24 @@
 
 use super::*;
 
-use super::authority_tests::{init_state_with_ids, send_and_confirm_transaction};
+use super::authority_tests::{
+    create_genesis_module_packages, init_state_with_ids, send_and_confirm_transaction,
+};
 use super::move_integration_tests::build_and_try_publish_test_package;
 use crate::authority::authority_tests::{init_state, init_state_with_ids_and_object_basics};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
-use sui_adapter::genesis;
+use once_cell::sync::Lazy;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
 use sui_types::utils::to_sender_signed_transaction;
-use sui_types::{
-    base_types::dbg_addr,
-    crypto::get_key_pair,
-    gas::{SuiGasStatus, MAX_GAS_BUDGET, MIN_GAS_BUDGET},
-};
+use sui_types::{base_types::dbg_addr, crypto::get_key_pair, gas::SuiGasStatus};
 use sui_types::{MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID};
+
+static MAX_GAS_BUDGET: Lazy<u64> = Lazy::new(|| SuiCostTable::new_for_testing().max_gas_budget);
+static MIN_GAS_BUDGET: Lazy<u64> =
+    Lazy::new(|| SuiCostTable::new_for_testing().min_gas_budget_external());
 
 #[tokio::test]
 async fn test_tx_less_than_minimum_gas_budget() {
@@ -90,7 +92,11 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
     // This test does a native transfer with sufficient gas budget and balance.
     // It's expected to succeed. We check that gas was charged properly.
     let result = execute_transfer(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET, true).await;
-    let effects = result.response.unwrap().1.unwrap().into_data();
+    let effects = result
+        .response
+        .unwrap()
+        .into_effects_for_testing()
+        .into_data();
     let gas_cost = effects.gas_used;
     assert!(gas_cost.computation_cost > *MIN_GAS_BUDGET);
     assert!(gas_cost.storage_cost > 0);
@@ -115,7 +121,12 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
 
     // Mimic the process of gas charging, to check that we are charging
     // exactly what we should be charging.
-    let mut gas_status = SuiGasStatus::new_with_budget(*MAX_GAS_BUDGET, 1.into(), 1.into());
+    let mut gas_status = SuiGasStatus::new_with_budget(
+        *MAX_GAS_BUDGET,
+        1.into(),
+        1.into(),
+        SuiCostTable::new_for_testing(),
+    );
     gas_status.charge_min_tx_gas()?;
     let obj_size = object.object_size_for_gas_metering();
     let gas_size = gas_object.object_size_for_gas_metering();
@@ -133,12 +144,20 @@ async fn test_native_transfer_gas_price_is_used() {
     let gas_price_2 = gas_price_1 * 2;
     let result =
         execute_transfer_with_price(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET, gas_price_1, true).await;
-    let effects = result.response.unwrap().1.unwrap().into_data();
+    let effects = result
+        .response
+        .unwrap()
+        .into_effects_for_testing()
+        .into_data();
     let gas_summary_1 = effects.gas_cost_summary();
 
     let result =
         execute_transfer_with_price(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET / 2, gas_price_2, true).await;
-    let effects = result.response.unwrap().1.unwrap().into_data();
+    let effects = result
+        .response
+        .unwrap()
+        .into_effects_for_testing()
+        .into_data();
     let gas_summary_2 = effects.gas_cost_summary();
 
     assert_eq!(
@@ -185,6 +204,7 @@ async fn test_transfer_sui_insufficient_gas() {
     let effects = send_and_confirm_transaction(&authority_state, tx)
         .await
         .unwrap()
+        .1
         .into_data();
     // We expect this to fail due to insufficient gas.
     assert_eq!(
@@ -203,7 +223,11 @@ async fn test_native_transfer_insufficient_gas_reading_objects() {
     let balance = *MIN_GAS_BUDGET + 1;
     let result = execute_transfer(balance, balance, true).await;
     // The transaction should still execute to effects, but with execution status as failure.
-    let effects = result.response.unwrap().1.unwrap().into_data();
+    let effects = result
+        .response
+        .unwrap()
+        .into_effects_for_testing()
+        .into_data();
     assert_eq!(
         effects.status.unwrap_err(),
         ExecutionFailureStatus::InsufficientGas
@@ -220,14 +244,17 @@ async fn test_native_transfer_insufficient_gas_execution() {
     let total_gas = result
         .response
         .unwrap()
-        .1
-        .unwrap()
+        .into_effects_for_testing()
         .data()
         .gas_used
         .gas_used();
     let budget = total_gas - 1;
     let result = execute_transfer(budget, budget, true).await;
-    let effects = result.response.unwrap().1.unwrap().into_data();
+    let effects = result
+        .response
+        .unwrap()
+        .into_effects_for_testing()
+        .into_data();
     // We won't drain the entire budget because we don't charge for storage if tx failed.
     assert!(effects.gas_used.gas_used() < budget);
     let gas_object = result
@@ -264,6 +291,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         &gas_object_id,
         "object_wrapping",
         GAS_VALUE_FOR_TESTING,
+        /* with_unpublished_deps */ false,
     )
     .await;
     let effects = response.1.into_data();
@@ -279,7 +307,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         expected_gas_balance,
     );
     // genesis objects are read during transaction since they are direct dependencies.
-    let genesis_objects = genesis::clone_genesis_packages();
+    let genesis_objects = create_genesis_module_packages();
     // We need the original package bytes in order to reproduce the publish computation cost.
     let publish_bytes = match response
         .0
@@ -296,7 +324,12 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     };
 
     // Mimic the gas charge behavior and cross check the result with above.
-    let mut gas_status = SuiGasStatus::new_with_budget(*MAX_GAS_BUDGET, 1.into(), 1.into());
+    let mut gas_status = SuiGasStatus::new_with_budget(
+        *MAX_GAS_BUDGET,
+        1.into(),
+        1.into(),
+        SuiCostTable::new_for_testing(),
+    );
     gas_status.charge_min_tx_gas()?;
     gas_status.charge_vm_gas()?;
     gas_status.charge_storage_read(
@@ -337,6 +370,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         &gas_object_id,
         "object_wrapping",
         budget,
+        /* with_unpublished_deps */ false,
     )
     .await;
     let effects = response.1.into_data();
@@ -368,6 +402,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         &gas_object_id,
         "object_wrapping",
         budget,
+        /* with_unpublished_deps */ false,
     )
     .await;
     let effects = response.1.into_data();
@@ -395,7 +430,7 @@ async fn test_move_call_gas() -> SuiResult {
     ];
     let data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        package_object_ref,
+        package_object_ref.0,
         module.clone(),
         function.clone(),
         Vec::new(),
@@ -406,7 +441,7 @@ async fn test_move_call_gas() -> SuiResult {
 
     let tx = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await?;
-    let effects = response.into_data();
+    let effects = response.1.into_data();
     let created_object_ref = effects.created[0].0;
     assert!(effects.status.is_ok());
     let gas_cost = effects.gas_used;
@@ -422,7 +457,12 @@ async fn test_move_call_gas() -> SuiResult {
     // Mimic the gas charge behavior and cross check the result with above. Do not include
     // computation cost calculation as it would require hard-coding a constant representing VM
     // execution cost which is quite fragile.
-    let mut gas_status = SuiGasStatus::new_with_budget(GAS_VALUE_FOR_TESTING, 1.into(), 1.into());
+    let mut gas_status = SuiGasStatus::new_with_budget(
+        GAS_VALUE_FOR_TESTING,
+        1.into(),
+        1.into(),
+        SuiCostTable::new_for_testing(),
+    );
     gas_status.charge_min_tx_gas()?;
     let package_object = authority_state
         .get_object(&package_object_ref.0)
@@ -456,7 +496,7 @@ async fn test_move_call_gas() -> SuiResult {
     // Execute object deletion, and make sure we have storage rebate.
     let data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        package_object_ref,
+        package_object_ref.0,
         module.clone(),
         ident_str!("delete").to_owned(),
         vec![],
@@ -469,7 +509,7 @@ async fn test_move_call_gas() -> SuiResult {
 
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, transaction).await?;
-    let effects = response.into_data();
+    let effects = response.1.into_data();
     assert!(effects.status.is_ok());
     let gas_cost = effects.gas_used;
     // storage_cost should be less than rebate because for object deletion, we only
@@ -484,7 +524,7 @@ async fn test_move_call_gas() -> SuiResult {
     let budget = gas_used_before_vm_exec + 1;
     let data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        package_object_ref,
+        package_object_ref.0,
         module,
         function,
         Vec::new(),
@@ -495,7 +535,7 @@ async fn test_move_call_gas() -> SuiResult {
 
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, transaction).await?;
-    let effects = response.into_data();
+    let effects = response.1.into_data();
     let gas_cost = effects.gas_used;
     let err = effects.status.unwrap_err();
     // We will run out of gas during VM execution.
@@ -511,10 +551,20 @@ async fn test_move_call_gas() -> SuiResult {
 
 #[tokio::test]
 async fn test_storage_gas_unit_price() -> SuiResult {
-    let mut gas_status1 = SuiGasStatus::new_with_budget(*MAX_GAS_BUDGET, 1.into(), 1.into());
+    let mut gas_status1 = SuiGasStatus::new_with_budget(
+        *MAX_GAS_BUDGET,
+        1.into(),
+        1.into(),
+        SuiCostTable::new_for_testing(),
+    );
     gas_status1.charge_storage_mutation(100, 200, 5.into())?;
     let gas_cost1 = gas_status1.summary(true);
-    let mut gas_status2 = SuiGasStatus::new_with_budget(*MAX_GAS_BUDGET, 1.into(), 3.into());
+    let mut gas_status2 = SuiGasStatus::new_with_budget(
+        *MAX_GAS_BUDGET,
+        1.into(),
+        3.into(),
+        SuiCostTable::new_for_testing(),
+    );
     gas_status2.charge_storage_mutation(100, 200, 5.into())?;
     let gas_cost2 = gas_status2.summary(true);
     // Computation unit price is the same, hence computation cost should be the same.
@@ -526,11 +576,30 @@ async fn test_storage_gas_unit_price() -> SuiResult {
     Ok(())
 }
 
+#[tokio::test]
+async fn test_tx_gas_price_less_than_reference_gas_price() {
+    let gas_balance = *MAX_GAS_BUDGET;
+    let budget = *MIN_GAS_BUDGET;
+    let gas_price = 0;
+    let result = execute_transfer_with_price(gas_balance, budget, gas_price, false).await;
+    assert_eq!(
+        result
+            .response
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::GasPriceUnderRGP {
+            gas_price: 0,
+            reference_gas_price: 1
+        }
+    );
+}
+
 struct TransferResult {
     pub authority_state: Arc<AuthorityState>,
     pub object_id: ObjectID,
     pub gas_object_id: ObjectID,
-    pub response: SuiResult<(Option<SignedTransaction>, Option<SignedTransactionEffects>)>,
+    pub response: SuiResult<TransactionStatus>,
 }
 
 async fn execute_transfer(gas_balance: u64, gas_budget: u64, run_confirm: bool) -> TransferResult {
@@ -567,12 +636,12 @@ async fn execute_transfer_with_price(
     let response = if run_confirm {
         send_and_confirm_transaction(&authority_state, tx)
             .await
-            .map(|effects| (None, Some(effects)))
+            .map(|(cert, effects)| TransactionStatus::Executed(Some(cert.into_sig()), effects))
     } else {
         authority_state
             .handle_transaction(tx)
             .await
-            .map(|response| (response.signed_transaction.map(|tx| tx.into_inner()), None))
+            .map(|r| r.status)
     };
     TransferResult {
         authority_state,

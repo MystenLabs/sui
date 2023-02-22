@@ -4,8 +4,6 @@
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { LatestTxCard } from '../../components/transaction-card/RecentTxCard';
 
-import styles from './Transactions.module.css';
-
 const TXN_PER_PAGE = 20;
 const TRUNCATE_LENGTH = 45;
 
@@ -14,7 +12,7 @@ function Transactions() {
         <div
             data-testid="transaction-page"
             id="transaction"
-            className={styles.container}
+            className="mx-auto"
         >
             <ErrorBoundary>
                 <LatestTxCard

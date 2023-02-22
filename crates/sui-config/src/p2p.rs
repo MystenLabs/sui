@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{net::SocketAddr, time::Duration};
+use std::{net::SocketAddr, num::NonZeroU32, time::Duration};
 
 use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
@@ -26,6 +26,12 @@ pub struct P2pConfig {
     pub state_sync: Option<StateSyncConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub discovery: Option<DiscoveryConfig>,
+    /// Size in bytes above which network messages are considered excessively large. Excessively
+    /// large messages will still be handled, but logged and reported in metrics for debugging.
+    ///
+    /// If unspecified, this will default to 8 MiB.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub excessive_message_size: Option<usize>,
 }
 
 fn default_listen_address() -> SocketAddr {
@@ -41,7 +47,17 @@ impl Default for P2pConfig {
             anemo_config: Default::default(),
             state_sync: None,
             discovery: None,
+            excessive_message_size: None,
         }
+    }
+}
+
+impl P2pConfig {
+    pub fn excessive_message_size(&self) -> usize {
+        const EXCESSIVE_MESSAGE_SIZE: usize = 8 << 20;
+
+        self.excessive_message_size
+            .unwrap_or(EXCESSIVE_MESSAGE_SIZE)
     }
 }
 
@@ -92,6 +108,36 @@ pub struct StateSyncConfig {
     /// If unspecified, this will default to `100`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_download_concurrency: Option<usize>,
+
+    /// Set the timeout that should be used when sending state-sync RPC requests.
+    ///
+    /// If unspecified, this will default to `10,000` milliseconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout_ms: Option<u64>,
+
+    /// Per-peer rate-limit (in requests/sec) for the PushCheckpointSummary RPC.
+    ///
+    /// If unspecified, this will default to no limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub push_checkpoint_summary_rate_limit: Option<NonZeroU32>,
+
+    /// Per-peer rate-limit (in requests/sec) for the GetCheckpointSummary RPC.
+    ///
+    /// If unspecified, this will default to no limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub get_checkpoint_summary_rate_limit: Option<NonZeroU32>,
+
+    /// Per-peer rate-limit (in requests/sec) for the GetCheckpointContents RPC.
+    ///
+    /// If unspecified, this will default to no limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub get_checkpoint_contents_rate_limit: Option<NonZeroU32>,
+
+    /// Per-peer rate-limit (in requests/sec) for the GetTransactionAndEffects RPC.
+    ///
+    /// If unspecified, this will default to no limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub get_transaction_and_effects_rate_limit: Option<NonZeroU32>,
 }
 
 impl StateSyncConfig {
@@ -134,6 +180,14 @@ impl StateSyncConfig {
         self.transaction_download_concurrency
             .unwrap_or(TRANSACTION_DOWNLOAD_CONCURRENCY)
     }
+
+    pub fn timeout(&self) -> Duration {
+        const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
+
+        self.timeout_ms
+            .map(Duration::from_millis)
+            .unwrap_or(DEFAULT_TIMEOUT)
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -145,7 +199,7 @@ pub struct DiscoveryConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub interval_period_ms: Option<u64>,
 
-    /// Target number of conncurrent connections to establish.
+    /// Target number of concurrent connections to establish.
     ///
     /// If unspecified, this will default to `4`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -159,6 +213,12 @@ pub struct DiscoveryConfig {
     /// If unspecified, this will default to `1`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub peers_to_query: Option<usize>,
+
+    /// Per-peer rate-limit (in requests/sec) for the GetKnownPeers RPC.
+    ///
+    /// If unspecified, this will default to no limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub get_known_peers_rate_limit: Option<NonZeroU32>,
 }
 
 impl DiscoveryConfig {

@@ -9,13 +9,13 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom';
 
 import TransferNFTForm from './TransferNFTForm';
 import { createValidationSchema } from './validation';
-import PageTitle from '_app/shared/page-title';
 import Loading from '_components/loading';
 import NFTDisplayCard from '_components/nft-display';
 import { useAppSelector, useAppDispatch, useObjectsState } from '_hooks';
 import { createAccountNftByIdSelector } from '_redux/slices/account';
 import { transferNFT } from '_redux/slices/sui-objects';
 import { DEFAULT_NFT_TRANSFER_GAS_FEE } from '_redux/slices/sui-objects/Coin';
+import PageTitle from '_src/ui/app/shared/PageTitle';
 
 import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
@@ -66,7 +66,7 @@ function NftTransferPage() {
                     navigate(
                         `/receipt?${new URLSearchParams({
                             txdigest: resp.txId,
-                            transfer: 'nft',
+                            from: 'nfts',
                         }).toString()}`
                     );
                 }
@@ -87,11 +87,9 @@ function NftTransferPage() {
                     <>
                         <PageTitle
                             title="Send NFT"
-                            backLink={`/nft-details?${new URLSearchParams({
+                            back={`/nft-details?${new URLSearchParams({
                                 objectId,
                             }).toString()}`}
-                            className={st.pageTitle}
-                            hideBackLabel={true}
                         />
                         <div className={st.content}>
                             <NFTDisplayCard

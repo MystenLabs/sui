@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{server::Server, Discovery, DiscoveryEventLoop, DiscoveryServer, State};
+use anemo::codegen::InboundRequestLayer;
+use anemo_tower::rate_limit;
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
@@ -27,14 +29,30 @@ impl Builder {
     }
 
     pub fn build(self) -> (UnstartedDiscovery, DiscoveryServer<impl Discovery>) {
+        let discovery_config = self
+            .config
+            .clone()
+            .and_then(|config| config.discovery)
+            .unwrap_or_default();
         let (builder, server) = self.build_internal();
-        (builder, DiscoveryServer::new(server))
+        let mut discovery_server = DiscoveryServer::new(server);
+
+        // Apply rate limits from configuration as needed.
+        if let Some(limit) = discovery_config.get_known_peers_rate_limit {
+            discovery_server = discovery_server.add_layer_for_get_known_peers(
+                InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
+                    governor::Quota::per_second(limit),
+                    rate_limit::WaitMode::Block,
+                )),
+            );
+        }
+        (builder, discovery_server)
     }
 
     pub(super) fn build_internal(self) -> (UnstartedDiscovery, Server) {
         let Builder { config } = self;
         let config = config.unwrap();
-        let (sender, reciever) = oneshot::channel();
+        let (sender, receiver) = oneshot::channel();
 
         let handle = Handle {
             _shutdown_handle: Arc::new(sender),
@@ -56,7 +74,7 @@ impl Builder {
             UnstartedDiscovery {
                 handle,
                 config,
-                shutdown_handle: reciever,
+                shutdown_handle: receiver,
                 state,
             },
             server,

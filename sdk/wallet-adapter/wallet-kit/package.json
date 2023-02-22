@@ -1,6 +1,6 @@
 {
   "name": "@mysten/wallet-kit",
-  "version": "0.2.1",
+  "version": "0.3.1",
   "description": "TODO: Write description",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",
@@ -36,6 +36,7 @@
     "@mysten/wallet-adapter-unsafe-burner": "workspace:*",
     "@mysten/wallet-adapter-wallet-standard": "workspace:*",
     "@mysten/wallet-kit-core": "workspace:*",
+    "@mysten/wallet-standard": "workspace:*",
     "@stitches/react": "^1.2.8"
   },
   "devDependencies": {

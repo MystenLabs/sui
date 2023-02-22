@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_store::EffectsStore;
 use crate::authority::AuthorityStore;
 use async_trait::async_trait;
 use either::Either;
-use futures::future::join_all;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use parking_lot::Mutex;
 use parking_lot::MutexGuard;
 use std::collections::hash_map::DefaultHasher;
@@ -20,26 +20,28 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use sui_types::base_types::TransactionDigest;
 use sui_types::error::SuiResult;
-use sui_types::messages::SignedTransactionEffects;
+use sui_types::messages::TransactionEffects;
 use tokio::sync::oneshot;
+use tokio::time::Instant;
+use tracing::debug;
 
 #[async_trait]
 pub trait EffectsNotifyRead: Send + Sync + 'static {
-    /// This method reads transaction effects from database.
-    /// If effects are not available immediately, the method blocks until they are persisted
-    /// in the database.
+    /// This method reads executed transaction effects from database.
+    /// If effects are not available immediately (i.e. haven't been executed yet),
+    /// the method blocks until they are persisted in the database.
     ///
     /// This method **does not** schedule transactions for execution - it is responsibility of the caller
     /// to schedule transactions for execution before calling this method.
-    async fn notify_read_effects(
+    async fn notify_read_executed_effects(
         &self,
         digests: Vec<TransactionDigest>,
-    ) -> SuiResult<Vec<SignedTransactionEffects>>;
+    ) -> SuiResult<Vec<TransactionEffects>>;
 
-    fn get_effects(
+    fn multi_get_executed_effects(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<SignedTransactionEffects>>>;
+    ) -> SuiResult<Vec<Option<TransactionEffects>>>;
 }
 
 type Registrations<V> = Vec<oneshot::Sender<V>>;
@@ -178,37 +180,62 @@ impl<'a, K: Eq + Hash + Clone, V: Clone> Drop for Registration<'a, K, V> {
 
 #[async_trait]
 impl EffectsNotifyRead for Arc<AuthorityStore> {
-    async fn notify_read_effects(
+    async fn notify_read_executed_effects(
         &self,
         digests: Vec<TransactionDigest>,
-    ) -> SuiResult<Vec<SignedTransactionEffects>> {
+    ) -> SuiResult<Vec<TransactionEffects>> {
+        let timer = Instant::now();
         // We need to register waiters _before_ reading from the database to avoid race conditions
-        let registrations = self.effects_notify_read.register_all(digests.clone());
-        let effects = EffectsStore::get_effects(self, digests.iter())?;
-        // Zipping together registrations and effects ensures returned order is the same as order of digests
-        let results = effects
+        let registrations = self
+            .executed_effects_notify_read
+            .register_all(digests.clone());
+        let effects = self.multi_get_executed_effects(&digests)?;
+        let mut needs_wait = false;
+        let mut results: FuturesUnordered<_> = effects
             .into_iter()
             .zip(registrations.into_iter())
             .map(|(e, r)| match e {
                 // Note that Some() clause also drops registration that is already fulfilled
                 Some(ready) => Either::Left(futures::future::ready(ready)),
-                None => Either::Right(r),
-            });
-
-        Ok(join_all(results).await)
+                None => {
+                    needs_wait = true;
+                    Either::Right(r)
+                }
+            })
+            .collect();
+        let mut effects_map = HashMap::new();
+        let mut last_finished = None;
+        while let Some(finished) = results.next().await {
+            last_finished = Some(finished.transaction_digest);
+            effects_map.insert(finished.transaction_digest, finished);
+        }
+        if needs_wait {
+            // Only log the duration if we ended up waiting.
+            debug!(duration=?timer.elapsed(), ?last_finished, "Finished notify_read_effects");
+        }
+        // Map from digests to ensures returned order is the same as order of digests
+        Ok(digests
+            .iter()
+            .map(|d| {
+                effects_map
+                    .remove(d)
+                    .expect("Every effect must have been added after each task finishes above")
+            })
+            .collect())
     }
 
-    fn get_effects(
+    fn multi_get_executed_effects(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<SignedTransactionEffects>>> {
-        EffectsStore::get_effects(self, digests.iter())
+    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+        AuthorityStore::multi_get_executed_effects(self, digests)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures::future::join_all;
 
     #[tokio::test]
     pub async fn test_notify_read() {

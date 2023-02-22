@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { useAppSelector } from '../../hooks';
 import { Toaster } from '../toaster';
 import DappStatus from '_app/shared/dapp-status';
 import { ErrorBoundary } from '_components/error-boundary';
 import Logo from '_components/logo';
 import { MenuButton, MenuContent } from '_components/menu';
 import Navigation from '_components/navigation';
-
-import type { ReactNode } from 'react';
 
 import st from './PageMainLayout.module.scss';
 
@@ -32,6 +32,18 @@ export default function PageMainLayout({
     centerLogo = false,
     className,
 }: PageMainLayoutProps) {
+    const networkName = useAppSelector(({ app: { apiEnv } }) => apiEnv);
+    const [logoWidth, setLogoWidth] = useState<number>();
+    const logoRef = useRef<HTMLAnchorElement>(null);
+    useEffect(() => {
+        const observer = new ResizeObserver(([entry]) => {
+            setLogoWidth(entry?.borderBoxSize[0]?.inlineSize);
+        });
+        if (logoRef.current) {
+            observer.observe(logoRef.current);
+        }
+        return () => observer.disconnect();
+    }, []);
     return (
         <div className={st.container}>
             <div
@@ -40,12 +52,30 @@ export default function PageMainLayout({
                         centerLogo && !topNavMenuEnabled && !dappStatusEnabled,
                 })}
             >
-                <Link to="/tokens" className={st.logoLink}>
-                    <Logo className={st.logo} txt={true} />
-                </Link>
-                {dappStatusEnabled ? <DappStatus /> : null}
+                <div
+                    className={st.logoContainer}
+                    style={{ flexBasis: logoWidth }}
+                >
+                    <Link
+                        ref={logoRef}
+                        to="/tokens"
+                        className="no-underline text-gray-90"
+                    >
+                        <Logo networkName={networkName} />
+                    </Link>
+                </div>
+                {dappStatusEnabled ? (
+                    <div className={st.dappStatusContainer}>
+                        <DappStatus />
+                    </div>
+                ) : null}
                 {topNavMenuEnabled ? (
-                    <MenuButton className={st.menuButton} />
+                    <div
+                        className={st.menuContainer}
+                        style={{ flexBasis: logoWidth }}
+                    >
+                        <MenuButton className={st.menuButton} />
+                    </div>
                 ) : null}
             </div>
             <div className={st.content}>

@@ -7,7 +7,6 @@ use crate::epoch::committee_store::CommitteeStore;
 use crate::test_authority_clients::LocalAuthorityClient;
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
-use signature::Signer;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -15,12 +14,14 @@ use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
-use sui_types::crypto::AuthorityKeyPair;
+use sui_protocol_config::ProtocolConfig;
+use sui_types::base_types::ObjectID;
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityPublicKeyBytes,
     NetworkKeyPair, SuiKeyPair,
 };
-use sui_types::messages::{TransactionData, VerifiedTransaction};
+use sui_types::crypto::{AuthorityKeyPair, Signer};
+use sui_types::messages::{TransactionData, VerifiedTransaction, DUMMY_GAS_PRICE};
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
@@ -30,15 +31,14 @@ use sui_types::{
     },
     committee::Committee,
     crypto::{AuthoritySignInfo, AuthoritySignature},
-    gas::GasCostSummary,
     message_envelope::Message,
-    messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects},
+    messages::{CertifiedTransaction, Transaction, TransactionEffects},
     object::{Object, Owner},
 };
 use tokio::time::timeout;
 use tracing::{info, warn};
 
-const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
+const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(10);
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 2_000;
 
@@ -64,7 +64,7 @@ where
 pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) {
     match timeout(
         WAIT_FOR_TX_TIMEOUT,
-        state.database.notify_read_effects(vec![digest]),
+        state.database.notify_read_executed_effects(vec![digest]),
     )
     .await
     {
@@ -79,7 +79,7 @@ pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) 
 pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<AuthorityState>) {
     match timeout(
         WAIT_FOR_TX_TIMEOUT,
-        state.database.notify_read_effects(digests.clone()),
+        state.database.notify_read_executed_effects(digests.clone()),
     )
     .await
     {
@@ -120,26 +120,12 @@ pub fn create_fake_cert_and_effect_digest<'a>(
 
 pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
     TransactionEffects {
-        status: ExecutionStatus::Success,
-        gas_used: GasCostSummary {
-            computation_cost: 0,
-            storage_cost: 0,
-            storage_rebate: 0,
-        },
-        modified_at_versions: Vec::new(),
-        shared_objects: Vec::new(),
         transaction_digest: *tx.digest(),
-        created: Vec::new(),
-        mutated: Vec::new(),
-        unwrapped: Vec::new(),
-        deleted: Vec::new(),
-        wrapped: Vec::new(),
         gas_object: (
             random_object_ref(),
-            Owner::AddressOwner(tx.data().intent_message.value.signer()),
+            Owner::AddressOwner(tx.data().intent_message.value.sender()),
         ),
-        events: Vec::new(),
-        dependencies: Vec::new(),
+        ..Default::default()
     }
 }
 
@@ -147,7 +133,7 @@ pub fn compile_basics_package() -> CompiledPackage {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sui_programmability/examples/basics");
 
-    let build_config = BuildConfig::default();
+    let build_config = BuildConfig::new_for_testing();
     sui_framework::build_move_package(&path, build_config).unwrap()
 }
 
@@ -157,7 +143,7 @@ async fn init_genesis(
 ) -> (
     Genesis,
     Vec<(AuthorityPublicKeyBytes, AuthorityKeyPair)>,
-    ObjectRef,
+    ObjectID,
 ) {
     // add object_basics package object to genesis
     let modules = compile_basics_package()
@@ -165,7 +151,12 @@ async fn init_genesis(
         .into_iter()
         .cloned()
         .collect();
-    let pkg = Object::new_package(modules, TransactionDigest::genesis()).unwrap();
+    let pkg = Object::new_package(
+        modules,
+        TransactionDigest::genesis(),
+        ProtocolConfig::get_for_max_version().max_move_package_size(),
+    )
+    .unwrap();
     let pkg_id = pkg.id();
     genesis_objects.push(pkg);
 
@@ -204,13 +195,7 @@ async fn init_genesis(
         builder = builder.add_validator_signature(key);
     }
     let genesis = builder.build();
-    let pkg_ref = genesis
-        .objects()
-        .iter()
-        .find(|o| o.id() == pkg_id)
-        .unwrap()
-        .compute_object_reference();
-    (genesis, key_pairs, pkg_ref)
+    (genesis, key_pairs, pkg_id)
 }
 
 pub async fn init_local_authorities(
@@ -220,11 +205,11 @@ pub async fn init_local_authorities(
     AuthorityAggregator<LocalAuthorityClient>,
     Vec<Arc<AuthorityState>>,
     Genesis,
-    ObjectRef,
+    ObjectID,
 ) {
-    let (genesis, key_pairs, pkg_ref) = init_genesis(committee_size, genesis_objects).await;
+    let (genesis, key_pairs, framework) = init_genesis(committee_size, genesis_objects).await;
     let (aggregator, authorities) = init_local_authorities_with_genesis(&genesis, key_pairs).await;
-    (aggregator, authorities, genesis, pkg_ref)
+    (aggregator, authorities, genesis, framework)
 }
 
 pub async fn init_local_authorities_with_genesis(
@@ -270,9 +255,15 @@ pub fn make_transfer_sui_transaction(
     amount: Option<u64>,
     sender: SuiAddress,
     keypair: &AccountKeyPair,
+    gas_price: Option<u64>,
 ) -> VerifiedTransaction {
-    let data = TransactionData::new_transfer_sui_with_dummy_gas_price(
-        recipient, sender, amount, gas_object, MAX_GAS,
+    let data = TransactionData::new_transfer_sui(
+        recipient,
+        sender,
+        amount,
+        gas_object,
+        MAX_GAS,
+        gas_price.unwrap_or(DUMMY_GAS_PRICE),
     );
     to_sender_signed_transaction(data, keypair)
 }
@@ -283,9 +274,15 @@ pub fn make_transfer_object_transaction(
     sender: SuiAddress,
     keypair: &AccountKeyPair,
     recipient: SuiAddress,
+    gas_price: Option<u64>,
 ) -> VerifiedTransaction {
-    let data = TransactionData::new_transfer_with_dummy_gas_price(
-        recipient, object_ref, sender, gas_object, MAX_GAS,
+    let data = TransactionData::new_transfer(
+        recipient,
+        object_ref,
+        sender,
+        gas_object,
+        MAX_GAS,
+        gas_price.unwrap_or(DUMMY_GAS_PRICE),
     );
     to_sender_signed_transaction(data, keypair)
 }

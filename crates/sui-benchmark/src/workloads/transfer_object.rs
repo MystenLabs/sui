@@ -14,6 +14,7 @@ use sui_types::{
     object::Owner,
 };
 
+use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
 use crate::workloads::{Gas, GasCoinConfig, WorkloadInitGas, WorkloadPayloadGas};
 use crate::{ExecutionEffects, ValidatorProxy};
@@ -21,11 +22,13 @@ use sui_core::test_utils::make_transfer_object_transaction;
 
 use super::workload::{Workload, WorkloadType, MAX_GAS_FOR_TESTING};
 
+#[derive(Debug)]
 pub struct TransferObjectTestPayload {
     transfer_object: ObjectRef,
     transfer_from: SuiAddress,
     transfer_to: SuiAddress,
     gas: Vec<Gas>,
+    system_state_observer: Arc<SystemStateObserver>,
 }
 
 impl Payload for TransferObjectTestPayload {
@@ -57,6 +60,7 @@ impl Payload for TransferObjectTestPayload {
             transfer_from: self.transfer_to,
             transfer_to: recipient.get_owner_address().unwrap(),
             gas: updated_gas,
+            system_state_observer: self.system_state_observer,
         })
     }
     fn make_transaction(&self) -> VerifiedTransaction {
@@ -71,6 +75,7 @@ impl Payload for TransferObjectTestPayload {
             self.transfer_from,
             keypair,
             self.transfer_to,
+            Some(*self.system_state_observer.reference_gas_price.borrow()),
         )
     }
     fn get_object_id(&self) -> ObjectID {
@@ -79,8 +84,13 @@ impl Payload for TransferObjectTestPayload {
     fn get_workload_type(&self) -> WorkloadType {
         WorkloadType::TransferObject
     }
+
+    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self as &TransferObjectTestPayload)
+    }
 }
 
+#[derive(Debug)]
 pub struct TransferObjectWorkload {
     pub transfer_keypairs: Arc<HashMap<SuiAddress, AccountKeyPair>>,
 }
@@ -139,6 +149,7 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
         &mut self,
         _init_config: WorkloadInitGas,
         _proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _system_state_observer: Arc<SystemStateObserver>,
     ) {
         return;
     }
@@ -147,6 +158,7 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
         num_payloads: u64,
         payload_config: WorkloadPayloadGas,
         _proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<dyn Payload>> {
         let mut gas_by_address: HashMap<SuiAddress, Vec<Gas>> = HashMap::new();
         for gas in payload_config.transfer_object_payload_gas.iter() {
@@ -179,6 +191,7 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
                     transfer_from: from.get_owner_address().unwrap(),
                     transfer_to: to.get_owner_address().unwrap(),
                     gas: g.to_vec(),
+                    system_state_observer: system_state_observer.clone(),
                 })
             })
             .map(|b| Box::<dyn Payload>::from(b))
@@ -186,5 +199,9 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
     }
     fn get_workload_type(&self) -> WorkloadType {
         WorkloadType::TransferObject
+    }
+
+    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self as &TransferObjectWorkload)
     }
 }

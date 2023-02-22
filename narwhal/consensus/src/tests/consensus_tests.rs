@@ -79,7 +79,6 @@ async fn test_consensus_recovery_with_bullshark() {
         tx_output,
         bullshark,
         metrics.clone(),
-        gc_depth,
     );
 
     // WHEN we feed all certificates to the consensus.
@@ -169,7 +168,6 @@ async fn test_consensus_recovery_with_bullshark() {
         tx_output,
         bullshark,
         metrics.clone(),
-        gc_depth,
     );
 
     // WHEN we send same certificates but up to round 3 (inclusive)
@@ -237,7 +235,6 @@ async fn test_consensus_recovery_with_bullshark() {
         tx_output,
         bullshark,
         metrics.clone(),
-        gc_depth,
     );
 
     // WHEN send the certificates of round >= 5 to trigger a leader election for round 4
@@ -284,7 +281,7 @@ fn setup_tracing() -> TelemetryGuards {
 
     let log_filter = format!("{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level}");
 
-    telemetry_subscribers::TelemetryConfig::new("narwhal")
+    telemetry_subscribers::TelemetryConfig::new()
         // load env variables
         .with_env()
         // load special log filter

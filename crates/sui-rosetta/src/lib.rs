@@ -15,7 +15,7 @@ use mysten_metrics::spawn_monitored_task;
 use sui_sdk::SuiClient;
 
 use crate::errors::Error;
-use crate::state::{OnlineServerContext, PseudoBlockProvider};
+use crate::state::{CheckpointBlockProvider, OnlineServerContext};
 use crate::types::{Currency, SuiEnv};
 
 /// This lib implements the Rosetta online and offline server defined by the [Rosetta API Spec](https://www.rosetta-api.org/docs/Reference.html)
@@ -24,7 +24,7 @@ mod block;
 mod construction;
 mod errors;
 mod network;
-mod operations;
+pub mod operations;
 mod state;
 pub mod types;
 
@@ -40,7 +40,7 @@ pub struct RosettaOnlineServer {
 
 impl RosettaOnlineServer {
     pub fn new(env: SuiEnv, client: SuiClient, data_path: &Path) -> Self {
-        let blocks = Arc::new(PseudoBlockProvider::spawn(client.clone(), data_path));
+        let blocks = Arc::new(CheckpointBlockProvider::spawn(client.clone(), data_path));
         Self {
             env,
             context: OnlineServerContext::new(client, blocks),

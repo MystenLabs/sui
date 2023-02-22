@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 pub type Accumulator = fastcrypto::hash::EllipticCurveMultisetHash;
 
 #[cfg(test)]
@@ -55,6 +54,50 @@ mod tests {
         // After removing all elements, it should be the same as an empty one.
         a1.remove(ref2);
         assert_eq!(a1, Accumulator::default());
+    }
+
+    #[test]
+    fn test_accumulator_commutativity() {
+        let ref1 = ObjectDigest::random();
+        let ref2 = ObjectDigest::random();
+        let ref3 = ObjectDigest::random();
+
+        let mut a1 = Accumulator::default();
+        a1.remove(ref1);
+        a1.remove(ref2);
+        a1.insert(ref1);
+        a1.insert(ref2);
+
+        // Removal before insertion should yield the same result
+        assert_eq!(a1, Accumulator::default());
+
+        a1.insert(ref1);
+        a1.insert(ref2);
+
+        // Insertion out of order should arrive at the same result.
+        let mut a2 = Accumulator::default();
+        a2.remove(ref1);
+        a2.remove(ref2);
+
+        // Unioning where all objects from a are removed in b should
+        // result in empty accumulator
+        a1.union(&a2);
+        assert_eq!(a1, Accumulator::default());
+
+        a1.insert(ref1);
+        a1.insert(ref2);
+        a1.insert(ref3);
+
+        let mut a3 = Accumulator::default();
+        a3.insert(ref3);
+
+        // a1: (+ref1, +ref2, +ref3)
+        // a2: (-ref1, -ref2)
+        // a3: (+ref3)
+        // a1 + a2 = a3
+
+        a1.union(&a2);
+        assert_eq!(a1, a3);
     }
 
     #[test]

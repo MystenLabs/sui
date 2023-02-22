@@ -14,19 +14,17 @@ Here an example is provided to serialize a transfer data in CLI. This outputs a 
 ```shell
 target/debug/sui client serialize-transfer-sui --to 0xfdf3a56d8ac390499c611fd338036e3139a0e9a5 --sui-coin-object-id 0x14808dbfbb3efd6fa09624fd18d7f40958679fa1 --gas-budget 1000
 
-Intent message to sign: $DATA_TO_SIGN
-Raw transaction to execute: $TX_BYTES
+Raw tx_bytes to execute: $TX_BYTES
 ```
 
 ## Step 2: Sign the data
 This can be done elsewhere in your signing device or implemented in languages of your choice. Sui accepts signatures for ECDSA Secp256k1, ECDSA Secp256r1 and pure Ed25519.
 
-An accepted ECDSA Secp256k1 signature follows:
-1. The signature must be of length 65 bytes in the form of `[r, s, v]` where the first 32 bytes are `r`, the second 32 bytes are `s` and the last byte is `v`.
+An accepted ECDSA Secp256k1 andd Secp256r1 signature follows:
+1. The signature must be of length 64 bytes in the form of `[r, s]` where the first 32 bytes are `r`, the second 32 bytes are `s`.
 2. The `r` value can be between 0x1 and 0xFFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFE BAAEDCE6 AF48A03B BFD25E8C D0364140 (inclusive).
 3. The `s` value must be in the lower half of the curve order, i.e. between 0x1 and 0x7FFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF 5D576E73 57A4501D DFE92F46 681B20A0 (inclusive).
-4. The `v` represents the recovery ID, which must be normalized to 0, 1, 2 or 3. Note that unlike [EIP-155](https://eips.ethereum.org/EIPS/eip-155) chain ID is not used to calculate the `v` value.
-5. Ideally, the signature must be generated with deterministic nonce according to [RFC6979](https://www.rfc-editor.org/rfc/rfc6979).
+4. Ideally, the signature must be generated with deterministic nonce according to [RFC6979](https://www.rfc-editor.org/rfc/rfc6979).
 
 An accepted pure Ed25519 signature follows:
 1. The signature must be produced according to [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032.html#section-5.1.6).
@@ -35,10 +33,12 @@ An accepted pure Ed25519 signature follows:
 Here we use the keytool command to sign as an example, using the Ed25519 key corresponding to the provided address stored in `sui.keystore`. This commands outputs the signature, the public key and the flag encoded in Base64. This command is backed by [fastcrypto](https://crates.io/crates/fastcrypto).
  
 ```shell
-target/debug/sui keytool sign --address 0xb59ce11ef3ad15b6c247dda9890dce1b781f99df --data $DATA_TO_SIGN
+target/debug/sui keytool sign --address 0xb59ce11ef3ad15b6c247dda9890dce1b781f99df --data $TX_BYTES
 
-Intent message to sign: AAAAAAP986VtisOQSZxhH9M4A24xOaDppQDue7TlY/36sS2HyepBJa2PjB3RkxSAjb+7Pv1voJYk/RjX9AlYZ5+hAgAAAAAAAAAgghpx3ucYetjUIHnaFCho6iaUXnt4hczdAeLlgIw0GqsBAAAAAAAAAOgDAAAAAAAA
-Signer address: 0xb59ce11ef3ad15b6c247dda9890dce1b781f99df
+Signer address: 0xa5f022cce499749a54ba59bf377cdaea369e7457
+Raw tx_bytes to execute: $TX_BYTES
+Intent: Intent { scope: TransactionData, version: V0, app_id: Sui }
+Intent message to sign: "AAAAAAMYPuVHP/7PyVnQxUemGYuU48LJcQBnglR8A4kz7KFUQOOUum3/eljiCBUxwn6yBVIxn5CDBNkN0CJf0fI/AgAAAAAAAAAgytK3HSb0y/qcT5VC23nt187atosf3Te8NEJ2tNGQ11sBAAAAAAAAABAnAAAAAAAA"
 Serialized signature (`flag || sig || pk` in Base64): $SERIALIZED_SIG
 ```
 

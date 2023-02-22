@@ -6,11 +6,9 @@ This section covers the main features of Sui Move.
 
 ## Move.toml
 
-Every Move package has a *package manifest* in the form of a `Move.toml` file - it is placed in the [root of the package](../build/move/index.md#move-code-organization). The manifest itself contains a number of sections, primary of which are:
+Every Move package has a *package manifest* in the form of a `Move.toml` file - it is placed in the [root of the package](../build/move/index.md#move-code-organization). 
 
-- `[package]` - includes package metadata such as name and author
-- `[dependencies]` - specifies dependencies of the project
-- `[addresses]` - address aliases (e.g., `@me` will be treated as a `0x0` address)
+./Move.toml:
 
 ```toml
 [package]
@@ -23,6 +21,99 @@ Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-fram
 [addresses]
 examples = "0x0"
 ```
+
+The manifest itself contains a number of sections, primary of which are:
+
+- `[package]` - includes package metadata such as name and author
+- `[dependencies]` - specifies dependencies of the project
+- `[addresses]` - address aliases (e.g., `@me` will be treated as a `0x0` address)
+
+Dependencies in the `[dependencies]` section are in the form:
+
+```
+<string> = { local = <string>, addr_subst* = { (<string> = (<string> | "<hex_address>"))+ } } # local dependencies
+<string> = { git = <URL or path to a git repo>, subdir = <path to dir containing Move.toml inside git repo>, rev = <git commit hash>, addr_subst* = { (<string> = (<string> | "<hex_address>"))+ } } # git dependencies
+```
+
+The `addr_subst` option for a dependency enables you to define a placeholder address from another package. It does not, however, provide a means to mutate the address of a published package. For example, a package manifest using a placeholder address might resemble:
+
+```toml
+[package]
+name = "Child"
+version = "0.0.1"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet-0.10.0" }
+
+[addresses]
+child = "_"
+```
+
+The package that references the previous package could then use `addr_subst` to provide the address:
+
+```toml
+[package]
+name = "Parent"
+version = "0.0.1"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet-0.10.0" }
+Child = { local = "child", addr_subst = { "child" = "0x08f5f5f4101e9c4b2d2b3f212b6e909b48acd02c" } }
+
+[addresses]
+parent = "0x0"
+```
+
+Using `addr_subst` is recommended when Child is a library that you plan to publish along with the packages that use it.
+
+The `addr_subst` attribute is also useful when multiple child packages use the same unassigned named address. For example, you might have a package A that depends on packages B and C. Both B and C have an unassigned named address, D, but you need to refer to them by unique names in A. In this case, you could supply different named addresses using `addr_subst` and define the addresses in the package A manifest `[addresses]` section.      
+
+Package A Move.toml:
+
+```toml
+[package]
+name = "A"
+version = "0.0.1"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet-0.10.0" }
+B = { local = "b", addr_subst = { "D" = "bd" }}
+C = { local = "c", addr_subst = { "D" = "cd" }}
+
+[addresses]
+a = "0x0"
+bd = "0x08f5f5f4101e9c4b2d2b3f212b6e909b48acd02b"
+cd = "0x04b3d4752496d3663cb274c33e61c732ed44146c"
+```
+
+Package B Move.toml:
+
+```toml
+[package]
+name = "B"
+version = "0.0.1"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet-0.10.0" }
+
+[addresses]
+D = "_"
+```
+
+Package C Move.toml:
+
+```toml
+[package]
+name = "C"
+version = "0.0.1"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet-0.10.0" }
+
+[addresses]
+D = "_"
+```
+
 
 
 ## Init function

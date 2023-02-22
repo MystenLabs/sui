@@ -23,7 +23,10 @@ use move_vm_types::{
 };
 use std::sync::Arc;
 
-use self::crypto::{bls12381, bulletproofs, ecdsa_k1, ed25519, elliptic_curve, groth16, hmac};
+use self::crypto::{
+    bls12381, bulletproofs, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, elliptic_curve, groth16, hash,
+    hmac, tbls,
+};
 
 pub fn all_natives(
     move_stdlib_addr: AccountAddress,
@@ -33,6 +36,7 @@ pub fn all_natives(
         ("address", "from_bytes", make_native!(address::from_bytes)),
         ("address", "to_u256", make_native!(address::to_u256)),
         ("address", "from_u256", make_native!(address::from_u256)),
+        ("hash", "blake2b256", make_native!(hash::blake2b256)),
         (
             "bls12381",
             "bls12381_min_sig_verify",
@@ -83,17 +87,31 @@ pub fn all_natives(
             "has_child_object_with_ty",
             make_native!(dynamic_field::has_child_object_with_ty),
         ),
-        ("ecdsa_k1", "ecrecover", make_native!(ecdsa_k1::ecrecover)),
+        (
+            "ecdsa_k1",
+            "secp256k1_ecrecover",
+            make_native!(ecdsa_k1::ecrecover),
+        ),
         (
             "ecdsa_k1",
             "decompress_pubkey",
             make_native!(ecdsa_k1::decompress_pubkey),
         ),
-        ("ecdsa_k1", "keccak256", make_native!(ecdsa_k1::keccak256)),
         (
             "ecdsa_k1",
             "secp256k1_verify",
             make_native!(ecdsa_k1::secp256k1_verify),
+        ),
+        ("ecvrf", "ecvrf_verify", make_native!(ecvrf::ecvrf_verify)),
+        (
+            "ecdsa_r1",
+            "secp256r1_ecrecover",
+            make_native!(ecdsa_r1::ecrecover),
+        ),
+        (
+            "ecdsa_r1",
+            "secp256r1_verify",
+            make_native!(ecdsa_r1::secp256r1_verify),
         ),
         (
             "ed25519",
@@ -141,12 +159,23 @@ pub fn all_natives(
             "native_hmac_sha3_256",
             make_native!(hmac::hmac_sha3_256),
         ),
+        ("hash", "keccak256", make_native!(hash::keccak256)),
         ("object", "delete_impl", make_native!(object::delete_impl)),
         ("object", "borrow_uid", make_native!(object::borrow_uid)),
         (
             "object",
             "record_new_uid",
             make_native!(object::record_new_uid),
+        ),
+        (
+            "randomness",
+            "native_tbls_verify_signature",
+            make_native!(tbls::tbls_verify_signature),
+        ),
+        (
+            "randomness",
+            "native_tbls_sign",
+            make_native!(tbls::tbls_sign),
         ),
         (
             "test_scenario",

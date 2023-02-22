@@ -31,6 +31,16 @@ module sui::stake_subsidy {
         }
     }
 
+    public(friend) fun mint_stake_subsidy_proportional_to_total_stake_testnet(
+        subsidy: &mut StakeSubsidy, supply: &mut Supply<SUI>, stake_subsidy_rate: u64, total_stake: u64
+    ) {
+        let amount_to_mint = ((total_stake as u128) * (stake_subsidy_rate as u128)) / BASIS_POINT_DENOMINATOR;
+        balance::join(
+            &mut subsidy.balance, 
+            balance::increase_supply(supply, (amount_to_mint as u64))
+        );
+    }
+
     /// Advance the epoch counter and mint new subsidy for the epoch.
     public(friend) fun advance_epoch(subsidy: &mut StakeSubsidy, supply: &mut Supply<SUI>) {
         // Mint new subsidy for this epoch.

@@ -3235,7 +3235,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Rule group evaulation problems",
+      "title": "Rule group evaluation problems",
       "tooltip": {
         "msResolution": false,
         "shared": true,

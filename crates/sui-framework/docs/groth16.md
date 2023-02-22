@@ -281,6 +281,7 @@ This can be used as inputs for the <code>verify_groth16_proof</code> function.
 
 
 <pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
 
 
@@ -352,6 +353,7 @@ Native functions that flattens the inputs into arrays of vectors and passed to t
 
 
 <pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
 
 

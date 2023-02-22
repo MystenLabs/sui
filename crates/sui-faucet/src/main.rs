@@ -71,7 +71,7 @@ const PROM_PORT_ADDR: &str = "0.0.0.0:9184";
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     // initialize tracing
-    let _guard = telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
+    let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
 
@@ -146,8 +146,8 @@ async fn health() -> &'static str {
 
 /// handler for all the request_gas requests
 async fn request_gas(
-    Json(payload): Json<FaucetRequest>,
     Extension(state): Extension<Arc<AppState>>,
+    Json(payload): Json<FaucetRequest>,
 ) -> impl IntoResponse {
     // ID for traceability
     let id = Uuid::new_v4();

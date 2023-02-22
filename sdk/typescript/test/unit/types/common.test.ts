@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect } from 'vitest';
-import { generateTransactionDigest } from '../../../src';
+import { bcs, generateTransactionDigest } from '../../../src';
 
 describe('Test common functions', () => {
   describe('Calculate transaction digest', () => {
@@ -19,40 +19,22 @@ describe('Test common functions', () => {
           },
         },
         sender: 'cba4a48bb0f8b586c167e5dcefaa1c5e96ab3f08',
-        gasPayment: {
-          objectId: '2fab642a835afc9d68d296f50c332c9d32b5a0d5',
-          version: 7,
-          digest: 'lGmQDt2ch1/4HwdgOlHmeeZZvCHUjfrKvBOND/c67n4=',
+        gasData: {
+          owner: 'cba4a48bb0f8b586c167e5dcefaa1c5e96ab3f08',
+          payment: {
+            objectId: '2fab642a835afc9d68d296f50c332c9d32b5a0d5',
+            version: 7,
+            digest: 'lGmQDt2ch1/4HwdgOlHmeeZZvCHUjfrKvBOND/c67n4=',
+          },
+          price: 1,
+          budget: 100,
         },
-        gasPrice: 1,
-        gasBudget: 100,
+        expiration: { None: null },
       };
-      const publicKey = 'ISHc0JgGmuU1aX3QGc/YZ3ynq6CtrB0ZWcvObcVLElk=';
-      const signature =
-        '4wL9wK8iLCLLmFKMMB/8t9KEGZxFOntJH2zWI/RBsySfNpnSLPxhYVdfujjnxvlP3bZunFz/GZAJga38bdn9Aw==';
 
-      const transactionDigest = generateTransactionDigest(
-        transactionData,
-        'ED25519',
-        signature,
-        publicKey,
-        "base58",
-        true
-      );
+      const transactionDigest = generateTransactionDigest(transactionData, bcs);
       expect(transactionDigest).toEqual(
-        'HZaXLHhraTyRJjQAEbaEn9ruT1LrjUMG9Sq9EeGY2JLZ'
-      );
-
-      const legacyTransactionDigest = generateTransactionDigest(
-        transactionData,
-        'ED25519',
-        signature,
-        publicKey,
-        "base64",
-        false
-      );
-      expect(legacyTransactionDigest).toEqual(
-        'DAOJCfCACatIaLpFEWuK90dJSPkbM48nRUOkGcbKZ9A='
+        'AXCK8UzvhACvD9qQYsaeYV26WUCFwgJXs2bzAJyWBQvb',
       );
     });
   });

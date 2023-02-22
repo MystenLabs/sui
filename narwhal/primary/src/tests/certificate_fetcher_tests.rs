@@ -2,14 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::primary::NUM_SHUTDOWN_RECEIVERS;
 use crate::{
-    certificate_fetcher::CertificateFetcher, core::Core, metrics::PrimaryMetrics,
-    synchronizer::Synchronizer,
+    certificate_fetcher::CertificateFetcher, metrics::PrimaryMetrics, synchronizer::Synchronizer,
 };
 use anemo::async_trait;
 use anyhow::Result;
 use config::{Epoch, WorkerId};
 use crypto::{PublicKey, Signature};
-use fastcrypto::{hash::Hash, signature_service::SignatureService, traits::KeyPair};
+use fastcrypto::{hash::Hash, traits::KeyPair};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use once_cell::sync::OnceCell;
@@ -17,6 +16,7 @@ use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use storage::CertificateStore;
 use storage::NodeStorage;
+use tokio::sync::oneshot;
 
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::{
@@ -143,22 +143,15 @@ async fn fetch_certificates_basic() {
     let worker_cache = fixture.shared_worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
-    let signature_service = SignatureService::new(primary.keypair().copy());
     let fake_primary = fixture.authorities().nth(1).unwrap();
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let gc_depth: Round = 50;
 
     // kept empty
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     // synchronizer to certificate fetcher
     let (tx_certificate_fetcher, rx_certificate_fetcher) = test_utils::test_channel!(1000);
-    // certificates
-    let (tx_certificates, rx_certificates) = test_utils::test_channel!(1000);
-    // certificate fetcher to primary
-    let (tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1000);
-    // proposer back to the core
-    let (_tx_headers, rx_headers) = test_utils::test_channel!(1000);
-    // core -> consensus, we store the output of process_certificate here, a small channel limit may backpressure the test into failure
-    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(1000);
-    // core -> proposers, byproduct of certificate processing, a small channel limit could backpressure the test into failure
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(1000);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1000);
     // FetchCertificateProxy -> test
     let (tx_fetch_req, mut rx_fetch_req) = mpsc::channel(1000);
@@ -172,18 +165,23 @@ async fn fetch_certificates_basic() {
 
     // Signal rounds
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
-    let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
-    // Make a synchronizer for the core.
+    // Make a synchronizer for certificates.
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
         fixture.committee().into(),
         worker_cache.clone(),
+        gc_depth,
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
+        tx_new_certificates.clone(),
+        tx_parents.clone(),
         rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
         None,
+        metrics.clone(),
     ));
 
     let fake_primary_addr = network::multiaddr_to_address(fake_primary.address()).unwrap();
@@ -203,43 +201,19 @@ async fn fetch_certificates_basic() {
         .await
         .unwrap();
 
-    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
-    let gc_depth: Round = 50;
-
     // Make a certificate fetcher
     let _certificate_fetcher_handle = CertificateFetcher::spawn(
         name.clone(),
         fixture.committee(),
+        fixture.shared_worker_cache(),
         client_network.clone(),
         certificate_store.clone(),
         rx_consensus_round_updates.clone(),
         gc_depth,
         tx_shutdown.subscribe(),
         rx_certificate_fetcher,
-        tx_certificates_loopback,
-        metrics.clone(),
-    );
-
-    // Spawn the core.
-    let _core_handle = Core::spawn(
-        name.clone(),
-        fixture.committee(),
-        worker_cache,
-        store.header_store.clone(),
-        certificate_store.clone(),
         synchronizer.clone(),
-        signature_service,
-        rx_consensus_round_updates,
-        rx_narwhal_round_updates,
-        gc_depth,
-        tx_shutdown.subscribe(),
-        rx_certificates,
-        rx_certificates_loopback,
-        rx_headers,
-        tx_consensus,
-        tx_parents,
         metrics.clone(),
-        client_network,
     );
 
     // Generate headers and certificates in successive rounds
@@ -285,10 +259,10 @@ async fn fetch_certificates_basic() {
 
     // Send a primary message for a certificate with parents that do not exist locally, to trigger fetching.
     let target_index = 123;
-    tx_certificates
-        .send((certificates[target_index].clone(), None))
+    assert!(!synchronizer
+        .check_parents(&certificates[target_index].clone())
         .await
-        .unwrap();
+        .unwrap());
 
     // Verify the fetch request.
     let mut req = rx_fetch_req.recv().await.unwrap();

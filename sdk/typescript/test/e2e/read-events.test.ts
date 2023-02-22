@@ -25,7 +25,7 @@ describe('Event Reading API', () => {
     const query1 = await toolbox.provider.getEvents(
       { Sender: toolbox.address() },
       null,
-      2
+      2,
     );
     expect(query1.data.length).toEqual(0);
   });
@@ -34,7 +34,7 @@ describe('Event Reading API', () => {
     const query2 = await toolbox.provider.getEvents(
       { Recipient: { AddressOwner: toolbox.address() } },
       null,
-      2
+      2,
     );
     expect(query2.data.length).toEqual(2);
   });

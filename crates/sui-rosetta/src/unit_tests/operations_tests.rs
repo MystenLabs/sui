@@ -31,9 +31,12 @@ async fn test_operation_data_parsing() -> Result<(), anyhow::Error> {
         tx_metadata: TransactionMetadata::PaySui(vec![gas]),
         sender,
         gas,
+        gas_price: 1,
         budget: 1000,
     };
-    let parsed_data = ops.into_internal()?.into_data(metadata);
+    let parsed_data = ops
+        .into_internal(Some(metadata.tx_metadata.clone().into()))?
+        .try_into_data(metadata)?;
     assert_eq!(data, parsed_data);
 
     Ok(())

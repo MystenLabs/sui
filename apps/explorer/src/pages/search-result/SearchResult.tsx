@@ -5,10 +5,8 @@ import { isValidTransactionDigest, isValidSuiAddress } from '@mysten/sui.js';
 import { useEffect, useState, useContext } from 'react';
 import { useParams } from 'react-router-dom';
 
-import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
 import { NetworkContext } from '../../context';
-import theme from '../../styles/theme.module.css';
 import {
     DefaultRpcClient as rpc,
     type Network,
@@ -16,6 +14,9 @@ import {
 import { isGenesisLibAddress } from '../../utils/api/searchUtil';
 
 import styles from './SearchResult.module.css';
+
+import { Banner } from '~/ui/Banner';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 type SearchDataType = {
     resultdata: any[];
@@ -28,14 +29,8 @@ const initState: SearchDataType = {
 };
 
 const querySearchParams = async (input: string, network: Network | string) => {
-    const version = await rpc(network).getRpcApiVersion();
     let searchPromises = [];
-    if (
-        isValidTransactionDigest(
-            input,
-            version?.major === 0 && version?.minor < 18 ? 'base64' : 'base58'
-        )
-    ) {
+    if (isValidTransactionDigest(input)) {
         searchPromises.push(
             rpc(network)
                 .getTransactionWithEffects(input)
@@ -106,11 +101,7 @@ function SearchResult() {
     }, [id, network]);
 
     if (resultData.loadState === 'pending') {
-        return (
-            <div className={theme.textresults}>
-                <div className={styles.textcenter}>Loading...</div>
-            </div>
-        );
+        return <LoadingSpinner text="Loading..." />;
     }
 
     if (
@@ -119,14 +110,11 @@ function SearchResult() {
         !id
     ) {
         return (
-            <ErrorResult
-                id={id}
-                errorMsg={
-                    id
-                        ? 'ID not a valid string'
-                        : 'Data on the following query could not be found'
-                }
-            />
+            <Banner variant="error" spacing="lg" fullWidth>
+                {id
+                    ? 'ID not a valid string'
+                    : `Data on the following query could not be found: ${id}`}
+            </Banner>
         );
     }
 

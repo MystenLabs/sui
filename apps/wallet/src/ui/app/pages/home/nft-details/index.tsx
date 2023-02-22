@@ -8,7 +8,6 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import Button from '_app/shared/button';
 import { Collapse } from '_app/shared/collapse';
-import PageTitle from '_app/shared/page-title';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
@@ -22,6 +21,7 @@ import {
 } from '_hooks';
 import { createAccountNftByIdSelector } from '_redux/slices/account';
 import ExternalLink from '_src/ui/app/components/external-link';
+import PageTitle from '_src/ui/app/shared/PageTitle';
 
 import type { ReactNode } from 'react';
 
@@ -100,9 +100,7 @@ function NFTDetailsPage() {
             <Loading loading={loading}>
                 {selectedNft ? (
                     <>
-                        <div className="flex">
-                            <PageTitle backLink="/nfts" hideBackLabel={true} />
-                        </div>
+                        <PageTitle back="/nfts" />
                         <div className="flex flex-col flex-nowrap flex-1 items-stretch overflow-y-auto overflow-x-hidden gap-7">
                             <div className="self-center gap-3 flex flex-col flex-nowrap items-center">
                                 <NFTDisplayCard

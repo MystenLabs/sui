@@ -45,7 +45,7 @@ const CKDPriv = ({ key, chainCode }: Keys, index: number): Keys => {
   data.set(key, 1);
   data.set(
     new Uint8Array(indexBuffer, 0, indexBuffer.byteLength),
-    key.length + 1
+    key.length + 1,
   );
 
   const I = hmac.create(sha512, chainCode).update(data).digest();
@@ -59,7 +59,7 @@ const CKDPriv = ({ key, chainCode }: Keys, index: number): Keys => {
 
 export const getPublicKey = (
   privateKey: Uint8Array,
-  withZeroByte = true
+  withZeroByte = true,
 ): Uint8Array => {
   const keyPair = nacl.sign.keyPair.fromSeed(privateKey);
   const signPk = keyPair.secretKey.subarray(32);
@@ -83,7 +83,7 @@ export const isValidPath = (path: string): boolean => {
 export const derivePath = (
   path: Path,
   seed: Hex,
-  offset = HARDENED_OFFSET
+  offset = HARDENED_OFFSET,
 ): Keys => {
   if (!isValidPath(path)) {
     throw new Error('Invalid derivation path');
@@ -98,6 +98,6 @@ export const derivePath = (
 
   return segments.reduce(
     (parentKeys, segment) => CKDPriv(parentKeys, segment + offset),
-    { key, chainCode }
+    { key, chainCode },
   );
 };

@@ -3,24 +3,21 @@
 
 import { useLocation, useParams } from 'react-router-dom';
 
-import ErrorResult from '../../components/error-result/ErrorResult';
-import theme from '../../styles/theme.module.css';
 import TransactionView from './TransactionView';
 
 import type { SuiTransactionResponse } from '@mysten/sui.js';
 
 import { useGetTransaction } from '~/hooks/useGetTransaction';
+import { Banner } from '~/ui/Banner';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 function FailedToGetTxResults({ id }: { id: string }) {
     return (
-        <ErrorResult
-            id={id}
-            errorMsg={
-                !id
-                    ? "Can't search for a transaction without a digest"
-                    : 'Data could not be extracted for the following specified transaction ID'
-            }
-        />
+        <Banner variant="error" spacing="lg" fullWidth>
+            {!id
+                ? "Can't search for a transaction without a digest"
+                : `Data could not be extracted for the following specified transaction ID: ${id}`}
+        </Banner>
     );
 }
 
@@ -29,11 +26,7 @@ function TransactionResultAPI({ id }: { id: string }) {
 
     // TODO update Loading screen
     if (isLoading) {
-        return (
-            <div className={theme.textresults}>
-                <div>Loading...</div>
-            </div>
-        );
+        return <LoadingSpinner text="Loading..." />;
     }
 
     if (isError || !data) {
@@ -49,9 +42,8 @@ function TransactionResult() {
 
     const checkStateHasData = (
         state: any
-    ): state is { data: SuiTransactionResponse } => {
-        return state !== null && 'data' in state;
-    };
+    ): state is { data: SuiTransactionResponse } =>
+        state !== null && 'data' in state;
 
     const checkIsString = (value: any): value is string =>
         typeof value === 'string';
@@ -64,7 +56,13 @@ function TransactionResult() {
         return <TransactionResultAPI id={id} />;
     }
 
-    return <ErrorResult id={id} errorMsg="ID not a valid string" />;
+    return (
+        <Banner variant="error" spacing="lg" fullWidth>
+            ID &ldquo;
+            {id}
+            &rdquo; is not a valid string
+        </Banner>
+    );
 }
 
 export default TransactionResult;

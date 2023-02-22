@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::RpcTransactionBuilderServer;
+use crate::api::TransactionBuilderServer;
 use crate::SuiRpcModule;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
@@ -25,12 +25,12 @@ use sui_adapter::execution_mode::{DevInspect, Normal};
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::RPCTransactionRequestParams;
 
-pub struct FullNodeTransactionBuilderApi {
+pub struct TransactionBuilderApi {
     builder: TransactionBuilder<Normal>,
     dev_inspect_builder: TransactionBuilder<DevInspect>,
 }
 
-impl FullNodeTransactionBuilderApi {
+impl TransactionBuilderApi {
     pub fn new(state: Arc<AuthorityState>) -> Self {
         let reader = Arc::new(AuthorityStateDataReader::new(state));
         Self {
@@ -77,7 +77,7 @@ impl DataReader for AuthorityStateDataReader {
 }
 
 #[async_trait]
-impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
+impl TransactionBuilderServer for TransactionBuilderApi {
     async fn transfer_object(
         &self,
         signer: SuiAddress,
@@ -307,20 +307,12 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
         signer: SuiAddress,
         delegation: ObjectID,
         staked_sui: ObjectID,
-        principal_withdraw_amount: u64,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
         Ok(TransactionBytes::from_data(
             self.builder
-                .request_withdraw_delegation(
-                    signer,
-                    delegation,
-                    staked_sui,
-                    principal_withdraw_amount,
-                    gas,
-                    gas_budget,
-                )
+                .request_withdraw_delegation(signer, delegation, staked_sui, gas, gas_budget)
                 .await?,
         )?)
     }
@@ -331,7 +323,6 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
         delegation: ObjectID,
         staked_sui: ObjectID,
         new_validator_address: SuiAddress,
-        switch_pool_token_amount: u64,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
@@ -342,7 +333,6 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
                     delegation,
                     staked_sui,
                     new_validator_address,
-                    switch_pool_token_amount,
                     gas,
                     gas_budget,
                 )
@@ -351,12 +341,12 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
     }
 }
 
-impl SuiRpcModule for FullNodeTransactionBuilderApi {
+impl SuiRpcModule for TransactionBuilderApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::RpcTransactionBuilderOpenRpc::module_doc()
+        crate::api::TransactionBuilderOpenRpc::module_doc()
     }
 }

@@ -32,6 +32,25 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                 ::sui_simulator::sui_framework::get_sui_framework();
                 ::sui_simulator::sui_types::gas::SuiGasStatus::new_unmetered();
 
+                {
+                    // Initialize the static initializers here:
+                    // https://github.com/move-language/move/blob/652badf6fd67e1d4cc2aa6dc69d63ad14083b673/language/tools/move-package/src/package_lock.rs#L12
+                    use std::path::PathBuf;
+                    use sui_simulator::sui_framework_build::compiled_package::BuildConfig;
+                    use sui_simulator::sui_framework::build_move_package;
+                    use sui_simulator::tempfile::TempDir;
+
+                    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+                    path.push("../../sui_programmability/examples/basics");
+                    let mut build_config = BuildConfig::default();
+
+                    build_config.config.install_dir = Some(TempDir::new().unwrap().into_path());
+                    let _all_module_bytes = build_move_package(&path, build_config)
+                        .unwrap()
+                        .get_package_bytes(/* with_unpublished_deps */ false);
+                }
+
+
                 use ::sui_simulator::anemo_tower::callback::CallbackLayer;
                 use ::sui_simulator::anemo_tower::trace::DefaultMakeSpan;
                 use ::sui_simulator::anemo_tower::trace::DefaultOnFailure;
@@ -66,6 +85,7 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                             )
                             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                                 Arc::new(inbound_network_metrics),
+                                usize::MAX,
                             )))
                             .service(::sui_simulator::anemo::Router::new());
 
@@ -77,6 +97,7 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                             )
                             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                                 Arc::new(outbound_network_metrics),
+                                usize::MAX,
                             )))
                             .into_inner();
 
@@ -159,16 +180,32 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
             #input
         }
     } else {
-        let fn_name = input.sig.ident.clone();
+        let fn_name = &input.sig.ident;
+        let sig = &input.sig;
+        let body = &input.block;
         quote! {
-            #[::core::prelude::v1::test]
-            #[ignore = "simulator-only test"]
-            fn #fn_name () {
-                unimplemented!("this test cannot run outside the simulator");
+            #[tokio::test]
+            #sig {
+                if std::env::var("SUI_SKIP_SIMTESTS").is_ok() {
+                    println!("not running test {} in `cargo test`: SUI_SKIP_SIMTESTS is set", stringify!(#fn_name));
 
-                // paste original function to silence un-used import errors.
-                #[allow(dead_code)]
-                #input
+                    struct Ret;
+
+                    impl From<Ret> for () {
+                        fn from(_ret: Ret) -> Self {
+                        }
+                    }
+
+                    impl<E> From<Ret> for Result<(), E> {
+                        fn from(_ret: Ret) -> Self {
+                            Ok(())
+                        }
+                    }
+
+                    return Ret.into();
+                }
+
+                #body
             }
         }
     };

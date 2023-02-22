@@ -8,95 +8,117 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
+use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 
 use crate::error::{Error, SuiRpcResult};
-use rpc_types::{SuiCertifiedTransaction, SuiParsedTransactionResponse, SuiTransactionEffects};
 use serde_json::Value;
 use sui_adapter::execution_mode::Normal;
 pub use sui_json as json;
 
 use crate::apis::{CoinReadApi, EventApi, GovernanceApi, QuorumDriver, ReadApi};
+use sui_json_rpc::{
+    CLIENT_SDK_TYPE_HEADER, CLIENT_SDK_VERSION_HEADER, CLIENT_TARGET_API_VERSION_HEADER,
+};
 pub use sui_json_rpc_types as rpc_types;
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiObjectInfo};
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
-use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::base_types::{ObjectID, SuiAddress};
 
 pub mod apis;
 pub mod error;
 pub const SUI_COIN_TYPE: &str = "0x2::sui::SUI";
-const WAIT_FOR_TX_TIMEOUT_SEC: u64 = 10;
+const WAIT_FOR_TX_TIMEOUT_SEC: u64 = 60;
 
-#[derive(Debug)]
-pub struct TransactionExecutionResult {
-    pub tx_digest: TransactionDigest,
-    pub tx_cert: Option<SuiCertifiedTransaction>,
-    pub effects: Option<SuiTransactionEffects>,
-    pub confirmed_local_execution: bool,
-    pub timestamp_ms: Option<u64>,
-    pub parsed_data: Option<SuiParsedTransactionResponse>,
+pub struct SuiClientBuilder {
+    request_timeout: Duration,
+    max_concurrent_requests: usize,
+    ws_url: Option<String>,
 }
 
-#[derive(Clone)]
-pub struct SuiClient {
-    api: Arc<RpcClient>,
-    transaction_builder: TransactionBuilder<Normal>,
-    read_api: Arc<ReadApi>,
-    coin_read_api: CoinReadApi,
-    event_api: EventApi,
-    quorum_driver: QuorumDriver,
-    governance_api: GovernanceApi,
-}
-
-pub(crate) struct RpcClient {
-    http: HttpClient,
-    ws: Option<WsClient>,
-    info: ServerInfo,
-}
-
-impl Debug for RpcClient {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "RPC client. Http: {:?}, Websocket: {:?}",
-            self.http, self.ws
-        )
+impl Default for SuiClientBuilder {
+    fn default() -> Self {
+        Self {
+            request_timeout: Duration::from_secs(60),
+            max_concurrent_requests: 256,
+            ws_url: None,
+        }
     }
 }
 
-struct ServerInfo {
-    rpc_methods: Vec<String>,
-    subscriptions: Vec<String>,
-    version: String,
-}
+impl SuiClientBuilder {
+    pub fn request_timeout(mut self, request_timeout: Duration) -> Self {
+        self.request_timeout = request_timeout;
+        self
+    }
 
-impl RpcClient {
-    pub async fn new(
-        http: &str,
-        ws: Option<&str>,
-        request_timeout: Option<Duration>,
-    ) -> Result<Self, Error> {
-        let mut http_builder = HttpClientBuilder::default();
-        if let Some(request_timeout) = request_timeout {
-            http_builder = http_builder.request_timeout(request_timeout);
-        }
-        let http = http_builder.build(http)?;
+    pub fn max_concurrent_requests(mut self, max_concurrent_requests: usize) -> Self {
+        self.max_concurrent_requests = max_concurrent_requests;
+        self
+    }
 
-        let ws = if let Some(url) = ws {
-            let mut ws_builder = WsClientBuilder::default();
-            if let Some(request_timeout) = request_timeout {
-                ws_builder = ws_builder.request_timeout(request_timeout);
-            }
-            let ws = ws_builder.build(url).await?;
-            Some(ws)
+    pub fn ws_url(mut self, url: impl AsRef<str>) -> Self {
+        self.ws_url = Some(url.as_ref().to_string());
+        self
+    }
+
+    pub async fn build(self, http: impl AsRef<str>) -> SuiRpcResult<SuiClient> {
+        let client_version = env!("CARGO_PKG_VERSION");
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            CLIENT_TARGET_API_VERSION_HEADER,
+            // for rust, the client version is the same as the target api version
+            HeaderValue::from_static(client_version),
+        );
+        headers.insert(
+            CLIENT_SDK_VERSION_HEADER,
+            HeaderValue::from_static(client_version),
+        );
+        headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("rust"));
+
+        let ws = if let Some(url) = self.ws_url {
+            Some(
+                WsClientBuilder::default()
+                    .max_request_body_size(2 << 30)
+                    .max_concurrent_requests(self.max_concurrent_requests)
+                    .set_headers(headers.clone())
+                    .request_timeout(self.request_timeout)
+                    .build(url)
+                    .await?,
+            )
         } else {
             None
         };
+
+        let http = HttpClientBuilder::default()
+            .max_request_body_size(2 << 30)
+            .max_concurrent_requests(self.max_concurrent_requests)
+            .set_headers(headers.clone())
+            .request_timeout(self.request_timeout)
+            .build(http)?;
+
         let info = Self::get_server_info(&http, &ws).await?;
-        Ok(Self { http, ws, info })
+
+        let rpc = RpcClient { http, ws, info };
+        let api = Arc::new(rpc);
+        let read_api = Arc::new(ReadApi::new(api.clone()));
+        let quorum_driver = QuorumDriver::new(api.clone());
+        let event_api = EventApi::new(api.clone());
+        let transaction_builder = TransactionBuilder::new(read_api.clone());
+        let coin_read_api = CoinReadApi::new(api.clone());
+        let governance_api = GovernanceApi::new(api.clone());
+
+        Ok(SuiClient {
+            api,
+            transaction_builder,
+            read_api,
+            coin_read_api,
+            event_api,
+            quorum_driver,
+            governance_api,
+        })
     }
 
     async fn get_server_info(
@@ -143,30 +165,54 @@ impl RpcClient {
     }
 }
 
+#[derive(Clone)]
+pub struct SuiClient {
+    api: Arc<RpcClient>,
+    transaction_builder: TransactionBuilder<Normal>,
+    read_api: Arc<ReadApi>,
+    coin_read_api: CoinReadApi,
+    event_api: EventApi,
+    quorum_driver: QuorumDriver,
+    governance_api: GovernanceApi,
+}
+
+pub(crate) struct RpcClient {
+    http: HttpClient,
+    ws: Option<WsClient>,
+    info: ServerInfo,
+}
+
+impl Debug for RpcClient {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "RPC client. Http: {:?}, Websocket: {:?}",
+            self.http, self.ws
+        )
+    }
+}
+
+struct ServerInfo {
+    rpc_methods: Vec<String>,
+    subscriptions: Vec<String>,
+    version: String,
+}
+
 impl SuiClient {
+    #[deprecated(since = "0.23.0", note = "Please use `SuiClientBuilder` instead.")]
     pub async fn new(
         http_url: &str,
         ws_url: Option<&str>,
         request_timeout: Option<Duration>,
     ) -> Result<Self, Error> {
-        let rpc = RpcClient::new(http_url, ws_url, request_timeout).await?;
-        let api = Arc::new(rpc);
-        let read_api = Arc::new(ReadApi::new(api.clone()));
-        let quorum_driver = QuorumDriver::new(api.clone());
-        let event_api = EventApi::new(api.clone());
-        let transaction_builder = TransactionBuilder::new(read_api.clone());
-        let coin_read_api = CoinReadApi::new(api.clone());
-        let governance_api = GovernanceApi::new(api.clone());
-
-        Ok(SuiClient {
-            api,
-            transaction_builder,
-            read_api,
-            coin_read_api,
-            event_api,
-            quorum_driver,
-            governance_api,
-        })
+        let mut builder = SuiClientBuilder::default();
+        if let Some(ws_url) = ws_url {
+            builder = builder.ws_url(ws_url);
+        }
+        if let Some(request_timeout) = request_timeout {
+            builder = builder.request_timeout(request_timeout);
+        }
+        builder.build(http_url).await
     }
 
     pub fn available_rpc_methods(&self) -> &Vec<String> {

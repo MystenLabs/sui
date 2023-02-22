@@ -132,4 +132,13 @@ module sui::math {
 
         (res as u128)
     }
+
+    /// Calculate x / y, but round up the result.
+    public fun divide_and_round_up(x: u64, y: u64): u64 {
+        if (x % y == 0) {
+            x / y
+        } else {
+            x / y + 1
+        }
+    }
 }

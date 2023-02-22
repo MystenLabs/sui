@@ -2,36 +2,65 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashSet;
-use std::error::Error;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::net::SocketAddr;
 
-use hyper::service::Service;
-use hyper::{body, http, Body, Request, Response};
-use jsonrpsee::core::__reexports::serde_json;
+use crate::{CLIENT_SDK_TYPE_HEADER, CLIENT_TARGET_API_VERSION_HEADER};
+use jsonrpsee::server::logger::{HttpRequest, Logger, MethodKind, TransportProtocol};
+use jsonrpsee::types::Params;
 use prometheus::{
-    register_histogram_vec_with_registry, register_int_counter_vec_with_registry, HistogramVec,
-    IntCounterVec,
+    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
+    register_int_gauge_vec_with_registry, HistogramVec, IntCounterVec, IntGaugeVec,
 };
-use serde::Deserialize;
 use tokio::time::Instant;
-use tower::Layer;
 
 const SPAM_LABEL: &str = "SPAM";
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+];
 
 #[derive(Debug, Clone)]
-pub struct MetricsLayer {
-    metrics: Metrics,
-    method_whitelist: Arc<HashSet<String>>,
+pub struct Metrics {
+    /// Counter of requests, route is a label (ie separate timeseries per route)
+    requests_by_route: IntCounterVec,
+    /// Gauge of inflight requests, route is a label (ie separate timeseries per route)
+    inflight_requests_by_route: IntGaugeVec,
+    /// Request latency, route is a label
+    req_latency_by_route: HistogramVec,
+    /// Failed requests by route
+    errors_by_route: IntCounterVec,
+    /// Client info
+    client: IntCounterVec,
+    /// Connection count
+    inflight_connection: IntGaugeVec,
 }
-impl MetricsLayer {
+
+#[derive(Clone)]
+pub struct MetricsLogger {
+    metrics: Metrics,
+    method_whitelist: HashSet<String>,
+}
+
+impl MetricsLogger {
+    fn check_spam<'a>(&'a self, method_name: &'a str) -> &'a str {
+        if self.method_whitelist.contains(method_name) {
+            method_name
+        } else {
+            SPAM_LABEL
+        }
+    }
+
     pub fn new(registry: &prometheus::Registry, method_whitelist: &[&str]) -> Self {
         let metrics = Metrics {
             requests_by_route: register_int_counter_vec_with_registry!(
                 "rpc_requests_by_route",
                 "Number of requests by route",
+                &["route"],
+                registry,
+            )
+            .unwrap(),
+            inflight_requests_by_route: register_int_gauge_vec_with_registry!(
+                "inflight_rpc_requests_by_route",
+                "Number of inflight requests by route",
                 &["route"],
                 registry,
             )
@@ -51,135 +80,114 @@ impl MetricsLayer {
                 registry,
             )
             .unwrap(),
+            client: register_int_counter_vec_with_registry!(
+                "rpc_client",
+                "Connected RPC client's info",
+                &["client_type", "api_version"],
+                registry,
+            )
+            .unwrap(),
+            inflight_connection: register_int_gauge_vec_with_registry!(
+                "rpc_inflight_connection",
+                "Number of inflight RPC connection by protocol",
+                &["protocol"],
+                registry,
+            )
+            .unwrap(),
         };
 
         Self {
             metrics,
-            method_whitelist: Arc::new(method_whitelist.iter().map(|s| (*s).into()).collect()),
+            method_whitelist: method_whitelist.iter().map(|s| (*s).into()).collect(),
         }
     }
 }
 
-impl<S> Layer<S> for MetricsLayer {
-    type Service = JsonRpcMetricService<S>;
+impl Logger for MetricsLogger {
+    type Instant = Instant;
 
-    fn layer(&self, inner: S) -> Self::Service {
-        JsonRpcMetricService::new(inner, self.metrics.clone(), self.method_whitelist.clone())
+    fn on_connect(&self, _remote_addr: SocketAddr, request: &HttpRequest, t: TransportProtocol) {
+        let client_type = request
+            .headers()
+            .get(CLIENT_SDK_TYPE_HEADER)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("Unknown");
+
+        let api_version = request
+            .headers()
+            .get(CLIENT_TARGET_API_VERSION_HEADER)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("Unknown");
+        self.metrics
+            .client
+            .with_label_values(&[client_type, api_version])
+            .inc();
+        self.metrics
+            .inflight_connection
+            .with_label_values(&[&t.to_string()])
+            .inc();
     }
-}
 
-#[derive(Debug, Clone)]
-pub struct JsonRpcMetricService<S> {
-    inner: S,
-    metrics: Metrics,
-    method_whitelist: Arc<HashSet<String>>,
-}
+    fn on_request(&self, _transport: TransportProtocol) -> Self::Instant {
+        Instant::now()
+    }
 
-#[derive(Debug, Clone)]
-pub struct Metrics {
-    /// Counter of requests, route is a label (ie separate timeseries per route)
-    requests_by_route: IntCounterVec,
-    /// Request latency, route is a label
-    req_latency_by_route: HistogramVec,
-    /// Failed requests by route
-    errors_by_route: IntCounterVec,
-}
+    fn on_call(
+        &self,
+        method_name: &str,
+        _params: Params,
+        _kind: MethodKind,
+        _transport: TransportProtocol,
+    ) {
+        let method_name = self.check_spam(method_name);
+        self.metrics
+            .inflight_requests_by_route
+            .with_label_values(&[method_name])
+            .inc();
+        self.metrics
+            .requests_by_route
+            .with_label_values(&[method_name])
+            .inc();
+    }
 
-const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
-];
+    fn on_result(
+        &self,
+        method_name: &str,
+        success: bool,
+        started_at: Self::Instant,
+        _transport: TransportProtocol,
+    ) {
+        let method_name = self.check_spam(method_name);
+        self.metrics
+            .inflight_requests_by_route
+            .with_label_values(&[method_name])
+            .dec();
+        let req_latency_secs = (Instant::now() - started_at).as_secs_f64();
+        self.metrics
+            .req_latency_by_route
+            .with_label_values(&[method_name])
+            .observe(req_latency_secs);
 
-impl<S> JsonRpcMetricService<S> {
-    pub fn new(inner: S, metrics: Metrics, method_whitelist: Arc<HashSet<String>>) -> Self {
-        Self {
-            inner,
-            metrics,
-            method_whitelist,
+        if !success {
+            self.metrics
+                .errors_by_route
+                .with_label_values(&[method_name])
+                .inc();
         }
     }
-}
 
-impl<S> Service<Request<Body>> for JsonRpcMetricService<S>
-where
-    S: Service<Request<Body>, Response = Response<Body>> + Clone + Send + 'static,
-    S::Response: 'static,
-    S::Error: Into<Box<dyn Error + Send + Sync>> + 'static,
-    S::Future: Send + 'static,
-{
-    type Response = S::Response;
-    type Error = Box<dyn Error + Send + Sync + 'static>;
-    type Future =
-        Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
-
-    #[inline]
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx).map_err(Into::into)
+    fn on_response(
+        &self,
+        _result: &str,
+        _started_at: Self::Instant,
+        _transport: TransportProtocol,
+    ) {
     }
 
-    fn call(&mut self, req: Request<Body>) -> Self::Future {
-        let started_at = Instant::now();
-        let metrics = self.metrics.clone();
-        let clone = self.inner.clone();
-        // take the service that was ready
-        // https://docs.rs/tower/latest/tower/trait.Service.html#be-careful-when-cloning-inner-services
-        let mut inner = std::mem::replace(&mut self.inner, clone);
-        let whitelist = self.method_whitelist.clone();
-
-        let res_fut = async move {
-            // Parse request to retrieve RPC method name.
-            let (rpc_name, req) = if is_json(req.headers().get(http::header::CONTENT_TYPE)) {
-                let (part, body) = req.into_parts();
-                let bytes = body::to_bytes(body).await?;
-                #[derive(Deserialize)]
-                struct RPCRequest {
-                    method: String,
-                }
-
-                let name = serde_json::from_slice::<RPCRequest>(&bytes)
-                    .ok()
-                    .map(|rpc| rpc.method);
-
-                (name, Request::from_parts(part, Body::from(bytes)))
-            } else {
-                (None, req)
-            };
-
-            let fut = inner.call(req);
-            let res = fut.await.map_err(|err| err.into())?;
-
-            // Record metrics if the request is a http RPC request.
-            if let Some(name) = rpc_name {
-                if whitelist.contains(&name) {
-                    let req_latency_secs = (Instant::now() - started_at).as_secs_f64();
-                    metrics.requests_by_route.with_label_values(&[&name]).inc();
-                    metrics
-                        .req_latency_by_route
-                        .with_label_values(&[&name])
-                        .observe(req_latency_secs);
-
-                    if res.status().is_server_error() {
-                        metrics.errors_by_route.with_label_values(&[&name]).inc();
-                    }
-                } else {
-                    // Only record request count for spams
-                    metrics
-                        .requests_by_route
-                        .with_label_values(&[SPAM_LABEL])
-                        .inc();
-                }
-            }
-            Ok(res)
-        };
-        Box::pin(res_fut)
+    fn on_disconnect(&self, _remote_addr: SocketAddr, t: TransportProtocol) {
+        self.metrics
+            .inflight_connection
+            .with_label_values(&[&t.to_string()])
+            .dec();
     }
-}
-
-fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
-    content_type
-        .and_then(|val| val.to_str().ok())
-        .map_or(false, |content| {
-            content.eq_ignore_ascii_case("application/json")
-                || content.eq_ignore_ascii_case("application/json; charset=utf-8")
-                || content.eq_ignore_ascii_case("application/json;charset=utf-8")
-        })
 }

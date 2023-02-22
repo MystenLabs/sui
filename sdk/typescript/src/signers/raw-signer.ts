@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Keypair } from '../cryptography/keypair';
+import {
+  SerializedSignature,
+  toSerializedSignature,
+} from '../cryptography/signature';
 import { Provider } from '../providers/provider';
-import { Base64DataBuffer } from '../serialization/base64';
 import { SuiAddress } from '../types';
-import { SignaturePubkeyPair } from './signer';
 import { SignerWithProvider } from './signer-with-provider';
 import { TxnDataSerializer } from './txn-data-serializers/txn-data-serializer';
 
@@ -15,7 +17,7 @@ export class RawSigner extends SignerWithProvider {
   constructor(
     keypair: Keypair,
     provider?: Provider,
-    serializer?: TxnDataSerializer
+    serializer?: TxnDataSerializer,
   ) {
     super(provider, serializer);
     this.keypair = keypair;
@@ -25,12 +27,16 @@ export class RawSigner extends SignerWithProvider {
     return this.keypair.getPublicKey().toSuiAddress();
   }
 
-  async signData(data: Base64DataBuffer): Promise<SignaturePubkeyPair> {
-    return {
-      signatureScheme: this.keypair.getKeyScheme(),
-      signature: this.keypair.signData(data),
-      pubKey: this.keypair.getPublicKey(),
-    };
+  async signData(data: Uint8Array): Promise<SerializedSignature> {
+    const pubkey = this.keypair.getPublicKey();
+    const signature = this.keypair.signData(data, false);
+    const signatureScheme = this.keypair.getKeyScheme();
+
+    return toSerializedSignature({
+      signatureScheme,
+      signature,
+      pubKey: pubkey,
+    });
   }
 
   connect(provider: Provider): SignerWithProvider {

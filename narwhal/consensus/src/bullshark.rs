@@ -11,7 +11,7 @@ use crypto::PublicKey;
 use fastcrypto::traits::EncodeDecodeBase64;
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::time::Instant;
-use tracing::{debug, error, trace};
+use tracing::{debug, trace};
 use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round, StoreResult};
 
 #[cfg(test)]
@@ -63,7 +63,8 @@ impl ConsensusProtocol for Bullshark {
         self.log_error_if_missing_parents(&certificate, state);
 
         // Add the new certificate to the local storage.
-        if state.try_insert(&certificate).is_err() {
+        if !state.try_insert(&certificate) {
+            // Certificate is not inserted. This operation is a no-op.
             return Ok(Vec::new());
         }
 
@@ -87,7 +88,8 @@ impl ConsensusProtocol for Bullshark {
         self.max_inserted_certificate_round = self.max_inserted_certificate_round.max(round);
 
         // Try to order the dag to commit. Start from the highest round for which we have at least
-        // f+1 certificates. This is because we need them to reveal the common coin.
+        // f+1 certificates. This is because we need them to provide
+        // enough support to the leader.
         let r = round - 1;
 
         // We only elect leaders for even round numbers.
@@ -114,7 +116,7 @@ impl ConsensusProtocol for Bullshark {
             }
         };
 
-        // Check if the leader has f+1 support from its children (ie. round r-1).
+        // Check if the leader has f+1 support from its children (ie. round r+1).
         let stake: Stake = state
             .dag
             .get(&round)
@@ -192,6 +194,17 @@ impl ConsensusProtocol for Bullshark {
             .with_label_values(&["elected"])
             .inc();
 
+        // The total leader_commits are expected to grow the same amount on validators,
+        // but strong vs weak counts are not expected to be the same across validators.
+        self.metrics
+            .leader_commits
+            .with_label_values(&["strong"])
+            .inc();
+        self.metrics
+            .leader_commits
+            .with_label_values(&["weak"])
+            .inc_by(committed_sub_dags.len() as u64 - 1);
+
         // Log the latest committed round of every authority (for debug).
         // Performance note: if tracing at the debug log level is disabled, this is cheap, see
         // https://github.com/tokio-rs/tracing/pull/326
@@ -199,22 +212,20 @@ impl ConsensusProtocol for Bullshark {
             debug!("Latest commit of {}: Round {}", name.encode_base64(), round);
         }
 
-        let total_commits: usize = committed_sub_dags
+        let total_committed_certificates: usize = committed_sub_dags
             .iter()
             .map(|x| x.certificates.len())
             .sum();
-        debug!("Total committed certificates: {}", total_commits);
+        debug!(
+            "Total committed certificates: {}",
+            total_committed_certificates
+        );
 
         self.metrics
             .committed_certificates
-            .observe(total_commits as f64);
+            .observe(total_committed_certificates as f64);
 
         Ok(committed_sub_dags)
-    }
-
-    fn update_committee(&mut self, new_committee: Committee) -> StoreResult<()> {
-        self.committee = new_committee;
-        self.store.clear()
     }
 }
 
@@ -279,7 +290,7 @@ impl Bullshark {
                     }
                 }
             } else {
-                error!(
+                trace!(
                     "Round not present in Dag store: {:?} when looking for parents of {:?}",
                     round - 1,
                     certificate

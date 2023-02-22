@@ -17,7 +17,7 @@ serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.88"
 tokio = { workspace = true, features = ["full", "tracing"] }
 tokio-stream = "^0.1"
-rocksdb = "0.19.0"
+rocksdb = "0.20.1"
 tracing = "0.1.36"
 # patch sqlx to a version using libsqlite3-sys v0.25.1 or later, see
 # https://github.com/launchbadge/sqlx/pull/2176
@@ -28,6 +28,7 @@ anyhow = "1.0.64"
 tempfile = "3.3.0"
 tap = "1.0.1"
 
+sui-simulator = { path = "../sui-simulator" }
 sui-types = { path = "../sui-types" }
 mysten-metrics = { path = "../mysten-metrics" }
 move-core-types.workspace = true

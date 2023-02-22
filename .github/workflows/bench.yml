@@ -57,6 +57,7 @@ jobs:
         crate: huniq
     - name: Install python dependencies
       run: |
+        pip install pyopenssl --upgrade
         if [ -f narwhal/benchmark/requirements.txt ]; then pip install -r narwhal/benchmark/requirements.txt; fi
     - name: Prepare artifact directory
       run: |
@@ -70,8 +71,10 @@ jobs:
     - name: Run benchmarks
       run: |
         set -o pipefail
-        cargo run --release --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --transfer-object 100 --run-duration 60s 2>&1 | huniq | tee -a artifacts/owned.txt
-        cargo run --release --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --shared-counter 100 --run-duration 60s 2>&1 | huniq | tee -a artifacts/shared.txt
+        cargo run --release --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 16 --num-server-threads 32 --num-transfer-accounts 2 bench --committee-size 4 --target-qps 500 --num-workers 16  --transfer-object 100 --run-duration 60s --stress-stat-collection 2>&1 | huniq | tee -a artifacts/owned_4_500.txt
+        cargo run --release --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 16 --num-server-threads 32 --num-transfer-accounts 2 bench --committee-size 4 --target-qps 500 --num-workers 16  --shared-counter 100 --run-duration 60s --stress-stat-collection 2>&1 | huniq | tee -a artifacts/shared_4_500.txt
+        cargo run --release --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 16 --num-server-threads 32 --num-transfer-accounts 2 bench --committee-size 20 --target-qps 150 --num-workers 16  --transfer-object 100 --run-duration 60s --stress-stat-collection 2>&1 | huniq | tee -a artifacts/owned_20_150.txt
+        cargo run --release --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 16 --num-server-threads 32 --num-transfer-accounts 2 bench --committee-size 20 --target-qps 50 --num-workers 16  --shared-counter 100 --run-duration 60s --stress-stat-collection 2>&1 | huniq | tee -a artifacts/shared_20_50.txt
         pushd narwhal/benchmark && fab local | tee -a ../../artifacts/narwhal.txt && popd
 
     - name: Retrieve benchmark results
@@ -79,14 +82,24 @@ jobs:
       run: |
         delimiter="$(openssl rand -hex 8)"
 
-        owned="$(cat artifacts/owned.txt | grep -e 'Benchmark Report:' -A 1000)"
-        echo "owned<<$delimiter" >> $GITHUB_OUTPUT
-        echo "$owned" >> $GITHUB_OUTPUT
+        owned_4_500="$(cat artifacts/owned_4_500.txt | grep -e 'Benchmark Report:' -A 1000)"
+        echo "owned_4_500<<$delimiter" >> $GITHUB_OUTPUT
+        echo "$owned_4_500" >> $GITHUB_OUTPUT
         echo "$delimiter" >> $GITHUB_OUTPUT
 
-        shared="$(cat artifacts/shared.txt | grep -e 'Benchmark Report:' -A 1000)"
-        echo "shared<<$delimiter" >> $GITHUB_OUTPUT
-        echo "$shared" >> $GITHUB_OUTPUT
+        shared_4_500="$(cat artifacts/shared_4_500.txt | grep -e 'Benchmark Report:' -A 1000)"
+        echo "shared_4_500<<$delimiter" >> $GITHUB_OUTPUT
+        echo "$shared_4_500" >> $GITHUB_OUTPUT
+        echo "$delimiter" >> $GITHUB_OUTPUT
+
+        owned_20_150="$(cat artifacts/owned_20_150.txt | grep -e 'Benchmark Report:' -A 1000)"
+        echo "owned_20_150<<$delimiter" >> $GITHUB_OUTPUT
+        echo "$owned_20_150" >> $GITHUB_OUTPUT
+        echo "$delimiter" >> $GITHUB_OUTPUT
+
+        shared_20_50="$(cat artifacts/shared_20_50.txt | grep -e 'Benchmark Report:' -A 1000)"
+        echo "shared_20_50<<$delimiter" >> $GITHUB_OUTPUT
+        echo "$shared_20_50" >> $GITHUB_OUTPUT
         echo "$delimiter" >> $GITHUB_OUTPUT
 
         narwhal="$(cat artifacts/narwhal.txt | grep -e 'SUMMARY:' -A 1000)"
@@ -99,15 +112,27 @@ jobs:
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         body: |
-          **Owned Transactions Benchmark Results**
+          **4 Validators 500/s Owned Transactions Benchmark Results**
           ```
-          ${{ steps.get-comment-body.outputs.owned }}
+          ${{ steps.get-comment-body.outputs.owned_4_500 }}
           ```
 
 
-          **Shared Transactions Benchmark Results**
+          **4 Validators 500/s Shared Transactions Benchmark Results**
           ```
-          ${{ steps.get-comment-body.outputs.shared }}
+          ${{ steps.get-comment-body.outputs.shared_4_500 }}
+          ```
+
+          
+          **20 Validators 50/s Owned Transactions Benchmark Results**
+          ```
+          ${{ steps.get-comment-body.outputs.owned_20_150 }}
+          ```
+
+
+          **20 Validators 50/s Shared Transactions Benchmark Results**
+          ```
+          ${{ steps.get-comment-body.outputs.shared_20_50 }}
           ```
 
           

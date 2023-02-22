@@ -165,7 +165,7 @@ sure the package is valid. If some modules have [initializers](move/debug-publis
 To publish a Move module, you also need to include `{{vector_of_compiled_modules}}`. To generate the value of this field, use the `sui move` command. The `sui move` command supports printing the bytecode as base64:
 
 ```
-sui move <move-module-path> build --dump-bytecode-as-base64
+sui move <move-module-path> build --dump-bytecode-as-base64 
 ```
 
 Assuming that the location of the package's sources is in the `PATH_TO_PACKAGE` environment variable an example command resembles the following:
@@ -181,3 +181,5 @@ Copy the output base64 representation of the compiled Move module into the
 REST publish endpoint.
 
 The command generates a package object that represents the published Move code. You can use the package ID as an argument for subsequent Move calls to functions defined in this package.
+
+**Note:** If your package has dependencies that are unpublished, include the `--with-unpublished-dependencies` flag to have the modules in those packages added to the bytecode.

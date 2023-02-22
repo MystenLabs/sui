@@ -128,11 +128,7 @@ impl EventHandler {
                     Event::move_event_to_move_struct(type_, contents, self.module_cache.as_ref())?;
                 // Convert into `SuiMoveStruct` which is a mirror of MoveStruct but with additional type supports, (e.g. ascii::String).
                 let sui_move_struct = SuiMoveStruct::from(move_struct);
-                Some(sui_move_struct.to_json_value().map_err(|e| {
-                    SuiError::ObjectSerializationError {
-                        error: e.to_string(),
-                    }
-                })?)
+                Some(sui_move_struct.to_json_value())
             }
             _ => None,
         };

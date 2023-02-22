@@ -7,22 +7,15 @@ import { useRpc } from '_hooks';
 
 import type { ValidatorMetaData, DelegatedStake } from '@mysten/sui.js';
 
-const STAKE_DELEGATOR_STALE_TIME = 5 * 1000;
-
 export function useGetDelegatedStake(
     address: string
 ): UseQueryResult<DelegatedStake[], Error> {
     const rpc = useRpc();
-    return useQuery(
-        ['validator', address],
-        () => rpc.getDelegatedStake(address),
-        {
-            staleTime: STAKE_DELEGATOR_STALE_TIME,
-        }
+    return useQuery(['validator', address], () =>
+        rpc.getDelegatedStakes(address)
     );
 }
 
-// maybe be cached for a long time
 export function useGetValidatorMetaData(): UseQueryResult<
     ValidatorMetaData[],
     Error

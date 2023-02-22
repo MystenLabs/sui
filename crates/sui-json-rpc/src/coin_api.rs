@@ -66,6 +66,7 @@ impl CoinReadApi {
                 digest: o.digest(),
                 balance,
                 locked_until_epoch,
+                previous_transaction: o.previous_transaction,
             })
         } else {
             Err(Error::UnexpectedError(format!(
@@ -77,7 +78,7 @@ impl CoinReadApi {
     async fn get_coins_internal(
         &self,
         owner: SuiAddress,
-        coin_type: Option<String>,
+        coin_type: Option<StructTag>,
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> Result<CoinPage, Error> {
@@ -102,7 +103,7 @@ impl CoinReadApi {
     fn get_owner_coin_iterator<'a>(
         &'a self,
         owner: SuiAddress,
-        coin_type: &'a Option<String>,
+        coin_type: &'a Option<StructTag>,
     ) -> Result<impl Iterator<Item = ObjectID> + '_, Error> {
         Ok(self
             .state
@@ -161,8 +162,10 @@ impl CoinReadApiServer for CoinReadApi {
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<CoinPage> {
-        // Default coin_type to 0x2::sui::SUI
-        let coin_type = coin_type.or_else(|| Some(GAS::type_().to_string()));
+        let coin_type = Some(match coin_type {
+            Some(c) => parse_sui_struct_tag(&c)?,
+            None => GAS::type_(),
+        });
         Ok(self
             .get_coins_internal(owner, coin_type, cursor, limit)
             .await?)
@@ -182,7 +185,10 @@ impl CoinReadApiServer for CoinReadApi {
         owner: SuiAddress,
         coin_type: Option<String>,
     ) -> RpcResult<Balance> {
-        let coin_type = coin_type.or_else(|| Some(GAS::type_().to_string()));
+        let coin_type = Some(match coin_type {
+            Some(c) => parse_sui_struct_tag(&c)?,
+            None => GAS::type_(),
+        });
 
         // TODO: Add index to improve performance?
         let coins = self.get_owner_coin_iterator(owner, &coin_type)?;
@@ -201,7 +207,7 @@ impl CoinReadApiServer for CoinReadApi {
         }
 
         Ok(Balance {
-            coin_type: coin_type.unwrap(),
+            coin_type: coin_type.unwrap().to_string(),
             coin_object_count,
             total_balance,
             locked_balance,
@@ -286,10 +292,10 @@ impl CoinReadApiServer for CoinReadApi {
     }
 }
 
-fn is_coin_type(type_: &StructTag, coin_type: &Option<String>) -> bool {
+fn is_coin_type(type_: &StructTag, coin_type: &Option<StructTag>) -> bool {
     if Coin::is_coin(type_) || LockedCoin::is_locked_coin(type_) {
         return if let Some(coin_type) = coin_type {
-            matches!(type_.type_params.first(), Some(TypeTag::Struct(type_)) if &type_.to_string() == coin_type)
+            matches!(type_.type_params.first(), Some(TypeTag::Struct(type_)) if type_.to_canonical_string() == coin_type.to_canonical_string())
         } else {
             true
         };

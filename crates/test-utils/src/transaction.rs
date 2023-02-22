@@ -11,9 +11,7 @@ use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_config::ValidatorInfo;
 use sui_core::authority_client::AuthorityAPI;
 pub use sui_core::test_utils::{compile_basics_package, wait_for_all_txes, wait_for_tx};
-use sui_json_rpc_types::SuiCertifiedTransaction;
-use sui_json_rpc_types::SuiObjectRead;
-use sui_json_rpc_types::SuiTransactionEffects;
+use sui_json_rpc_types::{SuiObjectRead, SuiTransactionResponse};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::json::SuiJsonValue;
 use sui_types::base_types::ObjectRef;
@@ -47,6 +45,7 @@ pub fn make_publish_package(gas_object: Object, path: PathBuf) -> VerifiedTransa
         path,
         sender,
         &keypair,
+        None,
     )
 }
 
@@ -79,7 +78,7 @@ pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress)
     publish_package_with_wallet(
         context,
         sender,
-        compile_basics_package().get_package_bytes(),
+        compile_basics_package().get_package_bytes(/* with_unpublished_deps */ false),
     )
     .await
 }
@@ -103,7 +102,7 @@ pub async fn publish_package_with_wallet(
             .keystore
             .sign_secure(&sender, &data, Intent::default())
             .unwrap();
-        Transaction::from_data(data, Intent::default(), signature)
+        Transaction::from_data(data, Intent::default(), vec![signature])
             .verify()
             .unwrap()
     };
@@ -117,9 +116,8 @@ pub async fn publish_package_with_wallet(
         .await
         .unwrap();
 
-    assert!(resp.confirmed_local_execution);
+    assert!(resp.confirmed_local_execution.unwrap());
     resp.effects
-        .unwrap()
         .created
         .iter()
         .find(|obj_ref| obj_ref.owner == Owner::Immutable)
@@ -133,18 +131,18 @@ pub async fn submit_move_transaction(
     context: &WalletContext,
     module: &'static str,
     function: &'static str,
-    package_ref: ObjectRef,
+    package_id: ObjectID,
     arguments: Vec<SuiJsonValue>,
     sender: SuiAddress,
     gas_object: Option<ObjectID>,
-) -> (SuiCertifiedTransaction, SuiTransactionEffects) {
-    debug!(?package_ref, ?arguments, "move_transaction");
+) -> SuiTransactionResponse {
+    debug!(?package_id, ?arguments, "move_transaction");
     let client = context.get_client().await.unwrap();
     let data = client
         .transaction_builder()
         .move_call(
             sender,
-            package_ref.0,
+            package_id,
             module,
             function,
             vec![], // type_args
@@ -161,7 +159,7 @@ pub async fn submit_move_transaction(
         .sign_secure(&sender, &data, Intent::default())
         .unwrap();
 
-    let tx = Transaction::from_data(data, Intent::default(), signature)
+    let tx = Transaction::from_data(data, Intent::default(), vec![signature])
         .verify()
         .unwrap();
     let tx_digest = tx.digest();
@@ -175,8 +173,8 @@ pub async fn submit_move_transaction(
         )
         .await
         .unwrap();
-    assert!(resp.confirmed_local_execution);
-    (resp.tx_cert.unwrap(), resp.effects.unwrap())
+    assert!(resp.confirmed_local_execution.unwrap());
+    resp
 }
 
 /// A helper function to publish the basics package and make counter objects
@@ -188,18 +186,19 @@ pub async fn publish_basics_package_and_make_counter(
 
     debug!(?package_ref);
 
-    let (_tx_cert, effects) = submit_move_transaction(
+    let response = submit_move_transaction(
         context,
         "counter",
         "create",
-        package_ref,
+        package_ref.0,
         vec![],
         sender,
         None,
     )
     .await;
 
-    let counter_ref = effects
+    let counter_ref = response
+        .effects
         .created
         .iter()
         .find(|obj_ref| matches!(obj_ref.owner, Owner::Shared { .. }))
@@ -214,14 +213,14 @@ pub async fn increment_counter(
     context: &WalletContext,
     sender: SuiAddress,
     gas_object: Option<ObjectID>,
-    package_ref: ObjectRef,
+    package_id: ObjectID,
     counter_id: ObjectID,
-) -> (SuiCertifiedTransaction, SuiTransactionEffects) {
+) -> SuiTransactionResponse {
     submit_move_transaction(
         context,
         "counter",
         "increment",
-        package_ref,
+        package_id,
         vec![SuiJsonValue::new(json!(counter_id.to_hex_literal())).unwrap()],
         sender,
         gas_object,
@@ -283,8 +282,8 @@ pub async fn transfer_sui(
     .execute(context)
     .await?;
 
-    let digest = if let SuiClientCommandResult::TransferSui(tx_cert, _effects) = res {
-        tx_cert.transaction_digest
+    let digest = if let SuiClientCommandResult::TransferSui(response) = res {
+        response.effects.transaction_digest
     } else {
         panic!("transfer command did not return WalletCommandResult::TransferSui");
     };
@@ -328,12 +327,12 @@ pub async fn transfer_coin(
     .execute(context)
     .await?;
 
-    let (digest, gas, gas_used) = if let SuiClientCommandResult::Transfer(_, cert, effect) = res {
+    let (digest, gas, gas_used) = if let SuiClientCommandResult::Transfer(_, response) = res {
         (
-            cert.transaction_digest,
-            cert.data.gas_payment,
-            effect.gas_used.computation_cost + effect.gas_used.storage_cost
-                - effect.gas_used.storage_rebate,
+            response.effects.transaction_digest,
+            response.transaction.data.gas_data.payment,
+            response.effects.gas_used.computation_cost + response.effects.gas_used.storage_cost
+                - response.effects.gas_used.storage_rebate,
         )
     } else {
         panic!("transfer command did not return WalletCommandResult::Transfer");
@@ -366,14 +365,13 @@ pub async fn delete_devnet_nft(
     context: &mut WalletContext,
     sender: &SuiAddress,
     nft_to_delete: ObjectRef,
-    package_ref: ObjectRef,
-) -> (SuiCertifiedTransaction, SuiTransactionEffects) {
+) -> SuiTransactionResponse {
     let gas = get_gas_object_with_wallet_context(context, sender)
         .await
         .unwrap_or_else(|| panic!("Expect {sender} to have at least one gas object"));
     let data = TransactionData::new_move_call_with_dummy_gas_price(
         *sender,
-        package_ref,
+        SUI_FRAMEWORK_OBJECT_ID,
         "devnet_nft".parse().unwrap(),
         "burn".parse().unwrap(),
         Vec::new(),
@@ -388,7 +386,7 @@ pub async fn delete_devnet_nft(
         .sign_secure(sender, &data, Intent::default())
         .unwrap();
 
-    let tx = Transaction::from_data(data, Intent::default(), signature)
+    let tx = Transaction::from_data(data, Intent::default(), vec![signature])
         .verify()
         .unwrap();
     let client = context.get_client().await.unwrap();
@@ -401,8 +399,8 @@ pub async fn delete_devnet_nft(
         .await
         .unwrap();
 
-    assert!(resp.confirmed_local_execution);
-    (resp.tx_cert.unwrap(), resp.effects.unwrap())
+    assert!(resp.confirmed_local_execution.unwrap());
+    resp
 }
 
 /// Submit a certificate containing only owned-objects to all authorities.
@@ -523,7 +521,7 @@ pub async fn get_framework_object(configs: &[ValidatorInfo]) -> Object {
 pub fn extract_obj(replies: Vec<ObjectInfoResponse>) -> Object {
     let mut all_objects = HashSet::new();
     for reply in replies {
-        all_objects.insert(reply.object_and_lock.unwrap().object);
+        all_objects.insert(reply.object);
     }
     assert_eq!(all_objects.len(), 1);
     all_objects.into_iter().next().unwrap()

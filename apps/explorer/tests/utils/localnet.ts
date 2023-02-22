@@ -3,12 +3,16 @@
 
 // eslint-disable-next-line import/order
 import 'tsconfig-paths/register';
+// eslint-disable-next-line import/order
 import {
     Ed25519Keypair,
     JsonRpcProvider,
     RawSigner,
     LocalTxnDataSerializer,
     type Keypair,
+    SuiExecuteTransactionResponse,
+    assert,
+    localnetConnection,
 } from '@mysten/sui.js';
 
 const addressToKeypair = new Map<string, Keypair>();
@@ -18,7 +22,7 @@ export async function mint(address: string) {
     if (!keypair) {
         throw new Error('missing keypair');
     }
-    const provider = new JsonRpcProvider('http://127.0.0.1:9000', {
+    const provider = new JsonRpcProvider(localnetConnection, {
         skipDataValidation: false,
     });
     const signer = new RawSigner(
@@ -45,10 +49,7 @@ export async function mint(address: string) {
         gasBudget: 30000,
     });
 
-    if (!('EffectsCert' in tx)) {
-        throw new Error('Missing effects cert');
-    }
-
+    assert(tx, SuiExecuteTransactionResponse);
     return tx;
 }
 

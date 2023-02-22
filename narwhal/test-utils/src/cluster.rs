@@ -721,7 +721,11 @@ impl AuthorityDetails {
             panic!("External consensus is disabled, won't create a proposer client");
         }
 
-        let config = mysten_network::config::Config::new();
+        let config = mysten_network::config::Config {
+            connect_timeout: Some(Duration::from_secs(10)),
+            request_timeout: Some(Duration::from_secs(10)),
+            ..Default::default()
+        };
         let channel = config
             .connect_lazy(&internal.primary.parameters.consensus_api_grpc.socket_addr)
             .unwrap();
@@ -798,7 +802,7 @@ pub fn setup_tracing() -> TelemetryGuards {
 
     let log_filter = format!("{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level},quinn={network_tracing_level}");
 
-    telemetry_subscribers::TelemetryConfig::new("narwhal")
+    telemetry_subscribers::TelemetryConfig::new()
         // load env variables
         .with_env()
         // load special log filter

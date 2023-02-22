@@ -44,7 +44,7 @@ fn linked(leader: &Certificate, prev_leader: &Certificate, dag: &Dag) -> bool {
     let mut parents = vec![leader];
     for r in (prev_leader.round()..leader.round()).rev() {
         parents = dag
-            .get(&(r))
+            .get(&r)
             .expect("We should have the whole history by now")
             .values()
             .filter(|(digest, _)| parents.iter().any(|x| x.header.parents.contains(digest)))
@@ -80,12 +80,12 @@ pub fn order_dag(
             };
 
             // We skip the certificate if we (1) already processed it or (2) we reached a round that we already
-            // committed for this authority.
+            // committed or will never commit for this authority.
             let mut skip = already_ordered.contains(&digest);
             skip |= state
                 .last_committed
                 .get(&certificate.origin())
-                .map_or_else(|| false, |r| r == &certificate.round());
+                .map_or_else(|| false, |r| &certificate.round() <= r);
             if !skip {
                 buffer.push(certificate);
                 already_ordered.insert(digest);

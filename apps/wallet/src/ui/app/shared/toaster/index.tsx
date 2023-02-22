@@ -13,7 +13,7 @@ export type ToasterProps = {
     bottomNavEnabled: boolean;
 };
 const commonToastClasses =
-    '!text-p2 !font-medium !rounded-2lg !shadow-notification';
+    '!px-0 !py-1 !text-p2 !font-medium !rounded-2lg !shadow-notification';
 export function Toaster({ bottomNavEnabled }: ToasterProps) {
     const { pathname } = useLocation();
     const isExtraNavTabsVisible = pathname.startsWith('/apps');

@@ -5,7 +5,7 @@ import { cva } from 'class-variance-authority';
 import cl from 'classnames';
 
 import { NftImage, type NftImageProps } from './NftImage';
-import { useMiddleEllipsis, useNFTBasicData } from '_hooks';
+import { useMiddleEllipsis, useNFTBasicData, useOriginbyteNft } from '_hooks';
 
 import type { SuiObject as SuiObjectType } from '@mysten/sui.js';
 import type { VariantProps } from 'class-variance-authority';
@@ -45,6 +45,9 @@ function NFTDisplayCard({
 }: NFTsProps) {
     const { filePath, nftObjectID, nftFields, fileExtensionType, objType } =
         useNFTBasicData(nftobj);
+
+    const { data: originByteNft } = useOriginbyteNft(nftObjectID);
+
     const name = nftFields?.name || nftFields?.metadata?.fields?.name;
     const objIDShort = useMiddleEllipsis(nftObjectID);
     const nftTypeShort = useMiddleEllipsis(
@@ -52,13 +55,17 @@ function NFTDisplayCard({
         OBJ_TYPE_MAX_LENGTH,
         OBJ_TYPE_MAX_PREFIX_LENGTH
     );
-    const displayTitle = name || objIDShort;
+
+    const displayTitle =
+        originByteNft?.fields.name ||
+        (typeof name === 'string' ? name : objIDShort);
+
     return (
         <div className={nftDisplayCardStyles({ animateHover, wideView })}>
             <NftImage
-                src={filePath}
-                name={fileExtensionType.name}
-                title={nftTypeShort}
+                src={originByteNft?.fields.url || filePath}
+                name={originByteNft?.fields.name || fileExtensionType.name}
+                title={originByteNft?.fields.description || nftTypeShort}
                 showLabel={!wideView}
                 animateHover={animateHover}
                 borderRadius={borderRadius}

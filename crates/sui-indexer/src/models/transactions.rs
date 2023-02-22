@@ -14,7 +14,7 @@ use crate::errors::IndexerError;
 use crate::schema::transactions::transaction_digest;
 use crate::PgPoolConnection;
 
-#[derive(Debug, Queryable)]
+#[derive(Clone, Debug, Queryable)]
 pub struct Transaction {
     pub id: i64,
     pub transaction_digest: String,
@@ -34,10 +34,11 @@ pub struct Transaction {
     pub computation_cost: i64,
     pub storage_cost: i64,
     pub storage_rebate: i64,
+    pub gas_price: i64,
     pub transaction_content: String,
 }
 
-#[derive(Debug, Insertable)]
+#[derive(Clone, Debug, Insertable)]
 #[diesel(table_name = transactions)]
 pub struct NewTransaction {
     pub transaction_digest: String,
@@ -57,6 +58,7 @@ pub struct NewTransaction {
     pub computation_cost: i64,
     pub storage_cost: i64,
     pub storage_rebate: i64,
+    pub gas_price: i64,
     pub transaction_content: String,
 }
 
@@ -119,19 +121,23 @@ pub fn commit_transactions(
 pub fn transaction_response_to_new_transaction(
     tx_resp: SuiTransactionResponse,
 ) -> Result<NewTransaction, IndexerError> {
-    let cer = tx_resp.certificate;
-    let txn_json = serde_json::to_string(&cer).map_err(|err| {
+    let txn_json = serde_json::to_string(&tx_resp.transaction).map_err(|err| {
         IndexerError::InsertableParsingError(format!(
             "Failed converting transaction {:?} to JSON with error: {:?}",
-            cer.clone(),
-            err
+            tx_resp.transaction, err
         ))
     })?;
     // canonical txn digest string is Base58 encoded
-    let tx_digest = cer.transaction_digest.base58_encode();
-    let gas_budget = cer.data.gas_budget;
-    let sender = cer.data.sender.to_string();
-    let txn_kind_iter = cer.data.transactions.iter().map(|k| k.to_string());
+    let tx_digest = tx_resp.effects.transaction_digest.base58_encode();
+    let gas_budget = tx_resp.transaction.data.gas_data.budget;
+    let gas_price = tx_resp.transaction.data.gas_data.price;
+    let sender = tx_resp.transaction.data.sender.to_string();
+    let txn_kind_iter = tx_resp
+        .transaction
+        .data
+        .transactions
+        .iter()
+        .map(|k| k.to_string());
 
     let effects = tx_resp.effects.clone();
     let created: Vec<String> = effects
@@ -179,7 +185,7 @@ pub fn transaction_response_to_new_transaction(
     let gas_object_id = gas_object_ref.object_id.to_string();
     let gas_object_seq = gas_object_ref.version;
     // canonical object digest is Base64 encoded
-    let gas_object_digest = gas_object_ref.digest.encode();
+    let gas_object_digest = gas_object_ref.digest.base64_encode();
 
     let gas_summary = tx_resp.effects.gas_used;
     let computation_cost = gas_summary.computation_cost;
@@ -202,6 +208,7 @@ pub fn transaction_response_to_new_transaction(
         // NOTE: cast u64 to i64 here is safe because
         // max value of i64 is 9223372036854775807 MISTs, which is 9223372036.85 SUI, which is way bigger than budget or cost constant already.
         gas_budget: gas_budget as i64,
+        gas_price: gas_price as i64,
         total_gas_cost: (computation_cost + storage_cost) as i64 - (storage_rebate as i64),
         computation_cost: computation_cost as i64,
         storage_cost: storage_cost as i64,

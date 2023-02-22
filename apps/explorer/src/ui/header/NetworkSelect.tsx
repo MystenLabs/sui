@@ -15,7 +15,7 @@ import {
     offset,
     shift,
     useFloating,
-} from '@floating-ui/react-dom-interactions';
+} from '@floating-ui/react';
 import { Popover } from '@headlessui/react';
 import clsx from 'clsx';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -65,8 +65,6 @@ function SelectableNetwork({
             role="button"
             onClick={onClick}
             className={clsx(
-                // CSS Reset:
-                'cursor-pointer border-0 bg-transparent text-left',
                 'flex items-start gap-4 rounded-md px-2 py-3 text-body font-semibold hover:bg-gray-40 hover:text-gray-90 ui-active:bg-gray-40 ui-active:text-gray-90',
                 state !== NetworkState.UNSELECTED
                     ? 'text-gray-90'
@@ -105,6 +103,8 @@ function CustomRPCInput({
         },
     });
 
+    const { errors, isDirty, isValid } = formState;
+
     return (
         <form
             onSubmit={handleSubmit((values) => {
@@ -116,8 +116,8 @@ function CustomRPCInput({
                 {...register('url')}
                 type="text"
                 className={clsx(
-                    'block w-full rounded-md border border-solid p-3 pr-16 shadow-sm outline-none',
-                    formState.errors.url
+                    'block w-full rounded-md border p-3 pr-16 shadow-sm outline-none',
+                    errors.url
                         ? 'border-issue-dark text-issue-dark'
                         : 'border-gray-65 text-gray-90'
                 )}
@@ -125,9 +125,9 @@ function CustomRPCInput({
 
             <div className="absolute inset-y-0 right-0 flex flex-col justify-center px-3">
                 <button
-                    disabled={!formState.isDirty || !formState.isValid}
+                    disabled={!isDirty || !isValid}
                     type="submit"
-                    className="flex items-center justify-center rounded-full border-0 bg-gray-90 px-2 py-1 text-captionSmall font-semibold uppercase text-white transition disabled:bg-gray-45 disabled:text-gray-65"
+                    className="flex items-center justify-center rounded-full bg-gray-90 px-2 py-1 text-captionSmall font-semibold uppercase text-white transition disabled:bg-gray-45 disabled:text-gray-65"
                 >
                     Save
                 </button>

@@ -57,7 +57,7 @@ Sui assumes the typical blockchain transaction is a user-to-user transfer or ass
 
 Sui mitigates a major hindrance to blockchain growth: [head-of-line blocking](https://en.wikipedia.org/wiki/Head-of-line_blocking). Blockchain nodes maintain an accumulator that represents the state of the entire blockchain, such as the latest certified transactions. Nodes participate in a consensus protocol to add an update to that state reflecting the transaction’s modification to blocks (add, remove, mutate). That consensus protocol leads to an agreement on the state of the blockchain before the increment, the validity and suitability of the state update itself, and the state of the blockchain after the increment. On a periodic basis, these increments are collected in the accumulator.
 
-In Sui, this [consensus](architecture/consensus.md)  protocol is required only when the transaction involves shared objects. For this, Sui offers the [Narwhal and Bullshark](https://github.com/MystenLabs/narwhal) DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus. When shared objects are involved, the Sui validators play the role of more active validators in other blockchains to totally order the transaction with respect to other transactions accessing shared objects.
+In Sui, this [consensus](architecture/consensus.md)  protocol is required only when the transaction involves shared objects. For this, Sui offers the Narwhal DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus via Bullshark. When shared objects are involved, the Sui validators play the role of more active validators in other blockchains to totally order the transaction with respect to other transactions accessing shared objects.
 
 Because Sui focuses on managing specific objects rather than a single aggregation of state, it also reports on them in a unique way: (i) every object in Sui has a unique version number, and (ii) every new version is created from a transaction that may involve several dependencies, themselves versioned objects.
 
@@ -70,38 +70,35 @@ Sui guarantees transaction processing obeys [eventual consistency](https://en.wi
 
 But contrary to a blockchain, Sui does not stop the flow of transactions in order to witness the convergence.
 
-## Simple transactions
+## Transactions on single-owner objects
 
-[Many transactions](https://eprint.iacr.org/2019/611.pdf) do not have complex interdependencies with other, arbitrary parts of the blockchain state. Often financial users just want to send an asset to a recipient, and the only data required to gauge whether this simple transaction is admissible is a fresh view of the sender's address. This observation allows Sui to forgo [consensus](https://pmg.csail.mit.edu/papers/osdi99.pdf) and instead use simpler algorithms based on [Byzantine Consistent Broadcast](https://link.springer.com/book/10.1007/978-3-642-15260-3). See our list of potential [single-writer apps](single-writer-apps.md) for examples of real-world simple transactions.
+[Many transactions](https://eprint.iacr.org/2019/611.pdf) such as coin or object transfers, NFT minting, and smart contract publishing can be expressed as operations on _single-owner_ objects that can be used in transactions by only one address at a time. Sui automatically recognizes such transactions and leverages this observation to forgo [consensus](https://pmg.csail.mit.edu/papers/osdi99.pdf). Instead, Sui uses simpler algorithms based on [Byzantine Consistent Broadcast](https://link.springer.com/book/10.1007/978-3-642-15260-3). See our list of potential [single-writer apps](single-writer-apps.md) for examples of real-world simple transactions.
 
-These protocols are based on the [FastPay](https://arxiv.org/abs/2003.11506) design that comes with peer-reviewed security guarantees. In a nutshell, Sui takes the approach of taking a lock (or "stopping the world") only for the relevant piece of data rather than the whole chain. In this case, the only information needed is the sender address, which can then send only one transaction at a time.
+These protocols are based on the [FastPay](https://arxiv.org/abs/2003.11506) design that comes with peer-reviewed security guarantees. In a nutshell, Sui takes the approach of taking a lock (or "stopping the world") only for the relevant piece of data rather than the whole chain. This enables parallel transaction submission and execution on a massive scale.
 
-Sui further expands this approach to more involved transactions that may explicitly depend on multiple elements under their sender's control, using Move’s object model and leveraging Move's strong ownership model. By requiring that dependencies be explicit, Sui applies a _multi-lane_ approach to transaction validation, making sure those independent transaction flows can progress without impediment from the others.
+Sui further expands this approach to more involved transactions that may explicitly depend on multiple elements under their sender's control, using Move’s object model and leveraging Move's strong ownership model. By requiring that dependencies be explicit, Sui applies a _multi-lane_ approach to transaction validation, making sure those independent transaction flows can progress without interference or synchronization.
 
 Sui validates transactions individually, rather than batching them into traditional blocks. The key advantage of this approach is low latency; each successful transaction quickly obtains a certificate of finality that proves to anyone the transaction will be processed by the Sui network.
 
-The process of submitting a Sui transaction is thus a bit more involved than in traditional blockchains. Whereas a usual blockchain can accept a bunch of transactions from the same author in a fire-and-forget mode, Sui transaction submission follows these steps:
+Submitting a Sui transaction involves the following steps. These are transparent to the transaction sender, but it's worth understanding what happens behind the scenes:
 
-1. The sender broadcasts a transaction to all Sui validators.
-1. Each Sui validator replies with an individual vote for this transaction. Each vote has a certain weight based on the stake owned by the validator.
-1. The sender collects a Byzantine-resistant-majority of these votes into a _certificate_ and broadcasts that back to all Sui validators. This settles the transaction, ensuring _finality_ that the transaction will not be dropped (revoked).
-1. Optionally, the sender collects a certificate detailing the effects of the transaction.
+1. Users send transactions to a *quorum driver*, such as a Full node, that broadcasts the transactions to a set of validators.
+1. Each Sui validator performs validity checks on transactions, and adds a signature to valid transactions. Each signature is weighted proportional to the amount staked with the validator. The combined weighting for all validators always equals 10,000. Therefore, the quorum threshold is always 6,667.
+1. The quorum driver collects signatures with a combined weight greater than or equal to 6,667 into a _certificate_ and broadcasts it to all Sui validators.
+1. When a validator receives a certificate, the validator verifies the certificate. If the certificate is valid, the validator  then executes the embedded transaction and returns signed _transaction effects_ to the quorum driver. A transaction becomes _final_ after a quorum of validators receive and execute the corresponding certificate.
+1. Optionally, the quorum driver can collect an _effects certificate_ based on the previous step and return it to the sender.
 
-While those steps demand more of the sender, performing them efficiently can still yield a cryptographic proof of finality with minimum latency. Aside from crafting the original transaction itself, the session management for a transaction does not require access to any private keys and can be delegated to a third party. Sui takes advantage of this observation to provide [Sui Gateway services](#sui-gateway-services).
+While this may sound like a lot of steps, this process allows each validator to perform the operations above in parallel without coordination--observe that none of the preceding steps require validators to communicate with each other! This significantly reduces latency compared to a conventional blockchain that requires O(n^2) communication among validators before achieving transaction finality.
 
+Finally, note that the role of quorum driver does not require access to any private keys, and can safely be delegated to a third party such as a Full node, an RPC provider, or a custodial wallet.
 
-## Complex contracts
+## Transactions on shared objects
 
-Complex smart contracts may benefit from shared objects where more than one user can mutate those objects (following smart contract specific rules). In this case, Sui totally orders all transactions involving shared objects using a [consensus](architecture/consensus.md) protocol. Sui uses a novel peer-reviewed consensus protocol based on [Narwhal](https://github.com/MystenLabs/narwhal). This is state-of-the-art in terms of both performance and robustness.
+Many use-cases require *shared* objects that can be manipulated by two or more addresses at once--such as an auction with open bidding, or a central limit order book that accepts arbitrary trades. In such cases, Sui must sequence transactions that manipulate the same shared object using a [consensus](architecture/consensus.md) protocol. Sui uses [Narwhal](https://arxiv.org/abs/2105.11827) for high-throughput, horizontally scalable transaction dissemination and [Bullshark](https://arxiv.org/abs/2209.05633) for zero message overhead consensus.
 
-The Narwhal mempool offers a high-throughput data availability engine and a scaled architecture, splitting the disk I/O and networking requirements across several workers. And Bullshark offers a zero-message overhead consensus algorithm, leveraging graph traversals.
-
-Transactions involving shared objects also contain at least one owned object to pay for gas fees. It is thus essential to carefully compose the protocol dealing with owned objects with the protocol sequencing the transaction to guarantee Sui’s security properties. When shared objects are involved, transaction submission follows these steps:
-
-1. The sender broadcasts a transaction to all Sui validators.
-1. Each Sui validator replies with an individual vote for this transaction. Each vote has a certain weight based on the stake owned by the validator.
-1. The sender collects a Byzantine-resistant-majority of these votes into a certificate and broadcasts it back to all Sui validators. _This time however, the certificate is sequenced through Byzantine Agreement._
-1. Once the transaction has been successfully sequenced, the user broadcasts again the certificate to the validators to settle the transaction.
+For transactions involving one or more shared objects, the process is as described above up to step (4), where instead:
+1. When a validator receives a certificate and validates it, the validator uses Narwhal to submit the certificate to Bullshark for sequencing.
+2. After Sui sequences the transaction, it executes it to produce effects using same flow as (5) above.
 
 ## Scalability
 

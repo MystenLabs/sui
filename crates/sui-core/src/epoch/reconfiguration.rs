@@ -4,7 +4,6 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use sui_types::error::SuiResult;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ReconfigCertStatus {
@@ -51,5 +50,5 @@ impl ReconfigState {
 }
 
 pub trait ReconfigurationInitiator {
-    fn close_epoch(&self, epoch_store: &Arc<AuthorityPerEpochStore>) -> SuiResult;
+    fn close_epoch(&self, epoch_store: &Arc<AuthorityPerEpochStore>);
 }

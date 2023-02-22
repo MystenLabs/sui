@@ -18,6 +18,8 @@ pub mod tusk;
 mod utils;
 
 pub use crate::consensus::Consensus;
+use store::StoreError;
+use thiserror::Error;
 
 use types::SequenceNumber;
 
@@ -26,3 +28,12 @@ pub const DEFAULT_CHANNEL_SIZE: usize = 1_000;
 
 /// The number of shutdown receivers to create on startup. We need one per component loop.
 pub const NUM_SHUTDOWN_RECEIVERS: u64 = 25;
+
+#[derive(Clone, Debug, Error)]
+enum ConsensusError {
+    #[error("Storage failure: {0}")]
+    StoreError(#[from] StoreError),
+
+    #[error("System shutting down")]
+    ShuttingDown,
+}

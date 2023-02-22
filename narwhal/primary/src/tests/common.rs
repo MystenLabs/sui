@@ -4,7 +4,7 @@ use config::WorkerId;
 use crypto::NetworkKeyPair;
 use std::time::Duration;
 use storage::CertificateStore;
-use store::{reopen, rocks, rocks::DBMap, Store};
+use store::{reopen, rocks, rocks::DBMap, rocks::ReadWriteOptions, Store};
 use test_utils::{
     temp_dir, PrimaryToWorkerMockServer, CERTIFICATES_CF, CERTIFICATE_DIGEST_BY_ORIGIN_CF,
     CERTIFICATE_DIGEST_BY_ROUND_CF, HEADERS_CF, PAYLOAD_CF, VOTES_CF,
@@ -16,6 +16,7 @@ use types::{
 
 use crypto::PublicKey;
 use storage::PayloadToken;
+use store::rocks::MetricConf;
 use tokio::{task::JoinHandle, time::Instant};
 
 pub fn create_db_stores() -> (
@@ -27,6 +28,7 @@ pub fn create_db_stores() -> (
     let rocksdb = rocks::open_cf(
         temp_dir(),
         None,
+        MetricConf::default(),
         &[
             HEADERS_CF,
             CERTIFICATES_CF,
@@ -63,7 +65,8 @@ pub fn create_db_stores() -> (
 
 pub fn create_test_vote_store() -> Store<PublicKey, VoteInfo> {
     // Create a new test store.
-    let rocksdb = rocks::open_cf(temp_dir(), None, &[VOTES_CF]).expect("Failed creating database");
+    let rocksdb = rocks::open_cf(temp_dir(), None, MetricConf::default(), &[VOTES_CF])
+        .expect("Failed creating database");
     let votes_map = reopen!(&rocksdb, VOTES_CF;<PublicKey, VoteInfo>);
     Store::new(votes_map)
 }

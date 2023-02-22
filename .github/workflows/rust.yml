@@ -6,6 +6,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 env:
   CARGO_TERM_COLOR: always
   # Disable incremental compilation.
@@ -35,6 +39,7 @@ jobs:
     runs-on: [ubuntu-latest]
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
+      isMove: ${{ steps.diff.outputs.isMove }}
     steps:
       - uses: actions/checkout@v3
       - name: Detect Changes
@@ -62,6 +67,11 @@ jobs:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
+    env:
+      # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
+      # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
+      # non-deterministic `test` job.
+      SUI_SKIP_SIMTESTS: 1
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -74,13 +84,14 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - name: Install python dependencies
         run: |
+          pip install pyopenssl --upgrade
           if [ -f narwhal/benchmark/requirements.txt ]; then pip install -r narwhal/benchmark/requirements.txt; fi
       - name: cargo test
         run: |
           cargo nextest run --profile ci
       - name: benchmark (smoke)
         run: |
-          cargo run --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --transfer-object 50 --shared-counter 50 --run-duration 10s
+          cargo run --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --transfer-object 50 --shared-counter 50 --run-duration 10s --stress-stat-collection
           pushd narwhal/benchmark && fab smoke && popd
       - name: doctests
         run: |
@@ -151,7 +162,7 @@ jobs:
 
       - name: Start local Sui network
         run: |
-          cargo run --bin sui start --no-full-node &
+          sui start --no-full-node &
         shell: bash
 
       - name: Start Rosetta servers
@@ -238,3 +249,35 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: EmbarkStudios/cargo-deny-action@v1
+
+  move-prover:
+    name: move-prover
+    needs: diff
+    timeout-minutes: 20
+    if: needs.diff.outputs.isMove == 'true'
+    runs-on: [ubuntu-ghcloud]
+
+    steps:     
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+      
+      - name: Prover Setup
+        run: |
+          crates/sui-move/scripts/prover_setup.sh
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+
+      - name: Prover Run
+        working-directory: crates/sui-framework
+        run: |
+          set -o pipefail
+          DOTNET_ROOT="$HOME/.dotnet"
+          BIN_DIR="$HOME/bin"
+          export DOTNET_ROOT="${DOTNET_ROOT}"
+          export PATH="${DOTNET_ROOT}/tools:\$PATH"
+          export Z3_EXE="${BIN_DIR}/z3"
+          export CVC5_EXE="${BIN_DIR}/cvc5"
+          export BOOGIE_EXE="${DOTNET_ROOT}/tools/boogie"
+          /home/runner/.cargo/bin/cargo run -p sui -- move prove

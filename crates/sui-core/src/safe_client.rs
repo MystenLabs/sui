@@ -4,7 +4,7 @@
 
 use crate::authority_client::AuthorityAPI;
 use crate::epoch::committee_store::CommitteeStore;
-use crate::histogram::{Histogram, HistogramVec};
+use mysten_metrics::histogram::{Histogram, HistogramVec};
 use prometheus::core::GenericCounter;
 use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
 use std::sync::Arc;
@@ -23,7 +23,7 @@ use tracing::{debug, error};
 macro_rules! check_error {
     ($address:expr, $cond:expr, $msg:expr) => {
         $cond.tap_err(|err| {
-            if err.indicates_epoch_change() {
+            if err.individual_error_indicates_epoch_change() {
                 debug!(?err, authority=?$address, "Not a real client error");
             } else {
                 error!(?err, authority=?$address, $msg);
@@ -69,10 +69,6 @@ impl SafeClientMetricsBase {
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 #[derive(Clone)]
 pub struct SafeClientMetrics {
-    total_requests_handle_transaction_and_effects_info_request:
-        GenericCounter<prometheus::core::AtomicU64>,
-    total_ok_responses_handle_transaction_and_effects_info_request:
-        GenericCounter<prometheus::core::AtomicU64>,
     total_requests_handle_transaction_info_request: GenericCounter<prometheus::core::AtomicU64>,
     total_ok_responses_handle_transaction_info_request: GenericCounter<prometheus::core::AtomicU64>,
     total_requests_handle_object_info_request: GenericCounter<prometheus::core::AtomicU64>,
@@ -86,19 +82,6 @@ pub struct SafeClientMetrics {
 impl SafeClientMetrics {
     pub fn new(metrics_base: &SafeClientMetricsBase, validator_address: AuthorityName) -> Self {
         let validator_address = validator_address.to_string();
-
-        let total_requests_handle_transaction_and_effects_info_request = metrics_base
-            .total_requests_by_address_method
-            .with_label_values(&[
-                &validator_address,
-                "handle_transaction_and_effects_info_request",
-            ]);
-        let total_ok_responses_handle_transaction_and_effects_info_request = metrics_base
-            .total_responses_by_address_method
-            .with_label_values(&[
-                &validator_address,
-                "handle_transaction_and_effects_info_request",
-            ]);
 
         let total_requests_handle_transaction_info_request = metrics_base
             .total_requests_by_address_method
@@ -127,8 +110,6 @@ impl SafeClientMetrics {
             .latency
             .with_label_values(&[&validator_address, "handle_transaction_info_request"]);
         Self {
-            total_requests_handle_transaction_and_effects_info_request,
-            total_ok_responses_handle_transaction_and_effects_info_request,
             total_requests_handle_transaction_info_request,
             total_ok_responses_handle_transaction_info_request,
             total_requests_handle_object_info_request,
@@ -190,9 +171,9 @@ impl<C> SafeClient<C> {
     fn check_signed_effects(
         &self,
         digest: &TransactionDigest,
-        signed_effects: &SignedTransactionEffects,
+        signed_effects: SignedTransactionEffects,
         expected_effects_digest: Option<&TransactionEffectsDigest>,
-    ) -> SuiResult {
+    ) -> SuiResult<VerifiedSignedTransactionEffects> {
         // Check it has the right signer
         fp_ensure!(
             signed_effects.auth_sig().authority == self.address,
@@ -223,206 +204,73 @@ impl<C> SafeClient<C> {
             );
         }
         let committee = self.get_committee(&signed_effects.epoch())?;
-        signed_effects.verify_signature(&committee)
+        signed_effects.verify(&committee)
     }
 
-    // Here we centralize all checks for transaction info responses
-    fn check_transaction_response(
+    fn check_transaction_info(
         &self,
         digest: &TransactionDigest,
-        effects_digest: Option<&TransactionEffectsDigest>,
-        response: TransactionInfoResponse,
+        transaction: VerifiedTransaction,
+        status: TransactionStatus,
     ) -> SuiResult<VerifiedTransactionInfoResponse> {
-        let mut committee = None;
-
-        let TransactionInfoResponse {
-            signed_transaction,
-            certified_transaction,
-            signed_effects,
-        } = response;
-
-        let signed_transaction = if let Some(signed_transaction) = signed_transaction {
-            // TODO: add test case where validator epoch advances but client does not know
-            // `MissingCommitteeAtEpoch`
-            // In this case, quorum driver should pause submit tranasactions until it catches up
-            committee = Some(self.get_committee(&signed_transaction.epoch())?);
-            // Check the transaction signature
-            let signed_transaction = signed_transaction.verify(committee.as_ref().unwrap())?;
-            // Check it has the right signer
-            fp_ensure!(
-                signed_transaction.auth_sig().authority == self.address,
-                SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address,
-                    reason: "Unexpected validator address in the signed tx signature".to_string()
-                }
-            );
-            // Check it's the right transaction
-            fp_ensure!(
-                signed_transaction.digest() == digest,
-                SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address,
-                    reason: "Unexpected digest in the signed tx".to_string()
-                }
-            );
-            Some(signed_transaction)
-        } else {
-            None
-        };
-
-        let certified_transaction = match certified_transaction {
-            Some(certificate) => {
-                if committee.is_none() {
-                    committee = Some(self.get_committee(&certificate.epoch())?);
-                }
-                // Check signatures and quorum
-                let certificate = certificate.verify(committee.as_ref().unwrap())?;
-                // Check it's the right transaction
-                fp_ensure!(
-                    certificate.digest() == digest,
-                    SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address,
-                        reason: "Unexpected digest in the certified tx".to_string()
-                    }
-                );
-                Some(certificate)
+        fp_ensure!(
+            digest == transaction.digest(),
+            SuiError::ByzantineAuthoritySuspicion {
+                authority: self.address,
+                reason: "Signed transaction digest does not match with expected digest".to_string()
             }
-            None => None,
-        };
-
-        if let Some(signed_effects) = &signed_effects {
-            self.check_signed_effects(digest, signed_effects, effects_digest)?;
+        );
+        match status {
+            TransactionStatus::Signed(signed) => {
+                let committee = self.get_committee(&signed.epoch)?;
+                Ok(VerifiedTransactionInfoResponse::Signed(
+                    SignedTransaction::new_from_data_and_sig(transaction.into_message(), signed)
+                        .verify(&committee)?,
+                ))
+            }
+            TransactionStatus::Executed(cert_opt, effects) => {
+                let signed_effects = self.check_signed_effects(digest, effects, None)?;
+                match cert_opt {
+                    Some(cert) => {
+                        let committee = self.get_committee(&cert.epoch)?;
+                        Ok(VerifiedTransactionInfoResponse::ExecutedWithCert(
+                            CertifiedTransaction::new_from_data_and_sig(
+                                transaction.into_message(),
+                                cert,
+                            )
+                            .verify(&committee)?,
+                            signed_effects,
+                        ))
+                    }
+                    None => Ok(VerifiedTransactionInfoResponse::ExecutedWithoutCert(
+                        transaction,
+                        signed_effects,
+                    )),
+                }
+            }
         }
-
-        Ok(VerifiedTransactionInfoResponse {
-            signed_transaction,
-            certified_transaction,
-            signed_effects,
-        })
     }
 
     fn check_object_response(
         &self,
         request: &ObjectInfoRequest,
         response: ObjectInfoResponse,
-        // We skip the signature check when there's potentially an epoch change.
-        // In this case we don't have the latest committee info locally until reconfig finishes.
-        skip_committee_check_during_reconfig: bool,
     ) -> SuiResult<VerifiedObjectInfoResponse> {
         let ObjectInfoResponse {
-            parent_certificate,
-            requested_object_reference,
-            object_and_lock,
+            object,
+            layout: _,
+            lock_for_debugging: _,
         } = response;
 
-        // If we get a certificate make sure it is a valid certificate
-        let parent_certificate = if skip_committee_check_during_reconfig {
-            parent_certificate.map(VerifiedCertificate::new_unchecked)
-        } else if let Some(certificate) = parent_certificate {
-            let epoch = certificate.epoch();
-            Some(certificate.verify(&self.get_committee(&epoch)?)?)
-        } else {
-            None
-        };
-
-        // Check the right object ID and version is returned
-        if let Some((object_id, version, _)) = &requested_object_reference {
-            fp_ensure!(
-                object_id == &request.object_id,
-                SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address,
-                    reason: "Object ID mismatch".to_string()
-                }
-            );
-            if let ObjectInfoRequestKind::PastObjectInfo(requested_version) = &request.request_kind
-            {
-                fp_ensure!(
-                    version == requested_version,
-                    SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address,
-                        reason: "Object version mismatch".to_string()
-                    }
-                );
+        fp_ensure!(
+            request.object_id == object.id(),
+            SuiError::ByzantineAuthoritySuspicion {
+                authority: self.address,
+                reason: "Object id mismatch in the response".to_string()
             }
-        }
+        );
 
-        let object_and_lock = if let Some(object_and_lock) = object_and_lock {
-            let ObjectResponse {
-                object,
-                lock,
-                layout,
-            } = object_and_lock;
-            // We should only be returning the object and lock data if requesting the latest object info.
-            fp_ensure!(
-                matches!(
-                    request.request_kind,
-                    ObjectInfoRequestKind::LatestObjectInfo(_)
-                ),
-                SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address,
-                    reason:
-                        "Object and lock data returned when request kind is not LatestObjectInfo"
-                            .to_string()
-                }
-            );
-
-            match requested_object_reference {
-                Some(obj_ref) => {
-                    // Since we are requesting the latest version, we should validate that if the object's
-                    // reference actually match with the one from the responded object reference.
-                    fp_ensure!(
-                        object.compute_object_reference() == obj_ref,
-                        SuiError::ByzantineAuthoritySuspicion {
-                            authority: self.address,
-                            reason: "Requested object reference mismatch with returned object"
-                                .to_string()
-                        }
-                    );
-                }
-                None => {
-                    // Since we are returning the object for the latest version,
-                    // we must also have the requested object reference in the response.
-                    // Otherwise the authority has inconsistent data.
-                    return Err(SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address,
-                        reason: "Object returned without the object reference in response"
-                            .to_string(),
-                    });
-                }
-            };
-
-            let signed_transaction = if let Some(signed_transaction) = lock {
-                // We cannot reuse the committee fetched above since they may not be from the same
-                // epoch.
-                let epoch = signed_transaction.epoch();
-                let signed_transaction = signed_transaction.verify(&self.get_committee(&epoch)?)?;
-                // Check it has the right signer
-                fp_ensure!(
-                    signed_transaction.auth_sig().authority == self.address,
-                    SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address,
-                        reason: "Unexpected validator address in the signed tx signature"
-                            .to_string()
-                    }
-                );
-                Some(signed_transaction)
-            } else {
-                None
-            };
-
-            Some(ObjectResponse {
-                object,
-                lock: signed_transaction,
-                layout,
-            })
-        } else {
-            None
-        };
-
-        Ok(VerifiedObjectInfoResponse {
-            parent_certificate,
-            requested_object_reference,
-            object_and_lock,
-        })
+        Ok(VerifiedObjectInfoResponse { object })
     }
 
     pub fn address(&self) -> &AuthorityPublicKeyBytes {
@@ -439,18 +287,18 @@ where
         &self,
         transaction: VerifiedTransaction,
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
-        let digest = *transaction.digest();
         let _timer = self.metrics.handle_transaction_latency.start_timer();
-        let transaction_info = self
+        let digest = *transaction.digest();
+        let response = self
             .authority_client
-            .handle_transaction(transaction.into_inner())
+            .handle_transaction(transaction.clone().into_inner())
             .await?;
-        let transaction_info = check_error!(
+        let response = check_error!(
             self.address,
-            self.check_transaction_response(&digest, None, transaction_info),
+            self.check_transaction_info(&digest, transaction, response.status),
             "Client error in handle_transaction"
         )?;
-        Ok(transaction_info)
+        Ok(response)
     }
 
     fn verify_certificate_response(
@@ -458,9 +306,8 @@ where
         digest: &TransactionDigest,
         response: HandleCertificateResponse,
     ) -> SuiResult<VerifiedHandleCertificateResponse> {
-        self.check_signed_effects(digest, &response.signed_effects, None)?;
         Ok(VerifiedHandleCertificateResponse {
-            signed_effects: response.signed_effects,
+            signed_effects: self.check_signed_effects(digest, response.signed_effects, None)?,
         })
     }
 
@@ -484,21 +331,9 @@ where
         Ok(verified)
     }
 
-    pub async fn handle_account_info_request(
-        &self,
-        request: AccountInfoRequest,
-    ) -> Result<AccountInfoResponse, SuiError> {
-        self.authority_client
-            .handle_account_info_request(request)
-            .await
-    }
-
-    /// Pass `skip_committee_check_during_reconfig = true` during reconfiguration, so that
-    /// we can tolerate missing committee information when processing the object data.
     pub async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
-        skip_committee_check_during_reconfig: bool,
     ) -> Result<VerifiedObjectInfoResponse, SuiError> {
         self.metrics.total_requests_handle_object_info_request.inc();
 
@@ -508,12 +343,8 @@ where
             .handle_object_info_request(request.clone())
             .await?;
         let response = self
-            .check_object_response(&request, response, skip_committee_check_during_reconfig)
-            .tap_err(|err|
-                error!(?err, authority=?self.address, "Client error in handle_object_info_request")
-
-
-                )?;
+            .check_object_response(&request, response)
+            .tap_err(|err| error!(?err, authority=?self.address, "Client error in handle_object_info_request"))?;
 
         self.metrics
             .total_ok_responses_handle_object_info_request
@@ -521,7 +352,7 @@ where
         Ok(response)
     }
 
-    /// Handle Transaction information requests for this account.
+    /// Handle Transaction information requests for a given digest.
     pub async fn handle_transaction_info_request(
         &self,
         request: TransactionInfoRequest,
@@ -529,58 +360,27 @@ where
         self.metrics
             .total_requests_handle_transaction_info_request
             .inc();
-        let digest = request.transaction_digest;
 
         let _timer = self.metrics.handle_tx_info_latency.start_timer();
 
         let transaction_info = self
             .authority_client
-            .handle_transaction_info_request(request)
+            .handle_transaction_info_request(request.clone())
             .await?;
 
-        let transaction_info = match self.check_transaction_response(
-            &digest,
-            None,
-            transaction_info,
-        ) {
-            Err(err) => {
+        let transaction_info = Transaction::new(transaction_info.transaction)
+            .verify()
+            .and_then(|verified_tx| {
+                self.check_transaction_info(
+                    &request.transaction_digest,
+                    verified_tx,
+                    transaction_info.status,
+                )
+            }).tap_err(|err| {
                 error!(?err, authority=?self.address, "Client error in handle_transaction_info_request");
-                return Err(err);
-            }
-            Ok(i) => i,
-        };
+            })?;
         self.metrics
             .total_ok_responses_handle_transaction_info_request
-            .inc();
-        Ok(transaction_info)
-    }
-
-    /// Handle Transaction + Effects information requests for this account.
-    pub async fn handle_transaction_and_effects_info_request(
-        &self,
-        digests: &ExecutionDigests,
-    ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
-        self.metrics
-            .total_requests_handle_transaction_and_effects_info_request
-            .inc();
-        let transaction_info = self
-            .authority_client
-            .handle_transaction_info_request(digests.transaction.into())
-            .await?;
-
-        let transaction_info = match self.check_transaction_response(
-            &digests.transaction,
-            Some(&digests.effects),
-            transaction_info,
-        ) {
-            Err(err) => {
-                error!(?err, authority=?self.address, "Client error in handle_transaction_and_effects_info_request");
-                return Err(err);
-            }
-            Ok(info) => info,
-        };
-        self.metrics
-            .total_ok_responses_handle_transaction_and_effects_info_request
             .inc();
         Ok(transaction_info)
     }
@@ -603,19 +403,11 @@ where
         requested_epoch: Option<EpochId>,
         committee_info: &CommitteeInfoResponse,
     ) -> SuiResult {
-        match requested_epoch {
-            Some(epoch) => {
-                fp_ensure!(
-                    committee_info.epoch == epoch,
-                    SuiError::from("Committee info response epoch doesn't match requested epoch")
-                );
-            }
-            None => {
-                fp_ensure!(
-                    committee_info.committee_info.is_some(),
-                    SuiError::from("A valid latest committee must exist")
-                );
-            }
+        if let Some(epoch) = requested_epoch {
+            fp_ensure!(
+                committee_info.epoch == epoch,
+                SuiError::from("Committee info response epoch doesn't match requested epoch")
+            );
         }
         Ok(())
     }

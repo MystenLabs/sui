@@ -55,8 +55,19 @@ To run E2E tests against local network
 
 ```
 pnpm sdk prepare:e2e
+
+// This will run all e2e tests
 pnpm sdk test:e2e
+
+// Alternatively you can choose to run only one test file
+npx vitest txn-builder.test.ts
 ```
+
+Troubleshooting:
+
+If you see errors like `ECONNRESET or "socket hang up"`, run `node -v` to make sure your node version is `v18.x.x`. Refer to this [guide](https://blog.logrocket.com/how-switch-node-js-versions-nvm/) to switch node version.
+
+Some more follow up here is if you used homebrew to install node, there could be multiple paths to node on your machine. https://stackoverflow.com/questions/52676244/node-version-not-updating-after-nvm-use-on-mac
 
 To run E2E tests against DevNet
 
@@ -72,39 +83,41 @@ The `JsonRpcProvider` class provides a connection to the JSON-RPC Server and sho
 - DevNet: https://fullnode.devnet.sui.io
 
 ```typescript
-import { JsonRpcProvider, Network } from '@mysten/sui.js';
+import { JsonRpcProvider, devnetConnection } from '@mysten/sui.js';
 // connect to Devnet
-const provider = new JsonRpcProvider(Network.DEVNET);
+const provider = new JsonRpcProvider(devnetConnection);
 // get tokens from the DevNet faucet server
 await provider.requestSuiFromFaucet(
-  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3'
+  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3',
 );
 ```
 
 For local development, you can run `cargo run --bin sui-test-validator` to spin up a local network with a local validator, a fullnode, and a faucet server.
 
 ```typescript
-import { JsonRpcProvider, Network } from '@mysten/sui.js';
+import { JsonRpcProvider, localnetConnection } from '@mysten/sui.js';
 // connect to local RPC server
-const provider = new JsonRpcProvider(Network.LOCAL);
+const provider = new JsonRpcProvider(localnetConnection);
 // get tokens from the local faucet server
 await provider.requestSuiFromFaucet(
-  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3'
+  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3',
 );
 ```
 
-You can also pass in custom URLs to your own fullnode and faucet server
+You can also construct your own in custom connections, with your own URLs to your fullnode and faucet server
 
 ```typescript
-import { JsonRpcProvider } from '@mysten/sui.js';
-// connect to a custom RPC server
-const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io', {
-  // you can also skip providing this field if you don't plan to interact with the faucet
-  faucetURL: 'https://faucet.devnet.sui.io/gas',
+import { JsonRpcProvider, Connection } from '@mysten/sui.js';
+// Construct your connection:
+const connection = new Connection({
+  fullnode: 'https://fullnode.devnet.sui.io',
+  faucet: 'https://faucet.devnet.sui.io/gas',
 });
+// connect to a custom RPC server
+const provider = new JsonRpcProvider(connection);
 // get tokens from a custom faucet server
 await provider.requestSuiFromFaucet(
-  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3'
+  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3',
 );
 ```
 
@@ -116,7 +129,7 @@ Fetch objects owned by the address `0xbff6ccc8707aa517b4f1b95750a2a8c666012df3`
 import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider();
 const objects = await provider.getOwnedObjectRefs(
-  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3'
+  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3',
 );
 ```
 
@@ -126,7 +139,7 @@ Fetch object details for the object with id `0xcff6ccc8707aa517b4f1b95750a2a8c66
 import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider();
 const txn = await provider.getObject(
-  '0xcff6ccc8707aa517b4f1b95750a2a8c666012df3'
+  '0xcff6ccc8707aa517b4f1b95750a2a8c666012df3',
 );
 // You can also fetch multiple objects in one batch request
 const txns = await provider.getObjectBatch([
@@ -141,7 +154,7 @@ Fetch transaction details from transaction digests:
 import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider();
 const txn = await provider.getTransactionWithEffects(
-  '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME='
+  '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
 );
 // You can also fetch multiple transactions in one batch request
 const txns = await provider.getTransactionWithEffectsBatch([
@@ -156,7 +169,7 @@ Fetch transaction events from a transaction digest:
 import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider();
 const txEvents = await provider.getEventsByTransaction(
-  '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME='
+  '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
 );
 ```
 
@@ -166,7 +179,41 @@ Fetch events by sender address:
 import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider();
 const senderEvents = await provider.getEventsBySender(
-  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3'
+  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3',
+);
+```
+
+Fetch coins of type `0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC` owned by an address:
+
+```typescript
+import { JsonRpcProvider } from '@mysten/sui.js';
+const provider = new JsonRpcProvider();
+// If coin type is not specified, it defaults to 0x2::sui::SUI
+const coins = await provider.getCoins(
+  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3',
+  '0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC',
+);
+```
+
+Fetch all coin objects owned by an address:
+
+```typescript
+import { JsonRpcProvider } from '@mysten/sui.js';
+const provider = new JsonRpcProvider();
+const allCoins = await provider.getAllCoins(
+  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3',
+);
+```
+
+Fetch the total coin balance for one coin type, owned by an address:
+
+```typescript
+import { JsonRpcProvider } from '@mysten/sui.js';
+const provider = new JsonRpcProvider();
+// If coin type is not specified, it defaults to 0x2::sui::SUI
+const coinBalance = await provider.getBalance(
+  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3',
+  '0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC',
 );
 ```
 
@@ -258,7 +305,7 @@ const subscriptionId = await provider.subscribeEvent(
   { SenderAddress: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' },
   (event: SuiEventEnvelope) => {
     // handle subscription notification message here. This function is called once per subscription message.
-  }
+  },
 );
 
 // later, to unsubscribe
@@ -283,7 +330,7 @@ const devNftSub = await provider.subscribeEvent(
   devnetNftFilter,
   (event: SuiEventEnvelope) => {
     // handle subscription notification message here
-  }
+  },
 );
 ```
 
@@ -299,14 +346,12 @@ const signer = new RawSigner(keypair, provider);
 const compiledModules = JSON.parse(
   execSync(
     `${cliPath} move build --dump-bytecode-as-base64 --path ${packagePath}`,
-    { encoding: 'utf-8' }
-  )
+    { encoding: 'utf-8' },
+  ),
 );
-const modulesInBytes = compiledModules.map((m) =>
-  Array.from(new Base64DataBuffer(m).getData())
-);
+
 const publishTxn = await signer.publish({
-  compiledModules: modulesInBytes,
+  compiledModules: compiledModules,
   gasBudget: 10000,
 });
 console.log('publishTxn', publishTxn);

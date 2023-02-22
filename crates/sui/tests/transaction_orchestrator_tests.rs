@@ -4,10 +4,11 @@
 use prometheus::Registry;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
+use sui_macros::sim_test;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::messages::{
-    CertifiedTransaction, ExecuteTransactionRequest, ExecuteTransactionRequestType,
-    ExecuteTransactionResponse, TransactionData, VerifiedTransaction,
+    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
+    FinalizedEffects, TransactionData, VerifiedTransaction,
 };
 use sui_types::object::generate_test_gas_objects_with_owner;
 use sui_types::quorum_driver_types::QuorumDriverError;
@@ -22,14 +23,14 @@ use test_utils::network::TestClusterBuilder;
 use test_utils::transaction::wait_for_tx;
 use tracing::info;
 
-#[tokio::test]
+#[sim_test]
 async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let context = &mut test_cluster.wallet;
     let node = &test_cluster.fullnode_handle.sui_node;
 
     let temp_dir = tempfile::tempdir().unwrap();
-    let reconfig_channel = node.subscribe_to_epoch_change().await;
+    let reconfig_channel = node.subscribe_to_epoch_change();
     let orchestrator = TransactiondOrchestrator::new_with_network_clients(
         node.state(),
         reconfig_channel,
@@ -79,7 +80,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = TestClusterBuilder::new().build().await?;
@@ -87,7 +88,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     let node = &test_cluster.fullnode_handle.sui_node;
 
     let temp_dir = tempfile::tempdir().unwrap();
-    let reconfig_channel = node.subscribe_to_epoch_change().await;
+    let reconfig_channel = node.subscribe_to_epoch_change();
     let orchestrator = TransactiondOrchestrator::new_with_network_clients(
         node.state(),
         reconfig_channel,
@@ -158,7 +159,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_transaction_orchestrator_reconfig() {
     telemetry_subscribers::init_for_testing();
     let config = test_authority_configs();
@@ -174,7 +175,7 @@ async fn test_transaction_orchestrator_reconfig() {
 
     for handle in &authorities {
         handle
-            .with_async(|node| async { node.close_epoch().await.unwrap() })
+            .with_async(|node| async { node.close_epoch_for_testing().await.unwrap() })
             .await;
     }
 
@@ -198,42 +199,44 @@ async fn test_transaction_orchestrator_reconfig() {
     });
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_tx_across_epoch_boundaries() {
     telemetry_subscribers::init_for_testing();
-    let total_tx_cnt = 1800;
+    let total_tx_cnt = 1;
     let (sender, keypair) = get_key_pair::<AccountKeyPair>();
-    let gas_objects = generate_test_gas_objects_with_owner(total_tx_cnt, sender);
-    let (result_tx, mut result_rx) =
-        tokio::sync::mpsc::channel::<CertifiedTransaction>(total_tx_cnt);
+    let gas_objects = generate_test_gas_objects_with_owner(1, sender);
+    let (result_tx, mut result_rx) = tokio::sync::mpsc::channel::<FinalizedEffects>(total_tx_cnt);
 
-    let (config, gas_objects) = test_authority_configs_with_objects(gas_objects);
+    let (config, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
     let authorities = spawn_test_authorities([], &config).await;
     let fullnode = spawn_fullnode(&config, None).await;
+    let gas_object = gas_objects.swap_remove(0);
+    let data = TransactionData::new_transfer_sui_with_dummy_gas_price(
+        get_key_pair::<AccountKeyPair>().0,
+        sender,
+        None,
+        gas_object.compute_object_reference(),
+        5000,
+    );
+    let tx = to_sender_signed_transaction(data, &keypair);
 
-    let txes = gas_objects
-        .iter()
-        .map(|o| {
-            let data = TransactionData::new_transfer_sui_with_dummy_gas_price(
-                get_key_pair::<AccountKeyPair>().0,
-                sender,
-                None,
-                o.compute_object_reference(),
-                5000,
-            );
-            to_sender_signed_transaction(data, &keypair)
-        })
-        .collect::<Vec<_>>();
-    let to = fullnode.with(|node| node.transaction_orchestrator().unwrap());
+    // We first let 2 validators stop accepting user cert
+    // to make sure QD does not get quorum until reconfig
+    for handle in authorities.iter().take(2) {
+        handle
+            .with_async(|node| async { node.close_epoch_for_testing().await.unwrap() })
+            .await;
+    }
 
-    // Spawn a task that fires transactions through TransactionOrchestrator
+    // Spawn a task that fire the transaction through TransactionOrchestrator
     // across the epoch boundary.
-    tokio::task::spawn(async move {
-        for tx in txes {
+    fullnode
+        .with_async(|node| async {
+            let to = node.transaction_orchestrator().unwrap();
             let tx_digest = *tx.digest();
             info!(?tx_digest, "Submitting tx");
             let tx = tx.into_inner();
-            loop {
+            tokio::task::spawn(async move {
                 match to
                     .execute_transaction(ExecuteTransactionRequest {
                         transaction: tx.clone(),
@@ -243,29 +246,23 @@ async fn test_tx_across_epoch_boundaries() {
                 {
                     Ok(ExecuteTransactionResponse::EffectsCert(res)) => {
                         info!(?tx_digest, "tx result: ok");
-                        let (tx_cert, _, _) = *res;
-                        result_tx.send(tx_cert).await.unwrap();
-                        break;
+                        let (_, effects_cert, _) = *res;
+                        result_tx.send(effects_cert).await.unwrap();
                     }
-                    Err(QuorumDriverError::TimeoutBeforeReachFinality) => {
+                    Err(QuorumDriverError::TimeoutBeforeFinality) => {
                         info!(?tx_digest, "tx result: timeout and will retry")
                     }
                     Err(other) => panic!("unexpected error: {:?}", other),
                 }
-                // Retry a transaction if it times out (e.g. in epoch boundary) after 500 ms.
-                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-            }
-        }
-    });
+            });
+        })
+        .await;
 
-    // uncomment this will cause fullnode not be able to advance epoch
-    // Wait for the task to start firing txes
-    // let tx_cert = result_rx.recv().await.unwrap();
-    // assert_eq!(tx_cert.auth_sig().epoch, 0);
-
-    for handle in &authorities {
+    info!("Asking remaining validators to change epoch");
+    // Ask the remaining 2 validators to close epoch
+    for handle in authorities.iter().skip(2) {
         handle
-            .with_async(|node| async { node.close_epoch().await.unwrap() })
+            .with_async(|node| async { node.close_epoch_for_testing().await.unwrap() })
             .await;
     }
 
@@ -276,19 +273,13 @@ async fn test_tx_across_epoch_boundaries() {
     wait_for_nodes_transition_to_epoch(std::iter::once(&fullnode), 1).await;
     info!("All nodes including fullnode finished");
 
-    // Newer transactions's cert must be in epoch 1
-    // Will all transactions finish in epoch 0?  Local testing results say
-    // unlikely with total_tx_size = 180.
-    loop {
-        match tokio::time::timeout(tokio::time::Duration::from_secs(60), result_rx.recv()).await {
-            Ok(Some(tx_cert)) => {
-                if tx_cert.auth_sig().epoch == 1 {
-                    return;
-                }
-            }
-            other => panic!("unexpected error: {:?}", other),
-        }
+    // The transaction must finalize in epoch 1
+    let start = std::time::Instant::now();
+    match tokio::time::timeout(tokio::time::Duration::from_secs(15), result_rx.recv()).await {
+        Ok(Some(effects_cert)) if effects_cert.epoch() == 1 => (),
+        other => panic!("unexpected error: {:?}", other),
     }
+    info!("test completed in {:?}", start.elapsed());
 }
 
 async fn execute_with_orchestrator(

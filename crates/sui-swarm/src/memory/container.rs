@@ -36,10 +36,7 @@ impl Drop for Container {
 
 impl Container {
     /// Spawn a new Node.
-    pub fn spawn(
-        config: NodeConfig,
-        runtime: RuntimeType,
-    ) -> (tokio::sync::oneshot::Receiver<()>, Self) {
+    pub async fn spawn(config: NodeConfig, runtime: RuntimeType) -> Self {
         let (startup_sender, startup_reciever) = tokio::sync::oneshot::channel();
         let (cancel_sender, cancel_reciever) = tokio::sync::oneshot::channel();
 
@@ -93,13 +90,12 @@ impl Container {
             });
         });
 
-        (
-            startup_reciever,
-            Self {
-                join_handle: Some(thread),
-                cancel_sender: Some(cancel_sender),
-            },
-        )
+        startup_reciever.await.unwrap();
+
+        Self {
+            join_handle: Some(thread),
+            cancel_sender: Some(cancel_sender),
+        }
     }
 
     /// Check to see that the Node is still alive by checking if the receiving side of the

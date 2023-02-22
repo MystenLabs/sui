@@ -11,10 +11,10 @@ import {
     getTransferSuiTransaction,
     SUI_TYPE_ARG,
     type GetTxnDigestsResponse,
-    type CertifiedTransaction,
     type ExecutionStatusType,
     type TransactionKindName,
     type JsonRpcProvider,
+    getTransactionSender,
 } from '@mysten/sui.js';
 import { Fragment } from 'react';
 
@@ -54,10 +54,10 @@ export function SuiAmount({
 }: {
     amount: bigint | number | string | undefined | null;
 }) {
-    const [formattedAmount] = useFormatCoin(amount, SUI_TYPE_ARG);
+    const [formattedAmount, coinType] = useFormatCoin(amount, SUI_TYPE_ARG);
 
     if (amount) {
-        const SuiSuffix = <abbr className={styles.suisuffix}>SUI</abbr>;
+        const SuiSuffix = <abbr className={styles.suisuffix}>{coinType}</abbr>;
 
         return (
             <section>
@@ -95,82 +95,78 @@ export function TxAddresses({ content }: { content: LinkObj[] }) {
 export const genTableDataFromTxData = (
     results: TxnData[],
     truncateLength: number
-) => {
-    return {
-        data: results.map((txn) => ({
-            date: <TxTimeType timestamp={txn.timestamp_ms} />,
-            transactionId: (
-                <TxAddresses
-                    content={[
-                        {
-                            url: txn.txId,
-                            name: truncate(txn.txId, truncateLength),
-                            category: 'transaction',
-                        },
-                    ]}
-                />
+) => ({
+    data: results.map((txn) => ({
+        date: <TxTimeType timestamp={txn.timestamp_ms} />,
+        transactionId: (
+            <TxAddresses
+                content={[
+                    {
+                        url: txn.txId,
+                        name: truncate(txn.txId, truncateLength),
+                        category: 'transaction',
+                    },
+                ]}
+            />
+        ),
+        addresses: (
+            <TxAddresses
+                content={[
+                    {
+                        url: txn.From,
+                        name: truncate(txn.From, truncateLength),
+                        category: 'address',
+                    },
+                    ...(txn.To
+                        ? [
+                              {
+                                  url: txn.To,
+                                  name: truncate(txn.To, truncateLength),
+                                  category: 'address',
+                              } as const,
+                          ]
+                        : []),
+                ]}
+            />
+        ),
+        txTypes: (
+            <TransactionType
+                isSuccess={txn.status === 'success'}
+                type={txn.kind}
+            />
+        ),
+        amounts: <SuiAmount amount={txn.suiAmount} />,
+        gas: <SuiAmount amount={txn.txGas} />,
+    })),
+    columns: [
+        {
+            header: 'Time',
+            accessorKey: 'date',
+        },
+        {
+            header: 'Type',
+            accessorKey: 'txTypes',
+        },
+        {
+            header: () => (
+                <div className={styles.addresses}>Transaction ID</div>
             ),
-            addresses: (
-                <TxAddresses
-                    content={[
-                        {
-                            url: txn.From,
-                            name: truncate(txn.From, truncateLength),
-                            category: 'address',
-                        },
-                        ...(txn.To
-                            ? [
-                                  {
-                                      url: txn.To,
-                                      name: truncate(txn.To, truncateLength),
-                                      category: 'address',
-                                  } as const,
-                              ]
-                            : []),
-                    ]}
-                />
-            ),
-            txTypes: (
-                <TransactionType
-                    isSuccess={txn.status === 'success'}
-                    type={txn.kind}
-                />
-            ),
-            amounts: <SuiAmount amount={txn.suiAmount} />,
-            gas: <SuiAmount amount={txn.txGas} />,
-        })),
-        columns: [
-            {
-                headerLabel: 'Time',
-                accessorKey: 'date',
-            },
-            {
-                headerLabel: 'Type',
-                accessorKey: 'txTypes',
-            },
-            {
-                headerLabel: () => (
-                    <div className={styles.addresses}>Transaction ID</div>
-                ),
-                accessorKey: 'transactionId',
-            },
-            {
-                headerLabel: () => (
-                    <div className={styles.addresses}>Addresses</div>
-                ),
-                accessorKey: 'addresses',
-            },
-            {
-                headerLabel: 'Amount',
-                accessorKey: 'amounts',
-            },
-            {
-                headerLabel: 'Gas',
-                accessorKey: 'gas',
-            },
-        ],
-    };
-};
+            accessorKey: 'transactionId',
+        },
+        {
+            header: () => <div className={styles.addresses}>Addresses</div>,
+            accessorKey: 'addresses',
+        },
+        {
+            header: 'Amount',
+            accessorKey: 'amounts',
+        },
+        {
+            header: 'Gas',
+            accessorKey: 'gas',
+        },
+    ],
+});
 
 const dedupe = (arr: string[]) => Array.from(new Set(arr));
 
@@ -178,50 +174,54 @@ export const getDataOnTxDigests = (
     rpc: JsonRpcProvider,
     transactions: GetTxnDigestsResponse
 ) =>
-    rpc.getTransactionWithEffectsBatch(dedupe(transactions)).then((txEffs) => {
-        return (
-            txEffs
-                .map((txEff) => {
-                    const digest = transactions.filter(
-                        (transactionId) =>
-                            transactionId ===
-                            getTransactionDigest(txEff.certificate)
-                    )[0];
-                    const res: CertifiedTransaction = txEff.certificate;
-                    // TODO: handle multiple transactions
-                    const txns = getTransactions(res);
-                    if (txns.length > 1) {
-                        console.error(
-                            'Handling multiple transactions is not yet supported',
-                            txEff
-                        );
-                        return null;
-                    }
-                    const txn = txns[0];
-                    const txKind = getTransactionKindName(txn);
-                    const recipient =
-                        getTransferObjectTransaction(txn)?.recipient ||
-                        getTransferSuiTransaction(txn)?.recipient;
+    rpc.getTransactionWithEffectsBatch(dedupe(transactions)).then((txEffs) =>
+        txEffs
+            .map((txEff) => {
+                const digest = transactions.filter(
+                    (transactionId) =>
+                        transactionId === getTransactionDigest(txEff)
+                )[0];
+                // TODO: handle multiple transactions
+                const txns = getTransactions(txEff);
+                if (txns.length > 1) {
+                    console.error(
+                        'Handling multiple transactions is not yet supported',
+                        txEff
+                    );
+                    return null;
+                }
+                const txn = txns[0];
+                const txKind = getTransactionKindName(txn);
+                const recipient =
+                    getTransferObjectTransaction(txn)?.recipient ||
+                    getTransferSuiTransaction(txn)?.recipient;
 
-                    const txnTransfer = getAmount(txn, txEff.effects)?.[0];
+                const transfer = getAmount({
+                    txnData: txEff,
+                    suiCoinOnly: true,
+                })[0];
 
-                    return {
-                        txId: digest,
-                        status: getExecutionStatusType(txEff)!,
-                        txGas: getTotalGasUsed(txEff),
-                        suiAmount: txnTransfer?.amount || null,
-                        coinType: txnTransfer?.coinType || null,
-                        kind: txKind,
-                        From: res.data.sender,
-                        timestamp_ms: txEff.timestamp_ms,
-                        ...(recipient
-                            ? {
-                                  To: recipient,
-                              }
-                            : {}),
-                    };
-                })
-                // Remove failed transactions
-                .filter((itm) => itm)
-        );
-    });
+                // use only absolute value of sui amount
+                const suiAmount = transfer?.amount
+                    ? Math.abs(transfer.amount)
+                    : null;
+
+                return {
+                    txId: digest,
+                    status: getExecutionStatusType(txEff)!,
+                    txGas: getTotalGasUsed(txEff),
+                    suiAmount,
+                    coinType: transfer?.coinType || null,
+                    kind: txKind,
+                    From: getTransactionSender(txEff),
+                    timestamp_ms: txEff.timestamp_ms || txEff.timestampMs,
+                    ...(recipient
+                        ? {
+                              To: recipient,
+                          }
+                        : {}),
+                };
+            })
+            // Remove failed transactions
+            .filter((itm) => itm)
+    );

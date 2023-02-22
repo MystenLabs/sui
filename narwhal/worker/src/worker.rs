@@ -9,19 +9,17 @@ use crate::{
     quorum_waiter::QuorumWaiter,
     TransactionValidator, NUM_SHUTDOWN_RECEIVERS,
 };
-use anemo::types::Address;
+use anemo::{codegen::InboundRequestLayer, types::Address};
 use anemo::{types::PeerInfo, Network, PeerId};
-use anemo_tower::set_header::SetResponseHeaderLayer;
 use anemo_tower::{
     auth::{AllowedPeers, RequireAuthorizationLayer},
     callback::CallbackLayer,
     set_header::SetRequestHeaderLayer,
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
-use async_trait::async_trait;
+use anemo_tower::{rate_limit, set_header::SetResponseHeaderLayer};
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
 use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey, PublicKey};
-use futures::StreamExt;
 use multiaddr::{Multiaddr, Protocol};
 use mysten_metrics::spawn_logged_monitored_task;
 use network::epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY};
@@ -33,15 +31,12 @@ use std::{net::Ipv4Addr, sync::Arc, thread::sleep};
 use store::Store;
 use tap::TapFallible;
 use tokio::task::JoinHandle;
-use tonic::{Request, Response, Status};
 use tower::ServiceBuilder;
 use tracing::{error, info};
 use types::{
-    error::DagError,
     metered_channel::{channel_with_total, Sender},
-    Batch, BatchDigest, ConditionalBroadcastReceiver, Empty, PreSubscribedBroadcastSender,
-    PrimaryToWorkerServer, Transaction, TransactionProto, Transactions, TransactionsServer,
-    TxResponse, WorkerOurBatchMessage, WorkerToWorkerServer,
+    Batch, BatchDigest, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender,
+    PrimaryToWorkerServer, WorkerOurBatchMessage, WorkerToWorkerServer,
 };
 
 #[cfg(test)]
@@ -51,10 +46,8 @@ pub mod worker_tests;
 /// The default channel capacity for each channel of the worker.
 pub const CHANNEL_CAPACITY: usize = 1_000;
 
-/// The maximum allowed size of transactions into Narwhal.
-pub const MAX_ALLOWED_TRANSACTION_SIZE: usize = 6 * 1024 * 1024;
-
 use crate::metrics::{Metrics, WorkerEndpointMetrics, WorkerMetrics};
+use crate::transactions_server::TxServer;
 
 pub struct Worker {
     /// The public key of this authority.
@@ -124,12 +117,29 @@ impl Worker {
 
         let mut shutdown_receivers = tx_shutdown.subscribe_n(NUM_SHUTDOWN_RECEIVERS);
 
-        let worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
+        let mut worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
             id: worker.id,
             tx_others_batch,
             store: worker.store.clone(),
             validator: validator.clone(),
         });
+        // Apply rate limits from configuration as needed.
+        if let Some(limit) = parameters.anemo.report_batch_rate_limit {
+            worker_service = worker_service.add_layer_for_report_batch(InboundRequestLayer::new(
+                rate_limit::RateLimitLayer::new(
+                    governor::Quota::per_second(limit),
+                    rate_limit::WaitMode::Block,
+                ),
+            ));
+        }
+        if let Some(limit) = parameters.anemo.request_batch_rate_limit {
+            worker_service = worker_service.add_layer_for_request_batch(InboundRequestLayer::new(
+                rate_limit::RateLimitLayer::new(
+                    governor::Quota::per_second(limit),
+                    rate_limit::WaitMode::Block,
+                ),
+            ));
+        }
 
         let primary_service = PrimaryToWorkerServer::new(PrimaryReceiverHandler {
             name: worker.primary_name.clone(),
@@ -187,6 +197,7 @@ impl Worker {
             )
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 inbound_network_metrics,
+                parameters.anemo.excessive_message_size(),
             )))
             .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
             .layer(SetResponseHeaderLayer::overriding(
@@ -203,6 +214,7 @@ impl Worker {
             )
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 outbound_network_metrics,
+                parameters.anemo.excessive_message_size(),
             )))
             .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
             .layer(SetRequestHeaderLayer::overriding(
@@ -217,14 +229,16 @@ impl Worker {
             quic_config.keep_alive_interval_ms = Some(5_000);
             let mut config = anemo::Config::default();
             config.quic = Some(quic_config);
-            // Set a default size limit of 8 MiB for all RPCs
-            // TODO: remove this and revert to default anemo max_frame_size once size
-            // limits are fully implemented on narwhal data structures.
-            config.max_frame_size = Some(8 << 20);
+            // Set the max_frame_size to be 2 GB to work around the issue of there being too many
+            // delegation events in the epoch change txn.
+            config.max_frame_size = Some(2 << 30);
             // Set a default timeout of 300s for all RPC requests
             config.inbound_request_timeout_ms = Some(300_000);
             config.outbound_request_timeout_ms = Some(300_000);
             config.shutdown_idle_timeout_ms = Some(1_000);
+            config.connectivity_check_interval_ms = Some(2_000);
+            config.connection_backoff_ms = Some(1_000);
+            config.max_connection_backoff_ms = Some(20_000);
             config
         };
 
@@ -452,14 +466,13 @@ impl Worker {
         let address = address
             .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
             .unwrap();
-        let tx_receiver_handle = TxReceiverHandler {
-            tx_batch_maker,
-            validator,
-        }
-        .spawn(
+
+        let tx_server_handle = TxServer::spawn(
             address.clone(),
             shutdown_receivers.pop().unwrap(),
             endpoint_metrics,
+            tx_batch_maker,
+            validator,
         );
 
         // The transactions are sent to the `BatchMaker` that assembles them into batches. It then broadcasts
@@ -494,114 +507,6 @@ impl Worker {
             self.id, address
         );
 
-        vec![batch_maker_handle, quorum_waiter_handle, tx_receiver_handle]
-    }
-}
-
-/// Defines how the network receiver handles incoming transactions.
-#[derive(Clone)]
-struct TxReceiverHandler<V> {
-    tx_batch_maker: Sender<(Transaction, TxResponse)>,
-    validator: V,
-}
-
-impl<V: TransactionValidator> TxReceiverHandler<V> {
-    async fn wait_for_shutdown(mut tx_shutdown: ConditionalBroadcastReceiver) {
-        _ = tx_shutdown.receiver.recv().await;
-    }
-
-    #[must_use]
-    fn spawn(
-        self,
-        address: Multiaddr,
-        rx_shutdown: ConditionalBroadcastReceiver,
-        endpoint_metrics: WorkerEndpointMetrics,
-    ) -> JoinHandle<()> {
-        spawn_logged_monitored_task!(
-            async move {
-                tokio::select! {
-                    _result =  mysten_network::config::Config::new()
-                        .server_builder_with_metrics(endpoint_metrics)
-                        .add_service(TransactionsServer::new(self))
-                        .bind(&address)
-                        .await
-                        .unwrap()
-                        .serve() => (),
-
-                    () = Self::wait_for_shutdown(rx_shutdown) => ()
-                }
-            },
-            "TxReceiverHandlerTask"
-        )
-    }
-}
-
-#[async_trait]
-impl<V: TransactionValidator> Transactions for TxReceiverHandler<V> {
-    async fn submit_transaction(
-        &self,
-        request: Request<TransactionProto>,
-    ) -> Result<Response<Empty>, Status> {
-        let message = request.into_inner().transaction;
-        if message.len() > MAX_ALLOWED_TRANSACTION_SIZE {
-            return Err(Status::resource_exhausted(format!(
-                "Transaction size is too large: {} > {}",
-                message.len(),
-                MAX_ALLOWED_TRANSACTION_SIZE
-            )));
-        }
-        if self.validator.validate(message.as_ref()).is_err() {
-            return Err(Status::invalid_argument("Invalid transaction"));
-        }
-        // Send the transaction to the batch maker.
-        let (notifier, when_done) = tokio::sync::oneshot::channel();
-        self.tx_batch_maker
-            .send((message.to_vec(), notifier))
-            .await
-            .map_err(|_| DagError::ShuttingDown)
-            .map_err(|e| Status::not_found(e.to_string()))?;
-
-        // TODO: distingush between a digest being returned vs the channel closing
-        // suggesting an error.
-        let _digest = when_done.await;
-
-        Ok(Response::new(Empty {}))
-    }
-
-    async fn submit_transaction_stream(
-        &self,
-        request: Request<tonic::Streaming<types::TransactionProto>>,
-    ) -> Result<Response<types::Empty>, Status> {
-        let mut transactions = request.into_inner();
-        let mut responses = Vec::new();
-
-        while let Some(Ok(txn)) = transactions.next().await {
-            if let Err(err) = self.validator.validate(txn.transaction.as_ref()) {
-                // If the transaction is invalid (often cryptographically), better to drop the client
-                return Err(Status::invalid_argument(format!(
-                    "Stream contains an invalid transaction {err}"
-                )));
-            }
-            // Send the transaction to the batch maker.
-            let (notifier, when_done) = tokio::sync::oneshot::channel();
-            self.tx_batch_maker
-                .send((txn.transaction.to_vec(), notifier))
-                .await
-                .expect("Failed to send transaction");
-
-            // Note that here we do not wait for a response because this would
-            // mean that we process only a single message from this stream at a
-            // time. Instead we gather them and resolve them once the stream is over.
-            responses.push(when_done);
-        }
-
-        // TODO: activate when we provide a meaningful guarantee, and
-        // distingush between a digest being returned vs the channel closing
-        // suggesting an error.
-        // for response in responses {
-        //     let _digest = response.await;
-        // }
-
-        Ok(Response::new(Empty {}))
+        vec![batch_maker_handle, quorum_waiter_handle, tx_server_handle]
     }
 }

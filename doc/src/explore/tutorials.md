@@ -9,7 +9,7 @@ and playing it to the end.
 
 ## Set up
 
-1. [Install Sui binaries](../build/install.md#binaries) and
+1. [Install Sui binaries](../build/install.md#install-or-update-sui-binaries) and
    [download Sui source code](../build/install.md#source-code).
 1. [Create Sui genesis](../build/cli-client.md#genesis) by running the
    `sui genesis` command.
@@ -29,7 +29,7 @@ gas units) times the price of gas in the SUI currency (i.e. the gas price).
 When you complete the setup steps, you can either use the following script to publish and run the sample code, or perform each step manually. Using the script is optional. To manually run each step, follow the steps starting in the [Gather addresses and gas objects](#gather-addresses-and-gas-objects) section.
 
 ## Quick script
-If you prefer not to enter command step by step, or need to go though it multiple
+If you prefer not to enter command step by step, or need to go through it multiple
 times (such as when you change some Move source code), the following automated script
 may be useful to save some time.
 Run this script from the project repo root.

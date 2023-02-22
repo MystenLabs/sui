@@ -3,8 +3,7 @@
 use crate::legacy_empty_cost;
 use fastcrypto::{
     bls12381::{min_pk, min_sig},
-    traits::ToFromBytes,
-    Verifier,
+    traits::{ToFromBytes, VerifyingKey},
 };
 use move_binary_format::errors::PartialVMResult;
 use move_vm_runtime::native_functions::NativeContext;

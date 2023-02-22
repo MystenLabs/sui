@@ -15,7 +15,9 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::usize;
 use sui_keys::keypair_file::{read_authority_keypair_from_file, read_keypair_from_file};
+use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::StakeUnit;
 use sui_types::crypto::AuthorityPublicKeyBytes;
@@ -59,13 +61,12 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_event_processing: bool,
 
-    /// Number of checkpoints per epoch.
-    /// Some means reconfiguration is enabled.
-    /// None means reconfiguration is disabled.
+    // TODO: It will be removed down the road.
+    /// Epoch duration in ms.
+    /// u64::MAX means reconfiguration is disabled
     /// Exposing this in config to allow easier testing with shorter epoch.
-    /// TODO: It will be removed down the road.
-    #[serde(default = "default_checkpoints_per_epoch")]
-    pub checkpoints_per_epoch: Option<u64>,
+    #[serde(default = "default_epoch_duration_ms")]
+    pub epoch_duration_ms: u64,
 
     #[serde(default)]
     pub grpc_load_shed: Option<bool>,
@@ -81,8 +82,23 @@ pub struct NodeConfig {
     #[serde(default = "default_authority_store_pruning_config")]
     pub authority_store_pruning_config: AuthorityStorePruningConfig,
 
+    /// Size of the broadcast channel used for notifying other systems of end of epoch.
+    ///
+    /// If unspecified, this will default to `128`.
+    #[serde(default = "default_end_of_epoch_broadcast_channel_capacity")]
+    pub end_of_epoch_broadcast_channel_capacity: usize,
+
     #[serde(default)]
     pub checkpoint_executor_config: CheckpointExecutorConfig,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metrics: Option<MetricsConfig>,
+
+    /// In a `sui-node` binary, this is set to SupportedProtocolVersions::SYSTEM_DEFAULT
+    /// in sui-node/src/main.rs. It is present in the config so that it can be changed by tests in
+    /// order to test protocol upgrades.
+    #[serde(skip)]
+    pub supported_protocol_versions: Option<SupportedProtocolVersions>,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
@@ -128,9 +144,13 @@ pub fn default_concurrency_limit() -> Option<usize> {
     Some(DEFAULT_GRPC_CONCURRENCY_LIMIT)
 }
 
-pub fn default_checkpoints_per_epoch() -> Option<u64> {
-    // Currently a checkpoint is ~3 seconds, 3000 checkpoints is 9000s, which is about 2.5 hours.
-    Some(3000)
+pub fn default_epoch_duration_ms() -> u64 {
+    // 24 Hrs
+    24 * 60 * 60 * 1000
+}
+
+pub fn default_end_of_epoch_broadcast_channel_capacity() -> usize {
+    128
 }
 
 pub fn bool_true() -> bool {
@@ -147,14 +167,20 @@ impl NodeConfig {
     pub fn worker_key_pair(&self) -> &NetworkKeyPair {
         match self.worker_key_pair.keypair() {
             SuiKeyPair::Ed25519(kp) => kp,
-            _ => panic!("Invalid keypair type"),
+            other => panic!(
+                "Invalid keypair type: {:?}, only Ed25519 is allowed for worker key",
+                other
+            ),
         }
     }
 
     pub fn network_key_pair(&self) -> &NetworkKeyPair {
         match self.network_key_pair.keypair() {
             SuiKeyPair::Ed25519(kp) => kp,
-            _ => panic!("Invalid keypair type"),
+            other => panic!(
+                "Invalid keypair type: {:?}, only Ed25519 is allowed for network key",
+                other
+            ),
         }
     }
 
@@ -223,15 +249,9 @@ impl ConsensusConfig {
 pub struct CheckpointExecutorConfig {
     /// Upper bound on the number of checkpoints that can be concurrently executed
     ///
-    /// If unspecified, this will default to `100`
+    /// If unspecified, this will default to `200`
     #[serde(default = "default_checkpoint_execution_max_concurrency")]
     pub checkpoint_execution_max_concurrency: usize,
-
-    /// Size of the broadcast channel use for notifying other systems of end of epoch.
-    ///
-    /// If unspecified, this will default to `128`.
-    #[serde(default = "default_end_of_epoch_broadcast_channel_capacity")]
-    pub end_of_epoch_broadcast_channel_capacity: usize,
 
     /// Number of seconds to wait for effects of a batch of transactions
     /// before logging a warning. Note that we will continue to retry
@@ -243,11 +263,7 @@ pub struct CheckpointExecutorConfig {
 }
 
 fn default_checkpoint_execution_max_concurrency() -> usize {
-    100
-}
-
-fn default_end_of_epoch_broadcast_channel_capacity() -> usize {
-    128
+    200
 }
 
 fn default_local_execution_timeout_sec() -> u64 {
@@ -258,8 +274,6 @@ impl Default for CheckpointExecutorConfig {
     fn default() -> Self {
         Self {
             checkpoint_execution_max_concurrency: default_checkpoint_execution_max_concurrency(),
-            end_of_epoch_broadcast_channel_capacity:
-                default_end_of_epoch_broadcast_channel_capacity(),
             local_execution_timeout_sec: default_local_execution_timeout_sec(),
         }
     }
@@ -271,14 +285,20 @@ pub struct AuthorityStorePruningConfig {
     pub objects_num_latest_versions_to_retain: u64,
     pub objects_pruning_period_secs: u64,
     pub objects_pruning_initial_delay_secs: u64,
+    pub num_latest_epoch_dbs_to_retain: usize,
+    pub epoch_db_pruning_period_secs: u64,
+    pub num_epochs_to_retain: u64,
 }
 
 impl Default for AuthorityStorePruningConfig {
     fn default() -> Self {
         Self {
             objects_num_latest_versions_to_retain: u64::MAX,
-            objects_pruning_period_secs: u64::MAX,
-            objects_pruning_initial_delay_secs: u64::MAX,
+            objects_pruning_period_secs: 24 * 60 * 60,
+            objects_pruning_initial_delay_secs: 60 * 60,
+            num_latest_epoch_dbs_to_retain: usize::MAX,
+            epoch_db_pruning_period_secs: u64::MAX,
+            num_epochs_to_retain: u64::MAX,
         }
     }
 }
@@ -291,6 +311,9 @@ impl AuthorityStorePruningConfig {
             objects_num_latest_versions_to_retain: 2,
             objects_pruning_period_secs: 24 * 60 * 60,
             objects_pruning_initial_delay_secs: 60 * 60,
+            num_latest_epoch_dbs_to_retain: 3,
+            epoch_db_pruning_period_secs: 60 * 60,
+            num_epochs_to_retain: if cfg!(msim) { 1 } else { u64::MAX },
         }
     }
     pub fn fullnode_config() -> Self {
@@ -298,8 +321,20 @@ impl AuthorityStorePruningConfig {
             objects_num_latest_versions_to_retain: 5,
             objects_pruning_period_secs: 24 * 60 * 60,
             objects_pruning_initial_delay_secs: 60 * 60,
+            num_latest_epoch_dbs_to_retain: 3,
+            epoch_db_pruning_period_secs: 60 * 60,
+            num_epochs_to_retain: if cfg!(msim) { 1 } else { u64::MAX },
         }
     }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct MetricsConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub push_interval_seconds: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub push_url: Option<String>,
 }
 
 /// Publicly known information about a validator
@@ -486,7 +521,7 @@ impl KeyPairWithPath {
         let cell: OnceCell<Arc<SuiKeyPair>> = OnceCell::new();
         // OK to unwrap panic because authority should not start without all keypairs loaded.
         cell.set(Arc::new(read_keypair_from_file(&path).unwrap_or_else(
-            |_| panic!("Invalid keypair file at path {:?}", &path),
+            |e| panic!("Invalid keypair file at path {:?}: {e}", &path),
         )))
         .expect("Failed to set keypair");
         Self {
@@ -502,8 +537,9 @@ impl KeyPairWithPath {
                 KeyPairLocation::File { path } => {
                     // OK to unwrap panic because authority should not start without all keypairs loaded.
                     Arc::new(
-                        read_keypair_from_file(path)
-                            .unwrap_or_else(|_| panic!("Invalid keypair file")),
+                        read_keypair_from_file(path).unwrap_or_else(|e| {
+                            panic!("Invalid keypair file at path {:?}: {e}", path)
+                        }),
                     )
                 }
             })
@@ -649,19 +685,18 @@ mod tests {
         let network_key_pair: NetworkKeyPair =
             get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
 
-        write_authority_keypair_to_file(&protocol_key_pair, &PathBuf::from("protocol.key"))
-            .unwrap();
+        write_authority_keypair_to_file(&protocol_key_pair, PathBuf::from("protocol.key")).unwrap();
         write_keypair_to_file(
             &SuiKeyPair::Ed25519(worker_key_pair.copy()),
-            &PathBuf::from("worker.key"),
+            PathBuf::from("worker.key"),
         )
         .unwrap();
         write_keypair_to_file(
             &SuiKeyPair::Ed25519(network_key_pair.copy()),
-            &PathBuf::from("network.key"),
+            PathBuf::from("network.key"),
         )
         .unwrap();
-        write_keypair_to_file(&account_key_pair, &PathBuf::from("account.key")).unwrap();
+        write_keypair_to_file(&account_key_pair, PathBuf::from("account.key")).unwrap();
 
         const TEMPLATE: &str = include_str!("../data/fullnode-template-with-path.yaml");
         let template: NodeConfig = serde_yaml::from_str(TEMPLATE).unwrap();

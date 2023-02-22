@@ -40,7 +40,7 @@ pub struct WorkloadInitGas {
     pub shared_counter_init_gas: Vec<Gas>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct WorkloadPayloadGas {
     // Gas coins to be used as transfer tokens
     // These are the objects which get transferred
@@ -140,6 +140,25 @@ pub fn make_transfer_object_workload(
             num_workers,
             max_in_flight_ops,
             workload,
+            payload_config,
+        })
+    }
+}
+
+pub fn make_delegation_workload(
+    target_qps: u64,
+    num_workers: u64,
+    max_in_flight_ops: u64,
+    payload_config: WorkloadPayloadGas,
+) -> Option<WorkloadInfo> {
+    if target_qps == 0 || max_in_flight_ops == 0 || num_workers == 0 {
+        None
+    } else {
+        Some(WorkloadInfo {
+            target_qps,
+            num_workers,
+            max_in_flight_ops,
+            workload: DelegationWorkload::new_boxed(),
             payload_config,
         })
     }
