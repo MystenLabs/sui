@@ -17,11 +17,10 @@ function TransactionsPage() {
     const {
         data: txns,
         isLoading,
-        isError,
         error,
     } = useGetTransactionsByAddress(activeAddress);
 
-    if (isError) {
+    if (error instanceof Error) {
         return (
             <div className="p-2">
                 <Alert mode="warning">

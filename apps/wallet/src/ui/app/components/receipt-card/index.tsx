@@ -197,7 +197,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                     <div className="flex gap-1.5 w-full py-3.5">
                         <ExplorerLink
                             type={ExplorerLinkType.transaction}
-                            transactionID={certificate.transactionDigest}
+                            transactionID={getTransactionDigest(txn)}
                             title="View on Sui Explorer"
                             className="text-sui-dark text-p4 font-semibold no-underline uppercase tracking-wider"
                             showIcon={false}
