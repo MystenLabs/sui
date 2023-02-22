@@ -43,7 +43,7 @@ describe('Transaction Serialization and deserialization', () => {
     toolbox = await setup();
     localSerializer = new LocalTxnDataSerializer(toolbox.provider);
     rpcSerializer = new RpcTxnDataSerializer(
-      toolbox.provider.endpoints.fullNode,
+      toolbox.provider.connection.fullnode,
     );
     const signer = new RawSigner(toolbox.keypair, toolbox.provider);
     const packagePath = __dirname + '/./data/serializer';

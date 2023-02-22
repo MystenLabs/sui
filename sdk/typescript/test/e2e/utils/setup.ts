@@ -8,23 +8,23 @@ import {
   getExecutionStatusType,
   JsonRpcProvider,
   JsonRpcProviderWithCache,
-  Network,
-  NETWORK_TO_API,
   ObjectId,
   RawSigner,
   SUI_SYSTEM_STATE_OBJECT_ID,
   fromB64,
+  localnetConnection,
+  Connection,
   SuiMoveObject,
   SuiObject,
 } from '../../../src';
 import { retry } from 'ts-retry-promise';
 import { FaucetRateLimitError } from '../../../src/rpc/faucet-client';
 
-const TEST_ENDPOINTS = NETWORK_TO_API[Network.LOCAL];
+const TEST_ENDPOINTS = localnetConnection;
 const DEFAULT_FAUCET_URL =
   import.meta.env.VITE_FAUCET_URL ?? TEST_ENDPOINTS.faucet;
 const DEFAULT_FULLNODE_URL =
-  import.meta.env.VITE_FULLNODE_URL ?? TEST_ENDPOINTS.fullNode;
+  import.meta.env.VITE_FULLNODE_URL ?? TEST_ENDPOINTS.fullnode;
 const SUI_BIN = import.meta.env.VITE_SUI_BIN ?? 'cargo run --bin sui';
 
 export const DEFAULT_RECIPIENT = '0x36096be6a0314052931babed39f53c0666a6b0df';
@@ -55,15 +55,18 @@ export class TestToolbox {
 type ProviderType = 'rpc' | 'rpc-with-cache';
 
 export function getProvider(providerType: ProviderType): JsonRpcProvider {
-  return providerType === 'rpc'
-    ? new JsonRpcProvider(DEFAULT_FULLNODE_URL, {
-        skipDataValidation: false,
-        faucetURL: DEFAULT_FAUCET_URL,
-      })
-    : new JsonRpcProviderWithCache(DEFAULT_FULLNODE_URL, {
-        skipDataValidation: false,
-        faucetURL: DEFAULT_FAUCET_URL,
-      });
+  const Provider =
+    providerType === 'rpc' ? JsonRpcProvider : JsonRpcProviderWithCache;
+
+  return new Provider(
+    new Connection({
+      fullnode: DEFAULT_FULLNODE_URL,
+      faucet: DEFAULT_FAUCET_URL,
+    }),
+    {
+      skipDataValidation: false,
+    },
+  );
 }
 
 export async function setup(providerType: ProviderType = 'rpc') {
@@ -102,8 +105,8 @@ export async function publishPackage(
   });
   expect(getExecutionStatusType(publishTxn)).toEqual('success');
 
-  const publishEvent = getEvents(publishTxn).filter(
-    (e: any) => 'publish' in e,
-  )[0];
-  return publishEvent.publish.packageId.replace(/^(0x)(0+)/, '0x');
+  const publishEvent = getEvents(publishTxn)?.find((e) => 'publish' in e);
+
+  // @ts-ignore: Publish not narrowed:
+  return publishEvent?.publish.packageId.replace(/^(0x)(0+)/, '0x');
 }
