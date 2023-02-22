@@ -61,7 +61,6 @@ pub mod admin;
 mod handle;
 pub mod metrics;
 pub use handle::SuiNodeHandle;
-use mysten_network::client::connect;
 use narwhal_config::SharedWorkerCache;
 use narwhal_network::connectivity::ConnectionStatus;
 use narwhal_types::TransactionsClient;
@@ -292,18 +291,17 @@ impl SuiNode {
         )
         .await?;
 
-<<<<<<< HEAD
         let accumulator = Arc::new(StateAccumulator::new(store));
-=======
-        let system_state = state
-            .get_sui_system_state_object()
-            .expect("Reading Sui system state object cannot fail");
-        // Spawn connectivity monitor for network
 
-        let peer_ids = system_state.get_current_epoch_peer_ids();
+        let peer_ids = epoch_store
+            .epoch_start_configuration()
+            .system_state
+            .get_current_epoch_peer_ids();
 
-        let authority_names_to_peer_ids =
-            system_state.get_current_epoch_authority_names_to_peer_ids();
+        let authority_names_to_peer_ids = epoch_store
+            .epoch_start_configuration()
+            .system_state
+            .get_current_epoch_authority_names_to_peer_ids();
 
         let network_connection_metrics =
             NetworkConnectionMetrics::new("sui", &registry_service.default_registry());
@@ -340,7 +338,7 @@ impl SuiNode {
                 checkpoint_store.clone(),
                 state_sync_handle.clone(),
                 accumulator.clone(),
-   connection_monitor_status.clone(),
+                connection_monitor_status.clone(),
                 &registry_service,
             )
             .await?;

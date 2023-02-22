@@ -21,6 +21,7 @@ use prometheus::{HistogramVec, IntCounter};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use std::collections::HashMap;
+use std::future::Future;
 use std::ops::Deref;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -310,29 +311,52 @@ impl ConsensusAdapter {
         self.num_inflight_transactions.load(Ordering::Relaxed)
     }
 
+    fn await_submit_delay(
+        &self,
+        committee: &Committee,
+        ourselves: &AuthorityName,
+        transaction: &ConsensusTransaction,
+        low_scoring_authorities: Vec<&AuthorityName>,
+    ) -> (impl Future<Output = ()>, usize) {
+        let (duration, position) = match &transaction.kind {
+            ConsensusTransactionKind::UserTransaction(certificate) => {
+                let tx_digest = certificate.digest();
+                let position = self.submission_position(
+                    committee,
+                    ourselves,
+                    tx_digest,
+                    low_scoring_authorities,
+                );
+                // DELAY_STEP is chosen as 1.5 * mean consensus delay
+                const DELAY_STEP: Duration = Duration::from_secs(7);
+                const MAX_DELAY_MUL: usize = 10;
+                (
+                    DELAY_STEP * std::cmp::min(position, MAX_DELAY_MUL) as u32,
+                    position,
+                )
+            }
+            _ => (Duration::ZERO, 0),
+        };
+        (tokio::time::sleep(duration), position)
+    }
+
     /// Check when this authority should submit the certificate to consensus.
     /// This sorts all authorities based on pseudo-random distribution derived from transaction hash.
     ///
     /// The function targets having 1 or 2 consensus transaction submitted per user transaction
     /// when system operates normally.
     ///
-    /// The function returns whether or not this authority should submit the transaction to consensus.
-    fn should_submit(
+    /// The function returns the position of this authority when it is their turn to submit the transaction to consensus.
+    fn submission_position(
         &self,
         committee: &Committee,
         ourselves: &AuthorityName,
-        transaction: &ConsensusTransaction,
-        exclusions: Vec<usize>,
-    ) -> bool {
-        let tx_digest;
-        if let ConsensusTransactionKind::UserTransaction(certificate) = &transaction.kind {
-            tx_digest = certificate.digest();
-        } else {
-            return true;
-        }
+        tx_digest: &TransactionDigest,
+        low_scoring_authorities: Vec<&AuthorityName>,
+    ) -> usize {
         let positions = order_validators_for_submission(committee, tx_digest);
 
-        self.check_submission_wrt_connectivity(ourselves, positions, exclusions)
+        self.check_submission_wrt_connectivity(ourselves, positions, low_scoring_authorities)
     }
 
     /// This function runs the following algorithm to decide whether or not to submit a transaction
@@ -350,74 +374,39 @@ impl ConsensusAdapter {
     ///
     /// This can possibly result in a transaction being submitted twice if an authority sees a false
     /// negative in connectivity to another, such as in the case of a network partition.
+    ///
+    /// Recursively, if the authority further ahead of us in the positions is a low performing authority, we will
+    /// move our positions up one, and submit at the same time. This allows low performing
+    /// node a chance to participate in consensus and redeem their scores while maintaining performance.
     fn check_submission_wrt_connectivity(
         &self,
         ourselves: &AuthorityName,
         positions: Vec<AuthorityName>,
-<<<<<<< HEAD
-        _exclusions: Vec<usize>,
-    ) -> (bool, usize) {
-=======
-        exclusions: Vec<usize>,
-    ) -> bool {
->>>>>>> d5245f7b89 (update to dashmap)
-        let (our_position, _) = positions
-            .clone()
+        low_scoring_authorities: Vec<&AuthorityName>,
+    ) -> usize {
+        let filtered_positions: Vec<AuthorityName> = positions
             .into_iter()
-            .find_position(|a| a == ourselves)
-            .expect("Could not find ourselves in shuffled committee");
+            .filter(|authority| {
+                self.connection_monitor_status
+                    .check_connection(authority)
+                    .unwrap_or(ConnectionStatus::Disconnected)
+                    == ConnectionStatus::Connected
+            })
+            .filter(|authority| {
+                // if we are a low scoring authority, we do not filter out ourselves from the list,
+                // nor do we move forward in line
+                // if we are a high scoring authority, we will co-submit with any low scoring authorities
+                // in front of us
+                !low_scoring_authorities.contains(&authority)
+                    || low_scoring_authorities.contains(&ourselves)
+            })
+            .collect();
 
-        let mut i = 0;
-        loop {
-            if exclusions.contains(&i) {
-                // this authority was responsible for submission but did not submit after a long time
-                i += 1;
-                continue;
-            }
-            if our_position == i {
-                // if we are the running validator in the first position
-                // we are responsible for submission
-                self.populate_position_metric(i);
-                return true;
-            }
-
-            let connection_to_first_validator = self
-                .connection_monitor_status
-                .check_connection(&positions[i])
-                .unwrap_or_else(|| {
-                    error!(
-                        "Could not find authority in status from connectivity monitor {:?}",
-                        positions[i]
-                    );
-                    ConnectionStatus::Disconnected
-                });
-
-            if connection_to_first_validator == ConnectionStatus::Connected {
-                // If we are connected to the validator at the first position, we assume they
-                // will submit the transaction, so we don't need to submit it ourselves
-                return false;
-            }
-
-            if let Some(metrics) = self.opt_metrics.as_ref() {
-                metrics.sequencing_certificate_skipped_disconnected.inc();
-            }
-
-            // if we don't have connection to the first validator, we don't expect that they are
-            // running so we shift the positions, making the next validator in the list responsible
-            // for submission, given that it is connected to by at least one other validator
-            i += 1;
-            if i >= positions.len() {
-                self.populate_position_metric(i);
-                return true;
-            }
-        }
-    }
-
-    fn populate_position_metric(&self, position: usize) {
-        // populate the position only when this authority submits the transaction
-        // to consensus
-        let mut guard = InflightDropGuard::acquire(self);
-        guard.position = Some(position);
+        filtered_positions
+            .into_iter()
+            .find_position(|authority| authority == ourselves)
+            .expect("Couldn't find ourselves in shuffled committee")
+            .0
     }
 
     /// This method blocks until transaction is persisted in local database
@@ -489,6 +478,27 @@ impl ConsensusAdapter {
             .consensus_message_processed_notify(transaction_key)
             .boxed();
 
+        // later populate this with the narwhal nodes that had lowest reputation scores
+        let low_scoring_authorities = vec![];
+
+        let (await_submit, position) = self.await_submit_delay(
+            epoch_store.committee(),
+            &self.authority,
+            &transaction,
+            low_scoring_authorities,
+        );
+        let mut guard = InflightDropGuard::acquire(&self);
+
+        // We need to wait for some delay until we submit transaction to the consensus
+        // However, if transaction is received by consensus while we wait, we don't need to wait
+        let processed_waiter = match select(processed_waiter, await_submit.boxed()).await {
+            Either::Left((processed, _await_submit)) => {
+                processed.expect("Storage error when waiting for consensus message processed");
+                None
+            }
+            Either::Right(((), processed_waiter)) => Some(processed_waiter),
+        };
+        let transaction_key = transaction.key();
         let _monitor = CancelOnDrop(spawn_monitored_task!(async {
             let mut i = 0u64;
             loop {
@@ -499,65 +509,60 @@ impl ConsensusAdapter {
                 warn!("Still waiting {total_wait} seconds for transaction {transaction_key:?} to commit in narwhal");
             }
         }));
+        if let Some(processed_waiter) = processed_waiter {
+            debug!("Submitting {transaction_key:?} to consensus");
 
-        // later populate this with the narwhal nodes that had lowest reputation scores
-        let exclusions = vec![];
+            // populate the position only when this authority submits the transaction
+            // to consensus
+            guard.position = Some(position);
 
-        let should_submit = self.should_submit(
-            epoch_store.committee(),
-            &self.authority,
-            &transaction,
-            exclusions.clone(),
-        );
+            // We enter this branch when in select above await_submit completed and processed_waiter is pending
+            // This means it is time for us to submit transaction to consensus
+            {
+                let ack_start = Instant::now();
+                let mut retries: u32 = 0;
+                while let Err(e) = self
+                    .consensus_client
+                    .submit_to_consensus(&transaction, epoch_store)
+                    .await
+                {
+                    // This can happen during Narwhal reconfig, so wait for a few retries.
+                    if retries > 3 {
+                        error!(
+                            "Error submitting transaction to own narwhal worker: {:?}",
+                            e
+                        );
+                    }
+                    self.opt_metrics.as_ref().map(|metrics| {
+                        metrics.sequencing_certificate_failures.inc();
+                    });
+                    retries += 1;
+                    time::sleep(Duration::from_secs(10)).await;
+                }
 
-        if should_submit {
-            self.submit_after_selected(transaction.clone(), epoch_store)
-                .await;
-        }
+                // we want to record the num of retries when reporting latency but to avoid label
+                // cardinality we do some simple bucketing to give us a good enough idea of how
+                // many retries happened associated with the latency.
+                let bucket = match retries {
+                    0..=10 => retries.to_string(), // just report the retry count as is
+                    11..=20 => "between_10_and_20".to_string(),
+                    21..=50 => "between_20_and_50".to_string(),
+                    51..=100 => "between_50_and_100".to_string(),
+                    _ => "over_100".to_string(),
+                };
 
-        // We wait to ensure the transaction was received by consensus. If sufficient time passes
-        // and consensus hasn't received the transaction, we submit it ourselves as a fallback.
-        let sleep_timer = tokio::time::sleep(Duration::from_secs(7));
-        let processed_waiter = epoch_store
-            .consensus_message_processed_notify(transaction.key())
-            .boxed();
-        match select(processed_waiter, Box::pin(sleep_timer)).await {
-            Either::Left((processed, _)) => {
-                processed.expect("Storage error when waiting for consensus message processed");
-            }
-            Either::Right(((), _timer)) => {
-                // we timed out
-                // try again with exclusion of the validator that was selected to submit
                 self.opt_metrics.as_ref().map(|metrics| {
-                    metrics.sequencing_certificate_timeouts.inc();
+                    metrics
+                        .sequencing_acknowledge_latency
+                        .with_label_values(&[&bucket])
+                        .observe(ack_start.elapsed().as_secs_f64());
                 });
-                self.submit_after_selected(transaction.clone(), epoch_store)
-                    .await;
             }
-<<<<<<< HEAD
-
-            // We need to wait for some delay until we submit transaction to the consensus
-            // However, if transaction is received by consensus while we wait, we don't need to wait
-            let sleep_timer = tokio::time::sleep(Duration::from_secs(5));
-            let processed_waiter = epoch_store
-                .consensus_message_processed_notify(transaction_key)
-                .boxed();
-            match select(processed_waiter, Box::pin(sleep_timer)).await {
-                Either::Left((processed, _)) => {
-                    processed.expect("Storage error when waiting for consensus message processed");
-                    break;
-                }
-                Either::Right(((), _timer)) => {
-                    // we timed out
-                    // try again with exclusion of the validator that was selected to submit
-                    continue;
-                }
-            };
+            debug!("Submitted {transaction_key:?} to consensus");
+            processed_waiter
+                .await
+                .expect("Storage error when waiting for consensus message processed");
         }
-=======
-        };
->>>>>>> d5245f7b89 (update to dashmap)
-
         debug!("{transaction_key:?} processed by consensus");
         epoch_store
             .remove_pending_consensus_transaction(&transaction.key())
@@ -594,57 +599,6 @@ impl ConsensusAdapter {
         self.opt_metrics.as_ref().map(|metrics| {
             metrics.sequencing_certificate_success.inc();
         });
-    }
-
-    async fn submit_after_selected(
-        self: &Arc<Self>,
-        transaction: ConsensusTransaction,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        let transaction_key = transaction.key();
-        debug!("Submitting {transaction_key:?} to consensus");
-
-        {
-            let ack_start = Instant::now();
-            let mut retries: u32 = 0;
-            while let Err(e) = self
-                .consensus_client
-                .submit_to_consensus(&transaction, epoch_store)
-                .await
-            {
-                // This can happen during Narwhal reconfig, so wait for a few retries.
-                if retries > 3 {
-                    error!(
-                        "Error submitting transaction to own narwhal worker: {:?}",
-                        e
-                    );
-                }
-                if let Some(metrics) = self.opt_metrics.as_ref() {
-                    metrics.sequencing_certificate_failures.inc();
-                }
-                retries += 1;
-                time::sleep(Duration::from_secs(10)).await;
-            }
-
-            // we want to record the num of retries when reporting latency but to avoid label
-            // cardinality we do some simple bucketing to give us a good enough idea of how
-            // many retries happened associated with the latency.
-            let bucket = match retries {
-                0..=10 => retries.to_string(), // just report the retry count as is
-                11..=20 => "between_10_and_20".to_string(),
-                21..=50 => "between_20_and_50".to_string(),
-                51..=100 => "between_50_and_100".to_string(),
-                _ => "over_100".to_string(),
-            };
-
-            if let Some(metrics) = self.opt_metrics.as_ref() {
-                metrics
-                    .sequencing_acknowledge_latency
-                    .with_label_values(&[&bucket])
-                    .observe(ack_start.elapsed().as_secs_f64());
-            }
-        }
-        debug!("Submitted {transaction_key:?} to consensus");
     }
 }
 

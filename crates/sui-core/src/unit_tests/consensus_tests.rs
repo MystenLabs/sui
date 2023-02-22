@@ -124,7 +124,7 @@ async fn submit_transaction_to_consensus_adapter() {
     let adapter = ConsensusAdapter::new(
         Box::new(SubmitDirectly(state.clone())),
         state.name,
-        Box::new(ConnectionMonitorStatusForTests {}),
+        Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
         metrics,
     );
 
