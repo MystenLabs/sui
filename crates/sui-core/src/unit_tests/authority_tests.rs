@@ -50,6 +50,7 @@ use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, Signature},
     crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits},
+    messages::TransactionExpiration,
     messages::VerifiedTransaction,
     object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
     sui_system_state::SuiSystemState,
@@ -1746,6 +1747,65 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
             .unwrap(),
         SuiError::GasBalanceTooLowToCoverGasBudget { .. }
     ));
+}
+
+#[tokio::test]
+async fn test_transaction_expiration() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
+
+    let mut committee = authority_state
+        .epoch_store_for_testing()
+        .committee()
+        .to_owned();
+    committee.epoch = 1;
+    let sui_system_state = SuiSystemState {
+        epoch: 1,
+        ..Default::default()
+    };
+
+    authority_state
+        .reconfigure(
+            &authority_state.epoch_store_for_testing(),
+            SupportedProtocolVersions::SYSTEM_DEFAULT,
+            committee,
+            sui_system_state,
+        )
+        .await
+        .unwrap();
+
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let mut data = TransactionData::new_transfer_sui_with_dummy_gas_price(
+        recipient,
+        sender,
+        Some(1),
+        object.compute_object_reference(),
+        MAX_GAS,
+    );
+
+    // Expired transaction returns an error
+    let mut expired_data = data.clone();
+    expired_data.expiration = TransactionExpiration::Epoch(0);
+    let expired_transaction = to_sender_signed_transaction(expired_data, &sender_key);
+    let result = authority_state
+        .handle_transaction(expired_transaction)
+        .await;
+
+    assert!(matches!(result.unwrap_err(), SuiError::TransactionExpired));
+
+    // Non expired transaction signed without issue
+    data.expiration = TransactionExpiration::Epoch(10);
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    authority_state
+        .handle_transaction(transaction)
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
