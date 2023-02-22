@@ -141,8 +141,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
           Pay: {
             coins: inputCoinRefs,
             recipients: pay.recipients,
-            // amounts: pay.amounts.map((a) => String(a)),
-            amounts: pay.amounts
+            amounts: pay.amounts,
           },
         };
         gasPayment = pay.gasPayment;
@@ -158,8 +157,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
           PaySui: {
             coins: paySuiInputCoinRefs,
             recipients: paySui.recipients,
-            // amounts: paySui.amounts.map( (a) => String(a)),
-            amounts: paySui.amounts
+            amounts: paySui.amounts,
           },
         };
         gasPayment = paySui.inputCoins[0];
