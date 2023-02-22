@@ -87,9 +87,11 @@ jobs:
       - uses: pnpm/action-setup@c3b53f6a16e57305370b4ae5a540c2077a1d50dd # pin@v2.2.4
         with:
           version: 7
-          
+
       # checkout and build the current branch
       - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+        with:
+          clean: false
 
       - name: Download sui binary from latest devnet release
         uses: wei/wget@v1
