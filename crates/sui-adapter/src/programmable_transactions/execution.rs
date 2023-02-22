@@ -269,7 +269,7 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>>(
             INIT_FN_NAME,
             vec![],
             vec![],
-            /* is_int */ true,
+            /* is init */ true,
         )?;
         assert_invariant!(
             return_values.is_empty(),
@@ -344,9 +344,9 @@ fn publish_and_verify_modules<E: fmt::Debug, S: StorageView<E>>(
         return Err(ExecutionErrorKind::PublishErrorEmptyPackage.into());
     }
 
-    // It should be fine that this does not go through context.fresh_id since the Move runtime
-    // does not to know about new packages created, since Move objects and Move packages cannot
-    // interact
+    // It should be fine that this does not go through ExecutionContext::fresh_id since the Move
+    // runtime does not to know about new packages created, since Move objects and Move packages
+    // cannot interact
     let package_id = generate_package_id(&mut modules, context.tx_context)?;
     // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
     let new_module_bytes: Vec<_> = modules
@@ -583,7 +583,7 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>>(
     if has_one_time_witness {
         // one time witness type is a struct with a single bool filed which in bcs is encoded as
         // 0x01
-        let bcs_true_value = vec![0x01];
+        let bcs_true_value = bcs::to_bytes(&true).unwrap();
         serialized_args.push(bcs_true_value)
     }
     for ((idx, arg), param_ty) in args.iter().copied().enumerate().zip(parameters) {
