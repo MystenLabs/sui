@@ -3,6 +3,7 @@
 
 use mysten_metrics::monitored_scope;
 use sui_types::committee::EpochId;
+use tracing::debug;
 use typed_store::Map;
 
 use std::sync::Arc;
@@ -27,6 +28,8 @@ impl StateAccumulator {
         Self { authority_store }
     }
 
+    /// Accumulates the effects of a single checkpoint.
+    /// This function is idempotent.
     pub fn accumulate_checkpoint(
         &self,
         effects: Vec<TransactionEffects>,
@@ -80,6 +83,7 @@ impl StateAccumulator {
         );
 
         epoch_store.insert_state_hash_for_checkpoint(&checkpoint_seq_num, &acc)?;
+        debug!("Accumulated checkpoint {}", checkpoint_seq_num);
 
         epoch_store
             .checkpoint_state_notify_read
@@ -89,10 +93,9 @@ impl StateAccumulator {
     }
 
     /// Unions all checkpoint accumulators at the end of the epoch to generate the
-    /// root state hash and saves it. This function is guaranteed to be idempotent (despite the
-    /// underlying data structure not being) as long as it is not called in a multi-threaded
-    /// context. Can be called on non-consecutive epochs, e.g. to accumulate epoch 3 after
-    /// having last accumulated epoch 1.
+    /// root state hash and saves it. This function is idempotent. Can be called on
+    /// non-consecutive epochs, e.g. to accumulate epoch 3 after having last
+    /// accumulated epoch 1.
     pub async fn accumulate_epoch(
         &self,
         epoch: &EpochId,
@@ -128,6 +131,11 @@ impl StateAccumulator {
             })
             .unwrap_or((0, (0, Accumulator::default())));
 
+        debug!(
+            "Accumulating epoch {} from checkpoint {} to checkpoint {} (inclusive)",
+            epoch, next_to_accumulate, last_checkpoint_of_epoch
+        );
+
         let (checkpoints, mut accumulators) = epoch_store
             .get_accumulators_in_checkpoint_range(next_to_accumulate, last_checkpoint_of_epoch)?
             .into_iter()
@@ -136,6 +144,13 @@ impl StateAccumulator {
         let remaining_checkpoints: Vec<_> = (next_to_accumulate..=last_checkpoint_of_epoch)
             .filter(|seq_num| !checkpoints.contains(seq_num))
             .collect();
+
+        if !remaining_checkpoints.is_empty() {
+            debug!(
+                "Awaiting accumulation of checkpoints {:?} for epoch {} accumulation",
+                remaining_checkpoints, epoch
+            );
+        }
 
         let mut remaining_accumulators = epoch_store
             .notify_read_checkpoint_state_digests(remaining_checkpoints)
