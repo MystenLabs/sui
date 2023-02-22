@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::api::CoinReadApiClient;
-use crate::api::GovernanceReadApiClient;
-use crate::api::{ReadApiClient, TransactionBuilderClient};
-use crate::api::{ThresholdBlsApiClient, TransactionExecutionClient};
+
+use crate::api::{
+    CoinReadApiClient, GovernanceReadApiClient, ReadApiClient, ThresholdBlsApiClient,
+    TransactionBuilderClient, WriteApiClient,
+};
 use std::path::Path;
 
 #[cfg(not(msim))]
@@ -11,6 +12,7 @@ use std::str::FromStr;
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
+
 use sui_json_rpc_types::SuiObjectInfo;
 use sui_json_rpc_types::{
     Balance, CoinPage, GetObjectDataResponse, SuiCoinMetadata, SuiEvent, SuiExecutionStatus,

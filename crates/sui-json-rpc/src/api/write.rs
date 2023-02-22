@@ -4,14 +4,15 @@
 use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
-use sui_json_rpc_types::SuiTransactionResponse;
+use sui_json_rpc_types::{DevInspectResults, SuiTransactionEffects, SuiTransactionResponse};
 
 use sui_open_rpc_macros::open_rpc;
+use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::messages::ExecuteTransactionRequestType;
 
-#[open_rpc(namespace = "sui", tag = "Transaction Execution API")]
+#[open_rpc(namespace = "sui", tag = "Write API")]
 #[rpc(server, client, namespace = "sui")]
-pub trait TransactionExecution {
+pub trait WriteApi {
     /// Execute the transaction and wait for results if desired.
     /// Request types:
     /// 1. WaitForEffectsCert: waits for TransactionEffectsCert and then return to client.
@@ -55,4 +56,24 @@ pub trait TransactionExecution {
         /// The request type
         request_type: ExecuteTransactionRequestType,
     ) -> RpcResult<SuiTransactionResponse>;
+
+    /// Runs the transaction in dev-inspect mode. Which allows for nearly any
+    /// transaction (or Move call) with any arguments. Detailed results are
+    /// provided, including both the transaction effects and any return values.
+    #[method(name = "devInspectTransaction")]
+    async fn dev_inspect_transaction(
+        &self,
+        sender_address: SuiAddress,
+        /// BCS encoded TransactionKind(as opposed to TransactionData, which include gasBudget and gasPrice)
+        tx_bytes: Base64,
+        /// Gas is not charged, but gas usage is still calculated. Default to use reference gas price
+        gas_price: Option<u64>,
+        /// The epoch to perform the call. Will be set from the system state object if not provided
+        epoch: Option<EpochId>,
+    ) -> RpcResult<DevInspectResults>;
+
+    /// Return transaction execution effects including the gas cost summary,
+    /// while the effects are not committed to the chain.
+    #[method(name = "dryRunTransaction")]
+    async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<SuiTransactionEffects>;
 }

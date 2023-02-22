@@ -4,10 +4,10 @@
 mod bls;
 mod coin;
 mod event;
-mod execution;
 mod governance;
 mod read;
 mod transaction_builder;
+mod write;
 
 pub use bls::ThresholdBlsApiClient;
 pub use bls::ThresholdBlsApiOpenRpc;
@@ -21,9 +21,9 @@ pub use event::EventReadApiClient;
 pub use event::EventReadApiOpenRpc;
 pub use event::EventReadApiServer;
 
-pub use execution::TransactionExecutionClient;
-pub use execution::TransactionExecutionOpenRpc;
-pub use execution::TransactionExecutionServer;
+pub use write::WriteApiClient;
+pub use write::WriteApiOpenRpc;
+pub use write::WriteApiServer;
 
 pub use governance::GovernanceReadApiClient;
 pub use governance::GovernanceReadApiOpenRpc;

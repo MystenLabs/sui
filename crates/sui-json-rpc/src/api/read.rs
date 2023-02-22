@@ -1,19 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use std::collections::BTreeMap;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DevInspectResults, DynamicFieldPage, GetObjectDataResponse,
-    GetPastObjectDataResponse, GetRawObjectDataResponse, MoveFunctionArgType,
-    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
-    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
+    Checkpoint, CheckpointId, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
+    GetRawObjectDataResponse, MoveFunctionArgType, SuiMoveNormalizedFunction,
+    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionResponse,
+    TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{
-    EpochId, ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
+    ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
 };
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
 use sui_types::messages_checkpoint::{
@@ -83,26 +82,6 @@ pub trait ReadApi {
         /// The Name of the dynamic field
         name: String,
     ) -> RpcResult<GetObjectDataResponse>;
-
-    /// Runs the transaction in dev-inspect mode. Which allows for nearly any
-    /// transaction (or Move call) with any arguments. Detailed results are
-    /// provided, including both the transaction effects and any return values.
-    #[method(name = "devInspectTransaction")]
-    async fn dev_inspect_transaction(
-        &self,
-        sender_address: SuiAddress,
-        /// BCS encoded TransactionKind(as opposed to TransactionData, which include gasBudget and gasPrice)
-        tx_bytes: Base64,
-        /// Gas is not charged, but gas usage is still calculated. Default to use reference gas price
-        gas_price: Option<u64>,
-        /// The epoch to perform the call. Will be set from the system state object if not provided
-        epoch: Option<EpochId>,
-    ) -> RpcResult<DevInspectResults>;
-
-    /// Return transaction execution effects including the gas cost summary,
-    /// while the effects are not committed to the chain.
-    #[method(name = "dryRunTransaction")]
-    async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<SuiTransactionEffects>;
 
     /// Return the argument types of a Move function,
     /// based on normalized Type.

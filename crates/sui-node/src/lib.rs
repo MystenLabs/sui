@@ -889,6 +889,7 @@ pub async fn build_server(
 
     if let Some(transaction_orchestrator) = transaction_orchestrator {
         server.register_module(TransactionExecutionApi::new(
+            state.clone(),
             transaction_orchestrator.clone(),
             state.module_cache.clone(),
         ))?;
