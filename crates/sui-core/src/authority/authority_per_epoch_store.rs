@@ -1615,11 +1615,21 @@ impl AuthorityPerEpochStore {
             }
             ConsensusTransactionKind::CapabilityNotification(capabilities) => {
                 let authority = capabilities.authority;
-                debug!(
-                    "Recieved CapabilityNotification from {:?}",
-                    authority.concise()
-                );
-                self.record_capabilities(capabilities)?;
+                if self
+                    .get_reconfig_state_read_lock_guard()
+                    .should_accept_consensus_certs()
+                {
+                    debug!(
+                        "Recieved CapabilityNotification from {:?}",
+                        authority.concise()
+                    );
+                    self.record_capabilities(capabilities)?;
+                } else {
+                    debug!(
+                        "Ignoring CapabilityNotification from {:?} because of end of epoch",
+                        authority.concise()
+                    );
+                }
                 Ok(None)
             }
         }
