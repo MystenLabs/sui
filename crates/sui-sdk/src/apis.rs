@@ -33,10 +33,7 @@ use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
 
 use futures::StreamExt;
-use sui_json_rpc::api::{
-    CoinReadApiClient, EventReadApiClient, EventStreamingApiClient, RpcBcsApiClient,
-    RpcFullNodeReadApiClient, RpcReadApiClient, TransactionExecutionApiClient,
-};
+use sui_json_rpc::api::{CoinReadApiClient, EventReadApiClient, ReadApiClient, WriteApiClient};
 use sui_types::governance::DelegatedStake;
 
 #[derive(Debug)]
@@ -448,7 +445,7 @@ impl QuorumDriver {
     ) -> SuiRpcResult<()> {
         let start = Instant::now();
         loop {
-            let resp = RpcReadApiClient::get_transaction(&c.http, tx_digest).await;
+            let resp = ReadApiClient::get_transaction(&c.http, tx_digest).await;
             if let Err(err) = resp {
                 if err.to_string().contains(TRANSACTION_NOT_FOUND_MSG_PREFIX) {
                     tokio::time::sleep(Duration::from_millis(300)).await;

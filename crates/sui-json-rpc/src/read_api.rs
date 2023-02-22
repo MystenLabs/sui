@@ -8,16 +8,16 @@ use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use sui_types::committee::EpochId;
 use sui_types::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use tap::TapFallible;
 
+use crate::api::ReadApiServer;
 use fastcrypto::encoding::Base64;
 use jsonrpsee::RpcModule;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DevInspectResults, DynamicFieldPage, GetObjectDataResponse,
-    GetPastObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page,
+    Checkpoint, CheckpointId, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
+    GetRawObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page,
     SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
     SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
 };
@@ -25,7 +25,7 @@ use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
 use sui_types::crypto::sha3_hash;
-use sui_types::messages::{TransactionData, TransactionKind};
+use sui_types::messages::TransactionData;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
     CheckpointSummary,
@@ -37,8 +37,7 @@ use sui_types::query::TransactionQuery;
 use sui_types::dynamic_field::DynamicFieldName;
 use tracing::debug;
 
-use crate::api::RpcFullNodeReadApiServer;
-use crate::api::{cap_page_limit, RpcReadApiServer};
+use crate::api::cap_page_limit;
 use crate::error::Error;
 use crate::SuiRpcModule;
 
@@ -48,21 +47,9 @@ pub struct ReadApi {
     pub state: Arc<AuthorityState>,
 }
 
-pub struct FullNodeApi {
-    pub state: Arc<AuthorityState>,
-}
-
-impl FullNodeApi {
+impl ReadApi {
     pub fn new(state: Arc<AuthorityState>) -> Self {
         Self { state }
-    }
-
-    fn get_sui_system_state_object_epoch_and_gas_price(&self) -> RpcResult<(EpochId, u64)> {
-        let sys_state = self
-            .state
-            .get_sui_system_state_object()
-            .map_err(|e| anyhow!("Unable to retrieve sui system state object: {e}"))?;
-        Ok((sys_state.epoch, sys_state.reference_gas_price))
     }
 
     fn get_checkpoint_internal(&self, id: CheckpointId) -> Result<Checkpoint, Error> {
@@ -81,14 +68,8 @@ impl FullNodeApi {
     }
 }
 
-impl ReadApi {
-    pub fn new(state: Arc<AuthorityState>) -> Self {
-        Self { state }
-    }
-}
-
 #[async_trait]
-impl RpcReadApiServer for ReadApi {
+impl ReadApiServer for ReadApi {
     async fn get_objects_owned_by_address(
         &self,
         address: SuiAddress,
@@ -183,53 +164,6 @@ impl RpcReadApiServer for ReadApi {
             confirmed_local_execution: None,
             checkpoint: checkpoint.map(|(_epoch, checkpoint)| checkpoint),
         })
-    }
-}
-
-impl SuiRpcModule for ReadApi {
-    fn rpc(self) -> RpcModule<Self> {
-        self.into_rpc()
-    }
-
-    fn rpc_doc_module() -> Module {
-        crate::api::RpcReadApiOpenRpc::module_doc()
-    }
-}
-
-#[async_trait]
-impl RpcFullNodeReadApiServer for FullNodeApi {
-    async fn dev_inspect_transaction(
-        &self,
-        sender_address: SuiAddress,
-        tx_bytes: Base64,
-        gas_price: Option<u64>,
-        epoch: Option<EpochId>,
-    ) -> RpcResult<DevInspectResults> {
-        let (mut current_epoch, mut reference_gas_price) = (0, 0);
-        // Only fetch from DB if necessary
-        if gas_price.is_none() || epoch.is_none() {
-            (current_epoch, reference_gas_price) =
-                self.get_sui_system_state_object_epoch_and_gas_price()?
-        }
-        let tx_kind: TransactionKind =
-            bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
-        Ok(self
-            .state
-            .dev_inspect_transaction(
-                sender_address,
-                tx_kind,
-                gas_price.unwrap_or(reference_gas_price),
-                epoch.unwrap_or(current_epoch),
-            )
-            .await?)
-    }
-
-    async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<SuiTransactionEffects> {
-        let (txn_data, txn_digest) = get_transaction_data_and_digest(tx_bytes)?;
-        Ok(self
-            .state
-            .dry_exec_transaction(txn_data, txn_digest)
-            .await?)
     }
 
     async fn get_normalized_move_modules_by_package(
@@ -405,7 +339,7 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         sequence_number: CheckpointSequenceNumber,
     ) -> RpcResult<CheckpointSummary> {
         Ok(self.state.get_checkpoint_summary_by_sequence_number(sequence_number)
-        .map_err(|e| anyhow!("Checkpoint summary based on sequence number: {sequence_number} was not found with error :{e}"))?)
+            .map_err(|e| anyhow!("Checkpoint summary based on sequence number: {sequence_number} was not found with error :{e}"))?)
     }
 
     fn get_checkpoint_contents_by_digest(
@@ -428,20 +362,29 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
             .get_checkpoint_contents_by_sequence_number(sequence_number)
             .map_err(|e| anyhow!("Checkpoint contents based on seq number: {sequence_number} were not found with error: {e}"))?)
     }
+
+    async fn get_raw_object(&self, object_id: ObjectID) -> RpcResult<GetRawObjectDataResponse> {
+        Ok(self
+            .state
+            .get_object_read(&object_id)
+            .await
+            .map_err(|e| anyhow!("{e}"))?
+            .try_into()?)
+    }
 }
 
-impl SuiRpcModule for FullNodeApi {
+impl SuiRpcModule for ReadApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::RpcFullNodeReadApiOpenRpc::module_doc()
+        crate::api::ReadApiOpenRpc::module_doc()
     }
 }
 
 pub async fn get_move_module(
-    fullnode_api: &FullNodeApi,
+    fullnode_api: &ReadApi,
     package: ObjectID,
     module_name: String,
 ) -> RpcResult<NormalizedModule> {
@@ -453,7 +396,7 @@ pub async fn get_move_module(
 }
 
 pub async fn get_move_modules_by_package(
-    fullnode_api: &FullNodeApi,
+    fullnode_api: &ReadApi,
     package: ObjectID,
 ) -> RpcResult<BTreeMap<String, NormalizedModule>> {
     let object_read = fullnode_api

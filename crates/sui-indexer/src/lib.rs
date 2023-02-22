@@ -79,13 +79,7 @@ pub async fn build_json_rpc_server(
     prometheus_registry: &Registry,
     pg_connection_pool: Arc<PgConnectionPool>,
 ) -> Result<ServerHandle, IndexerError> {
-    let mut builder =
-        JsonRpcServerBuilder::new(FAKE_PKG_VERSION, prometheus_registry).map_err(|e| {
-            IndexerError::JsonRpcServerError(format!(
-                "Failed to init JSON-RPC builder with error: {:?}",
-                e
-            ))
-        })?;
+    let mut builder = JsonRpcServerBuilder::new(FAKE_PKG_VERSION, prometheus_registry);
 
     builder
         .register_module(CheckpointApiImpl::new(pg_connection_pool))
