@@ -118,7 +118,7 @@ module nfts::collectible {
         let len = vec::length(&img_urls);
         let res = vec::empty();
 
-        // peform a dummy check to make sure collection does not overflow
+        // perform a dummy check to make sure collection does not overflow
         assert!(option::is_none(&cap.cap) || cap.minted + len < *option::borrow(&cap.cap), ECapReached);
         assert!(option::is_none(&names) || vec::length(option::borrow(&names)) == len, EWrongNamesLength);
         assert!(option::is_none(&creators) || vec::length(option::borrow(&creators)) == len, EWrongCreatorsLength);
