@@ -30,7 +30,6 @@ use sui_types::{
     messages::{
         Argument, Command, EntryArgumentErrorKind, ProgrammableMoveCall, ProgrammableTransaction,
     },
-    object::Owner,
     SUI_FRAMEWORK_ADDRESS,
 };
 use sui_verifier::{
@@ -49,12 +48,12 @@ use super::{context::*, types::*};
 pub fn execute<E: fmt::Debug, S: StorageView<E>>(
     protocol_config: &ProtocolConfig,
     vm: &MoveVM,
-    state_view: &mut S,
+    state_view: &S,
     ctx: &mut TxContext,
     gas_status: &mut GasStatus,
     gas_coin: ObjectID,
     pt: ProgrammableTransaction,
-) -> Result<(), ExecutionError> {
+) -> Result<ExecutionResults, ExecutionError> {
     let ProgrammableTransaction { inputs, commands } = pt;
     let mut context = ExecutionContext::new(
         protocol_config,
@@ -68,7 +67,7 @@ pub fn execute<E: fmt::Debug, S: StorageView<E>>(
     for command in commands {
         execute_command(&mut context, command)?;
     }
-    Ok(())
+    context.finish()
 }
 
 /// Execute a single command
@@ -207,6 +206,7 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>>(
         }
     }
 
+    context.take_user_events(module_id)?;
     assert_invariant!(
         return_value_kinds.len() == return_values.len(),
         "lost return value"
@@ -227,11 +227,9 @@ fn make_value(
 ) -> Result<Value, ExecutionError> {
     Ok(match value_info {
         ValueKind::Object {
-            owner,
             type_,
             has_public_transfer,
         } => Value::Object(ObjectValue::new(
-            owner,
             type_,
             has_public_transfer,
             is_return_value,
@@ -393,7 +391,6 @@ enum FunctionKind {
 /// Used to remember type information about a type when resolving the signature
 enum ValueKind {
     Object {
-        owner: Option<Owner>,
         type_: StructTag,
         has_public_transfer: bool,
     },
@@ -504,7 +501,6 @@ fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>>(
                         invariant_violation!("Struct type make a non struct type tag")
                     };
                     ValueKind::Object {
-                        owner: None,
                         type_: *struct_tag,
                         has_public_transfer: abilities.has_store(),
                     }
@@ -591,14 +587,12 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>>(
             Type::MutableReference(inner) => {
                 let value = context.borrow_arg_mut(idx, arg)?;
                 let object_info = if let Value::Object(ObjectValue {
-                    owner,
                     type_,
                     has_public_transfer,
                     ..
                 }) = &value
                 {
                     ValueKind::Object {
-                        owner: *owner,
                         type_: type_.clone(),
                         has_public_transfer: *has_public_transfer,
                     }

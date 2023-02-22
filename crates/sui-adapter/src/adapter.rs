@@ -307,7 +307,7 @@ fn execute_internal<
         deletions,
         user_events,
         loaded_child_objects,
-    } = object_runtime.finish(by_value_objects)?;
+    } = object_runtime.finish(by_value_objects, BTreeSet::new())?;
     let session = new_session(
         vm,
         &*state_view,
@@ -1456,7 +1456,7 @@ fn struct_tag_equals_struct_inst(
         )
 }
 
-fn missing_unwrapped_msg(id: &ObjectID) -> String {
+pub fn missing_unwrapped_msg(id: &ObjectID) -> String {
     format!(
         "Unable to unwrap object {}. Was unable to retrieve last known version in the parent sync",
         id
