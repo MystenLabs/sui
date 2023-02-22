@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::{SuiAddress, TransactionDigest, TransactionEffectsDigest, VersionNumber};
+use crate::base_types::{SuiAddress, TransactionDigest, VersionNumber};
 use crate::committee::{Committee, EpochId};
-use crate::digests::{CheckpointContentsDigest, CheckpointDigest};
+use crate::digests::{CheckpointContentsDigest, CheckpointDigest, TransactionEffectsDigest};
 use crate::message_envelope::Message;
 use crate::messages::InputObjectKind::{ImmOrOwnedMoveObject, MovePackage, SharedMoveObject};
 use crate::messages::{SenderSignedData, TransactionEffects, VerifiedCertificate};
@@ -59,11 +59,9 @@ pub struct SingleTxContext {
 }
 
 impl SingleTxContext {
+    // legacy
     pub fn transfer_sui(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("transfer_sui"), sender)
-    }
-    pub fn transfer_object(sender: SuiAddress) -> Self {
-        Self::sui_transaction(ident_str!("transfer_object"), sender)
     }
     pub fn pay(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("pay"), sender)
@@ -74,12 +72,21 @@ impl SingleTxContext {
     pub fn pay_all_sui(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("pay_all_sui"), sender)
     }
+    // programmable transactions
+    pub fn split_coin(sender: SuiAddress) -> Self {
+        Self::sui_transaction(ident_str!("split_coin"), sender)
+    }
+    // common to legacy and programmable transactions
+    pub fn transfer_object(sender: SuiAddress) -> Self {
+        Self::sui_transaction(ident_str!("transfer_object"), sender)
+    }
     pub fn unused_input(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("unused_input_object"), sender)
     }
     pub fn publish(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("publish"), sender)
     }
+    // system
     pub fn gas(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("gas"), sender)
     }

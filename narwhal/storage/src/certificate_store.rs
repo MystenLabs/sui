@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crypto::PublicKey;
+use crypto::{traits::InsecureDefault, PublicKey};
 use dashmap::DashMap;
 use fastcrypto::hash::Hash;
 use std::{
@@ -9,6 +9,7 @@ use std::{
     iter,
     sync::Arc,
 };
+
 use store::{
     rocks::{DBMap, TypedStoreError::RocksDBError},
     Map,
@@ -287,7 +288,7 @@ impl CertificateStore {
         // TODO: Add a more efficient seek method to typed store.
         let mut iter = self.certificate_id_by_round.iter();
         if round > 0 {
-            iter = iter.skip_to(&(round - 1, PublicKey::default()))?;
+            iter = iter.skip_to(&(round - 1, PublicKey::insecure_default()))?;
         }
 
         let mut digests = Vec::new();
@@ -326,7 +327,7 @@ impl CertificateStore {
         // TODO: Add a more efficient seek method to typed store.
         let mut iter = self.certificate_id_by_round.iter();
         if round > 0 {
-            iter = iter.skip_to(&(round - 1, PublicKey::default()))?;
+            iter = iter.skip_to(&(round - 1, PublicKey::insecure_default()))?;
         }
 
         let mut result = BTreeMap::<Round, Vec<PublicKey>>::new();
@@ -372,6 +373,39 @@ impl CertificateStore {
         }
 
         Ok(certificates)
+    }
+
+    /// Retrieves the last certificate of the given origin.
+    /// Returns None if there is no certificate for the origin.
+    pub fn last_round(&self, origin: &PublicKey) -> StoreResult<Option<Certificate>> {
+        let key = (origin.clone(), Round::MAX);
+        if let Some(((name, _round), digest)) = self
+            .certificate_id_by_origin
+            .iter()
+            .skip_prior_to(&key)?
+            .next()
+        {
+            if &name == origin {
+                return self.certificates_by_id.get(&digest);
+            }
+        }
+        Ok(None)
+    }
+
+    /// Retrieves the highest round number in the store.
+    /// Returns 0 if there is no certificate in the store.
+    pub fn highest_round_number(&self) -> Round {
+        if let Some(((round, _), _)) = self
+            .certificate_id_by_round
+            .iter()
+            .skip_to_last()
+            .reverse()
+            .next()
+        {
+            round
+        } else {
+            0
+        }
     }
 
     /// Retrieves the last round number of the given origin.
@@ -440,7 +474,7 @@ impl CertificateStore {
 #[cfg(test)]
 mod test {
     use crate::certificate_store::CertificateStore;
-    use crypto::PublicKey;
+    use crypto::{traits::InsecureDefault, PublicKey};
     use fastcrypto::hash::Hash;
     use futures::future::join_all;
     use std::{
@@ -574,7 +608,7 @@ mod test {
         let mut certs = Vec::new();
         for r in &rounds {
             let mut c = cert.clone();
-            c.header.round = *r as u64;
+            c.header.round = *r;
             certs.push(c);
         }
 
@@ -604,12 +638,18 @@ mod test {
 
         // WHEN
         let result = store.last_two_rounds_certs().unwrap();
+        let last_round_cert = store.last_round(&origin).unwrap().unwrap();
         let last_round_number = store.last_round_number(&origin).unwrap().unwrap();
-        let last_round_number_not_exist = store.last_round_number(&PublicKey::default()).unwrap();
+        let last_round_number_not_exist = store
+            .last_round_number(&PublicKey::insecure_default())
+            .unwrap();
+        let highest_round_number = store.highest_round_number();
 
         // THEN
         assert_eq!(result.len(), 8);
+        assert_eq!(last_round_cert.round(), 50);
         assert_eq!(last_round_number, 50);
+        assert_eq!(highest_round_number, 50);
         for certificate in result {
             assert!(
                 (certificate.round() == last_round_number)
@@ -626,11 +666,17 @@ mod test {
 
         // WHEN
         let result = store.last_two_rounds_certs().unwrap();
-        let last_round_number = store.last_round_number(&PublicKey::default()).unwrap();
+        let last_round_cert = store.last_round(&PublicKey::insecure_default()).unwrap();
+        let last_round_number = store
+            .last_round_number(&PublicKey::insecure_default())
+            .unwrap();
+        let highest_round_number = store.highest_round_number();
 
         // THEN
         assert!(result.is_empty());
+        assert!(last_round_cert.is_none());
         assert!(last_round_number.is_none());
+        assert_eq!(highest_round_number, 0);
     }
 
     #[tokio::test]

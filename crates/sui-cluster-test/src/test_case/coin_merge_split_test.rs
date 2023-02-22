@@ -4,7 +4,7 @@
 use crate::{helper::ObjectChecker, TestCaseImpl, TestContext};
 use async_trait::async_trait;
 use jsonrpsee::rpc_params;
-use sui_json_rpc_types::{SuiCertifiedTransaction, SuiTransactionEffects};
+use sui_json_rpc_types::SuiTransactionResponse;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::object::Owner;
 use tracing::{debug, info};
@@ -34,10 +34,10 @@ impl TestCaseImpl for CoinMergeSplitTest {
         info!("Testing coin split.");
         let amounts = vec![1, (original_value - 2) / 2];
 
-        let (tx_cert, effects) =
+        let response =
             Self::split_coin(ctx, signer, *primary_coin.id(), amounts, *gas_obj.id()).await;
-        let tx_digest = tx_cert.transaction_digest;
-        let new_coins = effects.created;
+        let tx_digest = response.effects.transaction_digest;
+        let new_coins = response.effects.created;
 
         // Verify fullnode observes the txn
         ctx.let_fullnode_sync(vec![tx_digest], 5).await;
@@ -65,11 +65,11 @@ impl TestCaseImpl for CoinMergeSplitTest {
                 "Merging coin {} back to {}.",
                 coin_to_merge, primary_coin_id
             );
-            let (tx_cert, _effects) =
+            let response =
                 Self::merge_coin(ctx, signer, primary_coin_id, coin_to_merge, *gas_obj.id()).await;
             debug!("Verifying the merged coin {} is deleted.", coin_to_merge);
             coins_merged.push(coin_to_merge);
-            txes.push(tx_cert.transaction_digest);
+            txes.push(response.effects.transaction_digest);
         }
 
         // Verify fullnode observes the txn
@@ -117,7 +117,7 @@ impl CoinMergeSplitTest {
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
         gas_obj_id: ObjectID,
-    ) -> (SuiCertifiedTransaction, SuiTransactionEffects) {
+    ) -> SuiTransactionResponse {
         let params = rpc_params![signer, primary_coin, coin_to_merge, Some(gas_obj_id), 2000];
 
         let data = ctx
@@ -134,7 +134,7 @@ impl CoinMergeSplitTest {
         primary_coin: ObjectID,
         amounts: Vec<u64>,
         gas_obj_id: ObjectID,
-    ) -> (SuiCertifiedTransaction, SuiTransactionEffects) {
+    ) -> SuiTransactionResponse {
         let params = rpc_params![signer, primary_coin, amounts, Some(gas_obj_id), 2000];
 
         let data = ctx

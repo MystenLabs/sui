@@ -143,7 +143,7 @@ class LogParser:
         header_creation_latencies = {d: float(t) for d, t in tmp}
 
         tmp = findall(
-            r'.* Header ([^ ]+) took (\d+\.\d+) seconds to be materialized to a certificate [^ ]+', log)
+            r'.* Header ([^ ]+) at round \d+ with \d+ batches, took (\d+\.\d+) seconds to be materialized to a certificate [^ ]+', log)
         header_to_cert_latencies = {d: float(t) for d, t in tmp}
 
         tmp = findall(

@@ -11,6 +11,7 @@ use crate::{
 };
 use bincode::Options;
 use collectable::TryExtend;
+use rocksdb::checkpoint::Checkpoint;
 use rocksdb::{
     properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error,
     ErrorKind, IteratorMode, MultiThreaded, OptimisticTransactionOptions, ReadOptions, Transaction,
@@ -375,6 +376,20 @@ impl RocksDB {
 
     pub fn flush(&self) -> Result<(), rocksdb::Error> {
         delegate_call!(self.flush())
+    }
+
+    pub fn checkpoint(&self, path: &Path) -> Result<(), rocksdb::Error> {
+        match self {
+            Self::DBWithThreadMode(d) => {
+                let checkpoint = Checkpoint::new(&d.underlying)?;
+                checkpoint.create_checkpoint(path)?;
+            }
+            Self::OptimisticTransactionDB(d) => {
+                let checkpoint = Checkpoint::new(&d.underlying)?;
+                checkpoint.create_checkpoint(path)?;
+            }
+        }
+        Ok(())
     }
 
     pub fn flush_cf(&self, cf: &impl AsColumnFamilyRef) -> Result<(), rocksdb::Error> {
@@ -1020,9 +1035,9 @@ impl DBBatch {
         Ok(())
     }
     /// Deletes a range of keys between `from` (inclusive) and `to` (non-inclusive)
-    pub fn delete_range_non_consuming<'a, K: Serialize, V>(
+    pub fn delete_range_non_consuming<K: Serialize, V>(
         &mut self,
-        db: &'a DBMap<K, V>,
+        db: &DBMap<K, V>,
         from: &K,
         to: &K,
     ) -> Result<(), TypedStoreError> {
@@ -1081,9 +1096,9 @@ impl DBBatch {
     }
 
     /// Deletes a range of keys between `from` (inclusive) and `to` (non-inclusive)
-    pub fn delete_range<'a, K: Serialize, V>(
+    pub fn delete_range<K: Serialize, V>(
         mut self,
-        db: &'a DBMap<K, V>,
+        db: &DBMap<K, V>,
         from: &K,
         to: &K,
     ) -> Result<Self, TypedStoreError> {
@@ -1503,7 +1518,7 @@ where
         };
         let key_buf = be_fix_int_ser(key)?;
         self.rocksdb
-            .delete_cf(&self.cf(), &key_buf, &self.opts.writeopts())?;
+            .delete_cf(&self.cf(), key_buf, &self.opts.writeopts())?;
         if report_metrics.is_some() {
             self.db_metrics
                 .op_metrics
@@ -1924,7 +1939,7 @@ pub fn list_tables(path: std::path::PathBuf) -> eyre::Result<Vec<String>> {
     const DB_DEFAULT_CF_NAME: &str = "default";
 
     let opts = rocksdb::Options::default();
-    rocksdb::DBWithThreadMode::<rocksdb::MultiThreaded>::list_cf(&opts, &path)
+    rocksdb::DBWithThreadMode::<rocksdb::MultiThreaded>::list_cf(&opts, path)
         .map_err(|e| e.into())
         .map(|q| {
             q.iter()

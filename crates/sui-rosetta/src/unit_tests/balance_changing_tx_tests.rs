@@ -19,7 +19,6 @@ use sui_sdk::rpc_types::{
     SuiTransactionResponse,
 };
 use sui_sdk::SuiClient;
-use sui_sdk::TransactionExecutionResult;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::intent::Intent;
@@ -46,7 +45,17 @@ async fn test_transfer_sui() {
         recipient,
         amount: Some(50000),
     });
-    test_transaction(&client, keystore, vec![recipient], sender, tx, None).await;
+    test_transaction(
+        &client,
+        keystore,
+        vec![recipient],
+        sender,
+        tx,
+        None,
+        10000,
+        false,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -62,7 +71,17 @@ async fn test_transfer_sui_whole_coin() {
         recipient,
         amount: None,
     });
-    test_transaction(&client, keystore, vec![recipient], sender, tx, None).await;
+    test_transaction(
+        &client,
+        keystore,
+        vec![recipient],
+        sender,
+        tx,
+        None,
+        10000,
+        false,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -79,7 +98,17 @@ async fn test_transfer_object() {
         recipient,
         object_ref,
     });
-    test_transaction(&client, keystore, vec![recipient], sender, tx, None).await;
+    test_transaction(
+        &client,
+        keystore,
+        vec![recipient],
+        sender,
+        tx,
+        None,
+        10000,
+        false,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -105,10 +134,11 @@ async fn test_publish_and_move_call() {
     let tx = SingleTransactionKind::Publish(MoveModulePublish {
         modules: compiled_module,
     });
-    let response = test_transaction(&client, keystore, vec![], sender, tx, None).await;
+    let response =
+        test_transaction(&client, keystore, vec![], sender, tx, None, 10000, false).await;
 
     // Test move call (reuse published module from above test)
-    let effect = response.effects.clone().unwrap();
+    let effect = response.effects;
     let package = effect
         .events
         .iter()
@@ -136,7 +166,7 @@ async fn test_publish_and_move_call() {
             CallArg::Pure(bcs::to_bytes(&recipient).unwrap()),
         ],
     });
-    test_transaction(&client, keystore, vec![], sender, tx, None).await;
+    test_transaction(&client, keystore, vec![], sender, tx, None, 10000, false).await;
 }
 
 #[tokio::test]
@@ -154,7 +184,7 @@ async fn test_split_coin() {
         .await
         .unwrap();
     let tx = tx.kind.single_transactions().next().unwrap().clone();
-    test_transaction(&client, keystore, vec![], sender, tx, None).await;
+    test_transaction(&client, keystore, vec![], sender, tx, None, 10000, false).await;
 }
 
 #[tokio::test]
@@ -173,7 +203,7 @@ async fn test_merge_coin() {
         .await
         .unwrap();
     let tx = tx.kind.single_transactions().next().unwrap().clone();
-    test_transaction(&client, keystore, vec![], sender, tx, None).await;
+    test_transaction(&client, keystore, vec![], sender, tx, None, 10000, false).await;
 }
 
 #[tokio::test]
@@ -191,7 +221,17 @@ async fn test_pay() {
         recipients: vec![recipient],
         amounts: vec![100000],
     });
-    test_transaction(&client, keystore, vec![recipient], sender, tx, None).await;
+    test_transaction(
+        &client,
+        keystore,
+        vec![recipient],
+        sender,
+        tx,
+        None,
+        10000,
+        false,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -218,6 +258,8 @@ async fn test_pay_multiple_coin_multiple_recipient() {
         sender,
         tx,
         None,
+        10000,
+        false,
     )
     .await;
 }
@@ -238,7 +280,17 @@ async fn test_pay_sui_multiple_coin_same_recipient() {
         recipients: vec![recipient1, recipient1, recipient1],
         amounts: vec![100000, 100000, 100000],
     });
-    test_transaction(&client, keystore, vec![recipient1], sender, tx, Some(coin1)).await;
+    test_transaction(
+        &client,
+        keystore,
+        vec![recipient1],
+        sender,
+        tx,
+        Some(coin1),
+        10000,
+        false,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -265,6 +317,38 @@ async fn test_pay_sui() {
         sender,
         tx,
         Some(coin1),
+        10000,
+        false,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_failed_pay_sui() {
+    let network = TestClusterBuilder::new().build().await.unwrap();
+    let client = network.wallet.get_client().await.unwrap();
+    let keystore = &network.wallet.config.keystore;
+
+    // Test failed Pay Sui
+    let sender = get_random_address(&network.accounts, vec![]);
+    let recipient1 = get_random_address(&network.accounts, vec![sender]);
+    let recipient2 = get_random_address(&network.accounts, vec![sender, recipient1]);
+    let coin1 = get_random_sui(&client, sender, vec![]).await;
+    let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
+    let tx = SingleTransactionKind::PaySui(PaySui {
+        coins: vec![coin1, coin2],
+        recipients: vec![recipient1, recipient2],
+        amounts: vec![1000000, 2000000],
+    });
+    test_transaction(
+        &client,
+        keystore,
+        vec![],
+        sender,
+        tx,
+        Some(coin1),
+        110,
+        true,
     )
     .await;
 }
@@ -295,7 +379,7 @@ async fn test_delegate_sui() {
         .unwrap();
     let tx = tx.kind.into_single_transactions().next().unwrap();
 
-    test_transaction(&client, keystore, vec![], sender, tx, None).await;
+    test_transaction(&client, keystore, vec![], sender, tx, None, 10000, false).await;
 }
 
 #[tokio::test]
@@ -324,7 +408,7 @@ async fn test_delegate_sui_with_none_amount() {
         .unwrap();
     let tx = tx.kind.into_single_transactions().next().unwrap();
 
-    test_transaction(&client, keystore, vec![], sender, tx, None).await;
+    test_transaction(&client, keystore, vec![], sender, tx, None, 10000, false).await;
 }
 
 #[tokio::test]
@@ -342,7 +426,17 @@ async fn test_pay_all_sui() {
         coins: vec![coin1, coin2],
         recipient,
     });
-    test_transaction(&client, keystore, vec![recipient], sender, tx, Some(coin1)).await;
+    test_transaction(
+        &client,
+        keystore,
+        vec![recipient],
+        sender,
+        tx,
+        Some(coin1),
+        10000,
+        false,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -427,7 +521,9 @@ async fn test_transaction(
     sender: SuiAddress,
     tx: SingleTransactionKind,
     gas: Option<ObjectRef>,
-) -> TransactionExecutionResult {
+    budget: u64,
+    expect_fail: bool,
+) -> SuiTransactionResponse {
     let gas = if let Some(gas) = gas {
         gas
     } else {
@@ -450,11 +546,11 @@ async fn test_transaction(
         TransactionKind::Single(tx.clone()),
         sender,
         gas,
-        10000,
+        budget,
     );
 
     let signature = keystore
-        .sign_secure(&data.signer(), &data, Intent::default())
+        .sign_secure(&data.sender(), &data, Intent::default())
         .unwrap();
 
     // Balance before execution
@@ -468,7 +564,7 @@ async fn test_transaction(
     let response = client
         .quorum_driver()
         .execute_transaction(
-            Transaction::from_data(data.clone(), Intent::default(), signature)
+            Transaction::from_data(data.clone(), Intent::default(), vec![signature])
                 .verify()
                 .unwrap(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
@@ -477,23 +573,20 @@ async fn test_transaction(
         .map_err(|e| anyhow!("TX execution failed for {data:#?}, error : {e}"))
         .unwrap();
 
-    let effects = response.effects.clone().unwrap();
+    let effects = &response.effects;
 
-    assert_eq!(
-        SuiExecutionStatus::Success,
-        effects.status,
-        "TX execution failed for {:#?}",
-        data
-    );
+    if !expect_fail {
+        assert_eq!(
+            SuiExecutionStatus::Success,
+            effects.status,
+            "TX execution failed for {:#?}",
+            data
+        );
+    } else {
+        assert!(matches!(effects.status, SuiExecutionStatus::Failure { .. }));
+    }
 
-    let tx_response = SuiTransactionResponse {
-        certificate: response.tx_cert.clone().unwrap(),
-        effects: effects.clone(),
-        timestamp_ms: None,
-        parsed_data: None,
-    };
-
-    let ops = tx_response.try_into().unwrap();
+    let ops = response.clone().try_into().unwrap();
     let balances_from_ops = extract_balance_changes_from_ops(ops);
 
     // get actual balance changed after transaction

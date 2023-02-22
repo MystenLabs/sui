@@ -551,9 +551,11 @@ impl Proposer {
                         }
 
                         debug!(
-                            "Retransmit batches in undelivered headers {:?} at commit round {:?}",
+                            "Retransmit {} batches in undelivered headers {:?} at commit round {:?}, remaining headers {}",
+                            self.digests.len(),
                             retransmit_rounds,
-                            commit_round
+                            commit_round,
+                            self.proposed_headers.len()
                         );
                     }
                 },

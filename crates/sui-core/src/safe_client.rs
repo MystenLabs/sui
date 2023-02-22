@@ -210,48 +210,45 @@ impl<C> SafeClient<C> {
     fn check_transaction_info(
         &self,
         digest: &TransactionDigest,
-        response: TransactionInfoResponse,
+        transaction: VerifiedTransaction,
+        status: TransactionStatus,
     ) -> SuiResult<VerifiedTransactionInfoResponse> {
-        match response {
-            TransactionInfoResponse::Signed(signed) => {
-                fp_ensure!(
-                    digest == signed.digest(),
-                    SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address,
-                        reason: "Signed transaction digest does not match with expected digest"
-                            .to_string()
-                    }
-                );
-                let committee = self.get_committee(&signed.epoch())?;
-                Ok(VerifiedTransactionInfoResponse::Signed(
-                    signed.verify(&committee)?,
-                ))
-            }
-            TransactionInfoResponse::Executed(cert, effects) => {
-                Ok(VerifiedTransactionInfoResponse::Executed(
-                    self.check_certificate(cert, digest)?,
-                    self.check_signed_effects(digest, effects, None)?,
-                ))
-            }
-        }
-    }
-
-    fn check_certificate(
-        &self,
-        certificate: CertifiedTransaction,
-        expected_digest: &TransactionDigest,
-    ) -> SuiResult<VerifiedCertificate> {
-        // Check it's the right transaction
         fp_ensure!(
-            certificate.digest() == expected_digest,
+            digest == transaction.digest(),
             SuiError::ByzantineAuthoritySuspicion {
                 authority: self.address,
-                reason: "Unexpected digest in the certified tx".to_string()
+                reason: "Signed transaction digest does not match with expected digest".to_string()
             }
         );
-        let committee = self.get_committee(&certificate.epoch())?;
-        // Check signatures and quorum
-        certificate.verify(&committee)
+        match status {
+            TransactionStatus::Signed(signed) => {
+                let committee = self.get_committee(&signed.epoch)?;
+                Ok(VerifiedTransactionInfoResponse::Signed(
+                    SignedTransaction::new_from_data_and_sig(transaction.into_message(), signed)
+                        .verify(&committee)?,
+                ))
+            }
+            TransactionStatus::Executed(cert_opt, effects) => {
+                let signed_effects = self.check_signed_effects(digest, effects, None)?;
+                match cert_opt {
+                    Some(cert) => {
+                        let committee = self.get_committee(&cert.epoch)?;
+                        Ok(VerifiedTransactionInfoResponse::ExecutedWithCert(
+                            CertifiedTransaction::new_from_data_and_sig(
+                                transaction.into_message(),
+                                cert,
+                            )
+                            .verify(&committee)?,
+                            signed_effects,
+                        ))
+                    }
+                    None => Ok(VerifiedTransactionInfoResponse::ExecutedWithoutCert(
+                        transaction,
+                        signed_effects,
+                    )),
+                }
+            }
+        }
     }
 
     fn check_object_response(
@@ -294,11 +291,11 @@ where
         let digest = *transaction.digest();
         let response = self
             .authority_client
-            .handle_transaction(transaction.into_inner())
+            .handle_transaction(transaction.clone().into_inner())
             .await?;
         let response = check_error!(
             self.address,
-            self.check_transaction_info(&digest, response),
+            self.check_transaction_info(&digest, transaction, response.status),
             "Client error in handle_transaction"
         )?;
         Ok(response)
@@ -371,9 +368,17 @@ where
             .handle_transaction_info_request(request.clone())
             .await?;
 
-        let transaction_info = self.check_transaction_info(&request.transaction_digest, transaction_info).tap_err(|err| {
-            error!(?err, authority=?self.address, "Client error in handle_transaction_info_request");
-        })?;
+        let transaction_info = Transaction::new(transaction_info.transaction)
+            .verify()
+            .and_then(|verified_tx| {
+                self.check_transaction_info(
+                    &request.transaction_digest,
+                    verified_tx,
+                    transaction_info.status,
+                )
+            }).tap_err(|err| {
+                error!(?err, authority=?self.address, "Client error in handle_transaction_info_request");
+            })?;
         self.metrics
             .total_ok_responses_handle_transaction_info_request
             .inc();

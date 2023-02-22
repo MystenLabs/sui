@@ -13,6 +13,7 @@
 
 import { toB64, fromB64 } from "./b64";
 import { toHEX, fromHEX } from "./hex";
+import bs58 from "bs58";
 
 function toLittleEndian(bigint: bigint, size: number) {
   let result = new Uint8Array(size);
@@ -25,8 +26,17 @@ function toLittleEndian(bigint: bigint, size: number) {
   return result;
 }
 
+const toB58 = (buffer: Uint8Array) => bs58.encode(buffer);
+const fromB58 = (str: string) => bs58.decode(str);
+
 // Re-export all encoding dependencies.
-export { toB64, fromB64, fromHEX, toHEX };
+export { toB58, fromB58, toB64, fromB64, fromHEX, toHEX };
+
+/**
+ * Supported encodings.
+ * Used in `Reader.toString()` as well as in `decodeStr` and `encodeStr` functions.
+ */
+export type Encoding = "base58" | "base64" | "hex";
 
 /**
  * Class used for reading BCS data chunk by chunk. Meant to be used
@@ -323,7 +333,7 @@ export class BcsWriter {
    * Represent data as 'hex' or 'base64'
    * @param encoding Encoding to use: 'base64' or 'hex'
    */
-  toString(encoding: string): string {
+  toString(encoding: Encoding): string {
     return encodeStr(this.toBytes(), encoding);
   }
 }
@@ -442,6 +452,7 @@ export type BcsConfig = {
   types?: {
     structs?: { [key: string]: StructTypeDefinition };
     enums?: { [key: string]: EnumTypeDefinition };
+    aliases?: { [key: string]: string }
   };
   /**
    * Whether to auto-register primitive types on launch.
@@ -464,17 +475,36 @@ export class BCS {
   static readonly VECTOR: string = "vector";
   static readonly ADDRESS: string = "address";
   static readonly STRING: string = "string";
+  static readonly HEX: string = "hex-string";
+  static readonly BASE58: string = "base58-string";
+  static readonly BASE64: string = "base64-string";
 
   /**
    * Map of kind `TypeName => TypeInterface`. Holds all
    * callbacks for (de)serialization of every registered type.
+   *
+   * If the value stored is a string, it is treated as an alias.
    */
-  public types: Map<string, TypeInterface> = new Map();
+  public types: Map<string, TypeInterface | string> = new Map();
 
   /**
    * Stored BcsConfig for the current instance of BCS.
    */
   protected schema: BcsConfig;
+
+  /**
+   * Name of the key to use for temporary struct definitions.
+   * Returns a temp key + index (for a case when multiple temp
+   * structs are processed).
+   */
+  private get tempKey() {
+    const key = (i: any) => "temp-struct-" + i;
+    let i = 0;
+    while (this.hasType(key(i))) {
+      i++;
+    }
+    return key(i);
+  }
 
   /**
    * Construct a BCS instance with a prepared schema.
@@ -514,6 +544,13 @@ export class BCS {
       }
     }
 
+    // Register aliases if they were passed.
+    if (schema.types && schema.types.aliases) {
+      for (let name of Object.keys(schema.types.aliases)) {
+        this.registerAlias(name, schema.types.aliases[name]);
+      }
+    }
+
     if (schema.withPrimitives !== false) {
       registerPrimitives(this);
     }
@@ -531,14 +568,35 @@ export class BCS {
    *
    * console.assert(toHex(serialized) === '06010203040506');
    *
-   * @param type Name of the type to serialize (must be registered).
+   * @param type Name of the type to serialize (must be registered) or a struct type.
    * @param data Data to serialize.
    * @param size Serialization buffer size. Default 1024 = 1KB.
    * @return A BCS reader instance. Usually you'd want to call `.toBytes()`
    */
-  public ser(type: string, data: any, size: number = 1024): BcsWriter {
-    let { typeName, typeParams } = this.parseTypeName(type);
-    return this.getTypeInterface(typeName).encode(data, size, typeParams);
+  public ser(
+    type: string | StructTypeDefinition,
+    data: any,
+    size: number = 1024
+  ): BcsWriter {
+    if (typeof type === "string") {
+      const { typeName, typeParams } = this.parseTypeName(type);
+      return this.getTypeInterface(typeName).encode(data, size, typeParams);
+    }
+
+    // Quick serialization without registering the type in the main struct.
+    if (typeof type == "object") {
+      const key = this.tempKey;
+      const temp = new BCS(this);
+      return temp
+        .registerStructType(key, type)
+        .ser(key, data, size);
+    }
+
+    throw new Error(
+      `Incorrect type passed into the '.ser()' function. \n${JSON.stringify(
+        type
+      )}`
+    );
   }
 
   /**
@@ -549,12 +607,16 @@ export class BCS {
    * let deNum = bcs.de('u64', num, 'hex');
    * console.assert(deNum.toString(10) === '4294967295');
    *
-   * @param type Name of the type to deserialize (must be registered).
+   * @param type Name of the type to deserialize (must be registered) or a struct type definition.
    * @param data Data to deserialize.
    * @param encoding Optional - encoding to use if data is of type String
    * @return Deserialized data.
    */
-  public de(type: string, data: Uint8Array | string, encoding?: string): any {
+  public de(
+    type: string | StructTypeDefinition,
+    data: Uint8Array | string,
+    encoding?: Encoding
+  ): any {
     if (typeof data == "string") {
       if (encoding) {
         data = decodeStr(data, encoding);
@@ -563,8 +625,26 @@ export class BCS {
       }
     }
 
-    let { typeName, typeParams } = this.parseTypeName(type);
-    return this.getTypeInterface(typeName).decode(data, typeParams);
+    // In case the type specified is already registered.
+    if (typeof type == "string") {
+      const { typeName, typeParams } = this.parseTypeName(type);
+      return this.getTypeInterface(typeName).decode(data, typeParams);
+    }
+
+    // Deserialize without registering a type using a temporary clone.
+    if (typeof type == "object") {
+      const temp = new BCS(this);
+      const key = this.tempKey;
+      return temp
+        .registerStructType(key, type)
+        .de(key, data, encoding);
+    }
+
+    throw new Error(
+      `Incorrect type passed into the '.de()' function. \n${JSON.stringify(
+        type
+      )}`
+    );
   }
 
   /**
@@ -574,6 +654,25 @@ export class BCS {
    */
   public hasType(type: string): boolean {
     return this.types.has(type);
+  }
+
+  /**
+   * Create an alias for a type.
+   * WARNING: this can potentially lead to recursion
+   * @param name Alias to use
+   * @param forType Type to reference
+   * @returns
+   *
+   * @example
+   * ```
+   * let bcs = new BCS(getSuiMoveConfig());
+   * bcs.registerAlias('ObjectDigest', BCS.BASE58);
+   * let b58_digest = bcs.de('ObjectDigest', '<digest_bytes>', 'base64');
+   * ```
+   */
+  public registerAlias(name: string, forType: string): BCS {
+    this.types.set(name, forType);
+    return this;
   }
 
   /**
@@ -624,7 +723,7 @@ export class BCS {
       _decodeRaw(reader, typeParams) {
         return decodeCb(reader, typeParams);
       },
-    });
+    } as TypeInterface);
 
     return this;
   }
@@ -643,7 +742,7 @@ export class BCS {
   public registerAddressType(
     name: string,
     length: number,
-    encoding: string | void = "hex"
+    encoding: Encoding | void = "hex"
   ): BCS {
     switch (encoding) {
       case "base64":
@@ -939,6 +1038,20 @@ export class BCS {
    */
   public getTypeInterface(type: string): TypeInterface {
     let typeInterface = this.types.get(type);
+
+    // Special case - string means an alias.
+    // Goes through the alias chain and tracks recursion.
+    if (typeof typeInterface == "string") {
+      let chain: string[] = [];
+      while (typeof typeInterface === "string") {
+        if (chain.includes(typeInterface)) {
+          throw new Error(`Recursive definition found: ${chain.join(' -> ')} -> ${typeInterface}`);
+        }
+        chain.push(typeInterface);
+        typeInterface = this.types.get(typeInterface);
+      }
+    }
+
     if (typeInterface === undefined) {
       throw new Error(`Type ${type} is not registered`);
     }
@@ -992,8 +1105,10 @@ export class BCS {
  * @param {String} encoding Encoding to use: base64 or hex
  * @return {String} Encoded value.
  */
-export function encodeStr(data: Uint8Array, encoding: string): string {
+export function encodeStr(data: Uint8Array, encoding: Encoding): string {
   switch (encoding) {
+    case "base58":
+      return toB58(data);
     case "base64":
       return toB64(data);
     case "hex":
@@ -1012,8 +1127,10 @@ export function encodeStr(data: Uint8Array, encoding: string): string {
  * @param {String} encoding Encoding to use: base64 or hex
  * @return {Uint8Array} Encoded value.
  */
-export function decodeStr(data: string, encoding: string): Uint8Array {
+export function decodeStr(data: string, encoding: Encoding): Uint8Array {
   switch (encoding) {
+    case "base58":
+      return fromB58(data);
     case "base64":
       return fromB64(data);
     case "hex":
@@ -1093,6 +1210,42 @@ export function registerPrimitives(bcs: BCS): void {
         .join("");
     },
     (_str: string) => true
+  );
+
+  bcs.registerType(
+    BCS.HEX,
+    (writer: BcsWriter, data: string) =>
+      writer.writeVec(Array.from(fromHEX(data)), (writer, el) =>
+        writer.write8(el)
+      ),
+    (reader: BcsReader) => {
+      let bytes = reader.readVec((reader) => reader.read8());
+      return toHEX(new Uint8Array(bytes));
+    }
+  );
+
+  bcs.registerType(
+    BCS.BASE58,
+    (writer: BcsWriter, data: string) =>
+      writer.writeVec(Array.from(fromB58(data)), (writer, el) =>
+        writer.write8(el)
+      ),
+    (reader: BcsReader) => {
+      let bytes = reader.readVec((reader) => reader.read8());
+      return toB58(new Uint8Array(bytes));
+    }
+  );
+
+  bcs.registerType(
+    BCS.BASE64,
+    (writer: BcsWriter, data: string) =>
+      writer.writeVec(Array.from(fromB64(data)), (writer, el) =>
+        writer.write8(el)
+      ),
+    (reader: BcsReader) => {
+      let bytes = reader.readVec((reader) => reader.read8());
+      return toB64(new Uint8Array(bytes));
+    }
   );
 }
 

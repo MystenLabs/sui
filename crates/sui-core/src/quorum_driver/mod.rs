@@ -367,7 +367,7 @@ where
             .await
             .map_err(QuorumDriverInternalError::CertificateError)?;
         let response = QuorumDriverResponse {
-            tx_cert: certificate,
+            tx_cert: Some(certificate),
             effects_cert: effects,
         };
 
@@ -471,8 +471,10 @@ where
             )
             .await?;
 
-        match response {
-            VerifiedTransactionInfoResponse::Executed(cert, _) => {
+        // If we are able to get a certificate right away, we use it and execute the cert;
+        // otherwise, we have to re-form a cert and execute it.
+        let verified_transaction = match response {
+            VerifiedTransactionInfoResponse::ExecutedWithCert(cert, _) => {
                 self.metrics
                     .total_times_conflicting_transaction_already_finalized_when_retrying
                     .inc();
@@ -499,35 +501,34 @@ where
                         );
                     });
                 // We only try it once.
-                Ok(result.is_ok())
+                return Ok(result.is_ok());
             }
-            VerifiedTransactionInfoResponse::Signed(signed) => {
-                let verified_transaction = signed.into_unsigned();
-                // Now ask validators to execute this transaction.
-                let result = self
-                    .validators
-                    .load()
-                    .execute_transaction(&verified_transaction)
-                    .await
-                    .tap_ok(|_resp| {
-                        debug!(
-                            ?tx_digest,
-                            ?original_tx_digest,
-                            "Retry conflicting transaction succeeded."
-                        );
-                    })
-                    .tap_err(|err| {
-                        debug!(
-                            ?tx_digest,
-                            ?original_tx_digest,
-                            "Retry conflicting transaction got an error: {:?}",
-                            err
-                        );
-                    });
-                // We only try it once
-                Ok(result.is_ok())
-            }
-        }
+            VerifiedTransactionInfoResponse::Signed(signed) => signed.into_unsigned(),
+            VerifiedTransactionInfoResponse::ExecutedWithoutCert(transaction, _) => transaction,
+        };
+        // Now ask validators to execute this transaction.
+        let result = self
+            .validators
+            .load()
+            .execute_transaction(&verified_transaction)
+            .await
+            .tap_ok(|_resp| {
+                debug!(
+                    ?tx_digest,
+                    ?original_tx_digest,
+                    "Retry conflicting transaction succeeded."
+                );
+            })
+            .tap_err(|err| {
+                debug!(
+                    ?tx_digest,
+                    ?original_tx_digest,
+                    "Retry conflicting transaction got an error: {:?}",
+                    err
+                );
+            });
+        // We only try it once
+        Ok(result.is_ok())
     }
 }
 
@@ -607,8 +608,8 @@ where
         self.quorum_driver.submit_transaction(transaction).await
     }
 
-    /// Create a new QuorumDriverHandler based on the same AuthorityAggregator.
-    /// Note: the new QuorumDriverHandler will have a new ArcSwap<AuthorityAggregator>
+    /// Create a new `QuorumDriverHandler` based on the same AuthorityAggregator.
+    /// Note: the new `QuorumDriverHandler` will have a new `ArcSwap<AuthorityAggregator>`
     /// that is NOT tied to the original one. So if there are multiple QuorumDriver(Handler)
     /// then all of them need to do reconfigs on their own.
     pub fn clone_new(&self) -> Self {

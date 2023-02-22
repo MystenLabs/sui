@@ -464,7 +464,7 @@ impl Display for NodeReadCausalRequest {
         result = format!(
             "{}\n\t|-Authority: {}",
             result,
-            base64::encode(&self.public_key.clone().unwrap().bytes)
+            base64::encode(self.public_key.clone().unwrap().bytes)
         );
 
         write!(f, "{}", result)
@@ -504,7 +504,7 @@ impl Display for RoundsRequest {
         result = format!(
             "{}\n\t|-Authority: {}",
             result,
-            base64::encode(&self.public_key.clone().unwrap().bytes)
+            base64::encode(self.public_key.clone().unwrap().bytes)
         );
 
         write!(f, "{}", result)

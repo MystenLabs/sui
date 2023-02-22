@@ -4,9 +4,9 @@
 use std::sync::Arc;
 
 use sui_types::base_types::TransactionDigest;
-use sui_types::base_types::TransactionEffectsDigest;
 use sui_types::committee::Committee;
 use sui_types::committee::EpochId;
+use sui_types::digests::TransactionEffectsDigest;
 use sui_types::message_envelope::Message;
 use sui_types::messages::TransactionEffects;
 use sui_types::messages::VerifiedCertificate;
@@ -96,13 +96,8 @@ impl ReadStore for RocksDbStore {
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<VerifiedCertificate>, Self::Error> {
-        if let Some(transaction) = self
-            .authority_store
-            .perpetual_tables
-            .certificates
-            .get(digest)?
-        {
-            return Ok(Some(transaction.into()));
+        if let Some(transaction) = self.authority_store.get_certified_transaction(digest)? {
+            return Ok(Some(transaction));
         }
 
         if let Some(transaction) = self

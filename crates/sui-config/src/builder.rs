@@ -21,6 +21,8 @@ use std::{
     num::NonZeroUsize,
     path::{Path, PathBuf},
 };
+use sui_protocol_config::SupportedProtocolVersions;
+use sui_types::committee::ProtocolVersion;
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
     AuthorityPublicKeyBytes, KeypairTraits, NetworkKeyPair, NetworkPublicKey, PublicKey,
@@ -48,6 +50,7 @@ pub struct ConfigBuilder<R = OsRng> {
     with_swarm: bool,
     validator_ip_sel: ValidatorIpSelection,
     epoch_duration_ms: u64,
+    pub protocol_version: ProtocolVersion,
 }
 
 impl ConfigBuilder {
@@ -68,6 +71,7 @@ impl ConfigBuilder {
                 ValidatorIpSelection::Localhost
             },
             epoch_duration_ms: default_epoch_duration_ms(),
+            protocol_version: ProtocolVersion::MAX,
         }
     }
 }
@@ -113,6 +117,11 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_protocol_version(mut self, protocol_version: ProtocolVersion) -> Self {
+        self.protocol_version = protocol_version;
+        self
+    }
+
     pub fn rng<N: rand::RngCore + rand::CryptoRng>(self, rng: N) -> ConfigBuilder<N> {
         ConfigBuilder {
             rng: Some(rng),
@@ -124,6 +133,7 @@ impl<R> ConfigBuilder<R> {
             with_swarm: self.with_swarm,
             validator_ip_sel: self.validator_ip_sel,
             epoch_duration_ms: self.epoch_duration_ms,
+            protocol_version: self.protocol_version,
         }
     }
 }
@@ -273,9 +283,12 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             })
             .collect::<Vec<_>>();
 
-        let initial_accounts_config = self
+        let mut initial_accounts_config = self
             .initial_accounts_config
             .unwrap_or_else(GenesisConfig::for_local_testing);
+
+        initial_accounts_config.parameters.protocol_version = self.protocol_version;
+
         let (account_keys, objects) = initial_accounts_config.generate_accounts(&mut rng).unwrap();
 
         let genesis = {
@@ -376,6 +389,8 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     end_of_epoch_broadcast_channel_capacity:
                         default_end_of_epoch_broadcast_channel_capacity(),
                     checkpoint_executor_config: Default::default(),
+                    metrics: None,
+                    supported_protocol_versions: Some(SupportedProtocolVersions::SYSTEM_DEFAULT),
                 }
             })
             .collect();

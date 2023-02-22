@@ -318,7 +318,7 @@ impl TryFrom<SuiTransactionResponse> for Operations {
     type Error = Error;
     fn try_from(response: SuiTransactionResponse) -> Result<Self, Self::Error> {
         let status = Some(response.effects.status.into());
-        let ops: Operations = response.certificate.data.try_into()?;
+        let ops: Operations = response.transaction.data.try_into()?;
         let ops = ops.set_status(status).into_iter();
 
         // We will need to subtract the operation amounts from the actual balance
@@ -326,8 +326,10 @@ impl TryFrom<SuiTransactionResponse> for Operations {
         let accounted_balances = ops
             .as_ref()
             .iter()
-            .filter_map(|op| match (&op.account, &op.amount) {
-                (Some(acc), Some(amount)) => Some((acc.address, -amount.value)),
+            .filter_map(|op| match (&op.account, &op.amount, &op.status) {
+                (Some(acc), Some(amount), Some(OperationStatus::Success)) => {
+                    Some((acc.address, -amount.value))
+                }
                 _ => None,
             })
             .fold(HashMap::new(), |mut balances, (addr, amount)| {

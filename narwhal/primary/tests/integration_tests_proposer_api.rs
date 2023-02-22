@@ -8,7 +8,7 @@ use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::PublicKey;
 use fastcrypto::{
     hash::Hash,
-    traits::{KeyPair as _, ToFromBytes},
+    traits::{InsecureDefault, KeyPair as _, ToFromBytes},
 };
 use narwhal_primary as primary;
 use narwhal_primary::NUM_SHUTDOWN_RECEIVERS;
@@ -57,7 +57,7 @@ async fn test_rounds_errors() {
                     .to_string(),
         },
         TestCase {
-            public_key: Bytes::from(PublicKey::default().as_bytes().to_vec()),
+            public_key: Bytes::from(PublicKey::insecure_default().as_bytes().to_vec()),
             test_case_name: "Valid public key, but authority not found in committee".to_string(),
             expected_error: "Invalid public key: unknown authority".to_string(),
         },

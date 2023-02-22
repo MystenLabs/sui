@@ -15,6 +15,8 @@ export type PayloadType =
     | 'acquire-permissions-response'
     | 'execute-transaction-request'
     | 'execute-transaction-response'
+    | 'sign-transaction-request'
+    | 'sign-transaction-response'
     | 'get-transaction-requests'
     | 'get-transaction-requests-response'
     | 'transaction-request-response'

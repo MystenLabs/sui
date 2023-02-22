@@ -23,13 +23,15 @@ chrono = "0.4.23"
 tower = "0.4.13"
 git-version = "0.3.5"
 const-str = "0.5.3"
+reqwest = { version = "0.11.13", default_features= false, features = ["blocking", "json", "rustls-tls"] }
 
+sui-tls = { path = "../sui-tls" }
 sui-config = { path = "../sui-config" }
 sui-core = { path = "../sui-core" }
 sui-storage = { path = "../sui-storage" }
 sui-network = { path = "../sui-network" }
 sui-json-rpc = { path = "../sui-json-rpc" }
-sui-protocol-constants = { path = "../sui-protocol-constants" }
+sui-protocol-config = { path = "../sui-protocol-config" }
 sui-telemetry = { path = "../sui-telemetry" }
 sui-types = { path = "../sui-types" }
 mysten-metrics = { path = "../mysten-metrics" }
@@ -39,10 +41,8 @@ narwhal-config = { path = "../../narwhal/config" }
 typed-store.workspace = true
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true
+fastcrypto.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-
-[dev-dependencies]
-reqwest = { version = "0.11.13", features = ["blocking", "json"] }
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator = { path = "../sui-simulator" }

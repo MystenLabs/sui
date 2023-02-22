@@ -16,9 +16,9 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::RpcModule;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    DevInspectResults, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
-    MoveFunctionArgType, ObjectValueKind, Page, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
-    SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionAuthSignersResponse,
+    Checkpoint, CheckpointId, DevInspectResults, DynamicFieldPage, GetObjectDataResponse,
+    GetPastObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
     SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
@@ -38,6 +38,7 @@ use tracing::debug;
 
 use crate::api::RpcFullNodeReadApiServer;
 use crate::api::{cap_page_limit, RpcReadApiServer};
+use crate::error::Error;
 use crate::SuiRpcModule;
 
 // An implementation of the read portion of the JSON-RPC interface intended for use in
@@ -61,6 +62,21 @@ impl FullNodeApi {
             .get_sui_system_state_object()
             .map_err(|e| anyhow!("Unable to retrieve sui system state object: {e}"))?;
         Ok((sys_state.epoch, sys_state.reference_gas_price))
+    }
+
+    fn get_checkpoint_internal(&self, id: CheckpointId) -> Result<Checkpoint, Error> {
+        Ok(match id {
+            CheckpointId::SequenceNumber(seq) => {
+                let summary = self.state.get_checkpoint_summary_by_sequence_number(seq)?;
+                let content = self.state.get_checkpoint_contents(summary.content_digest)?;
+                (summary, content).into()
+            }
+            CheckpointId::Digest(digest) => {
+                let summary = self.state.get_checkpoint_summary_by_digest(digest)?;
+                let content = self.state.get_checkpoint_contents(summary.content_digest)?;
+                (summary, content).into()
+            }
+        })
     }
 }
 
@@ -154,36 +170,18 @@ impl RpcReadApiServer for ReadApi {
             .get_transaction(digest)
             .await
             .tap_err(|err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err))?;
+        let checkpoint = self
+            .state
+            .database
+            .get_transaction_checkpoint(&digest)
+            .map_err(|e| anyhow!("{e}"))?;
         Ok(SuiTransactionResponse {
-            certificate: cert.try_into()?,
+            transaction: cert.data().clone().try_into()?,
             effects: SuiTransactionEffects::try_from(effects, self.state.module_cache.as_ref())?,
             timestamp_ms: self.state.get_timestamp_ms(&digest).await?,
-            parsed_data: None,
+            confirmed_local_execution: None,
+            checkpoint: checkpoint.map(|(_epoch, checkpoint)| checkpoint),
         })
-    }
-
-    async fn get_transaction_auth_signers(
-        &self,
-        digest: TransactionDigest,
-    ) -> RpcResult<SuiTransactionAuthSignersResponse> {
-        let epoch_store = self.state.load_epoch_store_one_call_per_task();
-
-        let (cert, _effects) = self
-            .state
-            .get_transaction(digest)
-            .await
-            .tap_err(|err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err))?;
-
-        let mut signers = Vec::new();
-        for authority_index in cert.auth_sig().signers_map.iter() {
-            let authority = epoch_store
-                .committee()
-                .authority_by_index(authority_index)
-                .ok_or_else(|| anyhow!("Failed to get authority"))?;
-            signers.push(*authority);
-        }
-
-        Ok(SuiTransactionAuthSignersResponse { signers })
     }
 }
 
@@ -381,6 +379,10 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
             .map_err(|e| {
                 anyhow!("Latest checkpoint sequence number was not found with error :{e}")
             })?)
+    }
+
+    fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
+        Ok(self.get_checkpoint_internal(id)?)
     }
 
     fn get_checkpoint_summary_by_digest(

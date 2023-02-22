@@ -4,14 +4,15 @@
 use prometheus::Registry;
 use std::sync::Arc;
 use sui_sdk::SuiClient;
-use tracing::info;
+use tracing::{error, info};
 
 use sui_indexer::errors::IndexerError;
 use sui_indexer::metrics::IndexerCheckpointHandlerMetrics;
 use sui_indexer::models::checkpoint_logs::{commit_checkpoint_log, read_checkpoint_log};
-use sui_indexer::models::checkpoints::commit_checkpoint;
+use sui_indexer::models::checkpoints::{
+    commit_checkpoint, create_checkpoint, read_previous_checkpoint, Checkpoint,
+};
 use sui_indexer::{get_pg_pool_connection, PgConnectionPool};
-
 pub struct CheckpointHandler {
     rpc_client: SuiClient,
     pg_connection_pool: Arc<PgConnectionPool>,
@@ -37,11 +38,29 @@ impl CheckpointHandler {
 
         let checkpoint_log = read_checkpoint_log(&mut pg_pool_conn)?;
         let mut next_cursor_sequence_number = checkpoint_log.next_cursor_sequence_number;
+        let mut previous_checkpoint_commit = Checkpoint::default();
+
+        if next_cursor_sequence_number != 0 {
+            let temp_checkpoint =
+                read_previous_checkpoint(&mut pg_pool_conn, next_cursor_sequence_number - 1);
+            match temp_checkpoint {
+                Ok(checkpoint) => previous_checkpoint_commit = checkpoint,
+                Err(err) => {
+                    error!("{}", err)
+                }
+            }
+        }
 
         loop {
             self.checkpoint_handler_metrics
                 .total_checkpoint_requested
                 .inc();
+
+            let request_guard = self
+                .checkpoint_handler_metrics
+                .full_node_read_request_latency
+                .start_timer();
+
             let mut checkpoint = self
                 .rpc_client
                 .read_api()
@@ -58,16 +77,25 @@ impl CheckpointHandler {
                     .get_checkpoint_summary(next_cursor_sequence_number as u64)
                     .await;
             }
+            request_guard.stop_and_record();
+
             self.checkpoint_handler_metrics
                 .total_checkpoint_received
                 .inc();
+
+            let db_guard = self
+                .checkpoint_handler_metrics
+                .db_write_request_latency
+                .start_timer();
             // unwrap here is safe because we checked for error above
-            commit_checkpoint(&mut pg_pool_conn, checkpoint.unwrap())?;
+            let new_checkpoint = create_checkpoint(checkpoint.unwrap(), previous_checkpoint_commit);
+            commit_checkpoint(&mut pg_pool_conn, new_checkpoint.clone())?;
             info!("Checkpoint {} committed", next_cursor_sequence_number);
             self.checkpoint_handler_metrics
                 .total_checkpoint_processed
                 .inc();
-
+            db_guard.stop_and_record();
+            previous_checkpoint_commit = Checkpoint::from(new_checkpoint.clone());
             next_cursor_sequence_number += 1;
             commit_checkpoint_log(&mut pg_pool_conn, next_cursor_sequence_number)?;
         }

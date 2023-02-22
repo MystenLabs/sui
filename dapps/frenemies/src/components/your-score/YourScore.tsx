@@ -39,7 +39,9 @@ export function YourScore() {
 
   return (
     <>
-      <Refresh />
+      <div className="absolute top-0 right-0">
+        <Refresh />
+      </div>
       <div className="flex gap-16 mt-3 mb-7">
         <Stat variant="leaderboard" label="Rank">
           {rank === -1 ? "--" : rank + 1}

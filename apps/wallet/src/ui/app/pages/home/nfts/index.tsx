@@ -3,13 +3,13 @@
 
 import { Link } from 'react-router-dom';
 
-import PageTitle from '_app/shared/page-title';
 import Alert from '_components/alert';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import NFTdisplay from '_components/nft-display';
 import { useAppSelector, useObjectsState } from '_hooks';
 import { accountNftsSelector } from '_redux/slices/account';
+import PageTitle from '_src/ui/app/shared/PageTitle';
 
 function NftsPage() {
     const nfts = useAppSelector(accountNftsSelector);
@@ -17,8 +17,8 @@ function NftsPage() {
     const isNftsFound = nfts.length > 0;
     return (
         <div className="flex flex-col flex-nowrap items-center gap-4 flex-1">
+            <PageTitle title="NFTs" />
             <Loading loading={loading}>
-                <PageTitle title="NFTs" className="justify-center" />
                 {showError && error ? (
                     <Alert>
                         <div>

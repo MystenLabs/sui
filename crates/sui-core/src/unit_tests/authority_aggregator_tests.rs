@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::test_utils::make_transfer_sui_transaction;
-use bcs::to_bytes;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use multiaddr::Multiaddr;
 use std::collections::BTreeMap;
@@ -18,7 +17,7 @@ use sui_types::crypto::{KeypairTraits, Signature};
 
 use sui_macros::sim_test;
 use sui_types::messages::*;
-use sui_types::object::{MoveObject, Object, Owner, GAS_VALUE_FOR_TESTING};
+use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
 
 use super::*;
 use crate::authority_client::AuthorityAPI;
@@ -191,7 +190,7 @@ where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
     let mut votes = vec![];
-    let mut transaction: Option<VerifiedSignedTransaction> = None;
+    let mut tx_data: Option<SenderSignedData> = None;
     for authority in authorities {
         let response = authority
             .handle_transaction_info_request(TransactionInfoRequest {
@@ -200,23 +199,24 @@ where
             .await;
         match response {
             Ok(VerifiedTransactionInfoResponse::Signed(signed)) => {
-                votes.push(signed.auth_sig().clone());
-                if let Some(inner_transaction) = transaction {
+                let (data, sig) = signed.into_inner().into_data_and_sig();
+                votes.push(sig);
+                if let Some(inner_transaction) = tx_data {
                     assert_eq!(
-                        inner_transaction.data().intent_message.value,
-                        signed.data().intent_message.value
+                        inner_transaction.intent_message.value,
+                        data.intent_message.value
                     );
                 }
-                transaction = Some(signed);
+                tx_data = Some(data);
             }
-            Ok(VerifiedTransactionInfoResponse::Executed(cert, _)) => {
+            Ok(VerifiedTransactionInfoResponse::ExecutedWithCert(cert, _)) => {
                 return cert.into_inner();
             }
             _ => {}
         }
     }
 
-    CertifiedTransaction::new(transaction.unwrap().into_message(), votes, committee).unwrap()
+    CertifiedTransaction::new(tx_data.unwrap(), votes, committee).unwrap()
 }
 
 pub async fn do_cert<A>(
@@ -317,7 +317,7 @@ async fn test_quorum_map_and_reduce_timeout() {
         .into_iter()
         .cloned()
         .collect();
-    let pkg = Object::new_package(modules, TransactionDigest::genesis()).unwrap();
+    let pkg = Object::new_package_for_testing(modules, TransactionDigest::genesis()).unwrap();
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let genesis_objects = vec![pkg.clone(), gas_object1.clone()];
@@ -352,7 +352,7 @@ async fn test_quorum_map_and_reduce_timeout() {
         // Server should return a signed effect even though previous calls
         // failed due to timeout
         assert!(resp.is_ok());
-        resp.unwrap().into_executed_for_testing();
+        assert!(resp.unwrap().is_executed());
     }
 }
 
@@ -360,29 +360,8 @@ async fn test_quorum_map_and_reduce_timeout() {
 async fn test_map_reducer() {
     let (authorities, _, _, _) = init_local_authorities(4, vec![]).await;
 
-    // Test: reducer errors get propagated up
-    let res = authorities
-        .quorum_map_then_reduce_with_timeout(
-            0usize,
-            |_name, _client| Box::pin(async move { Ok(()) }),
-            |_accumulated_state, _authority_name, _authority_weight, _result| {
-                Box::pin(async move {
-                    Err(SuiError::TooManyIncorrectAuthorities {
-                        errors: vec![],
-                        action: "".to_string(),
-                    })
-                })
-            },
-            Duration::from_millis(1000),
-        )
-        .await;
-    assert!(matches!(
-        res,
-        Err(SuiError::TooManyIncorrectAuthorities { .. })
-    ));
-
     // Test: mapper errors do not get propagated up, reducer works
-    let res = authorities
+    let res: Result<(), usize> = authorities
         .quorum_map_then_reduce_with_timeout(
             0usize,
             |_name, _client| {
@@ -401,13 +380,13 @@ async fn test_map_reducer() {
                         Err(SuiError::TooManyIncorrectAuthorities { .. })
                     ));
                     accumulated_state += 1;
-                    Ok(ReduceOutput::Continue(accumulated_state))
+                    ReduceOutput::Continue(accumulated_state)
                 })
             },
             Duration::from_millis(1000),
         )
         .await;
-    assert_eq!(Ok(4), res);
+    assert_eq!(Err(4), res);
 
     // Test: early end
     let res = authorities
@@ -417,10 +396,10 @@ async fn test_map_reducer() {
             |mut accumulated_state, _authority_name, _authority_weight, _result| {
                 Box::pin(async move {
                     if accumulated_state > 2 {
-                        Ok(ReduceOutput::End(accumulated_state))
+                        ReduceOutput::Success(accumulated_state)
                     } else {
                         accumulated_state += 1;
-                        Ok(ReduceOutput::Continue(accumulated_state))
+                        ReduceOutput::Continue(accumulated_state)
                     }
                 })
             },
@@ -430,7 +409,7 @@ async fn test_map_reducer() {
     assert_eq!(Ok(3), res);
 
     // Test: Global timeout works
-    let res = authorities
+    let res: Result<(), _> = authorities
         .quorum_map_then_reduce_with_timeout(
             0usize,
             |_name, _client| {
@@ -441,21 +420,16 @@ async fn test_map_reducer() {
                 })
             },
             |_accumulated_state, _authority_name, _authority_weight, _result| {
-                Box::pin(async move {
-                    Err(SuiError::TooManyIncorrectAuthorities {
-                        errors: vec![],
-                        action: "".to_string(),
-                    })
-                })
+                Box::pin(async move { ReduceOutput::Continue(0) })
             },
             Duration::from_millis(10),
         )
         .await;
-    assert_eq!(Ok(0), res);
+    assert_eq!(Err(0), res);
 
     // Test: Local timeout works
     let bad_auth = *authorities.committee.sample();
-    let res = authorities
+    let res: Result<(), _> = authorities
         .quorum_map_then_reduce_with_timeout(
             HashSet::new(),
             |_name, _client| {
@@ -471,12 +445,12 @@ async fn test_map_reducer() {
                 Box::pin(async move {
                     accumulated_state.insert(authority_name);
                     if accumulated_state.len() <= 3 {
-                        Ok(ReduceOutput::Continue(accumulated_state))
+                        ReduceOutput::Continue(accumulated_state)
                     } else {
-                        Ok(ReduceOutput::ContinueWithTimeout(
+                        ReduceOutput::ContinueWithTimeout(
                             accumulated_state,
                             Duration::from_millis(10),
-                        ))
+                        )
                     }
                 })
             },
@@ -484,8 +458,8 @@ async fn test_map_reducer() {
             Duration::from_millis(10 * 60),
         )
         .await;
-    assert_eq!(res.as_ref().unwrap().len(), 3);
-    assert!(!res.as_ref().unwrap().contains(&bad_auth));
+    assert_eq!(res.as_ref().unwrap_err().len(), 3);
+    assert!(!res.as_ref().unwrap_err().contains(&bad_auth));
 }
 
 #[sim_test]
@@ -743,10 +717,12 @@ async fn test_handle_transaction_response() {
         ..Default::default()
     };
     let (name_0, key_0) = &authority_keys[0];
-    let resp = TransactionInfoResponse::Executed(
-        cert_epoch_0.clone().into_inner(),
-        sign_tx_effects(effects, 0, *name_0, key_0),
-    );
+    let resp = HandleTransactionResponse {
+        status: TransactionStatus::Executed(
+            Some(cert_epoch_0.auth_sig().clone()),
+            sign_tx_effects(effects, 0, *name_0, key_0),
+        ),
+    };
     clients
         .get_mut(&authority_keys[0].0)
         .unwrap()
@@ -901,12 +877,18 @@ async fn assert_resp_err<F>(
     match agg.process_transaction(tx).await {
         Err(QuorumSignTransactionError {
             total_stake,
-            good_stake,
+            good_stake: _,
             errors,
             conflicting_tx_digests,
         }) => {
+            println!("{:?}", errors);
             assert_eq!(total_stake, 4);
-            assert_eq!(good_stake, 0);
+            // TODO: good_stake no longer always makes sense.
+            // Specifically, when we have non-quorum signed effects, it's difficult to say
+            // what good state should be. Right now, good_stake is only used for conflicting
+            // transaction processing. We should refactor this when we refactor conflicting
+            // transaction processing.
+            //assert_eq!(good_stake, 0);
             assert!(conflicting_tx_digests.is_empty());
             assert!(errors.iter().map(|e| &e.0).all(checker));
         }
@@ -927,10 +909,12 @@ fn set_tx_info_response_with_cert_and_effects<'a>(
     epoch: EpochId,
 ) {
     for (name, key) in authority_keys {
-        let resp = TransactionInfoResponse::Executed(
-            cert.clone(),
-            SignedTransactionEffects::new(epoch, effects.clone(), key, *name),
-        );
+        let resp = HandleTransactionResponse {
+            status: TransactionStatus::Executed(
+                Some(cert.auth_sig().clone()),
+                SignedTransactionEffects::new(epoch, effects.clone(), key, *name),
+            ),
+        };
         clients.get_mut(name).unwrap().set_tx_info_response(resp);
     }
 }
@@ -944,37 +928,11 @@ fn set_tx_info_response_with_signed_tx(
     for (name, secret) in authority_keys {
         let signed_tx = sign_tx(tx.clone(), epoch, *name, secret);
 
-        let resp = TransactionInfoResponse::Signed(signed_tx);
+        let resp = HandleTransactionResponse {
+            status: TransactionStatus::Signed(signed_tx.into_sig()),
+        };
         clients.get_mut(name).unwrap().set_tx_info_response(resp);
     }
-}
-
-pub fn make_response_from_sui_system_state(
-    system_state: SuiSystemState,
-) -> SuiResult<ObjectInfoResponse> {
-    let move_content = to_bytes(&system_state).unwrap();
-    let move_object = unsafe {
-        MoveObject::new_from_execution(
-            SuiSystemState::type_(),
-            false,
-            SequenceNumber::from_u64(1),
-            move_content,
-        )
-        .unwrap()
-    };
-    let initial_shared_version = move_object.version();
-    let object = Object::new_move(
-        move_object,
-        Owner::Shared {
-            initial_shared_version,
-        },
-        TransactionDigest::random(),
-    );
-    Ok(ObjectInfoResponse {
-        object,
-        layout: None,
-        lock_for_debugging: None,
-    })
 }
 
 pub fn get_authority_pub_key_bytes_and_address() -> (AuthorityPublicKeyBytes, Vec<u8>) {

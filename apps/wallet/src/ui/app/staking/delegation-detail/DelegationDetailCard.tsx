@@ -4,6 +4,7 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import { useMemo } from 'react';
 
+import { Heading } from '../../shared/heading';
 import { calculateAPY } from '../calculateAPY';
 import { getStakingRewards } from '../getStakingRewards';
 import { StakeAmount } from '../home/StakeAmount';
@@ -157,13 +158,14 @@ export function DelegationDetailCard({
                                         }
                                     >
                                         <div className="flex gap-0.5 items-baseline">
-                                            <Text
+                                            <Heading
                                                 variant="heading4"
                                                 weight="semibold"
                                                 color="gray-90"
+                                                leading="none"
                                             >
                                                 {apy}
-                                            </Text>
+                                            </Heading>
 
                                             <Text
                                                 variant="subtitleSmall"
@@ -189,13 +191,14 @@ export function DelegationDetailCard({
                                         }
                                     >
                                         <div className="flex gap-0.5 items-baseline">
-                                            <Text
+                                            <Heading
                                                 variant="heading4"
                                                 weight="semibold"
                                                 color="gray-90"
+                                                leading="none"
                                             >
                                                 {commission}
-                                            </Text>
+                                            </Heading>
 
                                             <Text
                                                 variant="subtitleSmall"

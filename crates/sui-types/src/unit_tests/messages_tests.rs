@@ -11,17 +11,18 @@ use move_core_types::language_storage::StructTag;
 use roaring::RoaringBitmap;
 use test_utils::messages::MAX_GAS;
 
+use super::*;
 use crate::base_types::random_object_ref;
 use crate::crypto::bcs_signable_test::{get_obligation_input, Foo};
 use crate::crypto::Secp256k1SuiSignature;
 use crate::crypto::SuiKeyPair;
+use crate::crypto::SuiSignature;
+use crate::crypto::SuiSignatureInner;
 use crate::crypto::{
     get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
     AuthoritySignInfoTrait, SuiAuthoritySignature,
 };
 use crate::object::Owner;
-
-use super::*;
 
 #[test]
 fn test_signed_values() {
@@ -52,7 +53,7 @@ fn test_signed_values() {
             10000,
         ),
         Intent::default(),
-        &sender_sec,
+        vec![&sender_sec],
     )
     .verify()
     .unwrap();
@@ -66,7 +67,7 @@ fn test_signed_values() {
             10000,
         ),
         Intent::default(),
-        &sender_sec2,
+        vec![&sender_sec2],
     ));
 
     let v = SignedTransaction::new(
@@ -129,7 +130,7 @@ fn test_certificates() {
             10000,
         ),
         Intent::default(),
-        &sender_sec,
+        vec![&sender_sec],
     )
     .verify()
     .unwrap();
@@ -442,7 +443,7 @@ fn test_digest_caching() {
             10000,
         ),
         Intent::default(),
-        &ssec2,
+        vec![&ssec2],
     )
     .verify()
     .unwrap();
@@ -461,7 +462,8 @@ fn test_digest_caching() {
         .data_mut_for_testing()
         .intent_message
         .value
-        .gas_budget += 1;
+        .gas_data
+        .budget += 1;
 
     // digest is cached
     assert_eq!(initial_digest, *signed_tx.digest());
@@ -519,13 +521,14 @@ fn test_user_signature_committed_in_transactions() {
     );
 
     let mut tx_data_2 = tx_data.clone();
-    tx_data_2.gas_budget += 1;
+    tx_data_2.gas_data.budget += 1;
 
     let transaction_a =
-        Transaction::from_data_and_signer(tx_data.clone(), Intent::default(), &sender_sec);
-    let transaction_b = Transaction::from_data_and_signer(tx_data, Intent::default(), &sender_sec2);
+        Transaction::from_data_and_signer(tx_data.clone(), Intent::default(), vec![&sender_sec]);
+    let transaction_b =
+        Transaction::from_data_and_signer(tx_data, Intent::default(), vec![&sender_sec2]);
     let transaction_c =
-        Transaction::from_data_and_signer(tx_data_2, Intent::default(), &sender_sec2);
+        Transaction::from_data_and_signer(tx_data_2, Intent::default(), vec![&sender_sec2]);
 
     let tx_digest_a = transaction_a.digest();
     let tx_digest_b = transaction_b.digest();
@@ -566,14 +569,14 @@ fn test_user_signature_committed_in_signed_transactions() {
         10000,
     );
     let transaction_a =
-        Transaction::from_data_and_signer(tx_data.clone(), Intent::default(), &sender_sec)
+        Transaction::from_data_and_signer(tx_data.clone(), Intent::default(), vec![&sender_sec])
             .verify()
             .unwrap();
     // transaction_b intentionally invalid (sender does not match signer).
     let transaction_b = VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
         tx_data,
         Intent::default(),
-        &sender_sec2,
+        vec![&sender_sec2],
     ));
 
     let signed_tx_a = SignedTransaction::new(
@@ -620,6 +623,245 @@ fn test_user_signature_committed_in_signed_transactions() {
     assert_ne!(signed_tx_a, signed_tx_b)
 }
 
+fn signature_from_signer(
+    data: TransactionData,
+    intent: Intent,
+    signer: &dyn Signer<Signature>,
+) -> Signature {
+    let intent_msg = IntentMessage::new(intent, data);
+    Signature::new_secure(&intent_msg, signer)
+}
+
+#[test]
+fn test_sponsored_transaction_message() {
+    let sender_kp = SuiKeyPair::Ed25519(get_key_pair().1);
+    let sender = (&sender_kp.public()).into();
+    let sponsor_kp = SuiKeyPair::Ed25519(get_key_pair().1);
+    let sponsor = (&sponsor_kp.public()).into();
+    let kind = TransactionKind::Single(SingleTransactionKind::TransferObject(TransferObject {
+        recipient: get_new_address::<AccountKeyPair>(),
+        object_ref: random_object_ref(),
+    }));
+    let gas_obj_ref = random_object_ref();
+    let gas_data = GasData {
+        payment: gas_obj_ref,
+        owner: sponsor,
+        price: DUMMY_GAS_PRICE,
+        budget: 10000,
+    };
+    let tx_data = TransactionData::new_with_gas_data(kind, sender, gas_data.clone());
+    let intent = Intent::default();
+    let sender_sig: GenericSignature =
+        signature_from_signer(tx_data.clone(), intent.clone(), &sender_kp).into();
+    let sponsor_sig: GenericSignature =
+        signature_from_signer(tx_data.clone(), intent.clone(), &sponsor_kp).into();
+    let transaction = Transaction::from_generic_sig_data(
+        tx_data.clone(),
+        intent.clone(),
+        vec![sender_sig.clone(), sponsor_sig.clone()],
+    )
+    .verify()
+    .unwrap();
+
+    assert_eq!(
+        transaction.get_signer_sig_mapping().unwrap(),
+        BTreeMap::from([(sender, &sender_sig), (sponsor, &sponsor_sig)]),
+    );
+
+    assert_eq!(transaction.sender_address(), sender,);
+    assert_eq!(transaction.gas_payment_object_ref(), &gas_obj_ref);
+
+    // Sig order does not matter
+    let transaction = Transaction::from_generic_sig_data(
+        tx_data.clone(),
+        intent.clone(),
+        vec![sponsor_sig.clone(), sender_sig.clone()],
+    )
+    .verify()
+    .unwrap();
+
+    // Test incomplete signature lists (missing sponsor sig)
+    assert!(matches!(
+        Transaction::from_generic_sig_data(
+            tx_data.clone(),
+            intent.clone(),
+            vec![sender_sig.clone()],
+        )
+        .verify()
+        .unwrap_err(),
+        SuiError::SignerSignatureNumberMismatch { .. }
+    ));
+
+    // Test incomplete signature lists (missing sender sig)
+    assert!(matches!(
+        Transaction::from_generic_sig_data(
+            tx_data.clone(),
+            intent.clone(),
+            vec![sponsor_sig.clone()],
+        )
+        .verify()
+        .unwrap_err(),
+        SuiError::SignerSignatureNumberMismatch { .. }
+    ));
+
+    // Test incomplete signature lists (more sigs than expected)
+    let thrid_party_kp = SuiKeyPair::Ed25519(get_key_pair().1);
+    let third_party_sig: GenericSignature =
+        signature_from_signer(tx_data.clone(), intent.clone(), &thrid_party_kp).into();
+    assert!(matches!(
+        Transaction::from_generic_sig_data(
+            tx_data.clone(),
+            intent.clone(),
+            vec![sender_sig, sponsor_sig.clone(), third_party_sig.clone()],
+        )
+        .verify()
+        .unwrap_err(),
+        SuiError::SignerSignatureNumberMismatch { .. }
+    ));
+
+    // Test irrelevant sigs
+    assert!(matches!(
+        Transaction::from_generic_sig_data(tx_data, intent, vec![sponsor_sig, third_party_sig],)
+            .verify()
+            .unwrap_err(),
+        SuiError::SignerSignatureAbsent { .. }
+    ));
+
+    let tx = transaction.data().transaction_data();
+    assert_eq!(tx.gas(), gas_obj_ref,);
+    assert_eq!(tx.gas_data(), &gas_data,);
+    assert_eq!(tx.sender(), sender,);
+    assert_eq!(tx.gas_owner(), sponsor,);
+}
+
+#[test]
+fn test_sponsored_transaction_validity_check() {
+    let sender_kp = SuiKeyPair::Ed25519(get_key_pair().1);
+    let sender = (&sender_kp.public()).into();
+    let sponsor_kp = SuiKeyPair::Ed25519(get_key_pair().1);
+    let sponsor = (&sponsor_kp.public()).into();
+
+    // This is a sponsored transation
+    assert_ne!(sender, sponsor);
+    let gas_data = GasData {
+        payment: random_object_ref(),
+        owner: sponsor,
+        price: DUMMY_GAS_PRICE,
+        budget: 10000,
+    };
+
+    TransactionData::new_with_gas_data(
+        TransactionKind::Single(SingleTransactionKind::TransferObject(TransferObject {
+            recipient: get_new_address::<AccountKeyPair>(),
+            object_ref: random_object_ref(),
+        })),
+        sender,
+        gas_data.clone(),
+    )
+    .validity_check()
+    .unwrap();
+
+    TransactionData::new_with_gas_data(
+        TransactionKind::Single(SingleTransactionKind::Call(MoveCall {
+            package: ObjectID::random(),
+            module: Identifier::new("random_module").unwrap(),
+            function: Identifier::new("random_function").unwrap(),
+            type_arguments: vec![],
+            arguments: vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(
+                random_object_ref(),
+            ))],
+        })),
+        sender,
+        gas_data.clone(),
+    )
+    .validity_check()
+    .unwrap();
+
+    TransactionData::new_with_gas_data(
+        TransactionKind::Single(SingleTransactionKind::Publish(MoveModulePublish {
+            modules: vec![vec![]],
+        })),
+        sender,
+        gas_data.clone(),
+    )
+    .validity_check()
+    .unwrap();
+
+    TransactionData::new_with_gas_data(
+        TransactionKind::Single(SingleTransactionKind::Pay(Pay {
+            coins: vec![random_object_ref()],
+            recipients: vec![SuiAddress::random_for_testing_only()],
+            amounts: vec![100000],
+        })),
+        sender,
+        gas_data.clone(),
+    )
+    .validity_check()
+    .unwrap();
+
+    // TransferSui cannot be sponsored
+    assert_eq!(
+        TransactionData::new_with_gas_data(
+            TransactionKind::Single(SingleTransactionKind::TransferSui(TransferSui {
+                recipient: SuiAddress::random_for_testing_only(),
+                amount: Some(50000),
+            })),
+            sender,
+            gas_data.clone(),
+        )
+        .validity_check()
+        .unwrap_err(),
+        SuiError::UnsupportedSponsoredTransactionKind
+    );
+
+    // PaySui cannot be sponsored
+    assert_eq!(
+        TransactionData::new_with_gas_data(
+            TransactionKind::Single(SingleTransactionKind::PaySui(PaySui {
+                coins: vec![(gas_data.payment)],
+                recipients: vec![],
+                amounts: vec![],
+            })),
+            sender,
+            gas_data.clone(),
+        )
+        .validity_check()
+        .unwrap_err(),
+        SuiError::UnsupportedSponsoredTransactionKind
+    );
+
+    // PayAllSui cannot be sponsored
+    assert_eq!(
+        TransactionData::new_with_gas_data(
+            TransactionKind::Single(SingleTransactionKind::PayAllSui(PayAllSui {
+                coins: vec![(gas_data.payment)],
+                recipient: SuiAddress::random_for_testing_only(),
+            })),
+            sender,
+            gas_data.clone(),
+        )
+        .validity_check()
+        .unwrap_err(),
+        SuiError::UnsupportedSponsoredTransactionKind
+    );
+
+    // Batch is non-sponsorable
+    assert_eq!(
+        TransactionData::new_with_gas_data(
+            TransactionKind::Batch(vec![SingleTransactionKind::Pay(Pay {
+                coins: vec![random_object_ref()],
+                recipients: vec![SuiAddress::random_for_testing_only()],
+                amounts: vec![100000],
+            })]),
+            sender,
+            gas_data,
+        )
+        .validity_check()
+        .unwrap_err(),
+        SuiError::UnsupportedSponsoredTransactionKind
+    );
+}
+
 #[test]
 fn verify_sender_signature_correctly_with_flag() {
     // set up authorities
@@ -649,15 +891,18 @@ fn verify_sender_signature_correctly_with_flag() {
     let sender_kp_2 = SuiKeyPair::Ed25519(get_key_pair().1);
     let mut tx_data_2 = tx_data.clone();
     tx_data_2.sender = (&sender_kp_2.public()).into();
+    tx_data_2.gas_data.owner = tx_data_2.sender;
 
     // create a sender keypair with Secp256r1
     let sender_kp_3 = SuiKeyPair::Secp256r1(get_key_pair().1);
     let mut tx_data_3 = tx_data.clone();
     tx_data_3.sender = (&sender_kp_3.public()).into();
+    tx_data_3.gas_data.owner = tx_data_3.sender;
 
-    let transaction = Transaction::from_data_and_signer(tx_data, Intent::default(), &sender_kp)
-        .verify()
-        .unwrap();
+    let transaction =
+        Transaction::from_data_and_signer(tx_data, Intent::default(), vec![&sender_kp])
+            .verify()
+            .unwrap();
 
     // create tx also signed by authority
     let signed_tx = SignedTransaction::new(
@@ -667,11 +912,12 @@ fn verify_sender_signature_correctly_with_flag() {
         AuthorityPublicKeyBytes::from(sec1.public()),
     );
 
+    let s = match &transaction.data().tx_signatures[0] {
+        GenericSignature::Signature(s) => s,
+        _ => panic!("invalid"),
+    };
     // signature contains the correct Secp256k1 flag
-    assert_eq!(
-        transaction.data().tx_signature.scheme().flag(),
-        Secp256k1SuiSignature::SCHEME.flag()
-    );
+    assert_eq!(s.scheme().flag(), Secp256k1SuiSignature::SCHEME.flag());
 
     // authority accepts signs tx after verification
     assert!(signed_tx
@@ -680,7 +926,7 @@ fn verify_sender_signature_correctly_with_flag() {
         .is_ok());
 
     let transaction_1 =
-        Transaction::from_data_and_signer(tx_data_2, Intent::default(), &sender_kp_2)
+        Transaction::from_data_and_signer(tx_data_2, Intent::default(), vec![&sender_kp_2])
             .verify()
             .unwrap();
 
@@ -690,12 +936,13 @@ fn verify_sender_signature_correctly_with_flag() {
         &sec1,
         AuthorityPublicKeyBytes::from(sec1.public()),
     );
+    let s = match &transaction_1.data().tx_signatures[0] {
+        GenericSignature::Signature(s) => s,
+        _ => panic!("unexpected signature scheme"),
+    };
 
     // signature contains the correct Ed25519 flag
-    assert_eq!(
-        transaction_1.data().tx_signature.scheme().flag(),
-        Ed25519SuiSignature::SCHEME.flag()
-    );
+    assert_eq!(s.scheme().flag(), Ed25519SuiSignature::SCHEME.flag());
 
     // signature verified
     assert!(signed_tx_1
@@ -709,7 +956,7 @@ fn verify_sender_signature_correctly_with_flag() {
         .is_err());
 
     // create transaction with r1 signer
-    let tx_3 = Transaction::from_data_and_signer(tx_data_3, Intent::default(), &sender_kp_3);
+    let tx_3 = Transaction::from_data_and_signer(tx_data_3, Intent::default(), vec![&sender_kp_3]);
     let tx_31 = tx_3.clone();
     let tx_32 = tx_3.clone();
 

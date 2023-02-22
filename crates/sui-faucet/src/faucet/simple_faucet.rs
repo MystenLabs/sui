@@ -3,7 +3,6 @@
 
 use crate::faucet::write_ahead_log;
 use crate::metrics::FaucetMetrics;
-use anyhow::anyhow;
 use async_trait::async_trait;
 use prometheus::Registry;
 use tap::tap::TapFallible;
@@ -13,9 +12,7 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use sui::client_commands::WalletContext;
-use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiObjectRead, SuiPaySui, SuiTransactionKind, SuiTransactionResponse,
-};
+use sui_json_rpc_types::{SuiObjectRead, SuiPaySui, SuiTransactionKind, SuiTransactionResponse};
 use sui_keys::keystore::AccountKeystore;
 use sui_types::object::Owner;
 use sui_types::{
@@ -214,7 +211,7 @@ impl SimpleFaucet {
             .keystore
             .sign_secure(&self.active_address, &tx_data, Intent::default())
             .map_err(FaucetError::internal)?;
-        let tx = Transaction::from_data(tx_data, Intent::default(), signature)
+        let tx = Transaction::from_data(tx_data, Intent::default(), vec![signature])
             .verify()
             .unwrap();
         let tx_digest = *tx.digest();
@@ -388,7 +385,7 @@ impl SimpleFaucet {
 
         let tx_digest = tx.digest();
         let client = self.wallet.get_client().await?;
-        let response = client
+        Ok(client
             .quorum_driver()
             .execute_transaction(
                 tx.clone(),
@@ -404,23 +401,7 @@ impl SimpleFaucet {
                     "Transfer Transaction failed: {:?}",
                     e
                 )
-            })?;
-        let tx_cert = response
-            .tx_cert
-            .ok_or_else(|| anyhow!("Expect Some(tx_cert)"))?;
-        let effects = response
-            .effects
-            .ok_or_else(|| anyhow!("Expect Some(effects)"))?;
-        if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
-            return Err(anyhow!("Error transferring object: {:#?}", effects.status));
-        }
-
-        Ok(SuiTransactionResponse {
-            certificate: tx_cert,
-            effects,
-            timestamp_ms: None,
-            parsed_data: None,
-        })
+            })?)
     }
 
     async fn build_pay_sui_txn(
@@ -453,7 +434,7 @@ impl SimpleFaucet {
         number_of_coins: usize,
         recipient: &SuiAddress,
     ) -> Result<(TransactionDigest, Vec<ObjectID>, Vec<u64>), FaucetError> {
-        let txns = res.certificate.data.transactions;
+        let txns = res.transaction.data.transactions;
         if txns.len() != 1 {
             panic!(
                 "PaySui Transaction should create one and exactly one txn, but got {:?}",
@@ -483,7 +464,7 @@ impl SimpleFaucet {
                 .map(|created_coin_owner_ref| created_coin_owner_ref.reference.object_id)
                 .collect();
             Ok((
-                res.certificate.transaction_digest,
+                res.effects.transaction_digest,
                 coin_ids,
                 amounts
                     .clone()
@@ -560,6 +541,7 @@ impl Faucet for SimpleFaucet {
 #[cfg(test)]
 mod tests {
     use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
+    use sui_json_rpc_types::SuiExecutionStatus;
     use test_utils::network::TestClusterBuilder;
 
     use super::*;
@@ -679,8 +661,11 @@ mod tests {
         .await
         .unwrap();
 
-        if let SuiClientCommandResult::PayAllSui(_tx_cert, effects) = res {
-            assert!(matches!(effects.status, SuiExecutionStatus::Success));
+        if let SuiClientCommandResult::PayAllSui(response) = res {
+            assert!(matches!(
+                response.effects.status,
+                SuiExecutionStatus::Success
+            ));
         } else {
             panic!("PayAllSui command did not return SuiClientCommandResult::PayAllSui");
         };

@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer, publicKeyFromSerialized } from '@mysten/sui.js';
+import {
+    type SerializedSignature,
+    toB64,
+    type SignedTransaction,
+} from '@mysten/sui.js';
 import { lastValueFrom, map, take } from 'rxjs';
 
 import { growthbook } from '../experimentation/feature-gating';
@@ -19,11 +23,7 @@ import { setActiveOrigin, changeActiveNetwork } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 
-import type {
-    SignaturePubkeyPair,
-    SuiAddress,
-    SuiTransactionResponse,
-} from '@mysten/sui.js';
+import type { SuiAddress, SuiTransactionResponse } from '@mysten/sui.js';
 import type { Message } from '_messages';
 import type { KeyringPayload } from '_payloads/keyring';
 import type {
@@ -95,8 +95,9 @@ export class BackgroundClient {
     public async sendTransactionRequestResponse(
         txID: string,
         approved: boolean,
-        txResult: SuiTransactionResponse | undefined,
-        tsResultError: string | undefined
+        txResult?: SuiTransactionResponse,
+        tsResultError?: string,
+        txSigned?: SignedTransaction
     ) {
         this.sendMessage(
             createMessage<TransactionRequestResponse>({
@@ -105,6 +106,7 @@ export class BackgroundClient {
                 txID,
                 txResult,
                 tsResultError,
+                txSigned,
             })
         );
     }
@@ -213,14 +215,14 @@ export class BackgroundClient {
 
     public async signData(
         address: SuiAddress,
-        data: Base64DataBuffer
-    ): Promise<SignaturePubkeyPair> {
+        data: Uint8Array
+    ): Promise<SerializedSignature> {
         return await lastValueFrom(
             this.sendMessage(
                 createMessage<KeyringPayload<'signData'>>({
                     type: 'keyring',
                     method: 'signData',
-                    args: { data: data.toString(), address },
+                    args: { data: toB64(data), address },
                 })
             ).pipe(
                 take(1),
@@ -229,16 +231,7 @@ export class BackgroundClient {
                         isKeyringPayload(payload, 'signData') &&
                         payload.return
                     ) {
-                        const { signatureScheme, signature, pubKey } =
-                            payload.return;
-                        return {
-                            signatureScheme,
-                            signature: new Base64DataBuffer(signature),
-                            pubKey: publicKeyFromSerialized(
-                                signatureScheme,
-                                pubKey
-                            ),
-                        };
+                        return payload.return;
                     }
                     throw new Error(
                         'Error unknown response for signData message'
@@ -266,6 +259,17 @@ export class BackgroundClient {
                     type: 'keyring',
                     method: 'switchAccount',
                     args: { address },
+                })
+            ).pipe(take(1))
+        );
+    }
+
+    public async deriveNextAccount() {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'deriveNextAccount'>>({
+                    type: 'keyring',
+                    method: 'deriveNextAccount',
                 })
             ).pipe(take(1))
         );

@@ -13,7 +13,7 @@ use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
 use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics};
 use crate::safe_client::SafeClientMetricsBase;
-use mysten_metrics::histogram::Histogram;
+use mysten_metrics::histogram::{Histogram, HistogramTimerGuard, HistogramVec};
 use mysten_metrics::spawn_monitored_task;
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
 use prometheus::{
@@ -145,14 +145,36 @@ where
         }
     }
 
-    #[instrument(name = "tx_orchestrator_execute_transaction", level = "debug", skip_all, fields(request_type = ?request.request_type), err)]
+    fn get_timer_guards(&self, tx: &VerifiedTransaction) -> Vec<HistogramTimerGuard> {
+        let mut guards = vec![];
+        if tx.contains_shared_object() {
+            guards.push(self.metrics.request_latency_shared_obj.start_timer());
+            guards.push(
+                self.metrics
+                    .wait_for_finality_latency_shared_obj
+                    .start_timer(),
+            );
+        } else {
+            guards.push(self.metrics.request_latency_single_writer.start_timer());
+            guards.push(
+                self.metrics
+                    .wait_for_finality_latency_single_writer
+                    .start_timer(),
+            );
+        }
+        guards
+    }
+
+    #[instrument(name = "tx_orchestrator_execute_transaction", level = "debug", skip_all,
+    fields(
+        tx_digest = ?request.transaction.digest(),
+        tx_type = ?request.transaction_type(),
+    ),
+    err)]
     pub async fn execute_transaction(
         &self,
         request: ExecuteTransactionRequest,
     ) -> Result<ExecuteTransactionResponse, QuorumDriverError> {
-        let (_in_flight_metrics_guard, good_response_metrics) =
-            self.update_metrics(&request.request_type);
-
         // TODO check if tx is already executed on this node.
         // Note: since EffectsCert is not stored today, we need to gather that from validators
         // (and maybe store it for caching purposes)
@@ -161,11 +183,11 @@ where
             .transaction
             .verify()
             .map_err(QuorumDriverError::InvalidUserSignature)?;
+        let (_in_flight_metrics_guards, good_response_metrics) = self.update_metrics(&transaction);
         let tx_digest = *transaction.digest();
         debug!(?tx_digest, "TO Received transaction execution request.");
 
-        let _request_guard = self.metrics.request_latency.start_timer();
-        let _wait_for_finality_guard = self.metrics.wait_for_finality_latency.start_timer();
+        let _timer_guards = self.get_timer_guards(&transaction);
 
         let ticket = self.submit(transaction).await.map_err(|e| {
             warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
@@ -194,11 +216,14 @@ where
                 } = response;
                 if !wait_for_local_execution {
                     return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        Some(tx_cert.into()),
+                        tx_cert.map(|cert| cert.into()),
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
                         false,
                     ))));
                 }
+                // TODO: Once we support executing transactions without a cert, we won't need this unwrap.
+                let tx_cert = tx_cert.expect("Currently we always obtain a cert");
+
                 match Self::execute_finalized_tx_locally_with_timeout(
                     &self.validator_state,
                     &tx_cert,
@@ -268,7 +293,12 @@ where
             scopeguard::guard(metrics.local_execution_in_flight.clone(), |in_flight| {
                 in_flight.dec();
             });
-        let _guard = metrics.local_execution_latency.start_timer();
+
+        let _guard = if tx_cert.contains_shared_object() {
+            metrics.local_execution_latency_shared_obj.start_timer()
+        } else {
+            metrics.local_execution_latency_single_writer.start_timer()
+        };
         match timeout(
             LOCAL_EXECUTION_TIMEOUT,
             validator_state.fullnode_execute_certificate_with_effects(
@@ -318,6 +348,8 @@ where
                     tx_cert,
                     effects_cert,
                 })) => {
+                    // TODO: Once we support executing transactions without a cert, we won't need this unwrap.
+                    let tx_cert = tx_cert.expect("Currently we always obtain a cert");
                     let tx_digest = tx_cert.digest();
                     if let Err(err) = pending_transaction_log.finish_transaction(tx_digest) {
                         error!(
@@ -370,29 +402,24 @@ where
 
     fn update_metrics(
         &'_ self,
-        request_type: &ExecuteTransactionRequestType,
+        transaction: &VerifiedTransaction,
     ) -> (impl Drop, &'_ GenericCounter<AtomicU64>) {
-        let (in_flight, good_response) = match request_type {
-            ExecuteTransactionRequestType::WaitForEffectsCert => {
-                self.metrics.total_req_received_wait_for_effects_cert.inc();
-                (
-                    &self.metrics.req_in_flight_wait_for_effects_cert,
-                    &self.metrics.good_response_wait_for_effects_cert,
-                )
-            }
-            ExecuteTransactionRequestType::WaitForLocalExecution => {
-                self.metrics
-                    .total_req_received_wait_for_local_execution
-                    .inc();
-                (
-                    &self.metrics.req_in_flight_wait_for_local_execution,
-                    &self.metrics.good_response_wait_for_local_execution,
-                )
-            }
+        let (in_flight, good_response) = if transaction.contains_shared_object() {
+            self.metrics.total_req_received_shared_object.inc();
+            (
+                self.metrics.req_in_flight_shared_object.clone(),
+                &self.metrics.good_response_shared_object,
+            )
+        } else {
+            self.metrics.total_req_received_single_writer.inc();
+            (
+                self.metrics.req_in_flight_single_writer.clone(),
+                &self.metrics.good_response_single_writer,
+            )
         };
         in_flight.inc();
         (
-            scopeguard::guard(in_flight.clone(), |in_flight| {
+            scopeguard::guard(in_flight, |in_flight| {
                 in_flight.dec();
             }),
             good_response,
@@ -426,73 +453,96 @@ where
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 #[derive(Clone)]
 pub struct TransactionOrchestratorMetrics {
-    total_req_received_wait_for_effects_cert: GenericCounter<AtomicU64>,
-    total_req_received_wait_for_local_execution: GenericCounter<AtomicU64>,
+    total_req_received_single_writer: GenericCounter<AtomicU64>,
+    total_req_received_shared_object: GenericCounter<AtomicU64>,
 
-    good_response_wait_for_effects_cert: GenericCounter<AtomicU64>,
-    good_response_wait_for_local_execution: GenericCounter<AtomicU64>,
+    good_response_single_writer: GenericCounter<AtomicU64>,
+    good_response_shared_object: GenericCounter<AtomicU64>,
 
-    req_in_flight_wait_for_effects_cert: GenericGauge<AtomicI64>,
-    req_in_flight_wait_for_local_execution: GenericGauge<AtomicI64>,
+    req_in_flight_single_writer: GenericGauge<AtomicI64>,
+    req_in_flight_shared_object: GenericGauge<AtomicI64>,
 
     local_execution_in_flight: GenericGauge<AtomicI64>,
     local_execution_success: GenericCounter<AtomicU64>,
     local_execution_timeout: GenericCounter<AtomicU64>,
     local_execution_failure: GenericCounter<AtomicU64>,
 
-    request_latency: Histogram,
-    wait_for_finality_latency: Histogram,
-    local_execution_latency: Histogram,
+    request_latency_single_writer: Histogram,
+    request_latency_shared_obj: Histogram,
+    wait_for_finality_latency_single_writer: Histogram,
+    wait_for_finality_latency_shared_obj: Histogram,
+    local_execution_latency_single_writer: Histogram,
+    local_execution_latency_shared_obj: Histogram,
 }
 
+// Note that labeled-metrics are stored upfront individually
+// to mitigate the perf hit by MetricsVec.
+// See https://github.com/tikv/rust-prometheus/tree/master/static-metric
 impl TransactionOrchestratorMetrics {
     pub fn new(registry: &Registry) -> Self {
         let total_req_received = register_int_counter_vec_with_registry!(
             "tx_orchestrator_total_req_received",
-            "Total number of executions request Transaction Orchestrator receives, group by request type",
-            &["request_type"],
+            "Total number of executions request Transaction Orchestrator receives, group by tx type",
+            &["tx_type"],
             registry
         )
         .unwrap();
 
-        let total_req_received_wait_for_effects_cert =
-            total_req_received.with_label_values(&["wait_for_effects_cert"]);
-        let total_req_received_wait_for_local_execution =
-            total_req_received.with_label_values(&["wait_for_local_execution"]);
+        let total_req_received_single_writer =
+            total_req_received.with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]);
+        let total_req_received_shared_object =
+            total_req_received.with_label_values(&[TX_TYPE_SHARED_OBJ_TX]);
 
         let good_response = register_int_counter_vec_with_registry!(
             "tx_orchestrator_good_response",
-            "Total number of good responses Transaction Orchestrator generates, group by request type",
-            &["request_type"],
+            "Total number of good responses Transaction Orchestrator generates, group by tx type",
+            &["tx_type"],
             registry
         )
         .unwrap();
 
-        let good_response_wait_for_effects_cert =
-            good_response.with_label_values(&["wait_for_effects_cert"]);
-        let good_response_wait_for_local_execution =
-            good_response.with_label_values(&["wait_for_local_execution"]);
+        let good_response_single_writer =
+            good_response.with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]);
+        let good_response_shared_object = good_response.with_label_values(&[TX_TYPE_SHARED_OBJ_TX]);
 
         let req_in_flight = register_int_gauge_vec_with_registry!(
             "tx_orchestrator_req_in_flight",
-            "Number of requests in flights Transaction Orchestrator processes, group by request type",
-            &["request_type"],
+            "Number of requests in flights Transaction Orchestrator processes, group by tx type",
+            &["tx_type"],
             registry
         )
         .unwrap();
 
-        let req_in_flight_wait_for_effects_cert =
-            req_in_flight.with_label_values(&["wait_for_effects_cert"]);
-        let req_in_flight_wait_for_local_execution =
-            req_in_flight.with_label_values(&["wait_for_local_execution"]);
+        let req_in_flight_single_writer =
+            req_in_flight.with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]);
+        let req_in_flight_shared_object = req_in_flight.with_label_values(&[TX_TYPE_SHARED_OBJ_TX]);
+
+        let request_latency = HistogramVec::new_in_registry(
+            "tx_orchestrator_request_latency",
+            "Time spent in processing one Transaction Orchestrator request",
+            &["tx_type"],
+            registry,
+        );
+        let wait_for_finality_latency = HistogramVec::new_in_registry(
+            "tx_orchestrator_wait_for_finality_latency",
+            "Time spent in waiting for one Transaction Orchestrator request gets finalized",
+            &["tx_type"],
+            registry,
+        );
+        let local_execution_latency = HistogramVec::new_in_registry(
+            "tx_orchestrator_local_execution_latency",
+            "Time spent in waiting for one Transaction Orchestrator gets locally executed",
+            &["tx_type"],
+            registry,
+        );
 
         Self {
-            total_req_received_wait_for_effects_cert,
-            total_req_received_wait_for_local_execution,
-            good_response_wait_for_effects_cert,
-            good_response_wait_for_local_execution,
-            req_in_flight_wait_for_effects_cert,
-            req_in_flight_wait_for_local_execution,
+            total_req_received_single_writer,
+            total_req_received_shared_object,
+            good_response_single_writer,
+            good_response_shared_object,
+            req_in_flight_single_writer,
+            req_in_flight_shared_object,
             local_execution_in_flight: register_int_gauge_with_registry!(
                 "tx_orchestrator_local_execution_in_flight",
                 "Number of local execution txns in flights Transaction Orchestrator handles",
@@ -517,21 +567,17 @@ impl TransactionOrchestratorMetrics {
                 registry,
             )
             .unwrap(),
-            request_latency: Histogram::new_in_registry(
-                "tx_orchestrator_request_latency",
-                "Time spent in processing one Transaction Orchestrator request",
-                registry,
-            ),
-            wait_for_finality_latency: Histogram::new_in_registry(
-                "tx_orchestrator_wait_for_finality_latency",
-                "Time spent in waiting for one Transaction Orchestrator request gets finalized",
-                registry,
-            ),
-            local_execution_latency: Histogram::new_in_registry(
-                "tx_orchestrator_local_execution_latency",
-                "Time spent in waiting for one Transaction Orchestrator gets locally executed",
-                registry,
-            ),
+            request_latency_single_writer: request_latency
+                .with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]),
+            request_latency_shared_obj: request_latency.with_label_values(&[TX_TYPE_SHARED_OBJ_TX]),
+            wait_for_finality_latency_single_writer: wait_for_finality_latency
+                .with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]),
+            wait_for_finality_latency_shared_obj: wait_for_finality_latency
+                .with_label_values(&[TX_TYPE_SHARED_OBJ_TX]),
+            local_execution_latency_single_writer: local_execution_latency
+                .with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]),
+            local_execution_latency_shared_obj: local_execution_latency
+                .with_label_values(&[TX_TYPE_SHARED_OBJ_TX]),
         }
     }
 
@@ -540,3 +586,6 @@ impl TransactionOrchestratorMetrics {
         Self::new(&registry)
     }
 }
+
+const TX_TYPE_SINGLE_WRITER_TX: &str = "single_writer";
+const TX_TYPE_SHARED_OBJ_TX: &str = "shared_object";

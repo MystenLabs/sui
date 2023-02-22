@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_store::EffectsStore;
 use crate::authority::AuthorityStore;
 use async_trait::async_trait;
 use either::Either;
@@ -21,28 +20,28 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use sui_types::base_types::TransactionDigest;
 use sui_types::error::SuiResult;
-use sui_types::messages::VerifiedSignedTransactionEffects;
+use sui_types::messages::TransactionEffects;
 use tokio::sync::oneshot;
 use tokio::time::Instant;
 use tracing::debug;
 
 #[async_trait]
 pub trait EffectsNotifyRead: Send + Sync + 'static {
-    /// This method reads transaction effects from database.
-    /// If effects are not available immediately, the method blocks until they are persisted
-    /// in the database.
+    /// This method reads executed transaction effects from database.
+    /// If effects are not available immediately (i.e. haven't been executed yet),
+    /// the method blocks until they are persisted in the database.
     ///
     /// This method **does not** schedule transactions for execution - it is responsibility of the caller
     /// to schedule transactions for execution before calling this method.
-    async fn notify_read_effects(
+    async fn notify_read_executed_effects(
         &self,
         digests: Vec<TransactionDigest>,
-    ) -> SuiResult<Vec<VerifiedSignedTransactionEffects>>;
+    ) -> SuiResult<Vec<TransactionEffects>>;
 
-    fn get_effects(
+    fn multi_get_executed_effects(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<VerifiedSignedTransactionEffects>>>;
+    ) -> SuiResult<Vec<Option<TransactionEffects>>>;
 }
 
 type Registrations<V> = Vec<oneshot::Sender<V>>;
@@ -181,14 +180,16 @@ impl<'a, K: Eq + Hash + Clone, V: Clone> Drop for Registration<'a, K, V> {
 
 #[async_trait]
 impl EffectsNotifyRead for Arc<AuthorityStore> {
-    async fn notify_read_effects(
+    async fn notify_read_executed_effects(
         &self,
         digests: Vec<TransactionDigest>,
-    ) -> SuiResult<Vec<VerifiedSignedTransactionEffects>> {
+    ) -> SuiResult<Vec<TransactionEffects>> {
         let timer = Instant::now();
         // We need to register waiters _before_ reading from the database to avoid race conditions
-        let registrations = self.effects_notify_read.register_all(digests.clone());
-        let effects = EffectsStore::get_effects(self, digests.iter())?;
+        let registrations = self
+            .executed_effects_notify_read
+            .register_all(digests.clone());
+        let effects = self.multi_get_executed_effects(&digests)?;
         let mut needs_wait = false;
         let mut results: FuturesUnordered<_> = effects
             .into_iter()
@@ -223,11 +224,11 @@ impl EffectsNotifyRead for Arc<AuthorityStore> {
             .collect())
     }
 
-    fn get_effects(
+    fn multi_get_executed_effects(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<VerifiedSignedTransactionEffects>>> {
-        EffectsStore::get_effects(self, digests.iter())
+    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+        AuthorityStore::multi_get_executed_effects(self, digests)
     }
 }
 

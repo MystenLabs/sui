@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer, Ed25519Keypair } from '@mysten/sui.js';
+import { Ed25519Keypair, fromB64 } from '@mysten/sui.js';
 import mitt from 'mitt';
 import { throttle } from 'throttle-debounce';
 
@@ -245,18 +245,13 @@ export class Keyring {
                         `Account for address ${address} not found in keyring`
                     );
                 }
-                const { signature, signatureScheme, pubKey } =
-                    await account.sign(new Base64DataBuffer(data));
+                const signature = await account.sign(fromB64(data));
                 uiConnection.send(
                     createMessage<KeyringPayload<'signData'>>(
                         {
                             type: 'keyring',
                             method: 'signData',
-                            return: {
-                                signatureScheme,
-                                signature: signature.toString(),
-                                pubKey: pubKey.toBase64(),
-                            },
+                            return: signature,
                         },
                         id
                     )
@@ -272,6 +267,11 @@ export class Keyring {
                 const changed = await this.changeActiveAccount(address);
                 if (!changed) {
                     throw new Error(`Failed to change account to ${address}`);
+                }
+                uiConnection.send(createMessage({ type: 'done' }, id));
+            } else if (isKeyringPayload(payload, 'deriveNextAccount')) {
+                if (!(await this.deriveNextAccount())) {
+                    throw new Error('Failed to derive next account');
                 }
                 uiConnection.send(createMessage({ type: 'done' }, id));
             }
