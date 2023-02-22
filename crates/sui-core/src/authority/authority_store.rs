@@ -358,7 +358,7 @@ impl AuthorityStore {
                         )
                     })?;
                     // If we can't find the locked version, it means
-                    // 1. either we have a bug that skips shared object verison assignment
+                    // 1. either we have a bug that skips shared object version assignment
                     // 2. or we have some DB corruption
                     let version = shared_locks.get(id).unwrap_or_else(|| {
                         panic!(
@@ -433,7 +433,7 @@ impl AuthorityStore {
                         )
                     })?;
                     // If we can't find the locked version, it means
-                    // 1. either we have a bug that skips shared object verison assignment
+                    // 1. either we have a bug that skips shared object version assignment
                     // 2. or we have some DB corruption
                     let version = shared_locks.get(id).unwrap_or_else(|| {
                         panic!(
@@ -1106,29 +1106,21 @@ impl AuthorityStore {
         }
     }
 
-    pub fn insert_transaction(&self, tx: &VerifiedTransaction) -> Result<(), TypedStoreError> {
-        self.perpetual_tables
-            .transactions
-            .insert(tx.digest(), tx.serializable_ref())
-    }
-
     pub fn insert_transaction_and_effects(
         &self,
-        tx: &VerifiedTransaction,
-        effects: &TransactionEffects,
-        // Pass in the effects digest to avoid re-computing it.
-        effects_digest: &TransactionEffectsDigest,
+        transaction: &VerifiedTransaction,
+        transaction_effects: &TransactionEffects,
     ) -> Result<(), TypedStoreError> {
-        #[cfg(debug_assertions)]
-        assert_eq!(&effects.digest(), effects_digest);
-
         let mut write_batch = self.perpetual_tables.transactions.batch();
         write_batch = write_batch
             .insert_batch(
                 &self.perpetual_tables.transactions,
-                [(tx.digest(), tx.serializable_ref())],
+                [(transaction.digest(), transaction.serializable_ref())],
             )?
-            .insert_batch(&self.perpetual_tables.effects, [(effects_digest, effects)])?;
+            .insert_batch(
+                &self.perpetual_tables.effects,
+                [(transaction_effects.digest(), transaction_effects)],
+            )?;
 
         write_batch.write()?;
         Ok(())

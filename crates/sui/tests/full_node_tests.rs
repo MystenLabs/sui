@@ -978,7 +978,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(is_executed_locally);
     // verify that the node has sequenced and executed the txn
-    node.state().get_transaction_and_effects(digest).await
+    node.state().get_executed_transaction_and_effects(digest).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForLocalExecution: {:?}", digest, e));
 
     // Test WaitForEffectsCert
@@ -1007,7 +1007,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(!is_executed_locally);
     wait_for_tx(digest, node.state().clone()).await;
-    node.state().get_transaction_and_effects(digest).await
+    node.state().get_executed_transaction_and_effects(digest).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForEffectsCert: {:?}", digest, e));
 
     Ok(())

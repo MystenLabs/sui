@@ -149,7 +149,7 @@ impl ReadApiServer for ReadApi {
     ) -> RpcResult<SuiTransactionResponse> {
         let (transaction, effects) = self
             .state
-            .get_transaction_and_effects(digest)
+            .get_executed_transaction_and_effects(digest)
             .await
             .tap_err(|err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err))?;
         let checkpoint = self

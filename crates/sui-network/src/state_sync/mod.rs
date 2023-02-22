@@ -1169,12 +1169,10 @@ where
                 && effects.transaction_digest == digests.transaction
             {
                 store
-                    .insert_transaction(sui_types::messages::VerifiedTransaction::new_unchecked(
-                        transaction,
-                    ))
-                    .expect("store operation should not fail");
-                store
-                    .insert_transaction_effects(effects)
+                    .insert_transaction_and_effects(
+                        sui_types::messages::VerifiedTransaction::new_unchecked(transaction),
+                        effects,
+                    )
                     .expect("store operation should not fail");
                 // TODO: If the transaction has already been executed, we should check that the executed
                 // effects match. If they don't, it's a bug and we should panic.
