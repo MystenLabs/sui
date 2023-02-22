@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 use sui_open_rpc::{Module, Project};
 
-use crate::metrics::MetricsLayer;
+use crate::metrics::MetricsLogger;
 
 pub mod api;
 pub mod bcs_api;
@@ -120,16 +120,15 @@ impl JsonRpcServerBuilder {
             })
             .unwrap_or(u32::MAX);
 
-        let metrics_layer = MetricsLayer::new(&self.registry, &methods_names);
-        let middleware = tower::ServiceBuilder::new()
-            .layer(cors)
-            .layer(metrics_layer);
+        let metrics_logger = MetricsLogger::new(&self.registry, &methods_names);
+        let middleware = tower::ServiceBuilder::new().layer(cors);
 
         let server = ServerBuilder::default()
             .max_response_body_size(2 << 30)
             .max_connections(max_connection)
             .set_host_filtering(AllowHosts::Any)
             .set_middleware(middleware)
+            .set_logger(metrics_logger)
             .build(listen_address)
             .await?;
         let addr = server.local_addr()?;
