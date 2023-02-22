@@ -614,7 +614,10 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     assert_eq!(5, tx.len());
 
     //test get_transaction_batch
-    let response: Vec<SuiTransactionResponse> = http_client.get_transactions_batch(tx).await?;
+    let response: Vec<SuiTransactionResponse> = http_client.multi_get_transactions(tx).await?;
+    println!("{}", response.len());
+    println!("{:?}", response);
+
     assert_eq!(5, response.len());
     assert!(response[1].certificate.transaction_digest == response[1].effects.transaction_digest);
 

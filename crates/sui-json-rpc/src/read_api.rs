@@ -196,29 +196,24 @@ impl ReadApiServer for ReadApi {
         })
     }
 
-    async fn get_transactions_batch(
+    async fn multi_get_transactions(
         &self,
         digests: Vec<TransactionDigest>,
     ) -> RpcResult<Vec<SuiTransactionResponse>> {
         let txn_batch = self
             .state
-            .get_transactions_batch(&digests)
+            .multi_get_transactions(&digests)
             .await
             .tap_err(|err| debug!(txs_digests=?digests, "Failed to get batch: {:?}", err))?;
         let mut responses: Vec<SuiTransactionResponse> = Vec::new();
         for i in 0..txn_batch.len() {
-            let checkpoint = self
-                .state
-                .database
-                .get_transaction_checkpoint(&digests[i])
-                .map_err(|e| anyhow!("{e}"))?;
             responses.push(SuiTransactionResponse {
-                certificate: txn_batch[i].clone().0.try_into()?,
+                certificate: txn_batch[i].clone().0.0.try_into()?,
                 effects: SuiTransactionEffects::try_from(
-                    txn_batch[i].clone().1,
+                    txn_batch[i].0.clone().1,
                     self.state.module_cache.as_ref(),
                 )?,
-                checkpoint: checkpoint.map(|(_epoch, checkpoint)| checkpoint),
+                checkpoint: txn_batch[i].1,
                 timestamp_ms: self.state.get_timestamp_ms(&digests[i]).await?,
                 parsed_data: None,
             })

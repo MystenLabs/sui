@@ -2137,18 +2137,20 @@ impl AuthorityState {
         }
     }
 
-    pub async fn get_transactions_batch(
+    pub async fn multi_get_transactions(
         &self,
         digests: &[TransactionDigest],
-    ) -> Result<Vec<(VerifiedCertificate, TransactionEffects)>, anyhow::Error> {
+    ) -> Result<Vec<((VerifiedCertificate, TransactionEffects), Option<CheckpointSequenceNumber>)>, anyhow::Error> {
         let certs = self.database.multi_get_certified_transaction(digests)?;
         let effects = self.database.multi_get_executed_effects(digests)?;
-        let mut response: Vec<(VerifiedCertificate, TransactionEffects)> = Vec::new();
+        let checkpoints = self.database.multi_get_transaction_checkpoint(digests)?;
+        let mut response: Vec<((VerifiedCertificate, TransactionEffects), Option<CheckpointSequenceNumber>)> = Vec::new();
 
-        if certs.len() == effects.len() {
-            for i in 0..certs.len() {
-                match (certs[i].clone(), effects[i].clone()) {
-                    (Some(cert), Some(effect)) => response.push((cert, effect)),
+        if certs.len() == effects.len() && checkpoints.len() == certs.len() {
+            // for i in 0..certs.len() {
+            for ((cert, effect), checkpoint) in certs.iter().zip(effects.iter()).zip(checkpoints.iter()) {
+                match ((cert.clone(), effect.clone()), checkpoint.clone()) {
+                    ((Some(cert), Some(effect)), Some((_,check))) => response.push(((cert, effect), Some(check))),
                     _ => continue,
                 }
             }
@@ -2156,6 +2158,15 @@ impl AuthorityState {
 
         if response.is_empty() {
             Err(anyhow!(SuiError::NoBatchesFoundError))
+        // } else if response.len() != digests.len(){
+        //     let mut missed_digests: Vec<TransactionDigest> = Vec::new();
+        //     for digest in digests.iter() {
+        //         if let None = effects.iter().find(|&effect| effect.clone().unwrap().transaction_digest != *digest) {
+        //             missed_digests.push(*digest);
+        //         }
+        //     }
+        //     Err(anyhow!(SuiError::TransactionsNotFound{ digests: missed_digests }))
+
         } else {
             Ok(response)
         }
