@@ -63,6 +63,11 @@ impl CommittedSubDag {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct ConsensusReputationScore {
+    pub scores_per_authority: HashMap<PublicKey, u64>,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CommittedSubDagShell {
     /// The sequence of committed certificates' digests.

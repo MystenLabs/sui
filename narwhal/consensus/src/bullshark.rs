@@ -12,7 +12,7 @@ use fastcrypto::traits::EncodeDecodeBase64;
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::time::Instant;
 use tracing::{debug, trace};
-use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round};
+use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusReputationScore, ConsensusStore, Round, StoreResult};
 
 #[cfg(test)]
 #[path = "tests/bullshark_tests.rs"]
@@ -48,6 +48,11 @@ pub struct Bullshark {
     pub last_leader_election: LastRound,
     /// The most recent round of inserted certificate
     pub max_inserted_certificate_round: Round,
+    /// The number of committed subdags that will trigger the schedule change and reputation
+    /// score reset.
+    pub change_schedule_every_committed_subdags: u64,
+    /// The last calculated consensus reputation score
+    pub last_consensus_reputation_score: ConsensusReputationScore
 }
 
 impl ConsensusProtocol for Bullshark {

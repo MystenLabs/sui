@@ -266,7 +266,7 @@ where
             tx_sequence,
             protocol,
             metrics,
-            state,
+            state
         };
 
         spawn_logged_monitored_task!(s.run(), "Consensus", INFO)
