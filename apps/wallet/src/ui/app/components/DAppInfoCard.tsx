@@ -62,7 +62,7 @@ export function DAppInfoCard({ name, url, iconUrl }: DAppInfoCardProps) {
                                 title={name}
                                 text="View Website"
                                 after={<ArrowUpRight12 />}
-                                color="heroDark"
+                                color="suiDark"
                                 weight="medium"
                             />
                         </div>
