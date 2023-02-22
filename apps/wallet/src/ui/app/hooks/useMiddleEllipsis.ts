@@ -3,6 +3,7 @@
 
 import { useMemo } from 'react';
 
+/** @deprecated Use `formatAddress` or `formatDigest` from the SDK instead. */
 export default function useMiddleEllipsis(
     txt: string | null,
     maxLength = 10,
