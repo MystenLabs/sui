@@ -22,23 +22,9 @@ use sui_open_rpc::Module;
 use sui_types::event::{EventEnvelope, EventID};
 use sui_types::query::EventQuery;
 
+use crate::api::cap_page_limit;
 use crate::api::EventReadApiServer;
-use crate::api::{cap_page_limit, EventStreamingApiServer};
 use crate::SuiRpcModule;
-
-pub struct EventStreamingApiImpl {
-    state: Arc<AuthorityState>,
-    event_handler: Arc<EventHandler>,
-}
-
-impl EventStreamingApiImpl {
-    pub fn new(state: Arc<AuthorityState>, event_handler: Arc<EventHandler>) -> Self {
-        Self {
-            state,
-            event_handler,
-        }
-    }
-}
 
 fn spawn_subscription<S, T, E>(mut sink: SubscriptionSink, rx: S)
 where
@@ -60,8 +46,50 @@ where
     });
 }
 
+pub struct EventReadApi {
+    state: Arc<AuthorityState>,
+    event_handler: Arc<EventHandler>,
+}
+
+impl EventReadApi {
+    pub fn new(state: Arc<AuthorityState>, event_handler: Arc<EventHandler>) -> Self {
+        Self {
+            state,
+            event_handler,
+        }
+    }
+}
+
+#[allow(unused)]
 #[async_trait]
-impl EventStreamingApiServer for EventStreamingApiImpl {
+impl EventReadApiServer for EventReadApi {
+    async fn get_events(
+        &self,
+        query: EventQuery,
+        cursor: Option<EventID>,
+        limit: Option<usize>,
+        descending_order: Option<bool>,
+    ) -> RpcResult<EventPage> {
+        debug!(
+            ?query,
+            ?cursor,
+            ?limit,
+            ?descending_order,
+            "get_events query"
+        );
+        let descending = descending_order.unwrap_or_default();
+        let limit = cap_page_limit(limit);
+        // Retrieve 1 extra item for next cursor
+        let mut data = self
+            .state
+            .get_events(query, cursor, limit + 1, descending)
+            .await?;
+        let next_cursor = data.get(limit).map(|(id, _)| id.clone());
+        data.truncate(limit);
+        let data = data.into_iter().map(|(_, event)| event).collect();
+        Ok(EventPage { data, next_cursor })
+    }
+
     fn subscribe_event(
         &self,
         mut sink: SubscriptionSink,
@@ -92,63 +120,7 @@ impl EventStreamingApiServer for EventStreamingApiImpl {
     }
 }
 
-impl SuiRpcModule for EventStreamingApiImpl {
-    fn rpc(self) -> RpcModule<Self> {
-        self.into_rpc()
-    }
-
-    fn rpc_doc_module() -> Module {
-        crate::api::EventStreamingApiOpenRpc::module_doc()
-    }
-}
-
-#[allow(unused)]
-pub struct EventReadApiImpl {
-    state: Arc<AuthorityState>,
-    event_handler: Arc<EventHandler>,
-}
-
-impl EventReadApiImpl {
-    pub fn new(state: Arc<AuthorityState>, event_handler: Arc<EventHandler>) -> Self {
-        Self {
-            state,
-            event_handler,
-        }
-    }
-}
-
-#[allow(unused)]
-#[async_trait]
-impl EventReadApiServer for EventReadApiImpl {
-    async fn get_events(
-        &self,
-        query: EventQuery,
-        cursor: Option<EventID>,
-        limit: Option<usize>,
-        descending_order: Option<bool>,
-    ) -> RpcResult<EventPage> {
-        debug!(
-            ?query,
-            ?cursor,
-            ?limit,
-            ?descending_order,
-            "get_events query"
-        );
-        let descending = descending_order.unwrap_or_default();
-        let limit = cap_page_limit(limit);
-        // Retrieve 1 extra item for next cursor
-        let mut data = self
-            .state
-            .get_events(query, cursor, limit + 1, descending)
-            .await?;
-        let next_cursor = data.get(limit).map(|(id, _)| id.clone());
-        data.truncate(limit);
-        let data = data.into_iter().map(|(_, event)| event).collect();
-        Ok(EventPage { data, next_cursor })
-    }
-}
-
-impl SuiRpcModule for EventReadApiImpl {
+impl SuiRpcModule for EventReadApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

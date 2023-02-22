@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::api::CoinReadApiClient;
 use crate::api::GovernanceReadApiClient;
-use crate::api::{RpcFullNodeReadApiClient, ThresholdBlsApiClient, TransactionExecutionApiClient};
-use crate::api::{RpcReadApiClient, RpcTransactionBuilderClient};
+use crate::api::{ReadApiClient, TransactionBuilderClient};
+use crate::api::{ThresholdBlsApiClient, TransactionExecutionClient};
 use std::path::Path;
 
 #[cfg(not(msim))]

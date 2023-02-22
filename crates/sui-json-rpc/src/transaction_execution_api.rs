@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::TransactionExecutionApiServer;
+use crate::api::TransactionExecutionServer;
 use crate::SuiRpcModule;
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -21,12 +21,13 @@ use sui_types::intent::Intent;
 use sui_types::messages::{ExecuteTransactionRequest, ExecuteTransactionRequestType};
 use sui_types::messages::{ExecuteTransactionResponse, Transaction};
 use sui_types::signature::GenericSignature;
-pub struct FullNodeTransactionExecutionApi {
+
+pub struct TransactionExecutionApi {
     pub transaction_orchestrator: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
     pub module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
 }
 
-impl FullNodeTransactionExecutionApi {
+impl TransactionExecutionApi {
     pub fn new(
         transaction_orchestrator: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
         module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
@@ -39,7 +40,7 @@ impl FullNodeTransactionExecutionApi {
 }
 
 #[async_trait]
-impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
+impl TransactionExecutionServer for TransactionExecutionApi {
     async fn execute_transaction(
         &self,
         tx_bytes: Base64,
@@ -110,12 +111,12 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
     }
 }
 
-impl SuiRpcModule for FullNodeTransactionExecutionApi {
+impl SuiRpcModule for TransactionExecutionApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::TransactionExecutionApiOpenRpc::module_doc()
+        crate::api::TransactionExecutionOpenRpc::module_doc()
     }
 }

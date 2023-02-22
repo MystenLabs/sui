@@ -30,13 +30,10 @@ use sui_core::{
     authority::{AuthorityState, AuthorityStore},
     authority_client::NetworkAuthorityClient,
 };
-use sui_json_rpc::bcs_api::BcsApiImpl;
-use sui_json_rpc::event_api::EventReadApiImpl;
-use sui_json_rpc::event_api::EventStreamingApiImpl;
-use sui_json_rpc::read_api::FullNodeApi;
+use sui_json_rpc::event_api::EventReadApi;
 use sui_json_rpc::read_api::ReadApi;
-use sui_json_rpc::transaction_builder_api::FullNodeTransactionBuilderApi;
-use sui_json_rpc::transaction_execution_api::FullNodeTransactionExecutionApi;
+use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
+use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
@@ -882,29 +879,23 @@ pub async fn build_server(
         return Ok(None);
     }
 
-    let mut server = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry)?;
+    let mut server = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
 
     server.register_module(ReadApi::new(state.clone()))?;
     server.register_module(CoinReadApi::new(state.clone()))?;
-    server.register_module(FullNodeApi::new(state.clone()))?;
-    server.register_module(BcsApiImpl::new(state.clone()))?;
     server.register_module(ThresholdBlsApi::new(state.clone()))?;
-    server.register_module(FullNodeTransactionBuilderApi::new(state.clone()))?;
+    server.register_module(TransactionBuilderApi::new(state.clone()))?;
     server.register_module(GovernanceReadApi::new(state.clone()))?;
 
     if let Some(transaction_orchestrator) = transaction_orchestrator {
-        server.register_module(FullNodeTransactionExecutionApi::new(
+        server.register_module(TransactionExecutionApi::new(
             transaction_orchestrator.clone(),
             state.module_cache.clone(),
         ))?;
     }
 
     if let Some(event_handler) = state.event_handler.clone() {
-        server.register_module(EventReadApiImpl::new(state.clone(), event_handler))?;
-    }
-
-    if let Some(event_handler) = state.event_handler.clone() {
-        server.register_module(EventStreamingApiImpl::new(state.clone(), event_handler))?;
+        server.register_module(EventReadApi::new(state.clone(), event_handler))?;
     }
 
     let rpc_server_handle = server.start(config.json_rpc_address).await?;
