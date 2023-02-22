@@ -654,6 +654,7 @@ impl CheckpointBuilder {
                         .in_monitored_scope("CheckpointBuilder::digest_epoch")
                         .await?,
                 );
+                self.metrics.highest_accumulated_epoch.set(epoch as i64);
 
                 // for now, just log this value, and insert default val into checkpoint summary
                 info!("Epoch {epoch} root state hash digest: {root_state_digest:?}");
