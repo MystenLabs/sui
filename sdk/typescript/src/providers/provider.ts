@@ -388,6 +388,7 @@ export abstract class Provider {
   /**
    * Returns checkpoint summary based on a checkpoint sequence number
    * @param sequence_number - The sequence number of the desired checkpoint summary
+   * @deprecated - Prefer `getCheckpoint` instead
    */
   abstract getCheckpointSummary(
     sequenceNumber: number,
