@@ -8721,6 +8721,7 @@ dependencies = [
  "mysten-metrics",
  "narwhal-network",
  "prometheus",
+ "rand 0.8.5",
  "serde 1.0.152",
  "serde_json",
  "sui-config",
