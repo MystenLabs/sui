@@ -149,6 +149,8 @@ module nfts::collectible {
         res
     }
 
+    // === Reads ===
+
     /// Keeping the door open for the dynamic field extensions.
     public fun uid_mut<T: store>(self: &mut Collectible<T>): &mut UID {
         &mut self.id
@@ -179,7 +181,9 @@ module nfts::collectible {
         &self.meta
     }
 
-    /// Internal: pop the value from the optional vector or return `none`.
+    // === Internal ===
+
+    /// Pop the value from the optional vector or return `none`.
     fun pop_or_none<T>(opt: &mut Option<vector<T>>): Option<T> {
         if (option::is_none(opt)) {
             option::none()
@@ -189,7 +193,8 @@ module nfts::collectible {
     }
 }
 
-///
+/// Boars Collection.
+/// Initializes a simple collection.
 module nfts::boars {
     use sui::tx_context::{TxContext, sender};
     use sui::transfer::transfer;
