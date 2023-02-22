@@ -43,8 +43,8 @@ export function ExportAccount() {
             <MenuLayout title="Your Private Key" back={accountUrl}>
                 <div className="flex flex-col flex-nowrap items-stretch gap-3">
                     <Alert mode="warning">
-                        Do not share your private key! It provides full control
-                        of your account.
+                        <div>Do not share your Private Key!</div>
+                        <div>It provides full control of your account.</div>
                     </Alert>
                     <HideShowDisplayBox
                         value={privateKey}
