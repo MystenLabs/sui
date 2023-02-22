@@ -15,6 +15,7 @@ use sui_types::base_types::{
     ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
 };
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
+use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
 };
@@ -80,7 +81,7 @@ pub trait ReadApi {
         /// The ID of the queried parent object
         parent_object_id: ObjectID,
         /// The Name of the dynamic field
-        name: String,
+        name: DynamicFieldName,
     ) -> RpcResult<GetObjectDataResponse>;
 
     /// Return the argument types of a Move function,
