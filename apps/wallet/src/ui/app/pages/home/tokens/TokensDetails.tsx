@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
-import cl from 'classnames';
 import { useMemo } from 'react';
 
 import { CoinActivitiesCard } from './CoinActivityCard';
@@ -19,16 +18,14 @@ import { AccountSelector } from '_src/ui/app/components/AccountSelector';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
 
-import st from './TokensPage.module.scss';
-
 type TokenDetailsProps = {
     coinType?: string;
 };
 
 const emptyWalletDescription = (
-    <div className={st.emptyWalletDescription}>
+    <Text variant="p2" color="gray-80" weight="normal">
         To conduct transactions on the Sui network, you need SUI in your wallet.
-    </div>
+    </Text>
 );
 
 function MyTokens() {
@@ -43,10 +40,10 @@ function MyTokens() {
     return (
         <Loading loading={loadingBalances}>
             {balance?.length ? (
-                <div className="flex flex-1 justify-start gap-2 flex-col w-full">
+                <div className="flex flex-1 justify-start gap-2 flex-col w-full mt-6">
                     <Text
                         variant="caption"
-                        color="steel-dark"
+                        color="steel-darker"
                         weight="semibold"
                     >
                         MY COINS
@@ -63,7 +60,7 @@ function MyTokens() {
                 </div>
             ) : null}
             {noSuiToken ? (
-                <div className={st.emptyWallet}>
+                <div className="flex flex-col flex-nowrap justify-center items-center gap-2 text-center mt-6 px-2.5">
                     <FaucetRequestButton trackEventSource="home" />
                     {emptyWalletDescription}
                 </div>
@@ -94,7 +91,10 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
         <>
             {coinType && <PageTitle title={coinSymbol} back="/tokens" />}
 
-            <div className={st.container} data-testid="coin-page">
+            <div
+                className="flex flex-col h-full flex-1 flex-grow items-center"
+                data-testid="coin-page"
+            >
                 {error instanceof Error ? (
                     <Alert>
                         <div>
@@ -104,7 +104,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                     </Alert>
                 ) : null}
                 {!coinType && <AccountSelector />}
-                <div className={st.balanceContainer}>
+                <div className="mt-1.5">
                     <Loading loading={loadingBalances}>
                         <CoinBalance
                             balance={tokenBalance}
@@ -113,7 +113,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                         />
                     </Loading>
                 </div>
-                <div className={st.actions}>
+                <div className="flex flex-nowrap gap-2  justify-center w-full  mt-5">
                     <IconLink
                         icon={SuiIcons.Buy}
                         to="/"
@@ -141,20 +141,36 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                 </div>
 
                 {activeCoinType === SUI_TYPE_ARG && accountAddress ? (
-                    <TokenIconLink accountAddress={accountAddress} />
+                    <div className="mt-6 flex justify-start gap-2 flex-col w-full">
+                        <Text
+                            variant="caption"
+                            color="steel-darker"
+                            weight="semibold"
+                        >
+                            SUI Stake
+                        </Text>
+                        <TokenIconLink
+                            accountAddress={accountAddress}
+                            disabled={!tokenBalance}
+                        />
+                    </div>
                 ) : null}
 
                 {!coinType ? (
                     <MyTokens />
                 ) : (
-                    <>
-                        <div className={cl([st.title, st.tokenActivities])}>
+                    <div className="mt-6 flex-1 justify-start gap-2 flex-col w-full">
+                        <Text
+                            variant="caption"
+                            color="steel-darker"
+                            weight="semibold"
+                        >
                             {coinSymbol} activity
-                        </div>
-                        <div className={st.txContent}>
+                        </Text>
+                        <div className="flex flex-col flex-nowrap flex-1">
                             <CoinActivitiesCard coinType={activeCoinType} />
                         </div>
-                    </>
+                    </div>
                 )}
             </div>
         </>
