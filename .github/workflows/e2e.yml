@@ -94,14 +94,10 @@ jobs:
           clean: false
 
       - name: Download sui binary from latest devnet release
-        uses: wei/wget@v1
-        with:
-          args: -O target/debug/sui https://github.com/MystenLabs/sui/releases/latest/download/sui
+        run: mkdir -p target/debug && wget -O target/debug/sui https://github.com/MystenLabs/sui/releases/latest/download/sui
 
       - name: Download sui-test-validator binary from latest devnet release
-        uses: wei/wget@v1
-        with:
-          args: -O target/debug/sui-test-validator https://github.com/MystenLabs/sui/releases/latest/download/sui-test-validator
+        run: mkdir -p target/debug && wget -O target/debug/sui-test-validator https://github.com/MystenLabs/sui/releases/latest/download/sui-test-validator
 
       - name: Install Nodejs
         uses: actions/setup-node@8c91899e586c5b171469028077307d293428b516 # pin@v3
