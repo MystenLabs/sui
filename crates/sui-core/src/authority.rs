@@ -2583,7 +2583,8 @@ impl AuthorityState {
                 {
                     info!(
                         "validator {:?} supports {:?}",
-                        authority, next_protocol_version
+                        authority.concise(),
+                        next_protocol_version
                     );
                     stake_aggregator.insert_generic(*authority, true);
                 } else {

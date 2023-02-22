@@ -769,6 +769,7 @@ impl SuiNode {
                             .supported_protocol_versions
                             .expect("Supported versions should be populated"),
                     ));
+                info!(?transaction, "submitting capabilities to consensus");
                 components
                     .consensus_adapter
                     .submit(transaction, None, &cur_epoch_store)?;
