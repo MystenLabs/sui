@@ -12,7 +12,7 @@
 /// More entry functions might be added in the future depending on the use cases.
 module sui::display {
     use sui::publisher::{is_package, Publisher};
-    use sui::tx_context::TxContext;
+    use sui::tx_context::{sender, TxContext};
     use std::string::{String, utf8};
     use sui::vec_map::{Self, VecMap};
     use sui::object::{Self, ID, UID};
@@ -20,7 +20,7 @@ module sui::display {
     use sui::event;
     use std::vector;
 
-    /// For when T does not belong to package in PublisherCap.
+    /// For when T does not belong to package in Publisher.
     const ENotOwner: u64 = 0;
 
     /// For when vectors passed into one of the multiple insert functions
@@ -65,7 +65,7 @@ module sui::display {
         id: ID
     }
 
-    // ============ Initializer Functions ===========
+    // === Initializer Functions ===
 
     /// Since the only way to own a Display is before it has been published,
     /// we don't need to perform an authorization check.
@@ -73,8 +73,8 @@ module sui::display {
     /// Also, the only place it can be used is the function where the Display
     /// object was created; hence values and names are likely to be hardcoded and
     /// vector<u8> is the best type for that purpose.
-    public fun set_owned<T: key>(d: Display<T>, name: vector<u8>, value: vector<u8>): Display<T> {
-        set_internal(&mut d, utf8(name), utf8(value));
+    public fun add_owned<T: key>(d: Display<T>, name: vector<u8>, value: vector<u8>): Display<T> {
+        add_internal(&mut d, utf8(name), utf8(value));
         d
     }
 
@@ -97,14 +97,24 @@ module sui::display {
 
     /// Share an object after the initialization is complete.
     public fun share<T: key>(d: Display<T>) {
-        transfer::share_object(d);
+        transfer::share_object(d)
     }
 
-    // ========== Entry functions ==========
+    /// Transfer an object to an address to have it single owner.
+    public fun transfer<T: key>(d: Display<T>, receiver: address) {
+        transfer::transfer(d, receiver)
+    }
+
+    // === Entry functions: Create ===
 
     /// Create a new empty Display<T> object and share it.
     entry public fun create_and_share<T: key>(pub: &Publisher, ctx: &mut TxContext) {
         share(empty<T>(pub, ctx))
+    }
+
+    /// Create a new empty Display<T> object and keep it.
+    entry public fun create_and_keep<T: key>(pub: &Publisher, ctx: &mut TxContext) {
+        transfer(empty<T>(pub, ctx), sender(ctx))
     }
 
     /// Create a new Display<T> object with a set of fields.
@@ -117,21 +127,23 @@ module sui::display {
         let i = 0;
         let display = empty<T>(pub, ctx);
         while (i < len) {
-            set_internal(&mut display, *vector::borrow(&fields, i), *vector::borrow(&values, i));
+            add_internal(&mut display, *vector::borrow(&fields, i), *vector::borrow(&values, i));
             i = i + 1;
         };
 
         share(display)
     }
 
+    // === Entry functions: Add/Modify fields ===
+
     /// Sets a custom `name` field with the `value`.
-    entry public fun set<T: key>(pub: &Publisher, d: &mut Display<T>, name: String, value: String) {
+    entry public fun add<T: key>(pub: &Publisher, d: &mut Display<T>, name: String, value: String) {
         assert!(is_package<T>(pub), ENotOwner);
-        set_internal(d, name, value)
+        add_internal(d, name, value)
     }
 
     /// Sets multiple `fields` with `values`.
-    entry public fun set_multiple<T: key>(
+    entry public fun add_multiple<T: key>(
         pub: &Publisher, d: &mut Display<T>, fields: vector<String>, values: vector<String>
     ) {
         let len = vector::length(&fields);
@@ -140,13 +152,21 @@ module sui::display {
 
         let i = 0;
         while (i < 0) {
-            set_internal(d, *vector::borrow(&fields, i), *vector::borrow(&values, i));
+            add_internal(d, *vector::borrow(&fields, i), *vector::borrow(&values, i));
             i = i + 1;
         };
     }
 
+    /// Change the value of the field.
+    /// TODO (long run): version changes;
+    entry public fun edit<T: key>(pub: &Publisher, d: &mut Display<T>, name: String, value: String) {
+        assert!(is_package<T>(pub), ENotOwner);
+        let (_k, _v) = vec_map::remove(name);
+        add_internal(d, name, value)
+    }
+
     /// Private method for inserting fields without security checks.
-    fun set_internal<T: key>(d: &mut Display<T>, name: String, value: String) {
+    fun add_internal<T: key>(d: &mut Display<T>, name: String, value: String) {
         vec_map::insert(&mut d.fields, name, value)
     }
 }
@@ -177,10 +197,10 @@ module sui::display_tests {
         // create a new display object
         let display = display::empty<Capy>(&pub, test::ctx(&mut test));
 
-        let d = display::set_owned(display, b"name", b"Capy {name}");
-        let d = display::set_owned(d, b"link", b"https://capy.art/capy/{id}");
-        let d = display::set_owned(d, b"image", b"https://api.capy.art/capy/{id}/svg");
-        let d = display::set_owned(d, b"description", b"A Lovely Capy");
+        let d = display::add_owned(display, b"name", b"Capy {name}");
+        let d = display::add_owned(d, b"link", b"https://capy.art/capy/{id}");
+        let d = display::add_owned(d, b"image", b"https://api.capy.art/capy/{id}/svg");
+        let d = display::add_owned(d, b"description", b"A Lovely Capy");
 
         publisher::burn(pub);
         display::share(d);
