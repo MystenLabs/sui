@@ -151,7 +151,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                         </Text>
                         <TokenIconLink
                             accountAddress={accountAddress}
-                            disabled={!tokenBalance}
+                            noSuiToken={!tokenBalance}
                         />
                     </div>
                 ) : null}

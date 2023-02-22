@@ -19,12 +19,13 @@ import { trackEvent } from '_src/shared/plausible';
 
 export function TokenIconLink({
     accountAddress,
-    disabled,
+    noSuiToken,
 }: {
     accountAddress: SuiAddress;
-    disabled?: boolean;
+    noSuiToken?: boolean;
 }) {
-    const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on && !disabled;
+    const stakingEnabled =
+        useFeature(FEATURES.STAKING_ENABLED).on && !noSuiToken;
     const { data: delegations, isLoading } =
         useGetDelegatedStake(accountAddress);
 
