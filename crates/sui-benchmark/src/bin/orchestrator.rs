@@ -41,20 +41,22 @@ async fn main() -> Result<()> {
     //     .await
     //     .wrap_err("Failed to install software on instances")?;
 
-    // testbed
-    //     .update()
-    //     .await
-    //     .wrap_err("Failed to install software on instances")?;
+    testbed
+        .update()
+        .await
+        .wrap_err("Failed to install software on instances")?;
 
     // testbed
     //     .configure(&parameters)
     //     .await
     //     .wrap_err("Failed to install software on instances")?;
 
-    testbed
-        .run_benchmark(&parameters)
-        .await
-        .wrap_err("Failed to deploy instances")?;
+    // testbed
+    //     .run_benchmark(&parameters)
+    //     .await
+    //     .wrap_err("Failed to deploy instances")?;
+
+    // testbed.kill(true).await.wrap_err("Failed to kill tested")?;
 
     // testbed.stop().await.wrap_err("Failed to stop tested")?;
 
