@@ -541,7 +541,7 @@ impl CheckpointBuilder {
             )?;
         }
         batch.write()?;
-        self.notify_aggregator.notify_waiters();
+        self.notify_aggregator.notify_one();
         self.epoch_store
             .process_pending_checkpoint(height, &new_checkpoint)?;
         Ok(())
