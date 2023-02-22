@@ -58,4 +58,18 @@ export const CheckpointContents = object({
   transactions: array(ExecutionDigests),
   user_signatures: array(string()),
 });
+
+export const Checkpoint = object({
+  epoch: number(),
+  sequenceNumber: number(),
+  digest: CheckpointDigest,
+  networkTotalTransactions: number(),
+  previousDigest: union([CheckpointDigest, literal(null)]),
+  epochRollingGasCostSummary: GasCostSummary,
+  timestampMs: union([number(), literal(null)]),
+  endOfEpochData: union([EndOfEpochData, literal(null)]),
+  transactions: array(TransactionDigest),
+});
+export type Checkpoint = Infer<typeof Checkpoint>;
+
 export type CheckpointContents = Infer<typeof CheckpointContents>;

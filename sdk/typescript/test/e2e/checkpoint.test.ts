@@ -45,6 +45,11 @@ describe('Checkpoints Reading API', () => {
     expect(resp.transactions.length).greaterThan(0);
   });
 
+  it('gets checkpoint by id', async () => {
+    const resp = await toolbox.provider.getCheckpoint(0);
+    // todo: finish this test
+  });
+
   it('get checkpoint contents by digest', async () => {
     const checkpoint_resp = await toolbox.provider.getCheckpointSummary(0);
     const digest = checkpoint_resp.content_digest;
