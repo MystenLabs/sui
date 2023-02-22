@@ -104,6 +104,42 @@ impl SupportedProtocolVersions {
 /// result in forking if not prevented here).
 #[derive(Clone)]
 pub struct ProtocolConfig {
+    // ==== Transaction input limits ====
+    /// Maximum number of individual transactions in a Batch transaction.
+    max_tx_in_batch: Option<u32>,
+
+    /// Maximum number of modules in a Publish transaction.
+    max_modules_in_publish: Option<u32>,
+
+    /// Maximum number of arguments in a move call or a ProgrammableTransaction's
+    /// TransferObjects command.
+    max_arguments: Option<u32>,
+
+    /// Maximum number of total type arguments, computed recursively.
+    max_type_arguments: Option<u32>,
+
+    /// Maximum depth of an individual type argument.
+    max_type_argument_depth: Option<u32>,
+
+    /// Maximum size of a Pure CallArg.
+    max_pure_argument_size: Option<u32>,
+
+    /// Maximum size of an ObjVec CallArg.
+    max_object_vec_argument_size: Option<u32>,
+
+    /// Maximum number of coins in Pay* transactions, or a ProgrammableTransaction's
+    /// MergeCoins command.
+    max_coins: Option<u32>,
+
+    /// Maximum number of recipients in Pay* transactions.
+    max_pay_recipients: Option<u32>,
+
+    /// Maximum number of Commands in a ProgrammableTransaction.
+    max_programmable_tx_commands: Option<u32>,
+
+    /// Maximum number of Publish Commands in a ProgrammableTransaction.
+    max_programmable_tx_publish_commands: Option<u32>,
+
     // ==== Move VM, Move bytecode verifier, and execution limits ===
     /// Maximum Move bytecode version the VM understands. All older versions are accepted.
     move_binary_format_version: Option<u32>,
@@ -247,6 +283,40 @@ const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protoco
 
 // getters
 impl ProtocolConfig {
+    pub fn max_tx_in_batch(&self) -> u32 {
+        self.max_tx_in_batch.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_modules_in_publish(&self) -> u32 {
+        self.max_modules_in_publish.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_arguments(&self) -> u32 {
+        self.max_arguments.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_type_arguments(&self) -> u32 {
+        self.max_type_arguments.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_type_argument_depth(&self) -> u32 {
+        self.max_type_argument_depth.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_pure_argument_size(&self) -> u32 {
+        self.max_pure_argument_size.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_object_vec_argument_size(&self) -> u32 {
+        self.max_object_vec_argument_size.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_coins(&self) -> u32 {
+        self.max_coins.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_pay_recipients(&self) -> u32 {
+        self.max_pay_recipients.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_programmable_tx_commands(&self) -> u32 {
+        self.max_programmable_tx_commands.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_programmable_tx_publish_commands(&self) -> u32 {
+        self.max_programmable_tx_publish_commands
+            .expect(CONSTANT_ERR_MSG)
+    }
     pub fn move_binary_format_version(&self) -> u32 {
         self.move_binary_format_version.expect(CONSTANT_ERR_MSG)
     }
@@ -395,7 +465,7 @@ impl ProtocolConfig {
         CONFIG_OVERRIDE.with(|ovr| {
             if let Some(override_fn) = &*ovr.borrow() {
                 warn!(
-                    "overriding ProtocolConfig settings with custom settings (you should not see this log outside of tests"
+                    "overriding ProtocolConfig settings with custom settings (you should not see this log outside of tests)"
                 );
                 override_fn(version, ret)
             } else {
@@ -457,6 +527,17 @@ impl ProtocolConfig {
         // To change the values here you must create a new protocol version with the new values!
         match version.0 {
             1 => Self {
+                max_tx_in_batch: Some(10),
+                max_modules_in_publish: Some(8),
+                max_arguments: Some(16),
+                max_type_arguments: Some(16),
+                max_type_argument_depth: Some(16),
+                max_pure_argument_size: Some(10 * 1024),
+                max_object_vec_argument_size: Some(128),
+                max_coins: Some(1024),
+                max_pay_recipients: Some(1024),
+                max_programmable_tx_commands: Some(16),
+                max_programmable_tx_publish_commands: Some(1),
                 move_binary_format_version: Some(6),
                 max_move_object_size: Some(250 * 1024),
                 max_move_package_size: Some(100 * 1024),

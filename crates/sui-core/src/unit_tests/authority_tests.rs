@@ -1511,7 +1511,8 @@ async fn test_package_size_limit() {
     while package_size <= max_move_package_size {
         let mut module = file_format::empty_module();
         // generate unique name
-        module.identifiers[0] = Identifier::new(format!("TestModule{:?}", package_size)).unwrap();
+        module.identifiers[0] =
+            Identifier::new(format!("TestModule{:0>21000?}", package_size)).unwrap();
         let module_bytes = {
             let mut bytes = Vec::new();
             module.serialize(&mut bytes).unwrap();

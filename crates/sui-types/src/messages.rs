@@ -46,7 +46,7 @@ use std::{
     iter,
 };
 use strum::IntoStaticStr;
-use sui_protocol_config::SupportedProtocolVersions;
+use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use tap::Pipe;
 use tracing::debug;
 
@@ -87,6 +87,47 @@ pub struct TransferObject {
     pub object_ref: ObjectRef,
 }
 
+fn type_tag_validity_check(
+    tag: &TypeTag,
+    config: &ProtocolConfig,
+    depth: u32,
+    starting_count: usize,
+) -> SuiResult<usize> {
+    fp_ensure!(
+        depth < config.max_type_argument_depth(),
+        SuiError::SizeLimitExceeded {
+            limit: "maximum type argument depth in a call transaction".to_string(),
+            value: config.max_type_argument_depth().to_string()
+        }
+    );
+    let count = 1 + match tag {
+        TypeTag::Bool
+        | TypeTag::U8
+        | TypeTag::U64
+        | TypeTag::U128
+        | TypeTag::Address
+        | TypeTag::Signer
+        | TypeTag::U16
+        | TypeTag::U32
+        | TypeTag::U256 => 0,
+        TypeTag::Vector(t) => {
+            type_tag_validity_check(t.as_ref(), config, depth + 1, starting_count + 1)?
+        }
+        TypeTag::Struct(s) => s.type_params.iter().try_fold(0, |accum, t| {
+            let count = accum + type_tag_validity_check(t, config, depth + 1, starting_count + 1)?;
+            fp_ensure!(
+                count + starting_count < config.max_type_arguments() as usize,
+                SuiError::SizeLimitExceeded {
+                    limit: "maximum type arguments in a call transaction".to_string(),
+                    value: config.max_type_arguments().to_string()
+                }
+            );
+            Ok(count)
+        })?,
+    };
+    Ok(count)
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MoveCall {
     pub package: ObjectID,
@@ -96,11 +137,57 @@ pub struct MoveCall {
     pub arguments: Vec<CallArg>,
 }
 
+impl MoveCall {
+    pub fn validity_check(&self, config: &ProtocolConfig) -> SuiResult {
+        let is_blocked = BLOCKED_MOVE_FUNCTIONS.contains(&(
+            self.package,
+            self.module.as_str(),
+            self.function.as_str(),
+        ));
+        fp_ensure!(!is_blocked, SuiError::BlockedMoveFunction);
+        let mut type_arguments_count = 0;
+        for tag in self.type_arguments.iter() {
+            type_arguments_count += type_tag_validity_check(tag, config, 1, type_arguments_count)?;
+            fp_ensure!(
+                type_arguments_count < config.max_type_arguments() as usize,
+                SuiError::SizeLimitExceeded {
+                    limit: "maximum type arguments in a call transaction".to_string(),
+                    value: config.max_type_arguments().to_string()
+                }
+            );
+        }
+        fp_ensure!(
+            self.arguments.len() < config.max_arguments() as usize,
+            SuiError::SizeLimitExceeded {
+                limit: "maximum arguments in a move call".to_string(),
+                value: config.max_arguments().to_string()
+            }
+        );
+        for a in self.arguments.iter() {
+            a.validity_check(config)?;
+        }
+        Ok(())
+    }
+}
+
 #[serde_as]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MoveModulePublish {
     #[serde_as(as = "Vec<Bytes>")]
     pub modules: Vec<Vec<u8>>,
+}
+
+impl MoveModulePublish {
+    pub fn validity_check(&self, config: &ProtocolConfig) -> SuiResult {
+        fp_ensure!(
+            self.modules.len() < config.max_modules_in_publish() as usize,
+            SuiError::SizeLimitExceeded {
+                limit: "maximum modules in a publish transaction".to_string(),
+                value: config.max_modules_in_publish().to_string()
+            }
+        );
+        Ok(())
+    }
 }
 
 // TODO: we can deprecate TransferSui when its callsites on RPC & SDK are
@@ -127,6 +214,25 @@ pub struct PayAllSui {
     pub recipient: SuiAddress,
 }
 
+impl PayAllSui {
+    pub fn validity_check(&self, config: &ProtocolConfig, gas_payment: &ObjectRef) -> SuiResult {
+        fp_ensure!(!self.coins.is_empty(), SuiError::EmptyInputCoins);
+        fp_ensure!(
+            // unwrap() is safe because coins are not empty.
+            self.coins.first().unwrap() == gas_payment,
+            SuiError::UnexpectedGasPaymentObject
+        );
+        fp_ensure!(
+            self.coins.len() < config.max_coins() as usize,
+            SuiError::SizeLimitExceeded {
+                limit: "maximum coins in a payment transaction".to_string(),
+                value: config.max_coins().to_string()
+            }
+        );
+        Ok(())
+    }
+}
+
 /// Send SUI coins to a list of addresses, following a list of amounts.
 /// only for SUI coin and does not require a separate gas coin object.
 /// Specifically, what pay_sui does are:
@@ -147,6 +253,35 @@ pub struct PaySui {
     pub amounts: Vec<u64>,
 }
 
+impl PaySui {
+    pub fn validity_check(&self, config: &ProtocolConfig, gas_payment: &ObjectRef) -> SuiResult {
+        fp_ensure!(!self.coins.is_empty(), SuiError::EmptyInputCoins);
+        fp_ensure!(
+            // unwrap() is safe because coins are not empty.
+            self.coins.first().unwrap() == gas_payment,
+            SuiError::UnexpectedGasPaymentObject
+        );
+        fp_ensure!(
+            self.coins.len() < config.max_coins() as usize,
+            SuiError::SizeLimitExceeded {
+                limit: "maximum coins in a payment transaction".to_string(),
+                value: config.max_coins().to_string()
+            }
+        );
+        fp_ensure!(
+            self.recipients.len() <= config.max_pay_recipients() as usize,
+            SuiError::SizeLimitExceeded {
+                limit: "maximum recipients in a payment transaction".to_string(),
+                value: config.max_pay_recipients().to_string()
+            }
+        );
+        // TODO: was this maybe missing a check for the following, or was
+        // it intentionally omitted?
+        // fp_ensure!(self.recipients.len() == self.amounts.len(), ...)
+        Ok(())
+    }
+}
+
 /// Pay each recipient the corresponding amount using the input coins
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Pay {
@@ -157,6 +292,29 @@ pub struct Pay {
     /// The amounts each recipient will receive.
     /// Must be the same length as recipients
     pub amounts: Vec<u64>,
+}
+
+impl Pay {
+    pub fn validity_check(&self, config: &ProtocolConfig) -> SuiResult {
+        fp_ensure!(
+            self.coins.len() < config.max_coins() as usize,
+            SuiError::SizeLimitExceeded {
+                limit: "maximum coins in a payment transaction".to_string(),
+                value: config.max_coins().to_string()
+            }
+        );
+        fp_ensure!(
+            self.recipients.len() <= config.max_pay_recipients() as usize,
+            SuiError::SizeLimitExceeded {
+                limit: "maximum recipients in a payment transaction".to_string(),
+                value: config.max_pay_recipients().to_string()
+            }
+        );
+        // TODO: was this maybe missing a check for the following, or was
+        // it intentionally omitted?
+        // fp_ensure!(self.recipients.len() == self.amounts.len(), ...)
+        Ok(())
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -286,6 +444,31 @@ impl CallArg {
                 })
                 .collect(),
         }
+    }
+
+    pub fn validity_check(&self, config: &ProtocolConfig) -> SuiResult {
+        match self {
+            CallArg::Pure(p) => {
+                fp_ensure!(
+                    p.len() < config.max_pure_argument_size() as usize,
+                    SuiError::SizeLimitExceeded {
+                        limit: "maximum pure argument size".to_string(),
+                        value: config.max_pure_argument_size().to_string()
+                    }
+                );
+            }
+            CallArg::Object(_) => (),
+            CallArg::ObjVec(v) => {
+                fp_ensure!(
+                    v.len() < config.max_object_vec_argument_size() as usize,
+                    SuiError::SizeLimitExceeded {
+                        limit: "maximum object vector argument size".to_string(),
+                        value: config.max_object_vec_argument_size().to_string()
+                    }
+                );
+            }
+        }
+        Ok(())
     }
 }
 
@@ -444,7 +627,7 @@ impl Command {
         }
     }
 
-    fn validity_check(&self) -> UserInputResult {
+    fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         match self {
             Command::MoveCall(call) => {
                 let is_blocked = BLOCKED_MOVE_FUNCTIONS.contains(&(
@@ -453,11 +636,56 @@ impl Command {
                     call.function.as_str(),
                 ));
                 fp_ensure!(!is_blocked, UserInputError::BlockedMoveFunction);
+                let mut type_arguments_count = 0;
+                for tag in call.type_arguments.iter() {
+                    type_arguments_count +=
+                        type_tag_validity_check(tag, config, 1, type_arguments_count)?;
+                    fp_ensure!(
+                        type_arguments_count < config.max_type_arguments() as usize,
+                        UserInputError::SizeLimitExceeded {
+                            limit: "maximum type arguments in a call transaction".to_string(),
+                            value: config.max_type_arguments().to_string()
+                        }
+                    );
+                }
+                fp_ensure!(
+                    call.arguments.len() < config.max_arguments() as usize,
+                    UserInputError::SizeLimitExceeded {
+                        limit: "maximum arguments in a move call".to_string(),
+                        value: config.max_arguments().to_string()
+                    }
+                );
             }
-            Command::TransferObjects(_, _)
-            | Command::SplitCoin(_, _)
-            | Command::MergeCoins(_, _)
-            | Command::Publish(_) => (),
+            Command::TransferObjects(v, _) => {
+                fp_ensure!(
+                    v.len() < config.max_arguments() as usize,
+                    UserInputError::SizeLimitExceeded {
+                        limit: "maximum arguments in a programmable transaction transfer objects command".to_string(),
+                        value: config.max_arguments().to_string()
+                    }
+                );
+            }
+            Command::SplitCoin(_, _) => (),
+            Command::MergeCoins(_, v) => {
+                fp_ensure!(
+                    v.len() < config.max_coins() as usize,
+                    UserInputError::SizeLimitExceeded {
+                        limit: "maximum coins in a programmable transaction merge command"
+                            .to_string(),
+                        value: config.max_coins().to_string()
+                    }
+                );
+            }
+            Command::Publish(v) => {
+                fp_ensure!(
+                    v.len() < config.max_modules_in_publish() as usize,
+                    UserInputError::SizeLimitExceeded {
+                        limit: "maximum modules in a programmable transaction publish command"
+                            .to_string(),
+                        value: config.max_modules_in_publish().to_string()
+                    }
+                );
+            }
         };
         Ok(())
     }
@@ -495,14 +723,34 @@ impl ProgrammableTransaction {
             .collect())
     }
 
-    fn validity_check(&self) -> UserInputResult {
+    fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         if !cfg!(test) {
             return Err(UserInputError::Unsupported(
                 "Programmable transactions are not yet available".to_owned(),
             ));
         }
+        fp_ensure!(
+            self.commands.len() < config.max_programmable_tx_commands() as usize,
+            SuiError::SizeLimitExceeded {
+                limit: "maximum commands in a progammable transaction".to_string(),
+                value: config.max_programmable_tx_commands().to_string()
+            }
+        );
+        let num_publish_commands = self
+            .commands
+            .iter()
+            .filter(|c| matches!(c, Command::Publish(_)))
+            .count();
+        fp_ensure!(
+            num_publish_commands < config.max_programmable_tx_publish_commands() as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum publish commands in a programmable transaction".to_string(),
+                value: config.max_programmable_tx_publish_commands().to_string()
+            }
+        );
+
         for c in &self.commands {
-            c.validity_check()?
+            c.validity_check(config)?
         }
         Ok(())
     }
@@ -730,19 +978,15 @@ impl SingleTransactionKind {
         Ok(input_objects)
     }
 
-    pub fn validity_check(&self, gas_payment: &ObjectRef) -> UserInputResult {
+    pub fn validity_check(&self, config: &ProtocolConfig, gas_payment: &ObjectRef) -> UserInputResult {
         match self {
-            SingleTransactionKind::Call(call) => {
-                let is_blocked = BLOCKED_MOVE_FUNCTIONS.contains(&(
-                    call.package,
-                    call.module.as_str(),
-                    call.function.as_str(),
-                ));
-                fp_ensure!(!is_blocked, UserInputError::BlockedMoveFunction);
-            }
-            SingleTransactionKind::Pay(_)
-            | SingleTransactionKind::Publish(_)
-            | SingleTransactionKind::TransferObject(_)
+            SingleTransactionKind::Publish(publish) => publish.validity_check(config)?,
+            SingleTransactionKind::Call(call) => call.validity_check(config)?,
+            SingleTransactionKind::Pay(p) => p.validity_check(config)?,
+            SingleTransactionKind::PayUserInput(p) => p.validity_check(config, gas_payment)?,
+            SingleTransactionKind::PayAllSui(pa) => pa.validity_check(config, gas_payment)?,
+            SingleTransactionKind::ProgrammableTransaction(p) => p.validity_check(config)?,
+            SingleTransactionKind::TransferObject(_)
             | SingleTransactionKind::TransferSui(_)
             | SingleTransactionKind::ChangeEpoch(_)
             | SingleTransactionKind::Genesis(_)
@@ -1329,8 +1573,8 @@ impl TransactionData {
         Ok(inputs)
     }
 
-    pub fn validity_check(&self) -> UserInputResult {
-        Self::validity_check_impl(&self.kind, self.gas_payment_object_ref())?;
+    pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
+        Self::validity_check_impl(config, &self.kind, self.gas_payment_object_ref())?;
         self.check_sponsorship()
     }
 
@@ -1364,13 +1608,24 @@ impl TransactionData {
         Err(UserInputError::UnsupportedSponsoredTransactionKind)
     }
 
-    pub fn validity_check_impl(kind: &TransactionKind, gas_payment: &ObjectRef) -> UserInputResult {
+    pub fn validity_check_impl(
+        config: &ProtocolConfig,
+        kind: &TransactionKind,
+        gas_payment: &ObjectRef,
+    ) -> UserInputResult {
         match kind {
             TransactionKind::Batch(b) => {
                 fp_ensure!(
                     !b.is_empty(),
                     UserInputError::InvalidBatchTransaction {
                         error: "Batch Transaction cannot be empty".to_string(),
+                    }
+                );
+                fp_ensure!(
+                    b.len() <= config.max_tx_in_batch() as usize,
+                    SuiError::SizeLimitExceeded {
+                        limit: "maximum transactions in a batch".to_string(),
+                        value: config.max_tx_in_batch().to_string()
                     }
                 );
                 // Check that all transaction kinds can be in a batch.
@@ -1396,10 +1651,10 @@ impl TransactionData {
                     }
                 );
                 for s in b {
-                    s.validity_check(gas_payment)?
+                    s.validity_check(config, gas_payment)?
                 }
             }
-            TransactionKind::Single(s) => s.validity_check(gas_payment)?,
+            TransactionKind::Single(s) => s.validity_check(config, gas_payment)?,
         }
         Ok(())
     }
