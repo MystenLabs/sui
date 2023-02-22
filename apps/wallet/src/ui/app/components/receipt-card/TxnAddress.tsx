@@ -7,7 +7,6 @@ import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { Text } from '_src/ui/app/shared/text';
 
-
 type TxnAddressProps = {
     address: string;
     label: string;
