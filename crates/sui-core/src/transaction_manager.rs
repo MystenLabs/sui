@@ -90,7 +90,7 @@ impl TransactionManager {
             tx_ready_certificates,
         };
         transaction_manager
-            .enqueue_certificates(epoch_store.all_pending_certificates().unwrap(), epoch_store)
+            .enqueue(epoch_store.all_pending_execution().unwrap(), epoch_store)
             .expect("Initialize TransactionManager with pending certificates failed.");
         transaction_manager
     }
@@ -153,7 +153,7 @@ impl TransactionManager {
             // skip already executed txes
             if self.authority_store.is_tx_already_executed(&digest)? {
                 // also ensure the transaction will not be retried after restart.
-                let _ = epoch_store.remove_pending_certificate(&digest);
+                let _ = epoch_store.remove_pending_execution(&digest);
                 self.metrics
                     .transaction_manager_num_enqueued_certificates
                     .with_label_values(&["already_executed"])
@@ -310,7 +310,7 @@ impl TransactionManager {
                 .transaction_manager_num_executing_certificates
                 .set(inner.executing_certificates.len() as i64);
         }
-        let _ = epoch_store.remove_pending_certificate(digest);
+        let _ = epoch_store.remove_pending_execution(digest);
     }
 
     /// Sends the ready certificate for execution.
