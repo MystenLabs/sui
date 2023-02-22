@@ -37,6 +37,7 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
 };
+use sui_types::sui_system_state::SuiSystemState;
 use tokio::sync::{mpsc, watch, Notify};
 use tokio::time::Instant;
 use tracing::{debug, error, error_span, info, warn, Instrument};
@@ -625,15 +626,21 @@ impl CheckpointBuilder {
 
             let epoch_rolling_gas_cost_summary =
                 self.get_epoch_total_gas_cost(last_checkpoint.as_ref().map(|(_, c)| c), &effects);
-            if last_checkpoint_of_epoch {
-                self.augment_epoch_last_checkpoint(
-                    &epoch_rolling_gas_cost_summary,
-                    timestamp_ms,
-                    &mut effects,
-                    sequence_number,
-                )
-                .await?;
-            }
+
+            let next_epoch_committee = if last_checkpoint_of_epoch {
+                let system_state_obj = self
+                    .augment_epoch_last_checkpoint(
+                        &epoch_rolling_gas_cost_summary,
+                        timestamp_ms,
+                        &mut effects,
+                        sequence_number,
+                    )
+                    .await?;
+
+                Some(system_state_obj.get_current_epoch_committee().committee)
+            } else {
+                None
+            };
 
             let contents =
                 CheckpointContents::new_with_causally_ordered_transactions_and_signatures(
@@ -656,17 +663,7 @@ impl CheckpointBuilder {
                 &contents,
                 previous_digest,
                 epoch_rolling_gas_cost_summary,
-                if last_checkpoint_of_epoch {
-                    Some(
-                        self.state
-                            .get_sui_system_state_object()
-                            .unwrap()
-                            .get_current_epoch_committee()
-                            .committee,
-                    )
-                } else {
-                    None
-                },
+                next_epoch_committee,
                 timestamp_ms,
             );
             if last_checkpoint_of_epoch {
@@ -713,7 +710,7 @@ impl CheckpointBuilder {
         epoch_start_timestamp_ms: CheckpointTimestamp,
         effects: &mut Vec<TransactionEffects>,
         checkpoint: CheckpointSequenceNumber,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<SuiSystemState> {
         let timer = Instant::now();
         let cert = self
             .state
@@ -738,7 +735,7 @@ impl CheckpointBuilder {
         let tx_digest = *executable_tx.digest();
 
         let span = error_span!("augment_epoch_last_checkpoint", ?tx_digest);
-        let signed_effects = self
+        let (system_state_obj, signed_effects) = self
             .state
             // Get the effects without committing execution to the db.
             .get_change_epoch_tx_effects(&executable_tx, &self.epoch_store)
@@ -780,7 +777,7 @@ impl CheckpointBuilder {
         // TODO: Audit the advance_epoch move call to make sure there is no way for it to fail.
         assert!(signed_effects.status.is_ok());
         effects.push(signed_effects.into_message());
-        Ok(())
+        Ok(system_state_obj)
     }
 
     /// For the given roots return complete list of effects to include in checkpoint
