@@ -20,8 +20,7 @@ use sui_json_rpc_types::{
     Checkpoint, CheckpointId, DevInspectResults, DynamicFieldPage, GetObjectDataResponse,
     GetPastObjectDataResponse, GetRawObjectDataResponse, MoveFunctionArgType, ObjectValueKind,
     Page, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
-    SuiObjectInfo, SuiTransactionAuthSignersResponse, SuiTransactionEffects,
-    SuiTransactionResponse, TransactionsPage,
+    SuiObjectInfo, SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;

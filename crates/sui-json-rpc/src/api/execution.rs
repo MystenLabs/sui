@@ -4,8 +4,7 @@
 use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
-
-use sui_json_rpc_types::SuiExecuteTransactionResponse;
+use sui_json_rpc_types::SuiTransactionResponse;
 
 use sui_open_rpc_macros::open_rpc;
 use sui_types::messages::ExecuteTransactionRequestType;
@@ -32,7 +31,7 @@ pub trait TransactionExecution {
         signature: Base64,
         /// The request type
         request_type: ExecuteTransactionRequestType,
-    ) -> RpcResult<SuiExecuteTransactionResponse>;
+    ) -> RpcResult<SuiTransactionResponse>;
 
     #[method(name = "executeTransactionSerializedSig", deprecated)]
     async fn execute_transaction_serialized_sig(
@@ -43,7 +42,7 @@ pub trait TransactionExecution {
         signature: Base64,
         /// The request type
         request_type: ExecuteTransactionRequestType,
-    ) -> RpcResult<SuiExecuteTransactionResponse>;
+    ) -> RpcResult<SuiTransactionResponse>;
 
     // TODO: migrate above two rpc calls to this one eventually.
     #[method(name = "submitTransaction")]
@@ -55,5 +54,5 @@ pub trait TransactionExecution {
         signatures: Vec<Base64>,
         /// The request type
         request_type: ExecuteTransactionRequestType,
-    ) -> RpcResult<SuiExecuteTransactionResponse>;
+    ) -> RpcResult<SuiTransactionResponse>;
 }
