@@ -116,12 +116,12 @@ where
             effects,
         } = request.into_inner();
 
-        let transaction = if let Some(transaction) = self
+        let cert = if let Some(cert) = self
             .store
             .get_transaction(&transaction)
             .map_err(|e| Status::internal(e.to_string()))?
         {
-            transaction
+            cert
         } else {
             return Ok(Response::new(None));
         };
@@ -136,6 +136,6 @@ where
             return Ok(Response::new(None));
         };
 
-        Ok(Response::new(Some((transaction.into_inner(), effects))))
+        Ok(Response::new(Some((cert.into_inner(), effects))))
     }
 }

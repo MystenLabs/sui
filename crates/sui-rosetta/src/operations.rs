@@ -185,13 +185,9 @@ impl Operations {
                     let amount = amount.to_json_value().as_array().and_then(|v| {
                         // value is a byte array
                         let bytes = v.iter().flat_map(|v| v.as_u64().map(|n| n as u8)).collect::<Vec<_>>();
-
-                        if let Ok(option) = bcs::from_bytes::<Vec<u64>>(&bytes){
-                            if let Some(amount) = option.first() {
-                                return Some(*amount as u128)
-                            }
-                        }
-                        None
+                        if let Ok(Some(amount)) = bcs::from_bytes::<Option<u64>>(&bytes) {
+                            Some(amount as u128)
+                        } else { None }
                     });
                     let validator = validator
                         .to_json_value()
@@ -317,7 +313,7 @@ impl TryFrom<SuiTransactionResponse> for Operations {
     type Error = Error;
     fn try_from(response: SuiTransactionResponse) -> Result<Self, Self::Error> {
         let status = Some(response.effects.status.into());
-        let ops: Operations = response.certificate.data.try_into()?;
+        let ops: Operations = response.transaction.data.try_into()?;
         let ops = ops.set_status(status).into_iter();
 
         // We will need to subtract the operation amounts from the actual balance
@@ -325,8 +321,10 @@ impl TryFrom<SuiTransactionResponse> for Operations {
         let accounted_balances = ops
             .as_ref()
             .iter()
-            .filter_map(|op| match (&op.account, &op.amount) {
-                (Some(acc), Some(amount)) => Some((acc.address, -amount.value)),
+            .filter_map(|op| match (&op.account, &op.amount, &op.status) {
+                (Some(acc), Some(amount), Some(OperationStatus::Success)) => {
+                    Some((acc.address, -amount.value))
+                }
                 _ => None,
             })
             .fold(HashMap::new(), |mut balances, (addr, amount)| {

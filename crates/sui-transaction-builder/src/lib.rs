@@ -19,6 +19,7 @@ use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_json_rpc_types::GetRawObjectDataResponse;
 use sui_json_rpc_types::SuiObjectInfo;
 use sui_json_rpc_types::{RPCTransactionRequestParams, SuiData, SuiTypeTag};
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SuiAddress};
 use sui_types::coin::{Coin, LockedCoin};
 use sui_types::error::SuiError;
@@ -353,7 +354,11 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             .try_as_package()
             .cloned()
             .ok_or_else(|| anyhow!("Object [{}] is not a move package.", package_id))?;
-        let package: MovePackage = MovePackage::new(package.id, &package.module_map)?;
+        let package: MovePackage = MovePackage::new(
+            package.id,
+            &package.module_map,
+            ProtocolConfig::get_for_min_version().max_move_package_size(),
+        )?;
 
         let json_args = resolve_move_function_args(
             &package,
@@ -606,7 +611,6 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             .pop()
             .ok_or_else(|| anyhow!("Coins input should contain at lease one coin object."))?;
         let (oref, coin_type) = self.get_object_ref_and_type(coin).await?;
-        obj_vec.push(ObjectArg::ImmOrOwnedObject(oref));
 
         let ObjectType::Struct(type_) = &coin_type else{
             return Err(anyhow!("Provided object [{coin}] is not a move object."))
@@ -624,6 +628,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             );
             obj_vec.push(ObjectArg::ImmOrOwnedObject(oref))
         }
+        obj_vec.push(ObjectArg::ImmOrOwnedObject(oref));
 
         let function = if Coin::is_coin(type_) {
             ADD_DELEGATION_MUL_COIN_FUN_NAME

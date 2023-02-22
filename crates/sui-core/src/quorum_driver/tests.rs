@@ -74,7 +74,7 @@ async fn test_quorum_driver_submit_transaction() {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(*tx_cert.digest(), digest);
+        assert_eq!(*tx_cert.unwrap().digest(), digest);
         assert_eq!(effects_cert.data().transaction_digest, digest);
     });
     let ticket = quorum_driver_handler.submit_transaction(tx).await.unwrap();
@@ -107,7 +107,7 @@ async fn test_quorum_driver_submit_transaction_no_ticket() {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(*tx_cert.digest(), digest);
+        assert_eq!(*tx_cert.unwrap().digest(), digest);
         assert_eq!(effects_cert.data().transaction_digest, digest);
     });
     quorum_driver_handler
@@ -125,7 +125,7 @@ async fn verify_ticket_response<'a>(
         tx_cert,
         effects_cert,
     } = ticket.await.unwrap();
-    assert_eq!(tx_cert.digest(), tx_digest);
+    assert_eq!(tx_cert.unwrap().digest(), tx_digest);
     assert_eq!(&effects_cert.data().transaction_digest, tx_digest);
 }
 
@@ -156,7 +156,7 @@ async fn test_quorum_driver_with_given_notify_read() {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(*tx_cert.digest(), digest);
+        assert_eq!(*tx_cert.unwrap().digest(), digest);
         assert_eq!(effects_cert.data().transaction_digest, digest);
     });
     let ticket1 = notifier.register_one(&digest);
@@ -326,7 +326,7 @@ async fn test_quorum_driver_retry_on_object_locked() -> Result<(), anyhow::Error
         tx_cert,
         effects_cert: _,
     } = res;
-    assert_eq!(tx_cert.digest(), &tx2_digest);
+    assert_eq!(tx_cert.unwrap().digest(), &tx2_digest);
 
     // Case 4 - object is locked by 2 txes with weight 2 and 1 respectivefully. Then try to execute the third txn
     let gas = gas_objects.pop().unwrap();
@@ -390,7 +390,7 @@ async fn test_quorum_driver_retry_on_object_locked() -> Result<(), anyhow::Error
         tx_cert,
         effects_cert: _,
     } = res;
-    assert_eq!(*tx_cert.digest(), tx_digest);
+    assert_eq!(*tx_cert.unwrap().digest(), tx_digest);
 
     // Case 7 - three validators lock the object, by different txes
     let gas = gas_objects.pop().unwrap();

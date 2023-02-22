@@ -17,7 +17,6 @@ import {
     createValidationSchemaStepTwo,
 } from './validation';
 import { Content } from '_app/shared/bottom-menu-layout';
-import PageTitle from '_app/shared/page-title';
 import Loading from '_components/loading';
 import ProgressBar from '_components/progress-bar';
 import { parseAmount } from '_helpers';
@@ -35,6 +34,7 @@ import { Coin } from '_redux/slices/sui-objects/Coin';
 import { sendTokens } from '_redux/slices/transactions';
 import { trackEvent } from '_src/shared/plausible';
 import { useGasBudgetInMist } from '_src/ui/app/hooks/useGasBudgetInMist';
+import PageTitle from '_src/ui/app/shared/PageTitle';
 
 import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
@@ -143,7 +143,7 @@ function TransferCoinPage() {
                 const txDigest = getTransactionDigest(response);
                 const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
                     txDigest
-                )}&transfer=coin`;
+                )}&from=transactions`;
 
                 navigate(receiptUrl);
             } catch (e) {
@@ -217,9 +217,7 @@ function TransferCoinPage() {
         <div className={st.container}>
             <PageTitle
                 title="Send Coins"
-                backLink={'/'}
-                className={st.pageTitle}
-                {...(currentStep > 1 && { onClick: handleBackStep })}
+                back={currentStep > 1 ? handleBackStep : '/'}
             />
 
             <Content className={st.content}>

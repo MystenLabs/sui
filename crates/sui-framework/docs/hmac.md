@@ -45,6 +45,7 @@ A native move wrapper around the HMAC-SHA3-256. Returns the digest.
 
 
 <pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
 
 

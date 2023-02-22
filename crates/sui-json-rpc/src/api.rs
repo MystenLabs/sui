@@ -9,14 +9,13 @@ use jsonrpsee_proc_macros::rpc;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    Balance, CoinPage, DevInspectResults, DynamicFieldPage, EventPage, GetObjectDataResponse,
-    GetPastObjectDataResponse, GetRawObjectDataResponse, MoveFunctionArgType,
-    RPCTransactionRequestParams, SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter,
-    SuiExecuteTransactionResponse, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
-    SuiMoveNormalizedStruct, SuiObjectInfo, SuiTBlsSignObjectCommitmentType,
-    SuiTBlsSignRandomnessObjectResponse, SuiTransactionAuthSignersResponse,
-    SuiTransactionBuilderMode, SuiTransactionEffects, SuiTransactionFilter, SuiTransactionResponse,
-    SuiTypeTag, TransactionBytes, TransactionsPage,
+    Balance, Checkpoint, CheckpointId, CoinPage, DevInspectResults, DynamicFieldPage, EventPage,
+    GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
+    MoveFunctionArgType, RPCTransactionRequestParams, SuiCoinMetadata, SuiEventEnvelope,
+    SuiEventFilter, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
+    SuiObjectInfo, SuiTBlsSignObjectCommitmentType, SuiTBlsSignRandomnessObjectResponse,
+    SuiTransactionBuilderMode, SuiTransactionEffects, SuiTransactionResponse, SuiTypeTag,
+    TransactionBytes, TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::balance::Supply;
@@ -116,14 +115,6 @@ pub trait RpcReadApi {
         address: SuiAddress,
     ) -> RpcResult<Vec<SuiObjectInfo>>;
 
-    /// Return the list of objects owned by an object.
-    #[method(name = "getObjectsOwnedByObject")]
-    async fn get_objects_owned_by_object(
-        &self,
-        /// the ID of the owner object
-        object_id: ObjectID,
-    ) -> RpcResult<Vec<SuiObjectInfo>>;
-
     /// Return the list of dynamic field objects owned by an object.
     #[method(name = "getDynamicFields")]
     async fn get_dynamic_fields(
@@ -158,14 +149,6 @@ pub trait RpcReadApi {
         digest: TransactionDigest,
     ) -> RpcResult<SuiTransactionResponse>;
 
-    /// Return the authority public keys that commits to the authority signature of the transaction.
-    #[method(name = "getTransactionAuthSigners")]
-    async fn get_transaction_auth_signers(
-        &self,
-        /// the digest of the queried transaction
-        digest: TransactionDigest,
-    ) -> RpcResult<SuiTransactionAuthSignersResponse>;
-
     /// Return the object information for a specified object
     #[method(name = "getObject")]
     async fn get_object(
@@ -188,7 +171,7 @@ pub trait RpcReadApi {
 #[open_rpc(namespace = "sui", tag = "Full Node API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcFullNodeReadApi {
-    /// Runs the transaction in dev-inpsect mode. Which allows for nearly any
+    /// Runs the transaction in dev-inspect mode. Which allows for nearly any
     /// transaction (or Move call) with any arguments. Detailed results are
     /// provided, including both the transaction effects and any return values.
     #[method(name = "devInspectTransaction")]
@@ -281,6 +264,14 @@ pub trait RpcFullNodeReadApi {
     /// Return the sequence number of the latest checkpoint that has been executed
     #[method(name = "getLatestCheckpointSequenceNumber")]
     fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber>;
+
+    /// Return a checkpoint
+    #[method(name = "getCheckpoint")]
+    fn get_checkpoint(
+        &self,
+        /// Checkpoint identifier, can use either checkpoint digest, or checkpoint sequence number as input.
+        id: CheckpointId,
+    ) -> RpcResult<Checkpoint>;
 
     /// Return a checkpoint summary based on a checkpoint sequence number
     #[method(name = "getCheckpointSummary")]
@@ -375,7 +366,7 @@ pub trait RpcTransactionBuilder {
         amount: Option<u64>,
     ) -> RpcResult<TransactionBytes>;
 
-    /// Send Coin<T> to a list of addresses, where `T` can be any coin type, following a list of amounts,
+    /// Send `Coin<T>` to a list of addresses, where `T` can be any coin type, following a list of amounts,
     /// The object specified in the `gas` field will be used to pay the gas fee for the transaction.
     /// The gas object can not appear in `input_coins`. If the gas object is not specified, the RPC server
     /// will auto-select one.
@@ -607,18 +598,6 @@ pub trait RpcBcsApi {
     ) -> RpcResult<GetRawObjectDataResponse>;
 }
 
-#[open_rpc(namespace = "sui", tag = "Transaction Subscription")]
-#[rpc(server, client, namespace = "sui")]
-pub trait TransactionStreamingApi {
-    /// Subscribe to a stream of Sui event
-    #[subscription(name = "subscribeTransaction", item = SuiTransactionResponse)]
-    fn subscribe_transaction(
-        &self,
-        /// the filter criteria of the transaction stream.
-        filter: SuiTransactionFilter,
-    );
-}
-
 #[open_rpc(namespace = "sui", tag = "Event Subscription")]
 #[rpc(server, client, namespace = "sui")]
 pub trait EventStreamingApi {
@@ -677,7 +656,6 @@ pub trait TransactionExecutionApi {
     ///     makes sure this node is aware of this transaction when client fires subsequent queries.
     ///     However if the node fails to execute the transaction locally in a timely manner,
     ///     a bool type in the response is set to false to indicated the case.
-    // TODO(joyqvq): remove this and rename executeTransactionSerializedSig to executeTransaction
     #[method(name = "executeTransaction")]
     async fn execute_transaction(
         &self,
@@ -687,9 +665,9 @@ pub trait TransactionExecutionApi {
         signature: Base64,
         /// The request type
         request_type: ExecuteTransactionRequestType,
-    ) -> RpcResult<SuiExecuteTransactionResponse>;
+    ) -> RpcResult<SuiTransactionResponse>;
 
-    #[method(name = "executeTransactionSerializedSig")]
+    #[method(name = "executeTransactionSerializedSig", deprecated)]
     async fn execute_transaction_serialized_sig(
         &self,
         /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
@@ -698,7 +676,19 @@ pub trait TransactionExecutionApi {
         signature: Base64,
         /// The request type
         request_type: ExecuteTransactionRequestType,
-    ) -> RpcResult<SuiExecuteTransactionResponse>;
+    ) -> RpcResult<SuiTransactionResponse>;
+
+    // TODO: migrate above two rpc calls to this one eventually.
+    #[method(name = "submitTransaction")]
+    async fn submit_transaction(
+        &self,
+        /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
+        tx_bytes: Base64,
+        /// A list of signatures (`flag || signature || pubkey` bytes, as base-64 encoded string). Signature is committed to the intent message of the transaction data, as base-64 encoded string.
+        signatures: Vec<Base64>,
+        /// The request type
+        request_type: ExecuteTransactionRequestType,
+    ) -> RpcResult<SuiTransactionResponse>;
 }
 
 pub fn cap_page_limit(limit: Option<usize>) -> usize {

@@ -1,5 +1,34 @@
 # @mysten/sui.js
 
+## 0.28.0
+
+### Minor Changes
+
+- a67cc044b: Transaction signatures are now serialized into a single string, and all APIs that previously took the public key, signature, and scheme now just take the single serialized signature string. To help make parsing this easier, there are new `toSerializedSignature` and `fromSerializedSignature` methods exposed as well.
+- a67cc044b: The RawSigner now provides a `signTransaction` function, which can be used to sign a transaction without submitting it to the network.
+- a67cc044b: The RawSigner now provides a `signMessage` function that can be used to sign personal messages. The SDK also now exports a `verifyMessage` function that can be used to easily verify a message signed with `signMessage`.
+
+### Patch Changes
+
+- 24bdb66c6: Include client type and version in RPC client request headers
+- Updated dependencies [598f106ef]
+  - @mysten/bcs@0.6.0
+
+## 0.27.0
+
+### Minor Changes
+
+- 473005d8f: Add protocol_version to CheckpointSummary and SuiSystemObject. Consolidate end-of-epoch information in CheckpointSummary.
+- 59641dc29: Support for deserializing new ConsensusCommitPrologue system transaction
+- 629804d26: Remove usage of `Base64DataBuffer`, and use `Uint8Array` instead.
+- f51c85e85: remove get_objects_owned_by_object and replace it with get_dynamic_fields
+
+### Patch Changes
+
+- fcba70206: Add basic formatting utilities
+- ebe6c3945: Support deserializing `paySui` and `payAllSui` transactions
+- e630f6832: Added string option to getCheckpointContents call in SDK to support 0.22.0
+
 ## 0.26.1
 
 ### Patch Changes

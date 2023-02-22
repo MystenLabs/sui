@@ -7,10 +7,11 @@ use rocksdb::Options;
 use std::path::Path;
 use sui_storage::default_db_options;
 use sui_types::base_types::SequenceNumber;
+use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::messages::TrustedCertificate;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::{DBMap, DBOptions, MetricConf, ReadWriteOptions};
-use typed_store::traits::{TableSummary, TypedStoreDebug};
+use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
 use typed_store_derive::DBMapUtils;
 
@@ -43,11 +44,13 @@ pub struct AuthorityPerpetualTables {
     pub(crate) owned_object_transaction_locks: DBMap<ObjectRef, Option<LockDetails>>,
 
     /// This is a map between the transaction digest and the corresponding certificate for all
-    /// certificates that have been successfully processed by this authority. This set of certificates
-    /// along with the genesis allows the reconstruction of all other state, and a full sync to this
-    /// authority.
+    /// certificates that have been successfully executed by this authority.
     #[default_options_override_fn = "certificates_table_default_config"]
-    pub(crate) certificates: DBMap<TransactionDigest, TrustedCertificate>,
+    pub(crate) executed_transactions: DBMap<TransactionDigest, TrustedTransaction>,
+
+    /// Signatures of transaction certificates that are executed locally.
+    /// TODO: This table will be move to the per-epoch store.
+    pub(crate) transaction_cert_signatures: DBMap<TransactionDigest, AuthorityStrongQuorumSignInfo>,
 
     /// The map between the object ref of objects processed at all versions and the transaction
     /// digest of the certificate that lead to the creation of this version of the object.
@@ -56,14 +59,24 @@ pub struct AuthorityPerpetualTables {
     /// a digest of ObjectDigest::deleted(), along with a link to the transaction that deleted it.
     pub(crate) parent_sync: DBMap<ObjectRef, TransactionDigest>,
 
-    /// A map between the transaction digest of a certificate that was successfully processed
-    /// (ie in `certificates`) and the effects its execution has on the authority state. This
-    /// structure is used to ensure we do not double process a certificate, and that we can return
-    /// the same response for any call after the first (ie. make certificate processing idempotent).
+    /// A map between the transaction digest of a certificate to the effects of its execution.
+    /// We store effects into this table in two different cases:
+    /// 1. When a transaction is synced through state_sync, we store the effects here. These effects
+    /// are known to be final in the network, but may not have been executed locally yet.
+    /// 2. When the transaction is executed locally on this node, we store the effects here. This means that
+    /// it's possible to store the same effects twice (once for the synced transaction, and once for the executed).
+    /// It's also possible for the effects to be reverted if the transaction didn't make it into the epoch.
     #[default_options_override_fn = "effects_table_default_config"]
-    pub(crate) executed_effects: DBMap<TransactionDigest, TrustedSignedTransactionEffects>,
-
     pub(crate) effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
+
+    /// Transactions that have been executed locally on this node. We need this table since the `effects` table
+    /// doesn't say anything about the execution status of the transaction on this node. When we wait for transactions
+    /// to be executed, we wait for them to appear in this table. When we revert transactions, we remove them from both
+    /// tables.
+    pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsDigest>,
+
+    /// This is currently used by state-sync to store downloaded transaction certs.
+    /// TODO: This table will be merged with executed_transactions.
     pub(crate) synced_transactions: DBMap<TransactionDigest, TrustedCertificate>,
 
     /// When transaction is executed via checkpoint executor, we store association here
@@ -200,6 +213,44 @@ impl AuthorityPerpetualTables {
             .skip_to(&ObjectKey::ZERO)?
             .next()
             .is_none())
+    }
+
+    pub fn iter_live_object_set(&self) -> LiveSetIter<'_> {
+        LiveSetIter {
+            iter: self.parent_sync.keys(),
+            prev: None,
+        }
+    }
+}
+
+pub struct LiveSetIter<'a> {
+    iter: <DBMap<ObjectRef, TransactionDigest> as Map<'a, ObjectRef, TransactionDigest>>::Keys,
+    prev: Option<ObjectRef>,
+}
+
+impl Iterator for LiveSetIter<'_> {
+    type Item = ObjectRef;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(next) = self.iter.next() {
+                let prev = self.prev;
+                self.prev = Some(next);
+
+                match prev {
+                    Some(prev) if prev.0 != next.0 && prev.2.is_alive() => return Some(prev),
+                    _ => continue,
+                }
+            }
+
+            return match self.prev {
+                Some(prev) if prev.2.is_alive() => {
+                    self.prev = None;
+                    Some(prev)
+                }
+                _ => None,
+            };
+        }
     }
 }
 

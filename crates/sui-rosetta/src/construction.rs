@@ -4,9 +4,9 @@
 use axum::{Extension, Json};
 use fastcrypto::encoding::{Encoding, Hex};
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto;
 use sui_types::crypto::{SignatureScheme, ToFromBytes};
 use sui_types::messages::{ExecuteTransactionRequestType, Transaction, TransactionData};
+use sui_types::signature::GenericSignature;
 
 use crate::errors::Error;
 use crate::types::{
@@ -93,10 +93,12 @@ pub async fn combine(
     }
     .flag()];
 
-    let signed_tx = Transaction::from_data(
+    let signed_tx = Transaction::from_generic_sig_data(
         intent_msg.value,
         Intent::default(),
-        crypto::Signature::from_bytes(&[&*flag, &*sig_bytes, &*pub_key].concat())?,
+        vec![GenericSignature::from_bytes(
+            &[&*flag, &*sig_bytes, &*pub_key].concat(),
+        )?],
     );
     signed_tx.verify_signature()?;
     let signed_tx_bytes = bcs::to_bytes(&signed_tx)?;
@@ -127,15 +129,13 @@ pub async fn submit(
         )
         .await?;
 
-    if let Some(effect) = response.effects {
-        if let SuiExecutionStatus::Failure { error } = effect.status {
-            return Err(Error::TransactionExecutionError(error));
-        }
+    if let SuiExecutionStatus::Failure { error } = response.effects.status {
+        return Err(Error::TransactionExecutionError(error));
     }
 
     Ok(TransactionIdentifierResponse {
         transaction_identifier: TransactionIdentifier {
-            hash: response.tx_digest,
+            hash: response.effects.transaction_digest,
         },
         metadata: None,
     })
@@ -190,7 +190,14 @@ pub async fn metadata(
     env.check_network_identifier(&request.network_identifier)?;
     let option = request.options.ok_or(Error::MissingMetadata)?;
     let sender = option.internal_operation.sender();
-    let (tx_metadata, gas) = match &option.internal_operation {
+    let gas_price = context
+        .client
+        .governance_api()
+        .get_sui_system_state()
+        .await?
+        .reference_gas_price;
+
+    let (tx_metadata, gas, budget) = match &option.internal_operation {
         InternalOperation::PaySui {
             sender, amounts, ..
         } => {
@@ -198,14 +205,20 @@ pub async fn metadata(
             let sender_coins = context
                 .client
                 .coin_read_api()
-                .select_coins(*sender, None, amount + 1000, None, vec![])
+                .select_coins(
+                    *sender,
+                    None,
+                    amount + (1000 * gas_price as u128),
+                    None,
+                    vec![],
+                )
                 .await?
                 .into_iter()
                 .map(|coin| coin.object_ref())
                 .collect::<Vec<_>>();
             // gas is always the first coin for pay_sui
             let gas = sender_coins[0];
-            (TransactionMetadata::PaySui(sender_coins), gas)
+            (TransactionMetadata::PaySui(sender_coins), gas, 1000)
         }
         InternalOperation::Delegation {
             sender,
@@ -216,7 +229,7 @@ pub async fn metadata(
             let coins = context
                 .client
                 .coin_read_api()
-                .select_coins(*sender, None, *amount as u128, *locked_until_epoch, vec![])
+                .select_coins(*sender, None, *amount, *locked_until_epoch, vec![])
                 .await?
                 .into_iter()
                 .map(|coin| coin.object_ref())
@@ -231,7 +244,7 @@ pub async fn metadata(
                     Some(*amount as u64),
                     *validator,
                     None,
-                    2000,
+                    13000,
                 )
                 .await?;
 
@@ -241,9 +254,11 @@ pub async fn metadata(
                     locked_until_epoch: *locked_until_epoch,
                 },
                 data.gas(),
+                13000,
             )
         }
     };
+
     // get gas estimation from dry-run, this will also return any tx error.
     let data = option
         .internal_operation
@@ -251,7 +266,8 @@ pub async fn metadata(
             tx_metadata: tx_metadata.clone(),
             sender,
             gas,
-            budget: 1000,
+            gas_price: 1,
+            budget,
         })?;
     let dry_run = context.client.read_api().dry_run_transaction(data).await?;
 
@@ -262,6 +278,7 @@ pub async fn metadata(
             tx_metadata,
             sender,
             gas,
+            gas_price,
             budget,
         },
         suggested_fee: vec![Amount::new(budget as i128)],
@@ -287,7 +304,7 @@ pub async fn parse(
         intent.value
     };
     let account_identifier_signers = if request.signed {
-        vec![data.signer().into()]
+        vec![data.sender().into()]
     } else {
         vec![]
     };

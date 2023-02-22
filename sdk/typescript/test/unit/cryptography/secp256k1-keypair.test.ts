@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-  Base64DataBuffer,
   DEFAULT_SECP256K1_DERIVATION_PATH,
+  PRIVATE_KEY_SIZE,
   Secp256k1Keypair,
 } from '../../../src';
 import { describe, it, expect } from 'vitest';
@@ -24,10 +24,14 @@ export const VALID_SECP256K1_PUBLIC_KEY = [
 ];
 
 // Invalid private key with incorrect length
-export const INVALID_SECP256K1_SECRET_KEY = Uint8Array.from(Array(31).fill(1));
+export const INVALID_SECP256K1_SECRET_KEY = Uint8Array.from(
+  Array(PRIVATE_KEY_SIZE - 1).fill(1),
+);
 
 // Invalid public key with incorrect length
-export const INVALID_SECP256K1_PUBLIC_KEY = Uint8Array.from(Array(32).fill(1));
+export const INVALID_SECP256K1_PUBLIC_KEY = Uint8Array.from(
+  Array(PRIVATE_KEY_SIZE).fill(1),
+);
 
 const TEST_MNEMONIC =
   'result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss';
@@ -59,7 +63,7 @@ describe('secp256k1-keypair', () => {
 
   it('generate keypair from random seed', () => {
     const keypair = Secp256k1Keypair.fromSeed(
-      Uint8Array.from(Array(32).fill(8)),
+      Uint8Array.from(Array(PRIVATE_KEY_SIZE).fill(8)),
     );
     expect(keypair.getPublicKey().toBase64()).toEqual(
       'A/mR+UTR4ZVKf8i5v2Lg148BX0wHdi1QXiDmxFJgo2Yb',
@@ -68,15 +72,13 @@ describe('secp256k1-keypair', () => {
 
   it('signature of data is valid', async () => {
     const keypair = new Secp256k1Keypair();
-    const signData = new Base64DataBuffer(
-      new TextEncoder().encode('hello world'),
-    );
+    const signData = new TextEncoder().encode('hello world');
 
-    const msgHash = await secp.utils.sha256(signData.getData());
+    const msgHash = await secp.utils.sha256(signData);
     const sig = keypair.signData(signData, false);
     expect(
       secp.verify(
-        Signature.fromCompact(sig.getData()),
+        Signature.fromCompact(sig),
         msgHash,
         keypair.getPublicKey().toBytes(),
       ),
@@ -86,20 +88,18 @@ describe('secp256k1-keypair', () => {
   it('signature of data is same as rust implementation', async () => {
     const secret_key = new Uint8Array(VALID_SECP256K1_SECRET_KEY);
     const keypair = Secp256k1Keypair.fromSecretKey(secret_key);
-    const signData = new Base64DataBuffer(
-      new TextEncoder().encode('Hello, world!'),
-    );
+    const signData = new TextEncoder().encode('Hello, world!');
 
-    const msgHash = await secp.utils.sha256(signData.getData());
+    const msgHash = await secp.utils.sha256(signData);
     const sig = keypair.signData(signData, false);
 
     // Assert the signature is the same as the rust implementation. See https://github.com/MystenLabs/fastcrypto/blob/0436d6ef11684c291b75c930035cb24abbaf581e/fastcrypto/src/tests/secp256k1_tests.rs#L115
-    expect(Buffer.from(sig.getData()).toString('hex')).toEqual(
+    expect(Buffer.from(sig).toString('hex')).toEqual(
       '25d450f191f6d844bf5760c5c7b94bc67acc88be76398129d7f43abdef32dc7f7f1a65b7d65991347650f3dd3fa3b3a7f9892a0608521cbcf811ded433b31f8b',
     );
     expect(
       secp.verify(
-        Signature.fromCompact(sig.getData()),
+        Signature.fromCompact(sig),
         msgHash,
         keypair.getPublicKey().toBytes(),
       ),

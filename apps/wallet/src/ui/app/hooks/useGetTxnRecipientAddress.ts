@@ -1,11 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+    type SuiTransactionResponse,
+    type SuiAddress,
+    getTransactions,
+    getTransactionSender,
+} from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { getEventsSummary, getAmount } from '_helpers';
-
-import type { SuiTransactionResponse, SuiAddress } from '@mysten/sui.js';
 
 type Props = {
     txn: SuiTransactionResponse;
@@ -13,17 +17,15 @@ type Props = {
 };
 
 export function useGetTxnRecipientAddress({ txn, address }: Props) {
-    const { certificate, effects } = txn;
+    const { effects } = txn;
 
     const eventsSummary = useMemo(() => {
         const { coins } = getEventsSummary(effects, address);
         return coins;
     }, [effects, address]);
 
-    const amountByRecipient = getAmount(
-        certificate.data.transactions[0],
-        txn.effects
-    );
+    const [transaction] = getTransactions(txn);
+    const amountByRecipient = getAmount(transaction, txn.effects);
 
     const recipientAddress = useMemo(() => {
         const transferObjectRecipientAddress =
@@ -40,9 +42,9 @@ export function useGetTxnRecipientAddress({ txn, address }: Props) {
         return (
             receiverAddr ??
             transferObjectRecipientAddress ??
-            certificate.data.sender
+            getTransactionSender(txn)
         );
-    }, [address, amountByRecipient, certificate.data.sender, eventsSummary]);
+    }, [address, amountByRecipient, eventsSummary, txn]);
 
     return recipientAddress;
 }

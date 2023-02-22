@@ -26,10 +26,10 @@ export const ValidatorMetaData = object({
   network_pubkey_bytes: array(number()),
   worker_pubkey_bytes: array(number()),
   proof_of_possession_bytes: array(number()),
-  name: array(number()),
-  description: nullable(array(any())),
-  image_url: nullable(array(any())),
-  project_url: nullable(array(any())),
+  name: union([string(), array(number())]),
+  description: union([string(), nullable(array(number()))]),
+  image_url: union([string(), nullable(array(number()))]),
+  project_url: union([string(), nullable(array(number()))]),
   net_address: array(number()),
   consensus_address: array(number()),
   worker_address: array(number()),
@@ -142,8 +142,10 @@ export const DelegationStakingPool = object({
 
 export const CommitteeInfo = object({
   epoch: number(),
+  // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
+  protocol_version: optional(number()),
   /* array of (validator public key, stake unit) tuple */
-  committee_info: nullable(array(tuple([AuthorityName, number()]))),
+  committee_info: optional(array(tuple([AuthorityName, number()]))),
 });
 
 export const SystemParameters = object({
@@ -181,6 +183,8 @@ export const ValidatorSet = object({
 export const SuiSystemState = object({
   info: object({ id: string() }),
   epoch: number(),
+  // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
+  protocol_version: optional(number()),
   validators: ValidatorSet,
   treasury_cap: SuiSupplyFields,
   storage_fund: Balance,
@@ -306,6 +310,8 @@ export const MoveValidatorsFieldsClass = object({
 export const MoveSuiSystemObjectFields = object({
   chain_id: optional(number()),
   epoch: string(),
+  // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
+  protocol_version: optional(string()),
   // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
   epoch_start_timestamp_ms: optional(string()),
   safe_mode: boolean(),

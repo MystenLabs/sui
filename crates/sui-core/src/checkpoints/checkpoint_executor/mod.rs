@@ -29,23 +29,29 @@ use itertools::izip;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use sui_config::node::CheckpointExecutorConfig;
-use sui_types::committee::{Committee, EpochId};
+use sui_types::error::SuiResult;
+use sui_types::messages::VerifiedExecutableTransaction;
 use sui_types::{
-    base_types::{ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
-    error::SuiResult,
+    base_types::{ExecutionDigests, TransactionDigest},
     messages::{TransactionEffects, VerifiedCertificate},
-    messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
+    messages_checkpoint::{CheckpointSequenceNumber, EndOfEpochData, VerifiedCheckpoint},
+};
+use sui_types::{
+    committee::{Committee, EpochId},
+    message_envelope::Message,
 };
 use tap::TapFallible;
-use tokio::{sync::broadcast, task::JoinHandle, time::timeout};
+use tokio::{
+    sync::broadcast::{self, error::RecvError},
+    task::JoinHandle,
+    time::timeout,
+};
 use tokio_stream::StreamExt;
 use tracing::{debug, error, info, instrument, warn};
 use typed_store::Map;
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
-use crate::authority::{
-    authority_per_epoch_store::AuthorityPerEpochStore, authority_store::EffectsStore,
-};
 use crate::transaction_manager::TransactionManager;
 use crate::{authority::EffectsNotifyRead, checkpoints::CheckpointStore};
 
@@ -106,6 +112,10 @@ impl CheckpointExecutor {
     /// We don't technically need &mut on self, but passing it to make sure only one instance is
     /// running at one time.
     pub async fn run_epoch(&mut self, epoch_store: Arc<AuthorityPerEpochStore>) -> Committee {
+        debug!(
+            "Checkpoint executor running for epoch {}",
+            epoch_store.epoch(),
+        );
         self.metrics
             .checkpoint_exec_epoch
             .set(epoch_store.epoch() as i64);
@@ -155,17 +165,30 @@ impl CheckpointExecutor {
                     highest_executed = Some(checkpoint);
                 }
                 // Check for newly synced checkpoints from StateSync.
-                Ok(checkpoint) = self.mailbox.recv() => {
-                    debug!(
-                        sequence_number = ?checkpoint.summary.sequence_number,
-                        "received checkpoint summary from state sync"
-                    );
-                    SystemTime::now().duration_since(checkpoint.summary.timestamp())
-                        .map(|latency|
-                            self.metrics.checkpoint_contents_age_ms.report(latency.as_millis() as u64)
-                        )
-                        .tap_err(|err| warn!("unable to compute checkpoint age: {}", err))
-                        .ok();
+                received = self.mailbox.recv() => match received {
+                    Ok(checkpoint) => {
+                        debug!(
+                            sequence_number = ?checkpoint.summary.sequence_number,
+                            "received checkpoint summary from state sync"
+                        );
+                        SystemTime::now().duration_since(checkpoint.summary.timestamp())
+                            .map(|latency|
+                                self.metrics.checkpoint_contents_age_ms.report(latency.as_millis() as u64)
+                            )
+                            .tap_err(|err| warn!("unable to compute checkpoint age: {}", err))
+                            .ok();
+                    },
+                    // In this case, messages in the mailbox have been overwritten
+                    // as a result of lagging too far behind.
+                    Err(RecvError::Lagged(num_skipped)) => {
+                        debug!(
+                            "Checkpoint Execution Recv channel overflowed {:?} messages",
+                            num_skipped,
+                        );
+                    }
+                    Err(RecvError::Closed) => {
+                        panic!("Checkpoint Execution Sender (StateSync) closed channel unexpectedly");
+                    }
                 }
             }
         }
@@ -203,6 +226,9 @@ impl CheckpointExecutor {
             .checkpoint_store
             .get_highest_synced_checkpoint()
             .expect("Failed to read highest synced checkpoint") else {
+            debug!(
+                "No checkpoints to schedule, highest synced checkpoint is None",
+            );
             return;
         };
 
@@ -235,6 +261,7 @@ impl CheckpointExecutor {
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
         debug!("Executing checkpoint {:?}", checkpoint.sequence_number());
+
         // Mismatch between node epoch and checkpoint epoch after startup
         // crash recovery is invalid
         let checkpoint_epoch = checkpoint.epoch();
@@ -277,7 +304,6 @@ impl CheckpointExecutor {
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 metrics.checkpoint_exec_errors.inc();
             }
-
             checkpoint
         }));
     }
@@ -291,16 +317,25 @@ fn check_epoch_last_checkpoint(
 ) -> Option<Committee> {
     if let Some(checkpoint) = checkpoint {
         if checkpoint.epoch() == cur_epoch {
-            if let Some(next_committee) = checkpoint.summary.next_epoch_committee.clone() {
+            if let Some(EndOfEpochData {
+                next_epoch_committee,
+                next_epoch_protocol_version,
+            }) = &checkpoint.summary.end_of_epoch_data
+            {
                 info!(
                     ended_epoch = cur_epoch,
+                    ?next_epoch_protocol_version,
                     last_checkpoint = checkpoint.sequence_number(),
                     "Reached end of epoch",
                 );
                 let next_epoch = cur_epoch + 1;
                 return Some(
-                    Committee::new(next_epoch, next_committee.into_iter().collect())
-                        .expect("Creating new committee object cannot fail"),
+                    Committee::new(
+                        next_epoch,
+                        *next_epoch_protocol_version,
+                        next_epoch_committee.iter().cloned().collect(),
+                    )
+                    .expect("Creating new committee object cannot fail"),
                 );
             }
         }
@@ -372,14 +407,15 @@ async fn execute_transactions(
         .map(|tx| tx.into())
         .collect();
 
-    let effects_digests: Vec<TransactionEffectsDigest> = execution_digests
+    let effects_digests: Vec<_> = execution_digests
         .iter()
         .map(|digest| digest.effects)
         .collect();
+
     let digest_to_effects: HashMap<TransactionDigest, TransactionEffects> = authority_store
         .perpetual_tables
         .effects
-        .multi_get(effects_digests.clone())?
+        .multi_get(effects_digests.iter())?
         .into_iter()
         .map(|fx| {
             if fx.is_none() {
@@ -401,34 +437,42 @@ async fn execute_transactions(
                 .await?;
         }
     }
-    epoch_store.insert_pending_certificates(&synced_txns)?;
+    let executable_txns = synced_txns
+        .into_iter()
+        .map(|cert| {
+            VerifiedExecutableTransaction::new_from_checkpoint_to_be_replaced(
+                cert,
+                epoch_store.epoch(),
+                checkpoint_sequence,
+            )
+        })
+        .collect();
 
-    transaction_manager.enqueue(synced_txns, epoch_store)?;
+    transaction_manager.enqueue(executable_txns, epoch_store)?;
 
     // Once synced_txns have been awaited, all txns should have effects committed.
     let mut periods = 1;
     let log_timeout_sec = Duration::from_secs(log_timeout_sec);
 
     loop {
-        let effects_future = authority_store.notify_read_effects(all_tx_digests.clone());
+        let effects_future = authority_store.notify_read_executed_effects(all_tx_digests.clone());
 
         match timeout(log_timeout_sec, effects_future).await {
             Err(_elapsed) => {
-                let missing_digests: Vec<TransactionDigest> =
-                    EffectsStore::get_effects(&authority_store, all_tx_digests.clone().iter())
-                        .expect("Failed to get effects")
-                        .iter()
-                        .zip(all_tx_digests.clone())
-                        .filter_map(
-                            |(fx, digest)| {
-                                if fx.is_none() {
-                                    Some(digest)
-                                } else {
-                                    None
-                                }
-                            },
-                        )
-                        .collect();
+                let missing_digests: Vec<TransactionDigest> = authority_store
+                    .multi_get_executed_effects(&all_tx_digests)?
+                    .iter()
+                    .zip(all_tx_digests.clone())
+                    .filter_map(
+                        |(fx, digest)| {
+                            if fx.is_none() {
+                                Some(digest)
+                            } else {
+                                None
+                            }
+                        },
+                    )
+                    .collect();
 
                 warn!(
                     "Transaction effects for tx digests {:?} checkpoint not present within {:?}. ",
@@ -439,18 +483,20 @@ async fn execute_transactions(
             }
             Ok(Err(err)) => return Err(err),
             Ok(Ok(effects)) => {
-                for (tx_digest, expected_effects_digest, actual_effects) in
-                    izip!(&all_tx_digests, &effects_digests, &effects)
+                for (tx_digest, expected_digest, actual_effects) in
+                    izip!(&all_tx_digests, &execution_digests, &effects)
                 {
+                    let expected_effects_digest = expected_digest.effects;
                     if expected_effects_digest != actual_effects.digest() {
                         panic!("When executing checkpoint {checkpoint_sequence}, transaction {tx_digest} is expected to have effects digest {expected_effects_digest}, but got {}!", actual_effects.digest());
                     }
                 }
-                authority_store.insert_executed_transactions(
+                authority_store.insert_finalized_transactions(
                     &all_tx_digests,
                     epoch_store.epoch(),
                     checkpoint_sequence,
                 )?;
+
                 return Ok(());
             }
         }

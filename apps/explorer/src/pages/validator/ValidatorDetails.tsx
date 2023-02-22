@@ -34,11 +34,11 @@ function ValidatorDetails() {
         );
     }, [id, validatorsData]);
 
-    const numberOfValidators = useMemo(() => {
-        return (
-            validatorsData?.validators.fields.active_validators.length || null
-        );
-    }, [validatorsData]);
+    const numberOfValidators = useMemo(
+        () =>
+            validatorsData?.validators.fields.active_validators.length || null,
+        [validatorsData]
+    );
 
     const { data: validatorEvents, isLoading: validatorsEventsLoading } =
         useGetValidatorsEvents({

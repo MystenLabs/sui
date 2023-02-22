@@ -29,7 +29,7 @@ pub fn derive_id(
     let digest = TransactionDigest::try_from(tx_hash.as_slice()).unwrap();
     let address = AccountAddress::from(ObjectID::derive_id(digest, ids_created));
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    obj_runtime.new_id(address.into());
+    obj_runtime.new_id(address.into())?;
 
     // TODO: choose cost
     let cost = legacy_create_signer_cost();

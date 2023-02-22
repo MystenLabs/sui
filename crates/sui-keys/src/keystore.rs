@@ -6,7 +6,6 @@ use bip32::DerivationPath;
 use bip39::{Language, Mnemonic, Seed};
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use signature::Signer;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
@@ -19,7 +18,7 @@ use sui_types::intent::{Intent, IntentMessage};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
     enum_dispatch, get_key_pair_from_rng, EncodeDecodeBase64, PublicKey, Signature,
-    SignatureScheme, SuiKeyPair,
+    SignatureScheme, Signer, SuiKeyPair,
 };
 
 use crate::key_derive::{derive_key_pair_from_path, generate_new_key};
@@ -131,12 +130,13 @@ impl<'de> Deserialize<'de> for FileBasedKeystore {
 impl AccountKeystore for FileBasedKeystore {
     #[warn(deprecated)]
     fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
-        self.keys
+        Ok(self
+            .keys
             .get(address)
             .ok_or_else(|| {
                 signature::Error::from_source(format!("Cannot find key for address: [{address}]"))
             })?
-            .try_sign(msg)
+            .sign(msg))
     }
 
     fn sign_secure<T>(
@@ -230,12 +230,13 @@ pub struct InMemKeystore {
 impl AccountKeystore for InMemKeystore {
     #[warn(deprecated)]
     fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
-        self.keys
+        Ok(self
+            .keys
             .get(address)
             .ok_or_else(|| {
                 signature::Error::from_source(format!("Cannot find key for address: [{address}]"))
             })?
-            .try_sign(msg)
+            .sign(msg))
     }
 
     fn sign_secure<T>(

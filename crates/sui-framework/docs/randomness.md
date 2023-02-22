@@ -383,6 +383,7 @@ Verify signature sig on message msg using the epoch's BLS key.
 
 
 <pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
 
 
@@ -418,6 +419,7 @@ Helper functions to sign on messages in tests.
 
 
 <pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
 
 

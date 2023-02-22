@@ -38,14 +38,6 @@ impl Builder {
         let mut discovery_server = DiscoveryServer::new(server);
 
         // Apply rate limits from configuration as needed.
-        if let Some(limit) = discovery_config.get_external_address_rate_limit {
-            discovery_server = discovery_server.add_layer_for_get_external_address(
-                InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
-                    governor::Quota::per_second(limit),
-                    rate_limit::WaitMode::Block,
-                )),
-            );
-        }
         if let Some(limit) = discovery_config.get_known_peers_rate_limit {
             discovery_server = discovery_server.add_layer_for_get_known_peers(
                 InboundRequestLayer::new(rate_limit::RateLimitLayer::new(

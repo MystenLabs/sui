@@ -89,6 +89,13 @@ function validatorsTableData(
                 header: 'Name',
                 accessorKey: 'name',
                 enableSorting: true,
+                sortingFn: (a: any, b: any, colId: string) =>
+                    a
+                        .getValue(colId)
+                        .name.localeCompare(b.getValue(colId).name, 'en', {
+                            sensitivity: 'base',
+                            numeric: true,
+                        }),
                 cell: (props: any) => {
                     const { name, logo } = props.getValue();
                     return (
@@ -175,11 +182,11 @@ function ValidatorPageResult() {
             ? (data.details.data.fields as MoveSuiSystemObjectFields)
             : null;
 
-    const numberOfValidators = useMemo(() => {
-        return (
-            validatorsData?.validators.fields.active_validators.length || null
-        );
-    }, [validatorsData]);
+    const numberOfValidators = useMemo(
+        () =>
+            validatorsData?.validators.fields.active_validators.length || null,
+        [validatorsData]
+    );
 
     const {
         data: validatorEvents,

@@ -1,18 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Disclosure } from '@headlessui/react';
 import { Coin } from '@mysten/sui.js';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 
-import { ReactComponent as OpenIcon } from '../../../assets/SVGIcons/12px/ShowNHideDown.svg';
 import { ReactComponent as ClosedIcon } from '../../../assets/SVGIcons/12px/ShowNHideRight.svg';
 import Pagination from '../../pagination/Pagination';
 import { type DataType, ITEMS_PER_PAGE } from '../OwnedObjectConstants';
 
-import styles from '../styles/OwnedCoin.module.css';
-
 import { useFormatCoin } from '~/hooks/useFormatCoin';
 import { ObjectLink } from '~/ui/InternalLink';
+import { Text } from '~/ui/Text';
 
 function CoinItem({
     id,
@@ -23,19 +22,28 @@ function CoinItem({
     balance?: bigint | null;
     coinType?: string | null;
 }) {
-    const [formattedBalance] = useFormatCoin(balance, coinType);
+    const [formattedBalance, symbol] = useFormatCoin(balance, coinType);
 
     return (
-        <div className={styles.singlecoin}>
-            <div className={styles.openrow}>
-                <div className={styles.label}>Object ID</div>
-                <div className={`${styles.oneline} ${styles.value}`}>
-                    <ObjectLink objectId={id} noTruncate />
-                </div>
+        <div className="bg-grey-40 grid grid-flow-row auto-rows-fr grid-cols-4 items-center">
+            <Text color="steel-darker" variant="bodySmall/medium">
+                Object ID
+            </Text>
+            <div className="col-span-3">
+                <ObjectLink objectId={id} noTruncate />
             </div>
-            <div className={styles.openrow}>
-                <div className={styles.label}>Balance</div>
-                <div className={styles.value}>{formattedBalance}</div>
+
+            <Text color="steel-darker" variant="bodySmall/medium">
+                Balance
+            </Text>
+
+            <div className="col-span-3 inline-flex items-end gap-1">
+                <Text color="steel-darker" variant="bodySmall/medium">
+                    {formattedBalance}
+                </Text>
+                <Text color="steel" variant="subtitleSmallExtra/normal">
+                    {symbol}
+                </Text>
             </div>
         </div>
     );
@@ -50,18 +58,6 @@ function SingleCoinView({
     coinType: string;
     currentPage: number;
 }) {
-    const [isOpen, setIsOpen] = useState(false);
-
-    const switchIsOpen = useCallback(
-        () => setIsOpen((prevOpen) => !prevOpen),
-        []
-    );
-
-    // Switching the page closes any open group:
-    useEffect(() => {
-        setIsOpen(false);
-    }, [currentPage]);
-
     const subObjList = results.filter(({ Type }) => Type === coinType);
 
     const totalBalance =
@@ -81,33 +77,34 @@ function SingleCoinView({
     );
 
     return (
-        <div
-            className={isOpen ? styles.openedgroup : styles.closedgroup}
-            data-testid="ownedcoinsummary"
-        >
-            <div onClick={switchIsOpen} className={styles.summary}>
-                <div className={styles.coinname}>
-                    <div>{isOpen ? <OpenIcon /> : <ClosedIcon />}</div>
-                    <div
-                        className={styles.oneline}
-                        data-testid="ownedcoinlabel"
-                    >
+        <Disclosure>
+            <Disclosure.Button
+                data-testid="ownedcoinlabel"
+                className="grid w-full grid-cols-3 items-center justify-between rounded-none py-2 text-left hover:bg-sui-light"
+            >
+                <div className="flex">
+                    <ClosedIcon className="mr-1.5 fill-gray-60 ui-open:rotate-90 ui-open:transform" />
+                    <Text color="steel-darker" variant="body/medium">
                         {symbol}
-                    </div>
+                    </Text>
                 </div>
-                <div
-                    className={styles.objcount}
-                    data-testid="ownedcoinobjcount"
-                >
-                    {subObjList.length}
-                </div>
-                <div className={styles.balance} data-testid="ownedcoinbalance">
-                    {formattedTotalBalance}
-                </div>
-            </div>
 
-            {isOpen && (
-                <div className={styles.openbody}>
+                <Text color="steel-darker" variant="body/medium">
+                    {subObjList.length}
+                </Text>
+
+                <div className="flex items-center gap-1">
+                    <Text color="steel-darker" variant="bodySmall/medium">
+                        {formattedTotalBalance}
+                    </Text>
+                    <Text color="steel" variant="subtitleSmallExtra/normal">
+                        {symbol}
+                    </Text>
+                </div>
+            </Disclosure.Button>
+
+            <Disclosure.Panel>
+                <div className="flex flex-col gap-1 bg-gray-40 p-3">
                     {subObjList.map((subObj) => (
                         <CoinItem
                             key={subObj.id}
@@ -117,8 +114,8 @@ function SingleCoinView({
                         />
                     ))}
                 </div>
-            )}
-        </div>
+            </Disclosure.Panel>
+        </Disclosure>
     );
 }
 
@@ -128,14 +125,14 @@ export default function OwnedCoinView({ results }: { results: DataType }) {
     const uniqueTypes = Array.from(new Set(results.map(({ Type }) => Type)));
 
     return (
-        <>
-            <div id="groupCollection" className={styles.groupview}>
-                <div className={styles.firstrow}>
-                    <div>Type</div>
-                    <div>Objects</div>
-                    <div>Balance</div>
+        <div className="flex flex-col text-left">
+            <div className="flex max-h-80 flex-col overflow-auto">
+                <div className="grid grid-cols-3 py-2 uppercase tracking-wider text-gray-80">
+                    <Text variant="caption/medium">Type</Text>
+                    <Text variant="caption/medium">Objects</Text>
+                    <Text variant="caption/medium">Balance</Text>
                 </div>
-                <div className={styles.body}>
+                <div>
                     {uniqueTypes
                         .slice(
                             (currentPage - 1) * ITEMS_PER_PAGE,
@@ -157,6 +154,6 @@ export default function OwnedCoinView({ results }: { results: DataType }) {
                 currentPage={currentPage}
                 onPagiChangeFn={setCurrentPage}
             />
-        </>
+        </div>
     );
 }

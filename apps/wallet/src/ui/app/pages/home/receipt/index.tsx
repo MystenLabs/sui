@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getExecutionStatusType, getTransactionKindName } from '@mysten/sui.js';
+import {
+    getExecutionStatusType,
+    getTransactionKindName,
+    getTransactions,
+    getTransactionSender,
+} from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useSearchParams, useNavigate } from 'react-router-dom';
@@ -21,8 +26,7 @@ function ReceiptPage() {
 
     // get tx results from url params
     const transactionId = searchParams.get('txdigest');
-    // get Return route from URL params
-    const fromRoute = searchParams.get('from');
+    const fromParam = searchParams.get('from');
     const rpc = useRpc();
 
     const { data, isLoading, isError } = useQuery(
@@ -33,20 +37,18 @@ function ReceiptPage() {
         { enabled: !!transactionId, retry: 8 }
     );
 
-    // return route or default to transactions
-    const linkTo = fromRoute ? `/${fromRoute}` : '/transactions';
-
     const navigate = useNavigate();
+    // return to previous route or from param if available
     const closeReceipt = useCallback(() => {
-        navigate(linkTo);
-    }, [linkTo, navigate]);
+        fromParam ? navigate(`/${fromParam}`) : navigate(-1);
+    }, [fromParam, navigate]);
 
     const pageTitle = useMemo(() => {
         if (data) {
             const executionStatus = getExecutionStatusType(data);
-            const { sender, transactions } = data.certificate.data;
+            const [transaction] = getTransactions(data);
 
-            const txnKind = getTransactionKindName(transactions[0]);
+            const txnKind = getTransactionKindName(transaction);
             const stakingTxn = checkStakingTxn(data);
 
             const isTransfer =
@@ -56,14 +58,14 @@ function ReceiptPage() {
                 txnKind === 'TransferObject' ||
                 txnKind === 'Pay';
 
-            const isSender = activeAddress === sender;
+            const isSender = activeAddress === getTransactionSender(data);
 
             const transferName = isTransfer
                 ? isSender
                     ? 'Sent Successfully'
                     : 'Received Successfully'
                 : stakingTxn
-                ? stakingTxn + ' Successfully'
+                ? `${stakingTxn} Successfully`
                 : 'Move Call';
 
             return `${
@@ -77,14 +79,11 @@ function ReceiptPage() {
     }, [activeAddress, data]);
 
     if (!transactionId || !activeAddress) {
-        return <Navigate to={linkTo} replace={true} />;
+        return <Navigate to="/transactions" replace={true} />;
     }
 
     return (
-        <Loading
-            loading={isLoading}
-            className="flex items-center justify-center"
-        >
+        <Loading loading={isLoading}>
             <Overlay
                 showModal={showModal}
                 setShowModal={setShowModal}

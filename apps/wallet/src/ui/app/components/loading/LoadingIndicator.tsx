@@ -1,16 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
+import { Spinner16 } from '@mysten/icons';
+import { cva, type VariantProps } from 'class-variance-authority';
 
-import st from './LoadingIndicator.module.scss';
+const styles = cva('', {
+    variants: {
+        color: {
+            inherit: 'text-inherit',
+            sui: 'text-sui',
+        },
+    },
+});
 
-export type LoadingIndicatorProps = {
-    className?: string;
-};
+export type LoadingIndicatorProps = VariantProps<typeof styles>;
 
-const LoadingIndicator = ({ className }: LoadingIndicatorProps) => {
-    return <span className={cl(st.spinner, className)} />;
+const LoadingIndicator = ({ color = 'sui' }: LoadingIndicatorProps) => {
+    return (
+        <Spinner16 className={styles({ className: 'animate-spin', color })} />
+    );
 };
 
 export default LoadingIndicator;

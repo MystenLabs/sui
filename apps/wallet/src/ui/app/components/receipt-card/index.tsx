@@ -9,6 +9,9 @@ import {
     getTotalGasUsed,
     getExecutionStatusError,
     SUI_TYPE_ARG,
+    getTransactions,
+    getTransactionSender,
+    getTransactionDigest,
 } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
@@ -17,16 +20,15 @@ import { ReceiptCardBg } from './ReceiptCardBg';
 import { StatusIcon } from './StatusIcon';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
-import { DelegationObjectCard } from '_components/receipt-card/DelegationObjectCard';
 import { StakeTxnCard } from '_components/receipt-card/StakeTxnCard';
 import { TxnAddress } from '_components/receipt-card/TxnAddress';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
 import { TxnGasSummery } from '_components/receipt-card/TxnGasSummery';
 import { UnStakeTxnCard } from '_components/receipt-card/UnstakeTxnCard';
-import { getTxnEffectsEventID } from '_components/transactions-card/Transaction';
+import { getTxnEffectsEventID } from '_components/transactions-card';
 import { TxnImage } from '_components/transactions-card/TxnImage';
-import { getEventsSummary, checkStakingTxn } from '_helpers';
-import { useGetTxnRecipientAddress } from '_hooks';
+import { checkStakingTxn } from '_helpers';
+import { useGetTxnRecipientAddress, useGetTransferAmount } from '_hooks';
 import { Text } from '_src/ui/app/shared/text';
 
 import type { SuiTransactionResponse, SuiAddress } from '@mysten/sui.js';
@@ -37,26 +39,27 @@ type ReceiptCardProps = {
 };
 
 function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
-    const { timestamp_ms, certificate, effects } = txn;
+    const { effects } = txn;
+    const timestamp = txn.timestamp_ms || txn.timestampMs;
     const executionStatus = getExecutionStatusType(txn);
     const error = useMemo(() => getExecutionStatusError(txn), [txn]);
     const isSuccessful = executionStatus === 'success';
-    const txnKind = getTransactionKindName(certificate.data.transactions[0]);
-    const { coins: eventsSummary } = getEventsSummary(effects, activeAddress);
+    const [transaction] = getTransactions(txn);
+    const txnKind = getTransactionKindName(transaction);
+
     const recipientAddress = useGetTxnRecipientAddress({
         txn,
         address: activeAddress,
     });
 
     const objectId = useMemo(() => {
-        const transferId = getTransferObjectTransaction(
-            certificate.data.transactions[0]
-        )?.objectRef?.objectId;
+        const transferId =
+            getTransferObjectTransaction(transaction)?.objectRef?.objectId;
 
         return transferId
             ? transferId
             : getTxnEffectsEventID(effects, activeAddress)[0];
-    }, [activeAddress, certificate.data.transactions, effects]);
+    }, [activeAddress, transaction, effects]);
 
     const gasTotal = getTotalGasUsed(txn);
 
@@ -66,32 +69,37 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
         return moveCallLabel ? moveCallLabel : 'Call';
     }, [txn, txnKind]);
 
-    const transferAmount = useMemo(() => {
-        return eventsSummary.filter(
-            ({ receiverAddress }) => receiverAddress === activeAddress
-        );
-    }, [eventsSummary, activeAddress]);
+    const transferAmount = useGetTransferAmount({
+        txn,
+        activeAddress,
+    });
 
     const totalSuiAmount = useMemo(() => {
-        const amount = eventsSummary.find(
+        const amount = transferAmount.find(
             ({ receiverAddress, coinType }) =>
                 receiverAddress === activeAddress && coinType === SUI_TYPE_ARG
         )?.amount;
         return amount ? Math.abs(amount) : null;
-    }, [activeAddress, eventsSummary]);
+    }, [activeAddress, transferAmount]);
 
-    const isSender = activeAddress === certificate.data.sender;
+    const isSender = activeAddress === getTransactionSender(txn);
     const isStakeTxn =
         moveCallLabel === 'Staked' || moveCallLabel === 'Unstaked';
+
+    const nftObjectLabel = transferAmount?.length
+        ? isSender
+            ? 'Sent'
+            : 'Received'
+        : 'Call';
 
     return (
         <div className="block relative w-full">
             <div className="flex mt-2.5 justify-center items-start">
                 <StatusIcon status={isSuccessful} />
             </div>
-            {timestamp_ms && (
+            {timestamp && (
                 <div className="my-3 flex justify-center">
-                    <DateCard timestamp={timestamp_ms} size="md" />
+                    <DateCard timestamp={timestamp} size="md" />
                 </div>
             )}
 
@@ -113,12 +121,18 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                         />
                     )
                 ) : (
-                    <>
+                    <div className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col">
                         {objectId && (
-                            <TxnImage
-                                id={objectId}
-                                label={isSender ? 'Sent' : 'Received'}
-                            />
+                            <div className="py-3.5 first:pt-0 flex gap-2 flex-col">
+                                <Text
+                                    variant="body"
+                                    weight="medium"
+                                    color="steel-darker"
+                                >
+                                    {nftObjectLabel}
+                                </Text>
+                                <TxnImage id={objectId} />
+                            </div>
                         )}
 
                         {transferAmount.length > 0
@@ -127,17 +141,18 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                                       return (
                                           <div
                                               key={coinType + receiverAddress}
-                                              className="divide-y divide-solid divide-steel/20 divide-x-0 gap-3.5 flex flex-col"
+                                              className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col pt-3.5 first:pt-0"
                                           >
                                               <TxnAmount
                                                   amount={amount}
                                                   label={
-                                                      amount > 0
-                                                          ? 'Received'
-                                                          : 'Sent'
+                                                      isSender
+                                                          ? 'Sent'
+                                                          : 'Received'
                                                   }
                                                   coinType={coinType}
                                               />
+
                                               <TxnAddress
                                                   address={recipientAddress}
                                                   label={
@@ -149,24 +164,28 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                                   }
                               )
                             : null}
-                    </>
+
+                        {txnKind === 'ChangeEpoch' &&
+                            !transferAmount.length && (
+                                <TxnAddress
+                                    address={recipientAddress}
+                                    label="From"
+                                />
+                            )}
+
+                        {gasTotal && isSender ? (
+                            <TxnGasSummery
+                                totalGas={gasTotal}
+                                transferAmount={totalSuiAmount}
+                            />
+                        ) : null}
+                    </div>
                 )}
 
-                {txnKind === 'ChangeEpoch' && !transferAmount.length ? (
-                    <DelegationObjectCard senderAddress={recipientAddress} />
-                ) : null}
-
-                {gasTotal && isSender ? (
-                    <TxnGasSummery
-                        totalGas={gasTotal}
-                        transferAmount={totalSuiAmount}
-                    />
-                ) : null}
-
-                <div className="flex gap-1.5 pt-3.75 w-full">
+                <div className="flex gap-1.5 w-full py-3.5">
                     <ExplorerLink
                         type={ExplorerLinkType.transaction}
-                        transactionID={certificate.transactionDigest}
+                        transactionID={getTransactionDigest(txn)}
                         title="View on Sui Explorer"
                         className="text-sui-dark text-p4 font-semibold no-underline uppercase tracking-wider"
                         showIcon={false}

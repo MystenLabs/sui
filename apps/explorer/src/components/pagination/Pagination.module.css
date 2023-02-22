@@ -4,14 +4,14 @@
     .basecontainer {
         @apply inline-block h-[2.3rem]
         items-center rounded border-[1px] border-solid
-        border-gray-50 bg-inherit
-        stroke-gray-75 font-sans text-gray-75;
+        border-gray-50 bg-inherit stroke-gray-75
+        font-sans text-sm text-gray-75;
 
         box-shadow: 0 1px 2px rgba(16 24 40 / 5%);
     }
 
     .desktopfooter .basecontainer {
-        @apply mx-[4px] px-2 py-2;
+        @apply mx-1 px-2 py-2;
     }
 
     .under6footer .basecontainer {
@@ -32,7 +32,7 @@ button.nointeract,
 }
 
 button.pagenumber {
-    @apply select-none border-solid border-sui-dark text-sui-dark;
+    @apply select-none border-sui-dark text-sui-dark;
 
     background: linear-gradient(0deg, #f4fbff, #f4fbff), #fff;
 }
@@ -55,7 +55,7 @@ button.gone {
 }
 
 .rhs > select {
-    @apply ml-[1vw] hidden cursor-pointer overflow-visible rounded-[6px] border-0 border-r-[12px] border-transparent sm:block;
+    @apply ml-[1vw] hidden cursor-pointer overflow-visible rounded-[6px] border-r-[12px] border-transparent sm:block;
 
     outline: 1px solid #e9eaeb !important;
 }
@@ -76,7 +76,7 @@ button.gone {
 /* Desktop */
 
 .desktopfooter {
-    @apply hidden text-center sm:mt-2 sm:block sm:grid sm:grid-cols-12 sm:text-left;
+    @apply hidden text-center sm:mt-2 sm:grid sm:grid-cols-12 sm:text-left;
 }
 
 .desktopfooter > div:first-child {
@@ -90,11 +90,11 @@ button.gone {
 /* Mobile */
 
 .mobilefooter {
-    @apply block w-[85vw] sm:hidden;
+    @apply block w-[85vw] text-sm sm:hidden;
 }
 
 .mobiletoprow {
-    @apply my-2 block grid grid-cols-6 sm:hidden;
+    @apply my-2 grid grid-cols-6 sm:hidden;
 }
 
 .mobiletoprow > button:nth-child(1),

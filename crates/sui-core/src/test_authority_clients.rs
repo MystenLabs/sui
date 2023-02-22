@@ -16,8 +16,9 @@ use sui_types::{
     crypto::AuthorityKeyPair,
     error::SuiError,
     messages::{
-        CertifiedTransaction, CommitteeInfoRequest, CommitteeInfoResponse, ObjectInfoRequest,
-        ObjectInfoResponse, Transaction, TransactionInfoRequest, TransactionInfoResponse,
+        CertifiedTransaction, CommitteeInfoRequest, CommitteeInfoResponse,
+        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, Transaction,
+        TransactionInfoRequest, TransactionInfoResponse, VerifiedExecutableTransaction,
     },
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
 };
@@ -48,7 +49,7 @@ impl AuthorityAPI for LocalAuthorityClient {
     async fn handle_transaction(
         &self,
         transaction: Transaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
+    ) -> Result<HandleTransactionResponse, SuiError> {
         if self.fault_config.fail_before_handle_transaction {
             return Err(SuiError::from("Mock error before handle_transaction"));
         }
@@ -60,7 +61,7 @@ impl AuthorityAPI for LocalAuthorityClient {
                 error: "Mock error after handle_transaction".to_owned(),
             });
         }
-        result.map(|v| v.into())
+        result
     }
 
     async fn handle_certificate(
@@ -79,10 +80,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
         let state = self.state.clone();
-        state
-            .handle_object_info_request(request)
-            .await
-            .map(|r| r.into())
+        state.handle_object_info_request(request).await
     }
 
     /// Handle Object information requests for this account.
@@ -91,10 +89,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.state.clone();
-        state
-            .handle_transaction_info_request(request)
-            .await
-            .map(|r| r.into())
+        state.handle_transaction_info_request(request).await
     }
 
     async fn handle_checkpoint(
@@ -145,14 +140,16 @@ impl LocalAuthorityClient {
         // Check existing effects before verifying the cert to allow querying certs finalized
         // from previous epochs.
         let tx_digest = *certificate.digest();
-        let epoch_store = state.epoch_store();
+        let epoch_store = state.epoch_store_for_testing();
         let signed_effects =
-            match state.get_signed_effects_and_maybe_resign(epoch_store.epoch(), &tx_digest) {
+            match state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store) {
                 Ok(Some(effects)) => effects,
                 _ => {
                     let certificate = { certificate.verify(epoch_store.committee())? };
+                    let executable_tx =
+                        VerifiedExecutableTransaction::new_from_certificate(certificate);
                     state
-                        .try_execute_immediately(&certificate, &epoch_store)
+                        .try_execute_immediately(&executable_tx, &epoch_store)
                         .await?
                 }
             }
@@ -201,7 +198,7 @@ impl AuthorityAPI for MockAuthorityApi {
     async fn handle_transaction(
         &self,
         _transaction: Transaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
+    ) -> Result<HandleTransactionResponse, SuiError> {
         unreachable!();
     }
 
@@ -259,7 +256,7 @@ impl AuthorityAPI for MockAuthorityApi {
 
 #[derive(Clone)]
 pub struct HandleTransactionTestAuthorityClient {
-    pub tx_info_resp_to_return: SuiResult<TransactionInfoResponse>,
+    pub tx_info_resp_to_return: SuiResult<HandleTransactionResponse>,
 }
 
 #[async_trait]
@@ -267,7 +264,7 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
     async fn handle_transaction(
         &self,
         _transaction: Transaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
+    ) -> Result<HandleTransactionResponse, SuiError> {
         self.tx_info_resp_to_return.clone()
     }
 
@@ -314,7 +311,7 @@ impl HandleTransactionTestAuthorityClient {
         }
     }
 
-    pub fn set_tx_info_response(&mut self, resp: TransactionInfoResponse) {
+    pub fn set_tx_info_response(&mut self, resp: HandleTransactionResponse) {
         self.tx_info_resp_to_return = Ok(resp);
     }
 

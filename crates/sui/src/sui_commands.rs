@@ -27,7 +27,7 @@ use crate::config::{SuiClientConfig, SuiEnv};
 use crate::console::start_console;
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
-use crate::sui_move::{self, execute_move_command};
+use sui_move::{self, execute_move_command};
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]

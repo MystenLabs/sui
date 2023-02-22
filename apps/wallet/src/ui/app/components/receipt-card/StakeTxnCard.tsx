@@ -67,17 +67,19 @@ export function StakeTxnCard({ txnEffects }: StakeTxnCardProps) {
     }, [stakingData, validatorsData]);
 
     return (
-        <div className="flex flex-col w-full items-center divide-y divide-solid divide-steel/20 divide-x-0 gap-3.5">
+        <div className="flex flex-col w-full items-center justify-center divide-y divide-solid divide-steel/20 divide-x-0">
             {stakingData?.fields.validator_address && (
-                <ValidatorLogo
-                    validatorAddress={stakingData.fields.validator_address}
-                    showAddress
-                    iconSize="md"
-                    size="body"
-                />
+                <div className="mb-3.5 w-full">
+                    <ValidatorLogo
+                        validatorAddress={stakingData.fields.validator_address}
+                        showAddress
+                        iconSize="md"
+                        size="body"
+                    />
+                </div>
             )}
 
-            <div className="flex justify-between w-full pt-3.5">
+            <div className="flex justify-between w-full py-3.5">
                 <div className="flex gap-1 items-baseline text-steel">
                     <Text variant="body" weight="medium" color="steel-darker">
                         APY
@@ -97,7 +99,7 @@ export function StakeTxnCard({ txnEffects }: StakeTxnCardProps) {
                 />
             )}
             {rewardEpoch > 0 && (
-                <div className="flex justify-between w-full pt-3.5">
+                <div className="flex justify-between w-full py-3.5">
                     <div className="flex gap-1 items-baseline text-steel">
                         <Text
                             variant="body"

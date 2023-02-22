@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::{Error, SuiRpcResult};
-use crate::{RpcClient, TransactionExecutionResult, WAIT_FOR_TX_TIMEOUT_SEC};
+use crate::{RpcClient, WAIT_FOR_TX_TIMEOUT_SEC};
 use fastcrypto::encoding::Base64;
 use futures::stream;
 use futures_core::Stream;
@@ -13,9 +13,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc_types::{
-    Balance, Coin, CoinPage, DynamicFieldPage, EventPage, GetObjectDataResponse,
-    GetPastObjectDataResponse, GetRawObjectDataResponse, SuiCoinMetadata, SuiEventEnvelope,
-    SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedModule, SuiObjectInfo,
+    Balance, Checkpoint, CheckpointId, Coin, CoinPage, DynamicFieldPage, EventPage,
+    GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse, SuiCoinMetadata,
+    SuiEventEnvelope, SuiEventFilter, SuiMoveNormalizedModule, SuiObjectInfo,
     SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
 };
 use sui_types::balance::Supply;
@@ -28,10 +28,7 @@ use sui_types::event::EventID;
 use sui_types::messages::{
     CommitteeInfoResponse, ExecuteTransactionRequestType, TransactionData, VerifiedTransaction,
 };
-use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
-    CheckpointSummary,
-};
+use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary};
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
 
@@ -57,13 +54,6 @@ impl ReadApi {
         address: SuiAddress,
     ) -> SuiRpcResult<Vec<SuiObjectInfo>> {
         Ok(self.api.http.get_objects_owned_by_address(address).await?)
-    }
-
-    pub async fn get_objects_owned_by_object(
-        &self,
-        object_id: ObjectID,
-    ) -> SuiRpcResult<Vec<SuiObjectInfo>> {
-        Ok(self.api.http.get_objects_owned_by_object(object_id).await?)
     }
 
     pub async fn get_dynamic_fields(
@@ -142,38 +132,9 @@ impl ReadApi {
             .await?)
     }
 
-    /// Return a checkpoint summary based on a checkpoint sequence number
-    pub async fn get_checkpoint(
-        &self,
-        seq_number: CheckpointSequenceNumber,
-    ) -> SuiRpcResult<Checkpoint> {
-        let summary = self.get_checkpoint_summary(seq_number).await?;
-        let content = self.get_checkpoint_contents(seq_number).await?;
-        Ok(Checkpoint { summary, content })
-    }
-
-    /// Return a checkpoint summary based on a checkpoint digest
-    pub async fn get_checkpoint_by_digest(
-        &self,
-        digest: CheckpointDigest,
-    ) -> SuiRpcResult<Checkpoint> {
-        let summary = self.get_checkpoint_summary_by_digest(digest).await?;
-        let content = self
-            .get_checkpoint_contents_by_digest(summary.content_digest)
-            .await?;
-        Ok(Checkpoint { summary, content })
-    }
-
-    /// Return a checkpoint summary based on checkpoint digest
-    pub async fn get_checkpoint_summary_by_digest(
-        &self,
-        digest: CheckpointDigest,
-    ) -> SuiRpcResult<CheckpointSummary> {
-        Ok(self
-            .api
-            .http
-            .get_checkpoint_summary_by_digest(digest)
-            .await?)
+    /// Return a checkpoint
+    pub async fn get_checkpoint(&self, id: CheckpointId) -> SuiRpcResult<Checkpoint> {
+        Ok(self.api.http.get_checkpoint(id).await?)
     }
 
     /// Return a checkpoint summary based on a checkpoint sequence number
@@ -192,30 +153,6 @@ impl ReadApi {
             .api
             .http
             .get_latest_checkpoint_sequence_number()
-            .await?)
-    }
-
-    /// Return contents of a checkpoint, namely a list of execution digests
-    pub async fn get_checkpoint_contents_by_digest(
-        &self,
-        digest: CheckpointContentsDigest,
-    ) -> SuiRpcResult<CheckpointContents> {
-        Ok(self
-            .api
-            .http
-            .get_checkpoint_contents_by_digest(digest)
-            .await?)
-    }
-
-    /// Return contents of a checkpoint based on its sequence number
-    pub async fn get_checkpoint_contents(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> SuiRpcResult<CheckpointContents> {
-        Ok(self
-            .api
-            .http
-            .get_checkpoint_contents(sequence_number)
             .await?)
     }
 
@@ -477,44 +414,30 @@ impl QuorumDriver {
         &self,
         tx: VerifiedTransaction,
         request_type: Option<ExecuteTransactionRequestType>,
-    ) -> SuiRpcResult<TransactionExecutionResult> {
-        let tx_digest = *tx.digest();
-        let (tx_bytes, signature) = tx.to_tx_bytes_and_signature();
+    ) -> SuiRpcResult<SuiTransactionResponse> {
+        let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
         let request_type =
             request_type.unwrap_or(ExecuteTransactionRequestType::WaitForLocalExecution);
-        let SuiExecuteTransactionResponse {
-            certificate,
-            effects,
-            confirmed_local_execution,
-        } = TransactionExecutionApiClient::execute_transaction_serialized_sig(
-            &self.api.http,
-            tx_bytes,
-            signature,
-            request_type.clone(),
-        )
-        .await?;
+        let mut response: SuiTransactionResponse = self
+            .api
+            .http
+            .submit_transaction(tx_bytes, signatures, request_type.clone())
+            .await?;
 
         Ok(match request_type {
-            ExecuteTransactionRequestType::WaitForEffectsCert => TransactionExecutionResult {
-                tx_digest,
-                tx_cert: certificate,
-                effects: Some(effects.effects),
-                confirmed_local_execution,
-                timestamp_ms: None,
-                parsed_data: None,
-            },
+            ExecuteTransactionRequestType::WaitForEffectsCert => response,
             ExecuteTransactionRequestType::WaitForLocalExecution => {
-                if !confirmed_local_execution {
-                    Self::wait_until_fullnode_sees_tx(&self.api, tx_digest).await?;
+                if let Some(confirmed_local_execution) = response.confirmed_local_execution {
+                    if !confirmed_local_execution {
+                        Self::wait_until_fullnode_sees_tx(
+                            &self.api,
+                            response.effects.transaction_digest,
+                        )
+                        .await?;
+                    }
                 }
-                TransactionExecutionResult {
-                    tx_digest,
-                    tx_cert: certificate,
-                    effects: Some(effects.effects),
-                    confirmed_local_execution,
-                    timestamp_ms: None,
-                    parsed_data: None,
-                }
+                response.confirmed_local_execution = Some(true);
+                response
             }
         })
     }
@@ -582,10 +505,4 @@ impl GovernanceApi {
     pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemState> {
         Ok(self.api.http.get_sui_system_state().await?)
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct Checkpoint {
-    pub summary: CheckpointSummary,
-    pub content: CheckpointContents,
 }

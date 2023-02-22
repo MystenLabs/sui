@@ -32,7 +32,7 @@ describe('Object id/Address/Transaction digest validation', () => {
 
     //more than 20bytes
     expect(
-      toolbox.provider.getObjectsOwnedByObject(
+      toolbox.provider.getDynamicFields(
         '0x4ce52ee7b659b610d59a1ced129291b3d0d4216322',
       ),
     ).rejects.toThrowError(/Invalid Sui Object id/);

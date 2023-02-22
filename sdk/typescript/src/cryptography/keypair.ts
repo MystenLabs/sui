@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64 } from '@mysten/bcs';
-import { Base64DataBuffer } from '../serialization/base64';
 import { Ed25519Keypair } from './ed25519-keypair';
-import { PublicKey, SignatureScheme } from './publickey';
+import { PublicKey } from './publickey';
 import { Secp256k1Keypair } from './secp256k1-keypair';
+import { SignatureScheme } from './signature';
+
+export const PRIVATE_KEY_SIZE = 32;
+export const LEGACY_PRIVATE_KEY_SIZE = 64;
 
 export type ExportedKeypair = {
   schema: SignatureScheme;
@@ -24,7 +27,7 @@ export interface Keypair {
   /**
    * Return the signature for the data
    */
-  signData(data: Base64DataBuffer, useRecoverable: boolean): Base64DataBuffer;
+  signData(data: Uint8Array, useRecoverable: boolean): Uint8Array;
 
   /**
    * Get the key scheme of the keypair: Secp256k1 or ED25519
@@ -38,7 +41,12 @@ export function fromExportedKeypair(keypair: ExportedKeypair): Keypair {
   const secretKey = fromB64(keypair.privateKey);
   switch (keypair.schema) {
     case 'ED25519':
-      return Ed25519Keypair.fromSecretKey(secretKey);
+      let pureSecretKey = secretKey;
+      if (secretKey.length === LEGACY_PRIVATE_KEY_SIZE) {
+        // This is a legacy secret key, we need to strip the public key bytes and only read the first 32 bytes
+        pureSecretKey = secretKey.slice(0, PRIVATE_KEY_SIZE);
+      }
+      return Ed25519Keypair.fromSecretKey(pureSecretKey);
     case 'Secp256k1':
       return Secp256k1Keypair.fromSecretKey(secretKey);
     default:

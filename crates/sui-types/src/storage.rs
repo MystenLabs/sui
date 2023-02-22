@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::{SuiAddress, TransactionDigest, TransactionEffectsDigest, VersionNumber};
+use crate::base_types::{SuiAddress, TransactionDigest, VersionNumber};
 use crate::committee::{Committee, EpochId};
-use crate::digests::{CheckpointContentsDigest, CheckpointDigest};
+use crate::digests::{CheckpointContentsDigest, CheckpointDigest, TransactionEffectsDigest};
 use crate::message_envelope::Message;
 use crate::messages::InputObjectKind::{ImmOrOwnedMoveObject, MovePackage, SharedMoveObject};
 use crate::messages::{SenderSignedData, TransactionEffects, VerifiedCertificate};
@@ -59,11 +59,9 @@ pub struct SingleTxContext {
 }
 
 impl SingleTxContext {
+    // legacy
     pub fn transfer_sui(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("transfer_sui"), sender)
-    }
-    pub fn transfer_object(sender: SuiAddress) -> Self {
-        Self::sui_transaction(ident_str!("transfer_object"), sender)
     }
     pub fn pay(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("pay"), sender)
@@ -74,12 +72,21 @@ impl SingleTxContext {
     pub fn pay_all_sui(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("pay_all_sui"), sender)
     }
+    // programmable transactions
+    pub fn split_coin(sender: SuiAddress) -> Self {
+        Self::sui_transaction(ident_str!("split_coin"), sender)
+    }
+    // common to legacy and programmable transactions
+    pub fn transfer_object(sender: SuiAddress) -> Self {
+        Self::sui_transaction(ident_str!("transfer_object"), sender)
+    }
     pub fn unused_input(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("unused_input_object"), sender)
     }
     pub fn publish(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("publish"), sender)
     }
+    // system
     pub fn gas(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("gas"), sender)
     }
@@ -388,10 +395,18 @@ impl InMemoryStore {
         let digest = checkpoint.digest();
         let sequence_number = checkpoint.sequence_number();
 
-        if let Some(next_committee) = checkpoint.next_epoch_committee() {
-            let next_committee = next_committee.iter().cloned().collect();
-            let committee = Committee::new(checkpoint.epoch().saturating_add(1), next_committee)
-                .expect("new committee from consensus should be constructable");
+        if let Some(end_of_epoch_data) = &checkpoint.summary.end_of_epoch_data {
+            let next_committee = end_of_epoch_data
+                .next_epoch_committee
+                .iter()
+                .cloned()
+                .collect();
+            let committee = Committee::new(
+                checkpoint.epoch().saturating_add(1),
+                end_of_epoch_data.next_epoch_protocol_version,
+                next_committee,
+            )
+            .expect("new committee from consensus should be constructable");
             self.insert_committee(committee);
         }
 

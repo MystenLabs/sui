@@ -10,11 +10,9 @@ use sui_types::base_types::SequenceNumber;
 use tracing::{debug, instrument};
 
 use crate::adapter;
-use sui_protocol_constants::{
-    REWARD_SLASHING_RATE, STAKE_SUBSIDY_RATE, STORAGE_FUND_REINVEST_RATE,
-};
+use sui_protocol_config::ProtocolConfig;
 use sui_types::coin::{transfer_coin, update_input_coins, Coin};
-use sui_types::committee::EpochId;
+use sui_types::epoch_data::EpochData;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
@@ -23,11 +21,15 @@ use sui_types::id::UID;
 use sui_types::messages::ExecutionFailureStatus;
 #[cfg(test)]
 use sui_types::messages::InputObjects;
-use sui_types::messages::{GenesisTransaction, ObjectArg, Pay, PayAllSui, PaySui, TransactionKind};
+use sui_types::messages::{
+    ConsensusCommitPrologue, GenesisTransaction, ObjectArg, Pay, PayAllSui, PaySui, TransactionKind,
+};
 use sui_types::object::{Data, MoveObject, Owner};
 use sui_types::storage::SingleTxContext;
 use sui_types::storage::{ChildObjectResolver, DeleteKind, ParentSync, WriteKind};
-use sui_types::sui_system_state::ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME;
+use sui_types::sui_system_state::{
+    ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME,
+};
 #[cfg(test)]
 use sui_types::temporary_store;
 use sui_types::temporary_store::InnerTemporaryStore;
@@ -44,7 +46,8 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_types::{
-    MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    MOVE_STDLIB_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 
 use sui_types::temporary_store::TemporaryStore;
@@ -64,13 +67,14 @@ pub fn execute_transaction_to_effects<
     move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
     gas_status: SuiGasStatus,
-    epoch: EpochId,
+    epoch_data: &EpochData,
+    protocol_config: &ProtocolConfig,
 ) -> (
     InnerTemporaryStore,
     TransactionEffects,
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
-    let mut tx_ctx = TxContext::new(&transaction_signer, &transaction_digest, epoch);
+    let mut tx_ctx = TxContext::new(&transaction_signer, &transaction_digest, epoch_data);
 
     let (gas_cost_summary, execution_result) = execute_transaction::<Mode, _>(
         &mut temporary_store,
@@ -80,6 +84,7 @@ pub fn execute_transaction_to_effects<
         move_vm,
         native_functions,
         gas_status,
+        protocol_config,
     );
 
     let (status, execution_result) = match execution_result {
@@ -107,6 +112,7 @@ pub fn execute_transaction_to_effects<
         gas_cost_summary,
         status,
         gas_object_ref,
+        epoch_data.epoch_id(),
     );
     (inner, effects, execution_result)
 }
@@ -140,6 +146,7 @@ fn execute_transaction<
     move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
     mut gas_status: SuiGasStatus,
+    protocol_config: &ProtocolConfig,
 ) -> (
     GasCostSummary,
     Result<Mode::ExecutionResults, ExecutionError>,
@@ -156,6 +163,7 @@ fn execute_transaction<
             move_vm,
             native_functions,
             &mut gas_status,
+            protocol_config,
         );
         if execution_result.is_err() {
             // Roll back the temporary store if execution failed.
@@ -188,6 +196,7 @@ fn execution_loop<
     move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
     gas_status: &mut SuiGasStatus,
+    protocol_config: &ProtocolConfig,
 ) -> Result<Mode::ExecutionResults, ExecutionError> {
     let mut results = Mode::empty_results();
     // TODO: Since we require all mutable objects to not show up more than
@@ -270,6 +279,7 @@ fn execution_loop<
                     arguments,
                     gas_status.create_move_gas_status(),
                     tx_ctx,
+                    protocol_config,
                 )?;
                 Mode::add_result(&mut results, idx, result);
             }
@@ -285,6 +295,7 @@ fn execution_loop<
                     modules,
                     tx_ctx,
                     gas_status.create_move_gas_status(),
+                    protocol_config,
                 )?;
             }
             SingleTransactionKind::Pay(Pay {
@@ -300,7 +311,14 @@ fn execution_loop<
                 pay(temporary_store, coin_objects, recipients, amounts, tx_ctx)?;
             }
             SingleTransactionKind::ChangeEpoch(change_epoch) => {
-                advance_epoch(change_epoch, temporary_store, tx_ctx, move_vm, gas_status)?;
+                advance_epoch(
+                    change_epoch,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_status,
+                    protocol_config,
+                )?;
             }
             SingleTransactionKind::Genesis(GenesisTransaction { objects }) => {
                 if tx_ctx.epoch() != 0 {
@@ -325,6 +343,17 @@ fn execution_loop<
                     }
                 }
             }
+            SingleTransactionKind::ConsensusCommitPrologue(prologue) => setup_consensus_commit(
+                prologue,
+                temporary_store,
+                tx_ctx,
+                move_vm,
+                gas_status,
+                protocol_config,
+            )?,
+            SingleTransactionKind::ProgrammableTransaction(_) => {
+                unreachable!("programmable transactions are not yet supported")
+            }
         };
     }
     Ok(results)
@@ -336,6 +365,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
     gas_status: &mut SuiGasStatus,
+    protocol_config: &ProtocolConfig,
 ) -> Result<(), ExecutionError> {
     let module_id = ModuleId::new(SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_MODULE_NAME.to_owned());
     let function = ADVANCE_EPOCH_FUNCTION_NAME.to_owned();
@@ -353,16 +383,18 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         vec![
             system_object_arg.clone(),
             CallArg::Pure(bcs::to_bytes(&change_epoch.epoch).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.protocol_version).unwrap()),
             CallArg::Pure(bcs::to_bytes(&change_epoch.storage_charge).unwrap()),
             CallArg::Pure(bcs::to_bytes(&change_epoch.computation_charge).unwrap()),
             CallArg::Pure(bcs::to_bytes(&change_epoch.storage_rebate).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&STORAGE_FUND_REINVEST_RATE).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&REWARD_SLASHING_RATE).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&STAKE_SUBSIDY_RATE).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&protocol_config.storage_fund_reinvest_rate()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&protocol_config.reward_slashing_rate()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&protocol_config.stake_subsidy_rate()).unwrap()),
             CallArg::Pure(bcs::to_bytes(&change_epoch.epoch_start_timestamp_ms).unwrap()),
         ],
         gas_status.create_move_gas_status(),
         tx_ctx,
+        protocol_config,
     );
     if result.is_err() {
         tracing::error!(
@@ -382,11 +414,47 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             vec![
                 system_object_arg,
                 CallArg::Pure(bcs::to_bytes(&change_epoch.epoch).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&change_epoch.protocol_version).unwrap()),
             ],
             gas_status.create_move_gas_status(),
             tx_ctx,
+            protocol_config,
         )?;
     }
+    Ok(())
+}
+
+/// Perform metadata updates in preparation for the transactions in the upcoming checkpoint:
+///
+/// - Set the timestamp for the `Clock` shared object from the timestamp in the header from
+///   consensus.
+fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
+    prologue: ConsensusCommitPrologue,
+    temporary_store: &mut TemporaryStore<S>,
+    tx_ctx: &mut TxContext,
+    move_vm: &Arc<MoveVM>,
+    gas_status: &mut SuiGasStatus,
+    protocol_config: &ProtocolConfig,
+) -> Result<(), ExecutionError> {
+    adapter::execute::<execution_mode::Normal, _, _>(
+        move_vm,
+        temporary_store,
+        ModuleId::new(SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_MODULE_NAME.to_owned()),
+        &CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME.to_owned(),
+        vec![],
+        vec![
+            CallArg::Object(ObjectArg::SharedObject {
+                id: SUI_CLOCK_OBJECT_ID,
+                initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+                mutable: true,
+            }),
+            CallArg::Pure(bcs::to_bytes(&prologue.checkpoint_start_timestamp_ms).unwrap()),
+        ],
+        gas_status.create_move_gas_status(),
+        tx_ctx,
+        protocol_config,
+    )?;
+
     Ok(())
 }
 
@@ -472,7 +540,13 @@ fn check_recipients(recipients: &[SuiAddress], amounts: &[u64]) -> Result<(), Ex
 }
 
 fn check_total_coins(coins: &[Coin], amounts: &[u64]) -> Result<(u64, u64), ExecutionError> {
-    let total_amount: u64 = amounts.iter().sum();
+    let Some(total_amount) = amounts.iter().fold(Some(0u64), |acc, a| acc?.checked_add(*a)) else {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::TotalAmountOverflow,
+            "Attempting to pay a total amount that overflows u64".to_string(),
+        ));
+    };
+    // u64 overflow is impossible because the sum of all coin values is bounded by the total amount
     let total_coins = coins.iter().fold(0, |acc, c| acc + c.value());
     if total_amount > total_coins {
         return Err(ExecutionError::new_with_source(
@@ -559,10 +633,10 @@ fn pay<S>(
     );
 
     // double check that we didn't create or destroy money
-    debug_assert_eq!(
-        total_coins - coins.iter().fold(0, |acc, c| acc + c.value()),
-        total_amount
-    );
+    // u64 overflow is impossible because the sum of all coin values is bounded by the total amount
+    let left_coins = coins.iter().fold(0, |acc, c| acc + c.value());
+    debug_assert!(left_coins <= total_coins);
+    debug_assert_eq!(total_coins - left_coins, total_amount);
 
     // update the input coins to reflect the decrease in value.
     // if the input coin has value 0, delete it
@@ -579,8 +653,7 @@ fn pay<S>(
             let new_contents = bcs::to_bytes(&coin).expect("Coin serialization should not fail");
             // unwrap safe because we checked that it was a coin object above
             let move_obj = coin_object.data.try_as_move_mut().unwrap();
-            // unwrap safe because coin object is always below maximum size
-            move_obj.update_contents(new_contents).unwrap();
+            move_obj.update_coin_contents(new_contents);
             temporary_store.write_object(&ctx, coin_object, WriteKind::Mutate);
         }
     }
@@ -599,7 +672,7 @@ fn pay_sui<S>(
     let (total_coins, total_amount) = check_total_coins(&coins, &amounts)?;
 
     let mut merged_coin = coins.swap_remove(0);
-    merged_coin.merge_coins(&mut coins);
+    merged_coin.merge_coins(&mut coins)?;
 
     let ctx = SingleTxContext::pay_sui(tx_ctx.sender());
 
@@ -633,7 +706,7 @@ fn pay_all_sui<S>(
     let total_coins = coins.iter().fold(0, |acc, c| acc + c.value());
 
     let mut merged_coin = coins.swap_remove(0);
-    merged_coin.merge_coins(&mut coins);
+    merged_coin.merge_coins(&mut coins)?;
     let ctx = SingleTxContext::pay_all_sui(sender);
     update_input_coins(
         &ctx,
@@ -674,8 +747,7 @@ fn transfer_sui<S>(
             .try_as_move_mut()
             .expect("Gas object must be Move object");
         let new_contents = bcs::to_bytes(&gas_coin).expect("Serializing gas coin can never fail");
-        // unwrap safe because coin object is always below maximum size
-        move_object.update_contents(new_contents).unwrap();
+        move_object.update_coin_contents(new_contents);
 
         // Creat a new gas coin with the amount.  Set a blank version, to be updated by the store
         // when it is committed to effects.
@@ -774,6 +846,28 @@ fn test_pay_arity_mismatch() {
             .unwrap_err()
             .to_execution_status(),
         ExecutionFailureStatus::RecipientsAmountsArityMismatch
+    );
+}
+
+#[test]
+fn test_pay_amount_overflow() {
+    let coin_objects = vec![Object::new_gas_with_balance_and_owner_for_testing(
+        10,
+        SuiAddress::random_for_testing_only(),
+    )];
+    let recipients = vec![
+        SuiAddress::random_for_testing_only(),
+        SuiAddress::random_for_testing_only(),
+    ];
+    let amounts = vec![u64::MAX, 100u64];
+    let mut store: TemporaryStore<()> = temporary_store::empty_for_testing();
+    let mut ctx = TxContext::random_for_testing_only();
+
+    assert_eq!(
+        pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
+            .unwrap_err()
+            .to_execution_status(),
+        ExecutionFailureStatus::TotalAmountOverflow
     );
 }
 

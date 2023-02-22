@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    Base64DataBuffer,
+    fromB64,
     getCertifiedTransaction,
     getTransactionEffects,
     LocalTxnDataSerializer,
+    type SignedTransaction,
 } from '@mysten/sui.js';
 import {
     createAsyncThunk,
@@ -84,7 +85,7 @@ export const deserializeTxn = createAsyncThunk<
         }
         const signer = api.getSignerInstance(activeAddress, background);
         const localSerializer = new LocalTxnDataSerializer(signer.provider);
-        const txnBytes = new Base64DataBuffer(serializedTxn);
+        const txnBytes = fromB64(serializedTxn);
 
         //TODO: Error handling - either show the error or use the serialized txn
         const deserializeTx =
@@ -145,47 +146,54 @@ export const respondToTransactionRequest = createAsyncThunk<
         if (!txRequest) {
             throw new Error(`TransactionRequest ${txRequestID} not found`);
         }
+        let txSigned: SignedTransaction | undefined = undefined;
         let txResult: SuiTransactionResponse | undefined = undefined;
         let tsResultError: string | undefined;
         if (approved) {
             const signer = api.getSignerInstance(activeAddress, background);
             try {
-                let response: SuiExecuteTransactionResponse;
-                if (
-                    txRequest.tx.type === 'v2' ||
-                    txRequest.tx.type === 'move-call'
-                ) {
-                    const txn: SignableTransaction =
-                        txRequest.tx.type === 'move-call'
-                            ? {
-                                  kind: 'moveCall',
-                                  data: txRequest.tx.data,
-                              }
-                            : txRequest.tx.data;
-
-                    response = await signer.signAndExecuteTransaction(
-                        txn,
-                        txRequest.tx.type === 'v2'
-                            ? txRequest.tx.options?.requestType
-                            : undefined
-                    );
-                } else if (txRequest.tx.type === 'serialized-move-call') {
-                    const txBytes = new Base64DataBuffer(txRequest.tx.data);
-                    response = await signer.signAndExecuteTransaction(txBytes);
+                if (txRequest.tx.type === 'v2' && txRequest.tx.justSign) {
+                    // TODO: Try / catch
+                    // Just a signing request, do not submit
+                    txSigned = await signer.signTransaction(txRequest.tx.data);
                 } else {
-                    throw new Error(
-                        `Either tx or txBytes needs to be defined.`
-                    );
-                }
+                    let response: SuiExecuteTransactionResponse;
+                    if (
+                        txRequest.tx.type === 'v2' ||
+                        txRequest.tx.type === 'move-call'
+                    ) {
+                        const txn: SignableTransaction =
+                            txRequest.tx.type === 'move-call'
+                                ? {
+                                      kind: 'moveCall',
+                                      data: txRequest.tx.data,
+                                  }
+                                : txRequest.tx.data;
 
-                txResult = {
-                    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                    certificate: getCertifiedTransaction(response)!,
-                    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                    effects: getTransactionEffects(response)!,
-                    timestamp_ms: null,
-                    parsed_data: null,
-                };
+                        response = await signer.signAndExecuteTransaction(
+                            txn,
+                            txRequest.tx.type === 'v2'
+                                ? txRequest.tx.options?.requestType
+                                : undefined
+                        );
+                    } else if (txRequest.tx.type === 'serialized-move-call') {
+                        const txBytes = fromB64(txRequest.tx.data);
+                        response = await signer.signAndExecuteTransaction(
+                            txBytes
+                        );
+                    } else {
+                        throw new Error(
+                            `Either tx or txBytes needs to be defined.`
+                        );
+                    }
+
+                    txResult = {
+                        certificate: getCertifiedTransaction(response)!,
+                        effects: getTransactionEffects(response)!,
+                        timestamp_ms: null,
+                        parsed_data: null,
+                    };
+                }
             } catch (e) {
                 tsResultError = (e as Error).message;
             }
@@ -194,7 +202,8 @@ export const respondToTransactionRequest = createAsyncThunk<
             txRequestID,
             approved,
             txResult,
-            tsResultError
+            tsResultError,
+            txSigned
         );
         return { txRequestID, approved: approved, txResponse: null };
     }

@@ -9,6 +9,7 @@ use crate::{
     messages_checkpoint::CheckpointSequenceNumber,
     object::Owner,
 };
+use fastcrypto::error::FastCryptoError;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::{
     errors::{Location, PartialVMError, VMError},
@@ -62,7 +63,6 @@ macro_rules! exit_main {
 #[derive(
     Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr, IntoStaticStr,
 )]
-#[allow(clippy::large_enum_variant)]
 pub enum SuiError {
     // Object misuse issues
     #[error("Error checking transaction input objects: {:?}", errors)]
@@ -105,6 +105,10 @@ pub enum SuiError {
     // Signature verification
     #[error("Signature is not valid: {}", error)]
     InvalidSignature { error: String },
+    #[error("Required Signature from {signer} is absent.")]
+    SignerSignatureAbsent { signer: String },
+    #[error("Expect {actual} signer signatures but got {expected}.")]
+    SignerSignatureNumberMismatch { expected: usize, actual: usize },
     #[error("Sender Signature must be verified separately from Authority Signature")]
     SenderSigUnbatchable,
     #[error("Value was not signed by the correct sender: {}", error)]
@@ -113,7 +117,16 @@ pub enum SuiError {
     UnknownSigner {
         signer: Option<String>,
         index: Option<u32>,
-        committee: Committee,
+        committee: Box<Committee>,
+    },
+    #[error(
+        "Validator {:?} responded multiple signatures for the same message, conflicting: {:?}",
+        signer,
+        conflicting_sig
+    )]
+    StakeAggregatorRepeatedSigner {
+        signer: AuthorityName,
+        conflicting_sig: bool,
     },
 
     // Certificate verification and execution
@@ -128,14 +141,6 @@ pub enum SuiError {
     CertificateRequiresQuorum,
     #[error("Authority {authority_name:?} could not sync certificate: {err:?}")]
     CertificateSyncError { authority_name: String, err: String },
-    #[error(
-        "The given sequence number ({given_sequence:?}) must match the next expected sequence ({expected_sequence:?}) number of the object ({object_id:?})"
-    )]
-    UnexpectedSequenceNumber {
-        object_id: ObjectID,
-        expected_sequence: SequenceNumber,
-        given_sequence: SequenceNumber,
-    },
     #[error("Invalid Authority Bitmap: {}", error)]
     InvalidAuthorityBitmap { error: String },
     #[error("Transaction certificate processing failed: {err}")]
@@ -144,7 +149,7 @@ pub enum SuiError {
         "Failed to get a quorum of signed effects when processing transaction: {effects_map:?}"
     )]
     QuorumFailedToGetEffectsQuorumWhenProcessingTransaction {
-        effects_map: BTreeMap<(EpochId, TransactionEffectsDigest), (Vec<AuthorityName>, StakeUnit)>,
+        effects_map: BTreeMap<TransactionEffectsDigest, (Vec<AuthorityName>, StakeUnit)>,
     },
     #[error("Module publish failed: {err}")]
     ErrorWhileProcessingPublish { err: String },
@@ -166,8 +171,6 @@ pub enum SuiError {
         effects_digests: Vec<TransactionEffectsDigest>,
         checkpoint: CheckpointSequenceNumber,
     },
-    #[error("The shared locks for this transaction have not yet been set.")]
-    SharedObjectLockNotSetError,
     #[error("The certificate needs to be sequenced by Narwhal before execution: {digest:?}")]
     CertificateNotSequencedError { digest: TransactionDigest },
 
@@ -228,6 +231,8 @@ pub enum SuiError {
     TransferImmutableError,
     #[error("Wrong initial version given for shared object")]
     SharedObjectStartingVersionMismatch,
+    #[error("Mutable parameter provided, immutable parameter expected.")]
+    ImmutableParameterExpectedError,
 
     // Errors related to batches
     #[error("The range specified is invalid.")]
@@ -322,6 +327,17 @@ pub enum SuiError {
         gas_budget: u128,
         gas_price: u64,
     },
+    #[error("Transaction kind does not support Sponsored Transaction")]
+    UnsupportedSponsoredTransactionKind,
+    #[error(
+        "Gas price {:?} under reference gas price (RGP) {:?}",
+        gas_price,
+        reference_gas_price
+    )]
+    GasPriceUnderRGP {
+        gas_price: u64,
+        reference_gas_price: u64,
+    },
 
     // Internal state errors
     #[error("Attempt to update state of TxContext from a different instance than original.")]
@@ -363,15 +379,6 @@ pub enum SuiError {
         object_id: ObjectID,
         version: Option<SequenceNumber>,
     },
-    #[error(
-        "Transaction involving Shared Object {:?} at version {:?} is not ready for execution because prior transactions have yet to execute.",
-        object_id,
-        version_not_ready
-    )]
-    SharedObjectPriorVersionsPendingExecution {
-        object_id: ObjectID,
-        version_not_ready: SequenceNumber,
-    },
     #[error("Could not find the referenced object {:?} as the asked version {:?} is higher than the latest {:?}", object_id, asked_version, latest_version)]
     ObjectSequenceNumberTooHigh {
         object_id: ObjectID,
@@ -396,15 +403,6 @@ pub enum SuiError {
     ByzantineAuthoritySuspicion {
         authority: AuthorityName,
         reason: String,
-    },
-    #[error(
-        "Sync from authority failed. From {xsource:?} to {destination:?}, digest {tx_digest:?}: {error:?}",
-    )]
-    PairwiseSyncFailed {
-        xsource: AuthorityName,
-        destination: AuthorityName,
-        tx_digest: TransactionDigest,
-        error: Box<SuiError>,
     },
     #[error("Storage error")]
     StorageError(#[from] TypedStoreError),
@@ -556,9 +554,9 @@ pub enum SuiError {
 pub enum VMMemoryLimitExceededSubStatusCode {
     EVENT_COUNT_LIMIT_EXCEEDED = 0,
     EVENT_SIZE_LIMIT_EXCEEDED = 1,
-    CREATED_OBJECT_COUNT_LIMIT_EXCEEDED = 2,
-    DELETED_OBJECT_COUNT_LIMIT_EXCEEDED = 3,
-    MUTATED_OBJECT_COUNT_LIMIT_EXCEEDED = 4,
+    NEW_ID_COUNT_LIMIT_EXCEEDED = 2,
+    DELETED_ID_COUNT_LIMIT_EXCEEDED = 3,
+    TRANSFER_ID_COUNT_LIMIT_EXCEEDED = 4,
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
@@ -621,6 +619,17 @@ impl From<&str> for SuiError {
     }
 }
 
+impl From<FastCryptoError> for SuiError {
+    fn from(kind: FastCryptoError) -> Self {
+        match kind {
+            FastCryptoError::InvalidSignature => SuiError::InvalidSignature {
+                error: "Invalid signature".to_string(),
+            },
+            _ => SuiError::Unknown("Unknown cryptography error".to_string()),
+        }
+    }
+}
+
 impl SuiError {
     pub fn individual_error_indicates_epoch_change(&self) -> bool {
         matches!(
@@ -676,6 +685,7 @@ impl SuiError {
             SuiError::GasBudgetTooHigh { .. } => (false, true),
             SuiError::GasBudgetTooLow { .. } => (false, true),
             SuiError::GasBalanceTooLowToCoverGasBudget { .. } => (false, true),
+            SuiError::GasPriceUnderRGP { .. } => (false, true),
             _ => (false, false),
         }
     }
@@ -773,7 +783,7 @@ pub fn convert_vm_error<
             debug_assert!(offset.is_some(), "Move should set the location on aborts");
             let (function, instruction) = offset.unwrap_or((0, 0));
             let function_name = vm.load_module(id, state_view).ok().map(|module| {
-                let fdef = module.function_def_at(FunctionDefinitionIndex(function as u16));
+                let fdef = module.function_def_at(FunctionDefinitionIndex(function));
                 let fhandle = module.function_handle_at(fdef.function);
                 module.identifier_at(fhandle.name).to_string()
             });
@@ -800,8 +810,7 @@ pub fn convert_vm_error<
                         );
                         let (function, instruction) = offset.unwrap_or((0, 0));
                         let function_name = vm.load_module(id, state_view).ok().map(|module| {
-                            let fdef =
-                                module.function_def_at(FunctionDefinitionIndex(function as u16));
+                            let fdef = module.function_def_at(FunctionDefinitionIndex(function));
                             let fhandle = module.function_handle_at(fdef.function);
                             module.identifier_at(fhandle.name).to_string()
                         });

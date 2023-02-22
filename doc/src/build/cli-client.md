@@ -215,7 +215,7 @@ You can transfer mutable objects you own to another address using the command be
     sui client transfer [OPTIONS] --to <TO> --object-id <OBJECT_ID> --gas-budget <GAS_BUDGET>
 
 OPTIONS:
-        --coin-object-id <OBJECT_ID>
+        --object-id <OBJECT_ID> 
             Object to transfer, in 20 bytes Hex string
 
         --gas <GAS>
@@ -239,7 +239,7 @@ To transfer an object to a recipient, you need the recipient's address,
 the object ID of the object to transfer, and, optionally, the ID of the coin object for the transaction fee payment. If not specified, a coin that meets the budget is picked. Gas budget sets a cap for how much gas to spend. We are still finalizing our gas metering mechanisms. For now, just set something large enough.
 
 ```shell
-sui client transfer --to 0xf456ebef195e4a231488df56b762ac90695be2dd --object-id 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 --gas-budget 100
+sui client transfer --to 0xf456ebef195e4a231488df56b762ac90695be2dd --object-id 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 --gas-budget 1000
 ```
 
 ## Create an example NFT
@@ -378,7 +378,7 @@ public entry fun transfer(c: coin::Coin<SUI>, recipient: address) {
 
 Please note that there is no real need to use a Move call to transfer
 coins as this can be accomplished with a built-in Sui client
-[command](#transferring-coins) - we chose this example due to its
+[command](#transfer-objects) - we chose this example due to its
 simplicity.
 
 Let us examine objects owned by address `0x48ff0a932b12976caec91d521265b009ad5b2225`:
@@ -398,7 +398,7 @@ Showing 5 results.
 
 Now that we know which objects are owned by that address,
 we can transfer one of them to another address, say the fresh one
-we created in the [Generating a new account](#generating-a-new-account) section
+we created in the [Create new account addresses](#create-new-account-addresses) section
 (`0xc72cf3adcc4d11c03079cef2c8992aea5268677a`). We can try any object,
 but for the sake of this exercise, let's choose the last one on the
 list.

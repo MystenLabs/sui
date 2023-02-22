@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Image32 } from '@mysten/icons';
 import { cva } from 'class-variance-authority';
 import cl from 'classnames';
-
-import Icon, { SuiIcons } from '../icon';
+import { useState } from 'react';
 
 import type { VariantProps } from 'class-variance-authority';
 
@@ -57,35 +57,46 @@ export function NftImage({
     borderRadius,
     size,
 }: NftImageProps) {
+    const [error, setError] = useState(false);
     const imgCls = cl(
         'w-full h-full object-cover',
         animateHover && 'group-hover:scale-110 duration-500 ease-ease-out-cubic'
     );
+    const imgSrc = src
+        ? src.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/')
+        : '';
     return (
-        <div className={nftImageStyles({ animateHover, borderRadius, size })}>
-            {src ? (
-                <img
-                    className={imgCls}
-                    src={src.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/')}
-                    alt={name || 'NFT'}
-                    title={title}
-                />
-            ) : (
+        <div
+            className={nftImageStyles({
+                animateHover,
+                borderRadius,
+                size,
+            })}
+        >
+            {error ? (
                 <div
                     className={cl(
                         imgCls,
                         'flex flex-col flex-nowrap items-center justify-center',
-                        'select-none uppercase text-steel-dark bg-placeholderGradient01 gap-2'
+                        'select-none uppercase text-steel-dark gap-2 bg-gray-40'
                     )}
                     title={title}
                 >
-                    <Icon className="text-xl" icon={SuiIcons.NftTypeImage} />
+                    <Image32 className="text-steel text-3xl" />
                     {showLabel ? (
                         <span className="text-captionSmall font-medium">
                             No media
                         </span>
                     ) : null}
                 </div>
+            ) : (
+                <img
+                    className={imgCls}
+                    src={imgSrc}
+                    alt={name || 'NFT'}
+                    title={title}
+                    onError={() => setError(true)}
+                />
             )}
         </div>
     );

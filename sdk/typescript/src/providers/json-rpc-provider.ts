@@ -16,6 +16,7 @@ import {
   SuiEventEnvelope,
   SuiEventFilter,
   SuiExecuteTransactionResponse,
+  SuiExecuteTransactionResponse_v26,
   SuiMoveFunctionArgTypes,
   SuiMoveNormalizedFunction,
   SuiMoveNormalizedModule,
@@ -37,13 +38,12 @@ import {
   TransactionEffects,
   DevInspectResults,
   CoinMetadata,
-  versionToString,
+  toSuiTransactionData,
   isValidTransactionDigest,
   isValidSuiAddress,
   isValidSuiObjectId,
   normalizeSuiAddress,
   normalizeSuiObjectId,
-  SuiTransactionAuthSignersResponse,
   CoinMetadataStruct,
   PaginatedCoins,
   GetObjectDataResponse,
@@ -58,25 +58,25 @@ import {
   CheckpointDigest,
   CheckPointContentsDigest,
   CommitteeInfo,
+  versionToString,
 } from '../types';
+import { lt } from '@suchipi/femver';
 import { DynamicFieldPage } from '../types/dynamic_fields';
-import {
-  PublicKey,
-  SignatureScheme,
-  SIGNATURE_SCHEME_TO_FLAG,
-} from '../cryptography/publickey';
 import {
   DEFAULT_CLIENT_OPTIONS,
   WebsocketClient,
   WebsocketClientOptions,
 } from '../rpc/websocket-client';
-import { ApiEndpoints, Network, NETWORK_TO_API } from '../utils/api-endpoints';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
-import { lt } from '@suchipi/femver';
-import { Base64DataBuffer } from '../serialization/base64';
 import { any, is, number, array } from 'superstruct';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import { LocalTxnDataSerializer } from '../signers/txn-data-serializers/local-txn-data-serializer';
+import { toB64 } from '@mysten/bcs';
+import { SerializedSignature } from '../cryptography/signature';
+import { pkgVersion } from '../pkg-version';
+import { Connection, devnetConnection } from '../rpc/connection';
+
+export const TARGETED_RPC_VERSION = '0.27.0';
 
 /**
  * Configuration options for the JsonRpcProvider. If the value of a field is not provided,
@@ -102,53 +102,53 @@ export type RpcProviderOptions = {
   /**
    * Cache timeout in seconds for the RPC API Version
    */
-  versionCacheTimoutInSeconds?: number;
-  /**
-   * URL to a faucet(optional). If you initialize `JsonRpcProvider`
-   * with a known `Network` value, this will be populated with a default
-   * value
-   */
-  faucetURL?: string;
+  versionCacheTimeoutInSeconds?: number;
 };
 
 const DEFAULT_OPTIONS: RpcProviderOptions = {
   skipDataValidation: true,
   socketOptions: DEFAULT_CLIENT_OPTIONS,
-  versionCacheTimoutInSeconds: 600,
+  versionCacheTimeoutInSeconds: 600,
 };
 
 export class JsonRpcProvider extends Provider {
-  public endpoints: ApiEndpoints;
+  public connection: Connection;
   protected client: JsonRpcClient;
   protected wsClient: WebsocketClient;
   private rpcApiVersion: RpcApiVersion | undefined;
   private cacheExpiry: number | undefined;
+  private addedHeaders = false;
   /**
    * Establish a connection to a Sui RPC endpoint
    *
-   * @param endpoint URL to the Sui RPC endpoint, or a `Network` enum
+   * @param connection The `Connection` object containing configuration for the network.
    * @param options configuration options for the provider
    */
   constructor(
-    endpoint: string | Network = Network.DEVNET,
+    // TODO: Probably remove the default endpoint here:
+    connection: Connection = devnetConnection,
     public options: RpcProviderOptions = DEFAULT_OPTIONS,
   ) {
     super();
 
-    if ((Object.values(Network) as string[]).includes(endpoint)) {
-      this.endpoints = NETWORK_TO_API[endpoint as Network];
-    } else {
-      this.endpoints = {
-        fullNode: endpoint,
-        faucet: options.faucetURL,
-      };
-    }
+    this.connection = connection;
 
     const opts = { ...DEFAULT_OPTIONS, ...options };
 
-    this.client = new JsonRpcClient(this.endpoints.fullNode);
+    // TODO: uncomment this when 0.27.0 is released. We cannot do this now because
+    // the current Devnet(0.26.0) does not support the header. And we need to make
+    // a request to RPC to know which version it is running. Therefore, we do not
+    // add headers here, instead we add headers in the first call of the `getRpcApiVersion`
+    // method
+    // this.client = new JsonRpcClient(this.endpoints.fullNode, {
+    //   'Client-Sdk-Type': 'typescript',
+    //   'Client-Sdk-Version': pkgVersion,
+    //   'Client-Target-Api-Version': TARGETED_RPC_VERSION,
+    // });
+    // TODO: add header for websocket request
+    this.client = new JsonRpcClient(this.connection.fullnode);
     this.wsClient = new WebsocketClient(
-      this.endpoints.fullNode,
+      this.connection.websocket,
       opts.skipDataValidation!,
       opts.socketOptions,
     );
@@ -170,8 +170,22 @@ export class JsonRpcProvider extends Provider {
         this.options.skipDataValidation,
       );
       this.rpcApiVersion = parseVersionFromString(resp.info.version);
+      // TODO: Remove this once 0.27.0 is released
+      if (
+        !this.addedHeaders &&
+        this.rpcApiVersion &&
+        !lt(versionToString(this.rpcApiVersion), '0.27.0')
+      ) {
+        this.client = new JsonRpcClient(this.connection.fullnode, {
+          'Client-Sdk-Type': 'typescript',
+          'Client-Sdk-Version': pkgVersion,
+          'Client-Target-Api-Version': TARGETED_RPC_VERSION,
+        });
+        this.addedHeaders = true;
+      }
       this.cacheExpiry =
-        Date.now() + (this.options.versionCacheTimoutInSeconds ?? 0);
+        // Date.now() is in milliseconds, but the timeout is in seconds
+        Date.now() + (this.options.versionCacheTimeoutInSeconds ?? 0) * 1000;
       return this.rpcApiVersion;
     } catch (err) {
       console.warn('Error fetching version number of the RPC API', err);
@@ -183,10 +197,10 @@ export class JsonRpcProvider extends Provider {
     recipient: SuiAddress,
     httpHeaders?: HttpHeaders,
   ): Promise<FaucetResponse> {
-    if (!this.endpoints.faucet) {
+    if (!this.connection.faucet) {
       throw new Error('Faucet URL is not specified');
     }
-    return requestSuiFromFaucet(this.endpoints.faucet, recipient, httpHeaders);
+    return requestSuiFromFaucet(this.connection.faucet, recipient, httpHeaders);
   }
 
   // Coins
@@ -484,24 +498,6 @@ export class JsonRpcProvider extends Provider {
     )) as GetObjectDataResponse[];
   }
 
-  async getObjectsOwnedByObject(objectId: ObjectId): Promise<SuiObjectInfo[]> {
-    try {
-      if (!objectId || !isValidSuiObjectId(normalizeSuiObjectId(objectId))) {
-        throw new Error('Invalid Sui Object id');
-      }
-      return await this.client.requestWithType(
-        'sui_getObjectsOwnedByObject',
-        [objectId],
-        GetOwnedObjectsResponse,
-        this.options.skipDataValidation,
-      );
-    } catch (err) {
-      throw new Error(
-        `Error fetching owned object: ${err} for objectId ${objectId}`,
-      );
-    }
-  }
-
   async getObject(objectId: ObjectId): Promise<GetObjectDataResponse> {
     try {
       if (!objectId || !isValidSuiObjectId(normalizeSuiObjectId(objectId))) {
@@ -679,33 +675,53 @@ export class JsonRpcProvider extends Provider {
   }
 
   async executeTransaction(
-    txnBytes: Base64DataBuffer,
-    signatureScheme: SignatureScheme,
-    signature: Base64DataBuffer,
-    pubkey: PublicKey,
+    txnBytes: Uint8Array | string,
+    signature: SerializedSignature,
     requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert',
   ): Promise<SuiExecuteTransactionResponse> {
+    const version = await this.getRpcApiVersion();
+    if (version?.major === 0 && version?.minor <= 26) {
+      try {
+        let resp = await this.client.requestWithType(
+          'sui_executeTransactionSerializedSig',
+          [
+            typeof txnBytes === 'string' ? txnBytes : toB64(txnBytes),
+            signature,
+            requestType,
+          ],
+          SuiExecuteTransactionResponse_v26,
+          this.options.skipDataValidation,
+        );
+        let certificate = resp.certificate
+          ? {
+              transactionDigest: resp.certificate!.transactionDigest,
+              data: toSuiTransactionData(resp.certificate!.data),
+              txSignatures: [resp.certificate!.txSignature],
+              authSignInfo: resp.certificate!.authSignInfo,
+            }
+          : undefined;
+        return {
+          certificate: certificate,
+          effects: resp.effects,
+          confirmed_local_execution: resp.confirmed_local_execution,
+        };
+      } catch (err) {
+        throw new Error(
+          `Error executing transaction with request type: ${err}`,
+        );
+      }
+    }
     try {
-      let resp;
-      // Serialize sigature field as: `flag || signature || pubkey`
-      const serialized_sig = new Uint8Array(
-        1 + signature.getLength() + pubkey.toBytes().length,
-      );
-      serialized_sig.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
-      serialized_sig.set(signature.getData(), 1);
-      serialized_sig.set(pubkey.toBytes(), 1 + signature.getLength());
-
-      resp = await this.client.requestWithType(
+      return await this.client.requestWithType(
         'sui_executeTransactionSerializedSig',
         [
-          txnBytes.toString(),
-          new Base64DataBuffer(serialized_sig).toString(),
+          typeof txnBytes === 'string' ? txnBytes : toB64(txnBytes),
+          signature,
           requestType,
         ],
         SuiExecuteTransactionResponse,
         this.options.skipDataValidation,
       );
-      return resp;
     } catch (err) {
       throw new Error(`Error executing transaction with request type: ${err}`);
     }
@@ -743,28 +759,8 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getTransactionAuthSigners(
-    digest: TransactionDigest,
-  ): Promise<SuiTransactionAuthSignersResponse> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getTransactionAuthSigners',
-        [digest],
-        SuiTransactionAuthSignersResponse,
-        this.options.skipDataValidation,
-      );
-    } catch (err) {
-      throw new Error(`Error fetching transaction auth signers: ${err}`);
-    }
-  }
-
   // Governance
   async getReferenceGasPrice(): Promise<number> {
-    const version = await this.getRpcApiVersion();
-    // TODO: clean up after 0.22.0 is deployed on both DevNet and TestNet
-    if (version && lt(versionToString(version), '0.22.0')) {
-      return 1;
-    }
     try {
       return await this.client.requestWithType(
         'sui_getReferenceGasPrice',
@@ -856,29 +852,23 @@ export class JsonRpcProvider extends Provider {
 
   async devInspectTransaction(
     sender: SuiAddress,
-    tx: UnserializedSignableTransaction | string | Base64DataBuffer,
+    tx: UnserializedSignableTransaction | string | Uint8Array,
     gasPrice: number | null = null,
     epoch: number | null = null,
   ): Promise<DevInspectResults> {
     try {
-      const version = await this.getRpcApiVersion();
-      // TODO: remove after 0.24.0 is deployed in both DevNet and TestNet
-      if (version?.major === 0 && version?.minor < 24) {
-        return this.devInspectTransactionDeprecated(sender, tx, epoch);
-      }
-
       let devInspectTxBytes;
       if (typeof tx === 'string') {
         devInspectTxBytes = tx;
-      } else if (tx instanceof Base64DataBuffer) {
-        devInspectTxBytes = tx.toString();
+      } else if (tx instanceof Uint8Array) {
+        devInspectTxBytes = toB64(tx);
       } else {
-        devInspectTxBytes = (
+        devInspectTxBytes = toB64(
           await new LocalTxnDataSerializer(this).serializeToBytesWithoutGasInfo(
             sender,
             tx,
-          )
-        ).toString();
+          ),
+        );
       }
 
       const resp = await this.client.requestWithType(
@@ -895,53 +885,11 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async devInspectTransactionDeprecated(
-    sender: SuiAddress,
-    tx: UnserializedSignableTransaction | string | Base64DataBuffer,
-    epoch: number | null = null,
-  ): Promise<DevInspectResults> {
-    let devInspectTxBytes;
-    if (typeof tx === 'string') {
-      devInspectTxBytes = tx;
-    } else if (tx instanceof Base64DataBuffer) {
-      devInspectTxBytes = tx.toString();
-    } else {
-      if (tx.kind === 'moveCall' && tx.data.gasBudget == null) {
-        const moveCall = tx.data;
-        const resp = await this.client.requestWithType(
-          'sui_devInspectMoveCall',
-          [
-            sender,
-            moveCall.packageObjectId,
-            moveCall.module,
-            moveCall.function,
-            moveCall.typeArguments,
-            moveCall.arguments,
-          ],
-          DevInspectResults,
-          this.options.skipDataValidation,
-        );
-        return resp;
-      }
-      devInspectTxBytes = (
-        await new LocalTxnDataSerializer(this).serializeToBytes(sender, tx)
-      ).toString();
-    }
-
-    const resp = await this.client.requestWithType(
-      'sui_devInspectTransaction',
-      [devInspectTxBytes, epoch],
-      DevInspectResults,
-      this.options.skipDataValidation,
-    );
-    return resp;
-  }
-
-  async dryRunTransaction(txBytes: string): Promise<TransactionEffects> {
+  async dryRunTransaction(txBytes: Uint8Array): Promise<TransactionEffects> {
     try {
       const resp = await this.client.requestWithType(
         'sui_dryRunTransaction',
-        [txBytes],
+        [toB64(txBytes)],
         TransactionEffects,
         this.options.skipDataValidation,
       );
@@ -960,6 +908,12 @@ export class JsonRpcProvider extends Provider {
     limit: number | null = null,
   ): Promise<DynamicFieldPage> {
     try {
+      if (
+        !parent_object_id ||
+        !isValidSuiObjectId(normalizeSuiObjectId(parent_object_id))
+      ) {
+        throw new Error('Invalid Sui Object id');
+      }
       const resp = await this.client.requestWithType(
         'sui_getDynamicFields',
         [parent_object_id, cursor, limit],
@@ -1047,7 +1001,7 @@ export class JsonRpcProvider extends Provider {
   }
 
   async getCheckpointContents(
-    sequence_number: number,
+    sequence_number: number | CheckPointContentsDigest,
   ): Promise<CheckpointContents> {
     try {
       const resp = await this.client.requestWithType(

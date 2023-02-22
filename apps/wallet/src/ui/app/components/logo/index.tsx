@@ -25,7 +25,7 @@ const Logo = ({ networkName }: LogoProps) => {
             <div className={cl('flex flex-col', { 'mb-2': !!networkName })}>
                 <Icon icon={SuiIcons.SuiLogoTxt} />
                 {networkName && (
-                    <div className="-mt-2 ml-0.5">
+                    <div className="-mt-2 ml-0.5 whitespace-nowrap">
                         <Text variant="subtitleSmallExtra">
                             {networkNames[networkName]}
                         </Text>

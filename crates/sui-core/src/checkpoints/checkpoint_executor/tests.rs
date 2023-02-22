@@ -8,12 +8,15 @@ use tempfile::tempdir;
 use std::{sync::Arc, time::Duration};
 
 use broadcast::{Receiver, Sender};
+use sui_protocol_config::SupportedProtocolVersions;
+use sui_types::committee::ProtocolVersion;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use tokio::{sync::broadcast, time::timeout};
 
 use crate::{authority::AuthorityState, checkpoints::CheckpointStore};
 
 use sui_network::state_sync::test_utils::{empty_contents, CommitteeFixture};
+use sui_types::sui_system_state::SuiSystemState;
 
 /// Test checkpoint executor happy path, test that checkpoint executor correctly
 /// picks up where it left off in the event of a mid-epoch node crash.
@@ -44,7 +47,7 @@ pub async fn test_checkpoint_executor_crash_recovery() {
         &committee,
     );
 
-    let epoch_store = state.epoch_store().clone();
+    let epoch_store = state.epoch_store_for_testing().clone();
     let executor_handle =
         spawn_monitored_task!(async move { executor.run_epoch(epoch_store).await });
     tokio::time::sleep(Duration::from_secs(5)).await;
@@ -77,7 +80,7 @@ pub async fn test_checkpoint_executor_crash_recovery() {
         state.transaction_manager().clone(),
     );
 
-    let epoch_store = state.epoch_store().clone();
+    let epoch_store = state.epoch_store_for_testing().clone();
     let executor_handle =
         spawn_monitored_task!(async move { executor.run_epoch(epoch_store).await });
     tokio::time::sleep(Duration::from_secs(5)).await;
@@ -97,7 +100,7 @@ pub async fn test_checkpoint_executor_crash_recovery() {
 #[tokio::test]
 pub async fn test_checkpoint_executor_cross_epoch() {
     let buffer_size = 10;
-    let num_to_sync_per_epoch = (buffer_size * 2) as usize;
+    let num_to_sync_per_epoch = buffer_size * 2;
     let tempdir = tempdir().unwrap();
     let checkpoint_store = CheckpointStore::new(tempdir.path());
 
@@ -154,7 +157,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     // Ensure executor reaches end of epoch in a timely manner
     timeout(Duration::from_secs(5), async {
         executor
-            .run_epoch(authority_state.epoch_store().clone())
+            .run_epoch(authority_state.epoch_store_for_testing().clone())
             .await;
     })
     .await
@@ -169,17 +172,24 @@ pub async fn test_checkpoint_executor_cross_epoch() {
         num_to_sync_per_epoch as u64,
     );
 
-    authority_state
-        .reconfigure(second_committee.committee().clone(), 0)
+    let sui_system_state = SuiSystemState {
+        epoch: 1,
+        ..Default::default()
+    };
+    let new_epoch_store = authority_state
+        .reconfigure(
+            &authority_state.epoch_store_for_testing(),
+            SupportedProtocolVersions::SYSTEM_DEFAULT,
+            second_committee.committee().clone(),
+            sui_system_state,
+        )
         .await
         .unwrap();
 
     // checkpoint execution should resume starting at checkpoints
     // of next epoch
     timeout(Duration::from_secs(5), async {
-        executor
-            .run_epoch(authority_state.epoch_store().clone())
-            .await;
+        executor.run_epoch(new_epoch_store).await;
     })
     .await
     .unwrap();
@@ -248,7 +258,7 @@ pub async fn test_reconfig_crash_recovery() {
 
     timeout(Duration::from_secs(1), async {
         executor
-            .run_epoch(authority_state.epoch_store().clone())
+            .run_epoch(authority_state.epoch_store_for_testing().clone())
             .await;
     })
     .await
@@ -277,7 +287,7 @@ pub async fn test_reconfig_crash_recovery() {
 
     timeout(Duration::from_millis(200), async {
         executor
-            .run_epoch(authority_state.epoch_store().clone())
+            .run_epoch(authority_state.epoch_store_for_testing().clone())
             .await;
     })
     .await
@@ -355,7 +365,10 @@ fn sync_end_of_epoch_checkpoint(
         CommitteeFixture::generate(rand::rngs::OsRng, committee.committee().epoch + 1, 4);
     let (_sequence_number, _digest, checkpoint) = committee.make_end_of_epoch_checkpoint(
         previous_checkpoint,
-        new_committee.committee().voting_rights.clone(),
+        Some(EndOfEpochData {
+            next_epoch_committee: new_committee.committee().voting_rights.clone(),
+            next_epoch_protocol_version: ProtocolVersion::MIN,
+        }),
     );
     sync_checkpoint(&checkpoint, checkpoint_store, sender);
 
