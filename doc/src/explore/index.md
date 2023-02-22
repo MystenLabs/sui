@@ -22,9 +22,3 @@ View [example](../explore/examples.md) Sui projects that help you learn how to w
 
 View the code for [Sui Wallet](https://github.com/MystenLabs/sui/tree/main/apps/wallet) or [Sui Explorer](https://github.com/MystenLabs/sui/tree/main/apps/explorer) for examples of web apps that interact with Sui using the Typescript SDK.
 
-## Sui prototypes
-
-To learn about how the implementation details for the Sui Monstar example prototype, see [Sui Prototypes](../explore/prototypes.md).
-
-[SoWork x Sui](../explore/sowork.md) - building features on Sui to power creative employee rewards and custom NFT mints via SoWork's mapmaker.
-
