@@ -36,11 +36,8 @@ function MyTokens() {
     const { data: balance, isLoading: loadingBalances } =
         useGetAllBalances(accountAddress);
 
-    const hasSuiToken = useMemo(() => {
-        return (
-            !!balance?.find(({ coinType }) => coinType === SUI_TYPE_ARG) ||
-            false
-        );
+    const noSuiToken = useMemo(() => {
+        return !balance?.find(({ coinType }) => coinType === SUI_TYPE_ARG);
     }, [balance]);
 
     return (
@@ -65,7 +62,7 @@ function MyTokens() {
                     </div>
                 </div>
             ) : null}
-            {!hasSuiToken ? (
+            {noSuiToken ? (
                 <div className={st.emptyWallet}>
                     <FaucetRequestButton trackEventSource="home" />
                     {emptyWalletDescription}
