@@ -3,9 +3,12 @@
 
 use mysten_metrics::monitored_scope;
 use sui_types::committee::EpochId;
+use sui_types::digests::ObjectDigest;
+use sui_types::storage::ObjectKey;
 use tracing::debug;
 use typed_store::Map;
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use fastcrypto::hash::MultisetHash;
@@ -42,22 +45,59 @@ impl StateAccumulator {
 
         let mut acc = Accumulator::default();
 
+        // process insertions to the set
         acc.insert_all(
             effects
                 .iter()
-                .flat_map(|fx| fx.created().iter().map(|(obj_ref, _)| obj_ref.2)),
+                .flat_map(|fx| {
+                    fx.created()
+                        .iter()
+                        .map(|(oref, _)| oref.2)
+                        .chain(fx.unwrapped().iter().map(|(oref, _)| oref.2))
+                        .chain(fx.mutated().iter().map(|(oref, _)| oref.2))
+                        .collect::<Vec<ObjectDigest>>()
+                })
+                .collect::<Vec<ObjectDigest>>(),
         );
+
+        // get all modified_at_versions for the fx
+        let modified_at_version_keys = effects
+            .iter()
+            .flat_map(|fx| {
+                fx.modified_at_versions()
+                    .iter()
+                    .map(|(id, seq_num)| ObjectKey(*id, *seq_num))
+                    .collect::<Vec<ObjectKey>>()
+            })
+            .collect::<HashSet<ObjectKey>>();
+
+        let modified_at_digests = self
+            .authority_store
+            .perpetual_tables
+            .parent_sync
+            .iter()
+            .filter_map(|(tup, _tx_digest)| {
+                if modified_at_version_keys.contains(&ObjectKey(tup.0, tup.1)) {
+                    Some(tup.2)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<ObjectDigest>>();
+
+        // process removals from the set
         acc.remove_all(
             effects
                 .iter()
-                .flat_map(|fx| fx.deleted().iter().map(|obj_ref| obj_ref.2)),
-        );
-
-        // MUSTFIX: almost certainly not correctly handling "mutated" effects.
-        acc.insert_all(
-            effects
-                .iter()
-                .flat_map(|fx| fx.mutated().iter().map(|(obj_ref, _)| obj_ref.2)),
+                .flat_map(|fx| {
+                    fx.deleted()
+                        .iter()
+                        .map(|oref| oref.2)
+                        .chain(fx.wrapped().iter().map(|oref| oref.2))
+                        .chain(modified_at_digests.clone().into_iter())
+                        .collect::<Vec<ObjectDigest>>()
+                })
+                .collect::<HashSet<ObjectDigest>>(),
         );
 
         epoch_store.insert_state_hash_for_checkpoint(&checkpoint_seq_num, &acc)?;
@@ -136,6 +176,7 @@ impl StateAccumulator {
             .expect("Failed to notify read checkpoint state digests");
 
         accumulators.append(&mut remaining_accumulators);
+
         assert!(accumulators.len() == (last_checkpoint_of_epoch - next_to_accumulate + 1) as usize);
 
         for acc in accumulators {
@@ -151,7 +192,6 @@ impl StateAccumulator {
             .root_state_notify_read
             .notify(epoch, &(last_checkpoint_of_epoch, root_state_hash.clone()));
 
-        debug!("Accumulated epoch {}", epoch);
         Ok(root_state_hash)
     }
 

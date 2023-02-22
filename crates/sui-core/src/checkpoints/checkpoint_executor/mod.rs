@@ -215,6 +215,12 @@ impl CheckpointExecutor {
         }
     }
 
+    pub fn set_inconsistent_state(&self, is_inconsistent_state: bool) {
+        self.metrics
+            .accumulator_inconsistent_state
+            .set(is_inconsistent_state as i64);
+    }
+
     /// Post processing and plumbing after we executed a checkpoint. This function is guaranteed
     /// to be called in the order of checkpoint sequence number.
     fn process_executed_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
