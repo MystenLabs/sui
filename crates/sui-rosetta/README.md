@@ -6,8 +6,7 @@ integration.
 
 ## Overview
 
-Sui-Rosetta is an implementation of the Rosetta API for the Sui network, the Sui-Rosetta server uses the Sui fullnode to
-read and write transactions to the Sui network.
+Sui-Rosetta is a software tool that allows developers to interact with the Sui network using the Rosetta API. The Sui network is a type of blockchain network, which is a digital ledger used for recording transactions. The Sui-Rosetta server uses the Sui fullnode software to access and record transactions on the Sui network.
 
 ## Local network quick start
 
