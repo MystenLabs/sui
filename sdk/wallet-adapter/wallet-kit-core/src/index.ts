@@ -4,6 +4,7 @@
 import {
   ExecuteTransactionRequestType,
   SignableTransaction,
+  SignedMessage,
   SignedTransaction,
   SuiAddress,
   SuiTransactionResponse,
@@ -53,6 +54,7 @@ export interface WalletKitCore {
   subscribe(handler: SubscribeHandler): Unsubscribe;
   connect(walletName: string): Promise<void>;
   disconnect(): Promise<void>;
+  signMessage(message: Uint8Array): Promise<SignedMessage>;
   signTransaction(transaction: SignableTransaction): Promise<SignedTransaction>;
   signAndExecuteTransaction(
     transaction: SignableTransaction,
@@ -238,6 +240,16 @@ export function createWalletKitCore({
       } catch {}
       await internalState.currentWallet.disconnect();
       disconnected();
+    },
+
+    signMessage(message) {
+      if (!internalState.currentWallet) {
+        throw new Error(
+          "No wallet is currently connected, cannot call `signMessage`."
+        );
+      }
+
+      return internalState.currentWallet.signMessage(message);
     },
 
     signTransaction(transaction) {

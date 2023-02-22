@@ -11,6 +11,7 @@ import {
   Network,
   RawSigner,
   SignableTransaction,
+  SignedMessage,
 } from "@mysten/sui.js";
 import {
   WalletAdapter,
@@ -47,6 +48,10 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
 
   async getAccounts() {
     return [this.#keypair.getPublicKey().toSuiAddress()];
+  }
+
+  async signMessage(message: Uint8Array) {
+    return this.#signer.signMessage(message);
   }
 
   async signTransaction(transaction: SignableTransaction) {
