@@ -54,7 +54,7 @@ module sui::display {
         /// fields are: name, link, image and description.
         fields: VecMap<String, String>,
         /// Version that can only be updated manually by the Publisher.
-        version: u64
+        version: u16
     }
 
     /// Event: emitted when a new Display object has been created for type T.
@@ -70,7 +70,7 @@ module sui::display {
     /// Version of Display got updated -
     struct VersionUpdated<phantom T: key> has copy, drop {
         id: ID,
-        version: u64,
+        version: u16,
         fields: VecMap<String, String>,
     }
 
@@ -197,7 +197,7 @@ module sui::display {
     // === Access fields ===
 
     /// Read the `version` field.
-    public fun version<T: key>(d: &Display<T>): u64 {
+    public fun version<T: key>(d: &Display<T>): u16 {
         d.version
     }
 

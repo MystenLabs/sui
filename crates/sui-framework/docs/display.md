@@ -97,7 +97,7 @@ the property names have a priority over their types.
  fields are: name, link, image and description.
 </dd>
 <dt>
-<code>version: u64</code>
+<code>version: u16</code>
 </dt>
 <dd>
  Version that can only be updated manually by the Publisher.
@@ -164,7 +164,7 @@ Version of Display got updated -
 
 </dd>
 <dt>
-<code>version: u64</code>
+<code>version: u16</code>
 </dt>
 <dd>
 
@@ -567,7 +567,7 @@ Remove the key from the Display.
 Read the <code>version</code> field.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_version">version</a>&lt;T: key&gt;(d: &<a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_version">version</a>&lt;T: key&gt;(d: &<a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;): u16
 </code></pre>
 
 
@@ -576,7 +576,7 @@ Read the <code>version</code> field.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_version">version</a>&lt;T: key&gt;(d: &<a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_version">version</a>&lt;T: key&gt;(d: &<a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;): u16 {
     d.version
 }
 </code></pre>
