@@ -1650,7 +1650,13 @@ impl AuthorityState {
         certs: Vec<VerifiedCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<()> {
-        epoch_store.insert_pending_certificates(&certs)?;
+        let executable_txns: Vec<_> = certs
+            .clone()
+            .into_iter()
+            .map(VerifiedExecutableTransaction::new_from_certificate)
+            .map(VerifiedExecutableTransaction::serializable)
+            .collect();
+        epoch_store.insert_pending_execution(&executable_txns)?;
         self.transaction_manager
             .enqueue_certificates(certs, epoch_store)
     }

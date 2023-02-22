@@ -24,7 +24,7 @@ use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
-    SenderSignedData, SharedInputObject, TransactionData, TransactionEffects, TrustedCertificate,
+    SenderSignedData, SharedInputObject, TransactionData, TransactionEffects,
     TrustedExecutableTransaction, TrustedSignedTransactionEffects, VerifiedCertificate,
     VerifiedExecutableTransaction, VerifiedSignedTransaction,
 };
@@ -169,7 +169,7 @@ pub struct AuthorityEpochTables {
     /// progress. But it is more complex, because it would be necessary to track inflight
     /// executions not ordered by indices. For now, tracking inflight certificates as a map
     /// seems easier.
-    pending_certificates: DBMap<TransactionDigest, TrustedCertificate>,
+    pending_execution: DBMap<TransactionDigest, TrustedExecutableTransaction>,
 
     /// Track which transactions have been processed in handle_consensus_transaction. We must be
     /// sure to advance next_shared_object_versions exactly once for each transaction we receive from
@@ -647,27 +647,19 @@ impl AuthorityPerEpochStore {
 
     /// `pending_certificates` table related methods. Should only be used from TransactionManager.
 
-    /// Gets one certificate pending execution.
-    pub fn get_pending_certificate(
-        &self,
-        tx: &TransactionDigest,
-    ) -> Result<Option<VerifiedCertificate>, TypedStoreError> {
-        Ok(self.tables.pending_certificates.get(tx)?.map(|c| c.into()))
-    }
-
     /// Gets all pending certificates. Used during recovery.
-    pub fn all_pending_certificates(&self) -> SuiResult<Vec<VerifiedCertificate>> {
+    pub fn all_pending_execution(&self) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
         Ok(self
             .tables
-            .pending_certificates
+            .pending_execution
             .iter()
             .map(|(_, cert)| cert.into())
             .collect())
     }
 
     /// Deletes one pending certificate.
-    pub fn remove_pending_certificate(&self, digest: &TransactionDigest) -> SuiResult<()> {
-        self.tables.pending_certificates.remove(digest)?;
+    pub fn remove_pending_execution(&self, digest: &TransactionDigest) -> SuiResult<()> {
+        self.tables.pending_execution.remove(digest)?;
         Ok(())
     }
 
@@ -903,15 +895,15 @@ impl AuthorityPerEpochStore {
     }
 
     /// Stores a list of pending certificates to be executed.
-    pub fn insert_pending_certificates(
+    pub fn insert_pending_execution(
         &self,
-        certs: &[VerifiedCertificate],
+        certs: &[TrustedExecutableTransaction],
     ) -> Result<(), TypedStoreError> {
-        let batch = self.tables.pending_certificates.batch().insert_batch(
-            &self.tables.pending_certificates,
+        let batch = self.tables.pending_execution.batch().insert_batch(
+            &self.tables.pending_execution,
             certs
                 .iter()
-                .map(|cert| (*cert.digest(), cert.clone().serializable())),
+                .map(|cert| (*cert.inner().digest(), cert.clone())),
         )?;
         batch.write()?;
         Ok(())
@@ -1032,7 +1024,7 @@ impl AuthorityPerEpochStore {
     pub async fn record_owned_object_cert_from_consensus(
         &self,
         transaction: &ConsensusTransaction,
-        certificate: &VerifiedCertificate,
+        certificate: &VerifiedExecutableTransaction,
         consensus_index: ExecutionIndicesWithHash,
     ) -> Result<(), SuiError> {
         let key = transaction.key();
@@ -1047,7 +1039,7 @@ impl AuthorityPerEpochStore {
     pub async fn record_shared_object_cert_from_consensus(
         &self,
         transaction: &ConsensusTransaction,
-        certificate: &VerifiedCertificate,
+        certificate: &VerifiedExecutableTransaction,
         consensus_index: ExecutionIndicesWithHash,
         parent_sync_store: impl ParentSync,
     ) -> Result<(), SuiError> {
@@ -1186,7 +1178,7 @@ impl AuthorityPerEpochStore {
     pub fn finish_consensus_certificate_process(
         &self,
         key: ConsensusTransactionKey,
-        certificate: &VerifiedCertificate,
+        certificate: &VerifiedExecutableTransaction,
         consensus_index: ExecutionIndicesWithHash,
     ) -> SuiResult {
         let write_batch = self.tables.last_consensus_index.batch();
@@ -1201,7 +1193,7 @@ impl AuthorityPerEpochStore {
     pub fn finish_assign_shared_object_versions(
         &self,
         key: ConsensusTransactionKey,
-        certificate: &VerifiedCertificate,
+        certificate: &VerifiedExecutableTransaction,
         consensus_index: ExecutionIndicesWithHash,
         assigned_versions: Vec<(ObjectID, SequenceNumber)>,
         next_versions: Vec<(ObjectID, SequenceNumber)>,
@@ -1276,7 +1268,7 @@ impl AuthorityPerEpochStore {
         &self,
         batch: DBBatch,
         key: ConsensusTransactionKey,
-        certificate: &VerifiedCertificate,
+        certificate: &VerifiedExecutableTransaction,
         consensus_index: ExecutionIndicesWithHash,
     ) -> SuiResult {
         let transaction_digest = *certificate.digest();
@@ -1285,7 +1277,7 @@ impl AuthorityPerEpochStore {
             [(consensus_index.index, transaction_digest)],
         )?;
         let batch = batch.insert_batch(
-            &self.tables.pending_certificates,
+            &self.tables.pending_execution,
             [(*certificate.digest(), certificate.clone().serializable())],
         )?;
         // User signatures are written in the same batch as consensus certificate processed flag,
@@ -1487,7 +1479,7 @@ impl AuthorityPerEpochStore {
         {
             // The certificate has already been inserted into the pending_certificates table by
             // process_consensus_transaction() above.
-            transaction_manager.enqueue_certificates(vec![certificate], self)?;
+            transaction_manager.enqueue(vec![certificate], self)?;
         }
         Ok(())
     }
@@ -1501,7 +1493,7 @@ impl AuthorityPerEpochStore {
         transaction: VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
         parent_sync_store: impl ParentSync,
-    ) -> SuiResult<Option<VerifiedCertificate>> {
+    ) -> SuiResult<Option<VerifiedExecutableTransaction>> {
         let _scope = monitored_scope("HandleConsensusTransaction");
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
             certificate: consensus_output,
@@ -1532,6 +1524,7 @@ impl AuthorityPerEpochStore {
                 // Safe because signatures are verified when VerifiedSequencedConsensusTransaction
                 // is constructed.
                 let certificate = VerifiedCertificate::new_unchecked(*certificate.clone());
+                let certificate = VerifiedExecutableTransaction::new_from_certificate(certificate);
 
                 debug!(
                     ?tracking_id,
