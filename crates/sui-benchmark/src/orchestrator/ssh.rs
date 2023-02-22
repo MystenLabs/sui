@@ -2,6 +2,7 @@ use std::{
     io::{Read, Write},
     net::SocketAddr,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 use ssh2::{Channel, Session};
@@ -11,6 +12,46 @@ use crate::{
     ensure,
     orchestrator::error::{SshError, SshResult},
 };
+
+pub struct SshCommand {
+    pub command: String,
+    pub background: bool,
+    pub path: Option<PathBuf>,
+    pub log_file: Option<PathBuf>,
+    pub timeout: Option<Duration>,
+}
+
+impl SshCommand {
+    pub fn new(command: String) -> Self {
+        Self {
+            command,
+            background: false,
+            path: None,
+            log_file: None,
+            timeout: None,
+        }
+    }
+
+    pub fn run_background(mut self) -> Self {
+        self.background = true;
+        self
+    }
+
+    pub fn execute_from_path(mut self, path: PathBuf) -> Self {
+        self.path = Some(path);
+        self
+    }
+
+    pub fn set_log_file(mut self, path: PathBuf) -> Self {
+        self.log_file = Some(path);
+        self
+    }
+
+    pub fn set_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+}
 
 #[derive(Clone)]
 pub struct SshConnectionManager {
@@ -44,7 +85,7 @@ impl SshConnection {
         let tcp = TcpStream::connect(address).await?;
 
         let mut session = Session::new()?;
-        session.set_timeout(120_000);
+        // session.set_timeout(120_000);
         session.set_tcp_stream(tcp);
         session.handshake()?;
         session.userauth_pubkey_file(username, None, private_key_file.as_ref(), None)?;
