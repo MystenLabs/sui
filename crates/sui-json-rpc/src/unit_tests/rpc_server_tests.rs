@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::api::CoinReadApiClient;
-use crate::api::GovernanceReadApiClient;
-use crate::api::{RpcFullNodeReadApiClient, ThresholdBlsApiClient, TransactionExecutionApiClient};
-use crate::api::{RpcReadApiClient, RpcTransactionBuilderClient};
+
+use crate::api::{
+    CoinReadApiClient, GovernanceReadApiClient, ReadApiClient, ThresholdBlsApiClient,
+    TransactionBuilderClient, WriteApiClient,
+};
 use std::path::Path;
 
 #[cfg(not(msim))]
@@ -11,11 +12,11 @@ use std::str::FromStr;
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
+
 use sui_json_rpc_types::SuiObjectInfo;
 use sui_json_rpc_types::{
-    Balance, CoinPage, GetObjectDataResponse, SuiCoinMetadata, SuiEvent,
-    SuiExecuteTransactionResponse, SuiExecutionStatus, SuiTBlsSignObjectCommitmentType,
-    SuiTransactionResponse, TransactionBytes,
+    Balance, CoinPage, GetObjectDataResponse, SuiCoinMetadata, SuiEvent, SuiExecutionStatus,
+    SuiTBlsSignObjectCommitmentType, SuiTransactionResponse, TransactionBytes,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::balance::Supply;
@@ -69,22 +70,22 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
     let tx_bytes1 = tx_bytes.clone();
     let dryrun_response = http_client.dry_run_transaction(tx_bytes).await?;
 
-    let tx_response: SuiExecuteTransactionResponse = http_client
-        .execute_transaction(
+    let tx_response: SuiTransactionResponse = http_client
+        .submit_transaction(
             tx_bytes1,
-            signature_bytes,
+            signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
 
-    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
+    let SuiTransactionResponse { effects, .. } = tx_response;
     assert_eq!(
         dryrun_response.transaction_digest,
-        effects.effects.transaction_digest
+        effects.transaction_digest
     );
     Ok(())
 }
@@ -122,21 +123,20 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
         .publish(*address, compiled_modules, Some(gas.object_id), 10000)
         .await?;
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction(
+        .submit_transaction(
             tx_bytes,
-            signature_bytes,
+            signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
 
-    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
-    assert_eq!(SuiExecutionStatus::Success, effects.effects.status);
+    let SuiTransactionResponse { effects, .. } = tx_response;
+    assert_eq!(SuiExecutionStatus::Success, effects.status);
 
     let package_id = effects
-        .effects
         .events
         .iter()
         .find_map(|e| {
@@ -166,21 +166,20 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
         .await?;
     let tx = transaction_bytes.to_data()?;
     let tx = to_sender_signed_transaction(tx, keystore.get_key(address)?);
-    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction(
+        .submit_transaction(
             tx_bytes,
-            signature_bytes,
+            signatures,
             ExecuteTransactionRequestType::WaitForEffectsCert,
         )
         .await?;
 
-    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
-    assert_eq!(SuiExecutionStatus::Success, effects.effects.status);
+    let SuiTransactionResponse { effects, .. } = tx_response;
+    assert_eq!(SuiExecutionStatus::Success, effects.status);
 
     let randomness_object_id = effects
-        .effects
         .events
         .iter()
         .find_map(|e| {
@@ -225,17 +224,17 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
         .await?;
     let tx = transaction_bytes.to_data()?;
     let tx = to_sender_signed_transaction(tx, keystore.get_key(address)?);
-    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction(
+        .submit_transaction(
             tx_bytes,
-            signature_bytes,
+            signatures,
             ExecuteTransactionRequestType::WaitForEffectsCert,
         )
         .await?;
-    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
-    assert_eq!(SuiExecutionStatus::Success, effects.effects.status);
+    let SuiTransactionResponse { effects, .. } = tx_response;
+    assert_eq!(SuiExecutionStatus::Success, effects.status);
 
     Ok(())
 }
@@ -260,16 +259,16 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction(
+        .submit_transaction(
             tx_bytes,
-            signature_bytes,
+            signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
-    matches!(tx_response, SuiExecuteTransactionResponse {effects, ..} if effects.effects.created.len() == 6);
+    matches!(tx_response, SuiTransactionResponse {effects, ..} if effects.created.len() == 6);
     Ok(())
 }
 
@@ -311,16 +310,16 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
 
-    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction(
+        .submit_transaction(
             tx_bytes,
-            signature_bytes,
+            signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
-    matches!(tx_response, SuiExecuteTransactionResponse {effects, ..} if effects.effects.created.len() == 1);
+    matches!(tx_response, SuiTransactionResponse {effects, ..} if effects.created.len() == 1);
     Ok(())
 }
 
@@ -418,20 +417,19 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-    let (tx_bytes, signature) = tx.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction(
+        .submit_transaction(
             tx_bytes,
-            signature,
+            signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
 
-    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
+    let SuiTransactionResponse { effects, .. } = tx_response;
 
     let package_id = effects
-        .effects
         .events
         .iter()
         .find_map(|e| {
@@ -477,20 +475,19 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-    let (tx_bytes, signature) = tx.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction(
+        .submit_transaction(
             tx_bytes,
-            signature,
+            signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
 
-    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
+    let SuiTransactionResponse { effects, .. } = tx_response;
 
     let package_id = effects
-        .effects
         .events
         .iter()
         .find_map(|e| {
@@ -509,7 +506,6 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     assert_eq!(0, result.value);
 
     let treasury_cap = effects
-        .effects
         .events
         .iter()
         .find_map(|e| {
@@ -555,19 +551,19 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let tx = transaction_bytes.to_data()?;
 
     let tx = to_sender_signed_transaction(tx, keystore.get_key(address)?);
-    let (tx_bytes, signature) = tx.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction(
+        .submit_transaction(
             tx_bytes,
-            signature,
+            signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
 
-    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
+    let SuiTransactionResponse { effects, .. } = tx_response;
 
-    assert_eq!(SuiExecutionStatus::Success, effects.effects.status);
+    assert_eq!(SuiExecutionStatus::Success, effects.status);
 
     let result: Supply = http_client.get_total_supply(coin_name.clone()).await?;
     assert_eq!(100000, result.value);
@@ -585,7 +581,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     let gas_id = objects.last().unwrap().object_id;
 
     // Make some transactions
-    let mut tx_responses: Vec<SuiExecuteTransactionResponse> = Vec::new();
+    let mut tx_responses: Vec<SuiTransactionResponse> = Vec::new();
     for oref in &objects[..objects.len() - 1] {
         let transaction_bytes: TransactionBytes = http_client
             .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
@@ -595,12 +591,12 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
         let tx =
             to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
 
-        let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+        let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
         let response = http_client
-            .execute_transaction(
+            .submit_transaction(
                 tx_bytes,
-                signature_bytes,
+                signatures,
                 ExecuteTransactionRequestType::WaitForLocalExecution,
             )
             .await?;
@@ -619,7 +615,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     for tx_digest in tx {
         let response: SuiTransactionResponse = http_client.get_transaction(tx_digest).await?;
         assert!(tx_responses.iter().any(
-            |resp| matches!(resp, SuiExecuteTransactionResponse {effects, ..} if effects.effects.transaction_digest == response.effects.transaction_digest)
+            |resp| matches!(resp, SuiTransactionResponse {effects, ..} if effects.transaction_digest == response.effects.transaction_digest)
         ))
     }
 
@@ -634,7 +630,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
-    let mut tx_responses = Vec::new();
+    let mut tx_responses: Vec<SuiTransactionResponse> = Vec::new();
 
     let client = context.get_client().await.unwrap();
 
@@ -751,12 +747,9 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     for tx_digest in tx.data {
         let response: SuiTransactionResponse =
             client.read_api().get_transaction(tx_digest).await.unwrap();
-        assert!(tx_responses.iter().any(|effects| effects
-            .effects
-            .as_ref()
-            .unwrap()
-            .transaction_digest
-            == response.effects.transaction_digest))
+        assert!(tx_responses
+            .iter()
+            .any(|resp| resp.effects.transaction_digest == response.effects.transaction_digest))
     }
 
     Ok(())
@@ -772,7 +765,7 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
     let client = cluster.wallet.get_client().await?;
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
-    let mut tx_responses = Vec::new();
+    let mut tx_responses: Vec<SuiTransactionResponse> = Vec::new();
 
     for address in cluster.accounts.iter() {
         let objects = client
@@ -810,7 +803,7 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         .event_api()
         .get_events(
             EventQuery::All,
-            Some((tx_responses[2].tx_digest, 0).into()),
+            Some((tx_responses[2].effects.transaction_digest, 0).into()),
             Some(3),
             false,
         )
@@ -818,14 +811,14 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         .unwrap();
     assert_eq!(3, page1.data.len());
     assert_eq!(
-        Some((tx_responses[5].tx_digest, 0).into()),
+        Some((tx_responses[5].effects.transaction_digest, 0).into()),
         page1.next_cursor
     );
     let page2 = client
         .event_api()
         .get_events(
             EventQuery::All,
-            Some((tx_responses[5].tx_digest, 0).into()),
+            Some((tx_responses[5].effects.transaction_digest, 0).into()),
             Some(20),
             false,
         )
@@ -842,7 +835,7 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         .unwrap();
     assert_eq!(3, page1.data.len());
     assert_eq!(
-        Some((tx_responses[16].tx_digest, 0).into()),
+        Some((tx_responses[16].effects.transaction_digest, 0).into()),
         page1.next_cursor
     );
 
@@ -850,7 +843,7 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         .event_api()
         .get_events(
             EventQuery::All,
-            Some((tx_responses[16].tx_digest, 0).into()),
+            Some((tx_responses[16].effects.transaction_digest, 0).into()),
             None,
             true,
         )
@@ -949,12 +942,12 @@ async fn test_locked_sui() -> Result<(), anyhow::Error> {
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
 
-    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     http_client
-        .execute_transaction(
+        .submit_transaction(
             tx_bytes,
-            signature_bytes,
+            signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
@@ -1003,12 +996,12 @@ async fn test_delegation() -> Result<(), anyhow::Error> {
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
 
-    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     http_client
-        .execute_transaction(
+        .submit_transaction(
             tx_bytes,
-            signature_bytes,
+            signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
@@ -1062,12 +1055,12 @@ async fn test_delegation_multiple_coins() -> Result<(), anyhow::Error> {
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
 
-    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     http_client
-        .execute_transaction(
+        .submit_transaction(
             tx_bytes,
-            signature_bytes,
+            signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
@@ -1129,12 +1122,12 @@ async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
 
-    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     http_client
-        .execute_transaction(
+        .submit_transaction(
             tx_bytes,
-            signature_bytes,
+            signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
@@ -1160,12 +1153,12 @@ async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
         )
         .await?;
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     http_client
-        .execute_transaction(
+        .submit_transaction(
             tx_bytes,
-            signature_bytes,
+            signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { formatAddress } from '@mysten/sui.js';
 import cl from 'classnames';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -9,10 +10,6 @@ import { Text } from '_app/shared/text';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
-import { useMiddleEllipsis } from '_hooks';
-
-const TRUNCATE_MAX_LENGTH = 10;
-const TRUNCATE_PREFIX_LENGTH = 6;
 
 type ValidatorListItemProp = {
     selected?: boolean;
@@ -30,12 +27,6 @@ export function ValidatorListItem({
     logo,
     validatorAddress,
 }: ValidatorListItemProp) {
-    const truncatedAddress = useMiddleEllipsis(
-        validatorAddress,
-        TRUNCATE_MAX_LENGTH,
-        TRUNCATE_PREFIX_LENGTH
-    );
-
     return (
         <AnimatePresence>
             <motion.div
@@ -82,7 +73,7 @@ export function ValidatorListItem({
                                 )}
                                 showIcon={false}
                             >
-                                {truncatedAddress}
+                                {formatAddress(validatorAddress)}
                             </ExplorerLink>
                         </div>
                     </div>

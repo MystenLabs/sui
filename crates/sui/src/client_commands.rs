@@ -31,14 +31,15 @@ use sui_types::error::SuiError;
 
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
+use sui_json_rpc_types::SuiExecutionStatus;
 use sui_json_rpc_types::{
-    DynamicFieldPage, GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse,
+    DynamicFieldPage, GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiRawData,
+    SuiTransactionResponse,
 };
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
-use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::SuiClient;
-use sui_sdk::TransactionExecutionResult;
+use sui_types::crypto::SignatureScheme;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::intent::Intent;
 use sui_types::signature::GenericSignature;
@@ -50,7 +51,6 @@ use sui_types::{
     object::Owner,
     parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS,
 };
-use sui_types::{crypto::SignatureScheme, intent::IntentMessage};
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
@@ -444,9 +444,9 @@ pub enum SuiClientCommands {
         #[clap(long)]
         tx_bytes: String,
 
-        /// Base64 encoded signature `flag || signature || pubkey`.
+        /// A list of Base64 encoded signatures `flag || signature || pubkey`.
         #[clap(long)]
-        signature: String,
+        signatures: Vec<String>,
     },
 
     DeserializeTx {
@@ -524,7 +524,8 @@ impl SuiClientCommands {
                         .sign_secure(&sender, &data, Intent::default())?;
                 let response = context
                     .execute_transaction(
-                        Transaction::from_data(data, Intent::default(), signature).verify()?,
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+                            .verify()?,
                     )
                     .await?;
 
@@ -534,8 +535,13 @@ impl SuiClientCommands {
             SuiClientCommands::Object { id, bcs } => {
                 // Fetch the object ref
                 let client = context.get_client().await?;
-                let object_read = client.read_api().get_parsed_object(id).await?;
-                SuiClientCommandResult::Object(object_read, bcs)
+                if !bcs {
+                    let object_read = client.read_api().get_parsed_object(id).await?;
+                    SuiClientCommandResult::Object(object_read)
+                } else {
+                    let raw_object_read = client.read_api().get_object(id).await?;
+                    SuiClientCommandResult::RawObject(raw_object_read)
+                }
             }
 
             SuiClientCommands::DynamicFieldQuery { id, cursor, limit } => {
@@ -556,11 +562,11 @@ impl SuiClientCommands {
                 gas_budget,
                 args,
             } => {
-                let (cert, effects) = call_move(
+                let response = call_move(
                     package, &module, &function, type_args, gas, gas_budget, args, context,
                 )
                 .await?;
-                SuiClientCommandResult::Call(cert, effects)
+                SuiClientCommandResult::Call(response)
             }
 
             SuiClientCommands::Transfer {
@@ -584,17 +590,16 @@ impl SuiClientCommands {
                         .sign_secure(&from, &data, Intent::default())?;
                 let response = context
                     .execute_transaction(
-                        Transaction::from_data(data, Intent::default(), signature).verify()?,
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+                            .verify()?,
                     )
                     .await?;
-                let cert = response.certificate;
-                let effects = response.effects;
-
+                let effects = &response.effects;
                 let time_total = time_start.elapsed().as_micros();
                 if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!("Error transferring object: {:#?}", effects.status));
                 }
-                SuiClientCommandResult::Transfer(time_total, cert, effects)
+                SuiClientCommandResult::Transfer(time_total, response)
             }
 
             SuiClientCommands::TransferSui {
@@ -617,16 +622,15 @@ impl SuiClientCommands {
                         .sign_secure(&from, &data, Intent::default())?;
                 let response = context
                     .execute_transaction(
-                        Transaction::from_data(data, Intent::default(), signature).verify()?,
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+                            .verify()?,
                     )
                     .await?;
-                let cert = response.certificate;
-                let effects = response.effects;
-
+                let effects = &response.effects;
                 if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!("Error transferring SUI: {:#?}", effects.status));
                 }
-                SuiClientCommandResult::TransferSui(cert, effects)
+                SuiClientCommandResult::TransferSui(response)
             }
 
             SuiClientCommands::Pay {
@@ -665,18 +669,18 @@ impl SuiClientCommands {
                         .sign_secure(&from, &data, Intent::default())?;
                 let response = context
                     .execute_transaction(
-                        Transaction::from_data(data, Intent::default(), signature).verify()?,
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+                            .verify()?,
                     )
                     .await?;
-                let cert = response.certificate;
-                let effects = response.effects;
+                let effects = &response.effects;
                 if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!(
                         "Error executing Pay transaction: {:#?}",
                         effects.status
                     ));
                 }
-                SuiClientCommandResult::Pay(cert, effects)
+                SuiClientCommandResult::Pay(response)
             }
 
             SuiClientCommands::PaySui {
@@ -714,19 +718,18 @@ impl SuiClientCommands {
                         .sign_secure(&signer, &data, Intent::default())?;
                 let response = context
                     .execute_transaction(
-                        Transaction::from_data(data, Intent::default(), signature).verify()?,
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+                            .verify()?,
                     )
                     .await?;
-
-                let cert = response.certificate;
-                let effects = response.effects;
+                let effects = &response.effects;
                 if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!(
                         "Error executing PaySui transaction: {:#?}",
                         effects.status
                     ));
                 }
-                SuiClientCommandResult::PaySui(cert, effects)
+                SuiClientCommandResult::PaySui(response)
             }
 
             SuiClientCommands::PayAllSui {
@@ -752,19 +755,18 @@ impl SuiClientCommands {
                         .sign_secure(&signer, &data, Intent::default())?;
                 let response = context
                     .execute_transaction(
-                        Transaction::from_data(data, Intent::default(), signature).verify()?,
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+                            .verify()?,
                     )
                     .await?;
-
-                let cert = response.certificate;
-                let effects = response.effects;
+                let effects = &response.effects;
                 if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!(
                         "Error executing PayAllSui transaction: {:#?}",
                         effects.status
                     ));
                 }
-                SuiClientCommandResult::PayAllSui(cert, effects)
+                SuiClientCommandResult::PayAllSui(response)
             }
 
             SuiClientCommands::Addresses => SuiClientCommandResult::Addresses(
@@ -839,7 +841,8 @@ impl SuiClientCommands {
                         .sign_secure(&signer, &data, Intent::default())?;
                 let response = context
                     .execute_transaction(
-                        Transaction::from_data(data, Intent::default(), signature).verify()?,
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+                            .verify()?,
                     )
                     .await?;
                 SuiClientCommandResult::SplitCoin(response)
@@ -863,7 +866,8 @@ impl SuiClientCommands {
                         .sign_secure(&signer, &data, Intent::default())?;
                 let response = context
                     .execute_transaction(
-                        Transaction::from_data(data, Intent::default(), signature).verify()?,
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+                            .verify()?,
                     )
                     .await?;
 
@@ -904,7 +908,7 @@ impl SuiClientCommands {
                 for a in args_json.as_array().unwrap() {
                     args.push(SuiJsonValue::new(a.clone()).unwrap());
                 }
-                let (_, effects) = call_move(
+                let response = call_move(
                     ObjectID::from(SUI_FRAMEWORK_ADDRESS),
                     "devnet_nft",
                     "mint",
@@ -915,7 +919,8 @@ impl SuiClientCommands {
                     context,
                 )
                 .await?;
-                let nft_id = effects
+                let nft_id = response
+                    .effects
                     .created
                     .first()
                     .ok_or_else(|| anyhow!("Failed to create NFT"))?
@@ -938,17 +943,14 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .transfer_sui(from, object_id, gas_budget, to, amount)
                     .await?;
-                let data1 = data.clone();
-                let intent_msg = IntentMessage::new(Intent::default(), data);
-                SuiClientCommandResult::SerializeTransferSui(
-                    Base64::encode(bcs::to_bytes(&intent_msg)?.as_slice()),
-                    Base64::encode(&bcs::to_bytes(&data1).unwrap()),
-                )
+                SuiClientCommandResult::SerializeTransferSui(Base64::encode(
+                    bcs::to_bytes(&data).unwrap(),
+                ))
             }
 
             SuiClientCommands::ExecuteSignedTx {
                 tx_bytes,
-                signature,
+                signatures,
             } => {
                 let data = bcs::from_bytes(
                     &Base64::try_from(tx_bytes)
@@ -956,14 +958,22 @@ impl SuiClientCommands {
                         .to_vec()
                         .map_err(|e| anyhow!(e))?,
                 )?;
-                let bytes = &Base64::try_from(signature)
-                    .map_err(|e| anyhow!(e))?
-                    .to_vec()
-                    .map_err(|e| anyhow!(e))?;
 
-                let sig = GenericSignature::from_bytes(bytes)?;
+                let mut sigs = Vec::new();
+                for sig in signatures {
+                    sigs.push(
+                        GenericSignature::from_bytes(
+                            &Base64::try_from(sig)
+                                .map_err(|e| anyhow!(e))?
+                                .to_vec()
+                                .map_err(|e| anyhow!(e))?,
+                        )
+                        .map_err(|e| anyhow!(e))?,
+                    );
+                }
                 let verified =
-                    Transaction::from_generic_sig_data(data, Intent::default(), sig).verify()?;
+                    Transaction::from_generic_sig_data(data, Intent::default(), sigs).verify()?;
+
                 let response = context.execute_transaction(verified).await?;
                 SuiClientCommandResult::ExecuteSignedTx(response)
             }
@@ -1193,34 +1203,14 @@ impl WalletContext {
         &self,
         tx: VerifiedTransaction,
     ) -> anyhow::Result<SuiTransactionResponse> {
-        let tx_digest = *tx.digest();
-
         let client = self.get_client().await?;
-        let result = client
+        Ok(client
             .quorum_driver()
             .execute_transaction(
                 tx,
                 Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
             )
-            .await;
-        match result {
-            Ok(TransactionExecutionResult {
-                tx_digest: _,
-                tx_cert,
-                effects,
-                confirmed_local_execution: _,
-                timestamp_ms,
-                parsed_data,
-            }) => Ok(SuiTransactionResponse {
-                certificate: tx_cert.unwrap(), // check is done in execute_transaction, safe to unwrap
-                effects: effects.unwrap(), // check is done in execute_transaction, safe to unwrap
-                timestamp_ms,
-                parsed_data,
-            }),
-            Err(err) => Err(anyhow!(
-                "Failed to execute transaction {tx_digest:?} with error {err:?}"
-            )),
-        }
+            .await?)
     }
 }
 
@@ -1229,47 +1219,50 @@ impl Display for SuiClientCommandResult {
         let mut writer = String::new();
         match self {
             SuiClientCommandResult::Publish(response) => {
-                write!(
-                    writer,
-                    "{}",
-                    write_cert_and_effects(&response.certificate, &response.effects)?
-                )?;
-                if let Some(parsed_resp) = &response.parsed_data {
-                    writeln!(writer, "{}", parsed_resp)?;
-                }
+                write!(writer, "{}", write_transaction_response(response)?)?;
             }
-            SuiClientCommandResult::Object(object_read, bcs) => {
-                let object = if *bcs {
-                    match object_read.object() {
-                        Ok(v) => {
-                            let bcs_bytes = bcs::to_bytes(v).unwrap();
-                            format!("{:?}\nNumber of bytes: {}", bcs_bytes, bcs_bytes.len())
-                        }
-                        Err(err) => format!("{err}").red().to_string(),
-                    }
-                } else {
-                    unwrap_err_to_string(|| Ok(object_read.object()?))
-                };
+            SuiClientCommandResult::Object(object_read) => {
+                let object = unwrap_err_to_string(|| Ok(object_read.object()?));
                 writeln!(writer, "{}", object)?;
             }
-            SuiClientCommandResult::Call(cert, effects) => {
-                write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
+            SuiClientCommandResult::RawObject(raw_object_read) => {
+                let raw_object = match raw_object_read.object() {
+                    Ok(v) => match &v.data {
+                        SuiRawData::MoveObject(o) => {
+                            format!("{:?}\nNumber of bytes: {}", o.bcs_bytes, o.bcs_bytes.len())
+                        }
+                        SuiRawData::Package(p) => {
+                            let mut temp = String::new();
+                            let mut bcs_bytes = 0usize;
+                            for m in &p.module_map {
+                                temp.push_str(&format!("{:?}\n", m));
+                                bcs_bytes += m.1.len()
+                            }
+                            format!("{}Number of bytes: {}", temp, bcs_bytes)
+                        }
+                    },
+                    Err(err) => format!("{err}").red().to_string(),
+                };
+                writeln!(writer, "{}", raw_object)?;
             }
-            SuiClientCommandResult::Transfer(time_elapsed, cert, effects) => {
+            SuiClientCommandResult::Call(response) => {
+                write!(writer, "{}", write_transaction_response(response)?)?;
+            }
+            SuiClientCommandResult::Transfer(time_elapsed, response) => {
                 writeln!(writer, "Transfer confirmed after {} us", time_elapsed)?;
-                write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
+                write!(writer, "{}", write_transaction_response(response)?)?;
             }
-            SuiClientCommandResult::TransferSui(cert, effects) => {
-                write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
+            SuiClientCommandResult::TransferSui(response) => {
+                write!(writer, "{}", write_transaction_response(response)?)?;
             }
-            SuiClientCommandResult::Pay(cert, effects) => {
-                write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
+            SuiClientCommandResult::Pay(response) => {
+                write!(writer, "{}", write_transaction_response(response)?)?;
             }
-            SuiClientCommandResult::PaySui(cert, effects) => {
-                write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
+            SuiClientCommandResult::PaySui(response) => {
+                write!(writer, "{}", write_transaction_response(response)?)?;
             }
-            SuiClientCommandResult::PayAllSui(cert, effects) => {
-                write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
+            SuiClientCommandResult::PayAllSui(response) => {
+                write!(writer, "{}", write_transaction_response(response)?)?;
             }
             SuiClientCommandResult::Addresses(addresses, active_address) => {
                 writeln!(writer, "Showing {} results.", addresses.len())?;
@@ -1360,24 +1353,10 @@ impl Display for SuiClientCommandResult {
                 }
             }
             SuiClientCommandResult::SplitCoin(response) => {
-                write!(
-                    writer,
-                    "{}",
-                    write_cert_and_effects(&response.certificate, &response.effects)?
-                )?;
-                if let Some(parsed_resp) = &response.parsed_data {
-                    writeln!(writer, "{}", parsed_resp)?;
-                }
+                write!(writer, "{}", write_transaction_response(response)?)?;
             }
             SuiClientCommandResult::MergeCoin(response) => {
-                write!(
-                    writer,
-                    "{}",
-                    write_cert_and_effects(&response.certificate, &response.effects)?
-                )?;
-                if let Some(parsed_resp) = &response.parsed_data {
-                    writeln!(writer, "{}", parsed_resp)?;
-                }
+                write!(writer, "{}", write_transaction_response(response)?)?;
             }
             SuiClientCommandResult::Switch(response) => {
                 write!(writer, "{}", response)?;
@@ -1395,21 +1374,13 @@ impl Display for SuiClientCommandResult {
                 writeln!(writer, "{}", object)?;
             }
             SuiClientCommandResult::ExecuteSignedTx(response) => {
-                write!(
-                    writer,
-                    "{}",
-                    write_cert_and_effects(&response.certificate, &response.effects)?
-                )?;
-                if let Some(parsed_resp) = &response.parsed_data {
-                    writeln!(writer, "{}", parsed_resp)?;
-                }
+                write!(writer, "{}", write_transaction_response(response)?)?;
             }
             SuiClientCommandResult::DeserializeTx(response) => {
                 write!(writer, "{:#?}", response)?;
             }
-            SuiClientCommandResult::SerializeTransferSui(data_to_sign, data_to_execute) => {
-                writeln!(writer, "Intent message to sign: {}", data_to_sign)?;
-                writeln!(writer, "Raw transaction to execute: {}", data_to_execute)?;
+            SuiClientCommandResult::SerializeTransferSui(data) => {
+                writeln!(writer, "Raw tx_bytes to execute: {}", data)?;
             }
             SuiClientCommandResult::ActiveEnv(env) => {
                 write!(writer, "{}", env.as_deref().unwrap_or("None"))?;
@@ -1443,7 +1414,7 @@ pub async fn call_move(
     gas_budget: u64,
     args: Vec<SuiJsonValue>,
     context: &mut WalletContext,
-) -> Result<(SuiCertifiedTransaction, SuiTransactionEffects), anyhow::Error> {
+) -> Result<SuiTransactionResponse, anyhow::Error> {
     // Convert all numeric input to String, this will allow number input from the CLI without failing SuiJSON's checks.
     let args = args
         .into_iter()
@@ -1474,16 +1445,14 @@ pub async fn call_move(
         .config
         .keystore
         .sign_secure(&sender, &data, Intent::default())?;
-    let transaction = Transaction::from_data(data, Intent::default(), signature).verify()?;
+    let transaction = Transaction::from_data(data, Intent::default(), vec![signature]).verify()?;
 
     let response = context.execute_transaction(transaction).await?;
-    let cert = response.certificate;
-    let effects = response.effects;
-
+    let effects = &response.effects;
     if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
         return Err(anyhow!("Error calling module: {:#?}", effects.status));
     }
-    Ok((cert, effects))
+    Ok(response)
 }
 
 fn convert_number_to_string(value: Value) -> Value {
@@ -1506,28 +1475,25 @@ fn unwrap_or<'a>(val: &'a Option<String>, default: &'a str) -> &'a str {
     }
 }
 
-fn write_cert_and_effects(
-    cert: &SuiCertifiedTransaction,
-    effects: &SuiTransactionEffects,
-) -> Result<String, fmt::Error> {
+fn write_transaction_response(response: &SuiTransactionResponse) -> Result<String, fmt::Error> {
     let mut writer = String::new();
-    writeln!(writer, "{}", "----- Certificate ----".bold())?;
-    write!(writer, "{}", cert)?;
+    writeln!(writer, "{}", "----- Transaction Data ----".bold())?;
+    write!(writer, "{}", response.transaction)?;
     writeln!(writer, "{}", "----- Transaction Effects ----".bold())?;
-    write!(writer, "{}", effects)?;
+    write!(writer, "{}", response.effects)?;
     Ok(writer)
 }
 
 impl Debug for SuiClientCommandResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let s = unwrap_err_to_string(|| match self {
-            SuiClientCommandResult::Object(object_read, bcs) => {
+            SuiClientCommandResult::Object(object_read) => {
                 let object = object_read.object()?;
-                if *bcs {
-                    Ok(serde_json::to_string_pretty(&bcs::to_bytes(&object)?)?)
-                } else {
-                    Ok(serde_json::to_string_pretty(&object)?)
-                }
+                Ok(serde_json::to_string_pretty(&object)?)
+            }
+            SuiClientCommandResult::RawObject(raw_object_read) => {
+                let raw_object = raw_object_read.object()?;
+                Ok(serde_json::to_string_pretty(&raw_object)?)
             }
             _ => Ok(serde_json::to_string_pretty(self)?),
         });
@@ -1563,18 +1529,18 @@ impl SuiClientCommandResult {
 pub enum SuiClientCommandResult {
     Publish(SuiTransactionResponse),
     VerifySource,
-    Object(GetObjectDataResponse, bool),
-    Call(SuiCertifiedTransaction, SuiTransactionEffects),
+    Object(GetObjectDataResponse),
+    RawObject(GetRawObjectDataResponse),
+    Call(SuiTransactionResponse),
     Transfer(
         // Skipping serialisation for elapsed time.
         #[serde(skip)] u128,
-        SuiCertifiedTransaction,
-        SuiTransactionEffects,
+        SuiTransactionResponse,
     ),
-    TransferSui(SuiCertifiedTransaction, SuiTransactionEffects),
-    Pay(SuiCertifiedTransaction, SuiTransactionEffects),
-    PaySui(SuiCertifiedTransaction, SuiTransactionEffects),
-    PayAllSui(SuiCertifiedTransaction, SuiTransactionEffects),
+    TransferSui(SuiTransactionResponse),
+    Pay(SuiTransactionResponse),
+    PaySui(SuiTransactionResponse),
+    PayAllSui(SuiTransactionResponse),
     Addresses(Vec<SuiAddress>, Option<SuiAddress>),
     Objects(Vec<SuiObjectInfo>),
     DynamicFieldQuery(DynamicFieldPage),
@@ -1588,7 +1554,7 @@ pub enum SuiClientCommandResult {
     ActiveEnv(Option<String>),
     Envs(Vec<SuiEnv>, Option<String>),
     CreateExampleNFT(GetObjectDataResponse),
-    SerializeTransferSui(String, String),
+    SerializeTransferSui(String),
     ExecuteSignedTx(SuiTransactionResponse),
     DeserializeTx(TransactionData),
     NewEnv(SuiEnv),

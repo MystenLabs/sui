@@ -22,7 +22,6 @@ use sui_config::{
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GetObjectDataResponse, SuiData, SuiObject, SuiParsedData, SuiParsedObject,
-    SuiTransactionEffects,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
@@ -409,14 +408,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     // Get the created object
-    let created_obj: ObjectID = if let SuiClientCommandResult::Call(
-        _,
-        SuiTransactionEffects {
-            created: new_objs, ..
-        },
-    ) = resp
-    {
-        new_objs.first().unwrap().reference.object_id
+    let created_obj: ObjectID = if let SuiClientCommandResult::Call(resp) = resp {
+        resp.effects.created.first().unwrap().reference.object_id
     } else {
         panic!();
     };
@@ -578,16 +571,14 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     // Get the mutated objects
-    let (mut_obj1, mut_obj2) =
-        if let SuiClientCommandResult::Transfer(_, _, SuiTransactionEffects { mutated, .. }) = resp
-        {
-            (
-                mutated.get(0).unwrap().reference.object_id,
-                mutated.get(1).unwrap().reference.object_id,
-            )
-        } else {
-            panic!()
-        };
+    let (mut_obj1, mut_obj2) = if let SuiClientCommandResult::Transfer(_, response) = resp {
+        (
+            response.effects.mutated.get(0).unwrap().reference.object_id,
+            response.effects.mutated.get(1).unwrap().reference.object_id,
+        )
+    } else {
+        panic!()
+    };
 
     // Check the objects
     let resp = SuiClientCommands::Object {
@@ -596,15 +587,12 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    let mut_obj1 = if let SuiClientCommandResult::Object(
-        GetObjectDataResponse::Exists(object),
-        false,
-    ) = resp
-    {
-        object
-    } else {
-        panic!()
-    };
+    let mut_obj1 =
+        if let SuiClientCommandResult::Object(GetObjectDataResponse::Exists(object)) = resp {
+            object
+        } else {
+            panic!()
+        };
 
     let resp = SuiClientCommands::Object {
         id: mut_obj2,
@@ -612,15 +600,12 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    let mut_obj2 = if let SuiClientCommandResult::Object(
-        GetObjectDataResponse::Exists(object),
-        false,
-    ) = resp
-    {
-        object
-    } else {
-        panic!()
-    };
+    let mut_obj2 =
+        if let SuiClientCommandResult::Object(GetObjectDataResponse::Exists(object)) = resp {
+            object
+        } else {
+            panic!()
+        };
 
     let (gas, obj) = if mut_obj1.owner.get_owner_address().unwrap() == address {
         (mut_obj1, mut_obj2)
@@ -652,16 +637,14 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     // Get the mutated objects
-    let (_mut_obj1, _mut_obj2) =
-        if let SuiClientCommandResult::Transfer(_, _, SuiTransactionEffects { mutated, .. }) = resp
-        {
-            (
-                mutated.get(0).unwrap().reference.object_id,
-                mutated.get(1).unwrap().reference.object_id,
-            )
-        } else {
-            panic!()
-        };
+    let (_mut_obj1, _mut_obj2) = if let SuiClientCommandResult::Transfer(_, response) = resp {
+        (
+            response.effects.mutated.get(0).unwrap().reference.object_id,
+            response.effects.mutated.get(1).unwrap().reference.object_id,
+        )
+    } else {
+        panic!()
+    };
 
     Ok(())
 }
@@ -669,8 +652,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
 #[test]
 // Test for issue https://github.com/MystenLabs/sui/issues/1078
 fn test_bug_1078() {
-    let read =
-        SuiClientCommandResult::Object(GetObjectDataResponse::NotExists(ObjectID::random()), false);
+    let read = SuiClientCommandResult::Object(GetObjectDataResponse::NotExists(ObjectID::random()));
     let mut writer = String::new();
     // fmt ObjectRead should not fail.
     write!(writer, "{}", read).unwrap();
@@ -1141,10 +1123,10 @@ async fn test_execute_signed_tx() -> Result<(), anyhow::Error> {
     let mut txns = make_transactions_with_wallet_context(context, 1).await;
     let txn = txns.swap_remove(0);
 
-    let (tx_data, signature) = txn.to_tx_bytes_and_signature();
+    let (tx_data, signatures) = txn.to_tx_bytes_and_signatures();
     SuiClientCommands::ExecuteSignedTx {
         tx_bytes: tx_data.encoded(),
-        signature: signature.encoded(),
+        signatures: signatures.into_iter().map(|s| s.encoded()).collect(),
     }
     .execute(context)
     .await?;

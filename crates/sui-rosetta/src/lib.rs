@@ -24,7 +24,7 @@ mod block;
 mod construction;
 mod errors;
 mod network;
-mod operations;
+pub mod operations;
 mod state;
 pub mod types;
 

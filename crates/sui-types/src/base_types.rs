@@ -2,8 +2,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub use crate::committee::EpochId;
+use crate::crypto::{
+    AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SignatureScheme,
+    SuiPublicKey, SuiSignature,
+};
+pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
+use crate::epoch_data::EpochData;
+use crate::error::ExecutionErrorKind;
+use crate::error::SuiError;
+use crate::error::{ExecutionError, SuiResult};
+use crate::gas_coin::GasCoin;
+use crate::multisig::MultiSigPublicKey;
+use crate::object::{Object, Owner};
+use crate::signature::GenericSignature;
+use crate::sui_serde::HexAccountAddress;
+use crate::sui_serde::Readable;
 use anyhow::anyhow;
 use fastcrypto::encoding::decode_bytes_hex;
+use fastcrypto::encoding::{Encoding, Hex};
+use fastcrypto::hash::{HashFunction, Sha3_256};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
@@ -16,23 +34,6 @@ use std::cmp::max;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::str::FromStr;
-
-pub use crate::committee::EpochId;
-use crate::crypto::{
-    AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SignatureScheme,
-    SuiPublicKey,
-};
-pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
-use crate::epoch_data::EpochData;
-use crate::error::ExecutionError;
-use crate::error::ExecutionErrorKind;
-use crate::error::SuiError;
-use crate::gas_coin::GasCoin;
-use crate::multisig::MultiSigPublicKey;
-use crate::object::{Object, Owner};
-use crate::sui_serde::Readable;
-use fastcrypto::encoding::{Encoding, Hex};
-use fastcrypto::hash::{HashFunction, Sha3_256};
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
@@ -73,7 +74,7 @@ pub type AuthorityName = AuthorityPublicKeyBytes;
 #[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct ObjectID(
     #[schemars(with = "Hex")]
-    #[serde_as(as = "Readable<Hex, _>")]
+    #[serde_as(as = "Readable<HexAccountAddress, _>")]
     AccountAddress,
 );
 
@@ -283,6 +284,25 @@ impl From<MultiSigPublicKey> for SuiAddress {
     }
 }
 
+impl TryFrom<&GenericSignature> for SuiAddress {
+    type Error = SuiError;
+    fn try_from(sig: &GenericSignature) -> SuiResult<Self> {
+        Ok(match sig {
+            GenericSignature::Signature(sig) => {
+                let scheme = sig.scheme();
+                let pub_key_bytes = sig.public_key_bytes();
+                let pub_key = PublicKey::try_from_bytes(scheme, pub_key_bytes).map_err(|e| {
+                    SuiError::InvalidSignature {
+                        error: e.to_string(),
+                    }
+                })?;
+                SuiAddress::from(&pub_key)
+            }
+            GenericSignature::MultiSig(ms) => ms.multisig_pk.clone().into(),
+        })
+    }
+}
+
 impl TryFrom<&[u8]> for SuiAddress {
     type Error = SuiError;
 
@@ -402,13 +422,13 @@ impl TxContext {
         Self::new(
             &SuiAddress::random_for_testing_only(),
             &TransactionDigest::random(),
-            &EpochData::genesis(),
+            &EpochData::new_test(),
         )
     }
 
     // for testing
     pub fn with_sender_for_testing_only(sender: &SuiAddress) -> Self {
-        Self::new(sender, &TransactionDigest::random(), &EpochData::genesis())
+        Self::new(sender, &TransactionDigest::random(), &EpochData::new_test())
     }
 }
 

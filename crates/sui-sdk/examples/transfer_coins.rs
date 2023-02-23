@@ -42,7 +42,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let transaction_response = sui
         .quorum_driver()
         .execute_transaction(
-            Transaction::from_data(transfer_tx, Intent::default(), signature).verify()?,
+            Transaction::from_data(transfer_tx, Intent::default(), vec![signature]).verify()?,
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;

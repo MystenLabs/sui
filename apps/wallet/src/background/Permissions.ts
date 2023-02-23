@@ -22,7 +22,7 @@ import {
 } from '_payloads/permissions';
 
 import type { ContentScriptConnection } from './connections/ContentScriptConnection';
-import type { SuiAddress } from '@mysten/sui.js/src';
+import type { SuiAddress } from '@mysten/sui.js';
 import type {
     Permission,
     PermissionResponse,

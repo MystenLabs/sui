@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::{metrics::initialise_metrics, TrivialTransactionValidator};
-use arc_swap::ArcSwap;
 use bytes::Bytes;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use fastcrypto::{
@@ -77,7 +76,7 @@ async fn reject_invalid_clients_transactions() {
         name.clone(),
         myself.keypair(),
         worker_id,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache.clone(),
         parameters,
         NilTxValidator,
@@ -171,7 +170,7 @@ async fn handle_clients_transactions() {
         name.clone(),
         myself.keypair(),
         worker_id,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache.clone(),
         parameters,
         TrivialTransactionValidator::default(),
@@ -283,7 +282,7 @@ async fn get_network_peers_from_admin_server() {
         name_1.clone(),
         signer_1,
         authority_1.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache.clone(),
         primary_1_parameters.clone(),
         store.header_store.clone(),
@@ -328,7 +327,7 @@ async fn get_network_peers_from_admin_server() {
         name_1,
         worker_1_keypair.copy(),
         worker_id,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache.clone(),
         worker_1_parameters.clone(),
         TrivialTransactionValidator::default(),
@@ -405,7 +404,7 @@ async fn get_network_peers_from_admin_server() {
         name_2.clone(),
         signer_2,
         authority_2.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache.clone(),
         primary_2_parameters.clone(),
         store.header_store.clone(),
@@ -451,7 +450,7 @@ async fn get_network_peers_from_admin_server() {
         name_2,
         worker_2_keypair.copy(),
         worker_id,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache.clone(),
         worker_2_parameters.clone(),
         TrivialTransactionValidator::default(),

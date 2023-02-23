@@ -441,9 +441,9 @@ impl TestDBWriteBatch {
         Ok(())
     }
     /// Deletes a range of keys between `from` (inclusive) and `to` (non-inclusive)
-    pub fn delete_range<'a, K: Serialize, V>(
+    pub fn delete_range<K: Serialize, V>(
         &mut self,
-        db: &'a TestDB<K, V>,
+        db: &TestDB<K, V>,
         from: &K,
         to: &K,
     ) -> Result<(), TypedStoreError> {

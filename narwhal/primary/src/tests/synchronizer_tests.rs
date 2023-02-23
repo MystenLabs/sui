@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{common::create_db_stores, synchronizer::Synchronizer, NUM_SHUTDOWN_RECEIVERS};
+use crate::{
+    common::create_db_stores, metrics::PrimaryMetrics, synchronizer::Synchronizer,
+    NUM_SHUTDOWN_RECEIVERS,
+};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use fastcrypto::{hash::Hash, traits::KeyPair};
 use prometheus::Registry;
@@ -11,8 +14,432 @@ use std::{
     time::Duration,
 };
 use test_utils::{make_optimal_signed_certificates, CommitteeFixture};
-use tokio::sync::watch;
+use tokio::sync::{oneshot, watch};
 use types::{error::DagError, Certificate, PreSubscribedBroadcastSender};
+
+#[tokio::test]
+async fn accept_certificates() {
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let primary = fixture.authorities().last().unwrap();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
+    let name = primary.public_key();
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
+    let (tx_new_certificates, mut rx_new_certificates) = test_utils::test_channel!(3);
+    let (tx_parents, mut rx_parents) = test_utils::test_channel!(4);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
+
+    // Create test stores.
+    let (_, certificate_store, payload_store) = create_db_stores();
+
+    // Make a synchronizer.
+    let synchronizer = Arc::new(Synchronizer::new(
+        name.clone(),
+        fixture.committee(),
+        worker_cache.clone(),
+        /* gc_depth */ 50,
+        certificate_store.clone(),
+        payload_store.clone(),
+        tx_certificate_fetcher,
+        tx_new_certificates.clone(),
+        tx_parents.clone(),
+        rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
+        None,
+        metrics.clone(),
+    ));
+
+    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(network_key)
+        .start(anemo::Router::new())
+        .unwrap();
+    let _ = tx_synchronizer_network.send(network.clone());
+
+    // Send 3 certificates to the Synchronizer.
+    let certificates: Vec<_> = fixture
+        .headers()
+        .iter()
+        .take(3)
+        .map(|h| fixture.certificate(h))
+        .collect();
+    for cert in certificates.clone() {
+        synchronizer
+            .try_accept_certificate(cert, &network)
+            .await
+            .unwrap();
+    }
+
+    // Ensure the Synchronizer sends the parents of the certificates to the proposer.
+    //
+    // The first messages are the Synchronizer letting us know about the round of parent certificates
+    for _i in 0..3 {
+        let received = rx_parents.recv().await.unwrap();
+        assert_eq!(received, (vec![], 0, 0));
+    }
+    // the next message actually contains the parents
+    let received = rx_parents.recv().await.unwrap();
+    assert_eq!(received, (certificates.clone(), 1, 0));
+
+    // Ensure the Synchronizer sends the certificates to the consensus.
+    for x in certificates.clone() {
+        let received = rx_new_certificates.recv().await.unwrap();
+        assert_eq!(received, x);
+    }
+
+    // Ensure the certificates are stored.
+    for x in &certificates {
+        let stored = certificate_store.read(x.digest()).unwrap();
+        assert_eq!(stored, Some(x.clone()));
+    }
+
+    let mut m = HashMap::new();
+    m.insert("source", "other");
+    assert_eq!(
+        metrics
+            .certificates_processed
+            .get_metric_with(&m)
+            .unwrap()
+            .get(),
+        3
+    );
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn synchronizer_recover_basic() {
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let primary = fixture.authorities().last().unwrap();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
+    let name = primary.public_key();
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(3);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(4);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
+
+    // Create test stores.
+    let (_, certificate_store, payload_store) = create_db_stores();
+
+    // Make Synchronizer.
+    let synchronizer = Arc::new(Synchronizer::new(
+        name.clone(),
+        fixture.committee(),
+        worker_cache.clone(),
+        /* gc_depth */ 50,
+        certificate_store.clone(),
+        payload_store.clone(),
+        tx_certificate_fetcher,
+        tx_new_certificates,
+        tx_parents,
+        rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
+        None,
+        metrics.clone(),
+    ));
+
+    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(network_key)
+        .start(anemo::Router::new())
+        .unwrap();
+    let _ = tx_synchronizer_network.send(network.clone());
+
+    // Send 3 certificates to Synchronizer.
+    let certificates: Vec<_> = fixture
+        .headers()
+        .iter()
+        .take(3)
+        .map(|h| fixture.certificate(h))
+        .collect();
+    for cert in certificates.clone() {
+        synchronizer
+            .try_accept_certificate(cert, &network)
+            .await
+            .unwrap();
+    }
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    // Shutdown Synchronizer.
+    drop(synchronizer);
+
+    // Restart Synchronizer.
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(3);
+    let (tx_parents, mut rx_parents) = test_utils::test_channel!(4);
+    let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
+
+    let _synchronizer = Arc::new(Synchronizer::new(
+        name.clone(),
+        fixture.committee(),
+        worker_cache.clone(),
+        /* gc_depth */ 50,
+        certificate_store.clone(),
+        payload_store.clone(),
+        tx_certificate_fetcher,
+        tx_new_certificates,
+        tx_parents,
+        rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
+        None,
+        metrics.clone(),
+    ));
+    let _ = tx_synchronizer_network.send(network.clone());
+
+    // Ensure the Synchronizer sends the parent certificates to the proposer.
+
+    // the recovery flow sends message that contains the parents
+    let received = rx_parents.recv().await.unwrap();
+    assert_eq!(received.1, 1);
+    assert_eq!(received.2, 0);
+    assert_eq!(received.0.len(), certificates.len());
+    for c in &certificates {
+        assert!(received.0.contains(c));
+    }
+
+    // Ensure the certificates are stored.
+    for x in &certificates {
+        let stored = certificate_store.read(x.digest()).unwrap();
+        assert_eq!(stored, Some(x.clone()));
+    }
+
+    let mut m = HashMap::new();
+    m.insert("source", "other");
+    assert_eq!(
+        metrics
+            .certificates_processed
+            .get_metric_with(&m)
+            .unwrap()
+            .get(),
+        3
+    );
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn synchronizer_recover_partial_certs() {
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let primary = fixture.authorities().last().unwrap();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
+    let name = primary.public_key();
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(3);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(4);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
+
+    // Create test stores.
+    let (_, certificate_store, payload_store) = create_db_stores();
+
+    // Make a synchronizer.
+    let synchronizer = Arc::new(Synchronizer::new(
+        name.clone(),
+        fixture.committee(),
+        worker_cache.clone(),
+        /* gc_depth */ 50,
+        certificate_store.clone(),
+        payload_store.clone(),
+        tx_certificate_fetcher,
+        tx_new_certificates.clone(),
+        tx_parents.clone(),
+        rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
+        None,
+        metrics.clone(),
+    ));
+
+    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(network_key)
+        .start(anemo::Router::new())
+        .unwrap();
+    let _ = tx_synchronizer_network.send(network.clone());
+
+    // Send 1 certificate.
+    let certificates: Vec<Certificate> = fixture
+        .headers()
+        .iter()
+        .take(3)
+        .map(|h| fixture.certificate(h))
+        .collect();
+    let last_cert = certificates.clone().into_iter().last().unwrap();
+    synchronizer
+        .try_accept_certificate(last_cert, &network)
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    // Shutdown Synchronizer.
+    drop(synchronizer);
+
+    // Restart Synchronizer.
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(3);
+    let (tx_parents, mut rx_parents) = test_utils::test_channel!(4);
+    let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
+
+    let synchronizer = Arc::new(Synchronizer::new(
+        name.clone(),
+        fixture.committee(),
+        worker_cache.clone(),
+        /* gc_depth */ 50,
+        certificate_store.clone(),
+        payload_store.clone(),
+        tx_certificate_fetcher,
+        tx_new_certificates,
+        tx_parents,
+        rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
+        None,
+        metrics.clone(),
+    ));
+    let _ = tx_synchronizer_network.send(network.clone());
+
+    // Send remaining 2f certs.
+    for cert in certificates.clone().into_iter().take(2) {
+        synchronizer
+            .try_accept_certificate(cert, &network)
+            .await
+            .unwrap();
+    }
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    for _ in 0..2 {
+        let received = rx_parents.recv().await.unwrap();
+        assert_eq!(received, (vec![], 0, 0));
+    }
+
+    // the recovery flow sends message that contains the parents
+    let received = rx_parents.recv().await.unwrap();
+    assert_eq!(received.1, 1);
+    assert_eq!(received.2, 0);
+    assert_eq!(received.0.len(), certificates.len());
+    for c in &certificates {
+        assert!(received.0.contains(c));
+    }
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn synchronizer_recover_previous_round() {
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let primary = fixture.authorities().last().unwrap();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
+    let name = primary.public_key();
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(6);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(10);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
+
+    // Create test stores.
+    let (_, certificate_store, payload_store) = create_db_stores();
+
+    // Make a synchronizer.
+    let synchronizer = Arc::new(Synchronizer::new(
+        name.clone(),
+        fixture.committee(),
+        worker_cache.clone(),
+        /* gc_depth */ 50,
+        certificate_store.clone(),
+        payload_store.clone(),
+        tx_certificate_fetcher,
+        tx_new_certificates.clone(),
+        tx_parents.clone(),
+        rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
+        None,
+        metrics.clone(),
+    ));
+
+    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(network_key)
+        .start(anemo::Router::new())
+        .unwrap();
+    let _ = tx_synchronizer_network.send(network.clone());
+
+    // Send 3 certificates from round 1, and 2 certificates from round 2 to Synchronizer.
+    let genesis_certs = Certificate::genesis(&committee);
+    let genesis = genesis_certs
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+    let keys = fixture
+        .authorities()
+        .map(|a| a.keypair().copy())
+        .take(3)
+        .collect::<Vec<_>>();
+    let (all_certificates, _next_parents) =
+        make_optimal_signed_certificates(1..=2, &genesis, &committee, &keys);
+    let all_certificates: Vec<_> = all_certificates.into_iter().collect();
+    let round_1_certificates = all_certificates[0..3].to_vec();
+    let round_2_certificates = all_certificates[3..5].to_vec();
+    for cert in round_1_certificates
+        .iter()
+        .chain(round_2_certificates.iter())
+    {
+        synchronizer
+            .try_accept_certificate(cert.clone(), &network)
+            .await
+            .unwrap();
+    }
+
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    // Shutdown Synchronizer.
+    drop(synchronizer);
+
+    // Restart Synchronizer.
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(6);
+    let (tx_parents, mut rx_parents) = test_utils::test_channel!(10);
+    let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
+
+    let _synchronizer = Arc::new(Synchronizer::new(
+        name.clone(),
+        fixture.committee(),
+        worker_cache.clone(),
+        /* gc_depth */ 50,
+        certificate_store.clone(),
+        payload_store.clone(),
+        tx_certificate_fetcher,
+        tx_new_certificates,
+        tx_parents,
+        rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
+        None,
+        metrics.clone(),
+    ));
+    let _ = tx_synchronizer_network.send(network.clone());
+
+    // the recovery flow sends message that contains the parents for the last round for which we
+    // have a quorum of certificates, in this case is round 1.
+    let received = rx_parents.recv().await.unwrap();
+    assert_eq!(received.0.len(), round_1_certificates.len());
+    assert_eq!(received.1, 1);
+    assert_eq!(received.2, 0);
+    for c in &round_1_certificates {
+        assert!(received.0.contains(c));
+    }
+}
 
 #[tokio::test]
 async fn deliver_certificate_using_dag() {
@@ -20,11 +447,15 @@ async fn deliver_certificate_using_dag() {
     let name = fixture.authorities().next().unwrap().public_key();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let (_, certificates_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus, rx_consensus) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -40,13 +471,18 @@ async fn deliver_certificate_using_dag() {
 
     let synchronizer = Synchronizer::new(
         name,
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
+        /* gc_depth */ 50,
         certificates_store,
         payload_store,
         tx_certificate_fetcher,
+        tx_new_certificates,
+        tx_parents,
         rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
         Some(dag.clone()),
+        metrics.clone(),
     );
 
     // create some certificates in a complete DAG form
@@ -83,20 +519,29 @@ async fn deliver_certificate_using_store() {
     let name = fixture.authorities().next().unwrap().public_key();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let (_, certificates_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Synchronizer::new(
         name,
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
+        /* gc_depth */ 50,
         certificates_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
+        tx_new_certificates,
+        tx_parents,
         rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
         None,
+        metrics.clone(),
     );
 
     // create some certificates in a complete DAG form
@@ -133,20 +578,29 @@ async fn deliver_certificate_not_found_parents() {
     let name = fixture.authorities().next().unwrap().public_key();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let (_, certificates_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, mut rx_certificate_fetcher) = test_utils::test_channel!(1);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Synchronizer::new(
         name,
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
+        /* gc_depth */ 50,
         certificates_store,
         payload_store,
         tx_certificate_fetcher,
+        tx_new_certificates,
+        tx_parents,
         rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
         None,
+        metrics.clone(),
     );
 
     // create some certificates in a complete DAG form
@@ -186,6 +640,7 @@ async fn sync_batches_drops_old() {
         .committee_size(NonZeroUsize::new(4).unwrap())
         .build();
     let worker_cache = fixture.shared_worker_cache();
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
     let author = fixture.authorities().nth(2).unwrap();
@@ -193,17 +648,25 @@ async fn sync_batches_drops_old() {
 
     let (_header_store, certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
+        /* gc_depth */ 50,
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
+        tx_new_certificates,
+        tx_parents,
         rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
         None,
+        metrics.clone(),
     ));
 
     let mut certificates = HashMap::new();

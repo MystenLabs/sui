@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::authority_store_pruner::AuthorityStorePruner;
+use super::authority_notify_read::NotifyRead;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::checkpoints::checkpoint_executor::CheckpointExecutionMessage;
+use either::Either;
+use move_core_types::resolver::ModuleResolver;
 use once_cell::sync::OnceCell;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -12,16 +13,16 @@ use std::cmp::Ordering;
 use std::iter;
 use std::path::Path;
 use std::sync::Arc;
-use sui_config::node::AuthorityStorePruningConfig;
 use sui_storage::mutex_table::{LockGuard, MutexTable};
+use sui_types::accumulator::Accumulator;
 use sui_types::message_envelope::Message;
 use sui_types::object::Owner;
 use sui_types::object::PACKAGE_VERSION;
-use sui_types::storage::{ChildObjectResolver, ObjectKey};
+use sui_types::storage::{BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectKey};
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
-use tokio::sync::{mpsc, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tracing::{debug, info, trace};
-use typed_store::rocks::DBBatch;
+use typed_store::rocks::{DBBatch, TypedStoreError};
 use typed_store::traits::Map;
 
 const NUM_SHARDS: usize = 4096;
@@ -41,7 +42,8 @@ pub struct AuthorityStore {
 
     // Implementation detail to support notify_read_effects().
     pub(crate) executed_effects_notify_read: NotifyRead<TransactionDigest, TransactionEffects>,
-    _store_pruner: AuthorityStorePruner,
+
+    pub(crate) root_state_notify_read: NotifyRead<EpochId, (CheckpointSequenceNumber, Accumulator)>,
     /// This lock denotes current 'execution epoch'.
     /// Execution acquires read lock, checks certificate epoch and holds it until all writes are complete.
     /// Reconfiguration acquires write lock, changes the epoch and revert all transactions
@@ -60,8 +62,6 @@ impl AuthorityStore {
         db_options: Option<Options>,
         genesis: &Genesis,
         committee_store: &Arc<CommitteeStore>,
-        pruning_config: &AuthorityStorePruningConfig,
-        checkpoint_stream: mpsc::Receiver<CheckpointExecutionMessage>,
     ) -> SuiResult<Self> {
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
         if perpetual_tables.database_is_empty()? {
@@ -71,14 +71,7 @@ impl AuthorityStore {
         let committee = committee_store
             .get_committee(&cur_epoch)?
             .expect("Committee of the current epoch must exist");
-        Self::open_inner(
-            genesis,
-            perpetual_tables,
-            committee,
-            pruning_config,
-            checkpoint_stream,
-        )
-        .await
+        Self::open_inner(genesis, perpetual_tables, committee).await
     }
 
     pub async fn open_with_committee_for_testing(
@@ -86,39 +79,27 @@ impl AuthorityStore {
         db_options: Option<Options>,
         committee: &Committee,
         genesis: &Genesis,
-        pruning_config: &AuthorityStorePruningConfig,
     ) -> SuiResult<Self> {
         // TODO: Since we always start at genesis, the committee should be technically the same
         // as the genesis committee.
         assert_eq!(committee.epoch, 0);
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
-        Self::open_inner(
-            genesis,
-            perpetual_tables,
-            committee.clone(),
-            pruning_config,
-            mpsc::channel(1).1,
-        )
-        .await
+        Self::open_inner(genesis, perpetual_tables, committee.clone()).await
     }
 
     async fn open_inner(
         genesis: &Genesis,
         perpetual_tables: Arc<AuthorityPerpetualTables>,
         committee: Committee,
-        pruning_config: &AuthorityStorePruningConfig,
-        checkpoint_stream: mpsc::Receiver<CheckpointExecutionMessage>,
     ) -> SuiResult<Self> {
         let epoch = committee.epoch;
-
-        let _store_pruner =
-            AuthorityStorePruner::new(perpetual_tables.clone(), pruning_config, checkpoint_stream);
 
         let store = Self {
             mutex_table: MutexTable::new(NUM_SHARDS, SHARD_SIZE),
             perpetual_tables,
-            _store_pruner,
             executed_effects_notify_read: NotifyRead::new(),
+            root_state_notify_read:
+                NotifyRead::<EpochId, (CheckpointSequenceNumber, Accumulator)>::new(),
             execution_lock: RwLock::new(epoch),
         };
         // Only initialize an empty database.
@@ -140,8 +121,11 @@ impl AuthorityStore {
 
             store
                 .perpetual_tables
-                .certificates
-                .insert(transaction.digest(), transaction.serializable_ref())
+                .transactions
+                .insert(
+                    transaction.digest(),
+                    transaction.clone().into_unsigned().serializable_ref(),
+                )
                 .unwrap();
 
             store
@@ -219,7 +203,27 @@ impl AuthorityStore {
             .contains_key(digest)?)
     }
 
-    pub fn insert_executed_transactions(
+    /// Returns future containing the state hash for the given epoch
+    /// once available
+    pub async fn notify_read_root_state_hash(
+        &self,
+        epoch: EpochId,
+    ) -> SuiResult<(CheckpointSequenceNumber, Accumulator)> {
+        // We need to register waiters _before_ reading from the database to avoid race conditions
+        let registration = self.root_state_notify_read.register_one(&epoch);
+        let hash = self.perpetual_tables.root_state_hash_by_epoch.get(&epoch)?;
+
+        let result = match hash {
+            // Note that Some() clause also drops registration that is already fulfilled
+            Some(ready) => Either::Left(futures::future::ready(ready)),
+            None => Either::Right(registration),
+        }
+        .await;
+
+        Ok(result)
+    }
+
+    pub fn insert_finalized_transactions(
         &self,
         digests: &[TransactionDigest],
         epoch: EpochId,
@@ -248,15 +252,14 @@ impl AuthorityStore {
             .contains_key(digest)?)
     }
 
-    pub fn transaction_executed_in_epoch(
+    pub fn get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
-    ) -> SuiResult<Option<EpochId>> {
+    ) -> SuiResult<Option<(EpochId, CheckpointSequenceNumber)>> {
         Ok(self
             .perpetual_tables
             .executed_transactions_to_checkpoint
-            .get(digest)?
-            .map(|(epoch, _)| epoch))
+            .get(digest)?)
     }
 
     /// Returns true if there are no objects in the database
@@ -354,23 +357,23 @@ impl AuthorityStore {
                             epoch_store.get_shared_locks(digest)?.into_iter().collect(),
                         )
                     })?;
-                    match shared_locks.get(id) {
-                        Some(version) => {
-                            if !self.object_version_exists(id, *version)? {
-                                // When this happens, other transactions that use smaller versions of
-                                // this shared object haven't finished execution.
-                                missing.push(ObjectKey(*id, *version));
-                            }
-                        }
-                        None => {
-                            // Abort the function because the lock should have been set.
-                            return Err(SuiError::SharedObjectLockNotSetError);
-                        }
-                    };
+                    // If we can't find the locked version, it means
+                    // 1. either we have a bug that skips shared object version assignment
+                    // 2. or we have some DB corruption
+                    let version = shared_locks.get(id).unwrap_or_else(|| {
+                        panic!(
+                        "Shared object locks should have been set. tx_digset: {:?}, obj id: {:?}",
+                        digest, id
+                    )
+                    });
+                    if !self.object_version_exists(id, *version)? {
+                        // When this happens, other transactions that use smaller versions of
+                        // this shared object haven't finished execution.
+                        missing.push(ObjectKey(*id, *version));
+                    }
                 }
                 InputObjectKind::MovePackage(id) => {
                     if !self.object_version_exists(id, PACKAGE_VERSION)? {
-                        // The cert cannot have been formed if immutable inputs were missing.
                         missing.push(ObjectKey(*id, PACKAGE_VERSION));
                     }
                 }
@@ -385,20 +388,20 @@ impl AuthorityStore {
         Ok(missing)
     }
 
-    /// Attempts to acquire execution lock for certificate
-    /// Returns the lock if certificate is matching current executed epoch
+    /// Attempts to acquire execution lock for an executable transaction.
+    /// Returns the lock if the transaction is matching current executed epoch
     /// Returns None otherwise
-    pub async fn execution_lock_for_certificate(
+    pub async fn execution_lock_for_executable_transaction(
         &self,
-        certificate: &CertifiedTransaction,
+        transaction: &VerifiedExecutableTransaction,
     ) -> SuiResult<ExecutionLockReadGuard> {
         let lock = self.execution_lock.read().await;
-        if *lock == certificate.epoch() {
+        if *lock == transaction.auth_sig().epoch() {
             Ok(lock)
         } else {
             Err(SuiError::WrongEpoch {
                 expected_epoch: *lock,
-                actual_epoch: certificate.epoch(),
+                actual_epoch: transaction.auth_sig().epoch(),
             })
         }
     }
@@ -409,6 +412,9 @@ impl AuthorityStore {
 
     /// When making changes, please see if get_missing_input_objects() above needs
     /// similar changes as well.
+    ///
+    /// Before this function is invoked, TransactionManager must ensure all depended
+    /// objects are present. Thus any missing object will panic.
     pub fn check_sequenced_input_objects(
         &self,
         digest: &TransactionDigest,
@@ -418,7 +424,6 @@ impl AuthorityStore {
         let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
 
         let mut result = Vec::new();
-        let mut errors = Vec::new();
         for kind in objects {
             let obj = match kind {
                 InputObjectKind::SharedMoveObject { id, .. } => {
@@ -427,54 +432,31 @@ impl AuthorityStore {
                             epoch_store.get_shared_locks(digest)?.into_iter().collect(),
                         )
                     })?;
-                    match shared_locks.get(id) {
-                        Some(version) => {
-                            if let Some(obj) = self.get_object_by_key(id, *version)? {
-                                result.push(obj);
-                            } else {
-                                // When this happens, other transactions that use smaller versions of
-                                // this shared object haven't finished execution.
-                                errors.push(SuiError::SharedObjectPriorVersionsPendingExecution {
-                                    object_id: *id,
-                                    version_not_ready: *version,
-                                });
-                            }
-                            continue;
-                        }
-                        None => {
-                            errors.push(SuiError::SharedObjectLockNotSetError);
-                            continue;
-                        }
-                    }
+                    // If we can't find the locked version, it means
+                    // 1. either we have a bug that skips shared object version assignment
+                    // 2. or we have some DB corruption
+                    let version = shared_locks.get(id).unwrap_or_else(|| {
+                        panic!(
+                        "Shared object locks should have been set. tx_digset: {:?}, obj id: {:?}",
+                        digest, id
+                    )
+                    });
+                    self.get_object_by_key(id, *version)?.unwrap_or_else(|| {
+                        panic!("All dependencies of tx {:?} should have been executed now, but Shared Object id: {}, version: {} is absent", digest, *id, *version);
+                    })
                 }
-                InputObjectKind::MovePackage(id) => self.get_object(id)?,
+                InputObjectKind::MovePackage(id) => self.get_object(id)?.unwrap_or_else(|| {
+                    panic!("All dependencies of tx {:?} should have been executed now, but Move Package id: {} is absent", digest, id);
+                }),
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
-                    self.get_object_by_key(&objref.0, objref.1)?
+                    self.get_object_by_key(&objref.0, objref.1)?.unwrap_or_else(|| {
+                        panic!("All dependencies of tx {:?} should have been executed now, but Immutable or Owned Object id: {}, version: {} is absent", digest, objref.0, objref.1);
+                    })
                 }
             };
-            // SharedMoveObject should not reach here
-            match obj {
-                Some(obj) => result.push(obj),
-                None => errors.push(kind.object_not_found_error()),
-            }
+            result.push(obj);
         }
-        if !errors.is_empty() {
-            Err(SuiError::TransactionInputObjectsErrors { errors })
-        } else {
-            Ok(result)
-        }
-    }
-
-    /// Read a certificate and return an option with None if it does not exist.
-    pub fn read_certificate(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Result<Option<VerifiedCertificate>, SuiError> {
-        self.perpetual_tables
-            .certificates
-            .get(digest)
-            .map(|r| r.map(|c| c.into()))
-            .map_err(|e| e.into())
+        Ok(result)
     }
 
     /// Read the transactionDigest that is the parent of an object reference
@@ -609,18 +591,18 @@ impl AuthorityStore {
     pub async fn update_state(
         &self,
         inner_temporary_store: InnerTemporaryStore,
-        certificate: &VerifiedCertificate,
+        transaction: &VerifiedTransaction,
         effects: &TransactionEffects,
     ) -> SuiResult {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
-        let mut write_batch = self.perpetual_tables.certificates.batch();
+        let mut write_batch = self.perpetual_tables.transactions.batch();
 
         // Store the certificate indexed by transaction digest
-        let transaction_digest: &TransactionDigest = certificate.digest();
+        let transaction_digest = transaction.digest();
         write_batch = write_batch.insert_batch(
-            &self.perpetual_tables.certificates,
-            iter::once((transaction_digest, certificate.serializable_ref())),
+            &self.perpetual_tables.transactions,
+            iter::once((transaction_digest, transaction.serializable_ref())),
         )?;
 
         // Add batched writes for objects and locks.
@@ -1012,9 +994,12 @@ impl AuthorityStore {
             return Ok(())
         };
 
-        let mut write_batch = self.perpetual_tables.certificates.batch();
+        // We should never be reverting shared object transactions.
+        assert!(effects.shared_objects.is_empty());
+
+        let mut write_batch = self.perpetual_tables.transactions.batch();
         write_batch = write_batch
-            .delete_batch(&self.perpetual_tables.certificates, iter::once(tx_digest))?
+            .delete_batch(&self.perpetual_tables.transactions, iter::once(tx_digest))?
             .delete_batch(&self.perpetual_tables.effects, iter::once(effects.digest()))?
             .delete_batch(
                 &self.perpetual_tables.executed_effects,
@@ -1028,6 +1013,7 @@ impl AuthorityStore {
             .chain(effects.unwrapped.iter())
             .map(|(r, _)| r)
             .chain(effects.deleted.iter())
+            .chain(effects.unwrapped_then_deleted.iter())
             .chain(effects.wrapped.iter());
         write_batch = write_batch.delete_batch(&self.perpetual_tables.parent_sync, all_new_refs)?;
 
@@ -1123,25 +1109,45 @@ impl AuthorityStore {
         }
     }
 
-    pub fn get_certified_transaction(
+    pub fn insert_transaction_and_effects(
         &self,
-        transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<VerifiedCertificate>> {
-        let transaction = self.perpetual_tables.certificates.get(transaction_digest)?;
-        Ok(transaction.map(|t| t.into()))
+        transaction: &VerifiedTransaction,
+        transaction_effects: &TransactionEffects,
+    ) -> Result<(), TypedStoreError> {
+        let mut write_batch = self.perpetual_tables.transactions.batch();
+        write_batch = write_batch
+            .insert_batch(
+                &self.perpetual_tables.transactions,
+                [(transaction.digest(), transaction.serializable_ref())],
+            )?
+            .insert_batch(
+                &self.perpetual_tables.effects,
+                [(transaction_effects.digest(), transaction_effects)],
+            )?;
+
+        write_batch.write()?;
+        Ok(())
     }
 
-    pub fn multi_get_certified_transaction(
+    pub fn multi_get_transactions(
         &self,
-        transaction_digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<VerifiedCertificate>>> {
+        tx_digests: &[TransactionDigest],
+    ) -> Result<Vec<Option<VerifiedTransaction>>, SuiError> {
         Ok(self
             .perpetual_tables
-            .certificates
-            .multi_get(transaction_digests)?
-            .into_iter()
-            .map(|o| o.map(|c| c.into()))
-            .collect())
+            .transactions
+            .multi_get(tx_digests)
+            .map(|v| v.into_iter().map(|v| v.map(|v| v.into())).collect())?)
+    }
+
+    pub fn get_transaction(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Result<Option<VerifiedTransaction>, TypedStoreError> {
+        self.perpetual_tables
+            .transactions
+            .get(tx_digest)
+            .map(|v| v.map(|v| v.into()))
     }
 
     pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {

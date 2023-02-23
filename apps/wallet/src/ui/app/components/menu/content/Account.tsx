@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Copy16 } from '@mysten/icons';
+import { formatAddress } from '@mysten/sui.js';
 
-import { useMiddleEllipsis } from '_src/ui/app/hooks';
 import { useCopyToClipboard } from '_src/ui/app/hooks/useCopyToClipboard';
 import { Heading } from '_src/ui/app/shared/heading';
 
@@ -12,7 +12,6 @@ export type AccountProps = {
 };
 
 export function Account({ address }: AccountProps) {
-    const addressShort = useMiddleEllipsis(address);
     const copyCallback = useCopyToClipboard(address, {
         copySuccessMessage: 'Address copied',
     });
@@ -26,7 +25,7 @@ export function Account({ address }: AccountProps) {
                     color="steel-dark"
                     leading="none"
                 >
-                    {addressShort}
+                    {formatAddress(address)}
                 </Heading>
             </div>
             <Copy16

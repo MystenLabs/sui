@@ -4,6 +4,7 @@
 import {
   ExecuteTransactionRequestType,
   SignableTransaction,
+  SignedTransaction,
   SuiAddress,
   SuiTransactionResponse,
 } from "@mysten/sui.js";
@@ -52,6 +53,7 @@ export interface WalletKitCore {
   subscribe(handler: SubscribeHandler): Unsubscribe;
   connect(walletName: string): Promise<void>;
   disconnect(): Promise<void>;
+  signTransaction(transaction: SignableTransaction): Promise<SignedTransaction>;
   signAndExecuteTransaction(
     transaction: SignableTransaction,
     options?: { requestType?: ExecuteTransactionRequestType }
@@ -186,12 +188,24 @@ export function createWalletKitCore({
         if (walletEventUnsubscribe) {
           walletEventUnsubscribe();
         }
-        walletEventUnsubscribe = currentWallet.on("change", ({ connected }) => {
-          // when undefined connected hasn't changed
-          if (connected === false) {
-            disconnected();
+        walletEventUnsubscribe = currentWallet.on(
+          "change",
+          ({ connected, accounts }) => {
+            // when undefined connected hasn't changed
+            if (connected === false) {
+              disconnected();
+            } else if (accounts) {
+              setState({
+                accounts,
+                currentAccount:
+                  internalState.currentAccount &&
+                  !accounts.includes(internalState.currentAccount)
+                    ? accounts[0]
+                    : internalState.currentAccount,
+              });
+            }
           }
-        });
+        );
         try {
           setState({ status: WalletKitCoreConnectionStatus.CONNECTING });
           await currentWallet.connect();
@@ -224,6 +238,16 @@ export function createWalletKitCore({
       } catch {}
       await internalState.currentWallet.disconnect();
       disconnected();
+    },
+
+    signTransaction(transaction) {
+      if (!internalState.currentWallet) {
+        throw new Error(
+          "No wallet is currently connected, cannot call `signAndExecuteTransaction`."
+        );
+      }
+
+      return internalState.currentWallet.signTransaction(transaction);
     },
 
     signAndExecuteTransaction(transaction, options) {

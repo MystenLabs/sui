@@ -20,7 +20,11 @@ use rand::rngs::OsRng;
 use std::{
     num::NonZeroUsize,
     path::{Path, PathBuf},
+    sync::Arc,
 };
+use sui_protocol_config::SupportedProtocolVersions;
+use sui_types::base_types::AuthorityName;
+use sui_types::committee::ProtocolVersion;
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
     AuthorityPublicKeyBytes, KeypairTraits, NetworkKeyPair, NetworkPublicKey, PublicKey,
@@ -38,6 +42,26 @@ enum ValidatorIpSelection {
     Simulator,
 }
 
+pub type SupportedProtocolVersionsCallback = Arc<
+    dyn Fn(
+            usize,                 /* validator idx */
+            Option<AuthorityName>, /* None for fullnode */
+        ) -> SupportedProtocolVersions
+        + Send
+        + Sync
+        + 'static,
+>;
+
+#[derive(Clone)]
+pub enum ProtocolVersionsConfig {
+    // use SYSTEM_DEFAULT
+    Default,
+    // Use one range for all validators.
+    Global(SupportedProtocolVersions),
+    // A closure that returns the versions for each validator.
+    PerValidator(SupportedProtocolVersionsCallback),
+}
+
 pub struct ConfigBuilder<R = OsRng> {
     rng: Option<R>,
     config_directory: PathBuf,
@@ -48,6 +72,11 @@ pub struct ConfigBuilder<R = OsRng> {
     with_swarm: bool,
     validator_ip_sel: ValidatorIpSelection,
     epoch_duration_ms: u64,
+    // the initial protocol version
+    pub protocol_version: ProtocolVersion,
+
+    // the versions that are supported by each validator
+    supported_protocol_versions_config: ProtocolVersionsConfig,
 }
 
 impl ConfigBuilder {
@@ -68,6 +97,8 @@ impl ConfigBuilder {
                 ValidatorIpSelection::Localhost
             },
             epoch_duration_ms: default_epoch_duration_ms(),
+            protocol_version: ProtocolVersion::MAX,
+            supported_protocol_versions_config: ProtocolVersionsConfig::Default,
         }
     }
 }
@@ -113,6 +144,29 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_protocol_version(mut self, protocol_version: ProtocolVersion) -> Self {
+        self.protocol_version = protocol_version;
+        self
+    }
+
+    pub fn with_supported_protocol_versions(mut self, c: SupportedProtocolVersions) -> Self {
+        self.supported_protocol_versions_config = ProtocolVersionsConfig::Global(c);
+        self
+    }
+
+    pub fn with_supported_protocol_version_callback(
+        mut self,
+        func: SupportedProtocolVersionsCallback,
+    ) -> Self {
+        self.supported_protocol_versions_config = ProtocolVersionsConfig::PerValidator(func);
+        self
+    }
+
+    pub fn with_supported_protocol_versions_config(mut self, c: ProtocolVersionsConfig) -> Self {
+        self.supported_protocol_versions_config = c;
+        self
+    }
+
     pub fn rng<N: rand::RngCore + rand::CryptoRng>(self, rng: N) -> ConfigBuilder<N> {
         ConfigBuilder {
             rng: Some(rng),
@@ -124,6 +178,8 @@ impl<R> ConfigBuilder<R> {
             with_swarm: self.with_swarm,
             validator_ip_sel: self.validator_ip_sel,
             epoch_duration_ms: self.epoch_duration_ms,
+            protocol_version: self.protocol_version,
+            supported_protocol_versions_config: self.supported_protocol_versions_config,
         }
     }
 }
@@ -273,9 +329,12 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             })
             .collect::<Vec<_>>();
 
-        let initial_accounts_config = self
+        let mut initial_accounts_config = self
             .initial_accounts_config
             .unwrap_or_else(GenesisConfig::for_local_testing);
+
+        initial_accounts_config.parameters.protocol_version = self.protocol_version;
+
         let (account_keys, objects) = initial_accounts_config.generate_accounts(&mut rng).unwrap();
 
         let genesis = {
@@ -297,7 +356,8 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
 
         let validator_configs = validators
             .into_iter()
-            .map(|validator| {
+            .enumerate()
+            .map(|(idx, validator)| {
                 let public_key: AuthorityPublicKeyBytes =
                     validator.genesis_info.key_pair.public().into();
                 let mut key_path = Hex::encode(public_key);
@@ -344,6 +404,12 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     ..Default::default()
                 };
 
+                let supported_protocol_versions = match &self.supported_protocol_versions_config {
+                    ProtocolVersionsConfig::Default => SupportedProtocolVersions::SYSTEM_DEFAULT,
+                    ProtocolVersionsConfig::Global(v) => *v,
+                    ProtocolVersionsConfig::PerValidator(func) => func(idx, Some(public_key)),
+                };
+
                 NodeConfig {
                     protocol_key_pair: AuthorityKeyPairWithPath::new(
                         validator.genesis_info.key_pair,
@@ -376,6 +442,8 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     end_of_epoch_broadcast_channel_capacity:
                         default_end_of_epoch_broadcast_channel_capacity(),
                     checkpoint_executor_config: Default::default(),
+                    metrics: None,
+                    supported_protocol_versions: Some(supported_protocol_versions),
                 }
             })
             .collect();

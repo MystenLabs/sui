@@ -42,7 +42,7 @@ describe('Transaction Serialization and deserialization', () => {
     toolbox = await setup();
     localSerializer = new LocalTxnDataSerializer(toolbox.provider);
     rpcSerializer = new RpcTxnDataSerializer(
-      toolbox.provider.endpoints.fullNode,
+      toolbox.provider.connection.fullnode,
     );
     const signer = new RawSigner(toolbox.keypair, toolbox.provider);
     const packagePath = __dirname + '/./data/serializer';
@@ -104,6 +104,7 @@ describe('Transaction Serialization and deserialization', () => {
         'An NFT created by the wallet Command Line Tool',
         'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
       ],
+      gasOwner: toolbox.address(),
       gasBudget: DEFAULT_GAS_BUDGET,
       gasPayment: coins[0].objectId,
     };
@@ -147,6 +148,7 @@ describe('Transaction Serialization and deserialization', () => {
         coins[2].objectId,
         validator_address,
       ],
+      gasOwner: toolbox.address(),
       gasBudget: DEFAULT_GAS_BUDGET,
       gasPayment: coins[3].objectId,
     };
@@ -221,10 +223,14 @@ describe('Transaction Serialization and deserialization', () => {
 
     const tx_data = {
       sender: DEFAULT_RECIPIENT_2,
-      gasBudget: gasBudget,
-      gasPrice: 100,
       kind: { Single: paySuiTx } as TransactionKind,
-      gasPayment: getObjectReference(coins[1]),
+      gasData: {
+        owner: DEFAULT_RECIPIENT_2,
+        budget: gasBudget,
+        price: 100,
+        payment: getObjectReference(coins[1]),
+      },
+      expiration: { None: null },
     } as TransactionData;
 
     const serializedData = await localSerializer.serializeTransactionData(
@@ -261,13 +267,16 @@ describe('Transaction Serialization and deserialization', () => {
         recipient: DEFAULT_RECIPIENT,
       },
     } as PayAllSuiTx;
-
     const tx_data = {
       sender: DEFAULT_RECIPIENT_2,
-      gasBudget: gasBudget,
-      gasPrice: 100,
       kind: { Single: payAllSui } as TransactionKind,
-      gasPayment: getObjectReference(coins[1]),
+      gasData: {
+        owner: DEFAULT_RECIPIENT_2,
+        budget: gasBudget,
+        price: 100,
+        payment: getObjectReference(coins[1]),
+      },
+      expiration: { None: null },
     } as TransactionData;
 
     const serializedData = await localSerializer.serializeTransactionData(

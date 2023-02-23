@@ -67,9 +67,7 @@ function ObjectResultAPI({ objID }: { objID: string }) {
                         .getTransactionWithEffects(resp.data.tx_digest)
                         .then((txEff) => ({
                             ...resp,
-                            publisherAddress: getTransactionSender(
-                                txEff.certificate
-                            ),
+                            publisherAddress: getTransactionSender(txEff),
                         }))
                         .catch((err) => {
                             console.log(err);

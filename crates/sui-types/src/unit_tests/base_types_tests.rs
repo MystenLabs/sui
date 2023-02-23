@@ -16,6 +16,7 @@ use crate::crypto::{
     Signature, SuiAuthoritySignature, SuiSignature,
 };
 use crate::{gas_coin::GasCoin, object::Object, SUI_FRAMEWORK_ADDRESS};
+use sui_protocol_config::ProtocolConfig;
 
 use super::*;
 
@@ -79,7 +80,7 @@ fn test_update_contents() {
     // update contents should not touch the version number or ID.
     let old_contents = coin_obj.contents().to_vec();
     let old_type_specific_contents = coin_obj.type_specific_contents().to_vec();
-    coin_obj.update_contents(old_contents).unwrap();
+    coin_obj.update_coin_contents(old_contents);
     assert_eq!(&coin_obj.id(), coin.id());
     assert_eq!(
         coin_obj.type_specific_contents(),
@@ -342,7 +343,12 @@ fn test_move_object_size_for_gas_metering() {
 #[test]
 fn test_move_package_size_for_gas_metering() {
     let module = file_format::empty_module();
-    let package = Object::new_package(vec![module], TransactionDigest::genesis()).unwrap();
+    let package = Object::new_package(
+        vec![module],
+        TransactionDigest::genesis(),
+        ProtocolConfig::get_for_max_version().max_move_package_size(),
+    )
+    .unwrap();
     let size = package.object_size_for_gas_metering();
     let serialized = bcs::to_bytes(&package).unwrap();
     // If the following assertion breaks, it's likely you have changed MovePackage's fields.

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::hash::Digest;
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -61,6 +62,11 @@ pub struct EndOfEpochData {
     /// The protocol version that is in effect during the epoch that starts immediately after this
     /// checkpoint.
     pub next_epoch_protocol_version: ProtocolVersion,
+
+    /// The digest of the union of all checkpoint accumulators,
+    /// representing the state of the system at the end of the epoch.
+    #[schemars(with = "[u8; 32]")]
+    pub root_state_digest: Digest<32>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
@@ -75,6 +81,7 @@ pub struct CheckpointSummary {
     /// The running total gas costs of all transactions included in the current epoch so far
     /// until this checkpoint.
     pub epoch_rolling_gas_cost_summary: GasCostSummary,
+
     /// Timestamp of the checkpoint - number of milliseconds from the Unix epoch
     /// Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent
     /// checkpoints can have same timestamp if they originate from the same underlining consensus commit
@@ -98,7 +105,7 @@ impl CheckpointSummary {
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
         epoch_rolling_gas_cost_summary: GasCostSummary,
-        next_epoch_committee: Option<Committee>,
+        end_of_epoch_data: Option<EndOfEpochData>,
         timestamp_ms: CheckpointTimestamp,
     ) -> CheckpointSummary {
         let content_digest = transactions.digest();
@@ -110,10 +117,7 @@ impl CheckpointSummary {
             content_digest,
             previous_digest,
             epoch_rolling_gas_cost_summary,
-            end_of_epoch_data: next_epoch_committee.map(|c| EndOfEpochData {
-                next_epoch_committee: c.voting_rights,
-                next_epoch_protocol_version: c.protocol_version,
-            }),
+            end_of_epoch_data,
             timestamp_ms,
             version_specific_data: Vec::new(),
         }
@@ -206,7 +210,7 @@ impl SignedCheckpointSummary {
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
         epoch_rolling_gas_cost_summary: GasCostSummary,
-        next_epoch_committee: Option<Committee>,
+        end_of_epoch_data: Option<EndOfEpochData>,
         timestamp_ms: CheckpointTimestamp,
     ) -> SignedCheckpointSummary {
         let checkpoint = CheckpointSummary::new(
@@ -216,7 +220,7 @@ impl SignedCheckpointSummary {
             transactions,
             previous_digest,
             epoch_rolling_gas_cost_summary,
-            next_epoch_committee,
+            end_of_epoch_data,
             timestamp_ms,
         );
         SignedCheckpointSummary::new_from_summary(checkpoint, authority, signer)
@@ -405,7 +409,7 @@ pub struct CheckpointContents {
     /// * Genesis checkpoint has transactions but this field is empty.
     /// * Last checkpoint in the epoch will have (last)extra system transaction
     /// in the transactions list not covered in the signatures list
-    user_signatures: Vec<GenericSignature>,
+    user_signatures: Vec<Vec<GenericSignature>>,
 }
 
 impl CheckpointSignatureMessage {
@@ -427,7 +431,7 @@ impl CheckpointContents {
 
     pub fn new_with_causally_ordered_transactions_and_signatures<T>(
         contents: T,
-        signatures: Vec<GenericSignature>,
+        signatures: Vec<Vec<GenericSignature>>,
     ) -> Self
     where
         T: IntoIterator<Item = ExecutionDigests>,

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import { getTransactionDigest, getTransactions } from '../../src';
 import { setup, TestToolbox } from './utils/setup';
 
 describe('Transaction Reading API', () => {
@@ -20,14 +21,7 @@ describe('Transaction Reading API', () => {
     const resp = await toolbox.provider.getTransactions('All', null, 1);
     const digest = resp.data[0];
     const txn = await toolbox.provider.getTransactionWithEffects(digest);
-    expect(txn.certificate.transactionDigest).toEqual(digest);
-  });
-
-  it('Get Transaction Auth Signers', async () => {
-    const resp = await toolbox.provider.getTransactions('All', null, 1);
-    const digest = resp.data[0];
-    const res = await toolbox.provider.getTransactionAuthSigners(digest);
-    expect(res.signers.length).greaterThan(0);
+    expect(getTransactionDigest(txn)).toEqual(digest);
   });
 
   it('Get Transactions', async () => {
@@ -67,7 +61,7 @@ describe('Transaction Reading API', () => {
     const txEffects = await toolbox.provider.getTransactionWithEffects(
       allTransactions.data[0],
     );
-    const txKind = txEffects.certificate.data.transactions[0];
-    expect(txKind.Genesis).toBeDefined();
+    const [txKind] = getTransactions(txEffects);
+    expect('Genesis' in txKind).toBe(true);
   });
 });

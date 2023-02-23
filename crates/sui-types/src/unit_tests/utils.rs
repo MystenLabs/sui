@@ -70,10 +70,17 @@ pub fn to_sender_signed_transaction(
     data: TransactionData,
     signer: &dyn Signer<Signature>,
 ) -> VerifiedTransaction {
+    to_sender_signed_transaction_with_multi_signers(data, vec![signer])
+}
+
+pub fn to_sender_signed_transaction_with_multi_signers(
+    data: TransactionData,
+    signers: Vec<&dyn Signer<Signature>>,
+) -> VerifiedTransaction {
     VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
         data,
         Intent::default(),
-        signer,
+        signers,
     ))
 }
 

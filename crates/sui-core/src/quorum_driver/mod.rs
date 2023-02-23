@@ -158,7 +158,7 @@ impl<A> QuorumDriver<A> {
             // max out the retry times, notify failure
             info!(tx_digest=?transaction.digest(), "Failed to reach finality after attempting for {} times", old_retry_times+1);
             self.notify(
-                transaction.digest(),
+                &transaction,
                 &Err(
                     QuorumDriverError::FailedWithTransientErrorAfterMaximumAttempts {
                         total_attempts: old_retry_times + 1,
@@ -191,17 +191,18 @@ impl<A> QuorumDriver<A> {
 
     pub fn notify(
         &self,
-        tx_digest: &TransactionDigest,
+        transaction: &VerifiedTransaction,
         response: &QuorumDriverResult,
         total_attempts: u8,
     ) {
+        let tx_digest = transaction.digest();
         let effects_queue_result = match &response {
             Ok(resp) => {
                 self.metrics.total_ok_responses.inc();
                 self.metrics
                     .attempt_times_ok_response
                     .report(total_attempts as u64);
-                Ok(resp.clone())
+                Ok((transaction.clone(), resp.clone()))
             }
             Err(err) => {
                 self.metrics
@@ -367,7 +368,6 @@ where
             .await
             .map_err(QuorumDriverInternalError::CertificateError)?;
         let response = QuorumDriverResponse {
-            tx_cert: Some(certificate),
             effects_cert: effects,
         };
 
@@ -608,8 +608,8 @@ where
         self.quorum_driver.submit_transaction(transaction).await
     }
 
-    /// Create a new QuorumDriverHandler based on the same AuthorityAggregator.
-    /// Note: the new QuorumDriverHandler will have a new ArcSwap<AuthorityAggregator>
+    /// Create a new `QuorumDriverHandler` based on the same AuthorityAggregator.
+    /// Note: the new `QuorumDriverHandler` will have a new `ArcSwap<AuthorityAggregator>`
     /// that is NOT tied to the original one. So if there are multiple QuorumDriver(Handler)
     /// then all of them need to do reconfigs on their own.
     pub fn clone_new(&self) -> Self {
@@ -691,16 +691,13 @@ where
                     debug!(?tx_digest, "Transaction processing succeeded");
                     tx_cert
                 }
-                Ok(ProcessTransactionResult::Executed(tx_cert, effects_cert)) => {
+                Ok(ProcessTransactionResult::Executed(effects_cert)) => {
                     debug!(
                         ?tx_digest,
                         "Transaction processing succeeded with effects directly"
                     );
-                    let response = QuorumDriverResponse {
-                        tx_cert,
-                        effects_cert,
-                    };
-                    quorum_driver.notify(&tx_digest, &Ok(response), old_retry_times + 1);
+                    let response = QuorumDriverResponse { effects_cert };
+                    quorum_driver.notify(&transaction, &Ok(response), old_retry_times + 1);
                     return;
                 }
                 Err(err) => {
@@ -719,15 +716,9 @@ where
         };
 
         let response = match quorum_driver.process_certificate(tx_cert.clone()).await {
-            Ok(QuorumDriverResponse {
-                tx_cert,
-                effects_cert,
-            }) => {
+            Ok(QuorumDriverResponse { effects_cert }) => {
                 debug!(?tx_digest, "Certificate processing succeeded");
-                QuorumDriverResponse {
-                    tx_cert,
-                    effects_cert,
-                }
+                QuorumDriverResponse { effects_cert }
             }
             // Note: non retryable failure when processing a cert
             // should be very rare.
@@ -744,7 +735,7 @@ where
             }
         };
 
-        quorum_driver.notify(&tx_digest, &Ok(response), old_retry_times + 1);
+        quorum_driver.notify(&transaction, &Ok(response), old_retry_times + 1);
     }
 
     fn handle_error(
@@ -761,7 +752,7 @@ where
             convert_to_quorum_driver_error_if_non_retryable(&quorum_driver, err, &tx_digest, action)
         {
             // If non-retryable failure, this task reaches terminal state for now, notify waiter.
-            quorum_driver.notify(&tx_digest, &Err(qd_error), old_retry_times + 1);
+            quorum_driver.notify(&transaction, &Err(qd_error), old_retry_times + 1);
         } else {
             // re-enqueue if retryable
             spawn_monitored_task!(quorum_driver.enqueue_again_maybe(

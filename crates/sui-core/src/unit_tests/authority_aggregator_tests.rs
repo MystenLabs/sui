@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::test_utils::make_transfer_sui_transaction;
-use bcs::to_bytes;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use multiaddr::Multiaddr;
 use std::collections::BTreeMap;
@@ -18,7 +17,7 @@ use sui_types::crypto::{KeypairTraits, Signature};
 
 use sui_macros::sim_test;
 use sui_types::messages::*;
-use sui_types::object::{MoveObject, Object, Owner, GAS_VALUE_FOR_TESTING};
+use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
 
 use super::*;
 use crate::authority_client::AuthorityAPI;
@@ -318,7 +317,7 @@ async fn test_quorum_map_and_reduce_timeout() {
         .into_iter()
         .cloned()
         .collect();
-    let pkg = Object::new_package(modules, TransactionDigest::genesis()).unwrap();
+    let pkg = Object::new_package_for_testing(modules, TransactionDigest::genesis()).unwrap();
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let genesis_objects = vec![pkg.clone(), gas_object1.clone()];
@@ -934,34 +933,6 @@ fn set_tx_info_response_with_signed_tx(
         };
         clients.get_mut(name).unwrap().set_tx_info_response(resp);
     }
-}
-
-pub fn make_response_from_sui_system_state(
-    system_state: SuiSystemState,
-) -> SuiResult<ObjectInfoResponse> {
-    let move_content = to_bytes(&system_state).unwrap();
-    let move_object = unsafe {
-        MoveObject::new_from_execution(
-            SuiSystemState::type_(),
-            false,
-            SequenceNumber::from_u64(1),
-            move_content,
-        )
-        .unwrap()
-    };
-    let initial_shared_version = move_object.version();
-    let object = Object::new_move(
-        move_object,
-        Owner::Shared {
-            initial_shared_version,
-        },
-        TransactionDigest::random(),
-    );
-    Ok(ObjectInfoResponse {
-        object,
-        layout: None,
-        lock_for_debugging: None,
-    })
 }
 
 pub fn get_authority_pub_key_bytes_and_address() -> (AuthorityPublicKeyBytes, Vec<u8>) {

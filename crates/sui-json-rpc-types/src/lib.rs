@@ -11,7 +11,7 @@ use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 use colored::Colorize;
-use fastcrypto::encoding::{Base64, Encoding};
+use fastcrypto::encoding::{Base64, Encoding, Hex};
 use itertools::Itertools;
 use move_binary_format::file_format::{Ability, AbilitySet, StructTypeParameter, Visibility};
 use move_binary_format::normalized::{
@@ -26,12 +26,13 @@ use schemars::JsonSchema;
 use serde::ser::Error;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 use serde_with::serde_as;
 use sui_json::SuiJsonValue;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{
-    AuthorityName, ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
-    TransactionDigest, TransactionEffectsDigest,
+    ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
+    TransactionEffectsDigest,
 };
 use sui_types::coin::CoinMetadata;
 use sui_types::committee::EpochId;
@@ -43,14 +44,15 @@ use sui_types::event::{EventEnvelope, EventType};
 use sui_types::filter::EventFilter;
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
-use sui_types::message_envelope::Message;
 use sui_types::messages::{
-    CallArg, CertifiedTransaction, EffectsFinalityInfo, ExecuteTransactionResponse,
-    ExecutionStatus, FinalizedEffects, GenesisObject, InputObjectKind, MoveModulePublish,
-    ObjectArg, Pay, PayAllSui, PaySui, SingleTransactionKind, TransactionData, TransactionEffects,
-    TransactionKind, VerifiedCertificate,
+    CallArg, EffectsFinalityInfo, ExecutionStatus, GenesisObject, InputObjectKind,
+    MoveModulePublish, ObjectArg, Pay, PayAllSui, PaySui, SenderSignedData, SingleTransactionKind,
+    TransactionData, TransactionEffects, TransactionKind,
 };
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::messages_checkpoint::{
+    CheckpointContents, CheckpointDigest, CheckpointSequenceNumber, CheckpointSummary,
+    CheckpointTimestamp, EndOfEpochData,
+};
 use sui_types::move_package::{disassemble_modules, MovePackage};
 use sui_types::object::{
     Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner, PastObjectRead,
@@ -346,17 +348,18 @@ pub enum MoveFunctionArgType {
     Object(ObjectValueKind),
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiTransactionResponse {
-    pub certificate: SuiCertifiedTransaction,
+    pub transaction: SuiTransaction,
     pub effects: SuiTransactionEffects,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timestamp_ms: Option<u64>,
-    pub parsed_data: Option<SuiParsedTransactionResponse>,
-}
-
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
-pub struct SuiTransactionAuthSignersResponse {
-    pub signers: Vec<AuthorityName>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confirmed_local_execution: Option<bool>,
+    /// The checkpoint number when this transaction was included and hence finalized.
+    /// This is only returned in the read api, not in the transaction execution api.
+    pub checkpoint: Option<CheckpointSequenceNumber>,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
@@ -410,42 +413,6 @@ pub enum SuiTBlsSignObjectCommitmentType {
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub struct SuiTBlsSignRandomnessObjectResponse {
     pub signature: fastcrypto_tbls::types::RawSignature,
-}
-
-#[allow(clippy::large_enum_variant)]
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
-pub struct SuiExecuteTransactionResponse {
-    // If this transaction was already finalized previously, there is no guarantee that a
-    // certificate is still available.
-    pub certificate: Option<SuiCertifiedTransaction>,
-    pub effects: SuiFinalizedEffects,
-    // If the transaction is confirmed to be executed locally
-    // before this response.
-    pub confirmed_local_execution: bool,
-}
-
-impl SuiExecuteTransactionResponse {
-    pub fn from_execute_transaction_response(
-        resp: ExecuteTransactionResponse,
-        resolver: &impl GetModule,
-    ) -> Result<Self, anyhow::Error> {
-        Ok(match resp {
-            ExecuteTransactionResponse::EffectsCert(cert) => {
-                let (certificate, effects, is_executed_locally) = *cert;
-                let certificate: Option<SuiCertifiedTransaction> = match certificate {
-                    Some(c) => Some(c.try_into()?),
-                    None => None,
-                };
-                let effects: SuiFinalizedEffects =
-                    SuiFinalizedEffects::try_from(effects, resolver)?;
-                SuiExecuteTransactionResponse {
-                    certificate,
-                    effects,
-                    confirmed_local_execution: is_executed_locally,
-                }
-            }
-        })
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
@@ -567,6 +534,7 @@ impl TryInto<Object> for SuiObject<SuiRawData> {
     type Error = anyhow::Error;
 
     fn try_into(self) -> Result<Object, Self::Error> {
+        let protocol_config = ProtocolConfig::get_for_min_version();
         let data = match self.data {
             SuiRawData::MoveObject(o) => {
                 let struct_tag = parse_sui_struct_tag(o.type_())?;
@@ -576,10 +544,15 @@ impl TryInto<Object> for SuiObject<SuiRawData> {
                         o.has_public_transfer,
                         o.version,
                         o.bcs_bytes,
+                        &protocol_config,
                     )?
                 })
             }
-            SuiRawData::Package(p) => Data::Package(MovePackage::new(p.id, &p.module_map)?),
+            SuiRawData::Package(p) => Data::Package(MovePackage::new(
+                p.id,
+                &p.module_map,
+                protocol_config.max_move_package_size(),
+            )?),
         };
         Ok(Object {
             data,
@@ -711,7 +684,7 @@ pub trait SuiData: Sized {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
-#[serde(tag = "dataType", rename_all = "camelCase", rename = "Data")]
+#[serde(tag = "dataType", rename_all = "camelCase", rename = "RawData")]
 pub enum SuiRawData {
     // Manually handle generic schema generation
     MoveObject(SuiRawMoveObject),
@@ -1212,6 +1185,22 @@ pub enum SuiMoveValue {
     Option(Box<Option<SuiMoveValue>>),
 }
 
+impl SuiMoveValue {
+    /// Extract values from MoveValue without type information in json format
+    pub fn to_json_value(self) -> Value {
+        match self {
+            SuiMoveValue::Struct(move_struct) => move_struct.to_json_value(),
+            SuiMoveValue::Vector(values) => SuiMoveStruct::Runtime(values).to_json_value(),
+            SuiMoveValue::Number(v) => json!(v),
+            SuiMoveValue::Bool(v) => json!(v),
+            SuiMoveValue::Address(v) => json!(v),
+            SuiMoveValue::String(v) => json!(v),
+            SuiMoveValue::UID { id } => json!({ "id": id }),
+            SuiMoveValue::Option(v) => json!(v),
+        }
+    }
+}
+
 impl Display for SuiMoveValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut writer = String::new();
@@ -1295,41 +1284,26 @@ pub enum SuiMoveStruct {
 }
 
 impl SuiMoveStruct {
-    pub fn to_json_value(self) -> Result<Value, serde_json::Error> {
+    /// Extract values from MoveStruct without type information in json format
+    pub fn to_json_value(self) -> Value {
         // Unwrap MoveStructs
-        let unwrapped = match self {
+        match self {
             SuiMoveStruct::Runtime(values) => {
                 let values = values
                     .into_iter()
-                    .map(|value| match value {
-                        SuiMoveValue::Struct(move_struct) => move_struct.to_json_value(),
-                        SuiMoveValue::Vector(values) => {
-                            SuiMoveStruct::Runtime(values).to_json_value()
-                        }
-                        _ => serde_json::to_value(&value),
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-                serde_json::to_value(&values)
+                    .map(|value| value.to_json_value())
+                    .collect::<Vec<_>>();
+                json!(values)
             }
             // We only care about values here, assuming struct type information is known at the client side.
             SuiMoveStruct::WithTypes { type_: _, fields } | SuiMoveStruct::WithFields(fields) => {
                 let fields = fields
                     .into_iter()
-                    .map(|(key, value)| {
-                        let value = match value {
-                            SuiMoveValue::Struct(move_struct) => move_struct.to_json_value(),
-                            SuiMoveValue::Vector(values) => {
-                                SuiMoveStruct::Runtime(values).to_json_value()
-                            }
-                            _ => serde_json::to_value(&value),
-                        };
-                        value.map(|value| (key, value))
-                    })
-                    .collect::<Result<BTreeMap<_, _>, _>>()?;
-                serde_json::to_value(&fields)
+                    .map(|(key, value)| (key, value.to_json_value()))
+                    .collect::<BTreeMap<_, _>>();
+                json!(fields)
             }
-        }?;
-        serde_json::to_value(&unwrapped)
+        }
     }
 }
 
@@ -1535,13 +1509,20 @@ impl From<PayAllSui> for SuiPayAllSui {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
+#[serde(rename = "GasData", rename_all = "camelCase")]
+pub struct SuiGasData {
+    pub payment: SuiObjectRef,
+    pub owner: SuiAddress,
+    pub price: u64,
+    pub budget: u64,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
 #[serde(rename = "TransactionData", rename_all = "camelCase")]
 pub struct SuiTransactionData {
     pub transactions: Vec<SuiTransactionKind>,
     pub sender: SuiAddress,
-    pub gas_payment: SuiObjectRef,
-    pub gas_price: u64,
-    pub gas_budget: u64,
+    pub gas_data: SuiGasData,
 }
 
 impl Display for SuiTransactionData {
@@ -1557,9 +1538,10 @@ impl Display for SuiTransactionData {
             }
         }
         writeln!(writer, "Sender: {}", self.sender)?;
-        writeln!(writer, "Gas Payment: {}", self.gas_payment)?;
-        writeln!(writer, "Gas Price: {}", self.gas_price)?;
-        writeln!(writer, "Gas Budget: {}", self.gas_budget)?;
+        writeln!(writer, "Gas Payment: {}", self.gas_data.payment)?;
+        writeln!(writer, "Gas Owner: {}", self.gas_data.owner)?;
+        writeln!(writer, "Gas Price: {}", self.gas_data.price)?;
+        writeln!(writer, "Gas Budget: {}", self.gas_data.budget)?;
         write!(f, "{}", writer)
     }
 }
@@ -1579,11 +1561,41 @@ impl TryFrom<TransactionData> for SuiTransactionData {
         };
         Ok(Self {
             transactions,
-            sender: data.signer(),
-            gas_payment: data.gas().into(),
-            gas_price: data.gas_price,
-            gas_budget: data.gas_budget,
+            sender: data.sender(),
+            gas_data: SuiGasData {
+                payment: data.gas().into(),
+                owner: data.gas_owner(),
+                price: data.gas_price(),
+                budget: data.gas_budget(),
+            },
         })
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
+#[serde(rename = "Transaction", rename_all = "camelCase")]
+pub struct SuiTransaction {
+    pub data: SuiTransactionData,
+    pub tx_signatures: Vec<GenericSignature>,
+}
+
+impl TryFrom<SenderSignedData> for SuiTransaction {
+    type Error = anyhow::Error;
+
+    fn try_from(data: SenderSignedData) -> Result<Self, Self::Error> {
+        Ok(Self {
+            data: data.intent_message.value.try_into()?,
+            tx_signatures: data.tx_signatures,
+        })
+    }
+}
+
+impl Display for SuiTransaction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut writer = String::new();
+        writeln!(writer, "Transaction Signature: {:?}", self.tx_signatures)?;
+        write!(writer, "{}", &self.data)?;
+        write!(f, "{}", writer)
     }
 }
 
@@ -1749,14 +1761,14 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
                         CallArg::Pure(p) => SuiJsonValue::from_bcs_bytes(&p),
                         CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))
                         | CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
-                            SuiJsonValue::new(Value::String(id.to_hex_literal()))
+                            SuiJsonValue::new(Value::String(Hex::encode(id)))
                         }
                         CallArg::ObjVec(vec) => SuiJsonValue::new(Value::Array(
                             vec.iter()
                                 .map(|obj_arg| match obj_arg {
                                     ObjectArg::ImmOrOwnedObject((id, _, _))
                                     | ObjectArg::SharedObject { id, .. } => {
-                                        Value::String(id.to_hex_literal())
+                                        Value::String(Hex::encode(id))
                                     }
                                 })
                                 .collect(),
@@ -1805,55 +1817,6 @@ pub struct SuiChangeEpoch {
     pub computation_charge: u64,
     pub storage_rebate: u64,
     pub epoch_start_timestamp_ms: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "CertifiedTransaction", rename_all = "camelCase")]
-pub struct SuiCertifiedTransaction {
-    pub transaction_digest: TransactionDigest,
-    pub data: SuiTransactionData,
-    /// tx_signature is signed by the transaction sender, committing to the intent message containing the transaction data and intent.
-    pub tx_signature: GenericSignature,
-    /// authority signature information, if available, is signed by an authority, applied on `data`.
-    pub auth_sign_info: SuiAuthorityStrongQuorumSignInfo,
-}
-
-impl Display for SuiCertifiedTransaction {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut writer = String::new();
-        writeln!(writer, "Transaction Hash: {:?}", self.transaction_digest)?;
-        writeln!(writer, "Transaction Signature: {:?}", self.tx_signature)?;
-        writeln!(
-            writer,
-            "Signed Authorities Bitmap: {:?}",
-            self.auth_sign_info.signers_map
-        )?;
-        write!(writer, "{}", &self.data)?;
-        write!(f, "{}", writer)
-    }
-}
-
-impl TryFrom<CertifiedTransaction> for SuiCertifiedTransaction {
-    type Error = anyhow::Error;
-
-    fn try_from(cert: CertifiedTransaction) -> Result<Self, Self::Error> {
-        let digest = *cert.digest();
-        let (data, sig) = cert.into_data_and_sig();
-        Ok(Self {
-            transaction_digest: digest,
-            data: data.intent_message.value.try_into()?,
-            tx_signature: data.tx_signature,
-            auth_sign_info: SuiAuthorityStrongQuorumSignInfo::from(&sig),
-        })
-    }
-}
-
-impl TryFrom<VerifiedCertificate> for SuiCertifiedTransaction {
-    type Error = anyhow::Error;
-    fn try_from(cert: VerifiedCertificate) -> Result<Self, Self::Error> {
-        let cert: CertifiedTransaction = cert.into();
-        cert.try_into()
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -1910,21 +1873,6 @@ impl Display for SuiFinalizedEffects {
     }
 }
 
-impl SuiFinalizedEffects {
-    fn try_from(
-        effects: FinalizedEffects,
-        resolver: &impl GetModule,
-    ) -> Result<Self, anyhow::Error> {
-        let digest = effects.effects.digest();
-        // We should always have a signature here.
-        Ok(Self {
-            transaction_effects_digest: digest,
-            effects: SuiTransactionEffects::try_from(effects.effects, resolver)?,
-            finality_info: effects.finality_info.into(),
-        })
-    }
-}
-
 /// The response from processing a transaction or a certified transaction
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "TransactionEffects", rename_all = "camelCase")]
@@ -1953,6 +1901,9 @@ pub struct SuiTransactionEffects {
     // Object Refs of objects now deleted (the old refs).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deleted: Vec<SuiObjectRef>,
+    /// Object refs of objects previously wrapped in other objects but now deleted.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unwrapped_then_deleted: Vec<SuiObjectRef>,
     // Object refs of objects now wrapped in other objects.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub wrapped: Vec<SuiObjectRef>,
@@ -1987,6 +1938,7 @@ impl SuiTransactionEffects {
             mutated: to_owned_ref(effect.mutated),
             unwrapped: to_owned_ref(effect.unwrapped),
             deleted: to_sui_object_ref(effect.deleted),
+            unwrapped_then_deleted: to_sui_object_ref(effect.unwrapped_then_deleted),
             wrapped: to_sui_object_ref(effect.wrapped),
             gas_object: OwnedObjectRef {
                 owner: effect.gas_object.1,
@@ -3009,4 +2961,78 @@ impl TransactionBytes {
 pub struct Page<T, C> {
     pub data: Vec<T>,
     pub next_cursor: Option<C>,
+}
+
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Checkpoint {
+    /// Checkpoint's epoch ID
+    pub epoch: EpochId,
+    /// Checkpoint sequence number
+    pub sequence_number: CheckpointSequenceNumber,
+    /// Checkpoint digest
+    pub digest: CheckpointDigest,
+    /// Total number of transactions committed since genesis, including those in this
+    /// checkpoint.
+    pub network_total_transactions: u64,
+    /// Digest of the previous checkpoint
+    pub previous_digest: Option<CheckpointDigest>,
+    /// The running total gas costs of all transactions included in the current epoch so far
+    /// until this checkpoint.
+    pub epoch_rolling_gas_cost_summary: GasCostSummary,
+    /// Timestamp of the checkpoint - number of milliseconds from the Unix epoch
+    /// Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent
+    /// checkpoints can have same timestamp if they originate from the same underlining consensus commit
+    pub timestamp_ms: CheckpointTimestamp,
+    /// Present only on the final checkpoint of the epoch.
+    pub end_of_epoch_data: Option<EndOfEpochData>,
+    /// Transaction digests
+    pub transactions: Vec<TransactionDigest>,
+}
+
+impl From<(CheckpointSummary, CheckpointContents)> for Checkpoint {
+    fn from((summary, contents): (CheckpointSummary, CheckpointContents)) -> Self {
+        let digest = summary.digest();
+        let CheckpointSummary {
+            epoch,
+            sequence_number,
+            network_total_transactions,
+            previous_digest,
+            epoch_rolling_gas_cost_summary,
+            timestamp_ms,
+            end_of_epoch_data,
+            ..
+        } = summary;
+
+        Checkpoint {
+            epoch,
+            sequence_number,
+            digest,
+            network_total_transactions,
+            previous_digest,
+            epoch_rolling_gas_cost_summary,
+            timestamp_ms,
+            end_of_epoch_data,
+            transactions: contents.iter().map(|digest| digest.transaction).collect(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum CheckpointId {
+    SequenceNumber(CheckpointSequenceNumber),
+    Digest(CheckpointDigest),
+}
+
+impl From<CheckpointSequenceNumber> for CheckpointId {
+    fn from(seq: CheckpointSequenceNumber) -> Self {
+        Self::SequenceNumber(seq)
+    }
+}
+
+impl From<CheckpointDigest> for CheckpointId {
+    fn from(digest: CheckpointDigest) -> Self {
+        Self::Digest(digest)
+    }
 }

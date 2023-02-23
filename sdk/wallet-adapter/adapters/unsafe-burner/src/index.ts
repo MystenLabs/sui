@@ -8,9 +8,10 @@ import {
   getTransactionEffects,
   JsonRpcProvider,
   LocalTxnDataSerializer,
-  Network,
   RawSigner,
   SignableTransaction,
+  Connection,
+  devnetConnection,
 } from "@mysten/sui.js";
 import {
   WalletAdapter,
@@ -29,7 +30,7 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
   #keypair: Ed25519Keypair;
   #signer: RawSigner;
 
-  constructor(network: string | Network = Network.LOCAL) {
+  constructor(network: Connection = devnetConnection) {
     this.#keypair = new Ed25519Keypair();
     this.#provider = new JsonRpcProvider(network);
     this.#signer = new RawSigner(
@@ -47,6 +48,10 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
 
   async getAccounts() {
     return [this.#keypair.getPublicKey().toSuiAddress()];
+  }
+
+  async signTransaction(transaction: SignableTransaction) {
+    return this.#signer.signTransaction(transaction);
   }
 
   async signAndExecuteTransaction(

@@ -18,7 +18,7 @@ use sui_types::{
     messages::{
         CertifiedTransaction, CommitteeInfoRequest, CommitteeInfoResponse,
         HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, Transaction,
-        TransactionInfoRequest, TransactionInfoResponse,
+        TransactionInfoRequest, TransactionInfoResponse, VerifiedExecutableTransaction,
     },
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
 };
@@ -146,8 +146,10 @@ impl LocalAuthorityClient {
                 Ok(Some(effects)) => effects,
                 _ => {
                     let certificate = { certificate.verify(epoch_store.committee())? };
+                    let executable_tx =
+                        VerifiedExecutableTransaction::new_from_certificate(certificate);
                     state
-                        .try_execute_immediately(&certificate, &epoch_store)
+                        .try_execute_immediately(&executable_tx, &epoch_store)
                         .await?
                 }
             }
