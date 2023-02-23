@@ -79,7 +79,7 @@ export function Search({
                 value={queryValue}
             />
 
-            <div className="absolute right-0 mr-2 hidden h-full items-center text-2xl text-white/20 sm:flex">
+            <div className="absolute bottom-0 right-0 mr-2 hidden h-full items-center text-2xl text-white/20 sm:flex">
                 <Search16 />
             </div>
 

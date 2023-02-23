@@ -188,12 +188,24 @@ export function createWalletKitCore({
         if (walletEventUnsubscribe) {
           walletEventUnsubscribe();
         }
-        walletEventUnsubscribe = currentWallet.on("change", ({ connected }) => {
-          // when undefined connected hasn't changed
-          if (connected === false) {
-            disconnected();
+        walletEventUnsubscribe = currentWallet.on(
+          "change",
+          ({ connected, accounts }) => {
+            // when undefined connected hasn't changed
+            if (connected === false) {
+              disconnected();
+            } else if (accounts) {
+              setState({
+                accounts,
+                currentAccount:
+                  internalState.currentAccount &&
+                  !accounts.includes(internalState.currentAccount)
+                    ? accounts[0]
+                    : internalState.currentAccount,
+              });
+            }
           }
-        });
+        );
         try {
           setState({ status: WalletKitCoreConnectionStatus.CONNECTING });
           await currentWallet.connect();

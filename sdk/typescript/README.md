@@ -83,9 +83,9 @@ The `JsonRpcProvider` class provides a connection to the JSON-RPC Server and sho
 - DevNet: https://fullnode.devnet.sui.io
 
 ```typescript
-import { JsonRpcProvider, Network } from '@mysten/sui.js';
+import { JsonRpcProvider, devnetConnection } from '@mysten/sui.js';
 // connect to Devnet
-const provider = new JsonRpcProvider(Network.DEVNET);
+const provider = new JsonRpcProvider(devnetConnection);
 // get tokens from the DevNet faucet server
 await provider.requestSuiFromFaucet(
   '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3',
@@ -95,24 +95,26 @@ await provider.requestSuiFromFaucet(
 For local development, you can run `cargo run --bin sui-test-validator` to spin up a local network with a local validator, a fullnode, and a faucet server.
 
 ```typescript
-import { JsonRpcProvider, Network } from '@mysten/sui.js';
+import { JsonRpcProvider, localnetConnection } from '@mysten/sui.js';
 // connect to local RPC server
-const provider = new JsonRpcProvider(Network.LOCAL);
+const provider = new JsonRpcProvider(localnetConnection);
 // get tokens from the local faucet server
 await provider.requestSuiFromFaucet(
   '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3',
 );
 ```
 
-You can also pass in custom URLs to your own fullnode and faucet server
+You can also construct your own in custom connections, with your own URLs to your fullnode and faucet server
 
 ```typescript
-import { JsonRpcProvider } from '@mysten/sui.js';
-// connect to a custom RPC server
-const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io', {
-  // you can also skip providing this field if you don't plan to interact with the faucet
-  faucetURL: 'https://faucet.devnet.sui.io/gas',
+import { JsonRpcProvider, Connection } from '@mysten/sui.js';
+// Construct your connection:
+const connection = new Connection({
+  fullnode: 'https://fullnode.devnet.sui.io',
+  faucet: 'https://faucet.devnet.sui.io/gas',
 });
+// connect to a custom RPC server
+const provider = new JsonRpcProvider(connection);
 // get tokens from a custom faucet server
 await provider.requestSuiFromFaucet(
   '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3',

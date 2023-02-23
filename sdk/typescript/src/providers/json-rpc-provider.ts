@@ -16,7 +16,6 @@ import {
   SuiEventEnvelope,
   SuiEventFilter,
   SuiExecuteTransactionResponse,
-  SuiExecuteTransactionResponse_v26,
   SuiMoveFunctionArgTypes,
   SuiMoveNormalizedFunction,
   SuiMoveNormalizedModule,
@@ -38,13 +37,11 @@ import {
   TransactionEffects,
   DevInspectResults,
   CoinMetadata,
-  toSuiTransactionData,
   isValidTransactionDigest,
   isValidSuiAddress,
   isValidSuiObjectId,
   normalizeSuiAddress,
   normalizeSuiObjectId,
-  SuiTransactionAuthSignersResponse,
   CoinMetadataStruct,
   PaginatedCoins,
   GetObjectDataResponse,
@@ -59,23 +56,20 @@ import {
   CheckpointDigest,
   CheckPointContentsDigest,
   CommitteeInfo,
-  versionToString,
 } from '../types';
-import { lt } from '@suchipi/femver';
-import { DynamicFieldPage } from '../types/dynamic_fields';
+import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
   DEFAULT_CLIENT_OPTIONS,
   WebsocketClient,
   WebsocketClientOptions,
 } from '../rpc/websocket-client';
-import { ApiEndpoints, Network, NETWORK_TO_API } from '../utils/api-endpoints';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
 import { any, is, number, array } from 'superstruct';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import { LocalTxnDataSerializer } from '../signers/txn-data-serializers/local-txn-data-serializer';
 import { toB64 } from '@mysten/bcs';
 import { SerializedSignature } from '../cryptography/signature';
-import { pkgVersion } from '../pkg-version';
+import { Connection, devnetConnection } from '../rpc/connection';
 
 export const TARGETED_RPC_VERSION = '0.27.0';
 
@@ -98,73 +92,59 @@ export type RpcProviderOptions = {
   skipDataValidation?: boolean;
   /**
    * Configuration options for the websocket connection
+   * TODO: Move to connection.
    */
   socketOptions?: WebsocketClientOptions;
   /**
    * Cache timeout in seconds for the RPC API Version
    */
-  versionCacheTimoutInSeconds?: number;
-  /**
-   * URL to a faucet(optional). If you initialize `JsonRpcProvider`
-   * with a known `Network` value, this will be populated with a default
-   * value
-   */
-  faucetURL?: string;
+  versionCacheTimeoutInSeconds?: number;
+
+  /** Allow defining a custom RPC client to use */
+  rpcClient?: JsonRpcClient;
+
+  /** Allow defining a custom websocket client to use */
+  websocketClient?: WebsocketClient;
 };
 
 const DEFAULT_OPTIONS: RpcProviderOptions = {
   skipDataValidation: true,
   socketOptions: DEFAULT_CLIENT_OPTIONS,
-  versionCacheTimoutInSeconds: 600,
+  versionCacheTimeoutInSeconds: 600,
 };
 
 export class JsonRpcProvider extends Provider {
-  public endpoints: ApiEndpoints;
+  public connection: Connection;
   protected client: JsonRpcClient;
   protected wsClient: WebsocketClient;
   private rpcApiVersion: RpcApiVersion | undefined;
   private cacheExpiry: number | undefined;
-  private addedHeaders = false;
   /**
    * Establish a connection to a Sui RPC endpoint
    *
-   * @param endpoint URL to the Sui RPC endpoint, or a `Network` enum
+   * @param connection The `Connection` object containing configuration for the network.
    * @param options configuration options for the provider
    */
   constructor(
-    endpoint: string | Network = Network.DEVNET,
+    // TODO: Probably remove the default endpoint here:
+    connection: Connection = devnetConnection,
     public options: RpcProviderOptions = DEFAULT_OPTIONS,
   ) {
     super();
 
-    if ((Object.values(Network) as string[]).includes(endpoint)) {
-      this.endpoints = NETWORK_TO_API[endpoint as Network];
-    } else {
-      this.endpoints = {
-        fullNode: endpoint,
-        faucet: options.faucetURL,
-      };
-    }
+    this.connection = connection;
 
     const opts = { ...DEFAULT_OPTIONS, ...options };
-
-    this.client = new JsonRpcClient(this.endpoints.fullNode);
-    // TODO: uncomment this when 0.27.0 is released. We cannot do this now because
-    // the current Devnet(0.26.0) does not support the header. And we need to make
-    // a request to RPC to know which version it is running. Therefore, we do not
-    // add headers here, instead we add headers in the first call of the `getRpcApiVersion`
-    // method
-    // this.client = new JsonRpcClient(this.endpoints.fullNode, {
-    //   'Client-Sdk-Type': 'typescript',
-    //   'Client-Sdk-Version': pkgVersion,
-    //   'Client-Target-Api-Version': TARGETED_RPC_VERSION,
-    // });
     // TODO: add header for websocket request
-    this.wsClient = new WebsocketClient(
-      this.endpoints.fullNode,
-      opts.skipDataValidation!,
-      opts.socketOptions,
-    );
+    this.client = opts.rpcClient ?? new JsonRpcClient(this.connection.fullnode);
+
+    this.wsClient =
+      opts.websocketClient ??
+      new WebsocketClient(
+        this.connection.websocket,
+        opts.skipDataValidation!,
+        opts.socketOptions,
+      );
   }
 
   async getRpcApiVersion(): Promise<RpcApiVersion | undefined> {
@@ -183,22 +163,9 @@ export class JsonRpcProvider extends Provider {
         this.options.skipDataValidation,
       );
       this.rpcApiVersion = parseVersionFromString(resp.info.version);
-      // TODO: Remove this once 0.27.0 is released
-      if (
-        !this.addedHeaders &&
-        this.rpcApiVersion &&
-        !lt(versionToString(this.rpcApiVersion), '0.27.0')
-      ) {
-        this.client = new JsonRpcClient(this.endpoints.fullNode, {
-          'Client-Sdk-Type': 'typescript',
-          'Client-Sdk-Version': pkgVersion,
-          'Client-Target-Api-Version': TARGETED_RPC_VERSION,
-        });
-        this.addedHeaders = true;
-      }
       this.cacheExpiry =
-        // Date.now() is in milliseonds, but the timeout is in seconds
-        Date.now() + (this.options.versionCacheTimoutInSeconds ?? 0) * 1000;
+        // Date.now() is in milliseconds, but the timeout is in seconds
+        Date.now() + (this.options.versionCacheTimeoutInSeconds ?? 0) * 1000;
       return this.rpcApiVersion;
     } catch (err) {
       console.warn('Error fetching version number of the RPC API', err);
@@ -210,10 +177,10 @@ export class JsonRpcProvider extends Provider {
     recipient: SuiAddress,
     httpHeaders?: HttpHeaders,
   ): Promise<FaucetResponse> {
-    if (!this.endpoints.faucet) {
+    if (!this.connection.faucet) {
       throw new Error('Faucet URL is not specified');
     }
-    return requestSuiFromFaucet(this.endpoints.faucet, recipient, httpHeaders);
+    return requestSuiFromFaucet(this.connection.faucet, recipient, httpHeaders);
   }
 
   // Coins
@@ -692,38 +659,6 @@ export class JsonRpcProvider extends Provider {
     signature: SerializedSignature,
     requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert',
   ): Promise<SuiExecuteTransactionResponse> {
-    const version = await this.getRpcApiVersion();
-    if (version?.major === 0 && version?.minor <= 26) {
-      try {
-        let resp = await this.client.requestWithType(
-          'sui_executeTransactionSerializedSig',
-          [
-            typeof txnBytes === 'string' ? txnBytes : toB64(txnBytes),
-            signature,
-            requestType,
-          ],
-          SuiExecuteTransactionResponse_v26,
-          this.options.skipDataValidation,
-        );
-        let certificate = resp.certificate
-          ? {
-              transactionDigest: resp.certificate!.transactionDigest,
-              data: toSuiTransactionData(resp.certificate!.data),
-              txSignatures: [resp.certificate!.txSignature],
-              authSignInfo: resp.certificate!.authSignInfo,
-            }
-          : undefined;
-        return {
-          certificate: certificate,
-          effects: resp.effects,
-          confirmed_local_execution: resp.confirmed_local_execution,
-        };
-      } catch (err) {
-        throw new Error(
-          `Error executing transaction with request type: ${err}`,
-        );
-      }
-    }
     try {
       return await this.client.requestWithType(
         'sui_executeTransactionSerializedSig',
@@ -769,21 +704,6 @@ export class JsonRpcProvider extends Provider {
       throw new Error(
         `Error fetching transaction digests in range: ${err} for range ${start}-${end}`,
       );
-    }
-  }
-
-  async getTransactionAuthSigners(
-    digest: TransactionDigest,
-  ): Promise<SuiTransactionAuthSignersResponse> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getTransactionAuthSigners',
-        [digest],
-        SuiTransactionAuthSignersResponse,
-        this.options.skipDataValidation,
-      );
-    } catch (err) {
-      throw new Error(`Error fetching transaction auth signers: ${err}`);
     }
   }
 
@@ -958,7 +878,7 @@ export class JsonRpcProvider extends Provider {
 
   async getDynamicFieldObject(
     parent_object_id: ObjectId,
-    name: string,
+    name: string | DynamicFieldName,
   ): Promise<GetObjectDataResponse> {
     try {
       const resp = await this.client.requestWithType(

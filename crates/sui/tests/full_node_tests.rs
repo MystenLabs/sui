@@ -14,8 +14,7 @@ use prometheus::Registry;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui_json_rpc_types::{
     type_and_fields_from_move_struct, EventPage, SuiEvent, SuiEventEnvelope, SuiEventFilter,
-    SuiExecuteTransactionResponse, SuiExecutionStatus, SuiMoveStruct, SuiMoveValue,
-    SuiTransactionResponse,
+    SuiExecutionStatus, SuiMoveStruct, SuiMoveValue, SuiTransactionResponse,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
@@ -94,9 +93,8 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
     let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context, sender).await;
 
-    let (tx_cert, _effects_cert) =
-        increment_counter(context, sender, None, package_ref.0, counter_ref.0).await;
-    let digest = tx_cert.transaction_digest;
+    let response = increment_counter(context, sender, None, package_ref.0, counter_ref.0).await;
+    let digest = response.effects.transaction_digest;
     wait_for_tx(digest, node.state().clone()).await;
 
     Ok(())
@@ -189,9 +187,8 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     let context = &mut test_cluster.wallet;
 
     let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context, sender).await;
-    let (tx_cert, _effects_cert) =
-        increment_counter(context, sender, None, package_ref.0, counter_ref.0).await;
-    let digest = tx_cert.transaction_digest;
+    let response = increment_counter(context, sender, None, package_ref.0, counter_ref.0).await;
+    let digest = response.effects.transaction_digest;
 
     wait_for_tx(digest, node.state().clone()).await;
     let txes = node.state().get_transactions(
@@ -559,7 +556,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                 };
 
                 owned_tx_digest = if let SuiClientCommandResult::SplitCoin(resp) = res {
-                    Some(resp.certificate.transaction_digest)
+                    Some(resp.effects.transaction_digest)
                 } else {
                     panic!("transfer command did not return WalletCommandResult::Transfer");
                 };
@@ -574,7 +571,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                         counter_ref.0,
                     )
                     .await
-                    .0
+                    .effects
                     .transaction_digest,
                 );
             }
@@ -967,17 +964,18 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
     let ExecuteTransactionResponse::EffectsCert(res) = res;
-    let QuorumDriverResponse {
-        tx_cert: certified_txn,
-        effects_cert: certified_txn_effects,
-    } = rx.recv().await.unwrap().unwrap();
-    let (ct, cte, is_executed_locally) = *res;
-    assert_eq!(*ct.unwrap().digest(), digest);
-    assert_eq!(*certified_txn.unwrap().digest(), digest);
+    let (
+        tx,
+        QuorumDriverResponse {
+            effects_cert: certified_txn_effects,
+        },
+    ) = rx.recv().await.unwrap().unwrap();
+    let (cte, is_executed_locally) = *res;
+    assert_eq!(*tx.digest(), digest);
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(is_executed_locally);
     // verify that the node has sequenced and executed the txn
-    node.state().get_transaction(digest).await
+    node.state().get_executed_transaction_and_effects(digest).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForLocalExecution: {:?}", digest, e));
 
     // Test WaitForEffectsCert
@@ -992,17 +990,18 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
     let ExecuteTransactionResponse::EffectsCert(res) = res;
-    let QuorumDriverResponse {
-        tx_cert: certified_txn,
-        effects_cert: certified_txn_effects,
-    } = rx.recv().await.unwrap().unwrap();
-    let (ct, cte, is_executed_locally) = *res;
-    assert_eq!(*ct.unwrap().digest(), digest);
-    assert_eq!(*certified_txn.unwrap().digest(), digest);
+    let (
+        tx,
+        QuorumDriverResponse {
+            effects_cert: certified_txn_effects,
+        },
+    ) = rx.recv().await.unwrap().unwrap();
+    let (cte, is_executed_locally) = *res;
+    assert_eq!(*tx.digest(), digest);
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(!is_executed_locally);
     wait_for_tx(digest, node.state().clone()).await;
-    node.state().get_transaction(digest).await
+    node.state().get_executed_transaction_and_effects(digest).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForEffectsCert: {:?}", digest, e));
 
     Ok(())
@@ -1048,18 +1047,18 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution
         ];
-        let response: SuiExecuteTransactionResponse = jsonrpc_client
+        let response: SuiTransactionResponse = jsonrpc_client
             .request("sui_submitTransaction", params)
             .await
             .unwrap();
 
-        let SuiExecuteTransactionResponse {
-            certificate: _,
+        let SuiTransactionResponse {
             effects,
             confirmed_local_execution,
+            ..
         } = response;
-        assert_eq!(&effects.effects.transaction_digest, tx_digest);
-        assert!(confirmed_local_execution);
+        assert_eq!(&effects.transaction_digest, tx_digest);
+        assert!(confirmed_local_execution.unwrap());
     }
     Ok(())
 }
@@ -1088,18 +1087,18 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
         signatures,
         ExecuteTransactionRequestType::WaitForLocalExecution
     ];
-    let response: SuiExecuteTransactionResponse = jsonrpc_client
+    let response: SuiTransactionResponse = jsonrpc_client
         .request("sui_submitTransaction", params)
         .await
         .unwrap();
 
-    let SuiExecuteTransactionResponse {
-        certificate: _,
+    let SuiTransactionResponse {
         effects,
         confirmed_local_execution,
+        ..
     } = response;
-    assert_eq!(&effects.effects.transaction_digest, tx_digest);
-    assert!(confirmed_local_execution);
+    assert_eq!(&effects.transaction_digest, tx_digest);
+    assert!(confirmed_local_execution.unwrap());
 
     let _response: SuiTransactionResponse = jsonrpc_client
         .request("sui_getTransaction", rpc_params![*tx_digest])
@@ -1113,18 +1112,18 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
         signatures,
         ExecuteTransactionRequestType::WaitForEffectsCert
     ];
-    let response: SuiExecuteTransactionResponse = jsonrpc_client
+    let response: SuiTransactionResponse = jsonrpc_client
         .request("sui_submitTransaction", params)
         .await
         .unwrap();
 
-    let SuiExecuteTransactionResponse {
-        certificate: _,
+    let SuiTransactionResponse {
         effects,
         confirmed_local_execution,
+        ..
     } = response;
-    assert_eq!(&effects.effects.transaction_digest, tx_digest);
-    assert!(!confirmed_local_execution);
+    assert_eq!(&effects.transaction_digest, tx_digest);
+    assert!(!confirmed_local_execution.unwrap());
 
     Ok(())
 }
@@ -1198,8 +1197,8 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         .expect("Failed to transfer coins to recipient");
 
     // Delete the object
-    let (_tx_cert, effects) = delete_devnet_nft(context, &recipient, object_ref_v2).await;
-    assert_eq!(effects.status, SuiExecutionStatus::Success);
+    let response = delete_devnet_nft(context, &recipient, object_ref_v2).await;
+    assert_eq!(response.effects.status, SuiExecutionStatus::Success);
     sleep(Duration::from_secs(1)).await;
 
     // Now test get_object_read

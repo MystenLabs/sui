@@ -64,7 +64,7 @@ pub async fn payloads(
         unsigned_transaction: Hex::from_bytes(&intent_msg_bytes),
         payloads: vec![SigningPayload {
             account_identifier: address.into(),
-            hex_bytes: Hex::encode(&bcs::to_bytes(&intent_msg)?),
+            hex_bytes: Hex::encode(bcs::to_bytes(&intent_msg)?),
             signature_type: Some(SignatureType::Ed25519),
         }],
     })
@@ -129,15 +129,13 @@ pub async fn submit(
         )
         .await?;
 
-    if let Some(effect) = response.effects {
-        if let SuiExecutionStatus::Failure { error } = effect.status {
-            return Err(Error::TransactionExecutionError(error));
-        }
+    if let SuiExecutionStatus::Failure { error } = response.effects.status {
+        return Err(Error::TransactionExecutionError(error));
     }
 
     Ok(TransactionIdentifierResponse {
         transaction_identifier: TransactionIdentifier {
-            hash: response.tx_digest,
+            hash: response.effects.transaction_digest,
         },
         metadata: None,
     })
@@ -231,7 +229,7 @@ pub async fn metadata(
             let coins = context
                 .client
                 .coin_read_api()
-                .select_coins(*sender, None, *amount as u128, *locked_until_epoch, vec![])
+                .select_coins(*sender, None, *amount, *locked_until_epoch, vec![])
                 .await?
                 .into_iter()
                 .map(|coin| coin.object_ref())

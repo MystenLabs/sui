@@ -12,9 +12,12 @@ use std::{
     mem, ops,
     path::{Path, PathBuf},
 };
-use sui_config::builder::{CommitteeConfig, ConfigBuilder};
+use sui_config::builder::{
+    CommitteeConfig, ConfigBuilder, ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
+};
 use sui_config::genesis_config::{GenesisConfig, ValidatorConfigInfo};
 use sui_config::NetworkConfig;
+use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::base_types::AuthorityName;
 use tempfile::TempDir;
 
@@ -28,6 +31,7 @@ pub struct SwarmBuilder<R = OsRng> {
     fullnode_rpc_addr: Option<SocketAddr>,
     with_event_store: bool,
     epoch_duration_ms: Option<u64>,
+    supported_protocol_versions_config: ProtocolVersionsConfig,
 }
 
 impl SwarmBuilder {
@@ -42,6 +46,7 @@ impl SwarmBuilder {
             fullnode_rpc_addr: None,
             with_event_store: false,
             epoch_duration_ms: None,
+            supported_protocol_versions_config: ProtocolVersionsConfig::Default,
         }
     }
 }
@@ -57,6 +62,7 @@ impl<R> SwarmBuilder<R> {
             fullnode_rpc_addr: self.fullnode_rpc_addr,
             with_event_store: false,
             epoch_duration_ms: None,
+            supported_protocol_versions_config: ProtocolVersionsConfig::Default,
         }
     }
 
@@ -102,6 +108,24 @@ impl<R> SwarmBuilder<R> {
         self.epoch_duration_ms = Some(epoch_duration_ms);
         self
     }
+
+    pub fn with_supported_protocol_versions(mut self, c: SupportedProtocolVersions) -> Self {
+        self.supported_protocol_versions_config = ProtocolVersionsConfig::Global(c);
+        self
+    }
+
+    pub fn with_supported_protocol_version_callback(
+        mut self,
+        func: SupportedProtocolVersionsCallback,
+    ) -> Self {
+        self.supported_protocol_versions_config = ProtocolVersionsConfig::PerValidator(func);
+        self
+    }
+
+    pub fn with_supported_protocol_versions_config(mut self, c: ProtocolVersionsConfig) -> Self {
+        self.supported_protocol_versions_config = c;
+        self
+    }
 }
 
 impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
@@ -127,6 +151,9 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             .committee(self.committee)
             .with_swarm()
             .rng(self.rng)
+            .with_supported_protocol_versions_config(
+                self.supported_protocol_versions_config.clone(),
+            )
             .build();
 
         let validators = network_config
@@ -139,8 +166,11 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
 
         if self.fullnode_count > 0 {
             (0..self.fullnode_count).for_each(|_| {
+                let spvc = self.supported_protocol_versions_config.clone();
+                //let spvc = spvc.clone();
                 let mut config = network_config
                     .fullnode_config_builder()
+                    .with_supported_protocol_versions_config(spvc)
                     .with_random_dir()
                     .build()
                     .unwrap();
@@ -176,6 +206,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
         let fullnodes = if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
             let mut config = network_config
                 .fullnode_config_builder()
+                .with_supported_protocol_versions_config(self.supported_protocol_versions_config)
                 .set_event_store(self.with_event_store)
                 .with_random_dir()
                 .build()

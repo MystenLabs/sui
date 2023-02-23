@@ -22,7 +22,6 @@ use sui_config::{
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GetObjectDataResponse, SuiData, SuiObject, SuiParsedData, SuiParsedObject,
-    SuiTransactionEffects,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
@@ -409,14 +408,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     // Get the created object
-    let created_obj: ObjectID = if let SuiClientCommandResult::Call(
-        _,
-        SuiTransactionEffects {
-            created: new_objs, ..
-        },
-    ) = resp
-    {
-        new_objs.first().unwrap().reference.object_id
+    let created_obj: ObjectID = if let SuiClientCommandResult::Call(resp) = resp {
+        resp.effects.created.first().unwrap().reference.object_id
     } else {
         panic!();
     };
@@ -578,16 +571,14 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     // Get the mutated objects
-    let (mut_obj1, mut_obj2) =
-        if let SuiClientCommandResult::Transfer(_, _, SuiTransactionEffects { mutated, .. }) = resp
-        {
-            (
-                mutated.get(0).unwrap().reference.object_id,
-                mutated.get(1).unwrap().reference.object_id,
-            )
-        } else {
-            panic!()
-        };
+    let (mut_obj1, mut_obj2) = if let SuiClientCommandResult::Transfer(_, response) = resp {
+        (
+            response.effects.mutated.get(0).unwrap().reference.object_id,
+            response.effects.mutated.get(1).unwrap().reference.object_id,
+        )
+    } else {
+        panic!()
+    };
 
     // Check the objects
     let resp = SuiClientCommands::Object {
@@ -646,16 +637,14 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     // Get the mutated objects
-    let (_mut_obj1, _mut_obj2) =
-        if let SuiClientCommandResult::Transfer(_, _, SuiTransactionEffects { mutated, .. }) = resp
-        {
-            (
-                mutated.get(0).unwrap().reference.object_id,
-                mutated.get(1).unwrap().reference.object_id,
-            )
-        } else {
-            panic!()
-        };
+    let (_mut_obj1, _mut_obj2) = if let SuiClientCommandResult::Transfer(_, response) = resp {
+        (
+            response.effects.mutated.get(0).unwrap().reference.object_id,
+            response.effects.mutated.get(1).unwrap().reference.object_id,
+        )
+    } else {
+        panic!()
+    };
 
     Ok(())
 }

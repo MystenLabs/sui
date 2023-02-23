@@ -5,7 +5,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use crate::execution_mode::{self, ExecutionMode};
 use move_core_types::language_storage::{ModuleId, StructTag};
-use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
+use move_vm_runtime::move_vm::MoveVM;
 use sui_types::base_types::SequenceNumber;
 use tracing::{debug, instrument};
 
@@ -65,7 +65,6 @@ pub fn execute_transaction_to_effects<
     transaction_digest: TransactionDigest,
     mut transaction_dependencies: BTreeSet<TransactionDigest>,
     move_vm: &Arc<MoveVM>,
-    native_functions: &NativeFunctionTable,
     gas_status: SuiGasStatus,
     epoch_data: &EpochData,
     protocol_config: &ProtocolConfig,
@@ -82,7 +81,6 @@ pub fn execute_transaction_to_effects<
         gas_object_ref.0,
         &mut tx_ctx,
         move_vm,
-        native_functions,
         gas_status,
         protocol_config,
     );
@@ -144,7 +142,6 @@ fn execute_transaction<
     gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
-    native_functions: &NativeFunctionTable,
     mut gas_status: SuiGasStatus,
     protocol_config: &ProtocolConfig,
 ) -> (
@@ -161,7 +158,6 @@ fn execute_transaction<
             gas_object_id,
             tx_ctx,
             move_vm,
-            native_functions,
             &mut gas_status,
             protocol_config,
         );
@@ -194,7 +190,6 @@ fn execution_loop<
     gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
-    native_functions: &NativeFunctionTable,
     gas_status: &mut SuiGasStatus,
     protocol_config: &ProtocolConfig,
 ) -> Result<Mode::ExecutionResults, ExecutionError> {
@@ -291,7 +286,6 @@ fn execution_loop<
                 adapter::publish(
                     temporary_store,
                     move_vm,
-                    native_functions.clone(),
                     modules,
                     tx_ctx,
                     gas_status.create_move_gas_status(),
@@ -540,7 +534,13 @@ fn check_recipients(recipients: &[SuiAddress], amounts: &[u64]) -> Result<(), Ex
 }
 
 fn check_total_coins(coins: &[Coin], amounts: &[u64]) -> Result<(u64, u64), ExecutionError> {
-    let total_amount: u64 = amounts.iter().sum();
+    let Some(total_amount) = amounts.iter().fold(Some(0u64), |acc, a| acc?.checked_add(*a)) else {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::TotalAmountOverflow,
+            "Attempting to pay a total amount that overflows u64".to_string(),
+        ));
+    };
+    // u64 overflow is impossible because the sum of all coin values is bounded by the total amount
     let total_coins = coins.iter().fold(0, |acc, c| acc + c.value());
     if total_amount > total_coins {
         return Err(ExecutionError::new_with_source(
@@ -627,10 +627,10 @@ fn pay<S>(
     );
 
     // double check that we didn't create or destroy money
-    debug_assert_eq!(
-        total_coins - coins.iter().fold(0, |acc, c| acc + c.value()),
-        total_amount
-    );
+    // u64 overflow is impossible because the sum of all coin values is bounded by the total amount
+    let left_coins = coins.iter().fold(0, |acc, c| acc + c.value());
+    debug_assert!(left_coins <= total_coins);
+    debug_assert_eq!(total_coins - left_coins, total_amount);
 
     // update the input coins to reflect the decrease in value.
     // if the input coin has value 0, delete it
@@ -840,6 +840,28 @@ fn test_pay_arity_mismatch() {
             .unwrap_err()
             .to_execution_status(),
         ExecutionFailureStatus::RecipientsAmountsArityMismatch
+    );
+}
+
+#[test]
+fn test_pay_amount_overflow() {
+    let coin_objects = vec![Object::new_gas_with_balance_and_owner_for_testing(
+        10,
+        SuiAddress::random_for_testing_only(),
+    )];
+    let recipients = vec![
+        SuiAddress::random_for_testing_only(),
+        SuiAddress::random_for_testing_only(),
+    ];
+    let amounts = vec![u64::MAX, 100u64];
+    let mut store: TemporaryStore<()> = temporary_store::empty_for_testing();
+    let mut ctx = TxContext::random_for_testing_only();
+
+    assert_eq!(
+        pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
+            .unwrap_err()
+            .to_execution_status(),
+        ExecutionFailureStatus::TotalAmountOverflow
     );
 }
 

@@ -365,9 +365,9 @@ impl SallyWriteBatch {
         }
     }
     /// Deletes a range of keys between `from` (inclusive) and `to` (non-inclusive)
-    pub fn delete_range<'a, K: Serialize, V>(
+    pub fn delete_range<K: Serialize, V>(
         &mut self,
-        db: &'a SallyColumn<K, V>,
+        db: &SallyColumn<K, V>,
         from: &K,
         to: &K,
     ) -> Result<(), TypedStoreError> {

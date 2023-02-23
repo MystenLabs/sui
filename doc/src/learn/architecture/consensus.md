@@ -8,11 +8,11 @@ The names highlight that the components split the responsibilities of:
 - ensuring the availability of data submitted to consensus = [Narwhal](https://arxiv.org/abs/2105.11827)
 - agreeing on a specific ordering of this data = [Bullshark](https://arxiv.org/abs/2209.05633) or [Tusk](https://arxiv.org/abs/2105.11827)
 
-In August 2022, Bullshark replaced the Tusk component of the consensus protocol as the default for reduced latency and support for fairness (where even slow validators can contribute). See [DAG Meets BFT - The Next Generation of BFT Consensus](https://decentralizedthoughts.github.io/2022-06-28-DAG-meets-BFT/) for a comparison of the protocols.
+In August 2022, Bullshark replaced the Tusk component of the consensus protocol as the default for reduced latency. See [DAG Meets BFT - The Next Generation of BFT Consensus](https://decentralizedthoughts.github.io/2022-06-28-DAG-meets-BFT/) for a comparison of the protocols.
 
-Still, you may easily use Tusk instead of Bullshark by updating the order engine [in source](https://github.com/MystenLabs/sui/blob/0440605cbb45e6cdd790ab678f1f6409f1e938a3/narwhal/node/src/lib.rs#L191).
+Still, you may easily use Tusk instead of Bullshark by updating the order engine [in source](https://github.com/MystenLabs/sui/blob/0440605cbb45e6cdd790ab678f1f6409f1e938a3/narwhal/node/src/lib.rs#L191), however this part is experimental and does not provide unpredictable leader election yet.
 
-Consensus is accomplished in two layered modules, so Narwhal can also be used coupled with an external consensus algorithm, such as HotStuff, Istanbul BFT, or Tendermint. Narwhal is undergoing integration in the [Celo](https://www.youtube.com/watch?v=Lwheo3jhAZM) and [Sommelier](https://www.prnewswire.com/news-releases/sommelier-partners-with-mysten-labs-to-make-the-cosmos-blockchain-the-fastest-on-the-planet-301381122.html) blockchain.
+Consensus is accomplished in two layered modules, so Narwhal can also be coupled with an external consensus algorithm, such as HotStuff, Istanbul BFT, or Tendermint. Narwhal is undergoing integration in the [Celo](https://www.youtube.com/watch?v=Lwheo3jhAZM) and [Sommelier](https://www.prnewswire.com/news-releases/sommelier-partners-with-mysten-labs-to-make-the-cosmos-blockchain-the-fastest-on-the-planet-301381122.html) blockchain.
 
 The Sui Consensus Engine represents the latest variant of decades of work on multi-proposer, high-throughput consensus algorithms that reach throughputs of more than 125,000 transactions per second with a two-second latency for a deployment of 50 parties, with production cryptography, permanent storage, and a scaled-out primary-worker architecture.
 
@@ -77,7 +77,7 @@ flowchart TB
 * The certificates prove the data availability of each collection, or block, at each round.
 * Their contents constitute a DAG that can be traversed identically at each honest node.
 
-While the Bullshark or Tusk consensus selects a specific DAG traversal among several a posteriori, both they and external consensus algorithms can add more sophistication to their selection of blocks / collections to reflect priority concerns.
+While the Bullshark or Tusk consensus selects  a posteriori a specific DAG traversal among several, both they and external consensus algorithms can add more sophistication to their selection of blocks / collections to reflect priority concerns.
 
 ## Dependencies
 
@@ -89,7 +89,7 @@ To conduct a fresh deployment of Sui Consensus Engine, follow the instructions a
 
 ## Further reading
 
-Narwhal and Tusk (Danezis et al. 2021) is a consensus system leveraging directed acyclic graphs (DAG). DAG-based consensus has been developed over the last 30 years, and some of the history is summarized in (Wang & al. 2020). The closest theoretical ancestor of Narwhal & Tusk is (Keidar & al. 2021).
+Narwhal and Tusk (Danezis et al. 2021) is a consensus system leveraging directed acyclic graphs (DAG). DAG-based consensus has been developed over the last 30 years, and some of the history is summarized in (Wang & al. 2020). The closest theoretical ancestor of Narwhal & Tusk is DAG-Rider (Keidar & al. 2021).
 
 Narwhal & Tusk are developed in the [asynchronous model](https://decentralizedthoughts.github.io/2019-06-01-2019-5-31-models/). A partially synchronous variant of Narwhal and Tusk, called Bullshark, is presented in (Giridharan 2022).
 

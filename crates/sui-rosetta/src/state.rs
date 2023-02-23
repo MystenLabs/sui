@@ -235,7 +235,7 @@ impl CheckpointBlockProvider {
             let tx = self.client.read_api().get_transaction(*digest).await?;
             transactions.push(Transaction {
                 transaction_identifier: TransactionIdentifier {
-                    hash: tx.certificate.transaction_digest,
+                    hash: tx.effects.transaction_digest,
                 },
                 operations: Operations::try_from(tx)?,
                 related_transactions: vec![],

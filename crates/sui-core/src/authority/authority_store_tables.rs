@@ -6,8 +6,8 @@ use crate::authority::authority_store::LockDetails;
 use rocksdb::Options;
 use std::path::Path;
 use sui_storage::default_db_options;
+use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
-use sui_types::messages::TrustedCertificate;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::{DBMap, DBOptions, MetricConf, ReadWriteOptions};
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
@@ -42,12 +42,11 @@ pub struct AuthorityPerpetualTables {
     #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
     pub(crate) owned_object_transaction_locks: DBMap<ObjectRef, Option<LockDetails>>,
 
-    /// This is a map between the transaction digest and the corresponding certificate for all
-    /// certificates that have been successfully processed by this authority. This set of certificates
-    /// along with the genesis allows the reconstruction of all other state, and a full sync to this
-    /// authority.
-    #[default_options_override_fn = "certificates_table_default_config"]
-    pub(crate) certificates: DBMap<TransactionDigest, TrustedCertificate>,
+    /// This is a map between the transaction digest and the corresponding transaction that's known to be
+    /// executable. This means that it may have been executed locally, or it may have been synced through
+    /// state-sync but hasn't been executed yet.
+    #[default_options_override_fn = "transactions_table_default_config"]
+    pub(crate) transactions: DBMap<TransactionDigest, TrustedTransaction>,
 
     /// The map between the object ref of objects processed at all versions and the transaction
     /// digest of the certificate that lead to the creation of this version of the object.
@@ -72,11 +71,14 @@ pub struct AuthorityPerpetualTables {
     /// tables.
     pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
-    pub(crate) synced_transactions: DBMap<TransactionDigest, TrustedCertificate>,
-
     /// When transaction is executed via checkpoint executor, we store association here
     pub(crate) executed_transactions_to_checkpoint:
         DBMap<TransactionDigest, (EpochId, CheckpointSequenceNumber)>,
+
+    // Finalized root state accumulator for epoch, to be included in CheckpointSummary
+    // of last checkpoint of epoch. These values should only ever be written once
+    // and never changed
+    pub(crate) root_state_hash_by_epoch: DBMap<EpochId, (CheckpointSequenceNumber, Accumulator)>,
 
     /// A singleton table that stores the current epoch number. This is used only for the purpose of
     /// crash recovery so that when we restart we know which epoch we are at. This is needed because
@@ -262,7 +264,7 @@ fn objects_table_default_config() -> DBOptions {
         },
     }
 }
-fn certificates_table_default_config() -> DBOptions {
+fn transactions_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
 fn effects_table_default_config() -> DBOptions {

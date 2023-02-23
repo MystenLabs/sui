@@ -145,9 +145,9 @@ export function getAmount({
     txnData: SuiTransactionResponse;
     suiCoinOnly?: boolean;
 }) {
-    const { effects, certificate } = txnData;
-    const txnDetails = getTransactions(certificate)[0];
-    const sender = getTransactionSender(certificate);
+    const { effects } = txnData;
+    const txnDetails = getTransactions(txnData)[0];
+    const sender = getTransactionSender(txnData);
     const suiTransfer = getTransfersAmount(txnDetails, effects);
     const coinBalanceChange = getTxnAmountFromCoinBalanceEvent(effects, sender);
     const transfers = suiTransfer || coinBalanceChange;

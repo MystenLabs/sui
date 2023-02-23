@@ -236,15 +236,25 @@ export type GasData = {
 };
 
 /**
+ * TransactionExpiration
+ *
+ * Indications the expiration time for a transaction.
+ */
+export type TransactionExpiration = { None: null } | { Epoch: number };
+
+/**
  * The TransactionData to be signed and sent to the RPC service.
  *
  * Field `sender` is made optional as it can be added during the signing
  * process and there's no need to define it sooner.
+ *
+ * Field `expiration` is made optional as it is defaulted to `None`.
  */
 export type TransactionData = {
   sender?: string;
   kind: TransactionKind;
   gasData: GasData;
+  expiration?: TransactionExpiration;
 };
 
 export const TRANSACTION_DATA_TYPE_TAG = Array.from('TransactionData::').map(
@@ -254,42 +264,9 @@ export const TRANSACTION_DATA_TYPE_TAG = Array.from('TransactionData::').map(
 export function deserializeTransactionBytesToTransactionData(
   bcs: BCS,
   bytes: Uint8Array,
-): TransactionData | TransactionData_v26 {
+): TransactionData {
   return bcs.de('TransactionData', bytes);
 }
-
-export function toTransactionData(
-  tx_data: TransactionData_v26 | TransactionData,
-): TransactionData {
-  if ('gasData' in tx_data) {
-    return tx_data;
-  }
-  return {
-    sender: tx_data.sender,
-    kind: tx_data.kind,
-    gasData: {
-      payment: tx_data.gasPayment,
-      owner: tx_data.sender!,
-      budget: tx_data.gasBudget,
-      price: tx_data.gasPrice,
-    },
-  };
-}
-
-/* TransactionData <= v26 */
-/**
- * The TransactionData to be signed and sent to the RPC service.
- *
- * Field `sender` is made optional as it can be added during the signing
- * process and there's no need to define it sooner.
- */
-export type TransactionData_v26 = {
-  sender?: string; //
-  gasBudget: number;
-  gasPrice: number;
-  kind: TransactionKind;
-  gasPayment: SuiObjectRef;
-};
 
 const BCS_SPEC = {
   enums: {
@@ -331,6 +308,10 @@ const BCS_SPEC = {
     TransactionKind: {
       Single: 'Transaction',
       Batch: 'vector<Transaction>',
+    },
+    TransactionExpiration: {
+      None: null,
+      Epoch: BCS.U64,
     },
   },
   structs: {
@@ -386,6 +367,7 @@ const BCS_SPEC = {
       kind: 'TransactionKind',
       sender: BCS.ADDRESS,
       gasData: 'GasData',
+      expiration: 'TransactionExpiration',
     },
     GasData: {
       payment: 'SuiObjectRef',
@@ -404,16 +386,14 @@ const BCS_SPEC = {
   },
 };
 
-// for version <= 0.26.0
-const BCS_0_26_SPEC = {
+// for version <= 0.27.0
+const BCS_0_27_SPEC = {
   structs: {
     ...BCS_SPEC.structs,
     TransactionData: {
       kind: 'TransactionKind',
       sender: BCS.ADDRESS,
-      gasPayment: 'SuiObjectRef',
-      gasPrice: BCS.U64,
-      gasBudget: BCS.U64,
+      gasData: 'GasData',
     },
     SenderSignedData: {
       data: 'TransactionData',
@@ -430,12 +410,12 @@ const bcs = new BCS({ ...getSuiMoveConfig(), types: BCS_SPEC });
 registerUTF8String(bcs);
 
 // ========== Backward Compatibility (remove after v0.24 deploys) ===========
-const bcs_0_26 = new BCS({ ...getSuiMoveConfig(), types: BCS_0_26_SPEC });
-registerUTF8String(bcs_0_26);
+const bcs_0_27 = new BCS({ ...getSuiMoveConfig(), types: BCS_0_27_SPEC });
+registerUTF8String(bcs_0_27);
 
 export function bcsForVersion(v?: RpcApiVersion) {
-  if (v?.major === 0 && v?.minor <= 26) {
-    return bcs_0_26;
+  if (v?.major === 0 && v?.minor <= 27) {
+    return bcs_0_27;
   }
 
   return bcs;

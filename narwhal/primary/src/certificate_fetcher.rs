@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{metrics::PrimaryMetrics, synchronizer::Synchronizer};
 use anemo::Network;
-use config::{Committee, SharedWorkerCache};
+use config::Committee;
 use crypto::{NetworkPublicKey, PublicKey};
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
@@ -57,8 +57,6 @@ pub(crate) struct CertificateFetcher {
     state: Arc<CertificateFetcherState>,
     /// The committee information.
     committee: Committee,
-    /// The worker information.
-    worker_cache: SharedWorkerCache,
     /// Persistent storage for certificates. Read-only usage.
     certificate_store: CertificateStore,
     /// Receiver for signal of round changes. Used for calculating gc_round.
@@ -97,7 +95,6 @@ impl CertificateFetcher {
     pub fn spawn(
         name: PublicKey,
         committee: Committee,
-        worker_cache: SharedWorkerCache,
         network: anemo::Network,
         certificate_store: CertificateStore,
         rx_consensus_round_updates: watch::Receiver<u64>,
@@ -119,7 +116,6 @@ impl CertificateFetcher {
                 Self {
                     state,
                     committee,
-                    worker_cache,
                     certificate_store,
                     rx_consensus_round_updates,
                     gc_depth,
@@ -257,7 +253,6 @@ impl CertificateFetcher {
 
         let state = self.state.clone();
         let committee = self.committee.clone();
-        let worker_cache = self.worker_cache.clone();
 
         debug!(
             "Starting task to fetch missing certificates: max target {}, gc round {:?}",
@@ -270,15 +265,7 @@ impl CertificateFetcher {
                 state.metrics.certificate_fetcher_inflight_fetch.inc();
 
                 let now = Instant::now();
-                match run_fetch_task(
-                    state.clone(),
-                    committee,
-                    worker_cache,
-                    gc_round,
-                    written_rounds,
-                )
-                .await
-                {
+                match run_fetch_task(state.clone(), committee, gc_round, written_rounds).await {
                     Ok(_) => {
                         debug!(
                             "Finished task to fetch certificates successfully, elapsed = {}s",
@@ -307,7 +294,6 @@ impl CertificateFetcher {
 async fn run_fetch_task(
     state: Arc<CertificateFetcherState>,
     committee: Committee,
-    worker_cahce: SharedWorkerCache,
     gc_round: Round,
     written_rounds: BTreeMap<PublicKey, BTreeSet<Round>>,
 ) -> DagResult<()> {
@@ -322,14 +308,7 @@ async fn run_fetch_task(
 
     // Process and store fetched certificates.
     let num_certs_fetched = response.certificates.len();
-    process_certificates_helper(
-        response,
-        &state.synchronizer,
-        &committee,
-        &worker_cahce,
-        &state.network,
-    )
-    .await?;
+    process_certificates_helper(response, &state.synchronizer, &state.network).await?;
     state
         .metrics
         .certificate_fetcher_num_certificates_processed
@@ -423,8 +402,6 @@ async fn fetch_certificates_helper(
 async fn process_certificates_helper(
     response: FetchCertificatesResponse,
     synchronizer: &Synchronizer,
-    committee: &Committee,
-    worker_cache: &SharedWorkerCache,
     network: &Network,
 ) -> DagResult<()> {
     trace!("Start sending fetched certificates to processing");
@@ -444,13 +421,11 @@ async fn process_certificates_helper(
         .chunks(VERIFY_CERTIFICATES_BATCH_SIZE)
         .map(|certs| {
             let certs = certs.to_vec();
-            let committee = committee.clone();
-            let worker_cache = worker_cache.clone();
+            let sync = synchronizer.clone();
             // Use threads dedicated to computation heavy work.
             spawn_blocking(move || {
                 for c in &certs {
-                    let worker_cache = worker_cache.clone();
-                    c.verify(&committee, worker_cache)?;
+                    sync.sanitize_certificate(c)?;
                 }
                 Ok::<Vec<Certificate>, DagError>(certs)
             })
@@ -460,7 +435,10 @@ async fn process_certificates_helper(
     for task in verify_tasks {
         let certificates = task.await.map_err(|_| DagError::Canceled)??;
         for cert in certificates {
-            match synchronizer.try_accept_certificate(cert, network).await {
+            match synchronizer
+                .try_accept_sanitized_certificate(cert, network)
+                .await
+            {
                 Ok(()) => continue,
                 // It is possible that subsequent certificates are above GC round,
                 // so not stopping early.

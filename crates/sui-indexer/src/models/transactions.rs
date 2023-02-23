@@ -19,6 +19,7 @@ pub struct Transaction {
     pub id: i64,
     pub transaction_digest: String,
     pub sender: String,
+    pub checkpoint_sequence_number: Option<i64>,
     pub transaction_time: Option<NaiveDateTime>,
     pub transaction_kinds: Vec<Option<String>>,
     pub created: Vec<Option<String>>,
@@ -43,6 +44,7 @@ pub struct Transaction {
 pub struct NewTransaction {
     pub transaction_digest: String,
     pub sender: String,
+    pub checkpoint_sequence_number: Option<i64>,
     pub transaction_time: Option<NaiveDateTime>,
     pub transaction_kinds: Vec<Option<String>>,
     pub created: Vec<Option<String>>,
@@ -121,20 +123,24 @@ pub fn commit_transactions(
 pub fn transaction_response_to_new_transaction(
     tx_resp: SuiTransactionResponse,
 ) -> Result<NewTransaction, IndexerError> {
-    let cer = tx_resp.certificate;
-    let txn_json = serde_json::to_string(&cer).map_err(|err| {
+    let txn_json = serde_json::to_string(&tx_resp.transaction).map_err(|err| {
         IndexerError::InsertableParsingError(format!(
             "Failed converting transaction {:?} to JSON with error: {:?}",
-            cer.clone(),
-            err
+            tx_resp.transaction, err
         ))
     })?;
     // canonical txn digest string is Base58 encoded
-    let tx_digest = cer.transaction_digest.base58_encode();
-    let gas_budget = cer.data.gas_data.budget;
-    let gas_price = cer.data.gas_data.price;
-    let sender = cer.data.sender.to_string();
-    let txn_kind_iter = cer.data.transactions.iter().map(|k| k.to_string());
+    let tx_digest = tx_resp.effects.transaction_digest.base58_encode();
+    let gas_budget = tx_resp.transaction.data.gas_data.budget;
+    let gas_price = tx_resp.transaction.data.gas_data.price;
+    let sender = tx_resp.transaction.data.sender.to_string();
+    let checkpoint_seq_number = tx_resp.checkpoint.map(|c| c as i64);
+    let txn_kind_iter = tx_resp
+        .transaction
+        .data
+        .transactions
+        .iter()
+        .map(|k| k.to_string());
 
     let effects = tx_resp.effects.clone();
     let created: Vec<String> = effects
@@ -192,6 +198,7 @@ pub fn transaction_response_to_new_transaction(
     Ok(NewTransaction {
         transaction_digest: tx_digest,
         sender,
+        checkpoint_sequence_number: checkpoint_seq_number,
         transaction_kinds: txn_kind_iter.map(Some).collect::<Vec<Option<String>>>(),
         transaction_time: timestamp,
         created: vec_string_to_vec_opt_string(created),

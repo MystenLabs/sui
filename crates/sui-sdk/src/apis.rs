@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::{Error, SuiRpcResult};
-use crate::{RpcClient, TransactionExecutionResult, WAIT_FOR_TX_TIMEOUT_SEC};
+use crate::{RpcClient, WAIT_FOR_TX_TIMEOUT_SEC};
 use fastcrypto::encoding::Base64;
 use futures::stream;
 use futures_core::Stream;
@@ -15,8 +15,8 @@ use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DynamicFieldPage, EventPage,
     GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse, SuiCoinMetadata,
-    SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedModule,
-    SuiObjectInfo, SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
+    SuiEventEnvelope, SuiEventFilter, SuiMoveNormalizedModule, SuiObjectInfo,
+    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{
@@ -33,10 +33,7 @@ use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
 
 use futures::StreamExt;
-use sui_json_rpc::api::{
-    CoinReadApiClient, EventReadApiClient, EventStreamingApiClient, RpcBcsApiClient,
-    RpcFullNodeReadApiClient, RpcReadApiClient, TransactionExecutionApiClient,
-};
+use sui_json_rpc::api::{CoinReadApiClient, EventReadApiClient, ReadApiClient, WriteApiClient};
 use sui_types::governance::DelegatedStake;
 
 #[derive(Debug)]
@@ -414,44 +411,30 @@ impl QuorumDriver {
         &self,
         tx: VerifiedTransaction,
         request_type: Option<ExecuteTransactionRequestType>,
-    ) -> SuiRpcResult<TransactionExecutionResult> {
-        let tx_digest = *tx.digest();
+    ) -> SuiRpcResult<SuiTransactionResponse> {
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
         let request_type =
             request_type.unwrap_or(ExecuteTransactionRequestType::WaitForLocalExecution);
-        let SuiExecuteTransactionResponse {
-            certificate,
-            effects,
-            confirmed_local_execution,
-        } = TransactionExecutionApiClient::submit_transaction(
-            &self.api.http,
-            tx_bytes,
-            signatures,
-            request_type.clone(),
-        )
-        .await?;
+        let mut response: SuiTransactionResponse = self
+            .api
+            .http
+            .submit_transaction(tx_bytes, signatures, request_type.clone())
+            .await?;
 
         Ok(match request_type {
-            ExecuteTransactionRequestType::WaitForEffectsCert => TransactionExecutionResult {
-                tx_digest,
-                tx_cert: certificate,
-                effects: Some(effects.effects),
-                confirmed_local_execution,
-                timestamp_ms: None,
-                parsed_data: None,
-            },
+            ExecuteTransactionRequestType::WaitForEffectsCert => response,
             ExecuteTransactionRequestType::WaitForLocalExecution => {
-                if !confirmed_local_execution {
-                    Self::wait_until_fullnode_sees_tx(&self.api, tx_digest).await?;
+                if let Some(confirmed_local_execution) = response.confirmed_local_execution {
+                    if !confirmed_local_execution {
+                        Self::wait_until_fullnode_sees_tx(
+                            &self.api,
+                            response.effects.transaction_digest,
+                        )
+                        .await?;
+                    }
                 }
-                TransactionExecutionResult {
-                    tx_digest,
-                    tx_cert: certificate,
-                    effects: Some(effects.effects),
-                    confirmed_local_execution,
-                    timestamp_ms: None,
-                    parsed_data: None,
-                }
+                response.confirmed_local_execution = Some(true);
+                response
             }
         })
     }
@@ -462,7 +445,7 @@ impl QuorumDriver {
     ) -> SuiRpcResult<()> {
         let start = Instant::now();
         loop {
-            let resp = RpcReadApiClient::get_transaction(&c.http, tx_digest).await;
+            let resp = ReadApiClient::get_transaction(&c.http, tx_digest).await;
             if let Err(err) = resp {
                 if err.to_string().contains(TRANSACTION_NOT_FOUND_MSG_PREFIX) {
                     tokio::time::sleep(Duration::from_millis(300)).await;

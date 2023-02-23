@@ -5,9 +5,7 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 use std::str::FromStr;
 
-use fastcrypto::traits::AggregateAuthenticator;
 use fastcrypto::traits::EncodeDecodeBase64;
-use fastcrypto::traits::KeyPair;
 use move_core_types::identifier::Identifier;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -18,21 +16,17 @@ use sui::client_commands::EXAMPLE_NFT_URL;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, EventPage, MoveCallParams, OwnedObjectRef,
-    RPCTransactionRequestParams, SuiCertifiedTransaction, SuiData, SuiEvent, SuiEventEnvelope,
-    SuiExecutionStatus, SuiGasCostSummary, SuiObject, SuiObjectInfo, SuiObjectRead, SuiObjectRef,
-    SuiParsedData, SuiPastObjectRead, SuiRawData, SuiRawMoveObject,
-    SuiTransactionAuthSignersResponse, SuiTransactionData, SuiTransactionEffects,
-    SuiTransactionResponse, TransactionBytes, TransactionsPage, TransferObjectParams,
+    RPCTransactionRequestParams, SuiData, SuiEvent, SuiEventEnvelope, SuiExecutionStatus,
+    SuiGasCostSummary, SuiObject, SuiObjectInfo, SuiObjectRead, SuiObjectRef, SuiParsedData,
+    SuiPastObjectRead, SuiRawData, SuiRawMoveObject, SuiTransaction, SuiTransactionData,
+    SuiTransactionEffects, SuiTransactionResponse, TransactionBytes, TransactionsPage,
+    TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectType, SequenceNumber, SuiAddress, TransactionDigest,
 };
-use sui_types::crypto::AuthorityQuorumSignInfo;
-use sui_types::crypto::{
-    get_key_pair_from_rng, AccountKeyPair, AggregateAuthoritySignature, AuthorityKeyPair,
-    AuthorityPublicKeyBytes, AuthoritySignature, SuiAuthorityStrongQuorumSignInfo,
-};
+use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair};
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
@@ -81,7 +75,6 @@ impl RpcExampleProvider {
             self.get_raw_object(),
             self.get_total_transaction_number(),
             self.get_transaction(),
-            self.get_transaction_auth_signers(),
             self.get_transactions(),
             self.get_events(),
             self.execute_transaction_example(),
@@ -371,36 +364,7 @@ impl RpcExampleProvider {
             "sui_getTransaction",
             vec![ExamplePairing::new(
                 "Return the transaction response object for specified transaction digest",
-                vec![(
-                    "digest",
-                    json!(result.certificate.transaction_digest.clone()),
-                )],
-                json!(result),
-            )],
-        )
-    }
-
-    fn get_transaction_auth_signers(&mut self) -> Examples {
-        let (_, _, _, _, tx_result, _) = self.get_transfer_data_response();
-        let sec1: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
-        let sec2: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([1; 32])).1;
-        let sec3: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([2; 32])).1;
-
-        let result = SuiTransactionAuthSignersResponse {
-            signers: vec![
-                AuthorityPublicKeyBytes::from(sec1.public()),
-                AuthorityPublicKeyBytes::from(sec2.public()),
-                AuthorityPublicKeyBytes::from(sec3.public()),
-            ],
-        };
-        Examples::new(
-            "sui_getTransactionAuthSigners",
-            vec![ExamplePairing::new(
-                "Return the list of authorities that committed to the authority signature of the specified transaction digest",
-                vec![(
-                    "digest",
-                    json!(tx_result.certificate.transaction_digest.clone()),
-                )],
+                vec![("digest", json!(result.effects.transaction_digest))],
                 json!(result),
             )],
         )
@@ -487,21 +451,6 @@ impl RpcExampleProvider {
             event: sui_event.clone(),
         }];
         let result = SuiTransactionResponse {
-            certificate: SuiCertifiedTransaction {
-                transaction_digest: *tx_digest,
-                data: SuiTransactionData::try_from(data1).unwrap(),
-                tx_signatures: signatures.clone(),
-                auth_sign_info: SuiAuthorityStrongQuorumSignInfo::from(&AuthorityQuorumSignInfo {
-                    epoch: 0,
-                    // We create a dummy signature since there is no such thing as a default valid
-                    // signature.
-                    signature: AggregateAuthoritySignature::aggregate(&vec![
-                        AuthoritySignature::default(),
-                    ])
-                    .unwrap(),
-                    signers_map: Default::default(),
-                }),
-            },
             effects: SuiTransactionEffects {
                 status: SuiExecutionStatus::Success,
                 executed_epoch: 0,
@@ -535,8 +484,12 @@ impl RpcExampleProvider {
                 dependencies: vec![],
             },
             timestamp_ms: None,
+            transaction: SuiTransaction {
+                data: SuiTransactionData::try_from(data1).unwrap(),
+                tx_signatures: signatures.clone(),
+            },
+            confirmed_local_execution: None,
             checkpoint: None,
-            parsed_data: None,
         };
 
         (data2, signatures, recipient, obj_id, result, events)
@@ -557,15 +510,13 @@ impl RpcExampleProvider {
                 vec![
                     (
                         "query",
-                        json!(EventQuery::Transaction(
-                            result.certificate.transaction_digest
-                        )),
+                        json!(EventQuery::Transaction(result.effects.transaction_digest)),
                     ),
                     (
                         "cursor",
                         json!(EventID {
                             event_seq: 10,
-                            tx_digest: result.certificate.transaction_digest
+                            tx_digest: result.effects.transaction_digest
                         }),
                     ),
                     ("limit", json!(events.len())),

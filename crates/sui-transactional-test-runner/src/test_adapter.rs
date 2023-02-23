@@ -25,9 +25,7 @@ use move_transactional_test_runner::{
     framework::{CompiledState, MoveTestAdapter},
     tasks::{InitCommand, SyntaxChoice, TaskInput},
 };
-use move_vm_runtime::{
-    move_vm::MoveVM, native_functions::NativeFunctionTable, session::SerializedReturnValues,
-};
+use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues};
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::fmt::Write;
@@ -74,7 +72,6 @@ const RNG_SEED: [u8; 32] = [
 pub struct SuiTestAdapter<'a> {
     vm: Arc<MoveVM>,
     pub(crate) storage: Arc<InMemoryStorage>,
-    native_functions: NativeFunctionTable,
     pub(crate) compiled_state: CompiledState<'a>,
     accounts: BTreeMap<String, (SuiAddress, AccountKeyPair)>,
     default_syntax: SyntaxChoice,
@@ -91,8 +88,7 @@ struct TxnSummary {
 }
 
 static GENESIS: Lazy<Genesis> = Lazy::new(create_genesis_module_objects);
-static PROTOCOL_CONSTANTS: Lazy<&'static ProtocolConfig> =
-    Lazy::new(ProtocolConfig::get_for_max_version);
+static PROTOCOL_CONSTANTS: Lazy<ProtocolConfig> = Lazy::new(ProtocolConfig::get_for_max_version);
 
 struct Genesis {
     pub objects: Vec<Object>,
@@ -251,9 +247,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         }
 
         let mut test_adapter = Self {
-            vm: Arc::new(new_move_vm(native_functions.clone(), &PROTOCOL_CONSTANTS).unwrap()),
+            vm: Arc::new(new_move_vm(native_functions, &PROTOCOL_CONSTANTS).unwrap()),
             storage: Arc::new(InMemoryStorage::new(objects)),
-            native_functions,
             compiled_state: CompiledState::new(
                 named_address_mapping,
                 pre_compiled_deps,
@@ -619,10 +614,9 @@ impl<'a> SuiTestAdapter<'a> {
             transaction_digest,
             transaction_dependencies,
             &self.vm,
-            &self.native_functions,
             gas_status,
             // TODO: Support different epochs in transactional tests.
-            &EpochData::genesis(),
+            &EpochData::new_test(),
             &PROTOCOL_CONSTANTS,
         );
 

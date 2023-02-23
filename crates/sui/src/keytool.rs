@@ -118,7 +118,7 @@ impl KeyToolCommand {
                     // The saved keypair is encoded `privkey || pubkey` without the scheme flag.
                     let (address, keypair) = get_authority_key_pair();
                     let file_name = format!("bls-{address}.key");
-                    write_authority_keypair_to_file(&keypair, &file_name)?;
+                    write_authority_keypair_to_file(&keypair, file_name)?;
                 } else {
                     let (address, kp, scheme, _) = generate_new_key(key_scheme, derivation_path)?;
                     let file = format!("{address}.key");

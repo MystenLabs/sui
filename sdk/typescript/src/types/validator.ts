@@ -177,7 +177,10 @@ export const ValidatorSet = object({
   pending_validators: array(Validator),
   pending_removals: array(number()),
   next_epoch_validators: array(ValidatorMetaData),
-  pending_delegation_switches: object({ contents: array(ValidatorPair) }),
+  // TODO: Remove this after 0.28.0 is released
+  pending_delegation_switches: optional(
+    object({ contents: array(ValidatorPair) }),
+  ),
 });
 
 export const SuiSystemState = object({
@@ -299,7 +302,8 @@ export const MoveActiveValidator = object({
 export const MoveValidatorsFieldsClass = object({
   active_validators: array(MoveActiveValidator),
   next_epoch_validators: array(MoveNextEpochValidator),
-  pending_delegation_switches: ValidatorReportRecords,
+  // TODO: Remove this after 0.28.0 is released
+  pending_delegation_switches: optional(ValidatorReportRecords),
   pending_removals: array(number()),
   pending_validators: array(number()),
   quorum_stake_threshold: optional(string()),
