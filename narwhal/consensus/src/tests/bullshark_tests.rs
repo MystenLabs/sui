@@ -85,7 +85,7 @@ async fn commit_one() {
 
     // Ensure the first 4 ordered certificates are from round 1 (they are the parents of the committed
     // leader); then the leader's certificate should be committed.
-    let committed_sub_dag = rx_output.recv().await.unwrap();
+    let committed_sub_dag: CommittedSubDag = rx_output.recv().await.unwrap();
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for _ in 1..=4 {
         let output = sequence.next().unwrap();
@@ -93,6 +93,9 @@ async fn commit_one() {
     }
     let output = sequence.next().unwrap();
     assert_eq!(output.round(), 2);
+
+    // AND the reputation scores have not been updated
+    assert_eq!(committed_sub_dag.reputation_score.total_authorities(), 0);
 }
 
 // Run for 8 dag rounds with one dead node node (that is not a leader). We should commit the leaders of

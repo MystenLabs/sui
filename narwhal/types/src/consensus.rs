@@ -81,6 +81,10 @@ impl ConsensusReputationScore {
         self.scores_per_authority.insert(authority, total_score);
     }
 
+    pub fn total_authorities(&self) -> u64 {
+        self.scores_per_authority.len() as u64
+    }
+
     /// Clear the scores for all authorities
     fn clear(&mut self) {
         self.scores_per_authority.clear();
