@@ -2140,33 +2140,36 @@ impl AuthorityState {
     pub async fn multi_get_transactions(
         &self,
         digests: &[TransactionDigest],
-    ) -> Result<Vec<((VerifiedCertificate, TransactionEffects), Option<CheckpointSequenceNumber>)>, anyhow::Error> {
+    ) -> Result<VerifiedTransactionBatch, anyhow::Error> {
         let certs = self.database.multi_get_certified_transaction(digests)?;
         let effects = self.database.multi_get_executed_effects(digests)?;
         let checkpoints = self.database.multi_get_transaction_checkpoint(digests)?;
-        let mut response: Vec<((VerifiedCertificate, TransactionEffects), Option<CheckpointSequenceNumber>)> = Vec::new();
+        let mut response: VerifiedTransactionBatch = Vec::new();
 
         if certs.len() == effects.len() && checkpoints.len() == certs.len() {
-            // for i in 0..certs.len() {
-            for ((cert, effect), checkpoint) in certs.iter().zip(effects.iter()).zip(checkpoints.iter()) {
-                match ((cert.clone(), effect.clone()), checkpoint.clone()) {
-                    ((Some(cert), Some(effect)), Some((_,check))) => response.push(((cert, effect), Some(check))),
-                    _ => continue,
+            for ((cert, effect), checkpoint) in
+                certs.iter().zip(effects.iter()).zip(checkpoints.iter())
+            {
+                match ((cert.clone(), effect.clone()), &checkpoint.clone()) {
+                    ((Some(cert), Some(effect)), check) => response.push(((cert, effect), *check)),
+                    ((_, _), _) => continue,
                 }
             }
         }
 
-        if response.is_empty() {
-            Err(anyhow!(SuiError::NoBatchesFoundError))
-        // } else if response.len() != digests.len(){
-        //     let mut missed_digests: Vec<TransactionDigest> = Vec::new();
-        //     for digest in digests.iter() {
-        //         if let None = effects.iter().find(|&effect| effect.clone().unwrap().transaction_digest != *digest) {
-        //             missed_digests.push(*digest);
-        //         }
-        //     }
-        //     Err(anyhow!(SuiError::TransactionsNotFound{ digests: missed_digests }))
-
+        if response.len() != digests.len() {
+            let mut missed_digests: Vec<TransactionDigest> = Vec::new();
+            for digest in digests.iter() {
+                if effects
+                    .iter()
+                    .any(|effect| effect.clone().unwrap().transaction_digest != *digest)
+                {
+                    missed_digests.push(*digest);
+                }
+            }
+            Err(anyhow!(SuiError::TransactionsNotFound {
+                digests: missed_digests
+            }))
         } else {
             Ok(response)
         }

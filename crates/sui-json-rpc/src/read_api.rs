@@ -208,12 +208,12 @@ impl ReadApiServer for ReadApi {
         let mut responses: Vec<SuiTransactionResponse> = Vec::new();
         for i in 0..txn_batch.len() {
             responses.push(SuiTransactionResponse {
-                certificate: txn_batch[i].clone().0.0.try_into()?,
+                certificate: txn_batch[i].clone().0 .0.try_into()?,
                 effects: SuiTransactionEffects::try_from(
                     txn_batch[i].0.clone().1,
                     self.state.module_cache.as_ref(),
                 )?,
-                checkpoint: txn_batch[i].1,
+                checkpoint: txn_batch[i].1.map(|(_epoch, checkpoint)| checkpoint),
                 timestamp_ms: self.state.get_timestamp_ms(&digests[i]).await?,
                 parsed_data: None,
             })

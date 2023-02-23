@@ -1992,6 +1992,11 @@ pub type TxCertAndSignedEffects = (
 pub type VerifiedCertificate = VerifiedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 
+pub type VerifiedTransactionBatch = Vec<(
+    (VerifiedCertificate, TransactionEffects),
+    Option<(EpochId, CheckpointSequenceNumber)>,
+)>;
+
 /// An ExecutableTransaction is a wrapper of a transaction with a CertificateProof that indicates
 /// there existed a valid certificate for this transaction, and hence it can be executed locally.
 /// This is an abstraction data structure to cover both the case where the transaction is

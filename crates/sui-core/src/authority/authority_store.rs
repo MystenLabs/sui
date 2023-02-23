@@ -287,9 +287,7 @@ impl AuthorityStore {
             .executed_transactions_to_checkpoint
             .multi_get(digests)?
             .into_iter()
-            .map(|o| o.map(|c| c.into()))
-            .collect()
-        )
+            .collect())
     }
 
     /// Returns true if there are no objects in the database
