@@ -2141,17 +2141,17 @@ impl AuthorityState {
         &self,
         digests: &[TransactionDigest],
     ) -> Result<VerifiedTransactionBatch, anyhow::Error> {
-        let certs = self.database.multi_get_certified_transaction(digests)?;
+        let transactions = self.database.multi_get_transactions(digests)?;
         let effects = self.database.multi_get_executed_effects(digests)?;
         let checkpoints = self.database.multi_get_transaction_checkpoint(digests)?;
         let mut response: VerifiedTransactionBatch = Vec::new();
 
-        if certs.len() == effects.len() && checkpoints.len() == certs.len() {
-            for ((cert, effect), checkpoint) in
-                certs.iter().zip(effects.iter()).zip(checkpoints.iter())
+        if transactions.len() == effects.len() && checkpoints.len() == transactions.len() {
+            for ((transaction, effect), checkpoint) in
+                transactions.iter().zip(effects.iter()).zip(checkpoints.iter())
             {
-                match ((cert.clone(), effect.clone()), &checkpoint.clone()) {
-                    ((Some(cert), Some(effect)), check) => response.push(((cert, effect), *check)),
+                match ((transaction.clone(), effect.clone()), &checkpoint.clone()) {
+                    ((Some(transaction), Some(effect)), check) => response.push(((transaction, effect), *check)),
                     ((_, _), _) => continue,
                 }
             }

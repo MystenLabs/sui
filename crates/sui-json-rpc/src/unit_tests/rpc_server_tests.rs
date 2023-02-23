@@ -617,11 +617,10 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     let response: Vec<SuiTransactionResponse> = http_client.multi_get_transactions(tx).await?;
 
     assert_eq!(5, response.len());
-    assert!(response[1].certificate.transaction_digest == response[1].effects.transaction_digest);
 
     for r in response.iter().skip(1) {
         assert!(tx_responses.iter().any(
-            |resp| matches!(resp, SuiExecuteTransactionResponse {effects, ..} if effects.effects.transaction_digest == r.effects.transaction_digest)
+            |resp| matches!(resp, SuiTransactionResponse {effects, ..} if effects.transaction_digest == r.effects.transaction_digest)
         ))
     }
 

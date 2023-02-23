@@ -141,6 +141,12 @@ pub trait ReadApi {
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage>;
 
+    #[method(name = "multiGetTransactions")]
+    async fn multi_get_transactions(
+        &self,
+        digests: Vec<TransactionDigest>,
+     ) -> RpcResult<Vec<SuiTransactionResponse>>;
+
     /// Note there is no software-level guarantee/SLA that objects with past versions
     /// can be retrieved by this API, even if the object and version exists/existed.
     /// The result may vary across nodes depending on their pruning policies.
