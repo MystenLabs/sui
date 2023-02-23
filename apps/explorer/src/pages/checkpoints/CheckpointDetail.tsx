@@ -84,7 +84,9 @@ function CheckpointDetail() {
 
     if (checkpointQuery.isLoading) return <LoadingSpinner />;
 
-    const { data: checkpoint } = checkpointQuery;
+    const {
+        data: { epochRollingGasCostSummary, ...checkpoint },
+    } = checkpointQuery;
 
     return (
         <div className="flex flex-col space-y-12">
@@ -95,35 +97,64 @@ function CheckpointDetail() {
                         <Tab>Details</Tab>
                     </TabList>
                     <TabPanels>
-                        <div className="mt-4 max-w-md space-y-2 overflow-auto">
-                            <div className="grid grid-cols-2">
-                                <Text color="steel-darker" variant="p1/medium">
-                                    Checkpoint Sequence No.
-                                </Text>
-                                <Text color="steel-darker" variant="p1/medium">
-                                    {checkpoint.sequenceNumber}
-                                </Text>
+                        <dl className="mt-4 space-y-2">
+                            <div className="space-y-2 sm:grid sm:grid-cols-4 sm:gap-4 sm:space-y-0">
+                                <dt>
+                                    <Text
+                                        color="steel-darker"
+                                        variant="p1/medium"
+                                    >
+                                        Checkpoint Sequence No.
+                                    </Text>
+                                </dt>
+                                <dd>
+                                    <Text
+                                        color="steel-darker"
+                                        variant="p1/medium"
+                                    >
+                                        {checkpoint.sequenceNumber}
+                                    </Text>
+                                </dd>
                             </div>
-                            <div className="grid grid-cols-2">
-                                <Text color="steel-darker" variant="p1/medium">
-                                    Epoch
-                                </Text>
-                                <Text color="steel-darker" variant="p1/medium">
-                                    {checkpoint.epoch}
-                                </Text>
+                            <div className="sm:grid sm:grid-cols-5 sm:gap-4">
+                                <dt>
+                                    <Text
+                                        color="steel-darker"
+                                        variant="p1/medium"
+                                    >
+                                        Epoch
+                                    </Text>
+                                </dt>
+                                <dd>
+                                    <Text
+                                        color="steel-darker"
+                                        variant="p1/medium"
+                                    >
+                                        {checkpoint.epoch}
+                                    </Text>
+                                </dd>
                             </div>
-                            <div className="grid grid-cols-2">
-                                <Text color="steel-darker" variant="p1/medium">
-                                    Checkpoint Timestamp
-                                </Text>
-
-                                <Text color="steel-darker" variant="p1/medium">
-                                    {convertNumberToDate(
-                                        checkpoint.timestampMs
-                                    )}
-                                </Text>
+                            <div className="sm:grid sm:grid-cols-5 sm:gap-4">
+                                <dt>
+                                    <Text
+                                        color="steel-darker"
+                                        variant="p1/medium"
+                                    >
+                                        Checkpoint Timestamp
+                                    </Text>
+                                </dt>
+                                <dd>
+                                    <Text
+                                        color="steel-darker"
+                                        variant="p1/medium"
+                                    >
+                                        {convertNumberToDate(
+                                            checkpoint.timestampMs
+                                        )}
+                                    </Text>
+                                </dd>
                             </div>
-                        </div>
+                        </dl>
                     </TabPanels>
                 </TabGroup>
                 <TabGroup as="div" size="lg">
@@ -138,8 +169,7 @@ function CheckpointDetail() {
                                 </Text>
                                 <Text color="steel-darker" variant="p1/medium">
                                     {
-                                        checkpoint.epochRollingGasCostSummary
-                                            .computation_cost
+                                        epochRollingGasCostSummary.computation_cost
                                     }
                                 </Text>
                             </div>
@@ -148,10 +178,7 @@ function CheckpointDetail() {
                                     Storage Fee
                                 </Text>
                                 <Text color="steel-darker" variant="p1/medium">
-                                    {
-                                        checkpoint.epochRollingGasCostSummary
-                                            .storage_cost
-                                    }
+                                    {epochRollingGasCostSummary.storage_cost}
                                 </Text>
                             </div>
                             <div className="grid grid-cols-2">
@@ -159,10 +186,7 @@ function CheckpointDetail() {
                                     Storage Rebate
                                 </Text>
                                 <Text color="steel-darker" variant="p1/medium">
-                                    {
-                                        checkpoint.epochRollingGasCostSummary
-                                            .storage_rebate
-                                    }
+                                    {epochRollingGasCostSummary.storage_rebate}
                                 </Text>
                             </div>
                         </div>
@@ -188,9 +212,10 @@ function CheckpointDetail() {
 }
 
 export default () => {
-    return (
-        <FeaturesReady timeout={500} fallback={<LoadingSpinner />}>
-            <CheckpointDetail />;
-        </FeaturesReady>
-    );
+    const gb = useGrowthBook();
+    if (gb?.ready) {
+        return <CheckpointDetail />;
+    } else {
+        return <LoadingSpinner />;
+    }
 };
