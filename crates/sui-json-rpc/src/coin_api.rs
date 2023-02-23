@@ -274,13 +274,11 @@ impl CoinReadApiServer for CoinReadApi {
     }
 
     async fn get_total_supply(&self, coin_type: String) -> RpcResult<Supply> {
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let coin_struct = parse_sui_struct_tag(&coin_type)?;
 
         Ok(if GAS::is_gas(&coin_struct) {
-            self.state
-                .get_sui_system_state_object()
-                .map_err(Error::from)?
-                .treasury_cap
+            epoch_store.system_state_object().treasury_cap.clone()
         } else {
             let treasury_cap_object = self
                 .find_package_object(&coin_struct.address.into(), TreasuryCap::type_(coin_struct))

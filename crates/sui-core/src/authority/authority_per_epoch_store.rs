@@ -461,10 +461,12 @@ impl AuthorityPerEpochStore {
             .insert(checkpoint, accumulator)?)
     }
 
+    pub fn system_state_object(&self) -> &SuiSystemState {
+        &self.epoch_start_configuration.system_state
+    }
+
     pub fn reference_gas_price(&self) -> u64 {
-        self.epoch_start_configuration
-            .system_state
-            .reference_gas_price
+        self.system_state_object().reference_gas_price
     }
 
     pub async fn acquire_tx_guard(

@@ -72,7 +72,8 @@ impl DataReader for AuthorityStateDataReader {
     }
 
     async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error> {
-        Ok(self.0.get_sui_system_state_object()?.reference_gas_price)
+        let epoch_store = self.0.load_epoch_store_one_call_per_task();
+        Ok(epoch_store.reference_gas_price())
     }
 }
 

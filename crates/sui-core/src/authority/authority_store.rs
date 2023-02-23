@@ -1158,6 +1158,7 @@ impl AuthorityStore {
             .map(|v| v.map(|v| v.into()))
     }
 
+    // TODO: Transaction Orchestrator also calls this, which is not ideal.
     pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
         self.perpetual_tables.get_sui_system_state_object()
     }

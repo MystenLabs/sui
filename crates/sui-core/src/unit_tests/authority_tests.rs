@@ -729,7 +729,9 @@ async fn test_dev_inspect_uses_unbound_object() {
         ))],
     }));
 
-    let result = fullnode.dev_inspect_transaction(sender, kind, 1).await;
+    let result = fullnode
+        .dev_inspect_transaction(sender, kind, Some(1))
+        .await;
     let Err(err) = result else { panic!() };
     assert!(err
         .to_string()
@@ -4234,7 +4236,9 @@ pub async fn call_dev_inspect(
         type_arguments,
         arguments,
     }));
-    authority.dev_inspect_transaction(*sender, kind, 1).await
+    authority
+        .dev_inspect_transaction(*sender, kind, Some(1))
+        .await
 }
 
 #[cfg(test)]
