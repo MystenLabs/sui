@@ -426,9 +426,6 @@ pub struct AuthorityState {
     #[allow(unused)]
     tx_execution_shutdown: Mutex<Option<oneshot::Sender<()>>>,
 
-    /// The currently supported protocol versions.
-    supported_protocol_versions: SupportedProtocolVersions,
-
     pub metrics: Arc<AuthorityMetrics>,
     _objects_pruner: AuthorityStorePruner,
     _authority_per_epoch_pruner: AuthorityPerEpochStorePruner,
@@ -1557,7 +1554,6 @@ impl AuthorityState {
             committee_store,
             transaction_manager,
             tx_execution_shutdown: Mutex::new(Some(tx_execution_shutdown)),
-            supported_protocol_versions,
             metrics,
             _objects_pruner,
             _authority_per_epoch_pruner,
@@ -2549,6 +2545,65 @@ impl AuthorityState {
         self.database.get_latest_parent_entry(object_id)
     }
 
+    fn choose_next_protocol_version(epoch_store: &Arc<AuthorityPerEpochStore>) -> ProtocolVersion {
+        let protocol_config = epoch_store.protocol_config();
+        let committee = epoch_store.committee();
+
+        // Determine which protocol version to propose for the following epoch.
+        let current_protocol_version = committee.protocol_version;
+        let next_protocol_version = current_protocol_version + 1;
+
+        let mut stake_aggregator: StakeAggregator<bool, true> =
+            StakeAggregator::new(Arc::new(committee.clone()));
+
+        for cap in epoch_store.get_capabilities().into_iter() {
+            let authority = cap.authority;
+
+            if cap
+                .supported_protocol_versions
+                .is_version_supported(next_protocol_version)
+            {
+                info!(
+                    "validator {:?} supports {:?}",
+                    authority.concise(),
+                    next_protocol_version
+                );
+                stake_aggregator.insert_generic(authority, true);
+            } else {
+                info!(
+                    "validator {:?} does not support {:?}",
+                    authority, next_protocol_version
+                );
+            }
+        }
+
+        let total_votes = stake_aggregator.total_votes();
+        let quorum_threshold = committee.quorum_threshold();
+        let f = committee.total_votes - committee.quorum_threshold();
+        let buffer_bps = protocol_config.buffer_stake_for_protocol_upgrade_bps();
+        let buffer_stake = (f * buffer_bps) / 10000;
+        let effective_threshold = quorum_threshold + buffer_stake;
+
+        info!(
+            ?total_votes,
+            ?quorum_threshold,
+            ?next_protocol_version,
+            ?buffer_bps,
+            ?effective_threshold,
+            "support for next protocol version"
+        );
+
+        // Note that even if we don't support the next version, we vote with the majority. This
+        // is needed to ensure that the final checkpoint can be certified. Otherwise, a validator
+        // might vote that they support it, then be reverted to an earlier build, and decide not
+        // to adhere to their vote.
+        if total_votes >= effective_threshold {
+            next_protocol_version
+        } else {
+            current_protocol_version
+        }
+    }
+
     /// Creates and execute the advance epoch transaction to effects without committing it to the database.
     /// The effects of the change epoch tx are only written to the database after a certified checkpoint has been
     /// formed and executed by CheckpointExecutor.
@@ -2561,62 +2616,7 @@ impl AuthorityState {
     ) -> anyhow::Result<(SuiSystemState, TransactionEffects)> {
         let next_epoch = epoch_store.epoch() + 1;
 
-        // Determine which protocol version to propose for the following epoch.
-        let current_protocol_version = epoch_store.committee().protocol_version;
-        let next_protocol_version = current_protocol_version + 1;
-        let next_epoch_protocol_version = if self
-            .supported_protocol_versions
-            .is_version_supported(next_protocol_version)
-        {
-            // we support the next version, check if enough other validators do as well.
-            let mut stake_aggregator: StakeAggregator<bool, true> =
-                StakeAggregator::new(Arc::new(epoch_store.committee().clone()));
-
-            let capabilities = epoch_store.get_capabilities();
-
-            let mut non_supporting = 0;
-            for cap in capabilities.iter() {
-                let authority = &cap.authority;
-                if cap
-                    .supported_protocol_versions
-                    .is_version_supported(next_protocol_version)
-                {
-                    info!(
-                        "validator {:?} supports {:?}",
-                        authority.concise(),
-                        next_protocol_version
-                    );
-                    stake_aggregator.insert_generic(*authority, true);
-                } else {
-                    info!(
-                        "validator {:?} does not support {:?}",
-                        authority, next_protocol_version
-                    );
-                    non_supporting += 1;
-                }
-            }
-
-            let total_votes = stake_aggregator.total_votes();
-            let quorum_threshold = epoch_store.committee().quorum_threshold();
-            info!(
-                ?total_votes,
-                ?quorum_threshold,
-                ?non_supporting,
-                ?next_protocol_version,
-                "support for next protocol version"
-            );
-
-            // Quorum threshold is required in order to certify the change epoch tx no matter what.
-            // We further require that we don't leave more than 3 validators behind.
-            if total_votes >= quorum_threshold && non_supporting <= 3 {
-                next_protocol_version
-            } else {
-                current_protocol_version
-            }
-        } else {
-            // we don't support the next version, so we won't vote for it.
-            current_protocol_version
-        };
+        let next_epoch_protocol_version = Self::choose_next_protocol_version(epoch_store);
 
         let tx = VerifiedTransaction::new_change_epoch(
             next_epoch,
