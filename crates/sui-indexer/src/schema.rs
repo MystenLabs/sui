@@ -155,18 +155,11 @@ diesel::table! {
 }
 
 diesel::table! {
-    transaction_logs (id) {
-        id -> Int4,
-        next_checkpoint_sequence_number -> Int8,
-    }
-}
-
-diesel::table! {
     transactions (id) {
         id -> Int8,
         transaction_digest -> Varchar,
         sender -> Varchar,
-        checkpoint_sequence_number -> Nullable<Int8>,
+        checkpoint_sequence_number -> Int8,
         transaction_time -> Nullable<Timestamp>,
         transaction_kinds -> Array<Nullable<Text>>,
         created -> Array<Nullable<Text>>,
@@ -203,6 +196,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     packages,
     publish_event_logs,
     publish_events,
-    transaction_logs,
     transactions,
 );

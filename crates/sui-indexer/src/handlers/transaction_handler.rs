@@ -13,8 +13,7 @@ use tracing::info;
 use sui_indexer::errors::IndexerError;
 use sui_indexer::metrics::IndexerTransactionHandlerMetrics;
 use sui_indexer::models::checkpoints::get_checkpoint;
-use sui_indexer::models::transaction_logs::{commit_transaction_log, read_transaction_log};
-use sui_indexer::models::transactions::commit_transactions;
+use sui_indexer::models::transactions::{commit_transactions, read_latest_processed_checkpoint};
 use sui_indexer::utils::log_errors_to_pg;
 use sui_indexer::{get_pg_pool_connection, PgConnectionPool};
 
@@ -42,20 +41,20 @@ impl TransactionHandler {
     pub async fn start(&self) -> Result<(), IndexerError> {
         info!("Indexer transaction handler started...");
         let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
-        let txn_log = read_transaction_log(&mut pg_pool_conn)?;
-        let mut checkpoint_seq_number = txn_log.next_checkpoint_sequence_number;
+        let mut next_checkpoint_to_process =
+            read_latest_processed_checkpoint(&mut pg_pool_conn)? + 1;
 
         loop {
             let checkpoint_db_read_guard = self
                 .transaction_handler_metrics
                 .checkpoint_db_read_request_latency
                 .start_timer();
-            let mut checkpoint_opt = get_checkpoint(&mut pg_pool_conn, checkpoint_seq_number);
+            let mut checkpoint_opt = get_checkpoint(&mut pg_pool_conn, next_checkpoint_to_process);
             // this often happens when the checkpoint is not yet committed to the database
             while checkpoint_opt.is_err() {
                 // this sleep is necessary to avoid blocking the checkpoint commit.
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                checkpoint_opt = get_checkpoint(&mut pg_pool_conn, checkpoint_seq_number);
+                checkpoint_opt = get_checkpoint(&mut pg_pool_conn, next_checkpoint_to_process);
             }
             // unwrap is safe here b/c of the check above.
             let checkpoint = checkpoint_opt.unwrap();
@@ -111,7 +110,7 @@ impl TransactionHandler {
             info!(
                 "Received transaction responses for {} transaction(s) in checkpoint {}",
                 resp_vec.len(),
-                checkpoint_seq_number,
+                next_checkpoint_to_process,
             );
             log_errors_to_pg(&mut pg_pool_conn, errors);
 
@@ -120,8 +119,7 @@ impl TransactionHandler {
                 .db_write_request_latency
                 .start_timer();
             commit_transactions(&mut pg_pool_conn, resp_vec)?;
-            checkpoint_seq_number += 1;
-            commit_transaction_log(&mut pg_pool_conn, checkpoint_seq_number)?;
+            next_checkpoint_to_process += 1;
             self.transaction_handler_metrics
                 .total_transactions_processed
                 .inc_by(txn_count as u64);

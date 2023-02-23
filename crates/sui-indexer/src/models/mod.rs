@@ -10,7 +10,6 @@ pub mod object_logs;
 pub mod objects;
 pub mod package_logs;
 pub mod packages;
-pub mod transaction_logs;
 pub mod transactions;
 // TODO: remove below after wave 2
 pub mod move_event_logs;
