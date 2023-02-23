@@ -7,6 +7,7 @@ import {
     getTransactionDigest,
     SUI_TYPE_ARG,
 } from '@mysten/sui.js';
+import * as Sentry from '@sentry/react';
 import { useMutation } from '@tanstack/react-query';
 import { Formik, type FormikHelpers } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
@@ -126,8 +127,9 @@ function TransferCoinPage() {
 
     const signer = useSigner();
 
-    const executeTransfer = useMutation({
-        mutationFn: async () => {
+    const tranferCoin = async () => {
+        const transaction = Sentry.startTransaction({ name: 'send-tokens' });
+        try {
             if (!signer) throw new Error('Signer not found');
             if (coinType === null || !gasBudgetEstimationUnits) {
                 return;
@@ -160,7 +162,16 @@ function TransferCoinPage() {
                     gasBudgetEstimationUnits
                 )
             );
-        },
+        } catch (error) {
+            transaction.setTag('failure', true);
+            throw error;
+        } finally {
+            transaction.finish();
+        }
+    };
+
+    const executeTransfer = useMutation({
+        mutationFn: tranferCoin,
         onSuccess: (response) => {
             const txDigest = getTransactionDigest(response!);
             const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
