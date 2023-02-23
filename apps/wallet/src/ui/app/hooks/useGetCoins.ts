@@ -35,7 +35,7 @@ async function fetchCoins(address: SuiAddress, coinType: string) {
         );
         if (!data) {
             // if data is null, then we should stop fetching
-            cursor = null;
+            break;
         }
 
         allData.push(...data.data);
