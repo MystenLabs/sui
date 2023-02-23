@@ -476,23 +476,23 @@ fn test_basic_args_linter_top_level() {
     assert!(!json_args.is_empty());
 
     assert_eq!(
-        json_args[1],
+        json_args[1].0,
         SuiJsonCallArg::Pure(bcs::to_bytes(&monster_name_raw.as_bytes().to_vec()).unwrap())
     );
     assert_eq!(
-        json_args[2],
+        json_args[2].0,
         SuiJsonCallArg::Pure(bcs::to_bytes(&(monster_img_id_raw.parse::<u64>().unwrap())).unwrap()),
     );
     assert_eq!(
-        json_args[3],
+        json_args[3].0,
         SuiJsonCallArg::Pure(bcs::to_bytes(&(breed_raw as u8)).unwrap())
     );
     assert_eq!(
-        json_args[4],
+        json_args[4].0,
         SuiJsonCallArg::Pure(bcs::to_bytes(&(monster_affinity_raw as u8)).unwrap()),
     );
     assert_eq!(
-        json_args[5],
+        json_args[5].0,
         SuiJsonCallArg::Pure(bcs::to_bytes(&monster_description_raw.as_bytes().to_vec()).unwrap()),
     );
 
@@ -560,14 +560,14 @@ fn test_basic_args_linter_top_level() {
     .unwrap();
 
     assert_eq!(
-        args[0],
+        args[0].0,
         SuiJsonCallArg::Pure(bcs::to_bytes(&(value_raw.parse::<u64>().unwrap())).unwrap())
     );
 
     // Need to verify this specially
     // BCS serialzes addresses like vectors so there's a length prefix, which makes the vec longer by 1
     assert_eq!(
-        args[1],
+        args[1].0,
         SuiJsonCallArg::Pure(bcs::to_bytes(&AccountAddress::from(address)).unwrap()),
     );
 
@@ -604,7 +604,7 @@ fn test_basic_args_linter_top_level() {
     .unwrap();
 
     assert_eq!(
-        args[0],
+        args[0].0,
         SuiJsonCallArg::Object(
             ObjectID::from_hex_literal(&format!("0x{:02x}", object_id_raw)).unwrap()
         )
@@ -613,7 +613,7 @@ fn test_basic_args_linter_top_level() {
     // Need to verify this specially
     // BCS serialzes addresses like vectors so there's a length prefix, which makes the vec longer by 1
     assert_eq!(
-        args[1],
+        args[1].0,
         SuiJsonCallArg::Pure(bcs::to_bytes(&AccountAddress::from(address)).unwrap())
     );
 
@@ -652,9 +652,9 @@ fn test_basic_args_linter_top_level() {
     )
     .unwrap();
 
-    assert!(matches!(args[0], SuiJsonCallArg::ObjVec { .. }));
+    assert!(matches!(args[0].0, SuiJsonCallArg::ObjVec { .. }));
 
-    if let SuiJsonCallArg::ObjVec(vec) = &args[0] {
+    if let SuiJsonCallArg::ObjVec(vec) = &args[0].0 {
         assert_eq!(vec.len(), 2);
         assert_eq!(
             vec[0],
