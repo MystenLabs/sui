@@ -5,9 +5,10 @@ import { formatAddress } from '@mysten/sui.js';
 import { cva } from 'class-variance-authority';
 import cl from 'classnames';
 
+import { Text } from '_app/shared/text';
 import Loading from '_components/loading';
 import { NftImage, type NftImageProps } from '_components/nft-display/NftImage';
-import { useGetNFTMeta, useFileExtensionType } from '_hooks';
+import { useGetNFTMeta, useFileExtensionType, useOriginbyteNft } from '_hooks';
 
 import type { VariantProps } from 'class-variance-authority';
 
@@ -42,17 +43,29 @@ export function NFTDisplayCard({
     borderRadius = 'md',
 }: NFTsProps) {
     const { data: nftMeta, isLoading } = useGetNFTMeta(objectId);
-    const truncateObjectId = formatAddress(objectId);
+    const { data: originByteNft, isLoading: originByteLoading } =
+        useOriginbyteNft(objectId);
     const nftName = nftMeta?.name;
-    const nftTypeShort = formatAddress(nftName!);
+
+    const displayTitle =
+        originByteNft?.fields.name || nftName
+            ? nftName
+            : formatAddress(objectId);
+
     const nftUrl = nftMeta?.url || null;
     const fileExtensionType = useFileExtensionType(nftUrl!);
+
     return (
         <div className={nftDisplayCardStyles({ animateHover, wideView })}>
-            <Loading loading={isLoading}>
+            <Loading loading={isLoading || originByteLoading}>
                 <NftImage
-                    name={nftName!}
-                    src={nftUrl}
+                    name={originByteNft?.fields.name || nftName!}
+                    src={originByteNft?.fields.url || nftUrl}
+                    title={
+                        originByteNft?.fields.description ||
+                        nftMeta?.description ||
+                        ''
+                    }
                     animateHover={true}
                     showLabel={!wideView}
                     borderRadius={borderRadius}
@@ -61,9 +74,15 @@ export function NFTDisplayCard({
 
                 {wideView ? (
                     <div className="flex flex-col gap-1 flex-1 min-w-0">
-                        <div className="capitalize text-gray-100 truncate font-semibold text-base ws-nowrap">
-                            {nftName || truncateObjectId}
-                        </div>
+                        <Text
+                            variant="subtitleSmall"
+                            color="steel-dark"
+                            weight="medium"
+                            truncate
+                        >
+                            {displayTitle}
+                        </Text>
+
                         <div className="text-gray-75 text-body font-medium">
                             {nftMeta?.url ? (
                                 `${fileExtensionType.name} ${fileExtensionType.type}`
@@ -82,7 +101,7 @@ export function NFTDisplayCard({
                                 'group-hover:text-black duration-200 ease-ease-in-out-cubic'
                         )}
                     >
-                        {nftTypeShort || truncateObjectId}
+                        {displayTitle}
                     </div>
                 ) : null}
             </Loading>
