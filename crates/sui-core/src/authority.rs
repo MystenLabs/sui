@@ -2564,6 +2564,8 @@ impl AuthorityState {
     ) -> anyhow::Result<(SuiSystemState, TransactionEffects)> {
         let next_epoch = epoch_store.epoch() + 1;
 
+        let protocol_config = epoch_store.protocol_config();
+
         // Determine which protocol version to propose for the following epoch.
         let current_protocol_version = epoch_store.committee().protocol_version;
         let next_protocol_version = current_protocol_version + 1;
@@ -2622,8 +2624,11 @@ impl AuthorityState {
             );
 
             // Quorum threshold is required in order to certify the change epoch tx no matter what.
-            // We further require that we don't leave more than 3 validators behind.
-            if total_votes >= quorum_threshold && non_supporting <= 3 {
+            // We further require that we don't leave more than N validators behind.
+            if total_votes >= quorum_threshold
+                && non_supporting
+                    <= protocol_config.max_non_supporting_validators_for_protocol_upgrade()
+            {
                 next_protocol_version
             } else {
                 current_protocol_version

@@ -239,6 +239,10 @@ pub struct ProtocolConfig {
     /// Max number of transactions per checkpoint.
     /// Note that this is constant and not a config as validators must have this set to the same value, otherwise they *will* fork
     max_transactions_per_checkpoint: Option<usize>,
+
+    /// Maximum allowable number of votes against a protocol upgrade. Counted in individual
+    /// validators, not stake units.
+    max_non_supporting_validators_for_protocol_upgrade: Option<u32>,
 }
 
 const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protocol version";
@@ -359,6 +363,10 @@ impl ProtocolConfig {
     }
     pub fn max_transactions_per_checkpoint(&self) -> usize {
         self.max_transactions_per_checkpoint
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_non_supporting_validators_for_protocol_upgrade(&self) -> u32 {
+        self.max_non_supporting_validators_for_protocol_upgrade
             .expect(CONSTANT_ERR_MSG)
     }
 
@@ -490,6 +498,7 @@ impl ProtocolConfig {
                 stake_subsidy_rate: Some(1),
                 storage_gas_price: Some(1),
                 max_transactions_per_checkpoint: Some(1000),
+                max_non_supporting_validators_for_protocol_upgrade: Some(3),
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
