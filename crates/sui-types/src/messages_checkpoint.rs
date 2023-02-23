@@ -403,12 +403,9 @@ pub struct CheckpointSignatureMessage {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct CheckpointContents {
     transactions: Vec<ExecutionDigests>,
-    /// This field 'pins' user signatures for the checkpoint:
-    ///
-    /// * For normal checkpoint this field will contain same number of elements as transactions.
-    /// * Genesis checkpoint has transactions but this field is empty.
-    /// * Last checkpoint in the epoch will have (last)extra system transaction
-    /// in the transactions list not covered in the signatures list
+    /// This field 'pins' user signatures for the checkpoint
+    /// The length of this vector is same as length of transactions vector
+    /// System transactions has empty signatures
     user_signatures: Vec<Vec<GenericSignature>>,
 }
 
@@ -423,22 +420,26 @@ impl CheckpointContents {
     where
         T: IntoIterator<Item = ExecutionDigests>,
     {
+        let transactions: Vec<_> = contents.into_iter().collect();
+        let user_signatures = transactions.iter().map(|_| vec![]).collect();
         Self {
-            transactions: contents.into_iter().collect(),
-            user_signatures: vec![],
+            transactions,
+            user_signatures,
         }
     }
 
     pub fn new_with_causally_ordered_transactions_and_signatures<T>(
         contents: T,
-        signatures: Vec<Vec<GenericSignature>>,
+        user_signatures: Vec<Vec<GenericSignature>>,
     ) -> Self
     where
         T: IntoIterator<Item = ExecutionDigests>,
     {
+        let transactions: Vec<_> = contents.into_iter().collect();
+        assert_eq!(transactions.len(), user_signatures.len());
         Self {
-            transactions: contents.into_iter().collect(),
-            user_signatures: signatures,
+            transactions,
+            user_signatures,
         }
     }
 

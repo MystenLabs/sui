@@ -513,7 +513,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             SuiSubcommand::ConsensusCommitPrologue(ConsensusCommitPrologueCommand {
                 timestamp_ms,
             }) => {
-                let transaction = VerifiedTransaction::new_consensus_commit_prologue(timestamp_ms);
+                let transaction =
+                    VerifiedTransaction::new_consensus_commit_prologue(0, 0, timestamp_ms);
                 let summary = self.execute_txn(transaction, GAS_VALUE_FOR_TESTING)?;
                 let output = self.object_summary_output(&summary, false);
                 Ok(output)

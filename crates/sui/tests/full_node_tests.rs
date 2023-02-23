@@ -32,7 +32,7 @@ use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
 use sui_types::{
-    base_types::{ObjectID, SuiAddress, TransactionDigest},
+    base_types::{ObjectID, SuiAddress},
     messages::TransactionInfoRequest,
 };
 use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_OBJECT_ID};
@@ -919,14 +919,13 @@ async fn test_full_node_event_read_api_ok() {
     // genesis txn
     // The first txn emits TransferObject(sender), TransferObject(recipient), Gas
     // The second txn emits MoveEvent, NewObject and Gas
-    let tx_digests: Vec<TransactionDigest> = all_events
-        .data
-        .iter()
-        .map(|envelope| envelope.tx_digest)
-        .collect();
+    let tx_digests = all_events.data.iter().map(|envelope| envelope.tx_digest);
     // Sorted in ascending time
+    let tx_digests: Vec<_> = tx_digests
+        .filter(|d| *d == digest || *d == digest2)
+        .collect();
     assert_eq!(
-        tx_digests[tx_digests.len() - 6..],
+        tx_digests,
         vec![digest, digest, digest, digest2, digest2, digest2]
     );
 }

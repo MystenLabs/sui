@@ -382,6 +382,20 @@ impl<T: Message> VerifiedEnvelope<T, CertificateProof> {
         })
     }
 
+    pub fn new_system(transaction: VerifiedEnvelope<T, EmptySignInfo>, epoch: EpochId) -> Self {
+        let inner = transaction.into_inner();
+        let Envelope {
+            digest,
+            data,
+            auth_signature: _,
+        } = inner;
+        VerifiedEnvelope::new_unchecked(Envelope {
+            digest,
+            data,
+            auth_signature: CertificateProof::new_system(epoch),
+        })
+    }
+
     pub fn new_from_quorum_execution(
         transaction: VerifiedEnvelope<T, EmptySignInfo>,
         epoch: EpochId,

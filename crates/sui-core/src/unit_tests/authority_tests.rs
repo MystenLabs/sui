@@ -2830,7 +2830,9 @@ async fn test_refusal_to_sign_consensus_commit_prologue() {
     let tx_data = TransactionData::new_with_dummy_gas_price(
         TransactionKind::Single(SingleTransactionKind::ConsensusCommitPrologue(
             ConsensusCommitPrologue {
-                checkpoint_start_timestamp_ms: 42,
+                epoch: 0,
+                round: 0,
+                commit_timestamp_ms: 42,
             },
         )),
         sender,
