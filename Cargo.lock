@@ -3340,7 +3340,7 @@ dependencies = [
  "futures",
  "indexmap",
  "match_opt",
- "mysten-metrics",
+ "mysten-util-mem",
  "narwhal-config",
  "narwhal-crypto",
  "narwhal-dag",
