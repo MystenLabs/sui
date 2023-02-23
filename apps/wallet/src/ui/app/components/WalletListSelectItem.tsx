@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { CheckFill16 } from '@mysten/icons';
+import { formatAddress } from '@mysten/sui.js';
 import { cx } from 'class-variance-authority';
 
-import { useMiddleEllipsis } from '../hooks';
 import { Text } from '../shared/text';
 
 export type WalletListSelectItemProps = {
@@ -16,7 +16,6 @@ export function WalletListSelectItem({
     address,
     selected,
 }: WalletListSelectItemProps) {
-    const addressShort = useMiddleEllipsis(address);
     return (
         <div
             className={cx(
@@ -32,7 +31,7 @@ export function WalletListSelectItem({
                 )}
             />
             <Text mono variant="body" weight="semibold">
-                {addressShort}
+                {formatAddress(address)}
             </Text>
         </div>
     );

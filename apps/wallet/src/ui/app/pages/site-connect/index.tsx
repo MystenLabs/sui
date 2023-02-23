@@ -3,7 +3,7 @@
 
 import { useFeature } from '@growthbook/growthbook-react';
 import { CheckFill12 } from '@mysten/icons';
-import { type SuiAddress } from '@mysten/sui.js';
+import { formatAddress, type SuiAddress } from '@mysten/sui.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -12,7 +12,7 @@ import { WalletListSelect } from '../../components/WalletListSelect';
 import { Text } from '../../shared/text';
 import Loading from '_components/loading';
 import UserApproveContainer from '_components/user-approve-container';
-import { useAppDispatch, useAppSelector, useMiddleEllipsis } from '_hooks';
+import { useAppDispatch, useAppSelector } from '_hooks';
 import {
     permissionsSelectors,
     respondToPermissionRequest,
@@ -45,7 +45,6 @@ function SiteConnectPage() {
     const dispatch = useAppDispatch();
     const permissionRequest = useAppSelector(permissionSelector);
     const activeAccount = useAppSelector(({ account }) => account.address);
-    const activeAccountShort = useMiddleEllipsis(activeAccount);
     const isMultiAccountEnabled = useFeature(FEATURES.WALLET_MULTI_ACCOUNTS).on;
     const [accountsToConnect, setAccountsToConnect] = useState<SuiAddress[]>(
         () => (activeAccount ? [activeAccount] : [])
@@ -176,7 +175,9 @@ function SiteConnectPage() {
                                         variant="body"
                                         weight="semibold"
                                     >
-                                        {activeAccountShort}
+                                        {activeAccount
+                                            ? formatAddress(activeAccount)
+                                            : null}
                                     </Text>
                                 }
                             />
