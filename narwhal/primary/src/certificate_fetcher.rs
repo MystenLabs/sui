@@ -436,7 +436,7 @@ async fn process_certificates_helper(
         let certificates = task.await.map_err(|_| DagError::Canceled)??;
         for cert in certificates {
             match synchronizer
-                .try_accept_sanitized_certificate(cert, network)
+                .try_accept_fetched_certificate(cert, network)
                 .await
             {
                 Ok(()) => continue,

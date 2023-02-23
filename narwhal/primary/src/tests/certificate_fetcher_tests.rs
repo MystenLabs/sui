@@ -259,9 +259,10 @@ async fn fetch_certificates_basic() {
     // Send a primary message for a certificate with parents that do not exist locally, to trigger fetching.
     let target_index = 123;
     assert!(!synchronizer
-        .check_parents(&certificates[target_index].clone())
+        .get_missing_parents(&certificates[target_index].clone())
         .await
-        .unwrap());
+        .unwrap()
+        .is_empty());
 
     // Verify the fetch request.
     let mut req = rx_fetch_req.recv().await.unwrap();

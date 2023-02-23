@@ -11,7 +11,8 @@ use network::{anemo_ext::NetworkExt, RetryConfig};
 use parking_lot::Mutex;
 use std::{
     cmp::min,
-    collections::{hash_map, BTreeMap, HashMap, VecDeque},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
+    iter,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -28,7 +29,7 @@ use tokio::{
 use tracing::{debug, error, trace, warn};
 use types::{
     ensure,
-    error::{DagError, DagResult},
+    error::{new_accept_notification, AcceptNotification, DagError, DagResult},
     metered_channel::Sender,
     BatchDigest, Certificate, CertificateDigest, Header, PrimaryToPrimaryClient,
     PrimaryToWorkerClient, Round, SendCertificateRequest, WorkerSynchronizeMessage,
@@ -80,16 +81,8 @@ struct Inner {
     certificate_senders: Mutex<JoinSet<()>>,
     /// Aggregates certificates to use as parents for new headers.
     certificates_aggregators: Mutex<BTreeMap<Round, Box<CertificatesAggregator>>>,
-    /// Map of digest of certificate pending to be accepted, to channel for signalling the
-    /// certificate has been accepted.
-    /// The invariant is that if a certificate digest exists in the pending table, it must not
-    /// exist in the certificate store. Otherwise waiters will never get notified.
-    /// This lock also ensures writing a certificate into store and sending it to consensus is
-    /// atomic.
-    /// TODO: store certificate and accept it into the store immediately after its parents have
-    /// been accepted, instead of waiting for the next external attempt to accept the certificate.
-    /// TODO: use a lighter weight alternative to broadcast::channel.
-    pending: tokio::sync::Mutex<HashMap<CertificateDigest, broadcast::Sender<()>>>,
+    /// State for tracking suspended certificates and when they can be accepted.
+    state: tokio::sync::Mutex<State>,
 }
 
 impl Inner {
@@ -108,6 +101,70 @@ impl Inner {
             .send((parents, certificate.round(), certificate.epoch()))
             .await
             .map_err(|_| DagError::ShuttingDown)
+    }
+
+    async fn accept_suspended_certificate(&self, suspended: SuspendedCertificate) -> DagResult<()> {
+        self.accept_certificate_internal(suspended.certificate)
+            .await?;
+        // Notify waiters that the certificate is no longer suspended.
+        // Must be after certificate acceptance.
+        // It is ok if there is no longer any waiter.
+        let _ = suspended.notify.send(());
+        Ok(())
+    }
+
+    async fn accept_certificate_internal(&self, certificate: Certificate) -> DagResult<()> {
+        let digest = certificate.digest();
+
+        // Store the certificate. After this, the certificate must be sent to consensus
+        // or Narwhal needs to shutdown, to avoid insistencies in certificate store and
+        // consensus dag.
+        self.certificate_store
+            .write(certificate.clone())
+            .expect("Writing certificate to storage cannot fail!");
+
+        // Update metrics for accepted certificates.
+        let highest_processed_round = self
+            .highest_processed_round
+            .fetch_max(certificate.round(), Ordering::AcqRel)
+            .max(certificate.round());
+        let certificate_source = if self.name.eq(&certificate.origin()) {
+            "own"
+        } else {
+            "other"
+        };
+        self.metrics
+            .highest_processed_round
+            .with_label_values(&[certificate_source])
+            .set(highest_processed_round as i64);
+        self.metrics
+            .certificates_processed
+            .with_label_values(&[certificate_source])
+            .inc();
+
+        // Append the certificate to the aggregator of the
+        // corresponding round.
+        if let Err(e) = self
+            .append_certificate_in_aggregator(certificate.clone())
+            .await
+        {
+            warn!(
+                "Failed to aggregate certificate {} for header: {}",
+                digest, e
+            );
+            return Err(DagError::ShuttingDown);
+        }
+
+        // Send the accepted certificate to the consensus layer.
+        if let Err(e) = self.tx_new_certificates.send(certificate).await {
+            warn!(
+                "Failed to deliver certificate {} to the consensus: {}",
+                digest, e
+            );
+            return Err(DagError::ShuttingDown);
+        }
+
+        Ok(())
     }
 }
 
@@ -167,7 +224,7 @@ impl Synchronizer {
             batch_tasks: Mutex::new(JoinSet::new()),
             certificate_senders: Mutex::new(JoinSet::new()),
             certificates_aggregators: Mutex::new(BTreeMap::new()),
-            pending: tokio::sync::Mutex::new(HashMap::new()),
+            state: tokio::sync::Mutex::new(State::default()),
         });
 
         // Start a task to recover parent certificates for proposer.
@@ -209,6 +266,24 @@ impl Synchronizer {
                     .certificates_aggregators
                     .lock()
                     .retain(|k, _| k > &gc_round);
+                // Accept certificates at gc round + 1, if there is any.
+                let mut state = inner.state.lock().await;
+                for suspended_cert in state.run_gc(gc_round) {
+                    let suspended_certs = state.accept_children(
+                        suspended_cert.certificate.round(),
+                        suspended_cert.certificate.digest(),
+                    );
+                    // Iteration must be in causal order.
+                    for suspended in iter::once(suspended_cert).chain(suspended_certs.into_iter()) {
+                        match inner.accept_suspended_certificate(suspended).await {
+                            Ok(()) => {}
+                            Err(DagError::ShuttingDown) => return,
+                            Err(e) => {
+                                panic!("Unexpected error accepting certificate during GC! {e}")
+                            }
+                        }
+                    }
+                }
             }
         });
 
@@ -252,18 +327,20 @@ impl Synchronizer {
         certificate: Certificate,
         network: &Network,
     ) -> DagResult<()> {
-        self.process_certificate_internal(certificate, network, true)
+        self.process_certificate_internal(certificate, network, true, true)
             .await
     }
 
-    /// Tries to accept a certificate that is already sanitized.
-    // TODO: produce a different type after sanitize, e.g. VerifiedCertificate.
-    pub async fn try_accept_sanitized_certificate(
+    /// Tries to accept a certificate from certificate fetcher.
+    /// Fetched certificates are already sanitized in parallel.
+    /// And in most cases, they have no missing parents. So it is useful to always check parents
+    /// for fetched certificates and use this information to validate suspended certificates state.
+    pub async fn try_accept_fetched_certificate(
         &self,
         certificate: Certificate,
         network: &Network,
     ) -> DagResult<()> {
-        self.process_certificate_internal(certificate, network, false)
+        self.process_certificate_internal(certificate, network, false, false)
             .await
     }
 
@@ -278,7 +355,7 @@ impl Synchronizer {
         network: &Network,
     ) -> DagResult<()> {
         match self
-            .process_certificate_internal(certificate, network, true)
+            .process_certificate_internal(certificate, network, true, true)
             .await
         {
             Err(DagError::Suspended(notify)) => {
@@ -302,7 +379,7 @@ impl Synchronizer {
     ) -> DagResult<()> {
         // Process the new certificate.
         match self
-            .process_certificate_internal(certificate.clone(), network, false)
+            .process_certificate_internal(certificate.clone(), network, false, false)
             .await
         {
             Ok(()) => Ok(()),
@@ -356,6 +433,7 @@ impl Synchronizer {
     }
 
     /// Checks if the certificate is valid and can potentially be accepted into the DAG.
+    // TODO: produce a different type after sanitize, e.g. VerifiedCertificate.
     pub fn sanitize_certificate(&self, certificate: &Certificate) -> DagResult<()> {
         ensure!(
             self.inner.committee.epoch() == certificate.epoch(),
@@ -381,6 +459,7 @@ impl Synchronizer {
         certificate: Certificate,
         network: &Network,
         sanitize: bool,
+        expect_missing_parents: bool,
     ) -> DagResult<()> {
         let digest = certificate.digest();
         if self.inner.certificate_store.contains(&digest)? {
@@ -388,7 +467,12 @@ impl Synchronizer {
             self.inner.metrics.duplicate_certificates_processed.inc();
             return Ok(());
         }
-
+        if expect_missing_parents {
+            if let Some(notify) = self.inner.state.lock().await.get_waiter(&digest) {
+                trace!("Certificate {digest:?} is still suspended. Skip processing.");
+                return Err(DagError::Suspended(notify));
+            }
+        }
         if sanitize {
             self.sanitize_certificate(&certificate)?;
         }
@@ -440,106 +524,47 @@ impl Synchronizer {
             Synchronizer::sync_batches_internal(inner, &header, sync_network, max_age).await
         });
 
+        // The state lock must be held for the rest of the function, to ensure updating state,
+        // writing certificates into storage and sending certificates to consensus are atomic.
+        // The atomicity makes sure the internal state is consistent with DAG in certificate store,
+        // and certificates are sent to consensus in causal order.
+        // It is possible to reduce the critical section below, but it seems unnecessary for now.
+        let mut state = self.inner.state.lock().await;
+
+        // The certificate could have been suspended already.
+        if expect_missing_parents {
+            if let Some(notify) = state.get_waiter(&digest) {
+                trace!("Certificate {digest:?} is still suspended. Skip processing.");
+                return Err(DagError::Suspended(notify));
+            }
+        }
+
         // Ensure either we have all the ancestors of this certificate, or the parents have been garbage collected.
         // If we don't, the synchronizer will start fetching missing certificates.
-        if certificate.round() > self.inner.gc_round.load(Ordering::Acquire) + 1
-            && !self.check_parents(&certificate).await?
-        {
-            let rx = {
-                let mut pending = self.inner.pending.lock().await;
-                // This check is necessary to ensure the certificate has not been accepted while trying
-                // to acquire the pending lock.
-                if self.inner.certificate_store.contains(&digest)? {
-                    return Ok(());
-                }
+        if certificate.round() > self.inner.gc_round.load(Ordering::Acquire) + 1 {
+            let missing_parents = self.get_missing_parents(&certificate).await?;
+            if !missing_parents.is_empty() {
+                debug!(
+                    "Processing certificate {:?} suspended: missing ancestors",
+                    certificate
+                );
                 self.inner
                     .metrics
                     .certificates_suspended
                     .with_label_values(&["missing_parents"])
                     .inc();
-                match pending.entry(digest) {
-                    hash_map::Entry::Occupied(entry) => entry.get().subscribe(),
-                    hash_map::Entry::Vacant(entry) => {
-                        let (tx, rx) = broadcast::channel(1);
-                        entry.insert(tx);
-                        rx
-                    }
-                }
-            };
-            debug!(
-                "Processing certificate {:?} suspended: missing ancestors",
-                certificate
-            );
-            return Err(DagError::Suspended(Arc::new(std::sync::Mutex::new(Some(
-                rx,
-            )))));
+                // There is no upper round limit to suspended certificates. Currently there is no
+                // memory usage issue and this will speed up catching up. But we can revisit later.
+                let notify = state.insert(certificate, missing_parents);
+                return Err(DagError::Suspended(notify));
+            }
         }
 
-        self.accept_certificate_internal(certificate).await
-    }
-
-    async fn accept_certificate_internal(&self, certificate: Certificate) -> DagResult<()> {
-        let digest = certificate.digest();
-
-        // This lock must be held for the scope of the function, to ensure the operations to write
-        // certificate into storage and sending the certificate to consensus is atomic. Otherwise
-        // it would be possible for certificates to be sent to consensus not in causal order,
-        // leading to inconsistencies or consensus forks.
-        let mut pending = self.inner.pending.lock().await;
-
-        // Store the certificate. Afterwards, the certificate must be sent to consensus
-        // or Narwhal needs to shutdown, to avoid insistencies certificate store and
-        // consensus dag.
-        self.inner.certificate_store.write(certificate.clone())?;
-
-        // Update metrics for accepted certificates.
-        let highest_processed_round = self
-            .inner
-            .highest_processed_round
-            .fetch_max(certificate.round(), Ordering::AcqRel)
-            .max(certificate.round());
-        let certificate_source = if self.inner.name.eq(&certificate.origin()) {
-            "own"
-        } else {
-            "other"
-        };
-        self.inner
-            .metrics
-            .highest_processed_round
-            .with_label_values(&[certificate_source])
-            .set(highest_processed_round as i64);
-        self.inner
-            .metrics
-            .certificates_processed
-            .with_label_values(&[certificate_source])
-            .inc();
-
-        // Append the certificate to the aggregator of the
-        // corresponding round.
-        if let Err(e) = self
-            .inner
-            .append_certificate_in_aggregator(certificate.clone())
-            .await
-        {
-            warn!(
-                "Failed to aggregate certificate {} for header: {}",
-                digest, e
-            );
-            return Err(DagError::ShuttingDown);
-        }
-
-        // Send it to the consensus layer.
-        if let Err(e) = self.inner.tx_new_certificates.send(certificate).await {
-            warn!(
-                "Failed to deliver certificate {} to the consensus: {}",
-                digest, e
-            );
-            return Err(DagError::ShuttingDown);
-        }
-
-        if let Some(sender) = pending.remove(&digest) {
-            // Ignore error if there is no more listeners.
-            let _ = sender.send(());
+        let suspended_certs = state.accept_children(certificate.round(), certificate.digest());
+        // Accept in causal order.
+        self.inner.accept_certificate_internal(certificate).await?;
+        for suspended in suspended_certs {
+            self.inner.accept_suspended_certificate(suspended).await?;
         }
 
         Ok(())
@@ -787,31 +812,36 @@ impl Synchronizer {
         Ok((parents, missing))
     }
 
-    /// Checks whether we have seen all the ancestors of the certificate. If we don't, send the
-    /// certificate to the `CertificateFetcher` which will trigger range fetching of missing
+    /// Tries to get all missing parents of the certificate. If there is any, sends the
+    /// certificate to `CertificateFetcher` which will trigger range fetching of missing
     /// certificates.
-    pub async fn check_parents(&self, certificate: &Certificate) -> DagResult<bool> {
+    pub async fn get_missing_parents(
+        &self,
+        certificate: &Certificate,
+    ) -> DagResult<Vec<CertificateDigest>> {
+        let mut result = Vec::new();
         if certificate.round() == 1 {
             for digest in &certificate.header.parents {
-                if self.inner.genesis.contains_key(digest) {
-                    continue;
+                if !self.inner.genesis.contains_key(digest) {
+                    result.push(*digest);
                 }
-                return Ok(false);
             }
-            return Ok(true);
+            return Ok(result);
         }
 
         for digest in &certificate.header.parents {
             if !self.has_processed_certificate(*digest).await? {
-                self.inner
-                    .tx_certificate_fetcher
-                    .send(certificate.clone())
-                    .await
-                    .map_err(|_| DagError::ShuttingDown)?;
-                return Ok(false);
+                result.push(*digest);
             }
         }
-        Ok(true)
+        if !result.is_empty() {
+            self.inner
+                .tx_certificate_fetcher
+                .send(certificate.clone())
+                .await
+                .map_err(|_| DagError::ShuttingDown)?;
+        }
+        Ok(result)
     }
 
     /// This method answers to the question of whether the certificate with the
@@ -824,5 +854,153 @@ impl Synchronizer {
             return Ok(dag.has_ever_contained(digest).await);
         }
         Ok(self.inner.certificate_store.contains(&digest)?)
+    }
+}
+
+/// Holds information for a suspended certificate. The certificate can be accepted into the DAG
+/// once `missing_parents` become empty.
+struct SuspendedCertificate {
+    certificate: Certificate,
+    missing_parents: HashSet<CertificateDigest>,
+    notify: broadcast::Sender<()>,
+}
+
+/// Keeps track of suspended certificates and their missing parents.
+/// The digest keys in `suspended` and `missing` can overlap, but a digest can exist in one map
+/// but not the other.
+///
+/// They can be combined into a single map, but it seems more complex to differentiate between
+/// suspended certificates that is not a missing parent of another, from a missing parent without
+/// the actual certificate.
+///
+/// Traversal of certificates that can be accepted should start from the missing map, i.e.
+/// 1. If a certificate exists in `missing`, remove its entry.
+/// 2. Find children of the certificate, update their missing parents.
+/// 3. If a child certificate no longer has missing parent, traverse from it with step 1.
+#[derive(Default)]
+struct State {
+    // Maps digests of suspended certificates to details including the certificate itself.
+    suspended: HashMap<CertificateDigest, SuspendedCertificate>,
+    // Maps digests of certificates that are not yet in the DAG, to digests of certificates that
+    // include them as parents. Keys are prefixed by round number to allow GC.
+    missing: BTreeMap<(Round, CertificateDigest), HashSet<CertificateDigest>>,
+}
+
+impl State {
+    /// Gets a waiter notification for the suspended certificate, if exists.
+    fn get_waiter(&self, digest: &CertificateDigest) -> Option<AcceptNotification> {
+        self.suspended
+            .get(digest)
+            .map(|suspended_cert| new_accept_notification(suspended_cert.notify.subscribe()))
+    }
+
+    /// Inserts a certificate with its missing parents into the suspended state.
+    fn insert(
+        &mut self,
+        certificate: Certificate,
+        missing_parents: Vec<CertificateDigest>,
+    ) -> AcceptNotification {
+        let digest = certificate.digest();
+        let missing_round = certificate.round() - 1;
+        let (tx, rx) = broadcast::channel(1);
+        assert!(self
+            .suspended
+            .insert(
+                digest,
+                SuspendedCertificate {
+                    certificate,
+                    missing_parents: missing_parents.iter().cloned().collect(),
+                    notify: tx,
+                }
+            )
+            .is_none());
+        for d in missing_parents {
+            assert!(self
+                .missing
+                .entry((missing_round, d))
+                .or_default()
+                .insert(digest));
+        }
+        new_accept_notification(rx)
+    }
+
+    /// Examines children of a certificate that has been accepted, and returns the children that
+    /// can be accepted as well.
+    fn accept_children(
+        &mut self,
+        round: Round,
+        digest: CertificateDigest,
+    ) -> Vec<SuspendedCertificate> {
+        // This validation is only triggered for fetched and own certificates.
+        // Certificates from other sources will find the suspended certificate and wait on its
+        // accept notification, so no parent check or validation is done.
+        if let Some(suspended_cert) = self.suspended.remove(&digest) {
+            panic!(
+                "Suspended certificate {digest:?} has no missing parent ({:?} exist in store)",
+                suspended_cert.missing_parents
+            )
+        }
+        let mut to_traverse = VecDeque::new();
+        let mut to_accept = Vec::new();
+        to_traverse.push_back((round, digest));
+        while let Some((round, digest)) = to_traverse.pop_front() {
+            let Some(child_digests) = self.missing.remove(&(round, digest)) else {
+                continue;
+            };
+            for child in &child_digests {
+                let Some(suspended_cert) = self.suspended.get_mut(child) else {
+                    continue;
+                };
+                suspended_cert.missing_parents.remove(&digest);
+                if suspended_cert.missing_parents.is_empty() {
+                    let suspended_cert = self.suspended.remove(child).unwrap();
+                    to_traverse.push_back((
+                        suspended_cert.certificate.round(),
+                        suspended_cert.certificate.digest(),
+                    ));
+                    to_accept.push(suspended_cert);
+                }
+            }
+        }
+        to_accept
+    }
+
+    /// Runs GC on the suspended certificates, returns a list that can be accepted at gc round + 1.
+    /// It is caller's responsibility to check if some children of the returned certificates can
+    /// also be accepted.
+    fn run_gc(&mut self, gc_round: Round) -> Vec<SuspendedCertificate> {
+        // Remove suspended certificates below gc round, and collect digests for certificates just
+        // above the gc round.
+        let mut gc_certificates = Vec::new();
+        let mut certificates_above_gc_round = HashSet::new();
+        while let Some(((round, digest), children)) = self.missing.iter().next() {
+            if *round > gc_round {
+                break;
+            }
+            if *round == gc_round {
+                certificates_above_gc_round.extend(children.iter().cloned());
+            }
+            // It is ok to notify waiters here (via Drop). The certificate will never and does
+            // not need to get into certificate store.
+            if let Some(suspended) = self.suspended.remove(digest) {
+                gc_certificates.push(suspended);
+            }
+            self.missing.remove(&(*round, *digest));
+        }
+        // Notify waiters on GC'ed certificates.
+        for suspended in gc_certificates {
+            let _ = suspended.notify.send(());
+        }
+        // All certificates at gc round + 1 can be accepted.
+        let mut to_accept = Vec::new();
+        for digest in certificates_above_gc_round {
+            let Some(mut suspended_cert) = self.suspended.remove(&digest) else {
+                error!("Suspended certificate {digest} not found!");
+                continue;
+            };
+            suspended_cert.missing_parents.clear();
+            to_accept.push(suspended_cert);
+        }
+        to_accept
     }
 }
