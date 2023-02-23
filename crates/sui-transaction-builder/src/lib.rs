@@ -31,7 +31,7 @@ use sui_types::messages::{
 
 use sui_types::governance::{
     ADD_DELEGATION_LOCKED_COIN_FUN_NAME, ADD_DELEGATION_MUL_COIN_FUN_NAME,
-    SWITCH_DELEGATION_FUN_NAME, WITHDRAW_DELEGATION_FUN_NAME,
+    WITHDRAW_DELEGATION_FUN_NAME,
 };
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Object, Owner};
@@ -688,43 +688,6 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                 }),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(delegation)),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(staked_sui)),
-            ],
-            gas_budget,
-            gas_price,
-        ))
-    }
-
-    pub async fn request_switch_delegation(
-        &self,
-        signer: SuiAddress,
-        delegation: ObjectID,
-        staked_sui: ObjectID,
-        new_validator_address: SuiAddress,
-        gas: Option<ObjectID>,
-        gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
-        let delegation = self.get_object_ref(delegation).await?;
-        let staked_sui = self.get_object_ref(staked_sui).await?;
-        let gas_price = self.0.get_reference_gas_price().await?;
-        let gas = self
-            .select_gas(signer, gas, gas_budget, vec![], gas_price)
-            .await?;
-        Ok(TransactionData::new_move_call(
-            signer,
-            SUI_FRAMEWORK_OBJECT_ID,
-            SUI_SYSTEM_MODULE_NAME.to_owned(),
-            SWITCH_DELEGATION_FUN_NAME.to_owned(),
-            vec![],
-            gas,
-            vec![
-                CallArg::Object(ObjectArg::SharedObject {
-                    id: SUI_SYSTEM_STATE_OBJECT_ID,
-                    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                    mutable: true,
-                }),
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(delegation)),
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(staked_sui)),
-                CallArg::Pure(bcs::to_bytes(&new_validator_address)?),
             ],
             gas_budget,
             gas_price,

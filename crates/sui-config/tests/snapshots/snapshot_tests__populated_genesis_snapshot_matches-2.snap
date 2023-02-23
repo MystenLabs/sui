@@ -487,8 +487,6 @@ validators:
       next_epoch_delegation: 0
       next_epoch_gas_price: 1
       next_epoch_commission_rate: 0
-  pending_delegation_switches:
-    contents: []
 treasury_cap:
   value: 2
 storage_fund:

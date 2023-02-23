@@ -316,29 +316,6 @@ impl TransactionBuilderServer for TransactionBuilderApi {
                 .await?,
         )?)
     }
-
-    async fn request_switch_delegation(
-        &self,
-        signer: SuiAddress,
-        delegation: ObjectID,
-        staked_sui: ObjectID,
-        new_validator_address: SuiAddress,
-        gas: Option<ObjectID>,
-        gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
-        Ok(TransactionBytes::from_data(
-            self.builder
-                .request_switch_delegation(
-                    signer,
-                    delegation,
-                    staked_sui,
-                    new_validator_address,
-                    gas,
-                    gas_budget,
-                )
-                .await?,
-        )?)
-    }
 }
 
 impl SuiRpcModule for TransactionBuilderApi {
