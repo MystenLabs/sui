@@ -60,7 +60,7 @@ export function ModalDialog({
                     leaveTo="opacity-0 scale-95"
                 >
                     <div className="fixed inset-0 flex flex-col items-center justify-center z-50">
-                        <Dialog.Panel className="shadow-wallet-modal bg-white py-6 rounded-xl max-w-[80vw] max-h-[60vh] overflow-hidden flex flex-col flex-nowrap items-stretch gap-1.5">
+                        <Dialog.Panel className="shadow-wallet-modal bg-white py-6 rounded-xl w-80 max-w-[85vw] max-h-[60vh] overflow-hidden flex flex-col flex-nowrap items-stretch gap-1.5">
                             {title ? (
                                 <div className="px-6 text-center">
                                     <Dialog.Title
