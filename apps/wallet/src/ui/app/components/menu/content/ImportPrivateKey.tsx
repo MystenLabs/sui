@@ -32,7 +32,7 @@ const validation = object({
         })
         .test(
             'valid-hex',
-            `\${path} must be a hex value that optionally starts with 0x`,
+            `\${path} must be a hexadecimal value. It may optionally begin with "0x".`,
             (value: string) => {
                 try {
                     hexToBytes(value);
@@ -44,7 +44,7 @@ const validation = object({
         )
         .test(
             'valid-bytes-length',
-            `\${path} must be 32 or 64 bytes`,
+            `\${path} must be either 32 or 64 bytes.`,
             (value: string) => {
                 try {
                     const bytes = hexToBytes(value);
@@ -77,61 +77,62 @@ export function ImportPrivateKey() {
         },
         onError: () => setShowPasswordDialog(false),
     });
-    return (
-        <>
-            {showPasswordDialog ? (
-                <div className="absolute inset-0 pb-8 px-2.5 flex flex-col z-10">
-                    <PasswordInputDialog
-                        title="Import Account"
-                        continueLabel="Import"
-                        finalStep
-                        onBackClicked={() => setShowPasswordDialog(false)}
-                        onPasswordVerified={async (password) => {
-                            await importMutation.mutateAsync(password);
-                        }}
-                    />
-                </div>
-            ) : null}
-            <MenuLayout title="Import Existing Account" back={accountsUrl}>
-                <Formik
-                    initialValues={{ privateKey: '' }}
-                    onSubmit={async ({ privateKey }) => {
-                        setPrivateKey(
-                            validation.cast({ privateKey }).privateKey
-                        );
-                        setShowPasswordDialog(true);
-                    }}
-                    validationSchema={validation}
-                >
-                    {({ isSubmitting, isValid }) => (
-                        <Form className="flex flex-col gap-3 pt-2.5">
-                            <FieldLabel txt="Enter Private Key">
-                                <Field
-                                    name="privateKey"
-                                    className="shadow-button text-steel-dark font-medium text-p1 resize-none rounded-xl border border-solid border-steel p-3"
-                                    component={'textarea'}
-                                    rows="3"
-                                    spellCheck="false"
-                                    autoComplete="off"
-                                />
-                                <ErrorMessage
-                                    render={(error) => <Alert>{error}</Alert>}
-                                    name="privateKey"
-                                />
-                            </FieldLabel>
-                            <Button
-                                type="submit"
-                                size="tall"
-                                variant="primary"
-                                text="Continue"
-                                after={<ArrowRight16 />}
-                                disabled={!isValid}
-                                loading={isSubmitting}
+    return showPasswordDialog ? (
+        <div className="absolute inset-0 pb-8 px-2.5 flex flex-col z-10">
+            <PasswordInputDialog
+                title="Import Account"
+                continueLabel="Import"
+                finalStep
+                onBackClicked={() => setShowPasswordDialog(false)}
+                onPasswordVerified={async (password) => {
+                    await importMutation.mutateAsync(password);
+                }}
+            />
+        </div>
+    ) : (
+        <MenuLayout title="Import Existing Account" back={accountsUrl}>
+            <Formik
+                initialValues={{ privateKey }}
+                onSubmit={async ({ privateKey: privateKeyInput }) => {
+                    setPrivateKey(
+                        validation.cast({ privateKey: privateKeyInput })
+                            .privateKey
+                    );
+                    setShowPasswordDialog(true);
+                }}
+                validationSchema={validation}
+                validateOnMount
+                enableReinitialize
+            >
+                {({ isSubmitting, isValid }) => (
+                    <Form className="flex flex-col gap-3 pt-2.5">
+                        <FieldLabel txt="Enter Private Key">
+                            <Field
+                                name="privateKey"
+                                className="shadow-button text-steel-dark font-medium text-p1 resize-none rounded-xl border border-solid border-steel p-3"
+                                component={'textarea'}
+                                rows="3"
+                                spellCheck="false"
+                                autoComplete="off"
+                                autoFocus
                             />
-                        </Form>
-                    )}
-                </Formik>
-            </MenuLayout>
-        </>
+                            <ErrorMessage
+                                render={(error) => <Alert>{error}</Alert>}
+                                name="privateKey"
+                            />
+                        </FieldLabel>
+                        <Button
+                            type="submit"
+                            size="tall"
+                            variant="primary"
+                            text="Continue"
+                            after={<ArrowRight16 />}
+                            disabled={!isValid}
+                            loading={isSubmitting}
+                        />
+                    </Form>
+                )}
+            </Formik>
+        </MenuLayout>
     );
 }
