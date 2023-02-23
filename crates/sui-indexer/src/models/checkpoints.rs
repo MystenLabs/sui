@@ -201,16 +201,16 @@ fn commit_checkpoint_impl(
     })
 }
 
-pub fn get_previous_checkpoint(
+pub fn get_checkpoint(
     pg_pool_conn: &mut PgPoolConnection,
-    currency_checkpoint_sequence_number: i64,
+    checkpoint_sequence_number: i64,
 ) -> Result<Checkpoint, IndexerError> {
     let checkpoint_read_result = pg_pool_conn
         .build_transaction()
         .read_only()
         .run::<_, Error, _>(|conn| {
             checkpoints_table
-                .filter(sequence_number.eq(currency_checkpoint_sequence_number - 1))
+                .filter(sequence_number.eq(checkpoint_sequence_number))
                 .limit(1)
                 .first::<Checkpoint>(conn)
         });
