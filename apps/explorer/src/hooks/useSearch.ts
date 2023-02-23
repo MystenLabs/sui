@@ -26,18 +26,21 @@ const getResultsForTransaction = async (
     query: string
 ) => {
     if (!isValidTransactionDigest(query)) return null;
-
-    const txdata = await rpc.getTransactionWithEffects(query);
-    return {
-        label: 'transaction',
-        results: [
-            {
-                id: getTransactionDigest(txdata),
-                label: getTransactionDigest(txdata),
-                type: 'transaction',
-            },
-        ],
-    };
+    try {
+        const txdata = await rpc.getTransactionWithEffects(query);
+        return {
+            label: 'transaction',
+            results: [
+                {
+                    id: getTransactionDigest(txdata),
+                    label: getTransactionDigest(txdata),
+                    type: 'transaction',
+                },
+            ],
+        };
+    } catch (e) {
+        return null;
+    }
 };
 
 const getResultsForObject = async (rpc: JsonRpcProvider, query: string) => {
@@ -53,6 +56,23 @@ const getResultsForObject = async (rpc: JsonRpcProvider, query: string) => {
                     id: details.reference.objectId,
                     label: details.reference.objectId,
                     type: 'object',
+                },
+            ],
+        };
+    }
+    return null;
+};
+
+const getResultsForCheckpoint = async (rpc: JsonRpcProvider, query: string) => {
+    const { digest } = await rpc.getCheckpoint(query);
+    if (digest) {
+        return {
+            label: 'checkpoint',
+            results: [
+                {
+                    id: digest,
+                    label: digest,
+                    type: 'checkpoint',
                 },
             ],
         };
@@ -92,6 +112,7 @@ export function useSearch(query: string) {
         async () => {
             const results = await Promise.all([
                 getResultsForTransaction(rpc, query),
+                getResultsForCheckpoint(rpc, query),
                 getResultsForAddress(rpc, query),
                 getResultsForObject(rpc, query),
             ]);
