@@ -1,5 +1,25 @@
 # @mysten/wallet-kit
 
+## 0.3.2
+
+### Patch Changes
+
+- 0e202a543: Remove pending delegation switches.
+- Updated dependencies [f1e3a0373]
+- Updated dependencies [f2e713bd0]
+- Updated dependencies [0e202a543]
+- Updated dependencies [67e503c7c]
+- Updated dependencies [4baf554f1]
+- Updated dependencies [aa650aa3b]
+- Updated dependencies [1d07807ff]
+- Updated dependencies [6ff0c785f]
+  - @mysten/sui.js@0.29.0
+  - @mysten/wallet-adapter-wallet-standard@0.6.2
+  - @mysten/wallet-adapter-unsafe-burner@0.7.0
+  - @mysten/wallet-adapter-base@0.6.2
+  - @mysten/wallet-kit-core@0.3.2
+  - @mysten/wallet-standard@0.4.2
+
 ## 0.3.1
 
 ### Patch Changes
