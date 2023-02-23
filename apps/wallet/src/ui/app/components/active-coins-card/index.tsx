@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
+import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
 import { CoinItem } from './CoinItem';
 import { Text } from '_app/shared/text';
 import { CoinIcon } from '_components/coin-icon';
-import { useAppSelector, useFormatCoin } from '_hooks';
-import { accountAggregateBalancesSelector } from '_redux/slices/account';
+import Loading from '_components/loading';
+import { useAppSelector, useFormatCoin, useRpc } from '_hooks';
 
 function SelectedCoinCard({
     balance,
@@ -48,21 +49,22 @@ export function ActiveCoinsCard({
     activeCoinType: string;
     showActiveCoin?: boolean;
 }) {
-    const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
+    const primaryAddress = useAppSelector(({ account }) => account.address);
 
-    const coins = useMemo(
-        () =>
-            Object.entries(aggregateBalances).map((aType) => {
-                return {
-                    coinType: aType[0],
-                    balance: aType[1],
-                };
-            }),
-        [aggregateBalances]
+    // TODO: remove and use useGetCoinBalance hook, once it's merged
+    const rpc = useRpc();
+
+    const { data: coins, isLoading } = useQuery(
+        ['coin-balance', primaryAddress],
+        () => rpc.getAllBalances(primaryAddress!),
+        {
+            enabled: !!primaryAddress,
+        }
     );
 
     const activeCoin = useMemo(() => {
-        return coins.filter((coin) => coin.coinType === activeCoinType)[0];
+        if (!coins) return null;
+        return coins.find(({ coinType }) => coinType === activeCoinType);
     }, [activeCoinType, coins]);
 
     const CoinListCard = (
@@ -71,7 +73,7 @@ export function ActiveCoinsCard({
                 My Coins
             </Text>
             <div className="flex flex-col justify-between items-center mt-2">
-                {coins.map(({ coinType, balance }) => (
+                {coins?.map(({ coinType, totalBalance }) => (
                     <Link
                         to={`/send?${new URLSearchParams({
                             type: coinType,
@@ -79,7 +81,10 @@ export function ActiveCoinsCard({
                         key={coinType}
                         className="py-3.75 px-1.5 no-underline flex gap-2 items-center w-full hover:bg-sui/10 group border-t border-solid border-transparent border-t-gray-45"
                     >
-                        <CoinItem coinType={coinType} balance={balance} />
+                        <CoinItem
+                            coinType={coinType}
+                            balance={BigInt(totalBalance)}
+                        />
                     </Link>
                 ))}
             </div>
@@ -87,15 +92,17 @@ export function ActiveCoinsCard({
     );
 
     return (
-        <div className="flex w-full">
-            {showActiveCoin
-                ? activeCoin && (
-                      <SelectedCoinCard
-                          coinType={activeCoin.coinType}
-                          balance={activeCoin.balance}
-                      />
-                  )
-                : CoinListCard}
-        </div>
+        <Loading loading={isLoading}>
+            <div className="flex w-full">
+                {showActiveCoin
+                    ? activeCoin && (
+                          <SelectedCoinCard
+                              coinType={activeCoin.coinType}
+                              balance={activeCoin.totalBalance}
+                          />
+                      )
+                    : CoinListCard}
+            </div>
+        </Loading>
     );
 }
