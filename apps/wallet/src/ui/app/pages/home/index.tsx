@@ -71,7 +71,6 @@ const HomePage = ({ disableNavigation, limitToPopUpSize = true }: Props) => {
                     bottomNavEnabled={!disableNavigation}
                     dappStatusEnabled={!disableNavigation}
                     topNavMenuEnabled={!disableNavigation}
-                    centerLogo={true}
                 >
                     <Outlet />
                 </PageMainLayout>
