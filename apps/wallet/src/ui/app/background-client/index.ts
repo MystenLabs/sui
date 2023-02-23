@@ -313,8 +313,8 @@ export class BackgroundClient {
         );
     }
 
-    public async importPrivateKey(password: string, keyPair: ExportedKeypair) {
-        return await lastValueFrom(
+    public importPrivateKey(password: string, keyPair: ExportedKeypair) {
+        return lastValueFrom(
             this.sendMessage(
                 createMessage<KeyringPayload<'importPrivateKey'>>({
                     type: 'keyring',
