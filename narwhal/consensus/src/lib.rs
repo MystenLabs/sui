@@ -21,7 +21,7 @@ pub use crate::consensus::Consensus;
 use store::StoreError;
 use thiserror::Error;
 
-use types::SequenceNumber;
+use types::{Certificate, SequenceNumber};
 
 /// The default channel size used in the consensus and subscriber logic.
 pub const DEFAULT_CHANNEL_SIZE: usize = 1_000;
@@ -29,11 +29,39 @@ pub const DEFAULT_CHANNEL_SIZE: usize = 1_000;
 /// The number of shutdown receivers to create on startup. We need one per component loop.
 pub const NUM_SHUTDOWN_RECEIVERS: u64 = 25;
 
-#[derive(Clone, Debug, Error)]
-enum ConsensusError {
+#[derive(Clone, Debug, Error, PartialEq)]
+pub enum ConsensusError {
     #[error("Storage failure: {0}")]
     StoreError(#[from] StoreError),
 
+    #[error("Certificate {0:?} equivocates with earlier certificate {1:?}")]
+    CertificateEquivocation(Certificate, Certificate),
+
     #[error("System shutting down")]
     ShuttingDown,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Outcome {
+    // Certificate has not been inserted to DAG since it's bellow the latest commit round
+    // for this authority.
+    CertificateBelowCommitRound,
+
+    // Certificate processed is of an even round, so the previous one is an odd round and
+    // no leader election takes process.
+    NoLeaderElectedForOddRound,
+
+    // Leader has been elected, but it's below the latest commit round, so commit happens.
+    LeaderBelowCommitRound,
+
+    // Tried to do a leader election, but leader was not found for the round, not commit will
+    // take place.
+    LeaderNotFound,
+
+    // Leader has been found,  but there was no enough support from the children nodes, so leader
+    // can't be used to commit.
+    NotEnoughSupportForLeader,
+
+    // Processed Certificate triggered a commit.
+    Commit,
 }
