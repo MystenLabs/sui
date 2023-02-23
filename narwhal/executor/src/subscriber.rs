@@ -17,9 +17,12 @@ use std::{sync::Arc, time::Duration, vec};
 use types::FetchBatchesRequest;
 
 use fastcrypto::hash::Hash;
-use mysten_metrics::spawn_logged_monitored_task;
-use tokio::task::JoinHandle;
-use tracing::{debug, error, info};
+use rand::prelude::SliceRandom;
+use rand::rngs::ThreadRng;
+use tokio::time::Instant;
+use tokio::{sync::oneshot, task::JoinHandle};
+use tracing::{debug, error, warn};
+use tracing::{info, instrument};
 use types::{
     metered_channel, Batch, BatchAPI, BatchDigest, Certificate, CertificateAPI, CommittedSubDag,
     ConditionalBroadcastReceiver, ConsensusOutput, HeaderAPI, Timestamp,
@@ -72,11 +75,10 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
         .unwrap_or_else(|| panic!("Not enough shutdown receivers"));
 
     vec![
-        spawn_logged_monitored_task!(
-            run_notify(state, rx_notifier, rx_shutdown_notify),
-            "SubscriberNotifyTask"
+        tokio::spawn(
+            run_notify(state, rx_notifier, rx_shutdown_notify)
         ),
-        spawn_logged_monitored_task!(
+        tokio::spawn(
             create_and_run_subscriber(
                 authority_id,
                 worker_cache,
@@ -87,8 +89,7 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
                 metrics,
                 restored_consensus_output,
                 tx_notifier,
-            ),
-            "SubscriberTask"
+            )
         ),
     ]
 }

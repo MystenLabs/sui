@@ -3426,7 +3426,7 @@ dependencies = [
  "indexmap",
  "itertools",
  "mockall",
- "mysten-metrics",
+ "multiaddr",
  "narwhal-config",
  "narwhal-consensus",
  "narwhal-crypto",

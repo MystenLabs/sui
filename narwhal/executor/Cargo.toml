@@ -33,7 +33,6 @@ anyhow = "1.0.65"
 rand = "0.8.5"
 mockall = "0.11.2"
 
-mysten-metrics = { path = "../../crates/mysten-metrics" }
 store = { path = "../../crates/typed-store", package = "typed-store" }
 
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "0e0ef7054082a6f5a8921688e3d568761bc3be21" }
