@@ -10,8 +10,8 @@ use crate::{
 use config::{AuthorityIdentifier, Committee};
 use consensus::dag::Dag;
 
-use mysten_metrics::spawn_logged_monitored_task;
-use mysten_network::Multiaddr;
+use crypto::PublicKey;
+use multiaddr::Multiaddr;
 use std::{sync::Arc, time::Duration};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
@@ -53,27 +53,24 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
         endpoints_metrics: EndpointMetrics,
         rx_shutdown: ConditionalBroadcastReceiver,
     ) -> JoinHandle<()> {
-        spawn_logged_monitored_task!(
-            async move {
-                let _ = Self {
-                    authority_id,
-                    socket_address,
-                    block_waiter,
-                    block_remover,
-                    get_collections_timeout,
-                    remove_collections_timeout,
-                    block_synchronizer_handler,
-                    dag,
-                    committee,
-                    endpoints_metrics,
-                    rx_shutdown,
-                }
-                .run()
-                .await
-                .map_err(|e| error!("{:?}", e));
-            },
-            "ConsensusAPIGrpcTask"
-        )
+        tokio::spawn(async move {
+            let _ = Self {
+                name,
+                socket_address,
+                block_waiter,
+                block_remover,
+                get_collections_timeout,
+                remove_collections_timeout,
+                block_synchronizer_handler,
+                dag,
+                committee,
+                endpoints_metrics,
+                rx_shutdown,
+            }
+            .run()
+            .await
+            .map_err(|e| error!("{:?}", e));
+        })
     }
 
     async fn run(mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -109,7 +106,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
 
         let shutdown_handle = server.take_cancel_handle().unwrap();
 
-        let server_handle = spawn_logged_monitored_task!(server.serve());
+        let server_handle = tokio::spawn(server.serve());
 
         // wait to receive a shutdown signal
         let _ = self.rx_shutdown.receiver.recv().await;

@@ -2,10 +2,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{metrics::PrimaryMetrics, NetworkModel};
-use config::{AuthorityIdentifier, Committee, Epoch, WorkerId};
-use fastcrypto::hash::Hash as _;
-use mysten_metrics::spawn_logged_monitored_task;
-use std::collections::{BTreeMap, VecDeque};
+use config::{Committee, Epoch, WorkerId};
+use crypto::{PublicKey, Signature};
+use fastcrypto::{hash::Hash as _, signature_service::SignatureService};
+use std::collections::BTreeMap;
 use std::{cmp::Ordering, sync::Arc};
 use storage::ProposerStore;
 use tokio::time::{sleep_until, Instant};
@@ -120,37 +120,34 @@ impl Proposer {
         metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
         let genesis = Certificate::genesis(&committee);
-        spawn_logged_monitored_task!(
-            async move {
-                Self {
-                    authority_id,
-                    committee,
-                    header_num_of_batches_threshold,
-                    max_header_num_of_batches,
-                    max_header_delay,
-                    min_header_delay,
-                    header_resend_timeout,
-                    network_model,
-                    rx_shutdown,
-                    rx_parents,
-                    rx_our_digests,
-                    tx_headers,
-                    tx_narwhal_round_updates,
-                    proposer_store,
-                    round: 0,
-                    last_round_timestamp: None,
-                    last_parents: genesis,
-                    last_leader: None,
-                    digests: VecDeque::with_capacity(2 * max_header_num_of_batches),
-                    proposed_headers: BTreeMap::new(),
-                    rx_committed_own_headers,
-                    metrics,
-                }
-                .run()
-                .await;
-            },
-            "ProposerTask"
-        )
+        tokio::spawn(async move {
+            Self {
+                name,
+                committee,
+                signature_service,
+                header_num_of_batches_threshold,
+                max_header_num_of_batches,
+                max_header_delay,
+                min_header_delay,
+                header_resend_timeout,
+                network_model,
+                rx_shutdown,
+                rx_parents,
+                rx_our_digests,
+                tx_headers,
+                tx_narwhal_round_updates,
+                proposer_store,
+                round: 0,
+                last_parents: genesis,
+                last_leader: None,
+                digests: Vec::with_capacity(2 * max_header_num_of_batches),
+                proposed_headers: BTreeMap::new(),
+                rx_committed_own_headers,
+                metrics,
+            }
+            .run()
+            .await;
+        })
     }
 
     /// make_header creates a new Header, persists it to database

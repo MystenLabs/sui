@@ -1,8 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::AuthorityIdentifier;
-use mysten_metrics::spawn_logged_monitored_task;
+use crypto::PublicKey;
 use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
@@ -34,20 +33,17 @@ impl StateHandler {
         tx_committed_own_headers: Option<Sender<(Round, Vec<Round>)>>,
         network: anemo::Network,
     ) -> JoinHandle<()> {
-        spawn_logged_monitored_task!(
-            async move {
-                Self {
-                    authority_id,
-                    rx_committed_certificates,
-                    rx_shutdown,
-                    tx_committed_own_headers,
-                    network,
-                }
-                .run()
-                .await;
-            },
-            "StateHandlerTask"
-        )
+        tokio::spawn(async move {
+            Self {
+                name,
+                rx_committed_certificates,
+                rx_shutdown,
+                tx_commited_own_headers,
+                network,
+            }
+            .run()
+            .await;
+        })
     }
 
     async fn handle_sequenced(&mut self, commit_round: Round, certificates: Vec<Certificate>) {
