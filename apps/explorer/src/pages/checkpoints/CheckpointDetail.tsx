@@ -1,22 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    useFeature,
-    FeaturesReady,
-    useGrowthBook,
-} from '@growthbook/growthbook-react';
-import { type TransactionKindName } from '@mysten/sui.js';
+import { useFeature, useGrowthBook } from '@growthbook/growthbook-react';
 import { useQuery } from '@tanstack/react-query';
 import { Navigate, useParams } from 'react-router-dom';
 
-import { genTableDataFromTxData } from '~/components/transaction-card/TxCardUtils';
+import {
+    genTableDataFromTxData,
+    getDataOnTxDigests,
+    type TxnData,
+} from '~/components/transaction-card/TxCardUtils';
 import { useRpc } from '~/hooks/useRpc';
 import { Banner } from '~/ui/Banner';
+import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { PageHeader } from '~/ui/PageHeader';
 import { TableCard } from '~/ui/TableCard';
-import { Tab, TabGroup, TabList, TabPanels } from '~/ui/Tabs';
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
 import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
 import { convertNumberToDate } from '~/utils/timeUtils';
@@ -31,54 +31,33 @@ function CheckpointDetail() {
         async () => await rpc.getCheckpoint(digest!)
     );
 
-    // const txQuery = useQuery(
-    //     ['checkpoint-transactions'],
-    //     async () =>
-    //         // todo: replace this with `sui_getTransactions` call when we are
-    //         // able to query by checkpoint digest
-    //         await rpc.getTransactionWithEffectsBatch(checkpoint.transactions),
-    //     { enabled: !!checkpoint?.transactions?.length }
-    // );
+    // todo: add user_signatures to combined `getCheckpoint` endpoint
+    const contentsQuery = useQuery(
+        ['contents'],
+        async () => await rpc.getCheckpointContents(checkpoint.sequenceNumber),
+        { enabled: !!checkpointQuery.data }
+    );
 
-    // // todo: loading/error states
-    // if (checkpointsLoading || txQuery.isLoading) {
-    //     return <div>loading...</div>;
-    // }
-
-    // if (txQuery.isError) {
-    //     return <div>error</div>;
-    // }
-
-    // const { sequenceNumber, epoch, timestampMs, epochRollingGasCostSummary } =
-    //     checkpoint;
-
-    // // todo: this is placeholder data
-    // const txDataForTable = txQuery.data?.map((tx) => ({
-    //     From: tx.certificate.data.sender,
-    //     To: Object.values(txQuery.data[0].certificate.data.transactions[0])[0]
-    //         .recipients[0],
-    //     txId: tx.certificate.transactionDigest,
-    //     status: 'success' as 'success' | 'failure',
-    //     txGas:
-    //         tx.effects.gasUsed.computationCost +
-    //         tx.effects.gasUsed.storageCost -
-    //         tx.effects.gasUsed.storageRebate,
-    //     suiAmount: 0,
-    //     coinType: 'sui',
-    //     kind: Object.keys(
-    //         txQuery.data[0].certificate.data.transactions[0]
-    //     )[0] as TransactionKindName,
-    //     timestamp_ms: tx.timestamp_ms ?? Date.now(),
-    // }));
-
-    // const txTableData = genTableDataFromTxData(txDataForTable!, 10);
+    const { data: transactions } = useQuery(
+        ['checkpoint-transactions'],
+        async () => {
+            // todo: replace this with `sui_getTransactions` call when we are
+            // able to query by checkpoint digest
+            const txData = await getDataOnTxDigests(
+                rpc,
+                checkpointQuery.data?.transactions!
+            );
+            return genTableDataFromTxData(txData as TxnData[]);
+        },
+        { enabled: checkpointQuery.isFetched }
+    );
 
     if (!enabled) return <Navigate to="/" />;
 
     if (checkpointQuery.isError)
         return (
             <Banner variant="error" fullWidth>
-                There was an issue retrieving checkpoint {id}
+                There was an issue retrieving data for checkpoint: {digest}
             </Banner>
         );
 
@@ -91,70 +70,64 @@ function CheckpointDetail() {
     return (
         <div className="flex flex-col space-y-12">
             <PageHeader title={checkpoint.digest} type="Checkpoint" />
-            <div className="space-y-10">
+            <div className="space-y-8">
                 <TabGroup as="div" size="lg">
                     <TabList>
                         <Tab>Details</Tab>
+                        <Tab>Signatures</Tab>
                     </TabList>
                     <TabPanels>
-                        <dl className="mt-4 space-y-2">
-                            <div className="space-y-2 sm:grid sm:grid-cols-4 sm:gap-4 sm:space-y-0">
-                                <dt>
+                        <TabPanel>
+                            <DescriptionList>
+                                <DescriptionItem title="Checkpoint Sequence No.">
                                     <Text
-                                        color="steel-darker"
                                         variant="p1/medium"
-                                    >
-                                        Checkpoint Sequence No.
-                                    </Text>
-                                </dt>
-                                <dd>
-                                    <Text
                                         color="steel-darker"
-                                        variant="p1/medium"
                                     >
                                         {checkpoint.sequenceNumber}
                                     </Text>
-                                </dd>
-                            </div>
-                            <div className="sm:grid sm:grid-cols-5 sm:gap-4">
-                                <dt>
+                                </DescriptionItem>
+                                <DescriptionItem title="Epoch">
                                     <Text
-                                        color="steel-darker"
                                         variant="p1/medium"
-                                    >
-                                        Epoch
-                                    </Text>
-                                </dt>
-                                <dd>
-                                    <Text
                                         color="steel-darker"
-                                        variant="p1/medium"
                                     >
                                         {checkpoint.epoch}
                                     </Text>
-                                </dd>
-                            </div>
-                            <div className="sm:grid sm:grid-cols-5 sm:gap-4">
-                                <dt>
+                                </DescriptionItem>
+                                <DescriptionItem title="Checkpoint Timestamp">
                                     <Text
-                                        color="steel-darker"
                                         variant="p1/medium"
-                                    >
-                                        Checkpoint Timestamp
-                                    </Text>
-                                </dt>
-                                <dd>
-                                    <Text
                                         color="steel-darker"
-                                        variant="p1/medium"
                                     >
-                                        {convertNumberToDate(
-                                            checkpoint.timestampMs
-                                        )}
+                                        {checkpoint.timestampMs
+                                            ? convertNumberToDate(
+                                                  checkpoint.timestampMs
+                                              )
+                                            : '--'}
                                     </Text>
-                                </dd>
-                            </div>
-                        </dl>
+                                </DescriptionItem>
+                            </DescriptionList>
+                        </TabPanel>
+                        <TabPanel>
+                            <DescriptionList>
+                                {contentsQuery.data?.user_signatures.map(
+                                    (signature) => (
+                                        <DescriptionItem
+                                            key={signature}
+                                            title="Signature"
+                                        >
+                                            <Text
+                                                variant="p1/medium"
+                                                color="steel-darker"
+                                            >
+                                                {signature}
+                                            </Text>
+                                        </DescriptionItem>
+                                    )
+                                )}
+                            </DescriptionList>
+                        </TabPanel>
                     </TabPanels>
                 </TabGroup>
                 <TabGroup as="div" size="lg">
@@ -162,34 +135,25 @@ function CheckpointDetail() {
                         <Tab>Gas & Storage Fee</Tab>
                     </TabList>
                     <TabPanels>
-                        <div className="mt-4 max-w-md space-y-2 overflow-auto">
-                            <div className="grid grid-cols-2">
-                                <Text color="steel-darker" variant="p1/medium">
-                                    Computation Fee
-                                </Text>
-                                <Text color="steel-darker" variant="p1/medium">
+                        <DescriptionList>
+                            <DescriptionItem title="Computation Fee">
+                                <Text variant="p1/medium" color="steel-darker">
                                     {
                                         epochRollingGasCostSummary.computation_cost
                                     }
                                 </Text>
-                            </div>
-                            <div className="grid grid-cols-2">
-                                <Text color="steel-darker" variant="p1/medium">
-                                    Storage Fee
-                                </Text>
-                                <Text color="steel-darker" variant="p1/medium">
+                            </DescriptionItem>
+                            <DescriptionItem title="Storage Fee">
+                                <Text variant="p1/medium" color="steel-darker">
                                     {epochRollingGasCostSummary.storage_cost}
                                 </Text>
-                            </div>
-                            <div className="grid grid-cols-2">
-                                <Text color="steel-darker" variant="p1/medium">
-                                    Storage Rebate
-                                </Text>
-                                <Text color="steel-darker" variant="p1/medium">
+                            </DescriptionItem>
+                            <DescriptionItem title="Storage Rebate">
+                                <Text variant="p1/medium" color="steel-darker">
                                     {epochRollingGasCostSummary.storage_rebate}
                                 </Text>
-                            </div>
-                        </div>
+                            </DescriptionItem>
+                        </DescriptionList>
                     </TabPanels>
                 </TabGroup>
 
@@ -199,10 +163,12 @@ function CheckpointDetail() {
                     </TabList>
                     <TabPanels>
                         <div className="mt-4">
-                            {/* <TableCard
-                                data={txTableData.data}
-                                columns={txTableData.columns}
-                            /> */}
+                            {transactions?.data ? (
+                                <TableCard
+                                    data={transactions?.data}
+                                    columns={transactions?.columns}
+                                />
+                            ) : null}
                         </div>
                     </TabPanels>
                 </TabGroup>
@@ -215,7 +181,6 @@ export default () => {
     const gb = useGrowthBook();
     if (gb?.ready) {
         return <CheckpointDetail />;
-    } else {
-        return <LoadingSpinner />;
     }
+    return <LoadingSpinner />;
 };
