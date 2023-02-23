@@ -45,6 +45,10 @@ struct PrimaryNodeInner {
 impl PrimaryNodeInner {
     /// The default channel capacity.
     pub const CHANNEL_CAPACITY: usize = 1_000;
+    /// The window where the schedule change takes place in consensus. It represents number
+    /// of committed sub dags.
+    /// TODO: move this to node properties
+    const CONSENSUS_SCHEDULE_CHANGE_SUB_DAGS: u64 = 10_000;
 
     // Starts the primary node with the provided info. If the node is already running then this
     // method will return an error instead.
@@ -325,7 +329,7 @@ impl PrimaryNodeInner {
             store.consensus_store.clone(),
             parameters.gc_depth,
             consensus_metrics.clone(),
-            100,
+            Self::CONSENSUS_SCHEDULE_CHANGE_SUB_DAGS,
         );
         let consensus_handles = Consensus::spawn(
             committee.clone(),
