@@ -37,9 +37,34 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - name: cargo simtest
         run: |
-          export MSIM_TEST_SEED=$(date +%s)
+          # TODO: If possible, if we build a docker image, and then run the below work inside the docker image,
+          # that would be great. The reason is that when failing seeds are found, they will only repro on linux,
+          # not mac. Therefore, to debug the failures, it would be excellent if you could just pull down the
+          # docker image that the failure happened in, so it could be reproduced locally very easily.
+
+          # build first
+          ./scripts/simtest/cargo-simtest simtest build
+          DATE=$(date +%s)
+          export RUST_LOG=off
           echo "Using MSIM_TEST_SEED=$MSIM_TEST_SEED"
-          MSIM_TEST_NUM=20 MSIM_WATCHDOG_TIMEOUT_MS=60000 scripts/simtest/cargo-simtest simtest
+          # TODO: get the right number of CPUs.
+          NUM_CPUS=10
+          for SUB_SEED in `seq 1 $NUM_CPUS`; do
+            SEED="$SUB_SEED$DATE"
+            LOG_FILE="log-$SEED"
+            echo "Iteration $SUB_SEED using MSIM_TEST_SEED=$SEED, logging to $LOG_FILE"
+            # TODO: need to run particular tests with different repeat counts.
+            MSIM_TEST_SEED="$SEED" MSIM_TEST_NUM=20 MSIM_WATCHDOG_TIMEOUT_MS=60000 scripts/simtest/cargo-simtest simtest --no-capture > "$LOG_FILE" 2>&1 &
+          done
+
+          # TODO: figure out which job(s) failed, ideally send the failing log file(s) to the slack channel.
+          # Also, what should the log output of the workflow as a whole be? we could just cat all the logs after running,
+          # so that they show up in the workflow UI. (We have to redirect them to individual files while running, since
+          # they are running in parallel and would get interleaved if they were all printing to stdout).
+          for JOB in $(jobs -p); do
+            wait $JOB || echo "job failed"
+          done
+
 
   report-status:
     name: Report Status
@@ -54,6 +79,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
         with:
+          # TODO: slack message should ideally include the git commit.
           channel-id: 'simtest-nightly'
           payload: |
             {
