@@ -4,7 +4,6 @@
 #[cfg(msim)]
 mod test {
 
-    use itertools::Itertools;
     use rand::{thread_rng, Rng};
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
@@ -18,18 +17,14 @@ mod test {
         LocalValidatorAggregatorProxy, ValidatorProxy,
     };
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
+    use sui_core::checkpoints::{CheckpointStore, CheckpointWatermark};
     use sui_macros::{register_fail_points, sim_test};
     use sui_simulator::{configs::*, SimConfig};
-    use sui_types::object::{Object, Owner};
-    use sui_types::storage::ObjectKey;
+    use sui_types::object::Owner;
     use test_utils::messages::get_sui_gas_object_with_wallet_context;
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use tracing::info;
-    use typed_store::rocks::ReadWriteOptions;
-    use typed_store::{
-        rocks::{DBMap, MetricConf},
-        traits::Map,
-    };
+    use typed_store::traits::Map;
 
     fn test_config() -> SimConfig {
         env_config(
@@ -60,12 +55,14 @@ mod test {
     #[sim_test(config = "test_config()")]
     #[ignore = "The benchmark client aborts certificates submission when it fails to gather a quorum of acknowledgements. This happens upon epoch change."]
     async fn test_simulated_load_with_reconfig() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 1000).await;
         test_simulated_load(test_cluster, 60).await;
     }
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_basic() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(7, 0).await;
         test_simulated_load(test_cluster, 15).await;
     }
@@ -73,6 +70,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     #[ignore]
     async fn test_simulated_load_restarts() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 0).await;
         let node_restarter = test_cluster
             .random_node_restarter()
@@ -85,6 +83,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     #[ignore]
     async fn test_simulated_load_reconfig_restarts() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 1000).await;
         let node_restarter = test_cluster
             .random_node_restarter()
@@ -97,6 +96,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     #[ignore]
     async fn test_simulated_load_reconfig_crashes() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 1000).await;
 
         struct DeadValidator {
@@ -152,28 +152,30 @@ mod test {
         let epoch_duration_ms = 5000;
         let test_cluster = build_test_cluster(4, epoch_duration_ms).await;
         test_simulated_load(test_cluster.clone(), 30).await;
-        // waiting enough time to get all transactions into checkpoints
-        tokio::time::sleep(Duration::from_millis(2 * epoch_duration_ms)).await;
 
         let swarm_dir = test_cluster.swarm.dir().join(AUTHORITIES_DB_NAME);
         let validator_path = std::fs::read_dir(swarm_dir).unwrap().next().unwrap();
-        let db_path = validator_path.unwrap().path().join("store");
 
-        let db = typed_store::rocks::open_cf(&db_path, None, MetricConf::default(), &["objects"]);
-        let objects = DBMap::<ObjectKey, Object>::reopen(
-            &db.unwrap(),
-            Some("objects"),
-            &ReadWriteOptions {
-                ignore_range_deletions: false,
-            },
-        )
-        .unwrap();
-
-        let iter = objects.iter().skip_to_last().reverse();
-        for (_, group) in &iter.group_by(|item| item.0 .0) {
-            // assure  only last version is kept
-            assert_eq!(group.count(), 1);
-        }
+        let db_path = validator_path.unwrap().path().join("checkpoints");
+        let store = CheckpointStore::open_readonly(&db_path);
+        let (pruned, digest) = store
+            .watermarks
+            .get(&CheckpointWatermark::HighestPruned)
+            .unwrap()
+            .unwrap();
+        assert!(pruned > 0);
+        let pruned_epoch = store
+            .checkpoint_by_digest
+            .get(&digest)
+            .unwrap()
+            .unwrap()
+            .epoch();
+        let expected_checkpoint = store
+            .epoch_last_checkpoint_map
+            .get(&pruned_epoch)
+            .unwrap()
+            .unwrap();
+        assert_eq!(expected_checkpoint, pruned);
     }
 
     async fn build_test_cluster(

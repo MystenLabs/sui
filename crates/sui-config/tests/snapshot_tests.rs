@@ -32,6 +32,7 @@ use sui_types::crypto::{
 };
 
 #[test]
+#[cfg_attr(msim, ignore)]
 fn genesis_config_snapshot_matches() {
     // Test creating fake SuiAddress from PublicKeyBytes.
     let keypair: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
@@ -51,6 +52,7 @@ fn genesis_config_snapshot_matches() {
 }
 
 #[test]
+#[cfg_attr(msim, ignore)]
 fn populated_genesis_snapshot_matches() {
     let genesis_config = GenesisConfig::for_local_testing();
     let (_account_keys, objects) = genesis_config

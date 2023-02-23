@@ -26,6 +26,12 @@ pub struct P2pConfig {
     pub state_sync: Option<StateSyncConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub discovery: Option<DiscoveryConfig>,
+    /// Size in bytes above which network messages are considered excessively large. Excessively
+    /// large messages will still be handled, but logged and reported in metrics for debugging.
+    ///
+    /// If unspecified, this will default to 8 MiB.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub excessive_message_size: Option<usize>,
 }
 
 fn default_listen_address() -> SocketAddr {
@@ -41,7 +47,17 @@ impl Default for P2pConfig {
             anemo_config: Default::default(),
             state_sync: None,
             discovery: None,
+            excessive_message_size: None,
         }
+    }
+}
+
+impl P2pConfig {
+    pub fn excessive_message_size(&self) -> usize {
+        const EXCESSIVE_MESSAGE_SIZE: usize = 8 << 20;
+
+        self.excessive_message_size
+            .unwrap_or(EXCESSIVE_MESSAGE_SIZE)
     }
 }
 

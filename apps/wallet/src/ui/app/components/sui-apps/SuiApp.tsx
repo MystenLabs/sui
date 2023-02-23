@@ -6,7 +6,6 @@ import { memo, useState, useCallback } from 'react';
 
 import DisconnectApp from './DisconnectApp';
 import ExternalLink from '_components/external-link';
-import { useMiddleEllipsis } from '_hooks';
 import { trackEvent } from '_src/shared/plausible';
 
 import st from './SuiApp.module.scss';
@@ -28,8 +27,6 @@ type SuiAppProps = {
     permissions: string[];
     disconnect?: boolean;
 };
-
-const TRUNCATE_MAX_LENGTH = 18;
 
 function SuiAppEmpty({ displaytype }: Displaytype) {
     return (
@@ -71,11 +68,7 @@ function SuiApp({
         pageLink,
     };
 
-    const originLabel = useMiddleEllipsis(
-        new URL(link).hostname,
-        TRUNCATE_MAX_LENGTH,
-        TRUNCATE_MAX_LENGTH - 1
-    );
+    const originLabel = new URL(link).hostname;
 
     const AppDetails = (
         <div className={cl(st.suiApp, st[displaytype])}>

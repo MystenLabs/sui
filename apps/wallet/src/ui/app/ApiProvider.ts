@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { JsonRpcProvider, LocalTxnDataSerializer } from '@mysten/sui.js';
+import {
+    Connection,
+    JsonRpcProvider,
+    LocalTxnDataSerializer,
+} from '@mysten/sui.js';
 
 import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
 import { LedgerSigner } from './LedgerSigner';
@@ -20,10 +24,6 @@ type EnvInfo = {
     env: API_ENV;
 };
 
-type ApiEndpoints = {
-    fullNode: string;
-    faucet?: string;
-} | null;
 export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
     [API_ENV.local]: { name: 'Local', env: API_ENV.local },
     [API_ENV.devNet]: { name: 'Sui Devnet', env: API_ENV.devNet },
@@ -31,21 +31,21 @@ export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
     [API_ENV.testNet]: { name: 'Sui Testnet', env: API_ENV.testNet },
 };
 
-export const ENV_TO_API: Record<API_ENV, ApiEndpoints> = {
-    [API_ENV.local]: {
-        fullNode: process.env.API_ENDPOINT_LOCAL_FULLNODE || '',
+export const ENV_TO_API: Record<API_ENV, Connection | null> = {
+    [API_ENV.local]: new Connection({
+        fullnode: process.env.API_ENDPOINT_LOCAL_FULLNODE || '',
         faucet: process.env.API_ENDPOINT_LOCAL_FAUCET || '',
-    },
-    [API_ENV.devNet]: {
-        fullNode: process.env.API_ENDPOINT_DEV_NET_FULLNODE || '',
+    }),
+    [API_ENV.devNet]: new Connection({
+        fullnode: process.env.API_ENDPOINT_DEV_NET_FULLNODE || '',
         faucet: process.env.API_ENDPOINT_DEV_NET_FAUCET || '',
-    },
+    }),
     [API_ENV.customRPC]: null,
-    [API_ENV.testNet]: {
-        fullNode: process.env.API_ENDPOINT_TEST_NET_FULLNODE || '',
+    [API_ENV.testNet]: new Connection({
+        fullnode: process.env.API_ENDPOINT_TEST_NET_FULLNODE || '',
         // NOTE: Faucet is currently disabled for testnet:
         // faucet: process.env.API_ENDPOINT_TEST_NET_FAUCET || '',
-    },
+    }),
 };
 
 function getDefaultApiEnv() {
@@ -60,7 +60,7 @@ function getDefaultAPI(env: API_ENV) {
     const apiEndpoint = ENV_TO_API[env];
     if (
         !apiEndpoint ||
-        apiEndpoint.fullNode === '' ||
+        apiEndpoint.fullnode === '' ||
         apiEndpoint.faucet === ''
     ) {
         throw new Error(`API endpoint not found for API_ENV ${env}`);
@@ -96,8 +96,9 @@ export default class ApiProvider {
         customRPC?: string | null
     ) {
         this._apiFullNodeProvider = new JsonRpcProvider(
-            customRPC ?? getDefaultAPI(apiEnv).fullNode,
-            { faucetURL: customRPC ? '' : getDefaultAPI(apiEnv).faucet }
+            customRPC
+                ? new Connection({ fullnode: customRPC })
+                : getDefaultAPI(apiEnv)
         );
         this._softSignerByAddress.clear();
         this._ledgerSignerByDerivationPath.clear();

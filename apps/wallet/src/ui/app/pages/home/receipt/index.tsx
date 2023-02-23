@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getExecutionStatusType, getTransactionKindName } from '@mysten/sui.js';
+import {
+    getExecutionStatusType,
+    getTransactionKindName,
+    getTransactions,
+    getTransactionSender,
+} from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useSearchParams, useNavigate } from 'react-router-dom';
@@ -41,9 +46,9 @@ function ReceiptPage() {
     const pageTitle = useMemo(() => {
         if (data) {
             const executionStatus = getExecutionStatusType(data);
-            const { sender, transactions } = data.certificate.data;
+            const [transaction] = getTransactions(data);
 
-            const txnKind = getTransactionKindName(transactions[0]);
+            const txnKind = getTransactionKindName(transaction);
             const stakingTxn = checkStakingTxn(data);
 
             const isTransfer =
@@ -53,7 +58,7 @@ function ReceiptPage() {
                 txnKind === 'TransferObject' ||
                 txnKind === 'Pay';
 
-            const isSender = activeAddress === sender;
+            const isSender = activeAddress === getTransactionSender(data);
 
             const transferName = isTransfer
                 ? isSender

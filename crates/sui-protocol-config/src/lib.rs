@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
+use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 pub const MIN_PROTOCOL_VERSION: u64 = 1;
@@ -19,11 +20,17 @@ impl ProtocolVersion {
     // ensures that when a new network (such as a testnet) is created, its genesis committee will
     // use a protocol version that is actually supported by the binary.
     pub const MIN: Self = Self(MIN_PROTOCOL_VERSION);
+
     pub const MAX: Self = Self(MAX_PROTOCOL_VERSION);
 
+    #[cfg(not(msim))]
+    const MAX_ALLOWED: Self = Self::MAX;
+
+    // We create one additional "fake" version in simulator builds so that we can test upgrades.
+    #[cfg(msim)]
+    const MAX_ALLOWED: Self = Self(MAX_PROTOCOL_VERSION + 1);
+
     pub fn new(v: u64) -> Self {
-        assert!(v >= MIN_PROTOCOL_VERSION, "{:?}", v);
-        assert!(v <= MAX_PROTOCOL_VERSION, "{:?}", v);
         Self(v)
     }
 
@@ -38,6 +45,46 @@ impl ProtocolVersion {
     }
 }
 
+impl std::ops::Sub<u64> for ProtocolVersion {
+    type Output = Self;
+    fn sub(self, rhs: u64) -> Self::Output {
+        Self::new(self.0 - rhs)
+    }
+}
+
+impl std::ops::Add<u64> for ProtocolVersion {
+    type Output = Self;
+    fn add(self, rhs: u64) -> Self::Output {
+        Self::new(self.0 + rhs)
+    }
+}
+
+/// Models the set of protocol versions supported by a validator.
+/// The `sui-node` binary will always use the SYSTEM_DEFAULT constant, but for testing we need
+/// to be able to inject arbitrary versions into SuiNode.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash)]
+pub struct SupportedProtocolVersions {
+    min: ProtocolVersion,
+    max: ProtocolVersion,
+}
+
+impl SupportedProtocolVersions {
+    pub const SYSTEM_DEFAULT: Self = Self {
+        min: ProtocolVersion::MIN,
+        max: ProtocolVersion::MAX,
+    };
+
+    pub fn new_for_testing(min: u64, max: u64) -> Self {
+        let min = ProtocolVersion::new(min);
+        let max = ProtocolVersion::new(max);
+        Self { min, max }
+    }
+
+    pub fn is_version_supported(&self, v: ProtocolVersion) -> bool {
+        v.0 >= self.min.0 && v.0 <= self.max.0
+    }
+}
+
 /// Constants that change the behavior of the protocol.
 ///
 /// The value of each constant here must be fixed for a given protocol version. To change the value
@@ -47,9 +94,9 @@ impl ProtocolVersion {
 ///
 /// To add a new field to this struct, use the following procedure:
 /// - Advance the protocol version.
-/// - Add the field as a private Option<T> to the struct.
-/// - Initialize the field to None in prior protocol versions.
-/// - Initialize the field to Some(val) for your new protocol version.
+/// - Add the field as a private `Option<T>` to the struct.
+/// - Initialize the field to `None` in prior protocol versions.
+/// - Initialize the field to `Some(val)` for your new protocol version.
 /// - Add a public getter that simply unwraps the field.
 ///
 /// This way, if the constant is accessed in a protocol version in which it is not defined, the
@@ -323,50 +370,86 @@ impl ProtocolConfig {
     // }
 }
 
+#[cfg(not(msim))]
 static POISON_VERSION_METHODS: AtomicBool = AtomicBool::new(false);
+
+// Use a thread local in sim tests for test isolation.
+#[cfg(msim)]
+thread_local! {
+    static POISON_VERSION_METHODS: AtomicBool = AtomicBool::new(false);
+}
 
 // Instantiations for each protocol version.
 impl ProtocolConfig {
     /// Get the value ProtocolConfig that are in effect during the given protocol version.
     pub fn get_for_version(version: ProtocolVersion) -> Self {
         // ProtocolVersion can be deserialized so we need to check it here as well.
-        assert!(version.0 >= MIN_PROTOCOL_VERSION, "{:?}", version);
-        assert!(version.0 <= MAX_PROTOCOL_VERSION, "{:?}", version);
+        assert!(version.0 >= ProtocolVersion::MIN.0, "{:?}", version);
+        assert!(version.0 <= ProtocolVersion::MAX_ALLOWED.0, "{:?}", version);
 
-        Self::get_for_version_impl(version)
+        let ret = Self::get_for_version_impl(version);
+
+        CONFIG_OVERRIDE.with(|ovr| {
+            if let Some(override_fn) = &*ovr.borrow() {
+                warn!(
+                    "overriding ProtocolConfig settings with custom settings (you should not see this log outside of tests"
+                );
+                override_fn(version, ret)
+            } else {
+                ret
+            }
+        })
     }
 
+    #[cfg(not(msim))]
     pub fn poison_get_for_min_version() {
         POISON_VERSION_METHODS.store(true, Ordering::Relaxed);
     }
 
+    #[cfg(not(msim))]
+    fn load_poison_get_for_min_version() -> bool {
+        POISON_VERSION_METHODS.load(Ordering::Relaxed)
+    }
+
+    #[cfg(msim)]
+    pub fn poison_get_for_min_version() {
+        POISON_VERSION_METHODS.with(|p| p.store(true, Ordering::Relaxed));
+    }
+
+    #[cfg(msim)]
+    fn load_poison_get_for_min_version() -> bool {
+        POISON_VERSION_METHODS.with(|p| p.load(Ordering::Relaxed))
+    }
+
     /// Convenience to get the constants at the current minimum supported version.
     /// Mainly used by client code that may not yet be protocol-version aware.
-    pub fn get_for_min_version() -> &'static Self {
-        if POISON_VERSION_METHODS.load(Ordering::Relaxed) {
+    pub fn get_for_min_version() -> Self {
+        if Self::load_poison_get_for_min_version() {
             panic!("get_for_min_version called on validator");
         }
-
-        static CONSTANTS: Lazy<ProtocolConfig> =
-            Lazy::new(|| ProtocolConfig::get_for_version(ProtocolVersion::MIN));
-
-        &CONSTANTS
+        ProtocolConfig::get_for_version(ProtocolVersion::MIN)
     }
 
     /// Convenience to get the constants at the current maximum supported version.
     /// Mainly used by genesis.
-    pub fn get_for_max_version() -> &'static Self {
-        if POISON_VERSION_METHODS.load(Ordering::Relaxed) {
+    pub fn get_for_max_version() -> Self {
+        if Self::load_poison_get_for_min_version() {
             panic!("get_for_max_version called on validator");
         }
-
-        static CONSTANTS: Lazy<ProtocolConfig> =
-            Lazy::new(|| ProtocolConfig::get_for_version(ProtocolVersion::MAX));
-
-        &CONSTANTS
+        ProtocolConfig::get_for_version(ProtocolVersion::MAX)
     }
 
     fn get_for_version_impl(version: ProtocolVersion) -> Self {
+        #[cfg(msim)]
+        {
+            // populate the fake simulator version # with a different base tx cost.
+            if version == ProtocolVersion::MAX_ALLOWED {
+                let mut config = Self::get_for_version_impl(version - 1);
+                config.base_tx_cost_fixed = Some(config.base_tx_cost_fixed() + 1000);
+                return config;
+            }
+        }
+
         // IMPORTANT: Never modify the value of any constant for a pre-existing protocol version.
         // To change the values here you must create a new protocol version with the new values!
         match version.0 {
@@ -429,5 +512,44 @@ impl ProtocolConfig {
             // },
             _ => panic!("unsupported version {:?}", version),
         }
+    }
+
+    /// Override one or more settings in the config, for testing.
+    /// This must be called at the beginning of the test, before get_for_(min|max)_version is
+    /// called, since those functions cache their return value.
+    pub fn apply_overrides_for_testing(
+        override_fn: impl Fn(ProtocolVersion, Self) -> Self + Send + 'static,
+    ) -> OverrideGuard {
+        CONFIG_OVERRIDE.with(|ovr| {
+            let mut cur = ovr.borrow_mut();
+            assert!(cur.is_none(), "config override already present");
+            *cur = Some(Box::new(override_fn));
+            OverrideGuard
+        })
+    }
+}
+
+// Setters for tests
+impl ProtocolConfig {
+    pub fn set_max_function_definitions_for_testing(&mut self, m: usize) {
+        self.max_function_definitions = Some(m)
+    }
+}
+
+type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;
+
+thread_local! {
+    static CONFIG_OVERRIDE: RefCell<Option<Box<OverrideFn>>> = RefCell::new(None);
+}
+
+#[must_use]
+pub struct OverrideGuard;
+
+impl Drop for OverrideGuard {
+    fn drop(&mut self) {
+        info!("restoring override fn");
+        CONFIG_OVERRIDE.with(|ovr| {
+            *ovr.borrow_mut() = None;
+        });
     }
 }

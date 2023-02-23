@@ -9,6 +9,7 @@ use crate::crypto::{
     AuthorityStrongQuorumSignInfo, EmptySignInfo, Signable, Signer,
 };
 use crate::error::SuiResult;
+use crate::messages_checkpoint::CheckpointSequenceNumber;
 use once_cell::sync::OnceCell;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::{Debug, Display, Formatter};
@@ -188,7 +189,7 @@ where
 }
 
 /// TrustedEnvelope is a serializable wrapper around Envelope which is
-/// Into<VerifiedEnvelope> - in other words it models a verified message which has been
+/// `Into<VerifiedEnvelope>` - in other words it models a verified message which has been
 /// written to the db (or some other trusted store), and may be read back from the db without
 /// further signature verification.
 ///
@@ -340,30 +341,65 @@ where
     }
 }
 
-impl<T: Message> Envelope<T, CertificateProof> {
-    pub fn new(data: T, validity: CertificateProof) -> Self {
-        Self {
-            digest: OnceCell::new(),
+/// The following implementation provides two ways to construct a VerifiedEnvelope with CertificateProof.
+/// It is implemented in this file such that we could reuse the digest without having to
+/// recompute it.
+/// We allow converting a VerifiedCertificate into a VerifiedEnvelope with CertificateProof::Certificate;
+/// and converting a VerifiedTransaction along with checkpoint information into a VerifiedEnvelope
+/// with CertificateProof::Checkpoint.
+impl<T: Message> VerifiedEnvelope<T, CertificateProof> {
+    pub fn new_from_certificate(
+        certificate: VerifiedEnvelope<T, AuthorityStrongQuorumSignInfo>,
+    ) -> Self {
+        let inner = certificate.into_inner();
+        let Envelope {
+            digest,
             data,
-            auth_signature: validity,
-        }
+            auth_signature,
+        } = inner;
+        VerifiedEnvelope::new_unchecked(Envelope {
+            digest,
+            data,
+            auth_signature: CertificateProof::new_from_cert_sig(auth_signature),
+        })
     }
-}
 
-// Note: There are many cases where its okay to construct an Envelope with CertificateProof
-// from AuthorityWeakQuorumSignInfo, including effects, checkpoint summaries, etc, which in
-// general only require that one honest validator has attested to it. But, we only offer a blanket
-// implementation for AuthorityStrongQuorumSignInfo to avoid accidentally promoting a case where
-// AuthorityWeakQuorumSignInfo is insufficient, such as a CertifiedTransaction.
-//
-// Cases where AuthorityWeakQuorumSignInfo is sufficient should all be special cased.
-impl<T: Message> From<Envelope<T, AuthorityStrongQuorumSignInfo>>
-    for Envelope<T, CertificateProof>
-{
-    fn from(env: Envelope<T, AuthorityStrongQuorumSignInfo>) -> Envelope<T, CertificateProof> {
-        Envelope::<T, CertificateProof>::new(
-            env.data,
-            CertificateProof::from_certified(env.auth_signature.epoch),
-        )
+    pub fn new_from_checkpoint(
+        transaction: VerifiedEnvelope<T, EmptySignInfo>,
+        epoch: EpochId,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Self {
+        let inner = transaction.into_inner();
+        let Envelope {
+            digest,
+            data,
+            auth_signature: _,
+        } = inner;
+        VerifiedEnvelope::new_unchecked(Envelope {
+            digest,
+            data,
+            auth_signature: CertificateProof::new_from_checkpoint(epoch, checkpoint),
+        })
+    }
+
+    pub fn new_from_quorum_execution(
+        transaction: VerifiedEnvelope<T, EmptySignInfo>,
+        epoch: EpochId,
+    ) -> Self {
+        let inner = transaction.into_inner();
+        let Envelope {
+            digest,
+            data,
+            auth_signature: _,
+        } = inner;
+        VerifiedEnvelope::new_unchecked(Envelope {
+            digest,
+            data,
+            auth_signature: CertificateProof::QuorumExecuted(epoch),
+        })
+    }
+
+    pub fn epoch(&self) -> EpochId {
+        self.auth_signature.epoch()
     }
 }

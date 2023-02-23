@@ -62,7 +62,7 @@ impl From<(TransactionDigest, i64)> for EventID {
     fn from((tx_digest_num, event_seq_number): (TransactionDigest, i64)) -> Self {
         Self {
             tx_digest: tx_digest_num as TransactionDigest,
-            event_seq: event_seq_number as i64,
+            event_seq: event_seq_number,
         }
     }
 }

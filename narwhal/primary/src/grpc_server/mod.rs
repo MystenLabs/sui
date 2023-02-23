@@ -7,7 +7,7 @@ use crate::{
     grpc_server::{metrics::EndpointMetrics, proposer::NarwhalProposer},
     BlockRemover, BlockWaiter,
 };
-use config::SharedCommittee;
+use config::Committee;
 use consensus::dag::Dag;
 
 use crypto::PublicKey;
@@ -34,7 +34,7 @@ pub struct ConsensusAPIGrpc<SynchronizerHandler: Handler + Send + Sync + 'static
     remove_collections_timeout: Duration,
     block_synchronizer_handler: Arc<SynchronizerHandler>,
     dag: Option<Arc<Dag>>,
-    committee: SharedCommittee,
+    committee: Committee,
     endpoints_metrics: EndpointMetrics,
     rx_shutdown: ConditionalBroadcastReceiver,
 }
@@ -50,7 +50,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
         remove_collections_timeout: Duration,
         block_synchronizer_handler: Arc<SynchronizerHandler>,
         dag: Option<Arc<Dag>>,
-        committee: SharedCommittee,
+        committee: Committee,
         endpoints_metrics: EndpointMetrics,
         rx_shutdown: ConditionalBroadcastReceiver,
     ) -> JoinHandle<()> {
@@ -89,13 +89,12 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
             self.dag.clone(),
         );
 
-        let narwhal_proposer = NarwhalProposer::new(self.dag, Arc::clone(&self.committee));
+        let narwhal_proposer = NarwhalProposer::new(self.dag, self.committee.clone());
         let narwhal_configuration = NarwhalConfiguration::new(
             self.committee
-                .load()
                 .primary(&self.name)
                 .expect("Our public key is not in the committee"),
-            Arc::clone(&self.committee),
+            self.committee.clone(),
         );
 
         let config = mysten_network::config::Config::default();

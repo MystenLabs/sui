@@ -33,11 +33,11 @@ use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell, ConsensusStore,
     FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
     GetCertificatesResponse, Header, HeaderBuilder, PayloadAvailabilityRequest,
-    PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
-    PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse,
-    RequestVoteRequest, RequestVoteResponse, Round, SequenceNumber, TimestampMs, Transaction, Vote,
-    WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerReconfigureMessage,
-    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
+    PayloadAvailabilityResponse, PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker,
+    PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, RequestVoteRequest,
+    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, SequenceNumber,
+    TimestampMs, Transaction, Vote, WorkerBatchMessage, WorkerDeleteBatchesMessage,
+    WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -173,14 +173,14 @@ pub fn transaction() -> Transaction {
 
 #[derive(Clone)]
 pub struct PrimaryToPrimaryMockServer {
-    sender: Sender<PrimaryMessage>,
+    sender: Sender<SendCertificateRequest>,
 }
 
 impl PrimaryToPrimaryMockServer {
     pub fn spawn(
         network_keypair: NetworkKeyPair,
         address: Multiaddr,
-    ) -> (Receiver<PrimaryMessage>, anemo::Network) {
+    ) -> (Receiver<SendCertificateRequest>, anemo::Network) {
         let addr = network::multiaddr_to_address(&address).unwrap();
         let (sender, receiver) = channel(1);
         let service = PrimaryToPrimaryServer::new(Self { sender });
@@ -198,15 +198,15 @@ impl PrimaryToPrimaryMockServer {
 
 #[async_trait]
 impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
-    async fn send_message(
+    async fn send_certificate(
         &self,
-        request: anemo::Request<PrimaryMessage>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        request: anemo::Request<SendCertificateRequest>,
+    ) -> Result<anemo::Response<SendCertificateResponse>, anemo::rpc::Status> {
         let message = request.into_body();
 
         self.sender.send(message).await.unwrap();
 
-        Ok(anemo::Response::new(()))
+        Ok(anemo::Response::new(SendCertificateResponse {}))
     }
 
     async fn request_vote(

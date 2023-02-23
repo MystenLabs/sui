@@ -8,7 +8,6 @@ use fastcrypto::encoding::{Base58, Base64, Encoding};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
-
 /// A representation of a SHA3-256 Digest
 #[serde_as]
 #[derive(

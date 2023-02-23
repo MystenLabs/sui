@@ -250,9 +250,8 @@ async fn run(
     let store_path = matches.value_of("store").unwrap();
 
     // Read the committee, workers and node's keypair from file.
-    let committee = Arc::new(ArcSwap::from_pointee(
-        Committee::import(committee_file).context("Failed to load the committee information")?,
-    ));
+    let committee =
+        Committee::import(committee_file).context("Failed to load the committee information")?;
     let worker_cache = Arc::new(ArcSwap::from_pointee(
         WorkerCache::import(workers_file).context("Failed to load the worker information")?,
     ));

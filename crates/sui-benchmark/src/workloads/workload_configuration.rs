@@ -105,9 +105,9 @@ impl WorkloadConfiguration {
         let shared_counter_qps = (shared_counter_weight_ratio * split_target_qps as f32) as u64;
         let shared_counter_num_workers =
             (shared_counter_weight_ratio * num_workers as f32).ceil() as u64;
-        let shared_counter_max_ops = (shared_counter_qps * in_flight_ratio) as u64;
+        let shared_counter_max_ops = shared_counter_qps * in_flight_ratio;
         let shared_counter_ratio =
-            1.0 - (std::cmp::min(shared_counter_hotness_factor as u32, 100) as f32 / 100.0);
+            1.0 - (std::cmp::min(shared_counter_hotness_factor, 100) as f32 / 100.0);
         let num_shared_counters = (shared_counter_max_ops as f32 * shared_counter_ratio) as u64;
 
         let transfer_object_weight_ratio = split_transfer_object_weight as f32
@@ -116,14 +116,14 @@ impl WorkloadConfiguration {
         let transfer_object_qps = (transfer_object_weight_ratio * split_target_qps as f32) as u64;
         let transfer_object_num_workers =
             (transfer_object_weight_ratio * num_workers as f32).ceil() as u64;
-        let transfer_object_max_ops = (transfer_object_qps * in_flight_ratio) as u64;
+        let transfer_object_max_ops = transfer_object_qps * in_flight_ratio;
 
         let delegate_weight_ratio = split_delegation_weight as f32
             / (split_shared_counter_weight + split_transfer_object_weight + split_delegation_weight)
                 as f32;
         let delegate_qps = (delegate_weight_ratio * split_target_qps as f32) as u64;
         let delegate_num_workers = (delegate_weight_ratio * num_workers as f32).ceil() as u64;
-        let delegate_max_ops = (delegate_qps * in_flight_ratio) as u64;
+        let delegate_max_ops = delegate_qps * in_flight_ratio;
 
         let mut workload_gas_configs = vec![];
 
@@ -283,7 +283,7 @@ pub async fn configure_combined_mode(
     let split_delegation_weight = (delegation_weight as f64 / num_proxies as f64).ceil() as u32;
 
     let shared_counter_ratio =
-        1.0 - (std::cmp::min(shared_counter_hotness_factor as u32, 100) as f32 / 100.0);
+        1.0 - (std::cmp::min(shared_counter_hotness_factor, 100) as f32 / 100.0);
     let max_ops = split_target_qps * in_flight_ratio;
 
     let mut workload_gas_configs = vec![];

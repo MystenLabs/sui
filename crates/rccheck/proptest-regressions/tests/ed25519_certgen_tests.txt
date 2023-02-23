@@ -1,7 +1,0 @@
-# Seeds for failure cases proptest has generated in the past. It is
-# automatically read and these particular cases re-run before any
-# novel cases are generated.
-#
-# It is recommended to check this file in to source control so that
-# everyone who runs the test benefits from these saved cases.
-cc 2314fa35d5986111fdc8a2e76ea8c71740afee8009f5a5562334ec93f9b9f3c3 # shrinks to kp = Keypair { secret: SecretKey: [242, 33, 74, 135, 132, 113, 26, 59, 115, 111, 186, 109, 99, 50, 165, 102, 95, 247, 82, 254, 166, 81, 194, 89, 227, 90, 236, 179, 199, 229, 9, 176], public: PublicKey(CompressedEdwardsY: [36, 252, 248, 160, 223, 187, 68, 119, 111, 224, 216, 76, 235, 141, 167, 246, 199, 188, 186, 164, 160, 100, 176, 30, 145, 135, 53, 99, 212, 141, 235, 105]), EdwardsPoint{ 	X: FieldElement51([636188592870209, 2122666908395076, 1759756592963115, 407366879547462, 1514920451640683]), 	Y: FieldElement51([1934028786357739, 917481144122446, 1075599933454187, 431199849450843, 1369755919471043]), 	Z: FieldElement51([506105058121111, 2016703970022612, 206462402701108, 1275383251367447, 1679329397810154]), 	T: FieldElement51([380064152557241, 1407294455312354, 1352227124520218, 1140276849245621, 1008811480537287]) }) }

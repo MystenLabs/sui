@@ -24,8 +24,8 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 100ms
-        min_header_delay: 100ms
+        max_header_delay: 2000ms
+        min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -48,7 +48,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
@@ -67,6 +67,7 @@ validator_configs:
       objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
+      num-epochs-to-retain: 18446744073709551615
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
@@ -92,8 +93,8 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 100ms
-        min_header_delay: 100ms
+        max_header_delay: 2000ms
+        min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -116,7 +117,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
@@ -135,6 +136,7 @@ validator_configs:
       objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
+      num-epochs-to-retain: 18446744073709551615
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
@@ -160,8 +162,8 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 100ms
-        min_header_delay: 100ms
+        max_header_delay: 2000ms
+        min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -184,7 +186,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
@@ -203,6 +205,7 @@ validator_configs:
       objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
+      num-epochs-to-retain: 18446744073709551615
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
@@ -228,8 +231,8 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 100ms
-        min_header_delay: 100ms
+        max_header_delay: 2000ms
+        min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -252,7 +255,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
@@ -271,6 +274,7 @@ validator_configs:
       objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
+      num-epochs-to-retain: 18446744073709551615
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
@@ -296,8 +300,8 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 100ms
-        min_header_delay: 100ms
+        max_header_delay: 2000ms
+        min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -320,7 +324,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
@@ -339,6 +343,7 @@ validator_configs:
       objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
+      num-epochs-to-retain: 18446744073709551615
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
@@ -364,8 +369,8 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 100ms
-        min_header_delay: 100ms
+        max_header_delay: 2000ms
+        min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -388,7 +393,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
@@ -407,6 +412,7 @@ validator_configs:
       objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
+      num-epochs-to-retain: 18446744073709551615
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
@@ -432,8 +438,8 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 100ms
-        min_header_delay: 100ms
+        max_header_delay: 2000ms
+        min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -456,7 +462,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
@@ -475,6 +481,7 @@ validator_configs:
       objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
+      num-epochs-to-retain: 18446744073709551615
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200

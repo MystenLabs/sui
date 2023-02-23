@@ -263,7 +263,7 @@ jobs:
       
       - name: Prover Setup
         run: |
-          crates/sui/scripts/prover_setup.sh
+          crates/sui-move/scripts/prover_setup.sh
       - name: Build
         uses: actions-rs/cargo@v1
         with:

@@ -89,7 +89,6 @@ The entry functions for staking are defined in [this module](https://github.com/
  * [`request_add_delegation`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_add_delegation)
  * [`request_add_delegation_with_locked_coin`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_add_delegation_with_locked_coin)
  * [`request_withdraw_delegation`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_withdraw_delegation)
- * [`request_switch_delegation`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_switch_delegation)
 
 The first three functions are for validator staking for themselves while the rest are for delegated staking.
 
@@ -120,10 +119,6 @@ Yes, you can add to or withdraw your stake from a validator. Use the following m
 Use the [`request_add_delegation`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_add_delegation) and [`request_add_delegation_with_locked_coin`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_add_delegation_with_locked_coin) methods to add to the staked amount.
 
 Use the [`request_withdraw_delegation`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_withdraw_delegation) method to withdraw all or part of the delegation.
-
-### Can I change the validator while a coin is actively staked?
-
-Yes, use the `request_switch_delegation` method to change the validator while a coin is staked. Examples coming soon.
 
 ### Does Sui require a bonding / warm-up period?
 

@@ -422,7 +422,7 @@ The primary-to-primary interface
 
 | Method Name | Request Type | Response Type | Description |
 | ----------- | ------------ | ------------- | ------------|
-| SendMessage | [BincodeEncodedPayload](#narwhal-BincodeEncodedPayload) | [Empty](#narwhal-Empty) | Sends a message |
+| SendCertificate | [BincodeEncodedPayload](#narwhal-BincodeEncodedPayload) | [Empty](#narwhal-Empty) | Sends a message |
 
 
 <a name="narwhal-PrimaryToWorker"></a>
@@ -432,7 +432,7 @@ The primary-to-worker interface
 
 | Method Name | Request Type | Response Type | Description |
 | ----------- | ------------ | ------------- | ------------|
-| SendMessage | [BincodeEncodedPayload](#narwhal-BincodeEncodedPayload) | [Empty](#narwhal-Empty) | Sends a message |
+| SendCertificate | [BincodeEncodedPayload](#narwhal-BincodeEncodedPayload) | [Empty](#narwhal-Empty) | Sends a message |
 
 
 <a name="narwhal-Proposer"></a>
@@ -477,7 +477,7 @@ The worker-to-primary interface
 
 | Method Name | Request Type | Response Type | Description |
 | ----------- | ------------ | ------------- | ------------|
-| SendMessage | [BincodeEncodedPayload](#narwhal-BincodeEncodedPayload) | [Empty](#narwhal-Empty) | Sends a message |
+| SendCertificate | [BincodeEncodedPayload](#narwhal-BincodeEncodedPayload) | [Empty](#narwhal-Empty) | Sends a message |
 
 
 <a name="narwhal-WorkerToWorker"></a>
@@ -487,7 +487,7 @@ The worker-to-worker interface
 
 | Method Name | Request Type | Response Type | Description |
 | ----------- | ------------ | ------------- | ------------|
-| SendMessage | [BincodeEncodedPayload](#narwhal-BincodeEncodedPayload) | [Empty](#narwhal-Empty) | Sends a worker message |
+| SendCertificate | [BincodeEncodedPayload](#narwhal-BincodeEncodedPayload) | [Empty](#narwhal-Empty) | Sends a worker message |
 | ClientBatchRequest | [BincodeEncodedPayload](#narwhal-BincodeEncodedPayload) | [BincodeEncodedPayload](#narwhal-BincodeEncodedPayload) stream | requests a number of batches that the service then streams back to the client |
 
 

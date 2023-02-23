@@ -3,7 +3,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
-import { truncate } from '../../utils/stringUtils';
 import { TxTimeType } from '../tx-time/TxTimeType';
 
 import type {
@@ -14,12 +13,11 @@ import type {
 
 import { useRpc } from '~/hooks/useRpc';
 import { Banner } from '~/ui/Banner';
-import { Link } from '~/ui/Link';
+import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 
 const TRANSACTION_STALE_TIME = 10 * 1000;
-const TRUNCATE_LENGTH = 16;
 
 const columns = [
     {
@@ -57,35 +55,9 @@ const transformTable = (events: SuiEvents) => ({
             if (!('publish' in event)) return {};
             return {
                 time: <TxTimeType timestamp={timestamp} />,
-                sender: (
-                    <Link
-                        variant="mono"
-                        to={`/address/${encodeURIComponent(
-                            event.publish.sender
-                        )}`}
-                    >
-                        {truncate(event.publish.sender, TRUNCATE_LENGTH)}
-                    </Link>
-                ),
-                packageId: (
-                    <Link
-                        variant="mono"
-                        to={`/objects/${encodeURIComponent(
-                            event.publish.packageId
-                        )}`}
-                    >
-                        {truncate(event.publish.packageId, TRUNCATE_LENGTH)}
-                    </Link>
-                ),
-
-                txnDigest: (
-                    <Link
-                        variant="mono"
-                        to={`/transaction/${encodeURIComponent(txDigest)}`}
-                    >
-                        {truncate(txDigest, TRUNCATE_LENGTH)}
-                    </Link>
-                ),
+                sender: <AddressLink address={event.publish.sender} />,
+                packageId: <ObjectLink objectId={event.publish.packageId} />,
+                txnDigest: <TransactionLink digest={txDigest} />,
             };
         }
     ),

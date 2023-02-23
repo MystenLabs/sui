@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress } from '@mysten/sui.js';
+import { formatAddress, type SuiAddress } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useMemo } from 'react';
 
@@ -12,10 +12,6 @@ import { ImageIcon } from '_app/shared/image-icon';
 import { Text } from '_app/shared/text';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
-import { useMiddleEllipsis } from '_hooks';
-
-const TRUNCATE_MAX_LENGTH = 8;
-const TRUNCATE_PREFIX_LENGTH = 4;
 
 interface ValidatorLogoProps {
     validatorAddress: SuiAddress;
@@ -35,11 +31,6 @@ export function ValidatorLogo({
     stacked,
 }: ValidatorLogoProps) {
     const { data: validatorsData, isLoading } = useGetValidatorMetaData();
-    const truncatedAddress = useMiddleEllipsis(
-        validatorAddress,
-        TRUNCATE_MAX_LENGTH,
-        TRUNCATE_PREFIX_LENGTH
-    );
 
     const validatorMeta = useMemo(() => {
         if (!validatorsData) return null;
@@ -97,7 +88,7 @@ export function ValidatorLogo({
                         showIcon={false}
                         className="text-steel-dark no-underline text-body font-mono"
                     >
-                        {truncatedAddress}
+                        {formatAddress(validatorAddress)}
                     </ExplorerLink>
                 )}
             </div>

@@ -26,8 +26,12 @@ diesel::table! {
 diesel::table! {
     checkpoints (sequence_number) {
         sequence_number -> Int8,
-        content_digest -> Varchar,
+        checkpoint_digest -> Varchar,
         epoch -> Int8,
+        transactions -> Array<Nullable<Text>>,
+        previous_checkpoint_digest -> Nullable<Varchar>,
+        next_epoch_committee -> Nullable<Text>,
+        next_epoch_protocol_version -> Nullable<Int8>,
         total_gas_cost -> Int8,
         total_computation_cost -> Int8,
         total_storage_cost -> Int8,
@@ -35,8 +39,6 @@ diesel::table! {
         total_transactions -> Int8,
         total_transactions_current_epoch -> Int8,
         total_transactions_from_genesis -> Int8,
-        previous_digest -> Nullable<Varchar>,
-        next_epoch_committee -> Nullable<Text>,
         timestamp_ms -> Int8,
         timestamp_ms_str -> Timestamp,
         checkpoint_tps -> Float4,
@@ -161,7 +163,7 @@ diesel::table! {
 diesel::table! {
     transaction_logs (id) {
         id -> Int4,
-        next_cursor_tx_digest -> Nullable<Text>,
+        next_checkpoint_sequence_number -> Int8,
     }
 }
 
@@ -170,6 +172,7 @@ diesel::table! {
         id -> Int8,
         transaction_digest -> Varchar,
         sender -> Varchar,
+        checkpoint_sequence_number -> Nullable<Int8>,
         transaction_time -> Nullable<Timestamp>,
         transaction_kinds -> Array<Nullable<Text>>,
         created -> Array<Nullable<Text>>,

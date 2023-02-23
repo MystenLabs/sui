@@ -576,6 +576,25 @@ async fn test_storage_gas_unit_price() -> SuiResult {
     Ok(())
 }
 
+#[tokio::test]
+async fn test_tx_gas_price_less_than_reference_gas_price() {
+    let gas_balance = *MAX_GAS_BUDGET;
+    let budget = *MIN_GAS_BUDGET;
+    let gas_price = 0;
+    let result = execute_transfer_with_price(gas_balance, budget, gas_price, false).await;
+    assert_eq!(
+        result
+            .response
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::GasPriceUnderRGP {
+            gas_price: 0,
+            reference_gas_price: 1
+        }
+    );
+}
+
 struct TransferResult {
     pub authority_state: Arc<AuthorityState>,
     pub object_id: ObjectID,

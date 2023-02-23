@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { formatAddress } from '@mysten/sui.js';
+
 import { MiniNFT } from './MiniNFT';
 import { SummaryCard } from './SummaryCard';
 import AccountAddress from '_components/account-address';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import {
-    useMiddleEllipsis,
     useFormatCoin,
     useGetNFTMeta,
     useAppSelector,
@@ -22,9 +23,6 @@ import type { TransactionRequest } from '_payloads/transactions';
 
 import st from './DappTxApprovalPage.module.scss';
 
-const TRUNCATE_MAX_LENGTH = 10;
-const TRUNCATE_PREFIX_LENGTH = 6;
-
 type TransferSummerCardProps = {
     coinsMeta: CoinsMetaProps[];
     origin: string;
@@ -33,11 +31,6 @@ type TransferSummerCardProps = {
 };
 
 function MiniNFTLink({ id }: { id: string }) {
-    const objectId = useMiddleEllipsis(
-        id,
-        TRUNCATE_MAX_LENGTH,
-        TRUNCATE_PREFIX_LENGTH
-    );
     const nftMeta = useGetNFTMeta(id);
     return (
         <>
@@ -54,7 +47,7 @@ function MiniNFTLink({ id }: { id: string }) {
                 className={st.objectId}
                 showIcon={false}
             >
-                {objectId}
+                {formatAddress(id)}
             </ExplorerLink>
         </>
     );
@@ -80,12 +73,6 @@ function CoinMeta({
     // Currently dry_run does not return receiver address for transactions init by Move contract
     const showAddress = receiverAddress !== activeAddress;
 
-    const receiverAddr = useMiddleEllipsis(
-        receiverAddress,
-        TRUNCATE_MAX_LENGTH,
-        TRUNCATE_PREFIX_LENGTH
-    );
-
     /// A net positive amount means the user received coins and verse versa.
     const sendLabel = coinMeta.amount < 0 ? 'Send' : 'Receive';
     const receiveLabel = coinMeta.amount < 0 ? 'To' : 'From';
@@ -110,7 +97,7 @@ function CoinMeta({
                                 className={st.objectId}
                                 showIcon={false}
                             >
-                                {receiverAddr}
+                                {formatAddress(receiverAddress)}
                             </ExplorerLink>
                         )}
                     </div>

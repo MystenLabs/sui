@@ -51,7 +51,7 @@ pub async fn balance(
             .await
             .map(|balance| AccountBalanceResponse {
                 block_identifier,
-                balances: vec![Amount::new(balance as i128)],
+                balances: vec![Amount::new(balance)],
             })
     }
 }

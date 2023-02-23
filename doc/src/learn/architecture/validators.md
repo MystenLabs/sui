@@ -4,7 +4,7 @@ title: Validators
 
 The Sui network is operated by a set of independent *validators*, each running its own instance of the Sui software on a separate machine (or a sharded cluster of machines operated by the same entity). A validator participates in the network by handling read and write requests sent by clients. This section focuses on the latter.
 
-Sui uses proof of stake (PoS) to determine which validators operate the network and their voting power. Validators are incentivized to participate in good faith via a share of transaction fees, staking rewards, and slashing to punish misbehavior.
+Sui uses proof of stake (PoS) to determine which validators operate the network and their voting power. Validators are incentivized to participate in good faith via a share of transaction fees, staking rewards, and slashing stake and staking rewards in case of misbehavior.
 
 ## Epochs
 
@@ -25,15 +25,16 @@ A validator can handle two types of write requests: transactions and certificate
 
 ### Transactions
 
-When a validator receives a transaction from a client, it will first perform transaction validity checks (e.g., validity of the sender's signature). If the checks pass, the validator locks all owned-objects and signs the transaction bytes. It then returns the signature to the client. The client repeats this process with multiple validators until it has collected signatures on its transaction from a committee, thereby forming a certificate.
+When a validator receives a transaction from a client, it will first perform transaction validity checks (e.g., validity of the sender's signature). If the checks pass, the validator locks all owned-objects and signs the transaction bytes. It then returns the signature to the client. The client repeats this process with multiple validators until it has collected signatures on its transaction from a quorum, thereby forming a certificate.
 
 Note that the process of collecting validator signatures on a transaction into a certificate and the process of submitting certificates can be performed in parallel. The client can simultaneously multicast transactions/certificates to an arbitrary number of validators. Alternatively, a client can outsource either or both of these tasks to a third-party service provider. This provider must be trusted for liveness (e.g., it can refuse to form a certificate), but not for safety (e.g., it cannot change the effects of the transaction, and does not need the user's secret key).
 
 ### Certificates
 
-Once the client forms a certificate, it submits the certificate to a validator, which will perform certificate validity checks (e.g., ensuring the signers are validators in the current epoch, and the signatures are cryptographically valid). If the checks pass, the authority will execute the transaction inside the certificate. Execution of a transaction will either succeed and commit all of its effects to the ledger, or abort (e.g., due to an explicit `abort` instruction, a runtime error such as division by zero, or exceeding the maximum gas budget) and have no effects other than debiting the transaction's gas input. In either case, the transaction will durably store the certificate indexed by the hash of its inner transaction.
+Once the client forms a certificate, it submits it to the validators, which will perform certificate validity checks (e.g., ensuring the signers are validators in the current epoch, and the signatures are cryptographically valid). If the checks pass, the validators will execute the transaction inside the certificate. Execution of a transaction will either succeed and commit all of its effects, or abort (e.g., due to an explicit `abort` instruction, a runtime error such as division by zero, or exceeding the maximum gas budget) and have no effects other than debiting the transaction's gas input. In either case, the validator will durably store the certificate indexed by the hash of its inner transaction. 
 
-As with transactions, we note that the process of sharing a certificate with validators can be parallelized and (if desired) outsourced to a third-party service provider. A client should broadcast its certificate to >1/3 of the validators to ensure that (up to BFT assumptions) at least one honest validator has executed and committed the certificate. Other validators may learn about the certificate via inter-validator state sync or via client-assisted state sync.
+If a client collects a quorum of signatures on the effects of the transaction then the client has a promise of finality. This means that this effects will persist on the shared database and actually be committed and visible to everyone by the end of the epoch. This does not mean that the latency is a full epoch, since the effects certificate can be used to convince anyone of the transactions finality as well as to access the effects and issue new transactions.
+As with transactions, we note that the process of sharing a certificate with validators can be parallelized and (if desired) outsourced to a third-party service provider. 
 
 ## The role of Narwhal and Bullshark
 
@@ -46,7 +47,7 @@ Narwhal enables the parallel ordering of transactions into batches that are coll
 
 Consensus sequences certificates of transactions. These represent transactions that have already been presented to 2/3 of validators that checked that all their owned objects are available to be operated on and signed the transaction. Upon a certificate being sequenced, what we do is set the *lock* of the shared objects at the next available version to map to the execution of that certificate. So for example if we have a shared object X at version 2, and we sequence certificate T, we store T -> [(X, 2)]. That is all we do when we reach consensus, and as a result we are able to ingest a lot of sequenced transactions.
 
-Now, once this is done Sui can execute all certificates that had their locks set, on one or multiple cores (currently). Obviously, transactions for earlier versions of objects need to be processed first (causally), and that reduces the degree of concurrency. The read and write set of the transaction can be statically determined from its versioned object inputs--execution can only read/write an object that was an input to the transaction, or that was created by the transaction.
+Now, once this is done Sui can execute all certificates that have their locks set, on one or multiple cores. Obviously, transactions for earlier versions of objects need to be processed first (causally), and that reduces the degree of concurrency. The read and write set of the transaction can be statically determined from its versioned object inputs--execution can only read/write an object that was an input to the transaction, or that was created by the transaction.
 
 ## Further reading
 

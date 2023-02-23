@@ -94,7 +94,7 @@ pub fn new_session<
 >(
     vm: &'v MoveVM,
     state_view: &'r S,
-    input_objects: BTreeMap<ObjectID, (/* by_value */ bool, Owner)>,
+    input_objects: BTreeMap<ObjectID, Owner>,
     is_metered: bool,
     protocol_config: &ProtocolConfig,
 ) -> Session<'r, 'v, S> {
@@ -221,7 +221,7 @@ fn execute_internal<
 ) -> Result<Mode::ExecutionResult, ExecutionError> {
     let input_objects = object_data
         .iter()
-        .map(|(id, (owner, _))| (*id, (by_value_objects.contains(id), *owner)))
+        .map(|(id, (owner, _))| (*id, *owner))
         .collect();
     let mut session = new_session(
         vm,
@@ -307,7 +307,7 @@ fn execute_internal<
         deletions,
         user_events,
         loaded_child_objects,
-    } = object_runtime.finish()?;
+    } = object_runtime.finish(by_value_objects)?;
     let session = new_session(
         vm,
         &*state_view,
@@ -365,7 +365,6 @@ pub fn publish<
 >(
     state_view: &mut S,
     vm: &MoveVM,
-    natives: NativeFunctionTable,
     module_bytes: Vec<Vec<u8>>,
     ctx: &mut TxContext,
     gas_status: &mut GasStatus,
@@ -385,15 +384,15 @@ pub fn publish<
     }
 
     let package_id = generate_package_id(&mut modules, ctx)?;
-    let vm = verify_and_link(
+    verify_and_link(
+        vm,
         state_view,
         &modules,
         package_id,
-        natives,
         gas_status,
         protocol_config,
     )?;
-    store_package_and_init_modules(state_view, &vm, modules, ctx, gas_status, protocol_config)
+    store_package_and_init_modules(state_view, vm, modules, ctx, gas_status, protocol_config)
 }
 
 /// Store package in state_view and call module initializers
@@ -428,7 +427,11 @@ pub fn store_package_and_init_modules<
 
     // wrap the modules in an object, write it to the store
     // The call to unwrap() will go away once we remove address owner from Immutable objects.
-    let package_object = Object::new_package(modules, ctx.digest())?;
+    let package_object = Object::new_package(
+        modules,
+        ctx.digest(),
+        protocol_config.max_move_package_size(),
+    )?;
     let id = package_object.id();
     let changes = BTreeMap::from([(
         id,
@@ -516,20 +519,18 @@ pub fn verify_and_link<
     E: Debug,
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ChildObjectResolver,
 >(
+    vm: &MoveVM,
     state_view: &S,
     modules: &[CompiledModule],
     package_id: ObjectID,
-    natives: NativeFunctionTable,
     gas_status: &mut GasStatus,
     protocol_config: &ProtocolConfig,
-) -> Result<MoveVM, ExecutionError> {
+) -> Result<(), ExecutionError> {
     // Run the Move bytecode verifier and linker.
     // It is important to do this before running the Sui verifier, since the sui
     // verifier may assume well-formedness conditions enforced by the Move verifier hold
-    let vm = MoveVM::new(natives)
-        .expect("VM creation only fails if natives are invalid, and we created the natives");
     let mut session = new_session(
-        &vm,
+        vm,
         state_view,
         BTreeMap::new(),
         gas_status.is_metered(),
@@ -552,14 +553,14 @@ pub fn verify_and_link<
             // Do we want to charge there?
             gas_status,
         )
-        .map_err(|e| convert_vm_error(e, &vm, state_view))?;
+        .map_err(|e| convert_vm_error(e, vm, state_view))?;
 
     // run the Sui verifier
     for module in modules.iter() {
         // Run Sui bytecode verifier, which runs some additional checks that assume the Move bytecode verifier has passed.
         verifier::verify_module(module, &BTreeMap::new())?;
     }
-    Ok(vm)
+    Ok(())
 }
 
 /// Given a list of `modules`, use `ctx` to generate a fresh ID for the new packages.
@@ -993,7 +994,15 @@ fn validate_primitive_arg(
 
     // we already checked the type above and struct layout for this type is guaranteed to exist
     let string_struct_layout = type_layout.unwrap();
+    validate_primitive_arg_string(arg, idx, string_struct, string_struct_layout)
+}
 
+pub fn validate_primitive_arg_string(
+    arg: &[u8],
+    idx: LocalIndex,
+    string_struct: (&AccountAddress, &IdentStr, &IdentStr),
+    string_struct_layout: MoveTypeLayout,
+) -> Result<(), ExecutionError> {
     let string_move_value =
         MoveValue::simple_deserialize(arg, &string_struct_layout).map_err(|_| {
             ExecutionError::new_with_source(
@@ -1454,7 +1463,7 @@ fn missing_unwrapped_msg(id: &ObjectID) -> String {
     )
 }
 
-fn convert_type_argument_error<
+pub fn convert_type_argument_error<
     'r,
     E: Debug,
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E>,

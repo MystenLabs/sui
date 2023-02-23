@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 
+use crate::base_types::ObjectIDParseError;
 use crate::crypto::{deterministic_random_account_key, sha3_hash};
 use crate::error::{ExecutionError, ExecutionErrorKind};
 use crate::error::{SuiError, SuiResult};
@@ -149,8 +150,12 @@ impl MoveObject {
         self.has_public_transfer
     }
     pub fn id(&self) -> ObjectID {
+        Self::id_opt(&self.contents).unwrap()
+    }
+
+    pub fn id_opt(contents: &[u8]) -> Result<ObjectID, ObjectIDParseError> {
         // TODO: Ensure safe index to to parse ObjectID. https://github.com/MystenLabs/sui/issues/6278
-        ObjectID::try_from(&self.contents[0..ID_END_INDEX]).unwrap()
+        ObjectID::try_from(&contents[0..ID_END_INDEX])
     }
 
     pub fn version(&self) -> SequenceNumber {
@@ -448,13 +453,28 @@ impl Object {
     pub fn new_package(
         modules: Vec<CompiledModule>,
         previous_transaction: TransactionDigest,
+        max_move_package_size: u64,
     ) -> Result<Self, ExecutionError> {
         Ok(Object {
-            data: Data::Package(MovePackage::from_module_iter(modules)?),
+            data: Data::Package(MovePackage::from_module_iter(
+                modules,
+                max_move_package_size,
+            )?),
             owner: Owner::Immutable,
             previous_transaction,
             storage_rebate: 0,
         })
+    }
+
+    pub fn new_package_for_testing(
+        modules: Vec<CompiledModule>,
+        previous_transaction: TransactionDigest,
+    ) -> Result<Self, ExecutionError> {
+        Self::new_package(
+            modules,
+            previous_transaction,
+            ProtocolConfig::get_for_max_version().max_move_package_size(),
+        )
     }
 
     pub fn is_immutable(&self) -> bool {

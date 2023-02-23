@@ -4,16 +4,15 @@
 use futures::future::join_all;
 use prometheus::Registry;
 use std::sync::Arc;
-use std::time::Duration;
 use sui_json_rpc_types::{SuiTransactionResponse, TransactionsPage};
 use sui_sdk::SuiClient;
 use sui_types::base_types::TransactionDigest;
 use sui_types::query::TransactionQuery;
-use tokio::time::sleep;
 use tracing::info;
 
 use sui_indexer::errors::IndexerError;
 use sui_indexer::metrics::IndexerTransactionHandlerMetrics;
+use sui_indexer::models::checkpoints::get_checkpoint;
 use sui_indexer::models::transaction_logs::{commit_transaction_log, read_transaction_log};
 use sui_indexer::models::transactions::commit_transactions;
 use sui_indexer::utils::log_errors_to_pg;
@@ -43,33 +42,57 @@ impl TransactionHandler {
     pub async fn start(&self) -> Result<(), IndexerError> {
         info!("Indexer transaction handler started...");
         let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
-
-        let mut next_cursor = None;
         let txn_log = read_transaction_log(&mut pg_pool_conn)?;
-        if let Some(tx_dig) = txn_log.next_cursor_tx_digest {
-            let tx_digest = tx_dig.parse().map_err(|e| {
-                IndexerError::TransactionDigestParsingError(format!(
-                    "Failed parsing transaction digest {:?} with error: {:?}",
-                    tx_dig, e
-                ))
-            })?;
-            next_cursor = Some(tx_digest);
-        }
+        let mut checkpoint_seq_number = txn_log.next_checkpoint_sequence_number;
 
         loop {
-            self.transaction_handler_metrics
-                .total_transaction_page_fetch_attempt
-                .inc();
+            let checkpoint_db_read_guard = self
+                .transaction_handler_metrics
+                .checkpoint_db_read_request_latency
+                .start_timer();
+            let mut checkpoint_opt = get_checkpoint(&mut pg_pool_conn, checkpoint_seq_number);
+            // this often happens when the checkpoint is not yet committed to the database
+            while checkpoint_opt.is_err() {
+                // this sleep is necessary to avoid blocking the checkpoint commit.
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                checkpoint_opt = get_checkpoint(&mut pg_pool_conn, checkpoint_seq_number);
+            }
+            // unwrap is safe here b/c of the check above.
+            let checkpoint = checkpoint_opt.unwrap();
+            checkpoint_db_read_guard.stop_and_record();
+
             let request_guard = self
                 .transaction_handler_metrics
                 .full_node_read_request_latency
                 .start_timer();
-
-            let page = get_transaction_page(self.rpc_client.clone(), next_cursor).await?;
-            self.transaction_handler_metrics
-                .total_transaction_page_received
-                .inc();
-            let txn_digest_vec = page.data;
+            let mut errors = vec![];
+            let txn_str_vec: Vec<String> = checkpoint
+                .transactions
+                .iter()
+                .filter_map(|t| {
+                    t.clone()
+                        .ok_or_else(|| {
+                            IndexerError::PostgresReadError(format!(
+                                "Read null transaction digests from checkpoint: {:?}",
+                                checkpoint
+                            ))
+                        })
+                        .map_err(|e| errors.push(e))
+                        .ok()
+                })
+                .collect();
+            let txn_digest_vec: Vec<TransactionDigest> = txn_str_vec
+                .into_iter()
+                .map(|txn_str| {
+                    txn_str.parse().map_err(|e| {
+                        IndexerError::PostgresReadError(format!(
+                            "Failed to decode transaction digest: {:?} with err: {:?}",
+                            txn_str, e
+                        ))
+                    })
+                })
+                .filter_map(|f| f.map_err(|e| errors.push(e)).ok())
+                .collect();
             let txn_count = txn_digest_vec.len();
             self.transaction_handler_metrics
                 .total_transactions_received
@@ -80,46 +103,29 @@ impl TransactionHandler {
                     .map(|tx_digest| get_transaction_response(self.rpc_client.clone(), tx_digest)),
             )
             .await;
-            info!(
-                "Received transaction responses for {} transactions with next cursor: {:?}",
-                txn_response_res_vec.len(),
-                page.next_cursor,
-            );
+            let resp_vec: Vec<SuiTransactionResponse> = txn_response_res_vec
+                .into_iter()
+                .filter_map(|f| f.map_err(|e| errors.push(e)).ok())
+                .collect();
             request_guard.stop_and_record();
+            info!(
+                "Received transaction responses for {} transaction(s) in checkpoint {}",
+                resp_vec.len(),
+                checkpoint_seq_number,
+            );
+            log_errors_to_pg(&mut pg_pool_conn, errors);
 
             let db_guard = self
                 .transaction_handler_metrics
                 .db_write_request_latency
                 .start_timer();
-            let mut errors = vec![];
-            let resp_vec: Vec<SuiTransactionResponse> = txn_response_res_vec
-                .into_iter()
-                .filter_map(|f| f.map_err(|e| errors.push(e)).ok())
-                .collect();
-
-            log_errors_to_pg(&mut pg_pool_conn, errors);
             commit_transactions(&mut pg_pool_conn, resp_vec)?;
-            // Transaction page's next cursor can be None when latest transaction page is
-            // reached, if we use the None cursor to read transactions, it will read from genesis,
-            // thus here we do not commit / use the None cursor.
-            // This will cause duplicate run of the current batch, but will not cause duplicate rows
-            // b/c of the uniqueness restriction of the table.
-            if let Some(next_cursor_val) = page.next_cursor {
-                // canonical txn digest is Base58 encoded
-                commit_transaction_log(&mut pg_pool_conn, Some(next_cursor_val.base58_encode()))?;
-                self.transaction_handler_metrics
-                    .total_transactions_processed
-                    .inc_by(txn_count as u64);
-                next_cursor = page.next_cursor;
-            }
+            checkpoint_seq_number += 1;
+            commit_transaction_log(&mut pg_pool_conn, checkpoint_seq_number)?;
             self.transaction_handler_metrics
-                .total_transaction_page_committed
-                .inc();
+                .total_transactions_processed
+                .inc_by(txn_count as u64);
             db_guard.stop_and_record();
-
-            if txn_count < TRANSACTION_PAGE_SIZE || page.next_cursor.is_none() {
-                sleep(Duration::from_secs_f32(0.1)).await;
-            }
         }
     }
 }

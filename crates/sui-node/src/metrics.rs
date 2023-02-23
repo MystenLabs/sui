@@ -56,6 +56,108 @@ async fn metrics(Extension(registry_service): Extension<RegistryService>) -> (St
     }
 }
 
+pub struct MetricsPushClient {
+    certificate: std::sync::Arc<sui_tls::SelfSignedCertificate>,
+    client: reqwest::Client,
+}
+
+impl MetricsPushClient {
+    pub fn new(network_key: sui_types::crypto::NetworkKeyPair) -> Self {
+        use fastcrypto::traits::KeyPair;
+        let certificate = std::sync::Arc::new(sui_tls::SelfSignedCertificate::new(
+            network_key.private(),
+            sui_tls::SUI_VALIDATOR_SERVER_NAME,
+        ));
+        let identity = certificate.reqwest_identity();
+        let client = reqwest::Client::builder()
+            .identity(identity)
+            .build()
+            .unwrap();
+
+        Self {
+            certificate,
+            client,
+        }
+    }
+
+    pub fn certificate(&self) -> &sui_tls::SelfSignedCertificate {
+        &self.certificate
+    }
+
+    pub fn client(&self) -> &reqwest::Client {
+        &self.client
+    }
+}
+
+/// Starts a task to periodically push metrics to a configured endpoint if a metrics push endpoint
+/// is configured.
+pub fn start_metrics_push_task(config: &sui_config::NodeConfig, registry: RegistryService) {
+    use anyhow::Context;
+    use fastcrypto::traits::KeyPair;
+    use sui_config::node::MetricsConfig;
+
+    const DEFAULT_METRICS_PUSH_INTERVAL: Duration = Duration::from_secs(60);
+
+    let (interval, url) = match &config.metrics {
+        Some(MetricsConfig {
+            push_interval_seconds,
+            push_url: Some(url),
+        }) => {
+            let interval = push_interval_seconds
+                .map(Duration::from_secs)
+                .unwrap_or(DEFAULT_METRICS_PUSH_INTERVAL);
+            let url = reqwest::Url::parse(url).expect("unable to parse metrics push url");
+            (interval, url)
+        }
+        _ => return,
+    };
+
+    let client = MetricsPushClient::new(config.network_key_pair().copy());
+
+    async fn push_metrics(
+        client: &MetricsPushClient,
+        url: &reqwest::Url,
+        registry: &RegistryService,
+    ) -> Result<(), anyhow::Error> {
+        let metrics = TextEncoder
+            .encode_to_string(&registry.gather_all())
+            .context("encoding metrics")?;
+
+        let response = client
+            .client()
+            .post(url.to_owned())
+            .body(metrics)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(anyhow::anyhow!(
+                "metrics push failed with status: {}",
+                response.status()
+            ));
+        }
+
+        tracing::debug!("successfully pushed metrics to {url}");
+
+        Ok(())
+    }
+
+    tokio::spawn(async move {
+        tracing::info!(push_url =% url, interval =? interval, "Started Metrics Push Service");
+
+        let mut interval = tokio::time::interval(interval);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+        loop {
+            interval.tick().await;
+
+            if let Err(error) = push_metrics(&client, &url, &registry).await {
+                tracing::warn!("unable to push metrics: {error}");
+            }
+        }
+    });
+}
+
 #[derive(Clone)]
 pub struct GrpcMetrics {
     inflight_grpc: IntGaugeVec,
