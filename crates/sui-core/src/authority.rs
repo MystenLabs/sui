@@ -2147,11 +2147,15 @@ impl AuthorityState {
         let mut response: VerifiedTransactionBatch = Vec::new();
 
         if transactions.len() == effects.len() && checkpoints.len() == transactions.len() {
-            for ((transaction, effect), checkpoint) in
-                transactions.iter().zip(effects.iter()).zip(checkpoints.iter())
+            for ((transaction, effect), checkpoint) in transactions
+                .iter()
+                .zip(effects.iter())
+                .zip(checkpoints.iter())
             {
                 match ((transaction.clone(), effect.clone()), &checkpoint.clone()) {
-                    ((Some(transaction), Some(effect)), check) => response.push(((transaction, effect), *check)),
+                    ((Some(transaction), Some(effect)), check) => {
+                        response.push(((transaction, effect), *check))
+                    }
                     ((_, _), _) => continue,
                 }
             }

@@ -1760,36 +1760,6 @@
       ]
     },
     {
-      "name": "sui_getTransactionsBatch",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "params": [
-        {
-          "name": "digests",
-          "required": true,
-          "schema": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TransactionDigest"
-            }
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiTransactionResponse>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/SuiTransactionResponse"
-          }
-        }
-      }
-    },
-    {
       "name": "sui_getTransactionsInRange",
       "tags": [
         {
@@ -2002,6 +1972,36 @@
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
+      "name": "sui_multiGetTransactions",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "digests",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TransactionDigest"
+            }
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<SuiTransactionResponse>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/SuiTransactionResponse"
+          }
         }
       }
     },

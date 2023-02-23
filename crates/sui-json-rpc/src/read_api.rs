@@ -216,7 +216,6 @@ impl ReadApiServer for ReadApi {
                 timestamp_ms: self.state.get_timestamp_ms(&digests[i]).await?,
                 confirmed_local_execution: None,
                 checkpoint: txn_batch[i].1.map(|(_epoch, checkpoint)| checkpoint),
-                
             })
         }
         Ok(responses)
