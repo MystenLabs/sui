@@ -163,9 +163,7 @@ export class CallArgSerializer {
 
     if (initialSharedVersion) {
       const mutable =
-        typeof expectedType === 'object' && 'MutableReference' in expectedType
-          ? true
-          : false;
+        typeof expectedType === 'object' && 'MutableReference' in expectedType;
 
       return { Shared: { objectId, initialSharedVersion, mutable } };
     }
