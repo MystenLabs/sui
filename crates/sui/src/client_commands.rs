@@ -39,6 +39,7 @@ use sui_json_rpc_types::{
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::SuiClient;
+use sui_types::crypto::SignatureScheme;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::intent::Intent;
 use sui_types::signature::GenericSignature;
@@ -49,7 +50,6 @@ use sui_types::{
     object::Owner,
     parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS,
 };
-use sui_types::{crypto::SignatureScheme, intent::IntentMessage};
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
@@ -936,12 +936,9 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .transfer_sui(from, object_id, gas_budget, to, amount)
                     .await?;
-                let data1 = data.clone();
-                let intent_msg = IntentMessage::new(Intent::default(), data);
-                SuiClientCommandResult::SerializeTransferSui(
-                    Base64::encode(bcs::to_bytes(&intent_msg)?.as_slice()),
-                    Base64::encode(bcs::to_bytes(&data1).unwrap()),
-                )
+                SuiClientCommandResult::SerializeTransferSui(Base64::encode(
+                    bcs::to_bytes(&data).unwrap(),
+                ))
             }
 
             SuiClientCommands::ExecuteSignedTx {
@@ -1360,9 +1357,8 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::ExecuteSignedTx(response) => {
                 write!(writer, "{}", write_transaction_response(response)?)?;
             }
-            SuiClientCommandResult::SerializeTransferSui(data_to_sign, data_to_execute) => {
-                writeln!(writer, "Intent message to sign: {}", data_to_sign)?;
-                writeln!(writer, "Raw transaction to execute: {}", data_to_execute)?;
+            SuiClientCommandResult::SerializeTransferSui(data) => {
+                writeln!(writer, "Raw tx_bytes to execute: {}", data)?;
             }
             SuiClientCommandResult::ActiveEnv(env) => {
                 write!(writer, "{}", env.as_deref().unwrap_or("None"))?;
@@ -1536,7 +1532,7 @@ pub enum SuiClientCommandResult {
     ActiveEnv(Option<String>),
     Envs(Vec<SuiEnv>, Option<String>),
     CreateExampleNFT(GetObjectDataResponse),
-    SerializeTransferSui(String, String),
+    SerializeTransferSui(String),
     ExecuteSignedTx(SuiTransactionResponse),
     NewEnv(SuiEnv),
 }

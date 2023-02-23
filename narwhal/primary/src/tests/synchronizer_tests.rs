@@ -39,7 +39,7 @@ async fn accept_certificates() {
     // Make a synchronizer.
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificate_store.clone(),
@@ -132,7 +132,7 @@ async fn synchronizer_recover_basic() {
     // Make Synchronizer.
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificate_store.clone(),
@@ -180,7 +180,7 @@ async fn synchronizer_recover_basic() {
 
     let _synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificate_store.clone(),
@@ -246,7 +246,7 @@ async fn synchronizer_recover_partial_certs() {
     // Make a synchronizer.
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificate_store.clone(),
@@ -293,7 +293,7 @@ async fn synchronizer_recover_partial_certs() {
 
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificate_store.clone(),
@@ -354,7 +354,7 @@ async fn synchronizer_recover_previous_round() {
     // Make a synchronizer.
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificate_store.clone(),
@@ -415,7 +415,7 @@ async fn synchronizer_recover_previous_round() {
 
     let _synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificate_store.clone(),
@@ -471,7 +471,7 @@ async fn deliver_certificate_using_dag() {
 
     let synchronizer = Synchronizer::new(
         name,
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificates_store,
@@ -530,7 +530,7 @@ async fn deliver_certificate_using_store() {
 
     let synchronizer = Synchronizer::new(
         name,
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificates_store.clone(),
@@ -589,7 +589,7 @@ async fn deliver_certificate_not_found_parents() {
 
     let synchronizer = Synchronizer::new(
         name,
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificates_store,
@@ -655,7 +655,7 @@ async fn sync_batches_drops_old() {
 
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificate_store.clone(),

@@ -3,25 +3,19 @@
 
 use futures::future::join_all;
 use prometheus::Registry;
-use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_core::authority::AuthorityState;
-use sui_core::authority_aggregator::{
-    AuthAggMetrics, AuthorityAggregator, LocalTransactionCertifier, NetworkTransactionCertifier,
-    TransactionCertifier,
-};
-use sui_core::authority_client::AuthorityAPI;
+use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_core::safe_client::SafeClientMetricsBase;
-use sui_core::test_utils::{init_local_authorities, make_transfer_sui_transaction};
+use sui_core::test_utils::make_transfer_sui_transaction;
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
-use sui_types::committee::ProtocolVersion;
 use sui_types::crypto::get_account_key_pair;
-use sui_types::error::SuiError;
 use sui_types::gas::GasCostSummary;
-use sui_types::messages::VerifiedTransaction;
+use sui_types::message_envelope::Message;
 use sui_types::object::Object;
 use test_utils::{
     authority::{spawn_test_authorities, test_authority_configs},
@@ -31,84 +25,47 @@ use tokio::time::{sleep, timeout};
 use tracing::info;
 
 #[sim_test]
-async fn local_advance_epoch_tx_test() {
-    // This test checks the following functionalities related to advance epoch transaction:
-    // 1. The create_advance_epoch_tx_cert API in AuthorityState can properly sign an advance
-    //    epoch transaction locally and exchange with other validators to obtain a cert.
-    // 2. The timeout in the API works as expected.
-    // 3. The certificate can be executed by each validator.
-    // Uses local clients.
-    let (net, states, _, _) = init_local_authorities(4, vec![]).await;
-
-    // Make sure that validators do not accept advance epoch sent externally.
-    let tx = VerifiedTransaction::new_change_epoch(1, ProtocolVersion::MIN, 0, 0, 0, 0);
-    let client0 = net.get_client(&states[0].name).unwrap().authority_client();
-    assert!(matches!(
-        client0.handle_transaction(tx.into_inner()).await,
-        Err(SuiError::InvalidSystemTransaction)
-    ));
-
-    let certifier = LocalTransactionCertifier::new(
-        states
-            .iter()
-            .map(|state| (state.name, state.clone()))
-            .collect::<BTreeMap<_, _>>(),
-    );
-    advance_epoch_tx_test_impl(states, &certifier).await;
-}
-
-#[sim_test]
-async fn network_advance_epoch_tx_test() {
+async fn advance_epoch_tx_test() {
     // Same as local_advance_epoch_tx_test, but uses network clients.
     let authorities = spawn_test_authorities([].into_iter(), &test_authority_configs()).await;
     let states: Vec<_> = authorities
         .iter()
         .map(|authority| authority.with(|node| node.state()))
         .collect();
-    let certifier = NetworkTransactionCertifier::default();
-    advance_epoch_tx_test_impl(states, &certifier).await;
+    advance_epoch_tx_test_impl(states).await;
 }
 
-async fn advance_epoch_tx_test_impl(
-    states: Vec<Arc<AuthorityState>>,
-    certifier: &dyn TransactionCertifier,
-) {
-    let failing_task = states[0]
-        .create_advance_epoch_tx_cert(
-            &states[0].epoch_store_for_testing(),
-            &GasCostSummary::new(0, 0, 0),
-            0, // epoch_start_timestamp_ms
-            Duration::from_secs(15),
-            certifier,
-        )
-        .await;
-    // Since we are only running the task on one validator, it will never get a quorum and hence
-    // never succeed.
-    assert!(failing_task.is_err());
-
+async fn advance_epoch_tx_test_impl(states: Vec<Arc<AuthorityState>>) {
     let tasks: Vec<_> = states
         .iter()
         .map(|state| async {
-            state
-                .create_advance_epoch_tx_cert(
+            let (_system_state, effects) = state
+                .create_and_execute_advance_epoch_tx(
                     &state.epoch_store_for_testing(),
                     &GasCostSummary::new(0, 0, 0),
-                    0,                         // epoch_start_timestamp_ms
-                    Duration::from_secs(1000), // A very very long time
-                    certifier,
+                    0, // checkpoint
+                    0, // epoch_start_timestamp_ms
                 )
                 .await
+                .unwrap();
+            // Check that the validator didn't commit the transaction yet.
+            assert!(state
+                .get_signed_effects_and_maybe_resign(
+                    &effects.transaction_digest,
+                    &state.epoch_store_for_testing()
+                )
+                .unwrap()
+                .is_none());
+            effects
         })
         .collect();
-    let results = futures::future::join_all(tasks)
+    let results: HashSet<_> = futures::future::join_all(tasks)
         .await
         .into_iter()
-        .collect::<anyhow::Result<Vec<_>>>()
-        .unwrap();
-    for (state, cert) in states.iter().zip(results) {
-        let signed_effects = state.try_execute_for_test(&cert).await.unwrap();
-        assert!(signed_effects.status.is_ok());
-    }
+        .map(|result| result.digest())
+        .collect();
+    // Check that all validators have the same result.
+    assert_eq!(results.len(), 1);
 }
 
 #[sim_test]

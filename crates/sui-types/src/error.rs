@@ -502,6 +502,9 @@ pub enum SuiError {
     #[error("Error when advancing epoch: {:?}", error)]
     AdvanceEpochError { error: String },
 
+    #[error("Transaction Expired")]
+    TransactionExpired,
+
     // These are errors that occur when an RPC fails and is simply the utf8 message sent in a
     // Tonic::Status
     #[error("{1} - {0}")]

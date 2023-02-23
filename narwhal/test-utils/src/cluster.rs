@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{temp_dir, CommitteeFixture};
-use arc_swap::ArcSwap;
-use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
+use config::{Committee, Parameters, SharedWorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::SerializedTransaction;
 use fastcrypto::traits::KeyPair as _;
@@ -33,7 +32,7 @@ pub struct Cluster {
     #[allow(unused)]
     fixture: CommitteeFixture,
     authorities: HashMap<usize, AuthorityDetails>,
-    pub committee_shared: SharedCommittee,
+    pub committee_shared: Committee,
     pub worker_cache_shared: SharedWorkerCache,
     #[allow(dead_code)]
     parameters: Parameters,
@@ -55,7 +54,7 @@ impl Cluster {
         let fixture = CommitteeFixture::builder().randomize_ports(true).build();
         let c = fixture.committee();
         let shared_worker_cache = fixture.shared_worker_cache();
-        let shared_committee = Arc::new(ArcSwap::from_pointee(c));
+        let shared_committee = c;
         let params = parameters.unwrap_or_else(Self::parameters);
 
         info!("###### Creating new cluster ######");
@@ -106,7 +105,7 @@ impl Cluster {
         workers_per_authority: Option<usize>,
         boot_wait_time: Option<Duration>,
     ) {
-        let max_authorities = self.committee_shared.load().authorities.len();
+        let max_authorities = self.committee_shared.authorities.len();
         let authorities = authorities_number.unwrap_or(max_authorities);
 
         if authorities > max_authorities {
@@ -280,7 +279,7 @@ pub struct PrimaryNodeDetails {
     node: PrimaryNode,
     store_path: PathBuf,
     parameters: Parameters,
-    committee: SharedCommittee,
+    committee: Committee,
     worker_cache: SharedWorkerCache,
     handlers: Rc<RefCell<Vec<JoinHandle<()>>>>,
     internal_consensus_enabled: bool,
@@ -292,7 +291,7 @@ impl PrimaryNodeDetails {
         key_pair: KeyPair,
         network_key_pair: NetworkKeyPair,
         parameters: Parameters,
-        committee: SharedCommittee,
+        committee: Committee,
         worker_cache: SharedWorkerCache,
         internal_consensus_enabled: bool,
     ) -> Self {
@@ -408,7 +407,7 @@ pub struct WorkerNodeDetails {
     pub registry: Registry,
     name: PublicKey,
     node: WorkerNode,
-    committee: SharedCommittee,
+    committee: Committee,
     worker_cache: SharedWorkerCache,
     store_path: PathBuf,
 }
@@ -419,7 +418,7 @@ impl WorkerNodeDetails {
         name: PublicKey,
         parameters: Parameters,
         transactions_address: Multiaddr,
-        committee: SharedCommittee,
+        committee: Committee,
         worker_cache: SharedWorkerCache,
     ) -> Self {
         let registry_service = RegistryService::new(Registry::new());
@@ -515,7 +514,7 @@ impl AuthorityDetails {
         network_key_pair: NetworkKeyPair,
         worker_keypairs: Vec<NetworkKeyPair>,
         parameters: Parameters,
-        committee: SharedCommittee,
+        committee: Committee,
         worker_cache: SharedWorkerCache,
         internal_consensus_enabled: bool,
     ) -> Self {

@@ -126,7 +126,7 @@ async fn test_narwhal_manager() {
         let shared_worker_cache = SharedWorkerCache::from(worker_cache.clone());
         narwhal_manager
             .start(
-                Arc::new(narwhal_committee.clone()),
+                narwhal_committee.clone(),
                 shared_worker_cache.clone(),
                 Arc::new(execution_state.clone()),
                 TrivialTransactionValidator::default(),
@@ -193,7 +193,7 @@ async fn test_narwhal_manager() {
         let shared_worker_cache = SharedWorkerCache::from(worker_cache.clone());
         narwhal_manager
             .start(
-                Arc::new(narwhal_committee.clone()),
+                narwhal_committee.clone(),
                 shared_worker_cache.clone(),
                 Arc::new(execution_state.clone()),
                 TrivialTransactionValidator::default(),

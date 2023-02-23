@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::authority_notify_read::NotifyRead;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use either::Either;
+use move_core_types::resolver::ModuleResolver;
 use once_cell::sync::OnceCell;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -11,11 +14,11 @@ use std::iter;
 use std::path::Path;
 use std::sync::Arc;
 use sui_storage::mutex_table::{LockGuard, MutexTable};
-use sui_types::crypto::AuthorityStrongQuorumSignInfo;
+use sui_types::accumulator::Accumulator;
 use sui_types::message_envelope::Message;
 use sui_types::object::Owner;
 use sui_types::object::PACKAGE_VERSION;
-use sui_types::storage::{ChildObjectResolver, ObjectKey};
+use sui_types::storage::{BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectKey};
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tracing::{debug, info, trace};
@@ -39,6 +42,8 @@ pub struct AuthorityStore {
 
     // Implementation detail to support notify_read_effects().
     pub(crate) executed_effects_notify_read: NotifyRead<TransactionDigest, TransactionEffects>,
+
+    pub(crate) root_state_notify_read: NotifyRead<EpochId, (CheckpointSequenceNumber, Accumulator)>,
     /// This lock denotes current 'execution epoch'.
     /// Execution acquires read lock, checks certificate epoch and holds it until all writes are complete.
     /// Reconfiguration acquires write lock, changes the epoch and revert all transactions
@@ -93,6 +98,8 @@ impl AuthorityStore {
             mutex_table: MutexTable::new(NUM_SHARDS, SHARD_SIZE),
             perpetual_tables,
             executed_effects_notify_read: NotifyRead::new(),
+            root_state_notify_read:
+                NotifyRead::<EpochId, (CheckpointSequenceNumber, Accumulator)>::new(),
             execution_lock: RwLock::new(epoch),
         };
         // Only initialize an empty database.
@@ -114,8 +121,11 @@ impl AuthorityStore {
 
             store
                 .perpetual_tables
-                .synced_transactions
-                .insert(transaction.digest(), transaction.serializable_ref())
+                .transactions
+                .insert(
+                    transaction.digest(),
+                    transaction.clone().into_unsigned().serializable_ref(),
+                )
                 .unwrap();
 
             store
@@ -193,25 +203,24 @@ impl AuthorityStore {
             .contains_key(digest)?)
     }
 
-    pub fn get_transaction_cert_sig(
+    /// Returns future containing the state hash for the given epoch
+    /// once available
+    pub async fn notify_read_root_state_hash(
         &self,
-        tx_digest: &TransactionDigest,
-    ) -> Result<Option<AuthorityStrongQuorumSignInfo>, TypedStoreError> {
-        self.perpetual_tables
-            .transaction_cert_signatures
-            .get(tx_digest)
-    }
+        epoch: EpochId,
+    ) -> SuiResult<(CheckpointSequenceNumber, Accumulator)> {
+        // We need to register waiters _before_ reading from the database to avoid race conditions
+        let registration = self.root_state_notify_read.register_one(&epoch);
+        let hash = self.perpetual_tables.root_state_hash_by_epoch.get(&epoch)?;
 
-    // TODO: Move this to epoch store.
-    pub fn insert_transaction_cert_sig(
-        &self,
-        tx_digest: &TransactionDigest,
-        sig: &AuthorityStrongQuorumSignInfo,
-    ) -> SuiResult {
-        self.perpetual_tables
-            .transaction_cert_signatures
-            .insert(tx_digest, sig)
-            .map_err(|e| e.into())
+        let result = match hash {
+            // Note that Some() clause also drops registration that is already fulfilled
+            Some(ready) => Either::Left(futures::future::ready(ready)),
+            None => Either::Right(registration),
+        }
+        .await;
+
+        Ok(result)
     }
 
     pub fn insert_finalized_transactions(
@@ -349,7 +358,7 @@ impl AuthorityStore {
                         )
                     })?;
                     // If we can't find the locked version, it means
-                    // 1. either we have a bug that skips shared object verison assignment
+                    // 1. either we have a bug that skips shared object version assignment
                     // 2. or we have some DB corruption
                     let version = shared_locks.get(id).unwrap_or_else(|| {
                         panic!(
@@ -424,7 +433,7 @@ impl AuthorityStore {
                         )
                     })?;
                     // If we can't find the locked version, it means
-                    // 1. either we have a bug that skips shared object verison assignment
+                    // 1. either we have a bug that skips shared object version assignment
                     // 2. or we have some DB corruption
                     let version = shared_locks.get(id).unwrap_or_else(|| {
                         panic!(
@@ -587,12 +596,12 @@ impl AuthorityStore {
     ) -> SuiResult {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
-        let mut write_batch = self.perpetual_tables.executed_transactions.batch();
+        let mut write_batch = self.perpetual_tables.transactions.batch();
 
         // Store the certificate indexed by transaction digest
         let transaction_digest = transaction.digest();
         write_batch = write_batch.insert_batch(
-            &self.perpetual_tables.executed_transactions,
+            &self.perpetual_tables.transactions,
             iter::once((transaction_digest, transaction.serializable_ref())),
         )?;
 
@@ -985,12 +994,12 @@ impl AuthorityStore {
             return Ok(())
         };
 
-        let mut write_batch = self.perpetual_tables.executed_transactions.batch();
+        // We should never be reverting shared object transactions.
+        assert!(effects.shared_objects.is_empty());
+
+        let mut write_batch = self.perpetual_tables.transactions.batch();
         write_batch = write_batch
-            .delete_batch(
-                &self.perpetual_tables.executed_transactions,
-                iter::once(tx_digest),
-            )?
+            .delete_batch(&self.perpetual_tables.transactions, iter::once(tx_digest))?
             .delete_batch(&self.perpetual_tables.effects, iter::once(effects.digest()))?
             .delete_batch(
                 &self.perpetual_tables.executed_effects,
@@ -1100,34 +1109,45 @@ impl AuthorityStore {
         }
     }
 
-    pub fn get_executed_transaction(
+    pub fn insert_transaction_and_effects(
+        &self,
+        transaction: &VerifiedTransaction,
+        transaction_effects: &TransactionEffects,
+    ) -> Result<(), TypedStoreError> {
+        let mut write_batch = self.perpetual_tables.transactions.batch();
+        write_batch = write_batch
+            .insert_batch(
+                &self.perpetual_tables.transactions,
+                [(transaction.digest(), transaction.serializable_ref())],
+            )?
+            .insert_batch(
+                &self.perpetual_tables.effects,
+                [(transaction_effects.digest(), transaction_effects)],
+            )?;
+
+        write_batch.write()?;
+        Ok(())
+    }
+
+    pub fn multi_get_transactions(
+        &self,
+        tx_digests: &[TransactionDigest],
+    ) -> Result<Vec<Option<VerifiedTransaction>>, SuiError> {
+        Ok(self
+            .perpetual_tables
+            .transactions
+            .multi_get(tx_digests)
+            .map(|v| v.into_iter().map(|v| v.map(|v| v.into())).collect())?)
+    }
+
+    pub fn get_transaction(
         &self,
         tx_digest: &TransactionDigest,
     ) -> Result<Option<VerifiedTransaction>, TypedStoreError> {
         self.perpetual_tables
-            .executed_transactions
+            .transactions
             .get(tx_digest)
-            .map(|v_opt| v_opt.map(|v| v.into()))
-    }
-
-    // TODO: This function will be moved to authority.rs since it will need to access the per-epoch store
-    // for the certificate signature.
-    pub fn get_certified_transaction(
-        &self,
-        tx_digest: &TransactionDigest,
-    ) -> Result<Option<VerifiedCertificate>, TypedStoreError> {
-        let Some(transaction) = self.get_executed_transaction(tx_digest)? else {
-            return Ok(None);
-        };
-        let Some(cert_sig) = self.get_transaction_cert_sig(tx_digest)? else {
-            return Ok(None);
-        };
-        Ok(Some(VerifiedCertificate::new_unchecked(
-            CertifiedTransaction::new_from_data_and_sig(
-                transaction.into_inner().into_data(),
-                cert_sig,
-            ),
-        )))
+            .map(|v| v.map(|v| v.into()))
     }
 
     pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {

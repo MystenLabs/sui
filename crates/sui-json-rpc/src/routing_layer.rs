@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::metrics::is_json;
 use crate::{CLIENT_TARGET_API_VERSION_HEADER, MAX_REQUEST_SIZE};
-use hyper::{Body, Method, Request, Response};
+use hyper::{http, Body, Method, Request, Response};
 use jsonrpsee::core::__reexports::serde_json;
 use jsonrpsee::core::error::GenericTransportError;
 use jsonrpsee::core::http_helpers::read_body;
@@ -250,4 +249,16 @@ mod response {
             .body(body.into())
             .expect("Unable to parse response body for type conversion")
     }
+}
+
+pub fn is_json(request: &hyper::Request<hyper::Body>) -> bool {
+    request
+        .headers()
+        .get(http::header::CONTENT_TYPE)
+        .and_then(|val| val.to_str().ok())
+        .map_or(false, |content| {
+            content.eq_ignore_ascii_case("application/json")
+                || content.eq_ignore_ascii_case("application/json; charset=utf-8")
+                || content.eq_ignore_ascii_case("application/json;charset=utf-8")
+        })
 }

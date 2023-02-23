@@ -7,7 +7,6 @@ use crate::{
     synchronizer::Synchronizer,
     NUM_SHUTDOWN_RECEIVERS,
 };
-use arc_swap::ArcSwap;
 use bincode::Options;
 use config::{Committee, Parameters, WorkerId};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
@@ -91,7 +90,7 @@ async fn get_network_peers_from_admin_server() {
         name_1.clone(),
         signer_1,
         authority_1.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache.clone(),
         primary_1_parameters.clone(),
         store.header_store.clone(),
@@ -137,7 +136,7 @@ async fn get_network_peers_from_admin_server() {
         name_1,
         worker_1_keypair.copy(),
         worker_id,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache.clone(),
         worker_1_parameters.clone(),
         TrivialTransactionValidator::default(),
@@ -213,7 +212,7 @@ async fn get_network_peers_from_admin_server() {
         name_2.clone(),
         signer_2,
         authority_2.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache.clone(),
         primary_2_parameters.clone(),
         store.header_store.clone(),
@@ -316,7 +315,7 @@ async fn test_request_vote_missing_parents() {
 
     let synchronizer = Arc::new(Synchronizer::new(
         target_name.clone(),
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificate_store.clone(),
@@ -331,7 +330,7 @@ async fn test_request_vote_missing_parents() {
     ));
     let handler = PrimaryReceiverHandler {
         name: target_name.clone(),
-        committee: fixture.committee().into(),
+        committee: fixture.committee(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
@@ -487,7 +486,7 @@ async fn test_request_vote_missing_batches() {
 
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificate_store.clone(),
@@ -502,7 +501,7 @@ async fn test_request_vote_missing_batches() {
     ));
     let handler = PrimaryReceiverHandler {
         name: name.clone(),
-        committee: fixture.committee().into(),
+        committee: fixture.committee(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
@@ -611,7 +610,7 @@ async fn test_request_vote_already_voted() {
 
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificate_store.clone(),
@@ -626,7 +625,7 @@ async fn test_request_vote_already_voted() {
     ));
     let handler = PrimaryReceiverHandler {
         name: name.clone(),
-        committee: fixture.committee().into(),
+        committee: fixture.committee(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
@@ -768,7 +767,7 @@ async fn test_fetch_certificates_handler() {
 
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificate_store.clone(),
@@ -783,7 +782,7 @@ async fn test_fetch_certificates_handler() {
     ));
     let handler = PrimaryReceiverHandler {
         name,
-        committee: fixture.committee().into(),
+        committee: fixture.committee(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
@@ -935,7 +934,7 @@ async fn test_process_payload_availability_success() {
 
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificate_store.clone(),
@@ -950,7 +949,7 @@ async fn test_process_payload_availability_success() {
     ));
     let handler = PrimaryReceiverHandler {
         name,
-        committee: fixture.committee().into(),
+        committee: fixture.committee(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
@@ -1085,7 +1084,7 @@ async fn test_process_payload_availability_when_failures() {
 
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificate_store.clone(),
@@ -1100,7 +1099,7 @@ async fn test_process_payload_availability_when_failures() {
     ));
     let handler = PrimaryReceiverHandler {
         name,
-        committee: fixture.committee().into(),
+        committee: fixture.committee(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
@@ -1183,7 +1182,7 @@ async fn test_request_vote_created_at_in_future() {
 
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificate_store.clone(),
@@ -1198,7 +1197,7 @@ async fn test_request_vote_created_at_in_future() {
     ));
     let handler = PrimaryReceiverHandler {
         name: name.clone(),
-        committee: fixture.committee().into(),
+        committee: fixture.committee(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,

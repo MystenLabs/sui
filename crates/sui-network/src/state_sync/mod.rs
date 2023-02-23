@@ -1168,16 +1168,11 @@ where
                 && effects.digest() == digests.effects
                 && effects.transaction_digest == digests.transaction
             {
-                // TODO this should just be a bare Transaction type and not a TransactionCertificate
-                // since Certificates are intended to be ephemeral and thrown away at the end of an
-                // epoch
                 store
-                    .insert_transaction(sui_types::messages::VerifiedCertificate::new_unchecked(
-                        transaction,
-                    ))
-                    .expect("store operation should not fail");
-                store
-                    .insert_transaction_effects(effects)
+                    .insert_transaction_and_effects(
+                        sui_types::messages::VerifiedTransaction::new_unchecked(transaction),
+                        effects,
+                    )
                     .expect("store operation should not fail");
                 // TODO: If the transaction has already been executed, we should check that the executed
                 // effects match. If they don't, it's a bug and we should panic.

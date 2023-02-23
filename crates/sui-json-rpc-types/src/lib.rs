@@ -26,7 +26,7 @@ use schemars::JsonSchema;
 use serde::ser::Error;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 use serde_with::serde_as;
 use sui_json::SuiJsonValue;
 use sui_protocol_config::ProtocolConfig;
@@ -684,7 +684,7 @@ pub trait SuiData: Sized {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
-#[serde(tag = "dataType", rename_all = "camelCase", rename = "Data")]
+#[serde(tag = "dataType", rename_all = "camelCase", rename = "RawData")]
 pub enum SuiRawData {
     // Manually handle generic schema generation
     MoveObject(SuiRawMoveObject),
@@ -1185,6 +1185,22 @@ pub enum SuiMoveValue {
     Option(Box<Option<SuiMoveValue>>),
 }
 
+impl SuiMoveValue {
+    /// Extract values from MoveValue without type information in json format
+    pub fn to_json_value(self) -> Value {
+        match self {
+            SuiMoveValue::Struct(move_struct) => move_struct.to_json_value(),
+            SuiMoveValue::Vector(values) => SuiMoveStruct::Runtime(values).to_json_value(),
+            SuiMoveValue::Number(v) => json!(v),
+            SuiMoveValue::Bool(v) => json!(v),
+            SuiMoveValue::Address(v) => json!(v),
+            SuiMoveValue::String(v) => json!(v),
+            SuiMoveValue::UID { id } => json!({ "id": id }),
+            SuiMoveValue::Option(v) => json!(v),
+        }
+    }
+}
+
 impl Display for SuiMoveValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut writer = String::new();
@@ -1268,41 +1284,26 @@ pub enum SuiMoveStruct {
 }
 
 impl SuiMoveStruct {
-    pub fn to_json_value(self) -> Result<Value, serde_json::Error> {
+    /// Extract values from MoveStruct without type information in json format
+    pub fn to_json_value(self) -> Value {
         // Unwrap MoveStructs
-        let unwrapped = match self {
+        match self {
             SuiMoveStruct::Runtime(values) => {
                 let values = values
                     .into_iter()
-                    .map(|value| match value {
-                        SuiMoveValue::Struct(move_struct) => move_struct.to_json_value(),
-                        SuiMoveValue::Vector(values) => {
-                            SuiMoveStruct::Runtime(values).to_json_value()
-                        }
-                        _ => serde_json::to_value(&value),
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-                serde_json::to_value(&values)
+                    .map(|value| value.to_json_value())
+                    .collect::<Vec<_>>();
+                json!(values)
             }
             // We only care about values here, assuming struct type information is known at the client side.
             SuiMoveStruct::WithTypes { type_: _, fields } | SuiMoveStruct::WithFields(fields) => {
                 let fields = fields
                     .into_iter()
-                    .map(|(key, value)| {
-                        let value = match value {
-                            SuiMoveValue::Struct(move_struct) => move_struct.to_json_value(),
-                            SuiMoveValue::Vector(values) => {
-                                SuiMoveStruct::Runtime(values).to_json_value()
-                            }
-                            _ => serde_json::to_value(&value),
-                        };
-                        value.map(|value| (key, value))
-                    })
-                    .collect::<Result<BTreeMap<_, _>, _>>()?;
-                serde_json::to_value(&fields)
+                    .map(|(key, value)| (key, value.to_json_value()))
+                    .collect::<BTreeMap<_, _>>();
+                json!(fields)
             }
-        }?;
-        serde_json::to_value(&unwrapped)
+        }
     }
 }
 

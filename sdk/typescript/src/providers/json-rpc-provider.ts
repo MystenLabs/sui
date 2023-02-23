@@ -16,7 +16,6 @@ import {
   SuiEventEnvelope,
   SuiEventFilter,
   SuiExecuteTransactionResponse,
-  SuiExecuteTransactionResponse_v26,
   SuiMoveFunctionArgTypes,
   SuiMoveNormalizedFunction,
   SuiMoveNormalizedModule,
@@ -38,7 +37,6 @@ import {
   TransactionEffects,
   DevInspectResults,
   CoinMetadata,
-  toSuiTransactionData,
   isValidTransactionDigest,
   isValidSuiAddress,
   isValidSuiObjectId,
@@ -61,7 +59,7 @@ import {
   versionToString,
 } from '../types';
 import { lt } from '@suchipi/femver';
-import { DynamicFieldPage } from '../types/dynamic_fields';
+import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
   DEFAULT_CLIENT_OPTIONS,
   WebsocketClient,
@@ -97,12 +95,19 @@ export type RpcProviderOptions = {
   skipDataValidation?: boolean;
   /**
    * Configuration options for the websocket connection
+   * TODO: Move to connection.
    */
   socketOptions?: WebsocketClientOptions;
   /**
    * Cache timeout in seconds for the RPC API Version
    */
   versionCacheTimeoutInSeconds?: number;
+
+  /** Allow defining a custom RPC client to use */
+  rpcClient?: JsonRpcClient;
+
+  /** Allow defining a custom websocket client to use */
+  websocketClient?: WebsocketClient;
 };
 
 const DEFAULT_OPTIONS: RpcProviderOptions = {
@@ -146,12 +151,15 @@ export class JsonRpcProvider extends Provider {
     //   'Client-Target-Api-Version': TARGETED_RPC_VERSION,
     // });
     // TODO: add header for websocket request
-    this.client = new JsonRpcClient(this.connection.fullnode);
-    this.wsClient = new WebsocketClient(
-      this.connection.websocket,
-      opts.skipDataValidation!,
-      opts.socketOptions,
-    );
+    this.client = opts.rpcClient ?? new JsonRpcClient(this.connection.fullnode);
+
+    this.wsClient =
+      opts.websocketClient ??
+      new WebsocketClient(
+        this.connection.websocket,
+        opts.skipDataValidation!,
+        opts.socketOptions,
+      );
   }
 
   async getRpcApiVersion(): Promise<RpcApiVersion | undefined> {
@@ -679,38 +687,6 @@ export class JsonRpcProvider extends Provider {
     signature: SerializedSignature,
     requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert',
   ): Promise<SuiExecuteTransactionResponse> {
-    const version = await this.getRpcApiVersion();
-    if (version?.major === 0 && version?.minor <= 26) {
-      try {
-        let resp = await this.client.requestWithType(
-          'sui_executeTransactionSerializedSig',
-          [
-            typeof txnBytes === 'string' ? txnBytes : toB64(txnBytes),
-            signature,
-            requestType,
-          ],
-          SuiExecuteTransactionResponse_v26,
-          this.options.skipDataValidation,
-        );
-        let certificate = resp.certificate
-          ? {
-              transactionDigest: resp.certificate!.transactionDigest,
-              data: toSuiTransactionData(resp.certificate!.data),
-              txSignatures: [resp.certificate!.txSignature],
-              authSignInfo: resp.certificate!.authSignInfo,
-            }
-          : undefined;
-        return {
-          certificate: certificate,
-          effects: resp.effects,
-          confirmed_local_execution: resp.confirmed_local_execution,
-        };
-      } catch (err) {
-        throw new Error(
-          `Error executing transaction with request type: ${err}`,
-        );
-      }
-    }
     try {
       return await this.client.requestWithType(
         'sui_executeTransactionSerializedSig',
@@ -930,7 +906,7 @@ export class JsonRpcProvider extends Provider {
 
   async getDynamicFieldObject(
     parent_object_id: ObjectId,
-    name: string,
+    name: string | DynamicFieldName,
   ): Promise<GetObjectDataResponse> {
     try {
       const resp = await this.client.requestWithType(

@@ -964,17 +964,18 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
     let ExecuteTransactionResponse::EffectsCert(res) = res;
-    let QuorumDriverResponse {
-        tx_cert: certified_txn,
-        effects_cert: certified_txn_effects,
-    } = rx.recv().await.unwrap().unwrap();
-    let (ct, cte, is_executed_locally) = *res;
-    assert_eq!(*ct.unwrap().digest(), digest);
-    assert_eq!(*certified_txn.unwrap().digest(), digest);
+    let (
+        tx,
+        QuorumDriverResponse {
+            effects_cert: certified_txn_effects,
+        },
+    ) = rx.recv().await.unwrap().unwrap();
+    let (cte, is_executed_locally) = *res;
+    assert_eq!(*tx.digest(), digest);
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(is_executed_locally);
     // verify that the node has sequenced and executed the txn
-    node.state().get_transaction(digest).await
+    node.state().get_executed_transaction_and_effects(digest).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForLocalExecution: {:?}", digest, e));
 
     // Test WaitForEffectsCert
@@ -989,17 +990,18 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
     let ExecuteTransactionResponse::EffectsCert(res) = res;
-    let QuorumDriverResponse {
-        tx_cert: certified_txn,
-        effects_cert: certified_txn_effects,
-    } = rx.recv().await.unwrap().unwrap();
-    let (ct, cte, is_executed_locally) = *res;
-    assert_eq!(*ct.unwrap().digest(), digest);
-    assert_eq!(*certified_txn.unwrap().digest(), digest);
+    let (
+        tx,
+        QuorumDriverResponse {
+            effects_cert: certified_txn_effects,
+        },
+    ) = rx.recv().await.unwrap().unwrap();
+    let (cte, is_executed_locally) = *res;
+    assert_eq!(*tx.digest(), digest);
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(!is_executed_locally);
     wait_for_tx(digest, node.state().clone()).await;
-    node.state().get_transaction(digest).await
+    node.state().get_executed_transaction_and_effects(digest).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForEffectsCert: {:?}", digest, e));
 
     Ok(())

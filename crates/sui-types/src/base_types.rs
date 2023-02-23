@@ -2,21 +2,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
-use fastcrypto::encoding::decode_bytes_hex;
-use move_core_types::account_address::AccountAddress;
-use move_core_types::ident_str;
-use move_core_types::identifier::IdentStr;
-use move_core_types::language_storage::StructTag;
-use rand::Rng;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-use std::cmp::max;
-use std::convert::{TryFrom, TryInto};
-use std::fmt;
-use std::str::FromStr;
-
 pub use crate::committee::EpochId;
 use crate::crypto::{
     AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SignatureScheme,
@@ -31,9 +16,24 @@ use crate::gas_coin::GasCoin;
 use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
 use crate::signature::GenericSignature;
+use crate::sui_serde::HexAccountAddress;
 use crate::sui_serde::Readable;
+use anyhow::anyhow;
+use fastcrypto::encoding::decode_bytes_hex;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::{HashFunction, Sha3_256};
+use move_core_types::account_address::AccountAddress;
+use move_core_types::ident_str;
+use move_core_types::identifier::IdentStr;
+use move_core_types::language_storage::StructTag;
+use rand::Rng;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use std::cmp::max;
+use std::convert::{TryFrom, TryInto};
+use std::fmt;
+use std::str::FromStr;
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
@@ -74,7 +74,7 @@ pub type AuthorityName = AuthorityPublicKeyBytes;
 #[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct ObjectID(
     #[schemars(with = "Hex")]
-    #[serde_as(as = "Readable<Hex, _>")]
+    #[serde_as(as = "Readable<HexAccountAddress, _>")]
     AccountAddress,
 );
 
@@ -422,13 +422,13 @@ impl TxContext {
         Self::new(
             &SuiAddress::random_for_testing_only(),
             &TransactionDigest::random(),
-            &EpochData::genesis(),
+            &EpochData::new_test(),
         )
     }
 
     // for testing
     pub fn with_sender_for_testing_only(sender: &SuiAddress) -> Self {
-        Self::new(sender, &TransactionDigest::random(), &EpochData::genesis())
+        Self::new(sender, &TransactionDigest::random(), &EpochData::new_test())
     }
 }
 

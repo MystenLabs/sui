@@ -18,7 +18,7 @@ use sui_core::{
     },
     validator_info::make_committee,
 };
-use sui_json_rpc_types::{SuiObjectRead, SuiTransaction, SuiTransactionEffects};
+use sui_json_rpc_types::{SuiObjectRead, SuiTransactionEffects};
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::{AuthorityName, SuiAddress};
@@ -117,17 +117,11 @@ pub trait ValidatorProxy {
 
     async fn get_latest_system_state_object(&self) -> Result<SuiSystemState, anyhow::Error>;
 
-    async fn execute_transaction(
-        &self,
-        tx: Transaction,
-    ) -> anyhow::Result<(Option<SuiTransaction>, ExecutionEffects)>;
+    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects>;
 
     /// This function is similar to `execute_transaction` but does not check any validator's
     /// signature. It should only be used for benchmarks.
-    async fn execute_bench_transaction(
-        &self,
-        tx: Transaction,
-    ) -> anyhow::Result<(Option<SuiTransaction>, ExecutionEffects)>;
+    async fn execute_bench_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects>;
 
     fn clone_committee(&self) -> Committee;
 
@@ -269,10 +263,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         auth_agg.get_latest_system_state_object_for_testing().await
     }
 
-    async fn execute_transaction(
-        &self,
-        tx: Transaction,
-    ) -> anyhow::Result<(Option<SuiTransaction>, ExecutionEffects)> {
+    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
         let tx_digest = *tx.digest();
         let tx = tx.verify()?;
         let mut retry_cnt = 0;
@@ -281,15 +272,9 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             // The ticket only times out when QuorumDriver exceeds the retry times
             match ticket.await {
                 Ok(resp) => {
-                    let QuorumDriverResponse {
-                        tx_cert,
-                        effects_cert,
-                    } = resp;
-                    return Ok((
-                        tx_cert
-                            .map(|cert| cert.data().clone().try_into())
-                            .transpose()?,
-                        ExecutionEffects::CertifiedTransactionEffects(effects_cert.into()),
+                    let QuorumDriverResponse { effects_cert } = resp;
+                    return Ok(ExecutionEffects::CertifiedTransactionEffects(
+                        effects_cert.into(),
                     ));
                 }
                 Err(err) => {
@@ -304,10 +289,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         bail!("Transaction {:?} failed for {retry_cnt} times", tx_digest);
     }
 
-    async fn execute_bench_transaction(
-        &self,
-        tx: Transaction,
-    ) -> anyhow::Result<(Option<SuiTransaction>, ExecutionEffects)> {
+    async fn execute_bench_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
         // Store the epoch number; we read it from the votes and use it later to create the certificate.
         let mut epoch = 0;
 
@@ -438,11 +420,10 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
         // Package the certificate and effects to return.
         let signed_material = certified_transaction.auth_sig().clone();
-        let tx = certified_transaction.data().clone().try_into()?;
         let effects = ExecutionEffects::CertifiedTransactionEffects(
             Envelope::new_from_data_and_sig(transaction_effects.unwrap(), signed_material),
         );
-        Ok((Some(tx), effects))
+        Ok(effects)
     }
 
     fn clone_committee(&self) -> Committee {
@@ -516,10 +497,7 @@ impl ValidatorProxy for FullNodeProxy {
         Ok(self.sui_client.read_api().get_sui_system_state().await?)
     }
 
-    async fn execute_transaction(
-        &self,
-        tx: Transaction,
-    ) -> anyhow::Result<(Option<SuiTransaction>, ExecutionEffects)> {
+    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
         let tx_digest = *tx.digest();
         let tx = tx.verify()?;
         let mut retry_cnt = 0;
@@ -537,9 +515,8 @@ impl ValidatorProxy for FullNodeProxy {
                 .await
             {
                 Ok(resp) => {
-                    let tx = resp.transaction;
                     let effects = ExecutionEffects::SuiTransactionEffects(resp.effects);
-                    return Ok((Some(tx), effects));
+                    return Ok(effects);
                 }
                 Err(err) => {
                     error!(
@@ -553,10 +530,7 @@ impl ValidatorProxy for FullNodeProxy {
         bail!("Transaction {:?} failed for {retry_cnt} times", tx_digest);
     }
 
-    async fn execute_bench_transaction(
-        &self,
-        tx: Transaction,
-    ) -> anyhow::Result<(Option<SuiTransaction>, ExecutionEffects)> {
+    async fn execute_bench_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
         self.execute_transaction(tx).await
     }
 

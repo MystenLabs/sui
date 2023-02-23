@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anemo::{Network, Request};
-use config::{Committee, Epoch, SharedCommittee, SharedWorkerCache, WorkerId};
+use config::{Committee, Epoch, SharedWorkerCache, WorkerId};
 use consensus::dag::Dag;
 use crypto::{NetworkPublicKey, PublicKey};
 use fastcrypto::hash::Hash as _;
@@ -30,8 +30,8 @@ use types::{
     ensure,
     error::{DagError, DagResult},
     metered_channel::Sender,
-    BatchDigest, Certificate, CertificateDigest, Header, PrimaryMessage, PrimaryToPrimaryClient,
-    PrimaryToWorkerClient, Round, WorkerSynchronizeMessage,
+    BatchDigest, Certificate, CertificateDigest, Header, PrimaryToPrimaryClient,
+    PrimaryToWorkerClient, Round, SendCertificateRequest, WorkerSynchronizeMessage,
 };
 
 use crate::{aggregators::CertificatesAggregator, metrics::PrimaryMetrics};
@@ -117,6 +117,7 @@ impl Inner {
 /// - Triggering fetching for certificates and batches.
 /// - Broadcasting created certificates.
 /// `Synchronizer` contains most of the certificate processing logic in Narwhal.
+#[derive(Clone)]
 pub struct Synchronizer {
     /// Internal data that are thread safe.
     inner: Arc<Inner>,
@@ -125,7 +126,7 @@ pub struct Synchronizer {
 impl Synchronizer {
     pub fn new(
         name: PublicKey,
-        committee: SharedCommittee,
+        committee: Committee,
         worker_cache: SharedWorkerCache,
         gc_depth: Round,
         certificate_store: CertificateStore,
@@ -138,7 +139,7 @@ impl Synchronizer {
         dag: Option<Arc<Dag>>,
         metrics: Arc<PrimaryMetrics>,
     ) -> Self {
-        let committee: &Committee = &committee.load();
+        let committee: &Committee = &committee;
         let genesis = Self::make_genesis(committee);
         let highest_processed_round = certificate_store.highest_round_number();
         let highest_created_certificate = certificate_store.last_round(&name).unwrap();
@@ -251,7 +252,18 @@ impl Synchronizer {
         certificate: Certificate,
         network: &Network,
     ) -> DagResult<()> {
-        self.process_certificate_internal(certificate, network)
+        self.process_certificate_internal(certificate, network, true)
+            .await
+    }
+
+    /// Tries to accept a certificate that is already sanitized.
+    // TODO: produce a different type after sanitize, e.g. VerifiedCertificate.
+    pub async fn try_accept_sanitized_certificate(
+        &self,
+        certificate: Certificate,
+        network: &Network,
+    ) -> DagResult<()> {
+        self.process_certificate_internal(certificate, network, false)
             .await
     }
 
@@ -266,7 +278,7 @@ impl Synchronizer {
         network: &Network,
     ) -> DagResult<()> {
         match self
-            .process_certificate_internal(certificate, network)
+            .process_certificate_internal(certificate, network, true)
             .await
         {
             Err(DagError::Suspended(notify)) => {
@@ -290,7 +302,7 @@ impl Synchronizer {
     ) -> DagResult<()> {
         // Process the new certificate.
         match self
-            .process_certificate_internal(certificate.clone(), network)
+            .process_certificate_internal(certificate.clone(), network, false)
             .await
         {
             Ok(()) => Ok(()),
@@ -343,7 +355,8 @@ impl Synchronizer {
             .collect()
     }
 
-    async fn sanitize_certificate(&self, certificate: &Certificate) -> DagResult<()> {
+    /// Checks if the certificate is valid and can potentially be accepted into the DAG.
+    pub fn sanitize_certificate(&self, certificate: &Certificate) -> DagResult<()> {
         ensure!(
             self.inner.committee.epoch() == certificate.epoch(),
             DagError::InvalidEpoch {
@@ -367,6 +380,7 @@ impl Synchronizer {
         &self,
         certificate: Certificate,
         network: &Network,
+        sanitize: bool,
     ) -> DagResult<()> {
         let digest = certificate.digest();
         if self.inner.certificate_store.contains(&digest)? {
@@ -375,7 +389,9 @@ impl Synchronizer {
             return Ok(());
         }
 
-        self.sanitize_certificate(&certificate).await?;
+        if sanitize {
+            self.sanitize_certificate(&certificate)?;
+        }
 
         debug!(
             "Processing certificate {:?} round:{:?}",
@@ -595,9 +611,9 @@ impl Synchronizer {
                 certificates.pop_front();
             }
             let cert = certificates.front().unwrap().clone();
-            let request =
-                Request::new(PrimaryMessage::Certificate(cert)).with_timeout(PUSH_TIMEOUT);
-            match client.send_message(request).await {
+            let request = Request::new(SendCertificateRequest { certificate: cert })
+                .with_timeout(PUSH_TIMEOUT);
+            match client.send_certificate(request).await {
                 Ok(_) => {
                     certificates.pop_front();
                     failure_backoff = MIN_FAILURE_BACKOFF;

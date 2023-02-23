@@ -815,10 +815,15 @@ impl Affiliated for Certificate {
     }
 }
 
+/// Request for broadcasting certificates to peers.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum PrimaryMessage {
-    Certificate(Certificate),
+pub struct SendCertificateRequest {
+    pub certificate: Certificate,
 }
+
+/// Response from peers after receiving a certificate.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SendCertificateResponse {}
 
 /// Used by the primary to request a vote from other primaries on newly produced headers.
 #[derive(Clone, Debug, Serialize, Deserialize)]

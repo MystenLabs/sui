@@ -48,7 +48,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
@@ -117,7 +117,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
@@ -186,7 +186,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
@@ -255,7 +255,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
@@ -324,7 +324,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
@@ -393,7 +393,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
@@ -462,7 +462,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use arc_swap::ArcSwap;
 use config::Parameters;
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
@@ -31,7 +30,7 @@ async fn simple_primary_worker_node_start_stop() {
         .build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
-    let shared_committee = Arc::new(ArcSwap::from_pointee(committee));
+    let shared_committee = committee.clone();
 
     let authority = fixture.authorities().next().unwrap();
     let key_pair = authority.keypair();
@@ -111,7 +110,7 @@ async fn primary_node_restart() {
         .build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
-    let shared_committee = Arc::new(ArcSwap::from_pointee(committee));
+    let shared_committee = committee.clone();
 
     let authority = fixture.authorities().next().unwrap();
     let key_pair = authority.keypair();

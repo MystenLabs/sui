@@ -9,6 +9,7 @@ import {
     Domain24,
     Version24,
 } from '@mysten/icons';
+import { formatAddress } from '@mysten/sui.js';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Browser from 'webextension-polyfill';
@@ -20,7 +21,7 @@ import { API_ENV_TO_INFO } from '_app/ApiProvider';
 import { Button } from '_app/shared/ButtonUI';
 import { lockWallet } from '_app/wallet/actions';
 import { useNextMenuUrl } from '_components/menu/hooks';
-import { useAppDispatch, useAppSelector, useMiddleEllipsis } from '_hooks';
+import { useAppDispatch, useAppSelector } from '_hooks';
 import { ToS_LINK } from '_src/shared/constants';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { useAutoLockInterval } from '_src/ui/app/hooks/useAutoLockInterval';
@@ -35,7 +36,6 @@ function MenuList() {
     const networkUrl = useNextMenuUrl(true, '/network');
     const autoLockUrl = useNextMenuUrl(true, '/auto-lock');
     const address = useAppSelector(({ account }) => account.address);
-    const shortenAddress = useMiddleEllipsis(address);
     const apiEnv = useAppSelector((state) => state.app.apiEnv);
     const networkName = API_ENV_TO_INFO[apiEnv].name;
     const autoLockInterval = useAutoLockInterval();
@@ -56,7 +56,7 @@ function MenuList() {
                     to={isMultiAccountsEnabled ? accountUrl : undefined}
                     icon={<Account24 />}
                     title={isMultiAccountsEnabled ? 'Accounts' : 'Account'}
-                    subtitle={shortenAddress}
+                    subtitle={address ? formatAddress(address) : ''}
                     onClick={
                         isMultiAccountsEnabled ? undefined : copyAddressCallback
                     }

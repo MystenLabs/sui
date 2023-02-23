@@ -48,7 +48,7 @@ import {
 } from '../types';
 import { Provider } from './provider';
 
-import { DynamicFieldPage } from '../types/dynamic_fields';
+import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import { SerializedSignature } from '../cryptography/signature';
 
 export class VoidProvider extends Provider {
@@ -209,7 +209,7 @@ export class VoidProvider extends Provider {
 
   getDynamicFieldObject(
     _parent_object_id: ObjectId,
-    _name: string,
+    _name: string | DynamicFieldName,
   ): Promise<GetObjectDataResponse> {
     throw this.newError('getDynamicFieldObject');
   }

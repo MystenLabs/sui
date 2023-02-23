@@ -36,12 +36,14 @@ use serde_with::Bytes;
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::{Hash, Hasher},
     iter,
 };
 use strum::IntoStaticStr;
+use sui_protocol_config::SupportedProtocolVersions;
 use tap::Pipe;
 use tracing::debug;
 
@@ -2835,6 +2837,7 @@ pub enum ConsensusTransactionKey {
     Certificate(TransactionDigest),
     CheckpointSignature(AuthorityName, CheckpointSequenceNumber),
     EndOfPublish(AuthorityName),
+    CapabilityNotification(AuthorityName, u64 /* generation */),
 }
 
 impl Debug for ConsensusTransactionKey {
@@ -2845,6 +2848,60 @@ impl Debug for ConsensusTransactionKey {
                 write!(f, "CheckpointSignature({:?}, {:?})", name.concise(), seq)
             }
             Self::EndOfPublish(name) => write!(f, "EndOfPublish({:?})", name.concise()),
+            Self::CapabilityNotification(name, generation) => write!(
+                f,
+                "CapabilityNotification({:?}, {:?})",
+                name.concise(),
+                generation
+            ),
+        }
+    }
+}
+
+/// Used to advertise capabilities of each authority via narwhal. This allows validators to
+/// negotiate the creation of the ChangeEpoch transaction.
+#[derive(Serialize, Deserialize, Clone, Hash)]
+pub struct AuthorityCapabilities {
+    /// Originating authority - must match narwhal transaction source.
+    pub authority: AuthorityName,
+    /// Generation number set by sending authority. Used to determine which of multiple
+    /// AuthorityCapabilities messages from the same authority is the most recent.
+    ///
+    /// (Currently, we just set this to the current time in milliseconds since the epoch, but this
+    /// should not be interpreted as a timestamp.)
+    pub generation: u64,
+    /// ProtocolVersions that the authority supports.
+    pub supported_protocol_versions: SupportedProtocolVersions,
+}
+
+impl Debug for AuthorityCapabilities {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthorityCapabilities")
+            .field("authority", &self.authority.concise())
+            .field("generation", &self.generation)
+            .field(
+                "supported_protocol_versions",
+                &self.supported_protocol_versions,
+            )
+            .finish()
+    }
+}
+
+impl AuthorityCapabilities {
+    pub fn new(
+        authority: AuthorityName,
+        supported_protocol_versions: SupportedProtocolVersions,
+    ) -> Self {
+        let generation = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Sui did not exist prior to 1970")
+            .as_millis()
+            .try_into()
+            .expect("This build of sui is not supported in the year 500,000,000");
+        Self {
+            authority,
+            generation,
+            supported_protocol_versions,
         }
     }
 }
@@ -2854,6 +2911,7 @@ pub enum ConsensusTransactionKind {
     UserTransaction(Box<CertifiedTransaction>),
     CheckpointSignature(Box<CheckpointSignatureMessage>),
     EndOfPublish(AuthorityName),
+    CapabilityNotification(AuthorityCapabilities),
 }
 
 impl ConsensusTransaction {
@@ -2892,6 +2950,16 @@ impl ConsensusTransaction {
         }
     }
 
+    pub fn new_capability_notification(capabilities: AuthorityCapabilities) -> Self {
+        let mut hasher = DefaultHasher::new();
+        capabilities.hash(&mut hasher);
+        let tracking_id = hasher.finish().to_le_bytes();
+        Self {
+            tracking_id,
+            kind: ConsensusTransactionKind::CapabilityNotification(capabilities),
+        }
+    }
+
     pub fn get_tracking_id(&self) -> u64 {
         (&self.tracking_id[..])
             .read_u64::<BigEndian>()
@@ -2904,7 +2972,10 @@ impl ConsensusTransaction {
                 certificate.verify_signature(committee)
             }
             ConsensusTransactionKind::CheckpointSignature(data) => data.verify(committee),
-            ConsensusTransactionKind::EndOfPublish(_) => Ok(()),
+            // EndOfPublish and CapabilityNotification are authenticated in
+            // AuthorityPerEpochStore::verify_consensus_transaction
+            ConsensusTransactionKind::EndOfPublish(_)
+            | ConsensusTransactionKind::CapabilityNotification(_) => Ok(()),
         }
     }
 
@@ -2921,6 +2992,9 @@ impl ConsensusTransaction {
             }
             ConsensusTransactionKind::EndOfPublish(authority) => {
                 ConsensusTransactionKey::EndOfPublish(*authority)
+            }
+            ConsensusTransactionKind::CapabilityNotification(cap) => {
+                ConsensusTransactionKey::CapabilityNotification(cap.authority, cap.generation)
             }
         }
     }
@@ -2999,13 +3073,7 @@ pub type IsTransactionExecutedLocally = bool;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ExecuteTransactionResponse {
-    EffectsCert(
-        Box<(
-            Option<CertifiedTransaction>,
-            FinalizedEffects,
-            IsTransactionExecutedLocally,
-        )>,
-    ),
+    EffectsCert(Box<(FinalizedEffects, IsTransactionExecutedLocally)>),
 }
 
 #[derive(Clone, Debug)]
@@ -3015,7 +3083,6 @@ pub struct QuorumDriverRequest {
 
 #[derive(Debug, Clone)]
 pub struct QuorumDriverResponse {
-    pub tx_cert: Option<VerifiedCertificate>,
     pub effects_cert: VerifiedCertifiedTransactionEffects,
 }
 

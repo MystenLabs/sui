@@ -17,12 +17,14 @@ use tracing::info;
 use mysten_metrics::RegistryService;
 use sui::config::SuiEnv;
 use sui::{client_commands::WalletContext, config::SuiClientConfig};
+use sui_config::builder::{ProtocolVersionsConfig, SupportedProtocolVersionsCallback};
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{FullnodeConfigBuilder, NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNode;
 use sui_node::SuiNodeHandle;
+use sui_protocol_config::SupportedProtocolVersions;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
 use sui_types::base_types::{AuthorityName, SuiAddress};
@@ -203,6 +205,7 @@ pub struct TestClusterBuilder {
     fullnode_rpc_port: Option<u16>,
     enable_fullnode_events: bool,
     epoch_duration_ms: Option<u64>,
+    supported_protocol_versions_config: ProtocolVersionsConfig,
 }
 
 impl TestClusterBuilder {
@@ -213,6 +216,7 @@ impl TestClusterBuilder {
             num_validators: None,
             enable_fullnode_events: false,
             epoch_duration_ms: None,
+            supported_protocol_versions_config: ProtocolVersionsConfig::Default,
         }
     }
 
@@ -241,6 +245,19 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn with_supported_protocol_versions(mut self, c: SupportedProtocolVersions) -> Self {
+        self.supported_protocol_versions_config = ProtocolVersionsConfig::Global(c);
+        self
+    }
+
+    pub fn with_supported_protocol_version_callback(
+        mut self,
+        func: SupportedProtocolVersionsCallback,
+    ) -> Self {
+        self.supported_protocol_versions_config = ProtocolVersionsConfig::PerValidator(func);
+        self
+    }
+
     pub async fn build(self) -> anyhow::Result<TestCluster> {
         let cluster = self.start_test_network_with_customized_ports().await?;
         Ok(cluster)
@@ -258,6 +275,9 @@ impl TestClusterBuilder {
         let fullnode_config = swarm
             .config()
             .fullnode_config_builder()
+            .with_supported_protocol_versions_config(
+                self.supported_protocol_versions_config.clone(),
+            )
             .set_event_store(self.enable_fullnode_events)
             .set_rpc_port(self.fullnode_rpc_port)
             .build()
@@ -291,9 +311,13 @@ impl TestClusterBuilder {
 
     /// Start a Swarm and set up WalletConfig
     async fn start_swarm(&mut self) -> Result<Swarm, anyhow::Error> {
-        let mut builder: SwarmBuilder = Swarm::builder().committee_size(
-            NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDAOTR)).unwrap(),
-        );
+        let mut builder: SwarmBuilder = Swarm::builder()
+            .committee_size(
+                NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDAOTR)).unwrap(),
+            )
+            .with_supported_protocol_versions_config(
+                self.supported_protocol_versions_config.clone(),
+            );
 
         if let Some(genesis_config) = self.genesis_config.take() {
             builder = builder.initial_accounts_config(genesis_config);
