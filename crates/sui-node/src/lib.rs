@@ -18,6 +18,7 @@ use mysten_network::server::ServerBuilder;
 use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::Registry;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{ConsensusConfig, NodeConfig};
@@ -293,11 +294,6 @@ impl SuiNode {
 
         let accumulator = Arc::new(StateAccumulator::new(store));
 
-        let peer_ids = epoch_store
-            .epoch_start_configuration()
-            .system_state
-            .get_current_epoch_peer_ids();
-
         let authority_names_to_peer_ids = epoch_store
             .epoch_start_configuration()
             .system_state
@@ -319,7 +315,7 @@ impl SuiNode {
         let _connection_monitor_handle = narwhal_network::connectivity::ConnectionMonitor::spawn(
             p2p_network.downgrade(),
             network_connection_metrics,
-            peer_ids,
+            HashMap::new(),
             connection_statuses.clone(),
         );
 

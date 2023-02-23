@@ -385,40 +385,6 @@ impl SuiSystemState {
         }
     }
 
-    pub fn get_current_epoch_peer_ids(&self) -> HashMap<PeerId, String> {
-        let mut result = HashMap::new();
-        let primary_peer_ids: Vec<PeerId> = self
-            .validators
-            .active_validators
-            .iter()
-            .map(|validator| {
-                let network_key = narwhal_crypto::NetworkPublicKey::from_bytes(
-                    &validator.metadata.network_pubkey_bytes,
-                )
-                .expect("Can't get narwhal network key");
-                PeerId(network_key.0.to_bytes())
-            })
-            .collect();
-
-        for peer_id in primary_peer_ids {
-            result.insert(peer_id, "other_primary".to_string());
-        }
-
-        let worker_peer_ids: Vec<PeerId> = self
-            .get_current_epoch_narwhal_worker_cache(&Multiaddr::empty())
-            .workers
-            .iter()
-            .flat_map(|(_, authority)| authority.0.iter().map(|v| v.1.clone()))
-            .map(|info| PeerId(info.name.0.to_bytes()))
-            .collect();
-
-        for peer_id in worker_peer_ids.iter() {
-            result.insert(*peer_id, "other_worker".to_string());
-        }
-
-        result
-    }
-
     pub fn get_current_epoch_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId> {
         let mut result = HashMap::new();
         let _: () = self
