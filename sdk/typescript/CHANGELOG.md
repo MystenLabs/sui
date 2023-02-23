@@ -1,5 +1,22 @@
 # @mysten/sui.js
 
+## 0.29.0
+
+### Minor Changes
+
+- f2e713bd0: Add TransactionExpiration to TransactionData
+- 4baf554f1: Make fromSecretKey take the 32 bytes privkey
+- aa650aa3b: Introduce new `Connection` class, which is used to define the endpoints that are used when interacting with the network.
+- 6ff0c785f: Use DynamicFieldName struct instead of string for dynamic field's name
+
+### Patch Changes
+
+- f1e3a0373: Expose rpcClient and websocketClient options
+- 0e202a543: Remove pending delegation switches.
+- 67e503c7c: Move base58 libraries to BCS
+- Updated dependencies [0e202a543]
+  - @mysten/bcs@0.6.1
+
 ## 0.28.0
 
 ### Minor Changes
