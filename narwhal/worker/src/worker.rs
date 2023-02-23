@@ -18,11 +18,9 @@ use anemo_tower::{
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
 use anemo_tower::{rate_limit, set_header::SetResponseHeaderLayer};
-use config::{Authority, AuthorityIdentifier, Committee, Parameters, WorkerCache, WorkerId};
-use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey};
-use mysten_metrics::spawn_logged_monitored_task;
-use mysten_network::{multiaddr::Protocol, Multiaddr};
-use network::client::NetworkClient;
+use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
+use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey, PublicKey};
+use multiaddr::{Multiaddr, Protocol};
 use network::epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY};
 use network::failpoints::FailpointsMakeCallbackHandler;
 use network::metrics::MetricsMakeCallbackHandler;
@@ -394,20 +392,17 @@ impl Worker {
         mut rx_shutdown: ConditionalBroadcastReceiver,
         network: Network,
     ) -> JoinHandle<()> {
-        spawn_logged_monitored_task!(
-            async move {
-                match rx_shutdown.receiver.recv().await {
-                    Ok(()) | Err(_) => {
-                        let _ = network
-                            .shutdown()
-                            .await
-                            .tap_err(|err| error!("Error while shutting down network: {err}"));
-                        info!("Worker network server shutdown");
-                    }
+        tokio::spawn(async move {
+            match rx_shutdown.receiver.recv().await {
+                Ok(()) | Err(_) => {
+                    let _ = network
+                        .shutdown()
+                        .await
+                        .tap_err(|err| error!("Error while shutting down network: {err}"));
+                    info!("Worker network server shutdown");
                 }
-            },
-            "WorkerShutdownNetworkListenerTask"
-        )
+            }
+        })
     }
 
     fn add_peer_in_network(

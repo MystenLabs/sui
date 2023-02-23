@@ -32,8 +32,6 @@ prometheus = "0.13.3"
 store = { path = "../../crates/typed-store", package = "typed-store" }
 mysten-network = { path = "../../crates/mysten-network"}
 
-mysten-metrics = { path = "../../crates/mysten-metrics" }
-
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "0e0ef7054082a6f5a8921688e3d568761bc3be21" }
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "0e0ef7054082a6f5a8921688e3d568761bc3be21" }
 anyhow = "1.0.65"

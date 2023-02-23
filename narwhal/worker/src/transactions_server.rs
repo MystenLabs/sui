@@ -7,7 +7,7 @@ use crate::TransactionValidator;
 use async_trait::async_trait;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use mysten_metrics::spawn_logged_monitored_task;
+use multiaddr::Multiaddr;
 use mysten_network::server::Server;
 use mysten_network::Multiaddr;
 use std::sync::Arc;
@@ -39,16 +39,15 @@ impl<V: TransactionValidator> TxServer<V> {
         tx_batch_maker: Sender<(Transaction, TxResponse)>,
         validator: V,
     ) -> JoinHandle<()> {
-        spawn_logged_monitored_task!(
+        tokio::spawn(
             Self {
                 address,
                 tx_batch_maker,
                 endpoint_metrics,
                 validator,
-                rx_shutdown
+                rx_shutdown,
             }
             .run(),
-            "TxServer"
         )
     }
 
@@ -105,7 +104,7 @@ impl<V: TransactionValidator> TxServer<V> {
 
         let shutdown_handle = server.take_cancel_handle().unwrap();
 
-        let server_handle = spawn_logged_monitored_task!(server.serve());
+        let server_handle = tokio::spawn(server.serve());
 
         // wait to receive a shutdown signal
         let _ = self.rx_shutdown.receiver.recv().await;

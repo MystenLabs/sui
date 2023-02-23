@@ -5,8 +5,7 @@
 use crate::batch_maker::MAX_PARALLEL_BATCH;
 use config::{Authority, Committee, Stake, WorkerCache, WorkerId};
 use fastcrypto::hash::Hash;
-use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
-use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
+use futures::stream::{futures_unordered::FuturesUnordered, FuturesOrdered, StreamExt as _};
 use network::{CancelOnDropHandler, ReliableNetwork};
 use std::time::Duration;
 use tokio::{task::JoinHandle, time::timeout};
@@ -47,22 +46,19 @@ impl QuorumWaiter {
         rx_quorum_waiter: Receiver<(Batch, tokio::sync::oneshot::Sender<()>)>,
         network: anemo::Network,
     ) -> JoinHandle<()> {
-        spawn_logged_monitored_task!(
-            async move {
-                Self {
-                    authority,
-                    id,
-                    committee,
-                    worker_cache,
-                    rx_shutdown,
-                    rx_quorum_waiter,
-                    network,
-                }
-                .run()
-                .await;
-            },
-            "QuorumWaiterTask"
-        )
+        tokio::spawn(async move {
+            Self {
+                name,
+                id,
+                committee,
+                worker_cache,
+                rx_shutdown,
+                rx_message,
+                network,
+            }
+            .run()
+            .await;
+        })
     }
 
     /// Helper function. It waits for a future to complete and then delivers a value.
@@ -104,7 +100,7 @@ impl QuorumWaiter {
                         .zip(handlers.into_iter())
                         .map(|(name, handler)| {
                             let stake = self.committee.stake(&name);
-                            monitored_future!(Self::waiter(handler, stake))
+                            Self::waiter(handler, stake)
                         })
                         .collect();
 

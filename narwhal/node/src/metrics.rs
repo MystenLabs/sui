@@ -40,14 +40,12 @@ pub fn start_prometheus_server(addr: Multiaddr, registry: &Registry) -> JoinHand
 
     let socket_addr = to_socket_addr(&addr).expect("failed to convert Multiaddr to SocketAddr");
 
-    tokio::spawn(
-        async move {
-            axum::Server::bind(&socket_addr)
-                .serve(app.into_make_service())
-                .await
-                .unwrap();
-        }
-    )
+    tokio::spawn(async move {
+        axum::Server::bind(&socket_addr)
+            .serve(app.into_make_service())
+            .await
+            .unwrap();
+    })
 }
 
 async fn metrics(registry: Extension<Registry>) -> (StatusCode, String) {
