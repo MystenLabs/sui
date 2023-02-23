@@ -34,7 +34,7 @@ pub struct CommittedSubDag {
     /// The index associated with this CommittedSubDag
     pub sub_dag_index: SequenceNumber,
     /// The so far calculated reputation score for nodes
-    pub reputation_score: ConsensusReputationScore,
+    pub reputation_score: ReputationScores,
 }
 
 impl CommittedSubDag {
@@ -66,11 +66,13 @@ impl CommittedSubDag {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct ConsensusReputationScore {
+pub struct ReputationScores {
+    /// Holds the score for every authority. If an authority is not amongst
+    /// the records of the map then we assume that its score is zero.
     pub scores_per_authority: HashMap<PublicKey, u64>,
 }
 
-impl ConsensusReputationScore {
+impl ReputationScores {
     /// Adds the provided `score` to the existing score for the provided `authority`
     pub fn add_score(&mut self, authority: PublicKey, score: u64) {
         let total_score = self
@@ -100,7 +102,7 @@ pub struct CommittedSubDagShell {
     /// Sequence number of the CommittedSubDag
     pub sub_dag_index: SequenceNumber,
     /// The so far calculated reputation score for nodes
-    pub reputation_score: ConsensusReputationScore,
+    pub reputation_score: ReputationScores,
 }
 
 impl CommittedSubDagShell {

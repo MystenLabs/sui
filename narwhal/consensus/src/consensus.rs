@@ -19,7 +19,7 @@ use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{
     metered_channel, Certificate, CertificateDigest, CommittedSubDag, CommittedSubDagShell,
-    ConditionalBroadcastReceiver, ConsensusReputationScore, ConsensusStore, Round, Timestamp,
+    ConditionalBroadcastReceiver, ConsensusStore, ReputationScores, Round, Timestamp,
 };
 
 #[cfg(test)]
@@ -39,7 +39,7 @@ pub struct ConsensusState {
     /// Used to populate the index in the sub-dag construction.
     pub latest_sub_dag_index: SequenceNumber,
     /// The last calculated consensus reputation score
-    pub last_consensus_reputation_score: ConsensusReputationScore,
+    pub last_consensus_reputation_score: ReputationScores,
     /// The last committed sub dag leader. This allow us to calculate the reputation score of the nodes
     /// that vote for the last leader.
     pub last_committed_leader: Option<CertificateDigest>,
@@ -57,7 +57,7 @@ impl ConsensusState {
             last_committed: Default::default(),
             latest_sub_dag_index: 0,
             dag: Default::default(),
-            last_consensus_reputation_score: ConsensusReputationScore::default(),
+            last_consensus_reputation_score: ReputationScores::default(),
             last_committed_leader: None,
             metrics,
         }

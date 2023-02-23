@@ -13,7 +13,9 @@ use fastcrypto::traits::EncodeDecodeBase64;
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::time::Instant;
 use tracing::{debug, trace};
-use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round};
+use types::{
+    Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, ReputationScores, Round,
+};
 
 #[cfg(test)]
 #[path = "tests/bullshark_tests.rs"]
@@ -168,36 +170,15 @@ impl ConsensusProtocol for Bullshark {
 
             let next_sub_dag_index = state.latest_sub_dag_index + 1;
 
-            // we reset the scores for every schedule change window.
-            // TODO: when schedule change is implemented we should probably change a little bit
-            // this logic here.
-            if next_sub_dag_index % self.change_schedule_every_committed_sub_dags == 0 {
-                state.last_consensus_reputation_score.clear();
-            }
-
-            // update the score for the previous leader. If no previous leader exists,
-            // then this is the first time we commit a leader, so no score update takes place
-            if let Some(previous_leader) = state.last_committed_leader {
-                for certificate in sequence.iter() {
-                    // TODO: we could iterate only the certificates of the round above the previous leader's round
-                    if certificate
-                        .header
-                        .parents
-                        .iter()
-                        .any(|digest| *digest == previous_leader)
-                    {
-                        state
-                            .last_consensus_reputation_score
-                            .add_score(certificate.origin(), 1);
-                    }
-                }
-            }
+            // We update the reputation score stored in state
+            let reputation_score =
+                self.update_reputation_score(state, &sequence, next_sub_dag_index);
 
             let sub_dag = CommittedSubDag {
                 certificates: sequence,
                 leader: leader.clone(),
                 sub_dag_index: next_sub_dag_index,
-                reputation_score: state.last_consensus_reputation_score.clone(),
+                reputation_score,
             };
 
             // Persist the update.
@@ -347,5 +328,41 @@ impl Bullshark {
 
         // Return its certificate and the certificate's digest.
         dag.get(&round).and_then(|x| x.get(&leader))
+    }
+
+    /// Updates and calculates the reputation score for the current commit managing any internal state.
+    /// It returns the updated reputation score.
+    fn update_reputation_score(
+        &mut self,
+        state: &mut ConsensusState,
+        committed_sequence: &[Certificate],
+        next_sub_dag_index: u64,
+    ) -> ReputationScores {
+        // we reset the scores for every schedule change window.
+        // TODO: when schedule change is implemented we should probably change a little bit
+        // this logic here.
+        if next_sub_dag_index % self.change_schedule_every_committed_sub_dags == 0 {
+            state.last_consensus_reputation_score.clear();
+        }
+
+        // update the score for the previous leader. If no previous leader exists,
+        // then this is the first time we commit a leader, so no score update takes place
+        if let Some(previous_leader) = state.last_committed_leader {
+            for certificate in committed_sequence {
+                // TODO: we could iterate only the certificates of the round above the previous leader's round
+                if certificate
+                    .header
+                    .parents
+                    .iter()
+                    .any(|digest| *digest == previous_leader)
+                {
+                    state
+                        .last_consensus_reputation_score
+                        .add_score(certificate.origin(), 1);
+                }
+            }
+        }
+
+        state.last_consensus_reputation_score.clone()
     }
 }
