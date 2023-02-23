@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use config::Export;
-use std::{
-    thread,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 use test_utils::{temp_dir, CommitteeFixture};
 
 const TEST_DURATION: Duration = Duration::from_secs(3);
