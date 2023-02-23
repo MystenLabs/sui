@@ -60,7 +60,6 @@ impl EventReadApi {
     }
 }
 
-#[allow(unused)]
 #[async_trait]
 impl EventReadApiServer for EventReadApi {
     async fn get_events(

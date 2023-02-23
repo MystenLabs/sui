@@ -74,7 +74,7 @@ impl HandlerOrchestrator {
 
         let checkpoint_handle = tokio::task::spawn(async move {
             let mut checkpoint_handler_exec_res = checkpoint_handler.start().await;
-            while let Err(e) = checkpoint_handler_exec_res.clone() {
+            while let Err(e) = &checkpoint_handler_exec_res {
                 warn!(
                     "Indexer checkpoint handler failed with error: {:?}, retrying after {:?} secs...",
                     e, HANDLER_RETRY_INTERVAL_IN_SECS
@@ -88,7 +88,7 @@ impl HandlerOrchestrator {
         });
         let txn_handle = tokio::task::spawn(async move {
             let mut txn_handler_exec_res = txn_handler.start().await;
-            while let Err(e) = txn_handler_exec_res.clone() {
+            while let Err(e) = &txn_handler_exec_res {
                 warn!(
                     "Indexer transaction handler failed with error: {:?}, retrying after {:?} secs...",
                     e, HANDLER_RETRY_INTERVAL_IN_SECS
@@ -102,7 +102,7 @@ impl HandlerOrchestrator {
         });
         let event_handle = tokio::task::spawn(async move {
             let mut event_handler_exec_res = event_handler.start().await;
-            while let Err(e) = event_handler_exec_res.clone() {
+            while let Err(e) = &event_handler_exec_res {
                 warn!(
                     "Indexer event handler failed with error: {:?}, retrying after {:?} secs...",
                     e, HANDLER_RETRY_INTERVAL_IN_SECS
@@ -116,7 +116,7 @@ impl HandlerOrchestrator {
         });
         let object_event_handle = tokio::task::spawn(async move {
             let mut obj_event_handler_exec_res = obj_event_handler.start().await;
-            while let Err(e) = obj_event_handler_exec_res.clone() {
+            while let Err(e) = &obj_event_handler_exec_res {
                 warn!(
                     "Indexer object event handler failed with error: {:?}, retrying after {:?} secs...",
                     e, HANDLER_RETRY_INTERVAL_IN_SECS
@@ -130,7 +130,7 @@ impl HandlerOrchestrator {
         });
         let publish_event_handle = tokio::task::spawn(async move {
             let mut publish_event_handler_exec_res = publish_event_handler.start().await;
-            while let Err(e) = publish_event_handler_exec_res.clone() {
+            while let Err(e) = &publish_event_handler_exec_res {
                 warn!(
                     "Indexer publish event handler failed with error: {:?}, retrying after {:?} secs...",
                     e, HANDLER_RETRY_INTERVAL_IN_SECS
@@ -144,7 +144,7 @@ impl HandlerOrchestrator {
         });
         let move_event_handle = tokio::task::spawn(async move {
             let mut move_event_handler_exec_res = move_handler.start().await;
-            while let Err(e) = move_event_handler_exec_res.clone() {
+            while let Err(e) = &move_event_handler_exec_res {
                 warn!(
                     "Indexer move event handler failed with error: {:?}, retrying after {:?} secs...",
                     e, HANDLER_RETRY_INTERVAL_IN_SECS
