@@ -11,8 +11,8 @@ module sui::table_vec {
         contents: Table<u64, Element>,
     }
 
-    const EINDEX_OUT_OF_BOUND: u64 = 0;
-    const ETABLE_NONEMPTY: u64 = 1;
+    const EIndexOutOfBound: u64 = 0;
+    const ETableNonEmpty: u64 = 1;
 
     /// Create an empty TableVec.
     public fun empty<Element: store>(ctx: &mut TxContext): TableVec<Element> {
@@ -41,7 +41,7 @@ module sui::table_vec {
     /// Acquire an immutable reference to the `i`th element of the TableVec `t`.
     /// Aborts if `i` is out of bounds.
     public fun borrow<Element: store>(t: &TableVec<Element>, i: u64): &Element {
-        assert!(length(t) > i, EINDEX_OUT_OF_BOUND);
+        assert!(length(t) > i, EIndexOutOfBound);
         table::borrow(&t.contents, i)
     }
 
@@ -54,7 +54,7 @@ module sui::table_vec {
     /// Return a mutable reference to the `i`th element in the TableVec `t`.
     /// Aborts if `i` is out of bounds.
     public fun borrow_mut<Element: store>(t: &mut TableVec<Element>, i: u64): &mut Element {
-        assert!(length(t) > i, EINDEX_OUT_OF_BOUND);
+        assert!(length(t) > i, EIndexOutOfBound);
         table::borrow_mut(&mut t.contents, i)
     }
 
@@ -62,14 +62,14 @@ module sui::table_vec {
     /// Aborts if `t` is empty.
     public fun pop_back<Element: store>(t: &mut TableVec<Element>): Element {
         let length = length(t);
-        assert!(length > 0, EINDEX_OUT_OF_BOUND);
+        assert!(length > 0, EIndexOutOfBound);
         table::remove(&mut t.contents, length - 1)
     }
 
     /// Destroy the TableVec `t`.
     /// Aborts if `t` is not empty.
     public fun destroy_empty<Element: store>(t: TableVec<Element>) {
-        assert!(length(&t) == 0, ETABLE_NONEMPTY);
+        assert!(length(&t) == 0, ETableNonEmpty);
         let TableVec { contents } = t;
         table::destroy_empty(contents);
     }

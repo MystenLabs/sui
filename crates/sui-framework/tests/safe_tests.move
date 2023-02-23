@@ -103,7 +103,7 @@ module sui::safe_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = safe::OVERDRAWN)]
+    #[expected_failure(abort_code = safe::EOverdrawn)]
     /// Ensure that funds cannot be over withdrawn
     fun test_safe_attempt_to_over_withdraw() {
         let owner = TEST_OWNER_ADDR;
@@ -126,7 +126,7 @@ module sui::safe_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = safe::TRANSFER_CAPABILITY_REVOKED)]
+    #[expected_failure(abort_code = safe::ETransferCapabilityRevoked)]
     /// Ensure that funds cannot be over withdrawn
     fun test_safe_withdraw_revoked() {
         let owner = TEST_OWNER_ADDR;
@@ -149,7 +149,7 @@ module sui::safe_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = safe::TRANSFER_CAPABILITY_REVOKED)]
+    #[expected_failure(abort_code = safe::ETransferCapabilityRevoked)]
     /// Ensure owner cannot withdraw funds after revoking itself.
     fun test_safe_withdraw_self_revoked() {
         let owner = TEST_OWNER_ADDR;

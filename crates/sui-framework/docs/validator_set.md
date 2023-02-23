@@ -272,20 +272,20 @@ each validator, emitted during epoch advancement.
 
 
 
-<a name="0x2_validator_set_EINVALID_STAKE_ADJUSTMENT_AMOUNT"></a>
+<a name="0x2_validator_set_EInvalidStakeAdjustmentAmount"></a>
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x2_validator_set_EINVALID_STAKE_ADJUSTMENT_AMOUNT">EINVALID_STAKE_ADJUSTMENT_AMOUNT</a>: u64 = 1;
+<pre><code><b>const</b> <a href="validator_set.md#0x2_validator_set_EInvalidStakeAdjustmentAmount">EInvalidStakeAdjustmentAmount</a>: u64 = 1;
 </code></pre>
 
 
 
-<a name="0x2_validator_set_ENON_VALIDATOR_IN_REPORT_RECORDS"></a>
+<a name="0x2_validator_set_ENonValidatorInReportRecords"></a>
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x2_validator_set_ENON_VALIDATOR_IN_REPORT_RECORDS">ENON_VALIDATOR_IN_REPORT_RECORDS</a>: u64 = 0;
+<pre><code><b>const</b> <a href="validator_set.md#0x2_validator_set_ENonValidatorInReportRecords">ENonValidatorInReportRecords</a>: u64 = 0;
 </code></pre>
 
 
@@ -1417,7 +1417,7 @@ non-performant validators according to the input threshold.
         <b>let</b> (validator_address, reporters) = <a href="vec_map.md#0x2_vec_map_pop">vec_map::pop</a>(&<b>mut</b> validator_report_records);
         <b>assert</b>!(
             <a href="validator_set.md#0x2_validator_set_is_active_validator">is_active_validator</a>(self, validator_address),
-            <a href="validator_set.md#0x2_validator_set_ENON_VALIDATOR_IN_REPORT_RECORDS">ENON_VALIDATOR_IN_REPORT_RECORDS</a>
+            <a href="validator_set.md#0x2_validator_set_ENonValidatorInReportRecords">ENonValidatorInReportRecords</a>,
         );
         // Sum up the voting power of validators that have reported this <a href="validator.md#0x2_validator">validator</a> and check <b>if</b> it <b>has</b>
         // passed the slashing threshold.
