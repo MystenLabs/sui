@@ -1155,25 +1155,29 @@ impl AuthorityState {
         indexes: &IndexStore,
         effects: &TransactionEffects,
     ) -> Result<ObjectIndexChanges, SuiError> {
-        let modified_at_version = effects
-            .modified_at_versions
-            .iter()
-            .cloned()
-            .collect::<HashMap<_, _>>();
-
-        let mut deleted_owners = vec![];
-        let mut deleted_dynamic_fields = vec![];
-        for (id, _, _) in &effects.deleted {
-            let old_version = modified_at_version.get(id).unwrap();
-
-            match self.get_owner_at_version(id, *old_version)? {
-                Owner::AddressOwner(addr) => deleted_owners.push((addr, *id)),
-                Owner::ObjectOwner(object_id) => {
-                    deleted_dynamic_fields.push((ObjectID::from(object_id), *id))
+        let changes = effects.deleted.iter().try_fold(
+            ObjectIndexChanges::default(),
+            |mut changes, (id, version, _)| {
+                if let Some((owner_status, last_known_version)) =
+                    indexes.get_last_known_owner(id)?
+                {
+                    // Do not update old version changes
+                    if &last_known_version < version {
+                        match owner_status {
+                            ObjectOwnerStatus::Owned(Owner::AddressOwner(addr)) => {
+                                changes.deleted_owners.push((addr, *id))
+                            }
+                            ObjectOwnerStatus::Owned(Owner::ObjectOwner(object_id)) => changes
+                                .deleted_dynamic_fields
+                                .push((ObjectID::from(object_id), *id)),
+                            ObjectOwnerStatus::Wrapped => changes.deleted_wrapped_objects.push(*id),
+                            _ => {}
+                        }
+                    }
                 }
-                _ => {}
-            }
-        }
+                Ok::<ObjectIndexChanges, SuiError>(changes)
+            },
+        )?;
 
         let changes =
             effects
