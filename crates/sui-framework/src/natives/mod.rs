@@ -272,6 +272,11 @@ pub fn all_natives(
             make_native!(types::is_one_time_witness),
         ),
         (
+            "unsecure",
+            "unsecure_verify",
+            make_native!(unsecure::unsecure_verify),
+        ),
+        (
             "validator",
             "validate_metadata_bcs",
             make_native!(validator::validate_metadata_bcs),

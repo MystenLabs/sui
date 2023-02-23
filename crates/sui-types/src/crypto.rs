@@ -25,7 +25,6 @@ use fastcrypto::unsecure::signature::{
     UnsecureAggregateSignature, UnsecureAggregateSignatureAsBytes, UnsecureKeyPair,
     UnsecurePrivateKey, UnsecurePublicKey, UnsecureSignature,
 };
-use fastcrypto::Verifier;
 use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
 use roaring::RoaringBitmap;

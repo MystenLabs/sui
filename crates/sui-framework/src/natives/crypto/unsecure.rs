@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::legacy_empty_cost;
-use fastcrypto::{traits::ToFromBytes, unsecure, Verifier};
+use fastcrypto::traits::VerifyingKey;
+use fastcrypto::{traits::ToFromBytes, unsecure};
 use move_binary_format::errors::PartialVMResult;
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
