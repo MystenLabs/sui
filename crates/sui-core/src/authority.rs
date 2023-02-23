@@ -546,7 +546,7 @@ impl AuthorityState {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
-        // Checks to see if the transaciton has expired
+        // Checks to see if the transactions has expired
         if match &transaction.inner().data().transaction_data().expiration {
             TransactionExpiration::None => false,
             TransactionExpiration::Epoch(epoch) => *epoch < epoch_store.epoch(),
@@ -1035,12 +1035,13 @@ impl AuthorityState {
         &self,
         sender: SuiAddress,
         transaction_kind: TransactionKind,
-        gas_price: u64,
+        gas_price: Option<u64>,
     ) -> Result<DevInspectResults, anyhow::Error> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
         if !self.is_fullnode(&epoch_store) {
             return Err(anyhow!("dev-inspect is only supported on fullnodes"));
         }
+        let gas_price = gas_price.unwrap_or_else(|| epoch_store.reference_gas_price());
 
         let protocol_config = epoch_store.protocol_config();
 
@@ -1832,8 +1833,14 @@ impl AuthorityState {
             .compute_object_reference())
     }
 
-    // TODO: Audit every call to this function to make sure there are no data races during reconfig.
-    pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
+    /// This function should be called once and exactly once during reconfiguration.
+    pub fn get_sui_system_state_object_during_reconfig(&self) -> SuiResult<SuiSystemState> {
+        self.database.get_sui_system_state_object()
+    }
+
+    // This function is only used for testing.
+    #[cfg(test)]
+    pub fn get_sui_system_state_object_for_testing(&self) -> SuiResult<SuiSystemState> {
         self.database.get_sui_system_state_object()
     }
 
@@ -2674,8 +2681,7 @@ impl AuthorityState {
             "Effects summary of the change epoch transaction: {:?}",
             signed_effects.summary_for_debug()
         );
-        epoch_store
-            .record_is_safe_mode_metric(self.get_sui_system_state_object().unwrap().safe_mode);
+        epoch_store.record_is_safe_mode_metric(system_obj.safe_mode);
         // The change epoch transaction cannot fail to execute.
         assert!(signed_effects.status.is_ok());
         Ok((system_obj, signed_effects.into_message()))

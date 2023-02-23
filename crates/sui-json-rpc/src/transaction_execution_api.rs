@@ -44,14 +44,6 @@ impl TransactionExecutionApi {
             module_cache,
         }
     }
-
-    fn get_sui_system_state_object_epoch_and_gas_price(&self) -> RpcResult<(EpochId, u64)> {
-        let sys_state = self
-            .state
-            .get_sui_system_state_object()
-            .map_err(|e| anyhow!("Unable to retrieve sui system state object: {e}"))?;
-        Ok((sys_state.epoch, sys_state.reference_gas_price))
-    }
 }
 
 #[async_trait]
@@ -130,23 +122,13 @@ impl WriteApiServer for TransactionExecutionApi {
         sender_address: SuiAddress,
         tx_bytes: Base64,
         gas_price: Option<u64>,
-        epoch: Option<EpochId>,
+        _epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults> {
-        // Only fetch from DB if necessary
-        let reference_gas_price = if gas_price.is_none() || epoch.is_none() {
-            self.get_sui_system_state_object_epoch_and_gas_price()?.1
-        } else {
-            0
-        };
         let tx_kind: TransactionKind =
             bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
         Ok(self
             .state
-            .dev_inspect_transaction(
-                sender_address,
-                tx_kind,
-                gas_price.unwrap_or(reference_gas_price),
-            )
+            .dev_inspect_transaction(sender_address, tx_kind, gas_price)
             .await?)
     }
 
