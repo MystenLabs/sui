@@ -75,22 +75,18 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
         .unwrap_or_else(|| panic!("Not enough shutdown receivers"));
 
     vec![
-        tokio::spawn(
-            run_notify(state, rx_notifier, rx_shutdown_notify)
-        ),
-        tokio::spawn(
-            create_and_run_subscriber(
-                authority_id,
-                worker_cache,
-                committee,
-                rx_shutdown_subscriber,
-                rx_sequence,
-                client,
-                metrics,
-                restored_consensus_output,
-                tx_notifier,
-            )
-        ),
+        tokio::spawn(run_notify(state, rx_notifier, rx_shutdown_notify)),
+        tokio::spawn(create_and_run_subscriber(
+            name,
+            network,
+            worker_cache,
+            committee,
+            rx_shutdown_subscriber,
+            rx_sequence,
+            metrics,
+            restored_consensus_output,
+            tx_notifier,
+        )),
     ]
 }
 

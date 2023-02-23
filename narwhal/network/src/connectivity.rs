@@ -4,10 +4,6 @@
 use crate::metrics::NetworkConnectionMetrics;
 use anemo::types::PeerEvent;
 use anemo::PeerId;
-use dashmap::DashMap;
-use futures::future;
-use mysten_metrics::spawn_logged_monitored_task;
-use quinn_proto::ConnectionStats;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -37,23 +33,14 @@ impl ConnectionMonitor {
         network: anemo::NetworkRef,
         connection_metrics: NetworkConnectionMetrics,
         peer_id_types: HashMap<PeerId, String>,
-        rx_shutdown: Option<ConditionalBroadcastReceiver>,
-    ) -> (JoinHandle<()>, Arc<DashMap<PeerId, ConnectionStatus>>) {
-        let connection_statuses_outer = Arc::new(DashMap::new());
-        let connection_statuses = connection_statuses_outer.clone();
-        (
-            spawn_logged_monitored_task!(
-                Self {
-                    network,
-                    connection_metrics,
-                    peer_id_types,
-                    connection_statuses,
-                    rx_shutdown
-                }
-                .run(),
-                "ConnectionMonitor"
-            ),
-            connection_statuses_outer,
+    ) -> JoinHandle<()> {
+        tokio::spawn(
+            Self {
+                network,
+                connection_metrics,
+                peer_id_types,
+            }
+            .run(),
         )
     }
 

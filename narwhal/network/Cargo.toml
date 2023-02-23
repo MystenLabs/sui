@@ -24,8 +24,6 @@ tonic = { version = "0.8.2", features = ["tls"] }
 tracing = "0.1.36"
 types = { path = "../types", package = "narwhal-types" }
 crypto = { path = "../crypto", package = "narwhal-crypto" }
-mysten-common = { path = "../../crates/mysten-common" }
-mysten-metrics = { path = "../../crates/mysten-metrics" }
 
 serde = "1.0.144"
 eyre = "0.6.8"
