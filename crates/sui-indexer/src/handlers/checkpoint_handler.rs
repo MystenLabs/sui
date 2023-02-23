@@ -8,9 +8,9 @@ use tracing::{error, info};
 
 use sui_indexer::errors::IndexerError;
 use sui_indexer::metrics::IndexerCheckpointHandlerMetrics;
-use sui_indexer::models::checkpoint_logs::{commit_checkpoint_log, read_checkpoint_log};
 use sui_indexer::models::checkpoints::{
-    commit_checkpoint, create_checkpoint, get_checkpoint, Checkpoint,
+    commit_checkpoint, create_checkpoint, get_checkpoint, get_latest_checkpoint_sequence_number,
+    Checkpoint,
 };
 use sui_indexer::{get_pg_pool_connection, PgConnectionPool};
 use sui_json_rpc_types::CheckpointId;
@@ -37,10 +37,8 @@ impl CheckpointHandler {
     pub async fn start(&self) -> Result<(), IndexerError> {
         info!("Indexer checkpoint handler started...");
         let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
-
-        let checkpoint_log = read_checkpoint_log(&mut pg_pool_conn)?;
-        let mut next_cursor_sequence_number = checkpoint_log.next_cursor_sequence_number;
-
+        let mut next_cursor_sequence_number =
+            get_latest_checkpoint_sequence_number(&mut pg_pool_conn)? + 1;
         let mut previous_checkpoint = Checkpoint::default();
         if next_cursor_sequence_number > 0 {
             let temp_checkpoint =
@@ -101,7 +99,6 @@ impl CheckpointHandler {
             db_guard.stop_and_record();
             previous_checkpoint = Checkpoint::from(new_checkpoint.clone());
             next_cursor_sequence_number += 1;
-            commit_checkpoint_log(&mut pg_pool_conn, next_cursor_sequence_number)?;
         }
     }
 }
