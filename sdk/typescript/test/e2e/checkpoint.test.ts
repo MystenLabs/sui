@@ -46,8 +46,12 @@ describe('Checkpoints Reading API', () => {
   });
 
   it('gets checkpoint by id', async () => {
-    const resp = await toolbox.provider.getCheckpoint(0);
-    expect(resp.digest.length).greaterThan(0);
+    const version = await toolbox.provider.getRpcApiVersion();
+    // todo: remove this once 0.28.0 is released
+    if (version?.major === 0 && version?.minor > 27) {
+      const resp = await toolbox.provider.getCheckpoint(0);
+      expect(resp.digest.length).greaterThan(0);
+    }
   });
 
   it('get checkpoint contents by digest', async () => {
