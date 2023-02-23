@@ -181,64 +181,6 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
     }
 }
 
-pub struct ConnectionMonitorStatusForTests {}
-
-impl CheckConnection for ConnectionMonitorStatusForTests {
-    fn check_connection(&self, _authority: &AuthorityName) -> Option<ConnectionStatus> {
-        Some(ConnectionStatus::Connected)
-    }
-    fn update_mapping_for_epoch(
-        &self,
-        _authority_names_to_peer_ids: HashMap<AuthorityName, PeerId>,
-    ) {
-    }
-}
-
-pub trait CheckConnection: Send + Sync {
-    fn check_connection(&self, authority: &AuthorityName) -> Option<ConnectionStatus>;
-    fn update_mapping_for_epoch(&self, authority_names_to_peer_ids: HashMap<AuthorityName, PeerId>);
-}
-
-pub struct ConnectionMonitorStatus {
-    /// Current connection statuses forwarded from the connection monitor
-    pub connection_statuses: Arc<DashMap<PeerId, ConnectionStatus>>,
-    /// A map from authority name to peer id
-    pub authority_names_to_peer_ids: ArcSwap<HashMap<AuthorityName, PeerId>>,
-}
-
-impl CheckConnection for ConnectionMonitorStatus {
-    fn check_connection(&self, authority: &AuthorityName) -> Option<ConnectionStatus> {
-        let mapping = self.authority_names_to_peer_ids.load_full();
-        let peer_id = match mapping.get(authority) {
-            Some(p) => p,
-            None => {
-                error!(
-                    "failed to find peer {:?} in connection monitor listener",
-                    authority
-                );
-                return None;
-            }
-        };
-
-        let res = match self.connection_statuses.try_get(peer_id) {
-            TryResult::Present(c) => Some(c.value().clone()),
-            TryResult::Absent => None,
-            TryResult::Locked => {
-                // update is in progress, assume the status is still or becoming disconnected
-                Some(ConnectionStatus::Disconnected)
-            }
-        };
-        res
-    }
-    fn update_mapping_for_epoch(
-        &self,
-        authority_names_to_peer_ids: HashMap<AuthorityName, PeerId>,
-    ) {
-        self.authority_names_to_peer_ids
-            .swap(Arc::new(authority_names_to_peer_ids));
-    }
-}
-
 /// Submit Sui certificates to the consensus.
 #[allow(unused)]
 pub struct ConsensusAdapter {
@@ -253,6 +195,20 @@ pub struct ConsensusAdapter {
     /// A structure to register metrics
     opt_metrics: OptArcConsensusAdapterMetrics,
 }
+
+pub trait CheckConnection: Send + Sync {
+    fn check_connection(&self, authority: &AuthorityName) -> Option<ConnectionStatus>;
+    fn update_mapping_for_epoch(&self, authority_names_to_peer_ids: HashMap<AuthorityName, PeerId>);
+}
+
+pub struct ConnectionMonitorStatus {
+    /// Current connection statuses forwarded from the connection monitor
+    pub connection_statuses: Arc<DashMap<PeerId, ConnectionStatus>>,
+    /// A map from authority name to peer id
+    pub authority_names_to_peer_ids: ArcSwap<HashMap<AuthorityName, PeerId>>,
+}
+
+pub struct ConnectionMonitorStatusForTests {}
 
 impl ConsensusAdapter {
     /// Make a new Consensus adapter instance.
@@ -599,6 +555,50 @@ impl ConsensusAdapter {
         self.opt_metrics.as_ref().map(|metrics| {
             metrics.sequencing_certificate_success.inc();
         });
+    }
+}
+
+impl CheckConnection for ConnectionMonitorStatus {
+    fn check_connection(&self, authority: &AuthorityName) -> Option<ConnectionStatus> {
+        let mapping = self.authority_names_to_peer_ids.load_full();
+        let peer_id = match mapping.get(authority) {
+            Some(p) => p,
+            None => {
+                error!(
+                    "failed to find peer {:?} in connection monitor listener",
+                    authority
+                );
+                return None;
+            }
+        };
+
+        let res = match self.connection_statuses.try_get(peer_id) {
+            TryResult::Present(c) => Some(c.value().clone()),
+            TryResult::Absent => None,
+            TryResult::Locked => {
+                // update is in progress, assume the status is still or becoming disconnected
+                Some(ConnectionStatus::Disconnected)
+            }
+        };
+        res
+    }
+    fn update_mapping_for_epoch(
+        &self,
+        authority_names_to_peer_ids: HashMap<AuthorityName, PeerId>,
+    ) {
+        self.authority_names_to_peer_ids
+            .swap(Arc::new(authority_names_to_peer_ids));
+    }
+}
+
+impl CheckConnection for ConnectionMonitorStatusForTests {
+    fn check_connection(&self, _authority: &AuthorityName) -> Option<ConnectionStatus> {
+        Some(ConnectionStatus::Connected)
+    }
+    fn update_mapping_for_epoch(
+        &self,
+        _authority_names_to_peer_ids: HashMap<AuthorityName, PeerId>,
+    ) {
     }
 }
 
