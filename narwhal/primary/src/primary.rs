@@ -34,6 +34,7 @@ use fastcrypto::{
     signature_service::SignatureService,
     traits::{EncodeDecodeBase64, KeyPair as _, ToFromBytes},
 };
+use futures::{stream::FuturesUnordered, StreamExt};
 use multiaddr::{Multiaddr, Protocol};
 use mysten_metrics::spawn_monitored_task;
 use network::epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY};
@@ -745,19 +746,27 @@ impl PrimaryReceiverHandler {
             .certificates_in_votes
             .inc_by(request.body().parents.len() as u64);
         let wait_network = network.clone();
-        let mut notifies = Vec::new();
-        for certificate in request.body().parents.clone() {
-            notifies.push(
+        let mut wait_notifications: FuturesUnordered<_> = request
+            .body()
+            .parents
+            .clone()
+            .into_iter()
+            .map(|cert| {
                 self.synchronizer
-                    .wait_to_accept_certificate(certificate, &wait_network),
-            );
-        }
-        let mut wait_notifies = futures::future::try_join_all(notifies);
+                    .wait_to_accept_certificate(cert, &wait_network)
+            })
+            .collect();
         loop {
             tokio::select! {
-                results = &mut wait_notifies => {
-                    results?;
-                    break
+                result = wait_notifications.next() => {
+                    match result {
+                        Some(result) => {
+                            result?;
+                            continue;
+                        },
+                        // Waits are done. Missing parents have been accepted.
+                        None => break,
+                    }
                 },
                 result = rx_narwhal_round_updates.changed() => {
                     if result.is_err() {
