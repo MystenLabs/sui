@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 const path = require('path');
 
 const COPYRIGHT = `
@@ -8,7 +5,6 @@ const COPYRIGHT = `
 // SPDX-License-Identifier: Apache-2.0
 `;
 
-/** @type {import('@svgr/core').Config} */
 module.exports = {
   icon: true,
   typescript: true,
@@ -18,25 +14,23 @@ module.exports = {
     "#383F47": "currentColor",
   },
   indexTemplate(filePaths) {
-    const exportEntries = filePaths.map((filePath) => {
+    const exportEntries = filePaths.map(filePath => {
       const basename = path.basename(filePath, path.extname(filePath));
       const exportName = /^\d/.test(basename) ? `Svg${basename}` : basename;
       return `export { default as ${exportName} } from './${basename}'`;
     });
-    return COPYRIGHT + exportEntries.join("\n");
+    return `${COPYRIGHT}${exportEntries.join("\n")}`;
   },
   template(variables, { tpl }) {
     return tpl`
-    ${COPYRIGHT}
-    ${variables.imports};
+    ${COPYRIGHT}${variables.imports};
 
     ${variables.interfaces};
 
-    const ${variables.componentName} = (${variables.props}) => (
-      ${variables.jsx}
-    );
+    const ${variables.componentName} = (${variables.props}) => ${variables.jsx};
 
     ${variables.exports};
     `;
   },
 };
+
