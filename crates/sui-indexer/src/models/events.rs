@@ -244,7 +244,7 @@ pub fn events_to_sui_events(
             }
         })
         .collect();
-    
+
     log_errors_to_pg(pg_pool_conn, errors);
     sui_events_to_process
 }
