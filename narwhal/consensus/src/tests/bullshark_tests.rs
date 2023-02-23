@@ -186,7 +186,7 @@ async fn dead_node() {
         } else {
             // For any other commit we expect to always have a +1 score for each authority, as everyone
             // always votes for the leader
-            for (_, score) in &sub_dag.reputation_score.scores_per_authority {
+            for score in sub_dag.reputation_score.scores_per_authority.values() {
                 assert_eq!(*score as usize, index);
             }
         }
@@ -337,7 +337,7 @@ async fn not_enough_support() {
     let score = committed_sub_dag
         .reputation_score
         .scores_per_authority
-        .get(&node_0_name)
+        .get(node_0_name)
         .unwrap();
     assert_eq!(*score, 1);
 }
@@ -645,6 +645,70 @@ async fn submitting_equivocating_certificate_should_error() {
                 assert_eq!(this_cert, certificate);
             }
             err => panic!("Unexpected error returned: {err}"),
+        }
+    }
+}
+
+/// Advance the DAG for 50 rounds, while we change "schedule" for every 5 subdag commits.
+#[tokio::test]
+async fn reset_consensus_scores_on_every_schedule_change() {
+    const CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS: u64 = 5;
+
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let epoch = committee.epoch();
+    let gc_depth = 10;
+
+    // Make certificates for rounds 1 to 50.
+    let genesis = Certificate::genesis(&committee)
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let (certificates, _) =
+        test_utils::make_certificates_with_epoch(&committee, 1..=50, epoch, &genesis, &keys);
+
+    let store = make_consensus_store(&test_utils::temp_dir());
+    let mut state = ConsensusState::new(metrics.clone());
+    let mut bullshark = Bullshark::new(
+        committee,
+        store,
+        gc_depth,
+        metrics,
+        CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+    );
+
+    // Populate DAG with the rounds up to round 50 so we trigger commits
+    let mut all_subdags = Vec::new();
+    for certificate in certificates {
+        let (_, committed_subdags) = bullshark
+            .process_certificate(&mut state, certificate)
+            .unwrap();
+        all_subdags.extend(committed_subdags);
+    }
+
+    // ensure the leaders of rounds 2 and 4 have been committed
+    let mut current_score = 0;
+    for sub_dag in all_subdags {
+        // The first commit has not scores
+        if sub_dag.sub_dag_index == 1 {
+            assert_eq!(sub_dag.reputation_score.total_authorities(), 0);
+        } else if sub_dag.sub_dag_index % 5 == 0 {
+            // On every 5th commit we reset the scores and count from the beginning with
+            // scores updated to 1, as we expect now every node to have voted for the previous leader.
+            for score in sub_dag.reputation_score.scores_per_authority.values() {
+                assert_eq!(*score as usize, 1);
+            }
+            current_score = 1;
+        } else {
+            // On every other commit the scores get calculated incrementally with +1 score
+            // for every commit.
+            current_score += 1;
+
+            for score in sub_dag.reputation_score.scores_per_authority.values() {
+                assert_eq!(*score, current_score);
+            }
         }
     }
 }

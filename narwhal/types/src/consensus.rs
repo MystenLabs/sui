@@ -86,7 +86,7 @@ impl ConsensusReputationScore {
     }
 
     /// Clear the scores for all authorities
-    fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.scores_per_authority.clear();
     }
 }

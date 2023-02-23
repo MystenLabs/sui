@@ -166,6 +166,15 @@ impl ConsensusProtocol for Bullshark {
                 sequence.push(x);
             }
 
+            let next_sub_dag_index = state.latest_sub_dag_index + 1;
+
+            // we reset the scores for every schedule change window.
+            // TODO: when schedule change is implemented we should probably change a little bit
+            // this logic here.
+            if next_sub_dag_index % self.change_schedule_every_committed_sub_dags == 0 {
+                state.last_consensus_reputation_score.clear();
+            }
+
             // update the score for the previous leader. If no previous leader exists,
             // then this is the first time we commit a leader, so no score update takes place
             if let Some(previous_leader) = state.last_committed_leader {
@@ -175,8 +184,7 @@ impl ConsensusProtocol for Bullshark {
                         .header
                         .parents
                         .iter()
-                        .find(|digest| **digest == previous_leader)
-                        .is_some()
+                        .any(|digest| *digest == previous_leader)
                     {
                         state
                             .last_consensus_reputation_score
@@ -185,7 +193,6 @@ impl ConsensusProtocol for Bullshark {
                 }
             }
 
-            let next_sub_dag_index = state.latest_sub_dag_index + 1;
             let sub_dag = CommittedSubDag {
                 certificates: sequence,
                 leader: leader.clone(),
