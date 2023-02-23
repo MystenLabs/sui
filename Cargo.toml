@@ -35,6 +35,7 @@ members = [
     "crates/sui-rosetta",
     "crates/sui-sdk",
     "crates/sui-simulator",
+    "crates/sui-snapshot",
     "crates/sui-source-validation",
     "crates/sui-storage",
     "crates/sui-swarm",

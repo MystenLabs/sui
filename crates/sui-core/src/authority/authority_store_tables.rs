@@ -7,6 +7,7 @@ use rocksdb::Options;
 use std::path::Path;
 use sui_storage::default_db_options;
 use sui_types::base_types::SequenceNumber;
+use sui_types::error::SuiError::StorageError;
 use sui_types::messages::TrustedCertificate;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::{DBMap, DBOptions, MetricConf, ReadWriteOptions};
@@ -31,7 +32,7 @@ pub struct AuthorityPerpetualTables {
     /// been written out, and which must be retried. But, they cannot be retried unless their input
     /// objects are still accessible!
     #[default_options_override_fn = "objects_table_default_config"]
-    pub(crate) objects: DBMap<ObjectKey, Object>,
+    pub objects: DBMap<ObjectKey, Object>,
 
     /// This is a map between object references of currently active objects that can be mutated,
     /// and the transaction that they are lock on for use by this specific authority. Where an object
@@ -54,7 +55,7 @@ pub struct AuthorityPerpetualTables {
     ///
     /// When an object is deleted we include an entry into this table for its next version and
     /// a digest of ObjectDigest::deleted(), along with a link to the transaction that deleted it.
-    pub(crate) parent_sync: DBMap<ObjectRef, TransactionDigest>,
+    pub parent_sync: DBMap<ObjectRef, TransactionDigest>,
 
     /// A map between the transaction digest of a certificate to the effects of its execution.
     /// We store effects into this table in two different cases:
@@ -101,6 +102,12 @@ impl AuthorityPerpetualTables {
 
     pub fn open_readonly(parent_path: &Path) -> AuthorityPerpetualTablesReadOnly {
         Self::get_read_only_handle(Self::path(parent_path), None, None, MetricConf::default())
+    }
+
+    pub fn get_object_by_ref(&self, object_ref: &ObjectRef) -> SuiResult<Option<Object>> {
+        self.objects
+            .get(&ObjectKey(object_ref.0, object_ref.1))
+            .map_err(StorageError)
     }
 
     /// Read an object and return it, or Ok(None) if the object was not found.
