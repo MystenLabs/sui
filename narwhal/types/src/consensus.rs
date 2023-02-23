@@ -65,7 +65,7 @@ impl CommittedSubDag {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct ReputationScores {
     /// Holds the score for every authority. If an authority is not amongst
     /// the records of the map then we assume that its score is zero.
