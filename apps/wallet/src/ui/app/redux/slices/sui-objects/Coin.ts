@@ -14,7 +14,7 @@ import type {
     SuiObject,
     SuiAddress,
     SuiMoveObject,
-    SuiExecuteTransactionResponse,
+    SuiTransactionResponse,
     SignerWithProvider,
 } from '@mysten/sui.js';
 
@@ -93,7 +93,7 @@ export class Coin {
         amount: bigint,
         validator: SuiAddress,
         gasPrice: number
-    ): Promise<SuiExecuteTransactionResponse> {
+    ): Promise<SuiTransactionResponse> {
         const transaction = Sentry.startTransaction({ name: 'stake' });
         const stakeCoin = await this.coinManageForStake(
             signer,
@@ -132,7 +132,7 @@ export class Coin {
         signer: SignerWithProvider,
         delegation: ObjectId,
         stakedSuiId: ObjectId
-    ): Promise<SuiExecuteTransactionResponse> {
+    ): Promise<SuiTransactionResponse> {
         const transaction = Sentry.startTransaction({ name: 'unstake' });
         try {
             return await signer.executeMoveCall({

@@ -144,14 +144,6 @@ export const AuthorityQuorumSignInfo = object({
 });
 export type AuthorityQuorumSignInfo = Infer<typeof AuthorityQuorumSignInfo>;
 
-export const CertifiedTransaction = object({
-  transactionDigest: TransactionDigest,
-  data: SuiTransactionData,
-  txSignatures: array(string()),
-  authSignInfo: AuthorityQuorumSignInfo,
-});
-export type CertifiedTransaction = Infer<typeof CertifiedTransaction>;
-
 export const GasCostSummary = object({
   computationCost: number(),
   storageCost: number(),
@@ -247,13 +239,6 @@ export const DevInspectResults = object({
   results: DevInspectResultsType,
 });
 export type DevInspectResults = Infer<typeof DevInspectResults>;
-
-// TODO: this is likely to go away after https://github.com/MystenLabs/sui/issues/4207
-export const SuiCertifiedTransactionEffects = object({
-  transactionEffectsDigest: string(),
-  authSignInfo: AuthorityQuorumSignInfo,
-  effects: TransactionEffects,
-});
 
 export const SuiEffectsFinalityInfo = union([
   object({ certified: AuthorityQuorumSignInfo }),
@@ -354,135 +339,51 @@ export const SuiTransaction = object({
 export type SuiTransaction = Infer<typeof SuiTransaction>;
 
 export const SuiTransactionResponse = object({
-  // TODO: Remove optional after devnet 0.28.0
-  transaction: optional(SuiTransaction),
-  // TODO: Remove after devnet 0.28.0
-  certificate: optional(CertifiedTransaction),
+  transaction: SuiTransaction,
   effects: TransactionEffects,
   events: TransactionEvents,
-  // TODO: Remove after devnet 0.28.0
-  timestamp_ms: optional(union([number(), literal(null)])),
-  // TODO: Remove optional after devnet 0.28.0
   timestampMs: optional(union([number(), literal(null)])),
-  // TODO: remove optional after 0.27.0 is released
-  checkpoint: optional(union([number(), literal(null)])),
-  // TODO: Remove optional after devnet 0.28.0
+  checkpoint: union([number(), literal(null)]),
   confirmedLocalExecution: optional(boolean()),
-  // TODO: Remove after devnet 0.28.0
-  parsed_data: optional(union([SuiParsedTransactionResponse, literal(null)])),
 });
 export type SuiTransactionResponse = Infer<typeof SuiTransactionResponse>;
-
-// TODO: Remove after devnet 0.28.0
-export const SuiExecuteTransactionResponse = union([
-  object({
-    EffectsCert: object({
-      certificate: CertifiedTransaction,
-      effects: SuiCertifiedTransactionEffects,
-      confirmed_local_execution: boolean(),
-    }),
-  }),
-  object({
-    certificate: optional(CertifiedTransaction),
-    effects: SuiFinalizedEffects,
-    confirmed_local_execution: boolean(),
-  }),
-  SuiTransactionResponse,
-]);
-export type SuiExecuteTransactionResponse = Infer<
-  typeof SuiExecuteTransactionResponse
->;
 
 /* -------------------------------------------------------------------------- */
 /*                              Helper functions                              */
 /* -------------------------------------------------------------------------- */
 
-/* ---------------------------------- CertifiedTransaction --------------------------------- */
-
-export function getCertifiedTransaction(
-  tx: SuiTransactionResponse | SuiExecuteTransactionResponse,
-): CertifiedTransaction | undefined {
-  if ('certificate' in tx) {
-    return tx.certificate;
-  } else if ('EffectsCert' in tx) {
-    return tx.EffectsCert.certificate;
-  }
-  return undefined;
-}
-
 export function getTransactionDigest(
-  tx:
-    | CertifiedTransaction
-    | SuiTransactionResponse
-    | SuiExecuteTransactionResponse,
+  tx: SuiTransactionResponse,
 ): TransactionDigest {
-  if ('transactionDigest' in tx) {
-    return tx.transactionDigest;
-  }
   const effects = getTransactionEffects(tx)!;
   return effects.transactionDigest;
 }
 
-export function getTransactionSignature(
-  tx: SuiTransactionResponse | CertifiedTransaction,
-): string[] {
-  const certificateOrTx =
-    'certificate' in tx
-      ? tx.certificate!
-      : 'transaction' in tx
-      ? tx.transaction!
-      : tx;
-
-  if ('txSignatures' in certificateOrTx) {
-    return certificateOrTx.txSignatures;
-  }
-
-  return [];
-}
-
-export function getTransactionData(
-  tx: CertifiedTransaction,
-): SuiTransactionData {
-  return tx.data;
+export function getTransactionSignature(tx: SuiTransactionResponse): string[] {
+  return tx.transaction.txSignatures;
 }
 
 /* ----------------------------- TransactionData ---------------------------- */
 
 export function getTransactionSender(tx: SuiTransactionResponse): SuiAddress {
-  return tx.certificate
-    ? tx.certificate.data.sender
-    : tx.transaction!.data.sender;
+  return tx.transaction.data.sender;
 }
 
-export function getGasData(
-  tx: CertifiedTransaction | SuiTransactionResponse,
-): SuiGasData {
-  if ('data' in tx) {
-    return tx.data.gasData;
-  }
-
-  if ('certificate' in tx) {
-    return tx.certificate!.data.gasData;
-  }
-
-  return tx.transaction!.data.gasData;
+export function getGasData(tx: SuiTransactionResponse): SuiGasData {
+  return tx.transaction.data.gasData;
 }
 
 export function getTransactionGasObject(
-  tx: SuiTransactionResponse | CertifiedTransaction,
+  tx: SuiTransactionResponse,
 ): SuiObjectRef {
   return getGasData(tx).payment;
 }
 
-export function getTransactionGasPrice(
-  tx: SuiTransactionResponse | CertifiedTransaction,
-) {
+export function getTransactionGasPrice(tx: SuiTransactionResponse) {
   return getGasData(tx).price;
 }
 
-export function getTransactionGasBudget(
-  tx: SuiTransactionResponse | CertifiedTransaction,
-): number {
+export function getTransactionGasBudget(tx: SuiTransactionResponse): number {
   return getGasData(tx).budget;
 }
 
@@ -543,9 +444,7 @@ export function getConsensusCommitPrologueTransaction(
 export function getTransactions(
   data: SuiTransactionResponse,
 ): SuiTransactionKind[] {
-  return data.certificate
-    ? data.certificate.data.transactions
-    : data.transaction!.data.transactions;
+  return data.transaction.data.transactions;
 }
 
 export function getTransferSuiAmount(data: SuiTransactionKind): bigint | null {
@@ -563,28 +462,25 @@ export function getTransactionKindName(
 /* ----------------------------- ExecutionStatus ---------------------------- */
 
 export function getExecutionStatusType(
-  data: SuiTransactionResponse | SuiExecuteTransactionResponse,
+  data: SuiTransactionResponse,
 ): ExecutionStatusType | undefined {
   return getExecutionStatus(data)?.status;
 }
 
 export function getExecutionStatus(
-  data: SuiTransactionResponse | SuiExecuteTransactionResponse,
+  data: SuiTransactionResponse,
 ): ExecutionStatus | undefined {
   return getTransactionEffects(data)?.status;
 }
 
 export function getExecutionStatusError(
-  data: SuiTransactionResponse | SuiExecuteTransactionResponse,
+  data: SuiTransactionResponse,
 ): string | undefined {
   return getExecutionStatus(data)?.error;
 }
 
 export function getExecutionStatusGasSummary(
-  data:
-    | SuiTransactionResponse
-    | SuiExecuteTransactionResponse
-    | TransactionEffects,
+  data: SuiTransactionResponse | TransactionEffects,
 ): GasCostSummary | undefined {
   if (is(data, TransactionEffects)) {
     return data.gasUsed;
@@ -593,10 +489,7 @@ export function getExecutionStatusGasSummary(
 }
 
 export function getTotalGasUsed(
-  data:
-    | SuiTransactionResponse
-    | SuiExecuteTransactionResponse
-    | TransactionEffects,
+  data: SuiTransactionResponse | TransactionEffects,
 ): number | undefined {
   const gasSummary = getExecutionStatusGasSummary(data);
   return gasSummary
@@ -607,10 +500,7 @@ export function getTotalGasUsed(
 }
 
 export function getTotalGasUsedUpperBound(
-  data:
-    | SuiTransactionResponse
-    | SuiExecuteTransactionResponse
-    | TransactionEffects,
+  data: SuiTransactionResponse | TransactionEffects,
 ): number | undefined {
   const gasSummary = getExecutionStatusGasSummary(data);
   return gasSummary
@@ -619,18 +509,15 @@ export function getTotalGasUsedUpperBound(
 }
 
 export function getTransactionEffects(
-  data: SuiExecuteTransactionResponse | SuiTransactionResponse,
+  data: SuiTransactionResponse,
 ): TransactionEffects | undefined {
-  if ('effects' in data) {
-    return `effects` in data.effects ? data.effects.effects : data.effects;
-  }
-  return 'EffectsCert' in data ? data.EffectsCert.effects.effects : undefined;
+  return data.effects;
 }
 
 /* ---------------------------- Transaction Effects --------------------------- */
 
 export function getEvents(
-  data: SuiExecuteTransactionResponse | SuiTransactionResponse,
+  data: SuiTransactionResponse,
 ): SuiEvent[] | undefined {
   if ('events' in data) {
     return data.events;
@@ -639,7 +526,7 @@ export function getEvents(
 }
 
 export function getCreatedObjects(
-  data: SuiExecuteTransactionResponse | SuiTransactionResponse,
+  data: SuiTransactionResponse,
 ): OwnedObjectRef[] | undefined {
   return getTransactionEffects(data)?.created;
 }
@@ -647,81 +534,16 @@ export function getCreatedObjects(
 /* --------------------------- TransactionResponse -------------------------- */
 
 export function getTimestampFromTransactionResponse(
-  data: SuiExecuteTransactionResponse | SuiTransactionResponse,
+  data: SuiTransactionResponse,
 ): number | undefined {
-  return 'timestamp_ms' in data || 'timestampMs' in data
-    ? (data.timestamp_ms || data.timestampMs) ?? undefined
-    : undefined;
-}
-
-export function getParsedSplitCoinResponse(
-  data: SuiTransactionResponse,
-): SuiParsedSplitCoinResponse | undefined {
-  const parsed = data.parsed_data;
-  return parsed && 'SplitCoin' in parsed ? parsed.SplitCoin : undefined;
-}
-
-export function getParsedMergeCoinResponse(
-  data: SuiTransactionResponse,
-): SuiParsedMergeCoinResponse | undefined {
-  const parsed = data.parsed_data;
-  return parsed && 'MergeCoin' in parsed ? parsed.MergeCoin : undefined;
-}
-
-export function getParsedPublishResponse(
-  data: SuiTransactionResponse,
-): SuiParsedPublishResponse | undefined {
-  const parsed = data.parsed_data;
-  return parsed && 'Publish' in parsed ? parsed.Publish : undefined;
-}
-
-/**
- * Get the updated coin after a merge.
- * @param data the response for executing a merge coin transaction
- * @returns the updated state of the primary coin after the merge
- */
-export function getCoinAfterMerge(
-  data: SuiTransactionResponse,
-): SuiObject | undefined {
-  return getParsedMergeCoinResponse(data)?.updatedCoin;
-}
-
-/**
- * Get the updated coin after a split.
- * @param data the response for executing a Split coin transaction
- * @returns the updated state of the original coin object used for the split
- */
-export function getCoinAfterSplit(
-  data: SuiTransactionResponse,
-): SuiObject | undefined {
-  return getParsedSplitCoinResponse(data)?.updatedCoin;
-}
-
-/**
- * Get the newly created coin after a split.
- * @param data the response for executing a Split coin transaction
- * @returns the updated state of the original coin object used for the split
- */
-export function getNewlyCreatedCoinsAfterSplit(
-  data: SuiTransactionResponse,
-): SuiObject[] | undefined {
-  return getParsedSplitCoinResponse(data)?.newCoins;
+  return data.timestampMs ?? undefined;
 }
 
 /**
  * Get the newly created coin refs after a split.
  */
 export function getNewlyCreatedCoinRefsAfterSplit(
-  data: SuiTransactionResponse | SuiExecuteTransactionResponse,
+  data: SuiTransactionResponse,
 ): SuiObjectRef[] | undefined {
-  if ('EffectsCert' in data) {
-    const effects = data.EffectsCert.effects.effects;
-    return effects.created?.map((c) => c.reference);
-  }
-  if ('effects' in data) {
-    const effects =
-      'effects' in data.effects ? data.effects.effects : data.effects;
-    return effects.created?.map((c) => c.reference);
-  }
-  return undefined;
+  return data.effects.created?.map((c) => c.reference);
 }

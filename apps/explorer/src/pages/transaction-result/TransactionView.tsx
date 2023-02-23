@@ -441,7 +441,7 @@ function TransactionView({
         ? getSignatureFromAddress(deserializedTransactionSignatures, gasOwner)
         : null;
 
-    const timestamp = transaction.timestamp_ms || transaction.timestampMs;
+    const timestamp = transaction.timestampMs;
 
     return (
         <div className={clsx(styles.txdetailsbg)}>
