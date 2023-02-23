@@ -12,7 +12,7 @@ use narwhal_worker::TransactionValidator;
 use sui_types::message_envelope::Message;
 use sui_types::{
     crypto::{AuthoritySignInfoTrait, VerificationObligation},
-    messages::{ConsensusTransaction, ConsensusTransactionKind, VerifiedCertificate},
+    messages::{ConsensusTransaction, ConsensusTransactionKind},
 };
 
 use tracing::info;
@@ -21,7 +21,7 @@ use tracing::info;
 #[derive(Clone)]
 pub struct SuiTxValidator {
     epoch_store: Arc<AuthorityPerEpochStore>,
-    transaction_manager: Arc<TransactionManager>,
+    _transaction_manager: Arc<TransactionManager>,
     metrics: Arc<SuiTxValidatorMetrics>,
 }
 
@@ -37,7 +37,7 @@ impl SuiTxValidator {
         );
         Self {
             epoch_store,
-            transaction_manager,
+            _transaction_manager: transaction_manager,
             metrics,
         }
     }
@@ -64,7 +64,7 @@ impl TransactionValidator for SuiTxValidator {
             .map(|tx| tx_from_bytes(tx))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let mut owned_tx_certs = Vec::new();
+        // let mut owned_tx_certs = Vec::new();
         let mut obligation = VerificationObligation::default();
         for tx in txs.into_iter() {
             match tx.kind {
@@ -78,11 +78,11 @@ impl TransactionValidator for SuiTxValidator {
                         idx,
                     )?;
 
-                    if !certificate.contains_shared_object() {
-                        // new_unchecked safety: we do not use the certs in this list until all
-                        // have had their signatures verified.
-                        owned_tx_certs.push(VerifiedCertificate::new_unchecked(*certificate));
-                    }
+                    // if !certificate.contains_shared_object() {
+                    //     // new_unchecked safety: we do not use the certs in this list until all
+                    //     // have had their signatures verified.
+                    //     owned_tx_certs.push(VerifiedCertificate::new_unchecked(*certificate));
+                    // }
                 }
                 ConsensusTransactionKind::CheckpointSignature(signature) => {
                     self.metrics.checkpoint_signatures_verified.inc();
@@ -103,15 +103,16 @@ impl TransactionValidator for SuiTxValidator {
         // verify the user transaction signatures as a batch
         obligation
             .verify_all()
-            .wrap_err("Malformed batch (failed to verify)")?;
+            .wrap_err("Malformed batch (failed to verify)")
 
+        // todo - we should un-comment line below once we have a way to revert those transactions at the end of epoch
         // all certificates had valid signatures, schedule them for execution prior to sequencing
         // which is unnecessary for owned object transactions.
         // It is unnecessary to write to pending_certificates table because the certs will be written
         // via Narwhal output.
-        self.transaction_manager
-            .enqueue_certificates(owned_tx_certs, &self.epoch_store)
-            .wrap_err("Failed to schedule certificates for execution")
+        // self.transaction_manager
+        //     .enqueue_certificates(owned_tx_certs, &self.epoch_store)
+        //     .wrap_err("Failed to schedule certificates for execution")
     }
 }
 
