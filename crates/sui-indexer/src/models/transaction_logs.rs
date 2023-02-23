@@ -13,7 +13,7 @@ use diesel::result::Error;
 #[diesel(primary_key(id))]
 pub struct TransactionLog {
     pub id: i32,
-    pub next_cursor_tx_digest: Option<String>,
+    pub next_checkpoint_sequence_number: i64,
 }
 
 pub fn read_transaction_log(
@@ -35,21 +35,21 @@ pub fn read_transaction_log(
 
 pub fn commit_transaction_log(
     pg_pool_conn: &mut PgPoolConnection,
-    txn_digest: Option<String>,
+    checkpoint_sequence_number: i64,
 ) -> Result<usize, IndexerError> {
     let txn_log_commit_result: Result<usize, Error> = pg_pool_conn
         .build_transaction()
         .read_write()
         .run::<_, Error, _>(|conn| {
             diesel::update(transaction_logs::table)
-                .set(next_cursor_tx_digest.eq(txn_digest.clone()))
+                .set(next_checkpoint_sequence_number.eq(checkpoint_sequence_number))
                 .execute(conn)
         });
 
     txn_log_commit_result.map_err(|e| {
         IndexerError::PostgresWriteError(format!(
             "Failed updating transaction log in PostgresDB with tx digest {:?} and error {:?}",
-            txn_digest, e
+            checkpoint_sequence_number, e
         ))
     })
 }

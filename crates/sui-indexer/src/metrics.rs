@@ -18,15 +18,12 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 pub struct IndexerTransactionHandlerMetrics {
     pub total_transactions_received: IntCounter,
     pub total_transactions_processed: IntCounter,
-
-    pub total_transaction_page_fetch_attempt: IntCounter,
-    pub total_transaction_page_received: IntCounter,
-    pub total_transaction_page_committed: IntCounter,
-
+    pub total_transaction_checkpoint_processed: IntCounter,
     pub total_transaction_handler_error: IntCounter,
 
     pub db_write_request_latency: Histogram,
     pub full_node_read_request_latency: Histogram,
+    pub checkpoint_db_read_request_latency: Histogram,
 }
 
 impl IndexerTransactionHandlerMetrics {
@@ -44,21 +41,9 @@ impl IndexerTransactionHandlerMetrics {
                 registry,
             )
             .unwrap(),
-            total_transaction_page_fetch_attempt: register_int_counter_with_registry!(
-                "total_transaction_page_fetch_attempt",
-                "Total number of transaction page fetch attempt",
-                registry,
-            )
-            .unwrap(),
-            total_transaction_page_received: register_int_counter_with_registry!(
-                "total_transaction_page_received",
-                "Total number of transaction page received",
-                registry,
-            )
-            .unwrap(),
-            total_transaction_page_committed: register_int_counter_with_registry!(
-                "total_transaction_page_committed",
-                "Total number of transaction page committed",
+            total_transaction_checkpoint_processed: register_int_counter_with_registry!(
+                "total_transaction_checkpoint_processed",
+                "Total number of transactions processed",
                 registry,
             )
             .unwrap(),
@@ -78,6 +63,13 @@ impl IndexerTransactionHandlerMetrics {
             full_node_read_request_latency: register_histogram_with_registry!(
                 "transaction_full_node_read_request_latency",
                 "Time spent in waiting for a new transaction from the Full Node",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            checkpoint_db_read_request_latency: register_histogram_with_registry!(
+                "transaction_checkpoint_db_read_request_latency",
+                "Time spent in reading a transaction from the checkpoint db",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )

@@ -1,7 +1,7 @@
 CREATE TABLE transaction_logs (
     id SERIAL PRIMARY KEY,
-    next_cursor_tx_digest TEXT
+    next_checkpoint_sequence_number BIGINT NOT NULL
 );
 
-INSERT INTO transaction_logs (id, next_cursor_tx_digest) VALUES
-(1, NULL);
+INSERT INTO transaction_logs (id, next_checkpoint_sequence_number) 
+VALUES (1, 0);
