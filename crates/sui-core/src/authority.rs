@@ -27,7 +27,10 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use std::{collections::HashMap, pin::Pin};
+use std::{
+    collections::{BTreeMap, HashMap},
+    pin::Pin,
+};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_types::message_envelope::Message;
 use sui_types::parse_sui_struct_tag;
@@ -2573,10 +2576,22 @@ impl AuthorityState {
                 StakeAggregator::new(Arc::new(epoch_store.committee().clone()));
 
             let capabilities = epoch_store.get_capabilities();
+            let mut capabilities_map = BTreeMap::new();
+            for cap in capabilities.into_iter() {
+                capabilities_map.insert(cap.authority, cap);
+            }
 
             let mut non_supporting = 0;
-            for cap in capabilities.iter() {
-                let authority = &cap.authority;
+            for (authority, _) in &epoch_store.committee().voting_rights {
+                let Some(cap) = capabilities_map.get(authority) else {
+                    info!(
+                        "validator {:?} did not broadcast their capabilities",
+                        authority.concise(),
+                    );
+                    non_supporting += 1;
+                    continue;
+                };
+
                 if cap
                     .supported_protocol_versions
                     .is_version_supported(next_protocol_version)
