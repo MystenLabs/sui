@@ -15,16 +15,18 @@ More entry functions might be added in the future depending on the use cases.
 
 
 -  [Resource `Display`](#0x2_display_Display)
+-  [Resource `DisplayEditorCap`](#0x2_display_DisplayEditorCap)
 -  [Struct `DisplayCreated`](#0x2_display_DisplayCreated)
 -  [Struct `VersionUpdated`](#0x2_display_VersionUpdated)
 -  [Constants](#@Constants_0)
 -  [Function `add_owned`](#0x2_display_add_owned)
--  [Function `empty`](#0x2_display_empty)
+-  [Function `new`](#0x2_display_new)
 -  [Function `share`](#0x2_display_share)
 -  [Function `transfer`](#0x2_display_transfer)
+-  [Function `new_protected`](#0x2_display_new_protected)
 -  [Function `create_and_share`](#0x2_display_create_and_share)
 -  [Function `create_and_keep`](#0x2_display_create_and_keep)
--  [Function `create_with_fields`](#0x2_display_create_with_fields)
+-  [Function `new_with_fields`](#0x2_display_new_with_fields)
 -  [Function `update_version`](#0x2_display_update_version)
 -  [Function `add`](#0x2_display_add)
 -  [Function `add_multiple`](#0x2_display_add_multiple)
@@ -32,6 +34,7 @@ More entry functions might be added in the future depending on the use cases.
 -  [Function `remove`](#0x2_display_remove)
 -  [Function `version`](#0x2_display_version)
 -  [Function `fields`](#0x2_display_fields)
+-  [Function `create_internal`](#0x2_display_create_internal)
 -  [Function `add_internal`](#0x2_display_add_internal)
 
 
@@ -101,6 +104,42 @@ the property names have a priority over their types.
 </dt>
 <dd>
  Version that can only be updated manually by the Publisher.
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_display_DisplayEditorCap"></a>
+
+## Resource `DisplayEditorCap`
+
+A capability granted to the <code><a href="display.md#0x2_display_Display">Display</a></code> creator which allows the owner
+to perform add/edit/remove operations over the <code><a href="display.md#0x2_display_Display">Display</a></code> as well as
+publish new versions via <code>update_display</code>.
+
+
+<pre><code><b>struct</b> <a href="display.md#0x2_display_DisplayEditorCap">DisplayEditorCap</a>&lt;T: key&gt; <b>has</b> store, key
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>for: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
 </dd>
 </dl>
 
@@ -187,7 +226,7 @@ Version of Display got updated -
 
 <a name="0x2_display_ENotOwner"></a>
 
-For when T does not belong to package in Publisher.
+For when T does not belong to the package <code>Publisher</code>.
 
 
 <pre><code><b>const</b> <a href="display.md#0x2_display_ENotOwner">ENotOwner</a>: u64 = 0;
@@ -237,15 +276,15 @@ vector<u8> is the best type for that purpose.
 
 </details>
 
-<a name="0x2_display_empty"></a>
+<a name="0x2_display_new"></a>
 
-## Function `empty`
+## Function `new`
 
 Create an empty Display object. It can either be shared empty or filled
 with data right away via cheaper <code>set_owned</code> method.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_empty">empty</a>&lt;T: key&gt;(pub: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_new">new</a>&lt;T: key&gt;(pub: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;
 </code></pre>
 
 
@@ -254,20 +293,9 @@ with data right away via cheaper <code>set_owned</code> method.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_empty">empty</a>&lt;T: key&gt;(pub: &Publisher, ctx: &<b>mut</b> TxContext): <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_new">new</a>&lt;T: key&gt;(pub: &Publisher, ctx: &<b>mut</b> TxContext): <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt; {
     <b>assert</b>!(is_package&lt;T&gt;(pub), <a href="display.md#0x2_display_ENotOwner">ENotOwner</a>);
-
-    <b>let</b> uid = <a href="object.md#0x2_object_new">object::new</a>(ctx);
-
-    <a href="event.md#0x2_event_emit">event::emit</a>(<a href="display.md#0x2_display_DisplayCreated">DisplayCreated</a>&lt;T&gt; {
-        id: <a href="object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&uid)
-    });
-
-    <a href="display.md#0x2_display_Display">Display</a> {
-        id: uid,
-        fields: <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
-        version: 0,
-    }
+    <a href="display.md#0x2_display_create_internal">create_internal</a>(ctx)
 }
 </code></pre>
 
@@ -325,6 +353,33 @@ Transfer an object to an address to have it single owner.
 
 </details>
 
+<a name="0x2_display_new_protected"></a>
+
+## Function `new_protected`
+
+Protected method to create an empty Display for the <code>Collectible&lt;T&gt;</code>.
+Similar result can be achieved by freezing the Publisher for the
+Container package.
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="display.md#0x2_display_new_protected">new_protected</a>&lt;T: key&gt;(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="display.md#0x2_display_new_protected">new_protected</a>&lt;T: key&gt;(ctx: &<b>mut</b> TxContext): <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt; {
+    <a href="display.md#0x2_display_create_internal">create_internal</a>(ctx)
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_display_create_and_share"></a>
 
 ## Function `create_and_share`
@@ -342,7 +397,7 @@ Create a new empty Display<T> object and share it.
 
 
 <pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_create_and_share">create_and_share</a>&lt;T: key&gt;(pub: &Publisher, ctx: &<b>mut</b> TxContext) {
-    <a href="display.md#0x2_display_share">share</a>(<a href="display.md#0x2_display_empty">empty</a>&lt;T&gt;(pub, ctx))
+    <a href="display.md#0x2_display_share">share</a>(<a href="display.md#0x2_display_new">new</a>&lt;T&gt;(pub, ctx))
 }
 </code></pre>
 
@@ -367,7 +422,7 @@ Create a new empty Display<T> object and keep it.
 
 
 <pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_create_and_keep">create_and_keep</a>&lt;T: key&gt;(pub: &Publisher, ctx: &<b>mut</b> TxContext) {
-    <a href="transfer.md#0x2_transfer">transfer</a>(<a href="display.md#0x2_display_empty">empty</a>&lt;T&gt;(pub, ctx), sender(ctx))
+    <a href="transfer.md#0x2_transfer">transfer</a>(<a href="display.md#0x2_display_new">new</a>&lt;T&gt;(pub, ctx), sender(ctx))
 }
 </code></pre>
 
@@ -375,14 +430,14 @@ Create a new empty Display<T> object and keep it.
 
 </details>
 
-<a name="0x2_display_create_with_fields"></a>
+<a name="0x2_display_new_with_fields"></a>
 
-## Function `create_with_fields`
+## Function `new_with_fields`
 
 Create a new Display<T> object with a set of fields.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_create_with_fields">create_with_fields</a>&lt;T: key&gt;(pub: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>, fields: <a href="">vector</a>&lt;<a href="_String">string::String</a>&gt;, values: <a href="">vector</a>&lt;<a href="_String">string::String</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_new_with_fields">new_with_fields</a>&lt;T: key&gt;(pub: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>, fields: <a href="">vector</a>&lt;<a href="_String">string::String</a>&gt;, values: <a href="">vector</a>&lt;<a href="_String">string::String</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -391,14 +446,14 @@ Create a new Display<T> object with a set of fields.
 <summary>Implementation</summary>
 
 
-<pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_create_with_fields">create_with_fields</a>&lt;T: key&gt;(
+<pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_new_with_fields">new_with_fields</a>&lt;T: key&gt;(
     pub: &Publisher, fields: <a href="">vector</a>&lt;String&gt;, values: <a href="">vector</a>&lt;String&gt;, ctx: &<b>mut</b> TxContext
 ) {
     <b>let</b> len = <a href="_length">vector::length</a>(&fields);
     <b>assert</b>!(len == <a href="_length">vector::length</a>(&values), <a href="display.md#0x2_display_EVecLengthMismatch">EVecLengthMismatch</a>);
 
     <b>let</b> i = 0;
-    <b>let</b> <a href="display.md#0x2_display">display</a> = <a href="display.md#0x2_display_empty">empty</a>&lt;T&gt;(pub, ctx);
+    <b>let</b> <a href="display.md#0x2_display">display</a> = <a href="display.md#0x2_display_new">new</a>&lt;T&gt;(pub, ctx);
     <b>while</b> (i &lt; len) {
         <a href="display.md#0x2_display_add_internal">add_internal</a>(&<b>mut</b> <a href="display.md#0x2_display">display</a>, *<a href="_borrow">vector::borrow</a>(&fields, i), *<a href="_borrow">vector::borrow</a>(&values, i));
         i = i + 1;
@@ -603,6 +658,41 @@ Read the <code>fields</code> field.
 
 <pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_fields">fields</a>&lt;T: key&gt;(d: &<a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;): &VecMap&lt;String, String&gt; {
     &d.fields
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_display_create_internal"></a>
+
+## Function `create_internal`
+
+Internal function to create a new <code><a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;</code>.
+
+
+<pre><code><b>fun</b> <a href="display.md#0x2_display_create_internal">create_internal</a>&lt;T: key&gt;(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="display.md#0x2_display_create_internal">create_internal</a>&lt;T: key&gt;(ctx: &<b>mut</b> TxContext): <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt; {
+    <b>let</b> uid = <a href="object.md#0x2_object_new">object::new</a>(ctx);
+
+    <a href="event.md#0x2_event_emit">event::emit</a>(<a href="display.md#0x2_display_DisplayCreated">DisplayCreated</a>&lt;T&gt; {
+        id: <a href="object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&uid)
+    });
+
+    <a href="display.md#0x2_display_Display">Display</a> {
+        id: uid,
+        fields: <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
+        version: 0,
+    }
 }
 </code></pre>
 

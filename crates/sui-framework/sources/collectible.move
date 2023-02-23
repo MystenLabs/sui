@@ -7,10 +7,11 @@
 /// Other fields can be omitted by using an `option::none()`.
 /// Custom metadata can be created and passed into the `Collectible` but that would
 /// require additional work on the creator side to set up metadata creation methods.
-module nfts::collectible {
+module sui::collectible {
     use sui::object::{Self, UID};
     use sui::publisher::{Self, Publisher};
     use sui::tx_context::{TxContext};
+    use sui::display::{Self, Display};
     use std::option::{Self, Option};
     use std::string::String;
     use std::vector as vec;
@@ -43,7 +44,7 @@ module nfts::collectible {
         name: Option<String>,
         description: Option<String>,
         creator: Option<String>,
-        meta: Option<T>
+        meta: Option<T>,
     }
 
     /// Capability granted to the collection creator. Is guaranteed to be one
@@ -51,7 +52,7 @@ module nfts::collectible {
     /// Contains the cap - maximum amount of Collectibles minted.
     struct CollectionCreatorCap<phantom T: store> has key, store {
         id: UID,
-        cap: Option<u64>,
+        max_supply: Option<u64>,
         minted: u64
     }
 
@@ -64,18 +65,26 @@ module nfts::collectible {
     /// Type parameter `T` is phantom; so we constrain it via `Publisher` to be
     /// defined in the same module as the OTW. Aborts otherwise.
     public fun create_collection<OTW: drop, T: store>(
-        otw: OTW, cap: Option<u64>, ctx: &mut TxContext
-    ): (Publisher, CollectionCreatorCap<T>) {
+        otw: OTW, max_supply: Option<u64>, ctx: &mut TxContext
+    ): (
+        Publisher,
+        Display<Collectible<T>>,
+        CollectionCreatorCap<T>
+    ) {
         assert!(sui::types::is_one_time_witness(&otw), ENotOneTimeWitness);
 
         let pub = publisher::claim(otw, ctx);
         assert!(publisher::is_module<T>(&pub), EModuleDoesNotContainT);
 
-        (pub, CollectionCreatorCap<T> {
-            id: object::new(ctx),
-            minted: 0,
-            cap
-        })
+        (
+            pub,
+            display::new_protected<Collectible<T>>(ctx),
+            CollectionCreatorCap<T> {
+                id: object::new(ctx),
+                minted: 0,
+                max_supply,
+            }
+        )
     }
 
     /// Mint a single Collectible specifying the fields.
@@ -89,7 +98,7 @@ module nfts::collectible {
         meta: Option<T>,
         ctx: &mut TxContext
     ): Collectible<T> {
-        assert!(option::is_none(&cap.cap) || *option::borrow(&cap.cap) < cap.minted, ECapReached);
+        assert!(option::is_none(&cap.max_supply) || *option::borrow(&cap.max_supply) > cap.minted, ECapReached);
         cap.minted = cap.minted + 1;
 
         Collectible {
@@ -119,7 +128,7 @@ module nfts::collectible {
         let res = vec::empty();
 
         // perform a dummy check to make sure collection does not overflow
-        assert!(option::is_none(&cap.cap) || cap.minted + len < *option::borrow(&cap.cap), ECapReached);
+        assert!(option::is_none(&cap.max_supply) || cap.minted + len < *option::borrow(&cap.max_supply), ECapReached);
         assert!(option::is_none(&names) || vec::length(option::borrow(&names)) == len, EWrongNamesLength);
         assert!(option::is_none(&creators) || vec::length(option::borrow(&creators)) == len, EWrongCreatorsLength);
         assert!(option::is_none(&descriptions) || vec::length(option::borrow(&descriptions)) == len, EWrongDescriptionsLength);
@@ -190,34 +199,5 @@ module nfts::collectible {
         } else {
             option::some(vec::pop_back(option::borrow_mut(opt)))
         }
-    }
-}
-
-/// Boars Collection.
-/// Initializes a simple collection.
-module nfts::boars {
-    use sui::tx_context::{TxContext, sender};
-    use sui::transfer::transfer;
-    use nfts::collectible;
-    use std::option;
-
-    /// Limit how many objects can be created within this collection.
-    const CAP: u64 = 1000;
-
-    /// An OTW to use when creating a Publisher and CollectionCreatorCap
-    struct BOARS has drop {}
-
-    /// The type of the Collectible; used only as a phantom parameter, and
-    /// does not require abilities. The type use is authorized with the Publisher
-    /// object and is hard-capped to the module (rather than the package).
-    struct Boar has store {}
-
-    fun init(otw: BOARS, ctx: &mut TxContext) {
-        let (pub, creatorCap) = collectible::create_collection<BOARS, Boar>(
-            otw, option::some(CAP), ctx
-        );
-
-        transfer(pub, sender(ctx));
-        transfer(creatorCap, sender(ctx));
     }
 }
