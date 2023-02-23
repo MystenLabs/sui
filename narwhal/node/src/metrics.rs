@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use axum::{http::StatusCode, routing::get, Extension, Router};
-use config::{AuthorityIdentifier, WorkerId};
-use mysten_metrics::spawn_logged_monitored_task;
-use mysten_network::multiaddr::{to_socket_addr, Multiaddr};
+use config::WorkerId;
+use crypto::PublicKey;
+use multiaddr::Multiaddr;
+use mysten_network::multiaddr::to_socket_addr;
 use prometheus::{Registry, TextEncoder};
 use std::collections::HashMap;
 use tokio::task::JoinHandle;
@@ -39,14 +40,13 @@ pub fn start_prometheus_server(addr: Multiaddr, registry: &Registry) -> JoinHand
 
     let socket_addr = to_socket_addr(&addr).expect("failed to convert Multiaddr to SocketAddr");
 
-    spawn_logged_monitored_task!(
+    tokio::spawn(
         async move {
             axum::Server::bind(&socket_addr)
                 .serve(app.into_make_service())
                 .await
                 .unwrap();
-        },
-        "MetricsServerTask"
+        }
     )
 }
 
