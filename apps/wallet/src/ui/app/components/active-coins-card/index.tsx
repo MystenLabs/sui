@@ -51,7 +51,7 @@ export function ActiveCoinsCard({
 }) {
     const primaryAddress = useAppSelector(({ account }) => account.address);
 
-    // TODO: remove and use useGetCoinBalance hook, once it's merged
+    // TODO: remove and use useGetAllBalances hook, once it's merged
     const rpc = useRpc();
 
     const { data: coins, isLoading } = useQuery(
