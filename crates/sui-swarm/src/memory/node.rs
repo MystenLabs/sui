@@ -20,7 +20,7 @@ use super::container::Container;
 #[derive(Debug)]
 pub struct Node {
     container: Mutex<Option<Container>>,
-    config: NodeConfig,
+    pub config: NodeConfig,
     runtime_type: RuntimeType,
 }
 
@@ -69,7 +69,12 @@ impl Node {
 
     /// If this Node is currently running
     pub fn is_running(&self) -> bool {
-        self.container.lock().unwrap().is_some()
+        self.container
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|c| c.is_alive())
+            .unwrap_or(false)
     }
 
     /// Perform a health check on this Node by:

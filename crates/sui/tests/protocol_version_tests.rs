@@ -76,11 +76,7 @@ mod sim_only_tests {
         monitor_version_change(&test_cluster, 2 /* expected proto version */).await;
     }
 
-    // TODO: should_panic should be removed - however we need to add the ability to model intentional
-    // shutdown to the simulator first. Currently in this test the network proceeds to version 2 just
-    // fine, but the validator that doesn't support it panics.
     #[sim_test]
-    #[should_panic]
     async fn test_protocol_version_upgrade_one_laggard() {
         telemetry_subscribers::init_for_testing();
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
@@ -100,6 +96,20 @@ mod sim_only_tests {
             .unwrap();
 
         monitor_version_change(&test_cluster, 2 /* expected proto version */).await;
+
+        // verify that the node that didn't support the new version shut itself down.
+        for v in test_cluster.swarm.validators() {
+            if !v
+                .config
+                .supported_protocol_versions
+                .unwrap()
+                .is_version_supported(ProtocolVersion::new(2))
+            {
+                assert!(!v.is_running());
+            } else {
+                assert!(v.is_running());
+            }
+        }
     }
 
     #[sim_test]

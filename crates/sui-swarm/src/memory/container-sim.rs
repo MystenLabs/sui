@@ -88,7 +88,10 @@ impl Container {
     ///
     pub fn is_alive(&self) -> bool {
         if let Some(cancel_sender) = &self.cancel_sender {
-            cancel_sender.receiver_count() > 0
+            // unless the node is deleted, it keeps a reference to its start up function, which
+            // keeps 1 receiver alive. If the node is actually running, the cloned receiver will
+            // also be alive, and receiver count will be 2.
+            cancel_sender.receiver_count() > 1
         } else {
             false
         }
