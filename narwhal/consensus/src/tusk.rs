@@ -9,7 +9,10 @@ use config::{Committee, Stake};
 use fastcrypto::{hash::Hash, traits::EncodeDecodeBase64};
 use std::{collections::HashMap, sync::Arc};
 use tracing::debug;
-use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusReputationScore, ConsensusStore, Round, StoreResult};
+use types::{
+    Certificate, CertificateDigest, CommittedSubDag, ConsensusReputationScore, ConsensusStore,
+    Round,
+};
 
 #[cfg(any(test))]
 #[path = "tests/tusk_tests.rs"]
@@ -103,7 +106,7 @@ impl ConsensusProtocol for Tusk {
                 certificates: sequence,
                 leader: leader.clone(),
                 sub_dag_index: next_sub_dag_index,
-                reputation_score: ConsensusReputationScore::default() // TODO compute the scores for Tusk as well
+                reputation_score: ConsensusReputationScore::default(), // TODO compute the scores for Tusk as well
             };
 
             // Persist the update.

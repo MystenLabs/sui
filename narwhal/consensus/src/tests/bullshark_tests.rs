@@ -162,9 +162,11 @@ async fn dead_node() {
 
     // We should commit 4 leaders (rounds 2, 4, 6, and 8).
     let mut committed = Vec::new();
+    let mut committed_sub_dags: Vec<CommittedSubDag> = Vec::new();
     for _commit_rounds in 1..=4 {
         let committed_sub_dag = rx_output.recv().await.unwrap();
-        committed.extend(committed_sub_dag.certificates);
+        committed.extend(committed_sub_dag.certificates.clone());
+        committed_sub_dags.push(committed_sub_dag);
     }
 
     let mut sequence = committed.into_iter();
@@ -175,6 +177,20 @@ async fn dead_node() {
     }
     let output = sequence.next().unwrap();
     assert_eq!(output.round(), 8);
+
+    // AND check that the consensus scores are the expected ones
+    for (index, sub_dag) in committed_sub_dags.iter().enumerate() {
+        // For the first commit we don't expect to have any score updates
+        if index == 0 {
+            assert_eq!(sub_dag.reputation_score.total_authorities(), 0);
+        } else {
+            // For any other commit we expect to always have a +1 score for each authority, as everyone
+            // always votes for the leader
+            for (_, score) in &sub_dag.reputation_score.scores_per_authority {
+                assert_eq!(*score as usize, index);
+            }
+        }
+    }
 }
 
 // Run for 5 dag rounds. The leader of round 2 does not have enough support, but the leader of
@@ -287,7 +303,7 @@ async fn not_enough_support() {
     }
 
     // We should commit 2 leaders (rounds 2 and 4).
-    let committed_sub_dag = rx_output.recv().await.unwrap();
+    let committed_sub_dag: CommittedSubDag = rx_output.recv().await.unwrap();
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for _ in 1..=3 {
         let output = sequence.next().unwrap();
@@ -296,7 +312,10 @@ async fn not_enough_support() {
     let output = sequence.next().unwrap();
     assert_eq!(output.round(), 2);
 
-    let committed_sub_dag = rx_output.recv().await.unwrap();
+    // AND no scores exist for leader 2 , as this is the first commit
+    assert_eq!(committed_sub_dag.reputation_score.total_authorities(), 0);
+
+    let committed_sub_dag: CommittedSubDag = rx_output.recv().await.unwrap();
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for _ in 1..=3 {
         let output = sequence.next().unwrap();
@@ -308,6 +327,19 @@ async fn not_enough_support() {
     }
     let output = sequence.next().unwrap();
     assert_eq!(output.round(), 4);
+
+    // AND scores should be updated with everyone that has voted for leader of round 2.
+    // Only node 0 has voted for the leader of this round, so only 1 score should exist
+    // with value 1
+    assert_eq!(committed_sub_dag.reputation_score.total_authorities(), 1);
+
+    let node_0_name = &keys[0];
+    let score = committed_sub_dag
+        .reputation_score
+        .scores_per_authority
+        .get(&node_0_name)
+        .unwrap();
+    assert_eq!(*score, 1);
 }
 
 // Run for 7 dag rounds. Node 0 (the leader of round 2) is missing for rounds 1 and 2,
@@ -384,7 +416,7 @@ async fn missing_leader() {
     }
 
     // Ensure the commit sequence is as expected.
-    let committed_sub_dag = rx_output.recv().await.unwrap();
+    let committed_sub_dag: CommittedSubDag = rx_output.recv().await.unwrap();
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for _ in 1..=3 {
         let output = sequence.next().unwrap();
@@ -400,6 +432,9 @@ async fn missing_leader() {
     }
     let output = sequence.next().unwrap();
     assert_eq!(output.round(), 4);
+
+    // AND no scores exist since this is the first commit that has happened
+    assert_eq!(committed_sub_dag.reputation_score.total_authorities(), 0);
 }
 
 // Run for 11 dag rounds in ideal conditions (all nodes reference all other nodes).
@@ -502,6 +537,8 @@ async fn committed_round_after_restart() {
 /// from round 2. Certificate 2 should not get committed.
 #[tokio::test]
 async fn delayed_certificates_are_rejected() {
+    const CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS: u64 = 100;
+
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
@@ -519,7 +556,13 @@ async fn delayed_certificates_are_rejected() {
 
     let store = make_consensus_store(&test_utils::temp_dir());
     let mut state = ConsensusState::new(metrics.clone());
-    let mut bullshark = Bullshark::new(committee, store, gc_depth, metrics);
+    let mut bullshark = Bullshark::new(
+        committee,
+        store,
+        gc_depth,
+        metrics,
+        CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+    );
 
     // Populate DAG with the rounds up to round 5 so we trigger commits
     let mut all_subdags = Vec::new();
@@ -546,6 +589,8 @@ async fn delayed_certificates_are_rejected() {
 
 #[tokio::test]
 async fn submitting_equivocating_certificate_should_error() {
+    const CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS: u64 = 100;
+
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
@@ -563,7 +608,13 @@ async fn submitting_equivocating_certificate_should_error() {
 
     let store = make_consensus_store(&test_utils::temp_dir());
     let mut state = ConsensusState::new(metrics.clone());
-    let mut bullshark = Bullshark::new(committee.clone(), store, gc_depth, metrics);
+    let mut bullshark = Bullshark::new(
+        committee.clone(),
+        store,
+        gc_depth,
+        metrics,
+        CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+    );
 
     // Populate DAG with all the certificates
     for certificate in certificates.clone() {

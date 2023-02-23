@@ -19,8 +19,7 @@ use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{
     metered_channel, Certificate, CertificateDigest, CommittedSubDag, CommittedSubDagShell,
-    ConditionalBroadcastReceiver, ConsensusReputationScore, ConsensusStore, Round, StoreResult,
-    Timestamp,
+    ConditionalBroadcastReceiver, ConsensusReputationScore, ConsensusStore, Round, Timestamp,
 };
 
 #[cfg(test)]

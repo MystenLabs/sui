@@ -13,7 +13,7 @@ use fastcrypto::traits::EncodeDecodeBase64;
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::time::Instant;
 use tracing::{debug, trace};
-use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round, StoreResult};
+use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round};
 
 #[cfg(test)]
 #[path = "tests/bullshark_tests.rs"]
