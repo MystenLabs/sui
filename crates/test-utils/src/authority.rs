@@ -24,8 +24,15 @@ pub fn test_authority_configs() -> NetworkConfig {
 }
 
 pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkConfig {
-    let config_dir = tempfile::tempdir().unwrap().into_path();
     let rng = StdRng::from_seed([0; 32]);
+    test_authority_configs_with_rng(committee_size, rng)
+}
+
+pub fn test_authority_configs_with_rng<R: rand::CryptoRng + rand::RngCore>(
+    committee_size: usize,
+    rng: R,
+) -> NetworkConfig {
+    let config_dir = tempfile::tempdir().unwrap().into_path();
     let mut configs = NetworkConfig::generate_with_rng(&config_dir, committee_size, rng);
     for config in configs.validator_configs.iter_mut() {
         let parameters = &mut config.consensus_config.as_mut().unwrap().narwhal_config;

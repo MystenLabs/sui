@@ -272,6 +272,15 @@ each validator, emitted during epoch advancement.
 
 
 
+<a name="0x2_validator_set_EDUPLICATE_VALIDATOR"></a>
+
+
+
+<pre><code><b>const</b> <a href="validator_set.md#0x2_validator_set_EDUPLICATE_VALIDATOR">EDUPLICATE_VALIDATOR</a>: u64 = 2;
+</code></pre>
+
+
+
 <a name="0x2_validator_set_EINVALID_STAKE_ADJUSTMENT_AMOUNT"></a>
 
 
@@ -347,7 +356,7 @@ processed at the end of epoch.
     <b>assert</b>!(
         !<a href="validator_set.md#0x2_validator_set_contains_duplicate_validator">contains_duplicate_validator</a>(&self.active_validators, &<a href="validator.md#0x2_validator">validator</a>)
             && !<a href="validator_set.md#0x2_validator_set_contains_duplicate_validator">contains_duplicate_validator</a>(&self.pending_validators, &<a href="validator.md#0x2_validator">validator</a>),
-        0
+        <a href="validator_set.md#0x2_validator_set_EDUPLICATE_VALIDATOR">EDUPLICATE_VALIDATOR</a>
     );
     <a href="_push_back">vector::push_back</a>(&<b>mut</b> self.pending_validators, <a href="validator.md#0x2_validator">validator</a>);
     self.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(self);

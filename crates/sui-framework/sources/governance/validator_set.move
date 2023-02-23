@@ -76,6 +76,7 @@ module sui::validator_set {
     // Errors
     const ENON_VALIDATOR_IN_REPORT_RECORDS: u64 = 0;
     const EINVALID_STAKE_ADJUSTMENT_AMOUNT: u64 = 1;
+    const EDUPLICATE_VALIDATOR: u64 = 2;
 
     // ==== initialization at genesis ====
 
@@ -104,7 +105,7 @@ module sui::validator_set {
         assert!(
             !contains_duplicate_validator(&self.active_validators, &validator)
                 && !contains_duplicate_validator(&self.pending_validators, &validator),
-            0
+            EDUPLICATE_VALIDATOR
         );
         vector::push_back(&mut self.pending_validators, validator);
         self.next_epoch_validators = derive_next_epoch_validators(self);
