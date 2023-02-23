@@ -567,6 +567,21 @@ impl Object {
         }
     }
 
+    pub fn immutable_with_id_version_for_testing(id: ObjectID, version: SequenceNumber) -> Self {
+        let data = Data::Move(MoveObject {
+            type_: GasCoin::type_(),
+            has_public_transfer: true,
+            version,
+            contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
+        });
+        Self {
+            owner: Owner::Immutable,
+            data,
+            previous_transaction: TransactionDigest::genesis(),
+            storage_rebate: 0,
+        }
+    }
+
     /// make a test shared object.
     pub fn shared_for_testing() -> Object {
         thread_local! {
