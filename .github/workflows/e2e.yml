@@ -116,7 +116,9 @@ jobs:
         run: pnpm explorer playwright install --with-deps chromium
 
       - name: Set env
-        run: echo "E2E_RUN_LOCAL_NET_CMD=(RUST_LOG=\"consensus=off\" $(echo $PWD/target/debug/sui-test-validator))" >> $GITHUB_ENV
+        run: |
+          echo "E2E_RUN_LOCAL_NET_CMD=(RUST_LOG=\"consensus=off\" $(echo $PWD/target/debug/sui-test-validator))" >> $GITHUB_ENV
+          echo "VITE_SUI_BIN=$PWD/target/debug/sui" >> $GITHUB_ENV
 
       - name: Run TS SDK e2e tests
         if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' }}
