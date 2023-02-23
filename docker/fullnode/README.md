@@ -27,7 +27,9 @@ wget https://github.com/MystenLabs/sui/raw/main/crates/sui-config/data/fullnode-
 
 Get the latest version of the Sui DevNet genesis [genesis.blob](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob) file over the web or:
 
-```wget https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob```
+```shell
+wget https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
+```
 
 
 ## Start the fullnode
