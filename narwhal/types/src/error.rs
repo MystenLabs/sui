@@ -31,7 +31,8 @@ macro_rules! ensure {
 
 pub type DagResult<T> = Result<T, DagError>;
 
-/// Notification for certificate accepted.
+// Notification for certificate accepted.
+// TODO: use a lighter weight alternative to broadcast::channel.
 pub type AcceptNotification = Arc<Mutex<Option<broadcast::Receiver<()>>>>;
 
 #[derive(Clone, Debug, Error)]
@@ -134,4 +135,8 @@ impl<T> From<tokio::sync::mpsc::error::TrySendError<T>> for DagError {
             tokio::sync::mpsc::error::TrySendError::Closed(_) => DagError::ShuttingDown,
         }
     }
+}
+
+pub fn new_accept_notification(receiver: broadcast::Receiver<()>) -> AcceptNotification {
+    Arc::new(std::sync::Mutex::new(Some(receiver)))
 }
