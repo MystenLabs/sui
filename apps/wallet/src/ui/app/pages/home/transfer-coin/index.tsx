@@ -225,6 +225,9 @@ function TransferCoinPage() {
                     <ProgressBar
                         currentStep={currentStep}
                         stepsName={['Amount', 'Address']}
+                        changeStep={(step) =>
+                            step < currentStep ? setCurrentStep(step) : {}
+                        }
                     />
                     {steps[currentStep - 1]}
                 </Loading>
