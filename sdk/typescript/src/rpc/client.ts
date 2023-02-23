@@ -14,6 +14,8 @@ import {
   Struct,
   validate,
 } from 'superstruct';
+import { pkgVersion } from '../pkg-version';
+import { TARGETED_RPC_VERSION } from '../providers/json-rpc-provider';
 
 /**
  * An object defining headers to be passed to the RPC server
@@ -63,15 +65,10 @@ export class JsonRpcClient {
           body: request,
           headers: {
             'Content-Type': 'application/json',
+            'Client-Sdk-Type': 'typescript',
+            'Client-Sdk-Version': pkgVersion,
+            'Client-Target-Api-Version': TARGETED_RPC_VERSION,
             ...httpHeaders,
-            // TODO: uncomment this when 0.27.0 is released. We cannot do this now because
-            // the current Devnet(0.26.0) does not support the header. And we need to make
-            // a request to RPC to know which version it is running. Therefore, we do not
-            // add headers here, instead we add headers in the first call of the `getRpcApiVersion`
-            // method
-            //   'Client-Sdk-Type': 'typescript',
-            //   'Client-Sdk-Version': pkgVersion,
-            //   'Client-Target-Api-Version': TARGETED_RPC_VERSION,
           },
         };
 
