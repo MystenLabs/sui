@@ -67,7 +67,8 @@ impl ConsensusState {
             .max_by(|a, b| a.1.cmp(b.1))
             .map(|(_k, v)| v)
             .unwrap_or_else(|| &0);
-        let dag = Self::construct_dag_from_cert_store(cert_store, &recover_last_committed);
+        let dag = Self::construct_dag_from_cert_store(cert_store, &recover_last_committed)
+            .expect("error when recovering DAG from store");
         metrics.recovered_consensus_state.inc();
 
         Self {
@@ -83,7 +84,7 @@ impl ConsensusState {
     pub fn construct_dag_from_cert_store(
         cert_store: CertificateStore,
         last_committed: &HashMap<PublicKey, Round>,
-    ) -> Dag {
+    ) -> Result<Dag, ConsensusError> {
         let mut dag: Dag = BTreeMap::new();
         let min_committed_round = last_committed.values().min().cloned().unwrap_or(0);
 
@@ -97,7 +98,7 @@ impl ConsensusState {
 
         let mut num_certs = 0;
         for cert in &certificates {
-            if Self::try_insert_in_dag(&mut dag, last_committed, cert).is_ok() {
+            if Self::try_insert_in_dag(&mut dag, last_committed, cert)? {
                 info!("Inserted certificate: {:?}", cert);
                 num_certs += 1;
             }
@@ -108,7 +109,7 @@ impl ConsensusState {
             dag.len()
         );
 
-        dag
+        Ok(dag)
     }
 
     /// Returns true if certificate is inserted in the dag.
@@ -139,7 +140,7 @@ impl ConsensusState {
             (certificate.digest(), certificate.clone()),
         ) {
             // we want to error only if we try to insert a different certificate in the dag
-            if existing_certificate != certificate.clone() {
+            if existing_certificate.digest() != certificate.digest() {
                 return Err(ConsensusError::CertificateEquivocation(
                     certificate.clone(),
                     existing_certificate,
