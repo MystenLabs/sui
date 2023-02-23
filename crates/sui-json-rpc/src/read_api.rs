@@ -307,7 +307,7 @@ impl ReadApiServer for ReadApi {
             .try_into()?)
     }
 
-    fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber> {
+    async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber> {
         Ok(self
             .state
             .get_latest_checkpoint_sequence_number()
@@ -316,11 +316,11 @@ impl ReadApiServer for ReadApi {
             })?)
     }
 
-    fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
+    async fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
         Ok(self.get_checkpoint_internal(id)?)
     }
 
-    fn get_checkpoint_summary_by_digest(
+    async fn get_checkpoint_summary_by_digest(
         &self,
         digest: CheckpointDigest,
     ) -> RpcResult<CheckpointSummary> {
@@ -334,7 +334,7 @@ impl ReadApiServer for ReadApi {
             })?)
     }
 
-    fn get_checkpoint_summary(
+    async fn get_checkpoint_summary(
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> RpcResult<CheckpointSummary> {
@@ -342,7 +342,7 @@ impl ReadApiServer for ReadApi {
             .map_err(|e| anyhow!("Checkpoint summary based on sequence number: {sequence_number} was not found with error :{e}"))?)
     }
 
-    fn get_checkpoint_contents_by_digest(
+    async fn get_checkpoint_contents_by_digest(
         &self,
         digest: CheckpointContentsDigest,
     ) -> RpcResult<CheckpointContents> {
@@ -353,7 +353,7 @@ impl ReadApiServer for ReadApi {
         })?)
     }
 
-    fn get_checkpoint_contents(
+    async fn get_checkpoint_contents(
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> RpcResult<CheckpointContents> {

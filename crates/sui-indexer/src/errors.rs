@@ -5,7 +5,7 @@ use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
 use thiserror::Error;
 
-#[derive(Clone, Debug, Eq, Error, PartialEq)]
+#[derive(Debug, Error)]
 pub enum IndexerError {
     #[error("Indexer failed to convert timestamp to NaiveDateTime with error: `{0}`")]
     DateTimeParsingError(String),
@@ -20,7 +20,7 @@ pub enum IndexerError {
     InsertableParsingError(String),
 
     #[error("Indexer failed to build JsonRpcServer with error: `{0}`")]
-    JsonRpcServerError(String),
+    JsonRpcServerError(#[from] sui_json_rpc::error::Error),
 
     #[error("Indexer failed to find object mutations, which should never happen.")]
     ObjectMutationNotAvailable,
