@@ -31,8 +31,6 @@ impl ProtocolVersion {
     const MAX_ALLOWED: Self = Self(MAX_PROTOCOL_VERSION + 1);
 
     pub fn new(v: u64) -> Self {
-        assert!(v >= Self::MIN.0, "{:?}", v);
-        assert!(v <= Self::MAX_ALLOWED.0, "{:?}", v);
         Self(v)
     }
 
@@ -64,7 +62,7 @@ impl std::ops::Add<u64> for ProtocolVersion {
 /// Models the set of protocol versions supported by a validator.
 /// The `sui-node` binary will always use the SYSTEM_DEFAULT constant, but for testing we need
 /// to be able to inject arbitrary versions into SuiNode.
-#[derive(Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash)]
 pub struct SupportedProtocolVersions {
     min: ProtocolVersion,
     max: ProtocolVersion,

@@ -19,6 +19,7 @@ prometheus = "0.13.3"
 
 sui-config = { path = "../sui-config" }
 sui-node = { path = "../sui-node" }
+sui-protocol-config = { path = "../sui-protocol-config" }
 sui-types = { path = "../sui-types" }
 mysten-metrics = { path = "../mysten-metrics" }
 mysten-network.workspace = true

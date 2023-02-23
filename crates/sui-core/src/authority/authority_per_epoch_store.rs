@@ -23,10 +23,10 @@ use sui_types::committee::Committee;
 use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
-    CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
-    SenderSignedData, SharedInputObject, TransactionData, TransactionEffects,
-    TrustedExecutableTransaction, TrustedSignedTransactionEffects, VerifiedCertificate,
-    VerifiedExecutableTransaction, VerifiedSignedTransaction,
+    AuthorityCapabilities, CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey,
+    ConsensusTransactionKind, SenderSignedData, SharedInputObject, TransactionData,
+    TransactionEffects, TrustedExecutableTransaction, TrustedSignedTransactionEffects,
+    VerifiedCertificate, VerifiedExecutableTransaction, VerifiedSignedTransaction,
 };
 use sui_types::signature::GenericSignature;
 use tracing::{debug, info, trace, warn};
@@ -255,6 +255,9 @@ pub struct AuthorityEpochTables {
     // only for the checkpoint that the key references. Append-only, i.e.,
     // the accumulator is complete wrt the checkpoint
     pub state_hash_by_checkpoint: DBMap<CheckpointSequenceNumber, Accumulator>,
+
+    /// Record of the capabilities advertised by each authority.
+    authority_capabilities: DBMap<AuthorityName, AuthorityCapabilities>,
 }
 
 /// Parameters of the epoch fixed at epoch start.
@@ -974,6 +977,31 @@ impl AuthorityPerEpochStore {
         Ok(result)
     }
 
+    /// Record most recently advertised capabilities of all authorities
+    pub fn record_capabilities(&self, capabilities: &AuthorityCapabilities) -> SuiResult {
+        info!("received capabilities {:?}", capabilities);
+        let authority = &capabilities.authority;
+
+        // Read-compare-write pattern assumes we are only called from the consensus handler task.
+        if let Some(cap) = self.tables.authority_capabilities.get(authority)? {
+            if cap.generation >= capabilities.generation {
+                debug!(
+                    "ignoring new capabilities {:?} in favor of previous capabilities {:?}",
+                    capabilities, cap
+                );
+                return Ok(());
+            }
+        }
+        self.tables
+            .authority_capabilities
+            .insert(authority, capabilities)?;
+        Ok(())
+    }
+
+    pub fn get_capabilities(&self) -> Vec<AuthorityCapabilities> {
+        self.tables.authority_capabilities.values().collect()
+    }
+
     /// Returns Ok(true) if 2f+1 end of publish messages were recorded at this point
     pub fn record_end_of_publish(
         &self,
@@ -1464,6 +1492,16 @@ impl AuthorityPerEpochStore {
                     return Err(());
                 }
             }
+            ConsensusTransactionKind::CapabilityNotification(capabilities) => {
+                if transaction.sender_authority() != capabilities.authority {
+                    warn!(
+                        "CapabilityNotification authority {} does not match narwhal certificate source {}",
+                        capabilities.authority,
+                        transaction.certificate.origin()
+                    );
+                    return Err(());
+                }
+            }
         }
         Ok(VerifiedSequencedConsensusTransaction(transaction))
     }
@@ -1573,6 +1611,25 @@ impl AuthorityPerEpochStore {
             ConsensusTransactionKind::EndOfPublish(authority) => {
                 debug!("Received EndOfPublish from {:?}", authority.concise());
                 self.record_end_of_publish(*authority, transaction.key(), consensus_index)?;
+                Ok(None)
+            }
+            ConsensusTransactionKind::CapabilityNotification(capabilities) => {
+                let authority = capabilities.authority;
+                if self
+                    .get_reconfig_state_read_lock_guard()
+                    .should_accept_consensus_certs()
+                {
+                    debug!(
+                        "Recieved CapabilityNotification from {:?}",
+                        authority.concise()
+                    );
+                    self.record_capabilities(capabilities)?;
+                } else {
+                    debug!(
+                        "Ignoring CapabilityNotification from {:?} because of end of epoch",
+                        authority.concise()
+                    );
+                }
                 Ok(None)
             }
         }
