@@ -424,8 +424,7 @@ async fn test_object_owning_another_object() {
     )
     .await;
     assert!(effects.is_err());
-    assert!(format!("{effects:?}")
-        .contains("TransactionInputObjectsErrors { errors: [InvalidChildObjectArgument"));
+    assert!(format!("{effects:?}").contains("InvalidChildObjectArgument"));
 
     // Create another parent.
     let effects = call_move(
@@ -985,8 +984,7 @@ async fn test_entry_point_vector() {
     )
     .await;
     assert!(effects.is_err());
-    assert!(format!("{effects:?}")
-        .contains("TransactionInputObjectsErrors { errors: [InvalidChildObjectArgument"));
+    assert!(format!("{effects:?}").contains("InvalidChildObjectArgument"));
 }
 
 #[tokio::test]
@@ -1188,11 +1186,8 @@ async fn test_entry_point_vector_error() {
     .await;
     // should fail as we have the same object passed in vector and as a separate by-value argument
     assert!(matches!(
-        result
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        &SuiError::DuplicateObjectRefInput { .. }
+        UserInputError::try_from(result.unwrap_err()).unwrap(),
+        UserInputError::DuplicateObjectRefInput { .. }
     ));
 
     // mint an owned object
@@ -1234,11 +1229,8 @@ async fn test_entry_point_vector_error() {
     .await;
     // should fail as we have the same object passed in vector and as a separate by-reference argument
     assert!(matches!(
-        result
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        &SuiError::DuplicateObjectRefInput { .. }
+        UserInputError::try_from(result.unwrap_err()).unwrap(),
+        UserInputError::DuplicateObjectRefInput { .. }
     ));
 }
 
@@ -1362,8 +1354,7 @@ async fn test_entry_point_vector_any() {
     )
     .await;
     assert!(effects.is_err());
-    assert!(format!("{effects:?}")
-        .contains("TransactionInputObjectsErrors { errors: [InvalidChildObjectArgument"));
+    assert!(format!("{effects:?}").contains("InvalidChildObjectArgument"));
 }
 
 #[tokio::test]
@@ -1568,11 +1559,8 @@ async fn test_entry_point_vector_any_error() {
     .await;
     // should fail as we have the same object passed in vector and as a separate by-value argument
     assert!(matches!(
-        result
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        &SuiError::DuplicateObjectRefInput { .. }
+        UserInputError::try_from(result.unwrap_err()).unwrap(),
+        UserInputError::DuplicateObjectRefInput { .. }
     ));
 
     // mint an owned object
@@ -1613,11 +1601,8 @@ async fn test_entry_point_vector_any_error() {
     )
     .await;
     assert!(matches!(
-        result
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        &SuiError::DuplicateObjectRefInput { .. }
+        UserInputError::try_from(result.unwrap_err()).unwrap(),
+        UserInputError::DuplicateObjectRefInput { .. }
     ));
 }
 
@@ -1995,7 +1980,10 @@ async fn check_latest_object_ref(
         })
         .await;
     if expect_not_found {
-        assert!(matches!(response, Err(SuiError::ObjectNotFound { .. })));
+        assert!(matches!(
+            UserInputError::try_from(response.unwrap_err()).unwrap(),
+            UserInputError::ObjectNotFound { .. },
+        ));
     } else {
         assert_eq!(
             &response.unwrap().object.compute_object_reference(),

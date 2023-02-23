@@ -38,7 +38,12 @@ impl CoinReadApi {
     }
 
     async fn get_object(&self, object_id: &ObjectID) -> Result<Object, Error> {
-        Ok(self.state.get_object_read(object_id).await?.into_object()?)
+        Ok(self
+            .state
+            .get_object_read(object_id)
+            .await?
+            .into_object()
+            .map_err(Into::<SuiError>::into)?)
     }
 
     async fn get_coin(&self, coin_id: &ObjectID) -> Result<SuiCoin, Error> {

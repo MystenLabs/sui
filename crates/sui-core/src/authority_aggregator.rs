@@ -18,6 +18,7 @@ use sui_network::{
     default_mysten_network_config, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC,
 };
 use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignInfo};
+use sui_types::error::UserInputError;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemState;
@@ -820,10 +821,10 @@ where
                 // A long timeout before we hear back from a quorum
                 self.timeouts.pre_quorum_timeout,
             )
-            .await.map_err(|_state| SuiError::ObjectNotFound {
+            .await.map_err(|_state| UserInputError::ObjectNotFound {
                 object_id,
                 version: None,
-            })
+            }.into())
     }
 
     /// Get the latest system state object from the authorities.
@@ -839,7 +840,7 @@ where
             object
                 .data
                 .try_as_move()
-                .ok_or(SuiError::MovePackageAsObject {
+                .ok_or(UserInputError::MovePackageAsObject {
                     object_id: object.id(),
                 })?
                 .contents(),

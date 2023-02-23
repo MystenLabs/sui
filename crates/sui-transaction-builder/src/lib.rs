@@ -22,7 +22,7 @@ use sui_json_rpc_types::{RPCTransactionRequestParams, SuiData, SuiTypeTag};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SuiAddress};
 use sui_types::coin::{Coin, LockedCoin};
-use sui_types::error::SuiError;
+use sui_types::error::UserInputError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, InputObjectKind, MoveCall, ObjectArg, SingleTransactionKind, TransactionData,
@@ -194,7 +194,10 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         amounts: Vec<u64>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
-        fp_ensure!(!input_coins.is_empty(), SuiError::EmptyInputCoins.into());
+        fp_ensure!(
+            !input_coins.is_empty(),
+            UserInputError::EmptyInputCoins.into()
+        );
 
         let handles: Vec<_> = input_coins
             .into_iter()
@@ -225,7 +228,10 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         recipient: SuiAddress,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
-        fp_ensure!(!input_coins.is_empty(), SuiError::EmptyInputCoins.into());
+        fp_ensure!(
+            !input_coins.is_empty(),
+            UserInputError::EmptyInputCoins.into()
+        );
 
         let handles: Vec<_> = input_coins
             .into_iter()
@@ -538,7 +544,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
     ) -> anyhow::Result<TransactionData> {
         fp_ensure!(
             !single_transaction_params.is_empty(),
-            SuiError::InvalidBatchTransaction {
+            UserInputError::InvalidBatchTransaction {
                 error: "Batch Transaction cannot be empty".to_owned(),
             }
             .into()

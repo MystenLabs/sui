@@ -811,7 +811,7 @@ fn test_sponsored_transaction_validity_check() {
         )
         .validity_check()
         .unwrap_err(),
-        SuiError::UnsupportedSponsoredTransactionKind
+        UserInputError::UnsupportedSponsoredTransactionKind
     );
 
     // PaySui cannot be sponsored
@@ -827,7 +827,7 @@ fn test_sponsored_transaction_validity_check() {
         )
         .validity_check()
         .unwrap_err(),
-        SuiError::UnsupportedSponsoredTransactionKind
+        UserInputError::UnsupportedSponsoredTransactionKind
     );
 
     // PayAllSui cannot be sponsored
@@ -842,7 +842,7 @@ fn test_sponsored_transaction_validity_check() {
         )
         .validity_check()
         .unwrap_err(),
-        SuiError::UnsupportedSponsoredTransactionKind
+        UserInputError::UnsupportedSponsoredTransactionKind
     );
 
     // Batch is non-sponsorable
@@ -858,7 +858,7 @@ fn test_sponsored_transaction_validity_check() {
         )
         .validity_check()
         .unwrap_err(),
-        SuiError::UnsupportedSponsoredTransactionKind
+        UserInputError::UnsupportedSponsoredTransactionKind
     );
 }
 

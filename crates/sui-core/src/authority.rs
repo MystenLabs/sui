@@ -29,6 +29,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, pin::Pin};
 use sui_config::node::AuthorityStorePruningConfig;
+use sui_types::error::UserInputError;
 use sui_types::message_envelope::Message;
 use sui_types::parse_sui_struct_tag;
 use tap::TapFallible;
@@ -463,7 +464,7 @@ impl AuthorityState {
         &self,
         transaction: VerifiedTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> Result<VerifiedSignedTransaction, SuiError> {
+    ) -> SuiResult<VerifiedSignedTransaction> {
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
             epoch_store.as_ref(),
@@ -722,9 +723,9 @@ impl AuthorityState {
             .expect("notify_read_effects should return exactly 1 element"))
     }
 
-    #[instrument(level = "trace", skip_all)]
     async fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
-        self.database.check_locks_exist(owned_object_refs)
+        self.database
+            .check_owned_object_locks_exist(owned_object_refs)
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -1276,10 +1277,10 @@ impl AuthorityState {
             DynamicFieldType::DynamicObject => {
                 // Find the actual object from storage using the object id obtained from the wrapper.
                 let Some(object) = self.database.find_object_lt_or_eq_version(object_id, o.version()) else{
-                    return Err(SuiError::ObjectNotFound {
+                    return Err(UserInputError::ObjectNotFound {
                         object_id,
                         version: Some(o.version()),
-                    })
+                    }.into())
                 };
                 let version = object.version();
                 let digest = object.digest();
@@ -1389,9 +1390,11 @@ impl AuthorityState {
                 let (_, seq, _) = self
                     .get_latest_parent_entry(request.object_id)
                     .await?
-                    .ok_or(SuiError::ObjectNotFound {
-                        object_id: request.object_id,
-                        version: None,
+                    .ok_or_else(|| {
+                        Into::<SuiError>::into(UserInputError::ObjectNotFound {
+                            object_id: request.object_id,
+                            version: None,
+                        })
                     })?
                     .0;
                 seq
@@ -1402,9 +1405,11 @@ impl AuthorityState {
         let object = self
             .database
             .get_object_by_key(&request.object_id, requested_object_seq)?
-            .ok_or(SuiError::ObjectNotFound {
-                object_id: request.object_id,
-                version: Some(requested_object_seq),
+            .ok_or_else(|| {
+                Into::<SuiError>::into(UserInputError::ObjectNotFound {
+                    object_id: request.object_id,
+                    version: Some(requested_object_seq),
+                })
             })?;
 
         let layout = match request.object_format_options {
@@ -1843,10 +1848,11 @@ impl AuthorityState {
                     match self.database.get_object_by_key(object_id, obj_ref.1)? {
                         None => {
                             error!("Object with in parent_entry is missing from object store, datastore is inconsistent");
-                            Err(SuiError::ObjectNotFound {
+                            Err(UserInputError::ObjectNotFound {
                                 object_id: *object_id,
                                 version: Some(obj_ref.1),
-                            })
+                            }
+                            .into())
                         }
                         Some(object) => {
                             let layout = object.get_layout(
@@ -1921,10 +1927,11 @@ impl AuthorityState {
                     match self.database.get_object_by_key(object_id, obj_ref.1)? {
                         None => {
                             error!("Object with in parent_entry is missing from object store, datastore is inconsistent");
-                            Err(SuiError::ObjectNotFound {
+                            Err(UserInputError::ObjectNotFound {
                                 object_id: *object_id,
                                 version: Some(obj_ref.1),
-                            })
+                            }
+                            .into())
                         }
                         Some(object) => {
                             let layout = object.get_layout(
@@ -1948,9 +1955,11 @@ impl AuthorityState {
     ) -> Result<Owner, SuiError> {
         self.database
             .get_object_by_key(object_id, version)?
-            .ok_or(SuiError::ObjectNotFound {
-                object_id: *object_id,
-                version: Some(version),
+            .ok_or_else(|| {
+                Into::<SuiError>::into(UserInputError::ObjectNotFound {
+                    object_id: *object_id,
+                    version: Some(version),
+                })
             })
             .map(|o| o.owner)
     }
@@ -2470,8 +2479,8 @@ impl AuthorityState {
 
     /// Get the TransactionEnvelope that currently locks the given object, if any.
     /// Since object locks are only valid for one epoch, we also need the epoch_id in the query.
-    /// Returns SuiError::ObjectNotFound if no lock records for the given object can be found.
-    /// Returns SuiError::ObjectVersionUnavailableForConsumption if the object record is at a different version.
+    /// Returns UserInputError::ObjectNotFound if no lock records for the given object can be found.
+    /// Returns UserInputError::ObjectVersionUnavailableForConsumption if the object record is at a different version.
     /// Returns Some(VerifiedEnvelope) if the given ObjectRef is locked by a certain transaction.
     /// Returns None if the a lock record is initialized for the given ObjectRef but not yet locked by any transaction,
     ///     or cannot find the transaction in transaction table, because of data race etc.
@@ -2480,13 +2489,17 @@ impl AuthorityState {
         object_ref: &ObjectRef,
         epoch_store: &AuthorityPerEpochStore,
     ) -> Result<Option<VerifiedSignedTransaction>, SuiError> {
-        let lock_info = self.database.get_lock(*object_ref, epoch_store.epoch())?;
+        let lock_info = self
+            .database
+            .get_lock(*object_ref, epoch_store.epoch())
+            .map_err(Into::<SuiError>::into)?;
         let lock_info = match lock_info {
             ObjectLockStatus::LockedAtDifferentVersion { locked_ref } => {
-                return Err(SuiError::ObjectVersionUnavailableForConsumption {
+                return Err(UserInputError::ObjectVersionUnavailableForConsumption {
                     provided_obj_ref: *object_ref,
                     current_version: locked_ref.1,
-                })
+                }
+                .into());
             }
             ObjectLockStatus::Initialized => {
                 return Ok(None);

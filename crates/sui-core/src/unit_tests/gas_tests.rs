@@ -31,12 +31,8 @@ async fn test_tx_less_than_minimum_gas_budget() {
     let result = execute_transfer(*MAX_GAS_BUDGET, budget, false).await;
 
     assert_eq!(
-        result
-            .response
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        &SuiError::GasBudgetTooLow {
+        UserInputError::try_from(result.response.unwrap_err()).unwrap(),
+        UserInputError::GasBudgetTooLow {
             gas_budget: budget,
             min_budget: *MIN_GAS_BUDGET
         }
@@ -52,12 +48,8 @@ async fn test_tx_more_than_maximum_gas_budget() {
     let result = execute_transfer(*MAX_GAS_BUDGET, budget, false).await;
 
     assert_eq!(
-        result
-            .response
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        &SuiError::GasBudgetTooHigh {
+        UserInputError::try_from(result.response.unwrap_err()).unwrap(),
+        UserInputError::GasBudgetTooHigh {
             gas_budget: budget,
             max_budget: *MAX_GAS_BUDGET
         }
@@ -74,12 +66,8 @@ async fn test_tx_gas_balance_less_than_budget() {
     let gas_price = 1;
     let result = execute_transfer_with_price(gas_balance, budget, gas_price, false).await;
     assert_eq!(
-        result
-            .response
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        &SuiError::GasBalanceTooLowToCoverGasBudget {
+        UserInputError::try_from(result.response.unwrap_err()).unwrap(),
+        UserInputError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: gas_balance as u128,
             gas_budget: (gas_price * budget) as u128,
             gas_price
@@ -171,12 +159,8 @@ async fn test_native_transfer_gas_price_is_used() {
     let gas_price = u64::MAX;
     let result = execute_transfer_with_price(gas_balance, gas_budget, gas_price, true).await;
     assert_eq!(
-        result
-            .response
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        &SuiError::GasBalanceTooLowToCoverGasBudget {
+        UserInputError::try_from(result.response.unwrap_err()).unwrap(),
+        UserInputError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: (gas_balance as u128),
             gas_budget: (gas_budget as u128) * (gas_price as u128),
             gas_price
@@ -583,12 +567,8 @@ async fn test_tx_gas_price_less_than_reference_gas_price() {
     let gas_price = 0;
     let result = execute_transfer_with_price(gas_balance, budget, gas_price, false).await;
     assert_eq!(
-        result
-            .response
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        &SuiError::GasPriceUnderRGP {
+        UserInputError::try_from(result.response.unwrap_err()).unwrap(),
+        UserInputError::GasPriceUnderRGP {
             gas_price: 0,
             reference_gas_price: 1
         }
