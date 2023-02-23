@@ -46,7 +46,7 @@ arc-swap = { version = "1.5.1", features = ["serde"] }
 rand = "0.8.5"
 tempfile = "3.3.0"
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
-reqwest = { version = "0.11.13", features = ["json"] }
+reqwest = { version = "0.11.13", default_features= false, features = ["json", "rustls-tls"] }
 node = { path = "../node", package = "narwhal-node" }
 consensus = { path = "../consensus", package = "narwhal-consensus" }
 primary = { path = "../primary", package = "narwhal-primary" }

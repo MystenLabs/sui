@@ -141,7 +141,7 @@ export function ModuleFunction({
                         className={clsx(
                             '!rounded-md !text-bodySmall',
                             isConnected
-                                ? '!border !border-solid !border-steel !font-mono !text-hero-dark !shadow-sm !shadow-ebony/5'
+                                ? '!border !border-solid !border-steel !bg-white !font-mono !text-hero-dark !shadow-sm !shadow-ebony/5'
                                 : '!flex !flex-nowrap !items-center !gap-1 !bg-sui-dark !font-sans !text-sui-light hover:!bg-sui-dark hover:!text-white'
                         )}
                     />

@@ -7,7 +7,10 @@ use crate::node::{
     AuthorityKeyPairWithPath, KeyPairWithPath,
 };
 use crate::p2p::{P2pConfig, SeedPeer};
-use crate::{builder, genesis, utils, Config, NodeConfig, ValidatorInfo};
+use crate::{
+    builder::{self, ProtocolVersionsConfig, SupportedProtocolVersionsCallback},
+    genesis, utils, Config, NodeConfig, ValidatorInfo,
+};
 use fastcrypto::traits::KeyPair;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -16,11 +19,11 @@ use serde_with::serde_as;
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
+use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::committee::Committee;
 use sui_types::crypto::{
     get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, NetworkKeyPair, SuiKeyPair,
 };
-use sui_types::sui_serde::KeyPairBase64;
 
 /// This is a config that is used for testing or local use as it contains the config and keys for
 /// all validators
@@ -28,7 +31,6 @@ use sui_types::sui_serde::KeyPairBase64;
 #[derive(Debug, Deserialize, Serialize)]
 pub struct NetworkConfig {
     pub validator_configs: Vec<NodeConfig>,
-    #[serde_as(as = "Vec<KeyPairBase64>")]
     pub account_keys: Vec<AccountKeyPair>,
     pub genesis: genesis::Genesis,
 }
@@ -85,7 +87,7 @@ pub struct FullnodeConfigBuilder<'a> {
     rpc_port: Option<u16>,
     // port for admin interface
     admin_port: Option<u16>,
-    enable_pruner: bool,
+    supported_protocol_versions_config: ProtocolVersionsConfig,
 }
 
 impl<'a> FullnodeConfigBuilder<'a> {
@@ -99,7 +101,7 @@ impl<'a> FullnodeConfigBuilder<'a> {
             p2p_port: None,
             rpc_port: None,
             admin_port: None,
-            enable_pruner: true,
+            supported_protocol_versions_config: ProtocolVersionsConfig::Default,
         }
     }
 
@@ -158,8 +160,21 @@ impl<'a> FullnodeConfigBuilder<'a> {
         self
     }
 
-    pub fn set_enable_pruner(mut self, status: bool) -> Self {
-        self.enable_pruner = status;
+    pub fn with_supported_protocol_versions(mut self, c: SupportedProtocolVersions) -> Self {
+        self.supported_protocol_versions_config = ProtocolVersionsConfig::Global(c);
+        self
+    }
+
+    pub fn with_supported_protocol_version_callback(
+        mut self,
+        func: SupportedProtocolVersionsCallback,
+    ) -> Self {
+        self.supported_protocol_versions_config = ProtocolVersionsConfig::PerValidator(func);
+        self
+    }
+
+    pub fn with_supported_protocol_versions_config(mut self, c: ProtocolVersionsConfig) -> Self {
+        self.supported_protocol_versions_config = c;
         self
     }
 
@@ -223,8 +238,12 @@ impl<'a> FullnodeConfigBuilder<'a> {
         let rpc_port = self.rpc_port.unwrap_or_else(|| get_available_port(9000));
         let jsonrpc_server_url = format!("{}:{}", listen_ip, rpc_port);
         let json_rpc_address: SocketAddr = jsonrpc_server_url.parse().unwrap();
-        let mut authority_store_pruning_config = AuthorityStorePruningConfig::fullnode_config();
-        authority_store_pruning_config.enable_live_pruner = self.enable_pruner;
+
+        let supported_protocol_versions = match &self.supported_protocol_versions_config {
+            ProtocolVersionsConfig::Default => SupportedProtocolVersions::SYSTEM_DEFAULT,
+            ProtocolVersionsConfig::Global(v) => *v,
+            ProtocolVersionsConfig::PerValidator(func) => func(0, None),
+        };
 
         Ok(NodeConfig {
             protocol_key_pair: AuthorityKeyPairWithPath::new(protocol_key_pair),
@@ -246,10 +265,12 @@ impl<'a> FullnodeConfigBuilder<'a> {
             grpc_load_shed: None,
             grpc_concurrency_limit: None,
             p2p_config,
-            authority_store_pruning_config,
+            authority_store_pruning_config: AuthorityStorePruningConfig::fullnode_config(),
             end_of_epoch_broadcast_channel_capacity:
                 default_end_of_epoch_broadcast_channel_capacity(),
             checkpoint_executor_config: Default::default(),
+            metrics: None,
+            supported_protocol_versions: Some(supported_protocol_versions),
         })
     }
 }

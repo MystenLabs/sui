@@ -3,12 +3,8 @@
 
 import { fromB64, toB64 } from '@mysten/bcs';
 import sha3 from 'js-sha3';
-import {
-  bytesEqual,
-  PublicKey,
-  PublicKeyInitData,
-  SIGNATURE_SCHEME_TO_FLAG,
-} from './publickey';
+import { bytesEqual, PublicKey, PublicKeyInitData } from './publickey';
+import { SIGNATURE_SCHEME_TO_FLAG } from './signature';
 
 const SECP256K1_PUBLIC_KEY_SIZE = 33;
 
@@ -16,6 +12,7 @@ const SECP256K1_PUBLIC_KEY_SIZE = 33;
  * A Secp256k1 public key
  */
 export class Secp256k1PublicKey implements PublicKey {
+  static SIZE = SECP256K1_PUBLIC_KEY_SIZE;
   private data: Uint8Array;
 
   /**

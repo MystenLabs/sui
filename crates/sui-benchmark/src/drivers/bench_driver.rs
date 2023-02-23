@@ -29,7 +29,6 @@ use crate::ValidatorProxy;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
-use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::messages::VerifiedTransaction;
 use sysinfo::{CpuExt, System, SystemExt};
 use tokio::sync::Barrier;
@@ -140,10 +139,10 @@ async fn print_and_start_benchmark() -> &'static Instant {
     .await
 }
 
-#[derive(Debug)]
 pub struct BenchWorker {
     pub target_qps: u64,
     pub payload: Vec<Box<dyn Payload>>,
+    pub proxy: Arc<dyn ValidatorProxy + Send + Sync>,
 }
 
 pub struct BenchDriver {
@@ -216,6 +215,7 @@ impl BenchDriver {
                 workers.push(BenchWorker {
                     target_qps,
                     payload: payloads,
+                    proxy: proxy.clone(),
                 });
                 payloads = remaining;
                 qps -= target_qps;
@@ -241,8 +241,7 @@ async fn ctrl_c() -> std::io::Result<()> {
 impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
     async fn run(
         &self,
-        workloads: Vec<WorkloadInfo>,
-        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        proxy_workloads: Vec<(Arc<dyn ValidatorProxy + Send + Sync>, Vec<WorkloadInfo>)>,
         system_state_observer: Arc<SystemStateObserver>,
         registry: &Registry,
         show_progress: bool,
@@ -254,11 +253,13 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
         let (stress_stat_tx, mut stress_stat_rx) = tokio::sync::mpsc::channel(100);
         let mut bench_workers = vec![];
-        for workload in workloads.iter() {
-            bench_workers.extend(
-                self.make_workers(workload, proxy.clone(), system_state_observer.clone())
-                    .await,
-            );
+        for (proxy, workloads) in proxy_workloads.iter() {
+            for workload in workloads.iter() {
+                bench_workers.extend(
+                    self.make_workers(workload, proxy.clone(), system_state_observer.clone())
+                        .await,
+                );
+            }
         }
         let num_workers = bench_workers.len() as u64;
         if num_workers == 0 {
@@ -290,10 +291,6 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
             let cloned_barrier = barrier.clone();
             let metrics_cloned = metrics.clone();
 
-            // Make a per worker proxy, otherwise they all share the same task.
-            // For remote proxy, this call is a no-op
-            let proxy = Arc::new(proxy.clone_new());
-
             let runner = tokio::spawn(async move {
                 cloned_barrier.wait().await;
                 let start_time = print_and_start_benchmark().await;
@@ -320,7 +317,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                         _ = stat_interval.tick() => {
                             if tx_cloned
                                 .try_send(Stats {
-                                    id: i as usize,
+                                    id: i,
                                     num_no_gas,
                                     num_in_flight,
                                     num_submitted,
@@ -352,13 +349,13 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                 metrics_cloned.num_submitted.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
                                 let metrics_cloned = metrics_cloned.clone();
                                 // TODO: clone committee for each request is not ideal.
-                                let committee_cloned = Arc::new(proxy.clone_committee());
+                                let committee_cloned = Arc::new(worker.proxy.clone_committee());
                                 let start = Arc::new(Instant::now());
-                                let res = proxy
-                                    .execute_transaction(b.0.clone().into())
+                                let res = worker.proxy
+                                    .execute_bench_transaction(b.0.clone().into())
                                     .then(|res| async move  {
                                         match res {
-                                            Ok((cert, effects)) => {
+                                            Ok(effects) => {
                                                 let new_version = effects.mutated().iter().find(|(object_ref, _)| {
                                                     object_ref.0 == b.1.get_object_id()
                                                 }).map(|x| x.0).unwrap();
@@ -366,8 +363,8 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                                 metrics_cloned.latency_s.with_label_values(&[&b.1.get_workload_type().to_string()]).observe(latency.as_secs_f64());
                                                 metrics_cloned.num_success.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
                                                 metrics_cloned.num_in_flight.with_label_values(&[&b.1.get_workload_type().to_string()]).dec();
-                                                let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
-                                                auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
+                                                // let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
+                                                // auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
                                                 if let Some(sig_info) = effects.quorum_sig() {
                                                     sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc())
                                                 }
@@ -401,12 +398,12 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                 let start = Arc::new(Instant::now());
                                 let metrics_cloned = metrics_cloned.clone();
                                 // TODO: clone committee for each request is not ideal.
-                                let committee_cloned = Arc::new(proxy.clone_committee());
-                                let res = proxy
-                                    .execute_transaction(tx.clone().into())
+                                let committee_cloned = Arc::new(worker.proxy.clone_committee());
+                                let res = worker.proxy
+                                    .execute_bench_transaction(tx.clone().into())
                                 .then(|res| async move {
                                     match res {
-                                        Ok((cert, effects)) => {
+                                        Ok(effects) => {
                                             let new_version = effects.mutated().iter().find(|(object_ref, _)| {
                                                 object_ref.0 == payload.get_object_id()
                                             }).map(|x| x.0).unwrap();
@@ -414,8 +411,8 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                             metrics_cloned.latency_s.with_label_values(&[&payload.get_workload_type().to_string()]).observe(latency.as_secs_f64());
                                             metrics_cloned.num_success.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
                                             metrics_cloned.num_in_flight.with_label_values(&[&payload.get_workload_type().to_string()]).dec();
-                                            let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
-                                            auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
+                                            // let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
+                                            // auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
                                             if let Some(sig_info) = effects.quorum_sig() { sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc()) }
                                             NextOp::Response(Some((
                                                 latency,
@@ -462,7 +459,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                 // send stats one last time
                 if tx_cloned
                     .try_send(Stats {
-                        id: i as usize,
+                        id: i,
                         num_no_gas,
                         num_in_flight,
                         num_submitted,

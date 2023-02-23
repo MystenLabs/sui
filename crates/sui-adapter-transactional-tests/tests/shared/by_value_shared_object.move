@@ -40,8 +40,8 @@ module t1::o1 {
 
 //# run t2::o2::create
 
-//# view-object 107
+//# view-object 108
 
-//# run t1::o1::consume_o2 --args object(107)
+//# run t1::o1::consume_o2 --args object(108)
 
-//# run t2::o2::consume_o2 --args object(107)
+//# run t2::o2::consume_o2 --args object(108)

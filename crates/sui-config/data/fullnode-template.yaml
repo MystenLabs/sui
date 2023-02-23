@@ -3,8 +3,8 @@ db-path: "suidb"
 
 network-address: "/dns/localhost/tcp/8080/http"
 metrics-address: "0.0.0.0:9184"
+# this address is also used for web socket connections
 json-rpc-address: "0.0.0.0:9000"
-websocket-address: "0.0.0.0:9001"
 enable-event-processing: true
 
 genesis:
@@ -17,4 +17,4 @@ authority-store-pruning-config:
   objects-pruning-initial-delay-secs: 3600
   num-latest-epoch-dbs-to-retain: 3
   epoch-db-pruning-period-secs: 3600
-  enable-live-pruner: true
+  num-epochs-to-retain: 18446744073709551615

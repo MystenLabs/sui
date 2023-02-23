@@ -9,9 +9,7 @@ export function useGetTransaction(transactionId: string) {
     const rpc = useRpc();
     return useQuery(
         ['transactions-by-id', transactionId],
-        async () => {
-            return rpc.getTransactionWithEffects(transactionId);
-        },
+        async () => rpc.getTransactionWithEffects(transactionId),
         { enabled: !!transactionId }
     );
 }

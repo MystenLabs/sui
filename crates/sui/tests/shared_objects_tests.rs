@@ -3,9 +3,10 @@
 
 use futures::{stream, StreamExt};
 use sui_core::authority_client::AuthorityAPI;
+use sui_core::consensus_adapter::position_submit_certificate;
 use sui_types::messages::{
     CallArg, EntryArgumentError, EntryArgumentErrorKind, ExecutionFailureStatus, ExecutionStatus,
-    ObjectArg, ObjectInfoRequest, ObjectInfoRequestKind,
+    ObjectArg, ObjectInfoRequest,
 };
 use test_utils::authority::get_client;
 use test_utils::transaction::{
@@ -301,9 +302,20 @@ async fn shared_object_sync() {
         package_id,
         /* arguments */ Vec::default(),
     );
+
+    let (slow_validators, fast_validators): (Vec<_>, Vec<_>) =
+        configs.validator_set().iter().cloned().partition(|info| {
+            position_submit_certificate(
+                &configs.committee(),
+                &info.protocol_key(),
+                create_counter_transaction.digest(),
+            ) > 0
+        });
+
     let effects = submit_single_owner_transaction(
         create_counter_transaction.clone(),
-        &configs.validator_set()[1..],
+        //&configs.validator_set()[1..],
+        &slow_validators,
     )
     .await;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
@@ -318,28 +330,22 @@ async fn shared_object_sync() {
     // sent to.
     let has_counter = stream::iter(&configs.validator_set()[1..]).any(|config| async move {
         get_client(config)
-            .handle_object_info_request(ObjectInfoRequest {
-                object_id: counter_id,
-                request_kind: ObjectInfoRequestKind::LatestObjectInfo(None),
-            })
+            .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
+                counter_id, None,
+            ))
             .await
-            .unwrap()
-            .object()
-            .is_some()
+            .is_ok()
     });
 
     assert!(has_counter.await);
 
     // Check that the validator that wasn't sent the transaction is unaware of the counter object
-    assert!(get_client(&configs.validator_set()[0])
-        .handle_object_info_request(ObjectInfoRequest {
-            object_id: counter_id,
-            request_kind: ObjectInfoRequestKind::LatestObjectInfo(None),
-        })
+    assert!(get_client(&fast_validators[0])
+        .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
+            counter_id, None,
+        ))
         .await
-        .unwrap()
-        .object()
-        .is_none());
+        .is_err());
 
     // Make a transaction to increment the counter.
     let increment_counter_transaction = move_transaction(
@@ -380,7 +386,7 @@ async fn replay_shared_object_transaction() {
     let configs = test_authority_configs();
     let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
 
-    // Publish the move package to all authorities and get its packge ID
+    // Publish the move package to all authorities and get its package ID
     let package_id = publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set())
         .await
         .0;

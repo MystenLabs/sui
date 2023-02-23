@@ -10,6 +10,7 @@ import {
   string,
   union,
   tuple,
+  optional,
 } from 'superstruct';
 
 import { TransactionDigest, TransactionEffectsDigest } from './common';
@@ -27,6 +28,14 @@ export type CheckPointContentsDigest = Infer<typeof CheckPointContentsDigest>;
 export const CheckpointDigest = string();
 export type CheckpointDigest = Infer<typeof CheckpointDigest>;
 
+export const EndOfEpochData = object({
+  next_epoch_committee: array(tuple([string(), number()])),
+  next_epoch_protocol_version: number(),
+  // Need to remove optional after we hit the next network version
+  root_state_digest: optional(array(number())),
+});
+export type EndOfEpochData = Infer<typeof EndOfEpochData>;
+
 export const CheckpointSummary = object({
   epoch: number(),
   sequence_number: number(),
@@ -34,11 +43,9 @@ export const CheckpointSummary = object({
   content_digest: CheckPointContentsDigest,
   previous_digest: union([CheckpointDigest, literal(null)]),
   epoch_rolling_gas_cost_summary: GasCostSummary,
-  next_epoch_committee: union([
-    array(tuple([string(), number()])),
-    literal(null),
-  ]),
+  end_of_epoch_data: union([EndOfEpochData, literal(null)]),
   timestamp_ms: union([number(), literal(null)]),
+  version_specific_data: optional(array(number())),
 });
 export type CheckpointSummary = Infer<typeof CheckpointSummary>;
 

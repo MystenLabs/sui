@@ -1,0 +1,10 @@
+[package]
+name = "old-frenemies"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../../crates/sui-framework" }
+#Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+
+[addresses]
+frenemies = "0xac02d650b50456147c2c055c68acac7c545de0a7"

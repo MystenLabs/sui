@@ -111,7 +111,7 @@ pub async fn split_coin_and_pay(
         &gas.2,
         Some(gas_price),
     )?;
-    let (_, effects) = proxy.execute_transaction(verified_tx.into()).await?;
+    let effects = proxy.execute_transaction(verified_tx.into()).await?;
     let updated_gas = effects
         .mutated()
         .into_iter()
@@ -136,7 +136,7 @@ pub async fn split_coin_and_pay(
         &gas.2,
         Some(gas_price),
     );
-    let (_, effects) = proxy.execute_transaction(verified_tx.into()).await?;
+    let effects = proxy.execute_transaction(verified_tx.into()).await?;
     let address_map: HashMap<SuiAddress, Arc<AccountKeyPair>> = coin_configs
         .iter()
         .map(|c| (c.address, c.keypair.clone()))

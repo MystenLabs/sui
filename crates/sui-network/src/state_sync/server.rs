@@ -8,7 +8,7 @@ use std::sync::{Arc, RwLock};
 use sui_types::{
     base_types::ExecutionDigests,
     digests::{CheckpointContentsDigest, CheckpointDigest},
-    messages::{CertifiedTransaction, TransactionEffects},
+    messages::{Transaction, TransactionEffects},
     messages_checkpoint::{
         CertifiedCheckpointSummary as Checkpoint, CheckpointContents, CheckpointSequenceNumber,
         VerifiedCheckpoint,
@@ -110,29 +110,25 @@ where
     async fn get_transaction_and_effects(
         &self,
         request: Request<ExecutionDigests>,
-    ) -> Result<Response<Option<(CertifiedTransaction, TransactionEffects)>>, Status> {
+    ) -> Result<Response<Option<(Transaction, TransactionEffects)>>, Status> {
         let ExecutionDigests {
-            transaction,
-            effects,
+            transaction: tx_digest,
+            effects: effects_digest,
         } = request.into_inner();
 
-        let transaction = if let Some(transaction) = self
+        let Some(transaction) = self
             .store
-            .get_transaction(&transaction)
-            .map_err(|e| Status::internal(e.to_string()))?
+            .get_transaction(&tx_digest)
+            .map_err(|e| Status::internal(e.to_string()))? else
         {
-            transaction
-        } else {
             return Ok(Response::new(None));
         };
 
-        let effects = if let Some(effects) = self
+        let Some(effects) = self
             .store
-            .get_transaction_effects(&effects)
-            .map_err(|e| Status::internal(e.to_string()))?
+            .get_transaction_effects(&effects_digest)
+            .map_err(|e| Status::internal(e.to_string()))? else
         {
-            effects
-        } else {
             return Ok(Response::new(None));
         };
 

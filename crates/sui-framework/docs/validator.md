@@ -16,7 +16,6 @@
 -  [Function `adjust_stake_and_gas_price`](#0x2_validator_adjust_stake_and_gas_price)
 -  [Function `request_add_delegation`](#0x2_validator_request_add_delegation)
 -  [Function `request_withdraw_delegation`](#0x2_validator_request_withdraw_delegation)
--  [Function `cancel_delegation_request`](#0x2_validator_cancel_delegation_request)
 -  [Function `decrease_next_epoch_delegation`](#0x2_validator_decrease_next_epoch_delegation)
 -  [Function `request_set_gas_price`](#0x2_validator_request_set_gas_price)
 -  [Function `request_set_commission_rate`](#0x2_validator_request_set_commission_rate)
@@ -585,36 +584,6 @@ Request to withdraw delegation from the validator's staking pool, processed at t
 
 </details>
 
-<a name="0x2_validator_cancel_delegation_request"></a>
-
-## Function `cancel_delegation_request`
-
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_cancel_delegation_request">cancel_delegation_request</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> (<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_cancel_delegation_request">cancel_delegation_request</a>(
-    self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>,
-    staked_sui: StakedSui,
-    ctx: &<b>mut</b> TxContext,
-) {
-    <b>let</b> delegate_amount = <a href="staking_pool.md#0x2_staking_pool_staked_sui_amount">staking_pool::staked_sui_amount</a>(&staked_sui);
-    <a href="staking_pool.md#0x2_staking_pool_cancel_delegation_request">staking_pool::cancel_delegation_request</a>(&<b>mut</b> self.delegation_staking_pool, staked_sui, ctx);
-    self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation - delegate_amount;
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_validator_decrease_next_epoch_delegation"></a>
 
 ## Function `decrease_next_epoch_delegation`
@@ -834,8 +803,24 @@ Called by <code><a href="validator_set.md#0x2_validator_set">validator_set</a></
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_total_stake_amount">total_stake_amount</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): u64 {
+    <b>spec</b> {
+        // TODO: this should be provable rather than assumed
+        <b>assume</b> self.stake_amount + self.delegation_staking_pool.sui_balance &lt;= MAX_U64;
+    };
     self.stake_amount + <a href="staking_pool.md#0x2_staking_pool_sui_balance">staking_pool::sui_balance</a>(&self.delegation_staking_pool)
 }
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>aborts_if</b> <b>false</b>;
 </code></pre>
 
 

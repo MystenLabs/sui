@@ -5,6 +5,7 @@ expression: genesis.sui_system_object()
 info:
   id: "0x0000000000000000000000000000000000000005"
 epoch: 0
+protocol_version: 1
 validators:
   validator_stake: 1
   delegation_stake: 0
@@ -223,11 +224,10 @@ validators:
           - 101
           - 131
           - 137
-        name:
-          - 48
-        description: []
-        image_url: []
-        project_url: []
+        name: "0"
+        description: ""
+        image_url: ""
+        project_url: ""
         net_address: []
         consensus_address: []
         worker_address: []
@@ -476,11 +476,10 @@ validators:
         - 101
         - 131
         - 137
-      name:
-        - 48
-      description: []
-      image_url: []
-      project_url: []
+      name: "0"
+      description: ""
+      image_url: ""
+      project_url: ""
       net_address: []
       consensus_address: []
       worker_address: []
@@ -488,8 +487,6 @@ validators:
       next_epoch_delegation: 0
       next_epoch_gas_price: 1
       next_epoch_commission_rate: 0
-  pending_delegation_switches:
-    contents: []
 treasury_cap:
   value: 2
 storage_fund:
@@ -507,3 +504,4 @@ stake_subsidy:
   current_epoch_amount: 1000000
 safe_mode: false
 epoch_start_timestamp_ms: 10
+

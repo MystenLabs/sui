@@ -85,6 +85,7 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                             )
                             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                                 Arc::new(inbound_network_metrics),
+                                usize::MAX,
                             )))
                             .service(::sui_simulator::anemo::Router::new());
 
@@ -96,6 +97,7 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                             )
                             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                                 Arc::new(outbound_network_metrics),
+                                usize::MAX,
                             )))
                             .into_inner();
 

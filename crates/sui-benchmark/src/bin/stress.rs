@@ -1,16 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::*;
 
 use prometheus::Registry;
+use rand::seq::SliceRandom;
 
 use std::sync::Arc;
-
 use sui_benchmark::drivers::bench_driver::BenchDriver;
 use sui_benchmark::drivers::driver::Driver;
 use sui_benchmark::drivers::BenchmarkCmp;
 use sui_benchmark::drivers::BenchmarkStats;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 
 use sui_node::metrics;
 
@@ -50,6 +51,24 @@ use tokio::sync::Barrier;
 #[tokio::main]
 async fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
+
+    // TODO: query the network for the current protocol version.
+    let protocol_config = match opts.protocol_version {
+        Some(v) => ProtocolConfig::get_for_version(ProtocolVersion::new(v)),
+        None => ProtocolConfig::get_for_max_version(),
+    };
+
+    let max_num_new_move_object_ids = protocol_config.max_num_new_move_object_ids();
+    let max_num_transfered_move_object_ids = protocol_config.max_num_transfered_move_object_ids();
+
+    if (opts.gas_request_chunk_size > max_num_new_move_object_ids as u64)
+        || (opts.gas_request_chunk_size > max_num_transfered_move_object_ids as u64)
+    {
+        eprintln!(
+            "`gas-request-chunk-size` must be less than the maximum number of new IDs {max_num_new_move_object_ids} and the maximum number of transferred IDs {max_num_transfered_move_object_ids}",
+        );
+    }
+
     let mut config = telemetry_subscribers::TelemetryConfig::new();
     config.log_string = Some("warn".to_string());
     if !opts.log_path.is_empty() {
@@ -67,10 +86,18 @@ async fn main() -> Result<()> {
     let barrier = Arc::new(Barrier::new(2));
     let cloned_barrier = barrier.clone();
     let env = if opts.local { Env::Local } else { Env::Remote };
-    let benchmark_setup = env.setup(cloned_barrier, &registry, &opts).await?;
+    let bench_setup = env.setup(cloned_barrier, &registry, &opts).await?;
     let system_state_observer = {
-        let mut system_state_observer =
-            SystemStateObserver::new(benchmark_setup.validator_proxy.clone());
+        // Only need to get system state from one proxy as it is shared for the
+        // whole network.
+        let mut system_state_observer = SystemStateObserver::new(
+            bench_setup
+                .proxy_and_coins
+                .choose(&mut rand::thread_rng())
+                .context("Failed to get proxy for system state observer")?
+                .proxy
+                .clone(),
+        );
         system_state_observer.reference_gas_price.changed().await?;
         eprintln!(
             "Found reference gas price from system state object = {:?}",
@@ -97,12 +124,10 @@ async fn main() -> Result<()> {
             } else {
                 WorkloadConfiguration::Combined
             };
-            let workloads = workload_configuration
+
+            let proxy_workloads = workload_configuration
                 .configure(
-                    benchmark_setup.primary_gas,
-                    benchmark_setup.pay_coin,
-                    benchmark_setup.pay_coin_type_tag,
-                    benchmark_setup.validator_proxy.clone(),
+                    bench_setup.proxy_and_coins,
                     &opts,
                     system_state_observer.clone(),
                 )
@@ -116,8 +141,7 @@ async fn main() -> Result<()> {
             let driver = BenchDriver::new(opts.stat_collection_interval, stress_stat_collection);
             driver
                 .run(
-                    workloads,
-                    benchmark_setup.validator_proxy.clone(),
+                    proxy_workloads,
                     system_state_observer,
                     &registry_clone,
                     show_progress,
@@ -130,6 +154,15 @@ async fn main() -> Result<()> {
     if let Err(err) = joined {
         Err(anyhow!("Failed to join client runtime: {:?}", err))
     } else {
+        // send signal to stop the server runtime
+        bench_setup
+            .shutdown_notifier
+            .send(())
+            .expect("Failed to stop server runtime");
+        bench_setup
+            .server_handle
+            .join()
+            .expect("Failed to join the server handle");
         let (benchmark_stats, stress_stats) = joined.unwrap().unwrap();
         let benchmark_table = benchmark_stats.to_table();
         eprintln!("Benchmark Report:");

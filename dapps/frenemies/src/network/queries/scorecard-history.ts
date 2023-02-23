@@ -42,6 +42,7 @@ export function useScorecardHistory(scorecardId?: string | null) {
       enabled: !!scorecardId,
       refetchOnWindowFocus: false,
       refetchInterval: 60 * 1000,
+      staleTime: 20 * 1000,
     }
   );
 }

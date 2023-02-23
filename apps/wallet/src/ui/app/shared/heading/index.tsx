@@ -52,6 +52,10 @@ const headingStyles = cva(
                 none: '!leading-none',
                 tight: 'leading-tight',
             },
+            truncate: {
+                true: 'truncate',
+                false: '',
+            },
             /** Fix the header size, and disable responsive sizing of the heading. */
             fixed: { true: '', false: '' },
         },

@@ -243,6 +243,7 @@ function StakingCard() {
                 navigate(
                     `/receipt?${new URLSearchParams({
                         txdigest: txDigest,
+                        from: 'stake',
                     }).toString()}`
                 );
             } catch (e) {
@@ -286,7 +287,6 @@ function StakingCard() {
         <div className="flex flex-col flex-nowrap flex-grow w-full">
             <Loading
                 loading={loadingBalance || isLoading || validatorsIsloading}
-                className="flex justify-center w-full h-full items-center"
             >
                 <Formik
                     initialValues={initialValues}
@@ -396,7 +396,7 @@ function StakingCard() {
                                     }
                                 >
                                     {isSubmitting ? (
-                                        <LoadingIndicator className="border-white" />
+                                        <LoadingIndicator color="inherit" />
                                     ) : unstake ? (
                                         'Unstake Now'
                                     ) : (

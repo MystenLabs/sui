@@ -7,6 +7,7 @@ import {
     createEntityAdapter,
     createSlice,
 } from '@reduxjs/toolkit';
+import * as Sentry from '@sentry/react';
 
 import {
     accountCoinsSelector,
@@ -40,6 +41,7 @@ export const sendTokens = createAsyncThunk<
         { tokenTypeArg, amount, recipientAddress, gasBudget },
         { getState, extra: { api, background }, dispatch }
     ) => {
+        const transaction = Sentry.startTransaction({ name: 'send-tokens' });
         const state = getState();
         const activeAddress = activeAccountSelector(state);
         if (!activeAddress) {
@@ -47,18 +49,26 @@ export const sendTokens = createAsyncThunk<
         }
         const coins: SuiMoveObject[] = accountCoinsSelector(state);
         const signer = api.getSignerInstance(activeAddress, background);
-        const response = await signer.signAndExecuteTransaction(
-            await CoinAPI.newPayTransaction(
-                coins,
-                tokenTypeArg,
-                amount,
-                recipientAddress,
-                gasBudget
-            )
-        );
-        // TODO: better way to sync latest objects
-        dispatch(fetchAllOwnedAndRequiredObjects());
-        return response;
+        try {
+            transaction.setTag('coin', tokenTypeArg);
+            const response = await signer.signAndExecuteTransaction(
+                await CoinAPI.newPayTransaction(
+                    coins,
+                    tokenTypeArg,
+                    amount,
+                    recipientAddress,
+                    gasBudget
+                )
+            );
+            // TODO: better way to sync latest objects
+            dispatch(fetchAllOwnedAndRequiredObjects());
+            return response;
+        } catch (e) {
+            transaction.setTag('failure', true);
+            throw e;
+        } finally {
+            transaction.finish();
+        }
     }
 );
 

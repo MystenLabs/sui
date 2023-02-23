@@ -50,8 +50,15 @@ pub struct Opts {
     #[clap(long, parse(try_from_str), default_value = "true", global = true)]
     pub local: bool,
     /// Required in remote benchmark, namely when local = false
-    #[clap(long)]
-    pub fullnode_rpc_address: Option<String>,
+    /// Multiple fullnodes can be specified.
+    #[clap(
+        long,
+        multiple_occurrences = false,
+        multiple_values = true,
+        value_delimiter = ',',
+        global = true
+    )]
+    pub fullnode_rpc_addresses: Vec<String>,
     /// Whether to submit transactions to a fullnode.
     /// If true, use FullNodeProxy.
     /// Otherwise, use LocalValidatorAggregatorProxy.
@@ -107,6 +114,11 @@ pub struct Opts {
     // the end of the benchmark or periodically during a continuous run.
     #[clap(long, action, global = true)]
     pub stress_stat_collection: bool,
+
+    /// Start the stress test at a given protocol version. (Usually unnecessary if stress test is
+    /// built at the same commit as the validators.
+    #[clap(long, global = true)]
+    pub protocol_version: Option<u64>,
 }
 
 #[derive(Debug, Clone, Parser, Eq, PartialEq, EnumString)]

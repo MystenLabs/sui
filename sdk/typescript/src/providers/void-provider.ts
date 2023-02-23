@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { PublicKey, SignatureScheme } from '../cryptography/publickey';
 import { HttpHeaders } from '../rpc/client';
-import { Base64DataBuffer } from '../serialization/base64';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
   CertifiedTransaction,
@@ -50,7 +48,8 @@ import {
 } from '../types';
 import { Provider } from './provider';
 
-import { DynamicFieldPage } from '../types/dynamic_fields';
+import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
+import { SerializedSignature } from '../cryptography/signature';
 
 export class VoidProvider extends Provider {
   // API Version
@@ -180,10 +179,8 @@ export class VoidProvider extends Provider {
   }
 
   async executeTransaction(
-    _txnBytes: Base64DataBuffer,
-    _signatureScheme: SignatureScheme,
-    _signature: Base64DataBuffer,
-    _pubkey: PublicKey,
+    _txnBytes: Uint8Array,
+    _signature: SerializedSignature,
     _requestType: ExecuteTransactionRequestType,
   ): Promise<SuiExecuteTransactionResponse> {
     throw this.newError('executeTransaction with request Type');
@@ -191,14 +188,14 @@ export class VoidProvider extends Provider {
 
   devInspectTransaction(
     _sender: SuiAddress,
-    _txn: UnserializedSignableTransaction | string | Base64DataBuffer,
+    _txn: UnserializedSignableTransaction | string | Uint8Array,
     _gasPrice: number | null = null,
     _epoch: number | null = null,
   ): Promise<DevInspectResults> {
     throw this.newError('devInspectTransaction');
   }
 
-  dryRunTransaction(_txBytes: string): Promise<TransactionEffects> {
+  dryRunTransaction(_txBytes: Uint8Array): Promise<TransactionEffects> {
     throw this.newError('dryRunTransaction');
   }
 
@@ -212,7 +209,7 @@ export class VoidProvider extends Provider {
 
   getDynamicFieldObject(
     _parent_object_id: ObjectId,
-    _name: string,
+    _name: string | DynamicFieldName,
   ): Promise<GetObjectDataResponse> {
     throw this.newError('getDynamicFieldObject');
   }

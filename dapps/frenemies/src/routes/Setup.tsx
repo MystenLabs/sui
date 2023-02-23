@@ -1,36 +1,62 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { UnserializedSignableTransaction } from "@mysten/sui.js";
 import { useWalletKit } from "@mysten/wallet-kit";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useEffect, useId } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/Card";
 import { config } from "../config";
-import { useScorecard } from "../network/queries/scorecard";
+import { useLegacyScorecard, useScorecard } from "../network/queries/scorecard";
 import { SUI_SYSTEM_ID } from "../network/queries/sui-system";
 import provider from "../network/provider";
 import { useBalance } from "../network/queries/coin";
 import { Spinner } from "../components/Spinner";
+import { GameEnding, useGameOverRedirect } from "../components/GameEnding";
 
 const GAS_BUDGET = 20000n;
 
 export function Setup() {
+  useGameOverRedirect();
   const id = useId();
   const navigate = useNavigate();
   const { currentAccount, signAndExecuteTransaction } = useWalletKit();
-  const { data: scorecard, isSuccess } = useScorecard(currentAccount);
+  const { data: scorecard, isSuccess } = useScorecard();
+  const legacyScorecard = useLegacyScorecard();
   const { data: balance } = useBalance();
   const { data: gasPrice } = useQuery(
     ["gas-price"],
     () => provider.getReferenceGasPrice(),
     {
+      staleTime: 5 * 60 * 1000,
       refetchInterval: false,
       refetchOnWindowFocus: false,
     }
   );
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (
+      isSuccess &&
+      legacyScorecard.isSuccess &&
+      !scorecard &&
+      legacyScorecard.data
+    ) {
+      navigate("/migrate", { replace: true });
+    }
+  }, [isSuccess, scorecard, legacyScorecard]);
+
+  useEffect(() => {
+    if (!currentAccount) {
+      navigate("/connect", { replace: true });
+    }
+  }, [currentAccount]);
+
+  useEffect(() => {
+    if (isSuccess && scorecard) {
+      navigate("/", { replace: true });
+    }
+  }, [scorecard, isSuccess]);
 
   const createScorecard = useMutation(
     ["create-scorecard"],
@@ -39,46 +65,53 @@ export function Setup() {
         throw new Error("No connected wallet found");
       }
 
-      const checkTx: UnserializedSignableTransaction = {
-        kind: "moveCall",
-        data: {
-          packageObjectId: config.VITE_PKG,
-          module: "registry",
-          function: "is_registered",
-          typeArguments: [],
-          arguments: [config.VITE_REGISTRY, username],
-        },
-      };
-
-      const inspectRes = await provider.devInspectTransaction(
-        currentAccount,
-        checkTx,
-        gasPrice
+      const inspectResults = await Promise.all(
+        [
+          { pkg: config.VITE_OLD_PKG, registry: config.VITE_OLD_REGISTRY },
+          { pkg: config.VITE_PKG, registry: config.VITE_REGISTRY },
+        ].map(({ pkg, registry }) =>
+          provider.devInspectTransaction(
+            currentAccount,
+            {
+              kind: "moveCall",
+              data: {
+                packageObjectId: pkg,
+                module: "registry",
+                function: "is_registered",
+                typeArguments: [],
+                arguments: [registry, username],
+              },
+            },
+            gasPrice
+          )
+        )
       );
 
-      if ("Err" in inspectRes.results) {
-        throw new Error(
-          `Error happened while checking for uniqueness: ${inspectRes.results.Err}`
-        );
-      }
+      inspectResults.forEach(({ results }) => {
+        if ("Err" in results) {
+          throw new Error(
+            `Error happened while checking for uniqueness: ${results.Err}`
+          );
+        }
 
-      const {
-        Ok: [
-          [
-            ,
-            {
-              // @ts-ignore // not cool
-              returnValues: [[[exists]]],
-            },
+        const {
+          Ok: [
+            [
+              ,
+              {
+                // @ts-ignore // not cool
+                returnValues: [[[exists]]],
+              },
+            ],
           ],
-        ],
-      } = inspectRes.results;
+        } = results;
 
-      // Add a warning saying that the name is already taken.
-      // Depending on the the `exists` result: 0 or 1;
-      if (exists == 1) {
-        throw new Error(`Name: '${username}' is already taken`);
-      }
+        // Add a warning saying that the name is already taken.
+        // Depending on the the `exists` result: 0 or 1;
+        if (exists == 1) {
+          throw new Error(`Name: '${username}' is already taken`);
+        }
+      });
 
       await signAndExecuteTransaction({
         kind: "moveCall",
@@ -86,7 +119,12 @@ export function Setup() {
           packageObjectId: config.VITE_PKG,
           module: "frenemies",
           function: "register",
-          arguments: [username, config.VITE_REGISTRY, SUI_SYSTEM_ID],
+          arguments: [
+            username,
+            config.VITE_REGISTRY,
+            config.VITE_OLD_REGISTRY,
+            SUI_SYSTEM_ID,
+          ],
           typeArguments: [],
 
           // TODO: Fix in sui.js - add option to use bigint...
@@ -102,18 +140,6 @@ export function Setup() {
     }
   );
 
-  useEffect(() => {
-    if (!currentAccount) {
-      navigate("/connect", { replace: true });
-    }
-  }, [currentAccount]);
-
-  useEffect(() => {
-    if (isSuccess && scorecard) {
-      navigate("/", { replace: true });
-    }
-  }, [scorecard, isSuccess]);
-
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -125,12 +151,14 @@ export function Setup() {
       ? balance.balance > BigInt(gasPrice) + GAS_BUDGET
       : false;
 
-  if (!isSuccess || scorecard) {
+  if (!isSuccess || scorecard || legacyScorecard.isLoading) {
     return <Spinner />;
   }
 
   return (
     <div className="max-w-4xl w-full mx-auto text-center space-y-5">
+      <GameEnding />
+
       {balance && gasPrice && !hasEnoughCoins && (
         <Card variant="error" spacing="md">
           Your wallet does not have enough SUI to register for Frenemies.

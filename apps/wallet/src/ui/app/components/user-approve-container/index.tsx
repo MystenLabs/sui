@@ -113,7 +113,7 @@ function UserApproveContainer({
                     >
                         <span>
                             {submitting ? (
-                                <LoadingIndicator className={st.loader} />
+                                <LoadingIndicator color="inherit" />
                             ) : (
                                 approveTitle
                             )}

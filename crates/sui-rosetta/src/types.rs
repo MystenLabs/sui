@@ -11,6 +11,7 @@ use crate::operations::Operations;
 use crate::SUI;
 use axum::response::{IntoResponse, Response};
 use fastcrypto::encoding::Hex;
+use fastcrypto::traits::ToFromBytes;
 use serde::de::Error as DeError;
 use serde::{Deserialize, Serializer};
 use serde::{Deserializer, Serialize};
@@ -314,10 +315,29 @@ pub struct ConstructionDeriveRequest {
     pub public_key: PublicKey,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct PublicKey {
     pub hex_bytes: Hex,
     pub curve_type: CurveType,
+}
+
+impl From<SuiPublicKey> for PublicKey {
+    fn from(pk: SuiPublicKey) -> Self {
+        match pk {
+            SuiPublicKey::Ed25519(k) => PublicKey {
+                hex_bytes: Hex::from_bytes(k.as_bytes()),
+                curve_type: CurveType::Edwards25519,
+            },
+            SuiPublicKey::Secp256k1(k) => PublicKey {
+                hex_bytes: Hex::from_bytes(k.as_bytes()),
+                curve_type: CurveType::Secp256k1,
+            },
+            SuiPublicKey::Secp256r1(k) => PublicKey {
+                hex_bytes: Hex::from_bytes(k.as_bytes()),
+                curve_type: CurveType::Secp256r1,
+            },
+        }
+    }
 }
 
 impl TryInto<SuiAddress> for PublicKey {
@@ -359,7 +379,7 @@ impl IntoResponse for ConstructionDeriveResponse {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ConstructionPayloadsRequest {
     pub network_identifier: NetworkIdentifier,
     pub operations: Operations,
@@ -388,6 +408,7 @@ pub enum OperationType {
     MoveCall,
     EpochChange,
     Genesis,
+    ConsensusCommitPrologue,
 }
 
 impl From<&SuiTransactionKind> for OperationType {
@@ -402,6 +423,9 @@ impl From<&SuiTransactionKind> for OperationType {
             SuiTransactionKind::TransferSui(_) => OperationType::TransferSUI,
             SuiTransactionKind::ChangeEpoch(_) => OperationType::EpochChange,
             SuiTransactionKind::Genesis(_) => OperationType::Genesis,
+            SuiTransactionKind::ConsensusCommitPrologue(_) => {
+                OperationType::ConsensusCommitPrologue
+            }
         }
     }
 }
@@ -435,7 +459,7 @@ pub enum CoinAction {
     CoinSpent,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ConstructionPayloadsResponse {
     pub unsigned_transaction: Hex,
     pub payloads: Vec<SigningPayload>,
@@ -447,29 +471,30 @@ impl IntoResponse for ConstructionPayloadsResponse {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SigningPayload {
     pub account_identifier: AccountIdentifier,
+    // Rosetta need the hex string without `0x`, cannot use fastcrypto's Hex
     pub hex_bytes: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature_type: Option<SignatureType>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum SignatureType {
     Ed25519,
     Ecdsa,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct ConstructionCombineRequest {
     pub network_identifier: NetworkIdentifier,
     pub unsigned_transaction: Hex,
     pub signatures: Vec<Signature>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct Signature {
     pub signing_payload: SigningPayload,
     pub public_key: PublicKey,
@@ -477,7 +502,7 @@ pub struct Signature {
     pub hex_bytes: Hex,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ConstructionCombineResponse {
     pub signed_transaction: Hex,
 }
@@ -488,12 +513,12 @@ impl IntoResponse for ConstructionCombineResponse {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ConstructionSubmitRequest {
     pub network_identifier: NetworkIdentifier,
     pub signed_transaction: Hex,
 }
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct TransactionIdentifierResponse {
     pub transaction_identifier: TransactionIdentifier,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -511,7 +536,7 @@ pub struct TransactionIdentifier {
     pub hash: TransactionDigest,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ConstructionPreprocessRequest {
     pub network_identifier: NetworkIdentifier,
     pub operations: Operations,
@@ -536,7 +561,7 @@ impl From<TransactionMetadata> for PreprocessMetadata {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ConstructionPreprocessResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub options: Option<MetadataOptions>,
@@ -544,7 +569,7 @@ pub struct ConstructionPreprocessResponse {
     pub required_public_keys: Vec<AccountIdentifier>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct MetadataOptions {
     pub internal_operation: InternalOperation,
 }
@@ -560,7 +585,7 @@ pub struct ConstructionHashRequest {
     pub signed_transaction: Hex,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ConstructionMetadataRequest {
     pub network_identifier: NetworkIdentifier,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -569,7 +594,7 @@ pub struct ConstructionMetadataRequest {
     pub public_keys: Vec<PublicKey>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ConstructionMetadataResponse {
     pub metadata: ConstructionMetadata,
     #[serde(default)]
@@ -899,7 +924,7 @@ impl InternalOperation {
                         CallArg::ObjVec(
                             coins.into_iter().map(ObjectArg::ImmOrOwnedObject).collect(),
                         ),
-                        CallArg::Pure(bcs::to_bytes(&amount)?),
+                        CallArg::Pure(bcs::to_bytes(&Some(amount as u64))?),
                         CallArg::Pure(bcs::to_bytes(&validator)?),
                     ],
                 })

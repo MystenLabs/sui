@@ -30,7 +30,7 @@ export function Header() {
       </div>
 
       <div className="">
-        <ConnectButton className="!bg-white !text-steel-dark !px-5 !py-3 leading-none" />
+        {/* <ConnectButton className="!bg-white !text-steel-dark !px-5 !py-3 leading-none" /> */}
       </div>
     </header>
   );

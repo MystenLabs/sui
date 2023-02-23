@@ -7,53 +7,6 @@ use anemo::Result;
 use std::collections::HashSet;
 
 #[tokio::test]
-async fn get_external_address() -> Result<()> {
-    let config = P2pConfig::default();
-    let (_, server) = Builder::new().config(config).build_internal();
-
-    let address = "127.0.0.1:1337".parse::<std::net::SocketAddr>()?;
-    let request = Request::new(()).with_extension(address);
-    let response = server
-        .get_external_address(request)
-        .await
-        .unwrap()
-        .into_inner();
-    assert_eq!(response, address);
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn get_external_address_with_real_network() -> Result<()> {
-    let config = P2pConfig::default();
-    let (_builder, server) = Builder::new().config(config).build();
-    let network_1 = build_network(|router| router.add_rpc_service(server));
-
-    let config = P2pConfig::default();
-    let (_builder, server) = Builder::new().config(config).build();
-    let network_2 = build_network(|router| router.add_rpc_service(server));
-
-    let peer_id_2 = network_1.connect(network_2.local_addr()).await?;
-    let mut client_2 = DiscoveryClient::new(network_1.peer(peer_id_2).unwrap());
-    let response = client_2
-        .get_external_address(())
-        .await
-        .unwrap()
-        .into_inner();
-    assert_eq!(response, network_1.local_addr());
-
-    let mut client_1 = DiscoveryClient::new(network_2.peer(network_1.peer_id()).unwrap());
-    let response = client_1
-        .get_external_address(())
-        .await
-        .unwrap()
-        .into_inner();
-    assert_eq!(response, network_2.local_addr());
-
-    Ok(())
-}
-
-#[tokio::test]
 async fn get_known_peers() -> Result<()> {
     let config = P2pConfig::default();
     let (UnstartedDiscovery { state, .. }, server) = Builder::new().config(config).build_internal();
@@ -65,7 +18,6 @@ async fn get_known_peers() -> Result<()> {
     let our_info = NodeInfo {
         peer_id: PeerId([9; 32]),
         addresses: Vec::new(),
-        external_socket_address: None,
         timestamp_ms: now_unix(),
     };
     state.write().unwrap().our_info = Some(our_info.clone());
@@ -81,7 +33,6 @@ async fn get_known_peers() -> Result<()> {
     let other_peer = NodeInfo {
         peer_id: PeerId([13; 32]),
         addresses: Vec::new(),
-        external_socket_address: None,
         timestamp_ms: now_unix(),
     };
     state

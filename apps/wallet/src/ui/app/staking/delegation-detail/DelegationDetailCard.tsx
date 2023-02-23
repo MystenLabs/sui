@@ -4,6 +4,7 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import { useMemo } from 'react';
 
+import { Heading } from '../../shared/heading';
 import { calculateAPY } from '../calculateAPY';
 import { getStakingRewards } from '../getStakingRewards';
 import { StakeAmount } from '../home/StakeAmount';
@@ -157,13 +158,14 @@ export function DelegationDetailCard({
                                         }
                                     >
                                         <div className="flex gap-0.5 items-baseline">
-                                            <Text
+                                            <Heading
                                                 variant="heading4"
                                                 weight="semibold"
                                                 color="gray-90"
+                                                leading="none"
                                             >
                                                 {apy}
-                                            </Text>
+                                            </Heading>
 
                                             <Text
                                                 variant="subtitleSmall"
@@ -189,13 +191,14 @@ export function DelegationDetailCard({
                                         }
                                     >
                                         <div className="flex gap-0.5 items-baseline">
-                                            <Text
+                                            <Heading
                                                 variant="heading4"
                                                 weight="semibold"
                                                 color="gray-90"
+                                                leading="none"
                                             >
                                                 {commission}
-                                            </Text>
+                                            </Heading>
 
                                             <Text
                                                 variant="subtitleSmall"
@@ -209,12 +212,12 @@ export function DelegationDetailCard({
                                 </div>
                             </Card>
                         </div>
-                        <div className="flex gap-2.5  w-full my-3.75">
+                        <div className="flex gap-2.5 w-full my-3.75">
                             <Button
                                 size="large"
                                 mode="outline"
                                 href={stakeByValidatorAddress}
-                                className="border-bg-steel-dark border-solid w-full hover:border-bg-steel-darker text-steel-dark hover:text-steel-darker"
+                                className="border-bg-steel-dark border-solid w-full hover:border-bg-steel-darker"
                                 disabled={!stakingEnabled}
                             >
                                 <Icon
@@ -231,7 +234,7 @@ export function DelegationDetailCard({
                                         stakeByValidatorAddress +
                                         '&unstake=true'
                                     }
-                                    className="border-bg-steel-dark border-solid w-full hover:border-bg-steel-darker text-steel-dark hover:text-steel-darker"
+                                    className="border-bg-steel-dark border-solid w-full hover:border-bg-steel-darker"
                                 >
                                     <Icon
                                         icon={SuiIcons.Remove}

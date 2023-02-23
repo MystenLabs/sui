@@ -7,7 +7,7 @@ use std::{
 };
 
 use mysten_metrics::spawn_monitored_task;
-use sui_types::messages::VerifiedCertificate;
+use sui_types::messages::VerifiedExecutableTransaction;
 use tokio::{
     sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
     time::sleep,
@@ -29,7 +29,7 @@ const EXECUTION_FAILURE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 /// processing the transaction in a loop.
 pub async fn execution_process(
     authority_state: Weak<AuthorityState>,
-    mut rx_ready_certificates: UnboundedReceiver<VerifiedCertificate>,
+    mut rx_ready_certificates: UnboundedReceiver<VerifiedExecutableTransaction>,
     mut rx_execution_shutdown: oneshot::Receiver<()>,
 ) {
     info!("Starting pending certificates execution process.");
@@ -66,7 +66,8 @@ pub async fn execution_process(
             return;
         };
 
-        let epoch_store = authority.epoch_store();
+        // TODO: Ideally execution_driver should own a copy of epoch store and recreate each epoch.
+        let epoch_store = authority.load_epoch_store_one_call_per_task();
 
         let digest = *certificate.digest();
         debug!(?digest, "Pending certificate execution activated.");
@@ -90,13 +91,11 @@ pub async fn execution_process(
                     .await;
                 if let Err(e) = res {
                     if attempts == EXECUTION_MAX_ATTEMPTS {
-                        error!("Failed to execute certified transaction after {attempts} attempts! error={e} certificate={:?}", certificate);
-                        authority.metrics.execution_driver_execution_failures.inc();
-                        return;
+                        panic!("Failed to execute certified transaction {digest:?} after {attempts} attempts! error={e} certificate={certificate:?}");
                     }
                     // Assume only transient failure can happen. Permanent failure is probably
                     // a bug. There is nothing that can be done to recover from permanent failures.
-                    error!(tx_digest=?digest, "Failed to execute certified transaction! attempt {attempts}, {e}");
+                    error!(tx_digest=?digest, "Failed to execute certified transaction {digest:?}! attempt {attempts}, {e}");
                     sleep(EXECUTION_FAILURE_RETRY_INTERVAL).await;
                 } else {
                     break;

@@ -151,8 +151,8 @@ async fn create_and_run_subscriber(
 }
 
 impl<Network: SubscriberNetwork> Subscriber<Network> {
-    /// Returns the max amount of pending consensus messages we should expect.
-    const MAX_PENDING_PAYLOADS: usize = 32;
+    /// Returns the max number of sub-dag to fetch payloads concurrently.
+    const MAX_PENDING_PAYLOADS: usize = 1000;
 
     /// Main loop connecting to the consensus to listen to sequence messages.
     async fn run(
@@ -194,7 +194,6 @@ impl<Network: SubscriberNetwork> Subscriber<Network> {
                         error!("tx_notifier closed: {}", e);
                         return Ok(());
                     }
-
                 },
 
                 _ = self.rx_shutdown.receiver.recv() => {

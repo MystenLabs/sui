@@ -4,8 +4,10 @@
 use crate::{HeaderDigest, Round, TimestampMs, VoteDigest};
 use config::Epoch;
 use fastcrypto::hash::Digest;
+use std::sync::{Arc, Mutex};
 use store::StoreError;
 use thiserror::Error;
+use tokio::sync::broadcast;
 
 #[cfg(test)]
 #[path = "./tests/error_test.rs"]
@@ -28,6 +30,9 @@ macro_rules! ensure {
 }
 
 pub type DagResult<T> = Result<T, DagError>;
+
+/// Notification for certificate accepted.
+pub type AcceptNotification = Arc<Mutex<Option<broadcast::Receiver<()>>>>;
 
 #[derive(Clone, Debug, Error)]
 pub enum DagError {
@@ -109,8 +114,8 @@ pub enum DagError {
     #[error("Network error: {0}")]
     NetworkError(String),
 
-    #[error("Processing was suspended to retrieve dependencies")]
-    Suspended,
+    #[error("Processing was suspended to retrieve parent certificates")]
+    Suspended(AcceptNotification),
 
     #[error("System shutting down")]
     ShuttingDown,

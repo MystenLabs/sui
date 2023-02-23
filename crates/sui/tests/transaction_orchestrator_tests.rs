@@ -72,10 +72,14 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
     let ExecuteTransactionResponse::EffectsCert(result) = res;
-    let (_, _, executed_locally) = *result;
+    let (_, executed_locally) = *result;
     assert!(executed_locally);
 
-    assert!(node.state().get_transaction(digest).await.is_ok());
+    assert!(node
+        .state()
+        .get_executed_transaction_and_effects(digest)
+        .await
+        .is_ok());
 
     Ok(())
 }
@@ -175,7 +179,7 @@ async fn test_transaction_orchestrator_reconfig() {
 
     for handle in &authorities {
         handle
-            .with_async(|node| async { node.close_epoch().await.unwrap() })
+            .with_async(|node| async { node.close_epoch_for_testing().await.unwrap() })
             .await;
     }
 
@@ -224,7 +228,7 @@ async fn test_tx_across_epoch_boundaries() {
     // to make sure QD does not get quorum until reconfig
     for handle in authorities.iter().take(2) {
         handle
-            .with_async(|node| async { node.close_epoch().await.unwrap() })
+            .with_async(|node| async { node.close_epoch_for_testing().await.unwrap() })
             .await;
     }
 
@@ -246,7 +250,7 @@ async fn test_tx_across_epoch_boundaries() {
                 {
                     Ok(ExecuteTransactionResponse::EffectsCert(res)) => {
                         info!(?tx_digest, "tx result: ok");
-                        let (_, effects_cert, _) = *res;
+                        let (effects_cert, _) = *res;
                         result_tx.send(effects_cert).await.unwrap();
                     }
                     Err(QuorumDriverError::TimeoutBeforeFinality) => {
@@ -262,7 +266,7 @@ async fn test_tx_across_epoch_boundaries() {
     // Ask the remaining 2 validators to close epoch
     for handle in authorities.iter().skip(2) {
         handle
-            .with_async(|node| async { node.close_epoch().await.unwrap() })
+            .with_async(|node| async { node.close_epoch_for_testing().await.unwrap() })
             .await;
     }
 

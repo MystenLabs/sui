@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { fromB64, toB64 } from '@mysten/bcs';
+import { SerializedSignature } from '../cryptography/signature';
 import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import { Provider } from '../providers/provider';
 import { VoidProvider } from '../providers/void-provider';
 import { HttpHeaders } from '../rpc/client';
-import { Base64DataBuffer } from '../serialization/base64';
 import {
   deserializeTransactionBytesToTransactionData,
   ExecuteTransactionRequestType,
@@ -18,7 +19,8 @@ import {
   DevInspectResults,
   bcsForVersion,
 } from '../types';
-import { SignaturePubkeyPair, Signer } from './signer';
+import { IntentScope, messageWithIntent } from '../utils/intent';
+import { Signer } from './signer';
 import { RpcTxnDataSerializer } from './txn-data-serializers/rpc-txn-data-serializer';
 import {
   MoveCallTransaction,
@@ -33,11 +35,9 @@ import {
   PublishTransaction,
   SignableTransaction,
   UnserializedSignableTransaction,
+  SignedTransaction,
 } from './txn-data-serializers/txn-data-serializer';
 
-// See: sui/crates/sui-types/src/intent.rs
-// This is currently hardcoded with [IntentScope::TransactionData = 0, Version::V0 = 0, AppId::Sui = 0]
-const INTENT_BYTES = [0, 0, 0];
 ///////////////////////////////
 // Exported Abstracts
 export abstract class SignerWithProvider implements Signer {
@@ -53,7 +53,7 @@ export abstract class SignerWithProvider implements Signer {
   /**
    * Returns the signature for the data and the public key of the signer
    */
-  abstract signData(data: Base64DataBuffer): Promise<SignaturePubkeyPair>;
+  abstract signData(data: Uint8Array): Promise<SerializedSignature>;
 
   // Returns a new instance of the Signer, connected to provider.
   // This MAY throw if changing providers is not supported.
@@ -81,7 +81,7 @@ export abstract class SignerWithProvider implements Signer {
     let endpoint = '';
     let skipDataValidation = false;
     if (this.provider instanceof JsonRpcProvider) {
-      endpoint = this.provider.endpoints.fullNode;
+      endpoint = this.provider.connection.fullnode;
       skipDataValidation = this.provider.options.skipDataValidation!;
     }
     this.serializer =
@@ -89,56 +89,68 @@ export abstract class SignerWithProvider implements Signer {
   }
 
   /**
-   * Sign a transaction and submit to the Fullnode for execution. Only exists
-   * on Fullnode
+   * Sign a message using the keypair, with the `PersonalMessage` intent.
    */
-  async signAndExecuteTransaction(
-    transaction: Base64DataBuffer | SignableTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
-  ): Promise<SuiExecuteTransactionResponse> {
-    // Handle submitting raw transaction bytes:
-    if (
-      transaction instanceof Base64DataBuffer ||
-      transaction.kind === 'bytes'
-    ) {
-      const txBytes =
-        transaction instanceof Base64DataBuffer
-          ? transaction
-          : new Base64DataBuffer(transaction.data);
-      const intentMessage = new Uint8Array(
-        INTENT_BYTES.length + txBytes.getLength(),
-      );
-      intentMessage.set(INTENT_BYTES);
-      intentMessage.set(txBytes.getData(), INTENT_BYTES.length);
+  async signMessage(message: Uint8Array): Promise<SerializedSignature> {
+    return await this.signData(
+      messageWithIntent(IntentScope.PersonalMessage, message),
+    );
+  }
 
-      const dataToSign = new Base64DataBuffer(intentMessage);
-      const txBytesToSubmit = txBytes;
-      const sig = await this.signData(dataToSign);
-      return await this.provider.executeTransaction(
-        txBytesToSubmit,
-        sig.signatureScheme,
-        sig.signature,
-        sig.pubKey,
-        requestType,
-      );
-    }
-    return await this.signAndExecuteTransaction(
-      await this.serializer.serializeToBytes(
+  /**
+   * Sign a transaction.
+   */
+  async signTransaction(
+    transaction: Uint8Array | SignableTransaction,
+  ): Promise<SignedTransaction> {
+    let transactionBytes;
+    if (transaction instanceof Uint8Array || transaction.kind === 'bytes') {
+      transactionBytes =
+        transaction instanceof Uint8Array ? transaction : transaction.data;
+    } else {
+      transactionBytes = await this.serializer.serializeToBytes(
         await this.getAddress(),
         transaction,
         'Commit',
-      ),
+      );
+    }
+
+    const intentMessage = messageWithIntent(
+      IntentScope.TransactionData,
+      transactionBytes,
+    );
+    const signature = await this.signData(intentMessage);
+
+    return {
+      transactionBytes: toB64(transactionBytes),
+      signature,
+    };
+  }
+
+  /**
+   * Sign a transaction and submit to the Fullnode for execution.
+   */
+  async signAndExecuteTransaction(
+    transaction: Uint8Array | SignableTransaction,
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
+  ): Promise<SuiExecuteTransactionResponse> {
+    const { transactionBytes, signature } = await this.signTransaction(
+      transaction,
+    );
+
+    return await this.provider.executeTransaction(
+      transactionBytes,
+      signature,
       requestType,
     );
   }
 
   async getTransactionDigest(
-    tx: Base64DataBuffer | SignableTransaction,
+    tx: Uint8Array | SignableTransaction,
   ): Promise<string> {
-    let txBytes: Base64DataBuffer;
-    if (tx instanceof Base64DataBuffer || tx.kind === 'bytes') {
-      txBytes =
-        tx instanceof Base64DataBuffer ? tx : new Base64DataBuffer(tx.data);
+    let txBytes: Uint8Array;
+    if (tx instanceof Uint8Array || tx.kind === 'bytes') {
+      txBytes = tx instanceof Uint8Array ? tx : tx.data;
     } else {
       txBytes = await this.serializer.serializeToBytes(
         await this.getAddress(),
@@ -147,23 +159,9 @@ export abstract class SignerWithProvider implements Signer {
       );
     }
     const version = await this.provider.getRpcApiVersion();
-    const intentMessage = new Uint8Array(
-      INTENT_BYTES.length + txBytes.getLength(),
-    );
-    intentMessage.set(INTENT_BYTES);
-    intentMessage.set(txBytes.getData(), INTENT_BYTES.length);
-    const dataToSign = new Base64DataBuffer(intentMessage);
-
     const bcs = bcsForVersion(version);
-    const sig = await this.signData(dataToSign);
     const data = deserializeTransactionBytesToTransactionData(bcs, txBytes);
-    return generateTransactionDigest(
-      data,
-      sig.signatureScheme,
-      sig.signature,
-      sig.pubKey,
-      bcs,
-    );
+    return generateTransactionDigest(data, bcs);
   }
 
   /**
@@ -178,7 +176,7 @@ export abstract class SignerWithProvider implements Signer {
    * in the Sui System State object
    */
   async devInspectTransaction(
-    tx: UnserializedSignableTransaction | string | Base64DataBuffer,
+    tx: UnserializedSignableTransaction | string | Uint8Array,
     gasPrice: number | null = null,
     epoch: number | null = null,
   ): Promise<DevInspectResults> {
@@ -192,23 +190,25 @@ export abstract class SignerWithProvider implements Signer {
    * @returns The transaction effects
    */
   async dryRunTransaction(
-    tx: SignableTransaction | string | Base64DataBuffer,
+    tx: SignableTransaction | string | Uint8Array,
   ): Promise<TransactionEffects> {
     const address = await this.getAddress();
-    let dryRunTxBytes: string;
+    let dryRunTxBytes: Uint8Array;
     if (typeof tx === 'string') {
+      dryRunTxBytes = fromB64(tx);
+    } else if (tx instanceof Uint8Array) {
       dryRunTxBytes = tx;
-    } else if (tx instanceof Base64DataBuffer) {
-      dryRunTxBytes = tx.toString();
     } else {
       switch (tx.kind) {
         case 'bytes':
-          dryRunTxBytes = new Base64DataBuffer(tx.data).toString();
+          dryRunTxBytes = tx.data;
           break;
         default:
-          dryRunTxBytes = (
-            await this.serializer.serializeToBytes(address, tx, 'Commit')
-          ).toString();
+          dryRunTxBytes = await this.serializer.serializeToBytes(
+            address,
+            tx,
+            'Commit',
+          );
           break;
       }
     }

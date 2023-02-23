@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { PublicKey, SignatureScheme } from '../cryptography/publickey';
+import { SerializedSignature } from '../cryptography/signature';
 import { HttpHeaders } from '../rpc/client';
-import { Base64DataBuffer } from '../serialization/base64';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
   GetObjectDataResponse,
@@ -48,7 +47,7 @@ import {
   CommitteeInfo,
 } from '../types';
 
-import { DynamicFieldPage } from '../types/dynamic_fields';
+import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 
 ///////////////////////////////
 // Exported Abstracts
@@ -233,10 +232,8 @@ export abstract class Provider {
    * Gateway
    */
   abstract executeTransaction(
-    txnBytes: Base64DataBuffer,
-    signatureScheme: SignatureScheme,
-    signature: Base64DataBuffer,
-    pubkey: PublicKey,
+    txnBytes: Uint8Array | string,
+    signature: SerializedSignature,
     requestType: ExecuteTransactionRequestType,
   ): Promise<SuiExecuteTransactionResponse>;
 
@@ -328,7 +325,7 @@ export abstract class Provider {
    */
   abstract devInspectTransaction(
     sender: SuiAddress,
-    txn: UnserializedSignableTransaction | string | Base64DataBuffer,
+    txn: UnserializedSignableTransaction | string | Uint8Array,
     gasPrice: number | null,
     epoch: number | null,
   ): Promise<DevInspectResults>;
@@ -338,7 +335,7 @@ export abstract class Provider {
    * gas budget and the transaction effects
    * @param txBytes
    */
-  abstract dryRunTransaction(txBytes: string): Promise<TransactionEffects>;
+  abstract dryRunTransaction(txBytes: Uint8Array): Promise<TransactionEffects>;
 
   /**
    * Return the list of dynamic field objects owned by an object
@@ -359,7 +356,7 @@ export abstract class Provider {
    */
   abstract getDynamicFieldObject(
     parent_object_id: ObjectId,
-    name: string,
+    name: string | DynamicFieldName,
   ): Promise<GetObjectDataResponse>;
 
   /**

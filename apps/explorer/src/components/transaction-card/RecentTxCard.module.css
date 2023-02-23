@@ -3,7 +3,7 @@ div.txcardgrid h3 {
 }
 
 div.txcard {
-    @apply mt-5 mb-5 grid h-auto items-center border border-solid border-gray-45 bg-white bg-center pt-5 pb-5 pl-5 pr-5 text-left font-mono shadow-sm md:flex md:justify-around;
+    @apply mt-5 mb-5 grid h-auto items-center border border-gray-45 bg-white bg-center pt-5 pb-5 pl-5 pr-5 text-left font-mono shadow-sm md:flex md:justify-around;
 }
 
 div.txcardgridlarge {
@@ -55,11 +55,11 @@ div.txadd {
 }
 
 .txsearch input {
-    @apply mr-0 ml-0 rounded-none border border-solid border-gray-45 pl-2 pr-2 text-base shadow-sm;
+    @apply mr-0 ml-0 rounded-none border border-gray-45 pl-2 pr-2 text-base shadow-sm;
 }
 
 .txsearch [type='submit'] {
-    @apply h-16 w-20 border border-solid border-gray-45 bg-offblack text-offwhite shadow-sm hover:bg-sui hover:text-offblack md:w-1/12;
+    @apply h-16 w-20 border border-gray-45 bg-offblack text-offwhite shadow-sm hover:bg-sui hover:text-offblack md:w-1/12;
 }
 
 .txlatestresults .tab {
@@ -67,7 +67,7 @@ div.txadd {
 }
 
 .moretxbtn {
-    @apply flex w-full cursor-pointer items-center gap-[6px] border-0
+    @apply flex w-full cursor-pointer items-center gap-[6px]
    bg-transparent pl-0 pr-0
     text-[14px] font-semibold text-gray-90
     hover:text-gray-70;

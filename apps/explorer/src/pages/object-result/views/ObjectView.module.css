@@ -10,7 +10,7 @@
     }
 
     .textdetails > tbody > tr > td:first-child {
-        @apply w-[150px]  pr-6 font-medium text-gray-80;
+        @apply w-[220px]  pr-6 font-medium text-gray-80;
     }
 
     .textdetails > tbody > tr > td:nth-child(2) {
@@ -54,7 +54,7 @@ div.metadata > p {
 
 .desktoppreviewmedia,
 .mobilepreviewmedia {
-    @apply cursor-pointer border-0 bg-inherit p-0 text-[14px] font-semibold
+    @apply cursor-pointer bg-inherit p-0 text-[14px] font-semibold
   leading-[13px] tracking-[-0.02em] text-gray-80;
 }
 

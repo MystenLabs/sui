@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
 use std::ops::Neg;
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -12,11 +11,10 @@ use move_core_types::parser::parse_struct_tag;
 use move_core_types::value::MoveStructLayout;
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
-use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
+use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui_json_rpc_types::{
     type_and_fields_from_move_struct, EventPage, SuiEvent, SuiEventEnvelope, SuiEventFilter,
-    SuiExecuteTransactionResponse, SuiExecutionStatus, SuiMoveStruct, SuiMoveValue,
-    SuiTransactionFilter, SuiTransactionResponse,
+    SuiExecutionStatus, SuiMoveStruct, SuiMoveValue, SuiTransactionResponse,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
@@ -27,11 +25,12 @@ use sui_types::event::BalanceChangeType;
 use sui_types::event::Event;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
-    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    QuorumDriverResponse,
+    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse, GasData,
+    QuorumDriverResponse, SingleTransactionKind, TransactionData, TransactionKind, TransferObject,
 };
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
+use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     messages::TransactionInfoRequest,
@@ -51,6 +50,7 @@ use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
 use tokio::sync::Mutex;
 use tokio::time::timeout;
 use tokio::time::{sleep, Duration};
+use tracing::info;
 
 #[sim_test]
 async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
@@ -93,11 +93,86 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
     let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context, sender).await;
 
-    let (tx_cert, _effects_cert) =
-        increment_counter(context, sender, None, package_ref.0, counter_ref.0).await;
-    let digest = tx_cert.transaction_digest;
+    let response = increment_counter(context, sender, None, package_ref.0, counter_ref.0).await;
+    let digest = response.effects.transaction_digest;
     wait_for_tx(digest, node.state().clone()).await;
 
+    Ok(())
+}
+
+#[sim_test]
+async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let sender = test_cluster.get_address_0();
+    let sponsor = test_cluster.get_address_1();
+    let another_addr = test_cluster.get_address_2();
+
+    let context = &mut test_cluster.wallet;
+
+    // This makes sender send one coin to sponsor.
+    // The sent coin is used as sponsor gas in the following sponsored tx.
+    let (sent_coin, sender_, receiver, _, object_ref, _) = transfer_coin(context).await.unwrap();
+    assert_eq!(sender, sender_);
+    assert_eq!(sponsor, receiver);
+    let context: &WalletContext = &test_cluster.wallet;
+    let object_ref: ObjectRef = context
+        .get_object_ref(object_ref.0)
+        .await
+        .unwrap()
+        .into_object()
+        .unwrap()
+        .reference
+        .to_object_ref();
+    let gas_obj: ObjectRef = context
+        .get_object_ref(sent_coin)
+        .await
+        .unwrap()
+        .into_object()
+        .unwrap()
+        .reference
+        .to_object_ref();
+    info!("updated obj ref: {:?}", object_ref);
+    info!("updated gas ref: {:?}", gas_obj);
+
+    // Construct the sponsored transction
+    let kind = TransactionKind::Single(SingleTransactionKind::TransferObject(TransferObject {
+        recipient: another_addr,
+        object_ref,
+    }));
+    let tx_data = TransactionData::new_with_gas_data(
+        kind,
+        sender,
+        GasData {
+            payment: gas_obj,
+            owner: sponsor,
+            price: 100,
+            budget: 10000,
+        },
+    );
+
+    let tx = to_sender_signed_transaction_with_multi_signers(
+        tx_data,
+        vec![
+            context.config.keystore.get_key(&sender).unwrap(),
+            context.config.keystore.get_key(&sponsor).unwrap(),
+        ],
+    );
+
+    context.execute_transaction(tx).await.unwrap();
+
+    assert_eq!(
+        sponsor,
+        context
+            .get_object_ref(sent_coin)
+            .await
+            .unwrap()
+            .into_object()
+            .unwrap()
+            .owner
+            .get_owner_address()
+            .unwrap(),
+    );
     Ok(())
 }
 
@@ -112,9 +187,8 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     let context = &mut test_cluster.wallet;
 
     let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context, sender).await;
-    let (tx_cert, _effects_cert) =
-        increment_counter(context, sender, None, package_ref.0, counter_ref.0).await;
-    let digest = tx_cert.transaction_digest;
+    let response = increment_counter(context, sender, None, package_ref.0, counter_ref.0).await;
+    let digest = response.effects.transaction_digest;
 
     wait_for_tx(digest, node.state().clone()).await;
     let txes = node.state().get_transactions(
@@ -425,7 +499,7 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
         })
         .await?;
     // Check that it has been executed.
-    info.into_executed_for_testing();
+    info.status.into_effects_for_testing();
 
     Ok(())
 }
@@ -482,7 +556,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                 };
 
                 owned_tx_digest = if let SuiClientCommandResult::SplitCoin(resp) = res {
-                    Some(resp.certificate.transaction_digest)
+                    Some(resp.effects.transaction_digest)
                 } else {
                     panic!("transfer command did not return WalletCommandResult::Transfer");
                 };
@@ -497,7 +571,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                         counter_ref.0,
                     )
                     .await
-                    .0
+                    .effects
                     .transaction_digest,
                 );
             }
@@ -515,67 +589,6 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
         .flat_map(|(a, b)| std::iter::once(a).chain(std::iter::once(b)))
         .collect();
     wait_for_all_txes(digests, node.state().clone()).await;
-
-    Ok(())
-}
-
-#[sim_test]
-async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
-
-    // Start a new fullnode that is not on the write path
-    let fullnode = test_cluster.start_fullnode().await.unwrap();
-    let ws_client = fullnode.ws_client;
-    let node = fullnode.sui_node;
-
-    let context = &mut test_cluster.wallet;
-
-    let mut sub: Subscription<SuiTransactionResponse> = ws_client
-        .subscribe(
-            "sui_subscribeTransaction",
-            rpc_params![SuiTransactionFilter::Any],
-            "sui_unsubscribeTransaction",
-        )
-        .await
-        .unwrap();
-
-    let mut expected_digests = HashSet::new();
-    for _i in 0..3 {
-        let (_, _, _, digest, _, _) = transfer_coin(context).await?;
-        expected_digests.insert(digest);
-    }
-
-    wait_for_all_txes(
-        expected_digests.iter().cloned().collect(),
-        node.state().clone(),
-    )
-    .await;
-
-    // Wait for streaming
-    let mut actual_digests = HashSet::new();
-    for _ in &expected_digests {
-        match timeout(Duration::from_secs(3), sub.next()).await {
-            Ok(Some(Ok(resp))) => {
-                actual_digests.insert(resp.certificate.transaction_digest);
-            }
-            other => panic!(
-                "Failed to get Ok item from transaction streaming, but {:?}",
-                other
-            ),
-        };
-    }
-
-    // No more
-    match timeout(Duration::from_secs(3), sub.next()).await {
-        Err(_) => (),
-        other => panic!(
-            "Expect to time out because no new txs are coming in. Got {:?}",
-            other
-        ),
-    }
-
-    // Check the digests match
-    assert_eq!(expected_digests, actual_digests);
 
     Ok(())
 }
@@ -951,17 +964,18 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
     let ExecuteTransactionResponse::EffectsCert(res) = res;
-    let QuorumDriverResponse {
-        tx_cert: certified_txn,
-        effects_cert: certified_txn_effects,
-    } = rx.recv().await.unwrap().unwrap();
-    let (ct, cte, is_executed_locally) = *res;
-    assert_eq!(*ct.unwrap().digest(), digest);
-    assert_eq!(*certified_txn.digest(), digest);
+    let (
+        tx,
+        QuorumDriverResponse {
+            effects_cert: certified_txn_effects,
+        },
+    ) = rx.recv().await.unwrap().unwrap();
+    let (cte, is_executed_locally) = *res;
+    assert_eq!(*tx.digest(), digest);
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(is_executed_locally);
     // verify that the node has sequenced and executed the txn
-    node.state().get_transaction(digest).await
+    node.state().get_executed_transaction_and_effects(digest).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForLocalExecution: {:?}", digest, e));
 
     // Test WaitForEffectsCert
@@ -976,17 +990,18 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
     let ExecuteTransactionResponse::EffectsCert(res) = res;
-    let QuorumDriverResponse {
-        tx_cert: certified_txn,
-        effects_cert: certified_txn_effects,
-    } = rx.recv().await.unwrap().unwrap();
-    let (ct, cte, is_executed_locally) = *res;
-    assert_eq!(*ct.unwrap().digest(), digest);
-    assert_eq!(*certified_txn.digest(), digest);
+    let (
+        tx,
+        QuorumDriverResponse {
+            effects_cert: certified_txn_effects,
+        },
+    ) = rx.recv().await.unwrap().unwrap();
+    let (cte, is_executed_locally) = *res;
+    assert_eq!(*tx.digest(), digest);
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(!is_executed_locally);
     wait_for_tx(digest, node.state().clone()).await;
-    node.state().get_transaction(digest).await
+    node.state().get_executed_transaction_and_effects(digest).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForEffectsCert: {:?}", digest, e));
 
     Ok(())
@@ -1026,24 +1041,24 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
     let txns = make_transactions_with_wallet_context(context, txn_count).await;
     for txn in txns {
         let tx_digest = txn.digest();
-        let (tx_bytes, signature) = txn.to_tx_bytes_and_signature();
+        let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
         let params = rpc_params![
             tx_bytes,
-            signature,
+            signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution
         ];
-        let response: SuiExecuteTransactionResponse = jsonrpc_client
-            .request("sui_executeTransactionSerializedSig", params)
+        let response: SuiTransactionResponse = jsonrpc_client
+            .request("sui_submitTransaction", params)
             .await
             .unwrap();
 
-        let SuiExecuteTransactionResponse {
-            certificate: _,
+        let SuiTransactionResponse {
             effects,
             confirmed_local_execution,
+            ..
         } = response;
-        assert_eq!(&effects.effects.transaction_digest, tx_digest);
-        assert!(confirmed_local_execution);
+        assert_eq!(&effects.transaction_digest, tx_digest);
+        assert!(confirmed_local_execution.unwrap());
     }
     Ok(())
 }
@@ -1066,24 +1081,24 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
     let tx_digest = txn.digest();
 
     // Test request with ExecuteTransactionRequestType::WaitForLocalExecution
-    let (tx_bytes, signature) = txn.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
     let params = rpc_params![
         tx_bytes,
-        signature,
+        signatures,
         ExecuteTransactionRequestType::WaitForLocalExecution
     ];
-    let response: SuiExecuteTransactionResponse = jsonrpc_client
-        .request("sui_executeTransactionSerializedSig", params)
+    let response: SuiTransactionResponse = jsonrpc_client
+        .request("sui_submitTransaction", params)
         .await
         .unwrap();
 
-    let SuiExecuteTransactionResponse {
-        certificate: _,
+    let SuiTransactionResponse {
         effects,
         confirmed_local_execution,
+        ..
     } = response;
-    assert_eq!(&effects.effects.transaction_digest, tx_digest);
-    assert!(confirmed_local_execution);
+    assert_eq!(&effects.transaction_digest, tx_digest);
+    assert!(confirmed_local_execution.unwrap());
 
     let _response: SuiTransactionResponse = jsonrpc_client
         .request("sui_getTransaction", rpc_params![*tx_digest])
@@ -1091,24 +1106,24 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
         .unwrap();
 
     // Test request with ExecuteTransactionRequestType::WaitForEffectsCert
-    let (tx_bytes, signature) = txn.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
     let params = rpc_params![
         tx_bytes,
-        signature,
+        signatures,
         ExecuteTransactionRequestType::WaitForEffectsCert
     ];
-    let response: SuiExecuteTransactionResponse = jsonrpc_client
-        .request("sui_executeTransactionSerializedSig", params)
+    let response: SuiTransactionResponse = jsonrpc_client
+        .request("sui_submitTransaction", params)
         .await
         .unwrap();
 
-    let SuiExecuteTransactionResponse {
-        certificate: _,
+    let SuiTransactionResponse {
         effects,
         confirmed_local_execution,
+        ..
     } = response;
-    assert_eq!(&effects.effects.transaction_digest, tx_digest);
-    assert!(!confirmed_local_execution);
+    assert_eq!(&effects.transaction_digest, tx_digest);
+    assert!(!confirmed_local_execution.unwrap());
 
     Ok(())
 }
@@ -1143,9 +1158,10 @@ async fn get_past_obj_read_from_node(
 }
 
 #[sim_test]
+#[ignore]
 async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
-    let mut test_cluster = TestClusterBuilder::new().disable_pruning().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let node = test_cluster.fullnode_handle.sui_node.clone();
     let context = &mut test_cluster.wallet;
 
@@ -1181,8 +1197,8 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         .expect("Failed to transfer coins to recipient");
 
     // Delete the object
-    let (_tx_cert, effects) = delete_devnet_nft(context, &recipient, object_ref_v2).await;
-    assert_eq!(effects.status, SuiExecutionStatus::Success);
+    let response = delete_devnet_nft(context, &recipient, object_ref_v2).await;
+    assert_eq!(response.effects.status, SuiExecutionStatus::Success);
     sleep(Duration::from_secs(1)).await;
 
     // Now test get_object_read

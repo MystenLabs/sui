@@ -1,24 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { formatAddress } from '@mysten/sui.js';
 import cl from 'classnames';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { ImageIcon } from '_app/shared/image-icon';
 import { Text } from '_app/shared/text';
-import { IconTooltip } from '_app/shared/tooltip';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
-import { useMiddleEllipsis } from '_hooks';
-
-const TRUNCATE_MAX_LENGTH = 10;
-const TRUNCATE_PREFIX_LENGTH = 6;
 
 type ValidatorListItemProp = {
     selected?: boolean;
-    // APY can be N/A
-    apy: number;
+    label: string;
+    value: string | number;
     validatorName: string;
     validatorAddress: string;
     logo: string | null;
@@ -26,16 +22,11 @@ type ValidatorListItemProp = {
 export function ValidatorListItem({
     selected,
     validatorName,
-    apy,
+    label,
+    value,
     logo,
     validatorAddress,
 }: ValidatorListItemProp) {
-    const truncatedAddress = useMiddleEllipsis(
-        validatorAddress,
-        TRUNCATE_MAX_LENGTH,
-        TRUNCATE_PREFIX_LENGTH
-    );
-
     return (
         <AnimatePresence>
             <motion.div
@@ -82,39 +73,25 @@ export function ValidatorListItem({
                                 )}
                                 showIcon={false}
                             >
-                                {truncatedAddress}
+                                {formatAddress(validatorAddress)}
                             </ExplorerLink>
                         </div>
                     </div>
                     <div className="flex gap-0.5 items-center">
-                        {typeof apy !== 'string' && (
+                        <div className="flex gap-0.5 leading-none">
                             <Text
                                 variant="body"
                                 weight="semibold"
                                 color="steel-darker"
                             >
-                                {apy}
-                            </Text>
-                        )}
-                        <div className="flex gap-0.5 leading-none">
-                            <Text
-                                variant="subtitleSmall"
-                                weight="medium"
-                                color="steel-dark"
-                            >
-                                {typeof apy === 'string' ? apy : '% APY'}
+                                {value}
                             </Text>
                             <div
                                 className={cl(
                                     selected && '!opacity-100',
                                     'text-steel items-baseline text-subtitle h-3 flex opacity-0 group-hover:opacity-100'
                                 )}
-                            >
-                                <IconTooltip
-                                    tip="Annual Percentage Yield"
-                                    placement="top"
-                                />
-                            </div>
+                            ></div>
                         </div>
                     </div>
                 </div>

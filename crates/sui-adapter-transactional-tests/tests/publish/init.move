@@ -22,6 +22,6 @@ module Test::M1 {
     }
 }
 
-//# view-object 104
+//# view-object 105
 
-//# view-object 103
+//# view-object 104

@@ -27,7 +27,7 @@ pub trait AuthorityAPI {
     async fn handle_transaction(
         &self,
         transaction: Transaction,
-    ) -> Result<TransactionInfoResponse, SuiError>;
+    ) -> Result<HandleTransactionResponse, SuiError>;
 
     /// Execute a certificate.
     async fn handle_certificate(
@@ -94,7 +94,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
     async fn handle_transaction(
         &self,
         transaction: Transaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
+    ) -> Result<HandleTransactionResponse, SuiError> {
         self.client()
             .transaction(transaction)
             .await

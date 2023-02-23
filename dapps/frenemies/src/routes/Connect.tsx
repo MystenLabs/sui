@@ -5,6 +5,7 @@ import { ConnectButton, useWalletKit } from "@mysten/wallet-kit";
 import { ReactNode, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/Card";
+import { GameEnding, useGameOverRedirect } from "../components/GameEnding";
 
 function InfoItem({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -31,6 +32,7 @@ function InfoLink({ href, children }: { href: string; children: ReactNode }) {
 }
 
 export function Connect() {
+  useGameOverRedirect();
   const navigate = useNavigate();
   const { currentAccount } = useWalletKit();
 
@@ -42,13 +44,16 @@ export function Connect() {
 
   return (
     <div className="max-w-4xl w-full mx-auto text-center">
+      <div className="mb-8">
+        <GameEnding />
+      </div>
       <Card spacing="xl">
         <h1 className="text-steel-darker text-2xl leading-tight font-semibold mb-5">
           Welcome to Sui Frenemies game
         </h1>
         <img src="/capy_cowboy.svg" className="mb-5 h-64 w-64 mx-auto" />
         <p className="text-steel-darker text-sm max-w-md mx-auto">
-          The goal of the game is to stake Sui tokens to move your assigned
+          The goal of the game is to stake SUI tokens to move your assigned
           Validator to one of three designated positions: Friend (top third),
           Neutral (middle third), or Enemy (bottom third).
         </p>

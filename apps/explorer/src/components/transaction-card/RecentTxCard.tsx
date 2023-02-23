@@ -130,9 +130,7 @@ export function LatestTxCard({
 
     const countQuery = useQuery(
         ['transactions', 'count'],
-        () => {
-            return rpc.getTotalTransactionNumber();
-        },
+        () => rpc.getTotalTransactionNumber(),
         {
             refetchInterval: paused ? false : TRANSACTION_POLL_TIME,
         }

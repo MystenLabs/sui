@@ -106,14 +106,14 @@ impl CheckpointOutput for LogCheckpointOutput {
             summary.sequence_number, contents
         );
         info!(
-            "Creating checkpoint {:?} at epoch {}, sequence {}, previous digest {:?}, transactions count {}, content digest {:?}, next_epoch_committee {:?}",
+            "Creating checkpoint {:?} at epoch {}, sequence {}, previous digest {:?}, transactions count {}, content digest {:?}, end_of_epoch_data {:?}",
             summary.digest(),
             summary.epoch,
             summary.sequence_number,
             summary.previous_digest,
             contents.size(),
             summary.content_digest,
-            summary.next_epoch_committee,
+            summary.end_of_epoch_data,
         );
 
         Ok(())

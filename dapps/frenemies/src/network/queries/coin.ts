@@ -26,6 +26,7 @@ export function useBalance() {
     {
       enabled: !!currentAccount,
       refetchInterval: 60 * 1000,
+      staleTime: 2000,
     }
   );
 }

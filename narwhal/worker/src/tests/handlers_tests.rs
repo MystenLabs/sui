@@ -24,7 +24,7 @@ async fn synchronize() {
     let handler = PrimaryReceiverHandler {
         name,
         id,
-        committee: committee.into(),
+        committee,
         worker_cache,
         store: store.clone(),
         request_batch_timeout: Duration::from_secs(999),
@@ -94,7 +94,7 @@ async fn synchronize_when_batch_exists() {
     let handler = PrimaryReceiverHandler {
         name,
         id,
-        committee: committee.into(),
+        committee,
         worker_cache,
         store: store.clone(),
         request_batch_timeout: Duration::from_secs(999),
@@ -143,7 +143,7 @@ async fn delete_batches() {
     let handler = PrimaryReceiverHandler {
         name,
         id,
-        committee: committee.into(),
+        committee,
         worker_cache,
         store: store.clone(),
         request_batch_timeout: Duration::from_secs(999),

@@ -1,11 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use config::{SharedCommittee, Stake};
+use arc_swap::ArcSwap;
+use config::{Committee, Stake};
 use crypto::PublicKey;
 use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use tonic::{Request, Response, Status};
 use types::{
     Configuration, Empty, GetPrimaryAddressResponse, MultiAddrProto, NewEpochRequest,
@@ -15,14 +17,14 @@ use types::{
 pub struct NarwhalConfiguration {
     primary_address: Multiaddr,
     /// The committee
-    committee: SharedCommittee,
+    committee: Arc<ArcSwap<Committee>>,
 }
 
 impl NarwhalConfiguration {
-    pub fn new(primary_address: Multiaddr, committee: SharedCommittee) -> Self {
+    pub fn new(primary_address: Multiaddr, committee: Committee) -> Self {
         Self {
             primary_address,
-            committee,
+            committee: Arc::new(ArcSwap::from_pointee(committee)),
         }
     }
 

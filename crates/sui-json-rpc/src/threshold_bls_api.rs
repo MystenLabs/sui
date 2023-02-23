@@ -11,6 +11,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use move_core_types::value::MoveStructLayout;
 use std::sync::Arc;
+use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::SuiTBlsSignObjectCommitmentType::{ConsensusCommitted, FastPathCommitted};
 use sui_json_rpc_types::{
@@ -66,11 +67,11 @@ impl ThresholdBlsApi {
     async fn verify_finalized_effects(
         &self,
         object_id: ObjectID,
+        epoch_store: &AuthorityPerEpochStore,
         finalized_effects: &SuiFinalizedEffects,
     ) -> Result<(), Error> {
         match &finalized_effects.finality_info {
             SuiEffectsFinalityInfo::Certified(cert) => {
-                let epoch_store = self.state.epoch_store();
                 if cert.epoch != epoch_store.epoch() {
                     Err(anyhow!(
                         "Old effects certificate, check instead if committed by consensus"
@@ -124,15 +125,16 @@ impl ThresholdBlsApiServer for ThresholdBlsApi {
         object_id: ObjectID,
         commitment_type: SuiTBlsSignObjectCommitmentType,
     ) -> RpcResult<SuiTBlsSignRandomnessObjectResponse> {
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
         match commitment_type {
             ConsensusCommitted => self.verify_object_alive_and_committed(object_id).await?,
             FastPathCommitted(finalized_effects) => {
-                self.verify_finalized_effects(object_id, &finalized_effects)
+                self.verify_finalized_effects(object_id, &epoch_store, &finalized_effects)
                     .await?
             }
         };
         // Construct the message to be signed, as done in the Move code of the Randomness object.
-        let curr_epoch = self.state.epoch();
+        let curr_epoch = epoch_store.epoch();
         let msg = construct_tbls_randomness_object_message(curr_epoch, &object_id);
         // Sign the message using the mocked DKG keys.
         let (sk, _pk) = mocked_dkg::generate_full_key_pair(curr_epoch);

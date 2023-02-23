@@ -139,7 +139,7 @@ pub async fn publish_basics_package(
     path.push("../../sui_programmability/examples/basics");
     let transaction =
         create_publish_move_package_transaction(gas, path, sender, keypair, Some(gas_price));
-    let (_, effects) = proxy.execute_transaction(transaction.into()).await.unwrap();
+    let effects = proxy.execute_transaction(transaction.into()).await.unwrap();
     parse_package_ref(&effects.created()).unwrap()
 }
 
@@ -192,7 +192,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
             );
             let proxy_ref = proxy.clone();
             futures.push(async move {
-                if let Ok((_, effects)) = proxy_ref.execute_transaction(transaction.into()).await {
+                if let Ok(effects) = proxy_ref.execute_transaction(transaction.into()).await {
                     effects.created()[0].0
                 } else {
                     panic!("Failed to create shared counter!");

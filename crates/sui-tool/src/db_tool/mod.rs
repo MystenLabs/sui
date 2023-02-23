@@ -21,7 +21,7 @@ pub enum DbToolCommand {
 #[clap(rename_all = "kebab-case")]
 pub struct Dump {
     /// The type of store to dump
-    #[clap(long = "store")]
+    #[clap(long = "store", value_enum)]
     store_name: StoreName,
     /// The name of the table to dump
     #[clap(long = "table-name")]
