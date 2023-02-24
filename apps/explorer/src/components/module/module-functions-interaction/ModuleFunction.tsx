@@ -69,14 +69,16 @@ export function ModuleFunction({
     const execute = useMutation({
         mutationFn: async ({ params, types }: TypeOf<typeof argsSchema>) => {
             const result = await signAndExecuteTransaction({
-                kind: 'moveCall',
-                data: {
-                    packageObjectId: packageId,
-                    module: moduleName,
-                    function: functionName,
-                    arguments: params || [],
-                    typeArguments: types || [],
-                    gasBudget: 2000,
+                transaction: {
+                    kind: 'moveCall',
+                    data: {
+                        packageObjectId: packageId,
+                        module: moduleName,
+                        function: functionName,
+                        arguments: params || [],
+                        typeArguments: types || [],
+                        gasBudget: 2000,
+                    },
                 },
             });
             if (getExecutionStatusType(result) === 'failure') {

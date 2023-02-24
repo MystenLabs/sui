@@ -3,12 +3,12 @@
 
 import type {
   ExecuteTransactionRequestType,
-  SignableTransaction,
   SuiTransactionResponse,
 } from "@mysten/sui.js";
+import type { SuiSignTransactionInput } from "./suiSignTransaction";
 
 /** The latest API version of the signAndExecuteTransaction API. */
-export type SuiSignAndExecuteTransactionVersion = "1.1.0";
+export type SuiSignAndExecuteTransactionVersion = "2.0.0";
 
 /**
  * A Wallet Standard feature for signing a transaction, and submitting it to the
@@ -29,8 +29,8 @@ export type SuiSignAndExecuteTransactionMethod = (
 ) => Promise<SuiSignAndExecuteTransactionOutput>;
 
 /** Input for signing and sending transactions. */
-export interface SuiSignAndExecuteTransactionInput {
-  transaction: SignableTransaction;
+export interface SuiSignAndExecuteTransactionInput
+  extends SuiSignTransactionInput {
   options?: SuiSignAndExecuteTransactionOptions;
 }
 

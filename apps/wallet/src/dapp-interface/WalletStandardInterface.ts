@@ -110,11 +110,11 @@ export class SuiWallet implements Wallet {
                 on: this.#on,
             },
             'sui:signTransaction': {
-                version: '1.0.0',
+                version: '2.0.0',
                 signTransaction: this.#signTransaction,
             },
             'sui:signAndExecuteTransaction': {
-                version: '1.1.0',
+                version: '2.0.0',
                 signAndExecuteTransaction: this.#signAndExecuteTransaction,
             },
             'suiWallet:stake': {

@@ -24,8 +24,8 @@ export function WithdrawDelegation({ stake, delegation }: Props) {
   const { currentAccount, signAndExecuteTransaction } = useWalletKit();
 
   const withdrawDelegation = useMutation(["unstake-validator"], async () => {
-    await signAndExecuteTransaction(
-      {
+    await signAndExecuteTransaction({
+      transaction: {
         kind: "moveCall",
         data: {
           packageObjectId: SUI_FRAMEWORK_ADDRESS,
@@ -40,10 +40,10 @@ export function WithdrawDelegation({ stake, delegation }: Props) {
           ],
         },
       },
-      {
-        // requestType: "WaitForEffectsCert",
-      }
-    );
+      // options: {
+      // requestType: "WaitForEffectsCert",
+      // },
+    });
   });
 
   return (

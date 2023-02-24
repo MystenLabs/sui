@@ -25,10 +25,10 @@ export function useRawObject<T>(objectId: string, bcsType: string) {
 function useObjectsOwnedByAddress() {
   const { currentAccount } = useWalletKit();
   return useQuery(
-    ["owned", currentAccount],
-    async () => provider.getObjectsOwnedByAddress(currentAccount!),
+    ["owned", currentAccount?.address],
+    async () => provider.getObjectsOwnedByAddress(currentAccount?.address!),
     {
-      enabled: !!currentAccount,
+      enabled: !!currentAccount?.address,
       refetchInterval: 2 * 60 * 1000,
     }
   );
