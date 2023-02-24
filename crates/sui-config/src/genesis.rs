@@ -1184,4 +1184,61 @@ mod test {
 
         assert_eq!(effects, genesis.effects);
     }
+
+    #[test]
+    fn object_display() {
+        use sui_types::gas_coin::GasCoin;
+
+        let mut builder = Builder::new();
+
+        let mut keys = Vec::new();
+        for i in 0..1 {
+            let key: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+            let worker_key: NetworkKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+            let account_key: AccountKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+            let network_key: NetworkKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+            let validator = ValidatorInfo {
+                name: i.to_string(),
+                protocol_key: key.public().into(),
+                worker_key: worker_key.public().clone(),
+                account_key: account_key.public().clone().into(),
+                network_key: network_key.public().clone(),
+                stake: 1,
+                delegation: 0,
+                gas_price: 1,
+                commission_rate: 0,
+                network_address: utils::new_tcp_network_address(),
+                p2p_address: utils::new_udp_network_address(),
+                narwhal_primary_address: utils::new_udp_network_address(),
+                narwhal_worker_address: utils::new_udp_network_address(),
+                description: String::new(),
+                image_url: String::new(),
+                project_url: String::new(),
+            };
+            let pop = generate_proof_of_possession(&key, account_key.public().into());
+            keys.push(key);
+            builder = builder.add_validator(validator, pop);
+        }
+
+        for key in keys {
+            builder = builder.add_validator_signature(&key);
+        }
+
+        let genesis = builder.build();
+
+        println!("object count {}", genesis.objects().len());
+        println!("validators {}", genesis.validator_set().len());
+        for object in genesis.objects() {
+            println!("{}", object.id());
+            if let Ok(gas) = GasCoin::try_from(object) {
+                println!("{:#?}", gas);
+            }
+
+            if !object.is_package() {
+                println!("{:#?}", object);
+            }
+        }
+
+        println!("{:#?}", genesis.sui_system_object());
+    }
 }
