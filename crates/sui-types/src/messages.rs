@@ -12,7 +12,7 @@ use crate::gas::GasCostSummary;
 use crate::intent::{Intent, IntentMessage};
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMessage};
-use crate::object::{MoveObject, Object, ObjectFormatOptions, Owner, PACKAGE_VERSION};
+use crate::object::{MoveObject, Object, ObjectFormatOptions, Owner};
 use crate::signature::{AuthenticatorTrait, GenericSignature};
 use crate::storage::{DeleteKind, WriteKind};
 use crate::{
@@ -2685,7 +2685,7 @@ impl InputObjectKind {
 
     pub fn version(&self) -> Option<SequenceNumber> {
         match self {
-            Self::MovePackage(..) => Some(PACKAGE_VERSION),
+            Self::MovePackage(..) => None,
             Self::ImmOrOwnedMoveObject((_, version, _)) => Some(*version),
             Self::SharedMoveObject { .. } => None,
         }

@@ -348,14 +348,15 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         type_args: &[TypeTag],
         json_args: Vec<SuiJsonValue>,
     ) -> Result<Vec<CallArg>, anyhow::Error> {
-        let package = self.0.get_object(package_id).await?.into_object()?;
-        let package = package
+        let object = self.0.get_object(package_id).await?.into_object()?;
+        let package = object
             .data
             .try_as_package()
             .cloned()
             .ok_or_else(|| anyhow!("Object [{}] is not a move package.", package_id))?;
         let package: MovePackage = MovePackage::new(
             package.id,
+            object.version(),
             &package.module_map,
             ProtocolConfig::get_for_min_version().max_move_package_size(),
         )?;

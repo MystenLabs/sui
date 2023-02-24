@@ -333,6 +333,8 @@ MovePackage:
   STRUCT:
     - id:
         TYPENAME: ObjectID
+    - version:
+        TYPENAME: SequenceNumber
     - module_map:
         MAP:
           KEY: STR
