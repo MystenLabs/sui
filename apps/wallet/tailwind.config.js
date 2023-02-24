@@ -41,6 +41,9 @@ module.exports = {
                 15: '0.9375rem',
                 '2lg': '0.625rem',
             },
+            gridTemplateColumns: {
+                header: '1fr fit-content(160px) 1fr',
+            },
             height: {
                 header: '4.25rem',
                 'nav-height': '76px',
