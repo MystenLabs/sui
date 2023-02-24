@@ -25,7 +25,7 @@ export function Header({
     return (
         <header className="grid grid-cols-header items-center gap-3 px-3 py-1">
             <div>
-                <Link to="/tokens" className="no-underline text-gray-90">
+                <Link to="/" className="no-underline text-gray-90">
                     <Logo networkName={networkName} />
                 </Link>
             </div>
