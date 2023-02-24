@@ -294,65 +294,65 @@ the epoch advancement transaction.
 
 
 
-<a name="0x2_sui_system_EBPS_TOO_LARGE"></a>
+<a name="0x2_sui_system_EBpsTooLarge"></a>
 
 
 
-<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_EBPS_TOO_LARGE">EBPS_TOO_LARGE</a>: u64 = 5;
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_EBpsTooLarge">EBpsTooLarge</a>: u64 = 5;
 </code></pre>
 
 
 
-<a name="0x2_sui_system_ECANNOT_REPORT_ONESELF"></a>
+<a name="0x2_sui_system_ECannotReportOneself"></a>
 
 
 
-<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_ECANNOT_REPORT_ONESELF">ECANNOT_REPORT_ONESELF</a>: u64 = 3;
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_ECannotReportOneself">ECannotReportOneself</a>: u64 = 3;
 </code></pre>
 
 
 
-<a name="0x2_sui_system_EEPOCH_NUMBER_MISMATCH"></a>
+<a name="0x2_sui_system_EEpochNumberMismatch"></a>
 
 
 
-<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_EEPOCH_NUMBER_MISMATCH">EEPOCH_NUMBER_MISMATCH</a>: u64 = 2;
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_EEpochNumberMismatch">EEpochNumberMismatch</a>: u64 = 2;
 </code></pre>
 
 
 
-<a name="0x2_sui_system_ELIMIT_EXCEEDED"></a>
+<a name="0x2_sui_system_ELimitExceeded"></a>
 
 
 
-<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_ELIMIT_EXCEEDED">ELIMIT_EXCEEDED</a>: u64 = 1;
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_ELimitExceeded">ELimitExceeded</a>: u64 = 1;
 </code></pre>
 
 
 
-<a name="0x2_sui_system_ENOT_VALIDATOR"></a>
+<a name="0x2_sui_system_ENotValidator"></a>
 
 
 
-<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_ENOT_VALIDATOR">ENOT_VALIDATOR</a>: u64 = 0;
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_ENotValidator">ENotValidator</a>: u64 = 0;
 </code></pre>
 
 
 
-<a name="0x2_sui_system_EREPORT_RECORD_NOT_FOUND"></a>
+<a name="0x2_sui_system_EReportRecordNotFound"></a>
 
 
 
-<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_EREPORT_RECORD_NOT_FOUND">EREPORT_RECORD_NOT_FOUND</a>: u64 = 4;
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_EReportRecordNotFound">EReportRecordNotFound</a>: u64 = 4;
 </code></pre>
 
 
 
-<a name="0x2_sui_system_ESTAKED_SUI_FROM_WRONG_EPOCH"></a>
+<a name="0x2_sui_system_EStakedSuiFromWrongEpoch"></a>
 
 
 
-<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_ESTAKED_SUI_FROM_WRONG_EPOCH">ESTAKED_SUI_FROM_WRONG_EPOCH</a>: u64 = 6;
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_EStakedSuiFromWrongEpoch">EStakedSuiFromWrongEpoch</a>: u64 = 6;
 </code></pre>
 
 
@@ -450,12 +450,12 @@ The amount of stake in the <code><a href="validator.md#0x2_validator">validator<
 ) {
     <b>assert</b>!(
         <a href="validator_set.md#0x2_validator_set_next_epoch_validator_count">validator_set::next_epoch_validator_count</a>(&self.validators) &lt; self.parameters.max_validator_candidate_count,
-        <a href="sui_system.md#0x2_sui_system_ELIMIT_EXCEEDED">ELIMIT_EXCEEDED</a>,
+        <a href="sui_system.md#0x2_sui_system_ELimitExceeded">ELimitExceeded</a>,
     );
     <b>let</b> stake_amount = <a href="coin.md#0x2_coin_value">coin::value</a>(&<a href="stake.md#0x2_stake">stake</a>);
     <b>assert</b>!(
         stake_amount &gt;= self.parameters.min_validator_stake,
-        <a href="sui_system.md#0x2_sui_system_ELIMIT_EXCEEDED">ELIMIT_EXCEEDED</a>,
+        <a href="sui_system.md#0x2_sui_system_ELimitExceeded">ELimitExceeded</a>,
     );
     <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator.md#0x2_validator_new">validator::new</a>(
         <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx),
@@ -896,9 +896,9 @@ and they are not the same address. This function is idempotent within an epoch.
 ) {
     <b>let</b> sender = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
     // Both the reporter and the reported have <b>to</b> be validators.
-    <b>assert</b>!(<a href="validator_set.md#0x2_validator_set_is_active_validator">validator_set::is_active_validator</a>(&self.validators, sender), <a href="sui_system.md#0x2_sui_system_ENOT_VALIDATOR">ENOT_VALIDATOR</a>);
-    <b>assert</b>!(<a href="validator_set.md#0x2_validator_set_is_active_validator">validator_set::is_active_validator</a>(&self.validators, validator_addr), <a href="sui_system.md#0x2_sui_system_ENOT_VALIDATOR">ENOT_VALIDATOR</a>);
-    <b>assert</b>!(sender != validator_addr, <a href="sui_system.md#0x2_sui_system_ECANNOT_REPORT_ONESELF">ECANNOT_REPORT_ONESELF</a>);
+    <b>assert</b>!(<a href="validator_set.md#0x2_validator_set_is_active_validator">validator_set::is_active_validator</a>(&self.validators, sender), <a href="sui_system.md#0x2_sui_system_ENotValidator">ENotValidator</a>);
+    <b>assert</b>!(<a href="validator_set.md#0x2_validator_set_is_active_validator">validator_set::is_active_validator</a>(&self.validators, validator_addr), <a href="sui_system.md#0x2_sui_system_ENotValidator">ENotValidator</a>);
+    <b>assert</b>!(sender != validator_addr, <a href="sui_system.md#0x2_sui_system_ECannotReportOneself">ECannotReportOneself</a>);
 
     <b>if</b> (!<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.validator_report_records, &validator_addr)) {
         <a href="vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> self.validator_report_records, validator_addr, <a href="vec_set.md#0x2_vec_set_singleton">vec_set::singleton</a>(sender));
@@ -939,9 +939,9 @@ Undo a <code>report_validator</code> action. Aborts if the sender has not report
 ) {
     <b>let</b> sender = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
 
-    <b>assert</b>!(<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.validator_report_records, &validator_addr), <a href="sui_system.md#0x2_sui_system_EREPORT_RECORD_NOT_FOUND">EREPORT_RECORD_NOT_FOUND</a>);
+    <b>assert</b>!(<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.validator_report_records, &validator_addr), <a href="sui_system.md#0x2_sui_system_EReportRecordNotFound">EReportRecordNotFound</a>);
     <b>let</b> reporters = <a href="vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.validator_report_records, &validator_addr);
-    <b>assert</b>!(<a href="vec_set.md#0x2_vec_set_contains">vec_set::contains</a>(reporters, &sender), <a href="sui_system.md#0x2_sui_system_EREPORT_RECORD_NOT_FOUND">EREPORT_RECORD_NOT_FOUND</a>);
+    <b>assert</b>!(<a href="vec_set.md#0x2_vec_set_contains">vec_set::contains</a>(reporters, &sender), <a href="sui_system.md#0x2_sui_system_EReportRecordNotFound">EReportRecordNotFound</a>);
     <a href="vec_set.md#0x2_vec_set_remove">vec_set::remove</a>(reporters, &sender);
 }
 </code></pre>
@@ -996,7 +996,7 @@ gas coins.
     <b>assert</b>!(
         storage_fund_reinvest_rate &lt;= bps_denominator_u64
         && reward_slashing_rate &lt;= bps_denominator_u64,
-        <a href="sui_system.md#0x2_sui_system_EBPS_TOO_LARGE">EBPS_TOO_LARGE</a>,
+        <a href="sui_system.md#0x2_sui_system_EBpsTooLarge">EBpsTooLarge</a>,
     );
 
     <b>let</b> delegation_stake = <a href="validator_set.md#0x2_validator_set_total_delegation_stake">validator_set::total_delegation_stake</a>(&self.validators);

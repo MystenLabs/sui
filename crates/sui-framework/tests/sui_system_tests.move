@@ -41,7 +41,7 @@ module sui::sui_system_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = sui_system::ENOT_VALIDATOR)]
+    #[expected_failure(abort_code = sui_system::ENotValidator)]
     fun test_report_non_validator_failure() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
@@ -52,7 +52,7 @@ module sui::sui_system_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = sui_system::ECANNOT_REPORT_ONESELF)]
+    #[expected_failure(abort_code = sui_system::ECannotReportOneself)]
     fun test_report_self_failure() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
@@ -63,7 +63,7 @@ module sui::sui_system_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = sui_system::EREPORT_RECORD_NOT_FOUND)]
+    #[expected_failure(abort_code = sui_system::EReportRecordNotFound)]
     fun test_undo_report_failure() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;

@@ -408,83 +408,83 @@ A self-custodial object holding the staked SUI tokens.
 ## Constants
 
 
-<a name="0x2_staking_pool_EDESTROY_NON_ZERO_BALANCE"></a>
+<a name="0x2_staking_pool_EDestroyNonzeroBalance"></a>
 
 
 
-<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EDESTROY_NON_ZERO_BALANCE">EDESTROY_NON_ZERO_BALANCE</a>: u64 = 5;
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EDestroyNonzeroBalance">EDestroyNonzeroBalance</a>: u64 = 5;
 </code></pre>
 
 
 
-<a name="0x2_staking_pool_EINSUFFICIENT_POOL_TOKEN_BALANCE"></a>
+<a name="0x2_staking_pool_EInsufficientPoolTokenBalance"></a>
 
 
 
-<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EINSUFFICIENT_POOL_TOKEN_BALANCE">EINSUFFICIENT_POOL_TOKEN_BALANCE</a>: u64 = 0;
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EInsufficientPoolTokenBalance">EInsufficientPoolTokenBalance</a>: u64 = 0;
 </code></pre>
 
 
 
-<a name="0x2_staking_pool_EINSUFFICIENT_REWARDS_POOL_BALANCE"></a>
+<a name="0x2_staking_pool_EInsufficientRewardsPoolBalance"></a>
 
 
 
-<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EINSUFFICIENT_REWARDS_POOL_BALANCE">EINSUFFICIENT_REWARDS_POOL_BALANCE</a>: u64 = 4;
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EInsufficientRewardsPoolBalance">EInsufficientRewardsPoolBalance</a>: u64 = 4;
 </code></pre>
 
 
 
-<a name="0x2_staking_pool_EINSUFFICIENT_SUI_TOKEN_BALANCE"></a>
+<a name="0x2_staking_pool_EInsufficientSuiTokenBalance"></a>
 
 
 
-<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EINSUFFICIENT_SUI_TOKEN_BALANCE">EINSUFFICIENT_SUI_TOKEN_BALANCE</a>: u64 = 3;
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EInsufficientSuiTokenBalance">EInsufficientSuiTokenBalance</a>: u64 = 3;
 </code></pre>
 
 
 
-<a name="0x2_staking_pool_EPENDING_DELEGATION_DOES_NOT_EXIST"></a>
+<a name="0x2_staking_pool_EPendingDelegationDoesNotExist"></a>
 
 
 
-<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EPENDING_DELEGATION_DOES_NOT_EXIST">EPENDING_DELEGATION_DOES_NOT_EXIST</a>: u64 = 8;
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EPendingDelegationDoesNotExist">EPendingDelegationDoesNotExist</a>: u64 = 8;
 </code></pre>
 
 
 
-<a name="0x2_staking_pool_ETOKEN_TIME_LOCK_IS_SOME"></a>
+<a name="0x2_staking_pool_ETokenTimeLockIsSome"></a>
 
 
 
-<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_ETOKEN_TIME_LOCK_IS_SOME">ETOKEN_TIME_LOCK_IS_SOME</a>: u64 = 6;
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_ETokenTimeLockIsSome">ETokenTimeLockIsSome</a>: u64 = 6;
 </code></pre>
 
 
 
-<a name="0x2_staking_pool_EWITHDRAW_AMOUNT_CANNOT_BE_ZERO"></a>
+<a name="0x2_staking_pool_EWithdrawAmountCannotBeZero"></a>
 
 
 
-<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EWITHDRAW_AMOUNT_CANNOT_BE_ZERO">EWITHDRAW_AMOUNT_CANNOT_BE_ZERO</a>: u64 = 2;
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EWithdrawAmountCannotBeZero">EWithdrawAmountCannotBeZero</a>: u64 = 2;
 </code></pre>
 
 
 
-<a name="0x2_staking_pool_EWRONG_DELEGATION"></a>
+<a name="0x2_staking_pool_EWrongDelegation"></a>
 
 
 
-<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EWRONG_DELEGATION">EWRONG_DELEGATION</a>: u64 = 7;
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EWrongDelegation">EWrongDelegation</a>: u64 = 7;
 </code></pre>
 
 
 
-<a name="0x2_staking_pool_EWRONG_POOL"></a>
+<a name="0x2_staking_pool_EWrongPool"></a>
 
 
 
-<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EWRONG_POOL">EWRONG_POOL</a>: u64 = 1;
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EWrongPool">EWrongPool</a>: u64 = 1;
 </code></pre>
 
 
@@ -647,16 +647,16 @@ time lock if applicable.
     staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>,
 ) : (Balance&lt;<a href="staking_pool.md#0x2_staking_pool_DelegationToken">DelegationToken</a>&gt;, Balance&lt;SUI&gt;, Option&lt;EpochTimeLock&gt;) {
     // Check that the delegation and staked <a href="sui.md#0x2_sui">sui</a> objects match.
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(&staked_sui) == delegation.staked_sui_id, <a href="staking_pool.md#0x2_staking_pool_EWRONG_DELEGATION">EWRONG_DELEGATION</a>);
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(&staked_sui) == delegation.staked_sui_id, <a href="staking_pool.md#0x2_staking_pool_EWrongDelegation">EWrongDelegation</a>);
 
     // Check that the delegation information matches the pool.
     <b>assert</b>!(
         staked_sui.validator_address == pool.validator_address &&
         staked_sui.pool_starting_epoch == pool.starting_epoch,
-        <a href="staking_pool.md#0x2_staking_pool_EWRONG_POOL">EWRONG_POOL</a>
+        <a href="staking_pool.md#0x2_staking_pool_EWrongPool">EWrongPool</a>
     );
 
-    <b>assert</b>!(delegation.principal_sui_amount == <a href="balance.md#0x2_balance_value">balance::value</a>(&staked_sui.principal), <a href="staking_pool.md#0x2_staking_pool_EINSUFFICIENT_SUI_TOKEN_BALANCE">EINSUFFICIENT_SUI_TOKEN_BALANCE</a>);
+    <b>assert</b>!(delegation.principal_sui_amount == <a href="balance.md#0x2_balance_value">balance::value</a>(&staked_sui.principal), <a href="staking_pool.md#0x2_staking_pool_EInsufficientSuiTokenBalance">EInsufficientSuiTokenBalance</a>);
 
     <b>let</b> pool_tokens = <a href="staking_pool.md#0x2_staking_pool_destroy_delegation_and_return_pool_tokens">destroy_delegation_and_return_pool_tokens</a>(delegation);
     <b>let</b> (principal_withdraw, time_lock) = <a href="staking_pool.md#0x2_staking_pool_unwrap_staked_sui">unwrap_staked_sui</a>(staked_sui);
@@ -1022,8 +1022,8 @@ Destroy an empty delegation that no longer contains any SUI or pool tokens.
         principal_sui_amount,
     } = delegation;
     <a href="object.md#0x2_object_delete">object::delete</a>(id);
-    <b>assert</b>!(<a href="balance.md#0x2_balance_value">balance::value</a>(&pool_tokens) == 0, <a href="staking_pool.md#0x2_staking_pool_EDESTROY_NON_ZERO_BALANCE">EDESTROY_NON_ZERO_BALANCE</a>);
-    <b>assert</b>!(principal_sui_amount == 0, <a href="staking_pool.md#0x2_staking_pool_EDESTROY_NON_ZERO_BALANCE">EDESTROY_NON_ZERO_BALANCE</a>);
+    <b>assert</b>!(<a href="balance.md#0x2_balance_value">balance::value</a>(&pool_tokens) == 0, <a href="staking_pool.md#0x2_staking_pool_EDestroyNonzeroBalance">EDestroyNonzeroBalance</a>);
+    <b>assert</b>!(principal_sui_amount == 0, <a href="staking_pool.md#0x2_staking_pool_EDestroyNonzeroBalance">EDestroyNonzeroBalance</a>);
     <a href="balance.md#0x2_balance_destroy_zero">balance::destroy_zero</a>(pool_tokens);
 }
 </code></pre>
@@ -1058,9 +1058,9 @@ Destroy an empty delegation that no longer contains any SUI or pool tokens.
         sui_token_lock
     } = staked_sui;
     <a href="object.md#0x2_object_delete">object::delete</a>(id);
-    <b>assert</b>!(<a href="balance.md#0x2_balance_value">balance::value</a>(&principal) == 0, <a href="staking_pool.md#0x2_staking_pool_EDESTROY_NON_ZERO_BALANCE">EDESTROY_NON_ZERO_BALANCE</a>);
+    <b>assert</b>!(<a href="balance.md#0x2_balance_value">balance::value</a>(&principal) == 0, <a href="staking_pool.md#0x2_staking_pool_EDestroyNonzeroBalance">EDestroyNonzeroBalance</a>);
     <a href="balance.md#0x2_balance_destroy_zero">balance::destroy_zero</a>(principal);
-    <b>assert</b>!(<a href="_is_none">option::is_none</a>(&sui_token_lock), <a href="staking_pool.md#0x2_staking_pool_ETOKEN_TIME_LOCK_IS_SOME">ETOKEN_TIME_LOCK_IS_SOME</a>);
+    <b>assert</b>!(<a href="_is_none">option::is_none</a>(&sui_token_lock), <a href="staking_pool.md#0x2_staking_pool_ETokenTimeLockIsSome">ETokenTimeLockIsSome</a>);
     <a href="_destroy_none">option::destroy_none</a>(sui_token_lock);
 }
 </code></pre>

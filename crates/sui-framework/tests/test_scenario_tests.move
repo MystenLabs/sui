@@ -8,9 +8,9 @@ module sui::test_scenarioTests {
     use sui::transfer;
     use sui::tx_context;
 
-    const ID_BYTES_MISMATCH: u64 = 0;
-    const VALUE_MISMATCH: u64 = 1;
-    const OBJECT_ID_NOT_FOUND: u64 = 2;
+    const EIdBytesMismatch: u64 = 0;
+    const EValueMismatch: u64 = 1;
+    const EObjectIdNotFound: u64 = 2;
 
     struct Object has key, store {
         id: object::UID,
@@ -211,8 +211,8 @@ module sui::test_scenarioTests {
             assert!(ts::has_most_recent_for_sender<Object>(&scenario), 1);
             let received_obj = ts::take_from_sender<Object>(&mut scenario);
             let Object { id: received_id, value } = received_obj;
-            assert!(object::uid_to_inner(&received_id) == id_bytes, ID_BYTES_MISMATCH);
-            assert!(value == 100, VALUE_MISMATCH);
+            assert!(object::uid_to_inner(&received_id) == id_bytes, EIdBytesMismatch);
+            assert!(value == 100, EValueMismatch);
             object::delete(received_id);
         };
         // check that the object is no longer accessible after deletion
@@ -243,7 +243,7 @@ module sui::test_scenarioTests {
         };
         ts::next_tx(&mut scenario, sender);
         let ids = ts::ids_for_sender<Object>(&scenario);
-        assert!(ids == vector[id1, id2, id3], VALUE_MISMATCH);
+        assert!(ids == vector[id1, id2, id3], EValueMismatch);
         ts::end(scenario);
     }
 
@@ -270,9 +270,9 @@ module sui::test_scenarioTests {
             let obj1 = ts::take_from_sender_by_id<Object>(&mut scenario, id1);
             let obj3 = ts::take_from_sender_by_id<Object>(&mut scenario, id3);
             let obj2 = ts::take_from_sender_by_id<Object>(&mut scenario, id2);
-            assert!(obj1.value == 10, VALUE_MISMATCH);
-            assert!(obj2.value == 20, VALUE_MISMATCH);
-            assert!(obj3.value == 30, VALUE_MISMATCH);
+            assert!(obj1.value == 10, EValueMismatch);
+            assert!(obj2.value == 20, EValueMismatch);
+            assert!(obj3.value == 30, EValueMismatch);
             ts::return_to_sender(&mut scenario, obj1);
             ts::return_to_sender(&mut scenario, obj2);
             ts::return_to_sender(&mut scenario, obj3);
@@ -318,9 +318,9 @@ module sui::test_scenarioTests {
             let obj1 = ts::take_shared_by_id<Object>(&scenario, id1);
             let obj3 = ts::take_shared_by_id<Object>(&scenario, id3);
             let obj2 = ts::take_shared_by_id<Object>(&scenario, id2);
-            assert!(obj1.value == 10, VALUE_MISMATCH);
-            assert!(obj2.value == 20, VALUE_MISMATCH);
-            assert!(obj3.value == 30, VALUE_MISMATCH);
+            assert!(obj1.value == 10, EValueMismatch);
+            assert!(obj2.value == 20, EValueMismatch);
+            assert!(obj3.value == 30, EValueMismatch);
             ts::return_shared(obj1);
             ts::return_shared(obj2);
             ts::return_shared(obj3);
@@ -341,7 +341,7 @@ module sui::test_scenarioTests {
         {
             assert!(ts::has_most_recent_shared<Object>(), 1);
             let obj1 = ts::take_shared<Object>(&mut scenario);
-            assert!(obj1.value == 10, VALUE_MISMATCH);
+            assert!(obj1.value == 10, EValueMismatch);
             ts::return_shared(obj1);
         };
         ts::end(scenario);
@@ -370,9 +370,9 @@ module sui::test_scenarioTests {
             let obj1 = ts::take_immutable_by_id<Object>(&scenario, id1);
             let obj3 = ts::take_immutable_by_id<Object>(&scenario, id3);
             let obj2 = ts::take_immutable_by_id<Object>(&scenario, id2);
-            assert!(obj1.value == 10, VALUE_MISMATCH);
-            assert!(obj2.value == 20, VALUE_MISMATCH);
-            assert!(obj3.value == 30, VALUE_MISMATCH);
+            assert!(obj1.value == 10, EValueMismatch);
+            assert!(obj2.value == 20, EValueMismatch);
+            assert!(obj3.value == 30, EValueMismatch);
             ts::return_immutable(obj1);
             ts::return_immutable(obj2);
             ts::return_immutable(obj3);
@@ -393,7 +393,7 @@ module sui::test_scenarioTests {
         {
             assert!(ts::has_most_recent_immutable<Object>(), 1);
             let obj1 = ts::take_immutable<Object>(&mut scenario);
-            assert!(obj1.value == 10, VALUE_MISMATCH);
+            assert!(obj1.value == 10, EValueMismatch);
             ts::return_immutable(obj1);
         };
         ts::end(scenario);

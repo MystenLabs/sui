@@ -74,8 +74,8 @@ module sui::validator_set {
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
 
     // Errors
-    const ENON_VALIDATOR_IN_REPORT_RECORDS: u64 = 0;
-    const EINVALID_STAKE_ADJUSTMENT_AMOUNT: u64 = 1;
+    const ENonValidatorInReportRecords: u64 = 0;
+    const EInvalidStakeAdjustmentAmount: u64 = 1;
 
     // ==== initialization at genesis ====
 
@@ -607,7 +607,7 @@ module sui::validator_set {
             let (validator_address, reporters) = vec_map::pop(&mut validator_report_records);
             assert!(
                 is_active_validator(self, validator_address),
-                ENON_VALIDATOR_IN_REPORT_RECORDS
+                ENonValidatorInReportRecords,
             );
             // Sum up the voting power of validators that have reported this validator and check if it has
             // passed the slashing threshold.

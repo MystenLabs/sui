@@ -95,13 +95,13 @@ module sui::sui_system {
     }
 
     // Errors
-    const ENOT_VALIDATOR: u64 = 0;
-    const ELIMIT_EXCEEDED: u64 = 1;
-    const EEPOCH_NUMBER_MISMATCH: u64 = 2;
-    const ECANNOT_REPORT_ONESELF: u64 = 3;
-    const EREPORT_RECORD_NOT_FOUND: u64 = 4;
-    const EBPS_TOO_LARGE: u64 = 5;
-    const ESTAKED_SUI_FROM_WRONG_EPOCH: u64 = 6;
+    const ENotValidator: u64 = 0;
+    const ELimitExceeded: u64 = 1;
+    const EEpochNumberMismatch: u64 = 2;
+    const ECannotReportOneself: u64 = 3;
+    const EReportRecordNotFound: u64 = 4;
+    const EBpsTooLarge: u64 = 5;
+    const EStakedSuiFromWrongEpoch: u64 = 6;
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
 
@@ -169,12 +169,12 @@ module sui::sui_system {
     ) {
         assert!(
             validator_set::next_epoch_validator_count(&self.validators) < self.parameters.max_validator_candidate_count,
-            ELIMIT_EXCEEDED,
+            ELimitExceeded,
         );
         let stake_amount = coin::value(&stake);
         assert!(
             stake_amount >= self.parameters.min_validator_stake,
-            ELIMIT_EXCEEDED,
+            ELimitExceeded,
         );
         let validator = validator::new(
             tx_context::sender(ctx),
@@ -375,9 +375,9 @@ module sui::sui_system {
     ) {
         let sender = tx_context::sender(ctx);
         // Both the reporter and the reported have to be validators.
-        assert!(validator_set::is_active_validator(&self.validators, sender), ENOT_VALIDATOR);
-        assert!(validator_set::is_active_validator(&self.validators, validator_addr), ENOT_VALIDATOR);
-        assert!(sender != validator_addr, ECANNOT_REPORT_ONESELF);
+        assert!(validator_set::is_active_validator(&self.validators, sender), ENotValidator);
+        assert!(validator_set::is_active_validator(&self.validators, validator_addr), ENotValidator);
+        assert!(sender != validator_addr, ECannotReportOneself);
 
         if (!vec_map::contains(&self.validator_report_records, &validator_addr)) {
             vec_map::insert(&mut self.validator_report_records, validator_addr, vec_set::singleton(sender));
@@ -398,9 +398,9 @@ module sui::sui_system {
     ) {
         let sender = tx_context::sender(ctx);
 
-        assert!(vec_map::contains(&self.validator_report_records, &validator_addr), EREPORT_RECORD_NOT_FOUND);
+        assert!(vec_map::contains(&self.validator_report_records, &validator_addr), EReportRecordNotFound);
         let reporters = vec_map::get_mut(&mut self.validator_report_records, &validator_addr);
-        assert!(vec_set::contains(reporters, &sender), EREPORT_RECORD_NOT_FOUND);
+        assert!(vec_set::contains(reporters, &sender), EReportRecordNotFound);
         vec_set::remove(reporters, &sender);
     }
 
@@ -435,7 +435,7 @@ module sui::sui_system {
         assert!(
             storage_fund_reinvest_rate <= bps_denominator_u64
             && reward_slashing_rate <= bps_denominator_u64,
-            EBPS_TOO_LARGE,
+            EBpsTooLarge,
         );
 
         let delegation_stake = validator_set::total_delegation_stake(&self.validators);
