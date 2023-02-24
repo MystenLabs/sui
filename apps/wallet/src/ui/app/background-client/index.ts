@@ -122,10 +122,22 @@ export class BackgroundClient {
         );
     }
 
-    public async disconnectApp(origin: string) {
+    /**
+     * Disconnect a dapp, if specificAccounts contains accounts then only those accounts will be disconnected.
+     * @param origin The origin of the dapp
+     * @param specificAccounts Accounts to disconnect. If not provided or it's an empty array all accounts will be disconnected
+     */
+    public async disconnectApp(
+        origin: string,
+        specificAccounts?: SuiAddress[]
+    ) {
         await lastValueFrom(
             this.sendMessage(
-                createMessage<DisconnectApp>({ type: 'disconnect-app', origin })
+                createMessage<DisconnectApp>({
+                    type: 'disconnect-app',
+                    origin,
+                    specificAccounts,
+                })
             ).pipe(take(1))
         );
     }
