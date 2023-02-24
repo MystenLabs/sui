@@ -215,7 +215,7 @@ describe('VaultStorage', () => {
                     testEd25519Serialized,
                     testDataVault1.password
                 )
-            ).toBe(false);
+            ).toBe(null);
         });
     });
 });

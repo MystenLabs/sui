@@ -153,12 +153,12 @@ describe('Keyring', () => {
                 const eventSpy = vi.fn();
                 k.on('accountsChanged', eventSpy);
                 vaultStorageMock.verifyPassword.mockResolvedValue(true);
-                vaultStorageMock.importKeypair.mockResolvedValue(false);
+                vaultStorageMock.importKeypair.mockResolvedValue(null);
                 const added = await k.importAccountKeypair(
                     testEd25519Serialized,
                     'correct password'
                 );
-                expect(added).toBe(false);
+                expect(added).toBe(null);
                 expect(eventSpy).not.toHaveBeenCalled();
             });
 

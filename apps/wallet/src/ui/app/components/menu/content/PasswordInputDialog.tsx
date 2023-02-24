@@ -23,7 +23,7 @@ const validation = object({
 export type PasswordExportDialogProps = {
     title: string;
     continueLabel?: string;
-    finalStep?: boolean;
+    showArrowIcon?: boolean;
     onPasswordVerified: (password: string) => Promise<void> | void;
     onBackClicked?: () => void;
 };
@@ -31,7 +31,7 @@ export type PasswordExportDialogProps = {
 export function PasswordInputDialog({
     title,
     continueLabel = 'Continue',
-    finalStep = false,
+    showArrowIcon = false,
     onPasswordVerified,
     onBackClicked,
 }: PasswordExportDialogProps) {
@@ -90,7 +90,7 @@ export function PasswordInputDialog({
                             text={continueLabel}
                             loading={isSubmitting}
                             disabled={!isValid}
-                            after={finalStep ? null : <ArrowRight16 />}
+                            after={showArrowIcon ? <ArrowRight16 /> : null}
                         />
                         <Link
                             text="Go Back"

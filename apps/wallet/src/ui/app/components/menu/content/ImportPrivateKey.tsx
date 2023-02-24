@@ -82,7 +82,6 @@ export function ImportPrivateKey() {
             <PasswordInputDialog
                 title="Import Account"
                 continueLabel="Import"
-                finalStep
                 onBackClicked={() => setShowPasswordDialog(false)}
                 onPasswordVerified={async (password) => {
                     await importMutation.mutateAsync(password);
