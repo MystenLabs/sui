@@ -91,6 +91,8 @@ pub enum SuiCommand {
         /// Return command outputs in json format.
         #[clap(long, global = true)]
         json: bool,
+        #[clap(short = 'y', long = "yes")]
+        accept_defaults: bool,
     },
 
     /// Tool to build and test Move applications.
@@ -202,13 +204,18 @@ impl SuiCommand {
             }
             SuiCommand::Console { config } => {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                prompt_if_no_config(&config).await?;
+                prompt_if_no_config(&config, false).await?;
                 let context = WalletContext::new(&config, None).await?;
                 start_console(context, &mut stdout(), &mut stderr()).await
             }
-            SuiCommand::Client { config, cmd, json } => {
+            SuiCommand::Client {
+                config,
+                cmd,
+                json,
+                accept_defaults,
+            } => {
                 let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                prompt_if_no_config(&config_path).await?;
+                prompt_if_no_config(&config_path, accept_defaults).await?;
                 let mut context = WalletContext::new(&config_path, None).await?;
                 if let Some(cmd) = cmd {
                     cmd.execute(&mut context).await?.print(!json);
@@ -390,7 +397,10 @@ async fn genesis(
     Ok(())
 }
 
-async fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
+async fn prompt_if_no_config(
+    wallet_conf_path: &Path,
+    accept_defaults: bool,
+) -> Result<(), anyhow::Error> {
     // Prompt user for connect to devnet fullnode if config does not exist.
     if !wallet_conf_path.exists() {
         let env = match std::env::var_os("SUI_CONFIG_WITH_RPC_URL") {
@@ -400,13 +410,25 @@ async fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Erro
                 ws: None,
             }),
             None => {
-                print!(
-                    "Config file [{:?}] doesn't exist, do you want to connect to a Sui full node server [yN]?",
-                    wallet_conf_path
-                );
-                if matches!(read_line(), Ok(line) if line.trim().to_lowercase() == "y") {
-                    print!("Sui full node server url (Default to Sui DevNet if not specified) : ");
-                    let url = read_line()?;
+                if accept_defaults {
+                    print!("Creating config file [{:?}] with default (devnet) full node server and ed25519 key scheme.", wallet_conf_path);
+                } else {
+                    print!(
+                        "Config file [{:?}] doesn't exist, do you want to connect to a Sui full node server [yN]?",
+                        wallet_conf_path
+                    );
+                }
+                if accept_defaults
+                    || matches!(read_line(), Ok(line) if line.trim().to_lowercase() == "y")
+                {
+                    let url = if accept_defaults {
+                        String::new()
+                    } else {
+                        print!(
+                            "Sui full node server url (Default to Sui DevNet if not specified) : "
+                        );
+                        read_line()?
+                    };
                     Some(if url.trim().is_empty() {
                         SuiEnv::devnet()
                     } else {
@@ -435,10 +457,14 @@ async fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Erro
                 .unwrap_or(&sui_config_dir()?)
                 .join(SUI_KEYSTORE_FILENAME);
             let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
-            println!("Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2: for secp256r1:");
-            let key_scheme = match SignatureScheme::from_flag(read_line()?.trim()) {
-                Ok(s) => s,
-                Err(e) => return Err(anyhow!("{e}")),
+            let key_scheme = if accept_defaults {
+                SignatureScheme::ED25519
+            } else {
+                println!("Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2: for secp256r1:");
+                match SignatureScheme::from_flag(read_line()?.trim()) {
+                    Ok(s) => s,
+                    Err(e) => return Err(anyhow!("{e}")),
+                }
             };
             let (new_address, phrase, scheme) =
                 keystore.generate_and_add_new_key(key_scheme, None)?;
