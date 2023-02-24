@@ -54,6 +54,7 @@ fn test_protocol_overrides_2() {
 #[cfg(msim)]
 mod sim_only_tests {
 
+    use super::*;
     use std::sync::Arc;
     use sui_macros::*;
     use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
@@ -63,8 +64,7 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn test_protocol_version_upgrade() {
-        telemetry_subscribers::init_for_testing();
-        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        ProtocolConfig::poison_get_for_min_version();
 
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(10000)
@@ -78,8 +78,12 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn test_protocol_version_upgrade_one_laggard() {
-        telemetry_subscribers::init_for_testing();
-        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
+            config
+        });
+
+        ProtocolConfig::poison_get_for_min_version();
 
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(10000)
@@ -114,8 +118,7 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn test_protocol_version_upgrade_no_quorum() {
-        telemetry_subscribers::init_for_testing();
-        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        ProtocolConfig::poison_get_for_min_version();
 
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(10000)

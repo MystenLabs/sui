@@ -547,6 +547,9 @@ impl ProtocolConfig {
     pub fn set_max_function_definitions_for_testing(&mut self, m: usize) {
         self.max_function_definitions = Some(m)
     }
+    pub fn set_buffer_stake_for_protocol_upgrade_bps_for_testing(&mut self, b: u64) {
+        self.buffer_stake_for_protocol_upgrade_bps = Some(b)
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;
