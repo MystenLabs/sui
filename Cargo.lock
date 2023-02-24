@@ -6760,6 +6760,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "prometheus-parse"
+version = "0.2.3"
+source = "git+https://github.com/ccakes/prometheus-parse-rs.git?rev=75334db#75334dbe2d286edf6d4424abba92a74643333096"
+dependencies = [
+ "chrono",
+ "itertools",
+ "lazy_static 1.4.0",
+ "regex",
+]
+
+[[package]]
 name = "proptest"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8612,6 +8623,7 @@ dependencies = [
  "async-trait",
  "base64",
  "bcs",
+ "chrono",
  "clap 3.2.23",
  "color-eyre",
  "comfy-table",
@@ -8628,9 +8640,11 @@ dependencies = [
  "once_cell",
  "prettytable-rs",
  "prometheus",
+ "prometheus-parse",
  "rand 0.8.5",
  "rand_distr",
  "rayon",
+ "regex",
  "reqwest",
  "roaring",
  "rocksdb",

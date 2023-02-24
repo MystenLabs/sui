@@ -10,7 +10,7 @@ use crossterm::{
 };
 use futures::future::try_join_all;
 use prettytable::{format, row, Table};
-use tokio::time::sleep;
+use tokio::time::{self, sleep};
 
 use crate::{
     ensure,
@@ -25,6 +25,7 @@ use crate::{
 
 use super::{
     config::Config,
+    metrics::MetricsAggregator,
     ssh::{SshCommand, SshConnectionManager},
 };
 
@@ -37,6 +38,17 @@ pub struct BenchmarkParameters {
     pub load: usize,
     /// The duration of the benchmark.
     pub duration: Duration,
+}
+
+impl Default for BenchmarkParameters {
+    fn default() -> Self {
+        Self {
+            nodes: 4,
+            faults: 0,
+            load: 500,
+            duration: Duration::from_secs(60),
+        }
+    }
 }
 
 pub struct Testbed<C> {
@@ -245,6 +257,8 @@ impl<C: Client> Testbed<C> {
 }
 
 impl<C> Testbed<C> {
+    const CLIENT_METRIC_PORT: u16 = 8081;
+
     pub fn select_instances(
         &self,
         parameters: &BenchmarkParameters,
@@ -359,7 +373,7 @@ impl<C> Testbed<C> {
     }
 
     pub async fn configure(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
-        print!("Generating configuration files...");
+        crossterm::execute!(stdout(), Print("Generating configuration files...")).unwrap();
 
         // Select instances to configure.
         let instances = self.select_instances(parameters)?;
@@ -413,7 +427,7 @@ impl<C> Testbed<C> {
     }
 
     pub async fn kill(&self, cleanup: bool) -> TestbedResult<()> {
-        print!("Cleaning up testbed...");
+        crossterm::execute!(stdout(), Print("Cleaning up testbed...")).unwrap();
 
         // Kill all tmux servers and delete the nodes dbs. Optionally clear logs.
         let mut command = vec![
@@ -441,7 +455,8 @@ impl<C> Testbed<C> {
 
         // Deploy the committee.
         let branch = self.settings.repository.branch.clone();
-        print!("Deploying {} nodes (branch '{branch}')...", instances.len());
+        let message = format!("Deploying {} nodes (branch '{branch}')...", instances.len());
+        crossterm::execute!(stdout(), Print(message)).unwrap();
 
         let command = |i: usize| -> String {
             let path = format!("~/.sui/sui_config/validator-config-{i}.yaml");
@@ -461,7 +476,7 @@ impl<C> Testbed<C> {
     }
 
     pub async fn run_clients(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
-        print!("Setting up load generators...");
+        crossterm::execute!(stdout(), Print("Setting up load generators...")).unwrap();
 
         // Select the instances to run.
         let instances = self.select_instances(parameters)?;
@@ -483,6 +498,7 @@ impl<C> Testbed<C> {
                 &format!("bench --target-qps {load_share} --num-workers 100"),
                 &format!("--shared-counter 0 --run-duration {duration}s"),
                 "--in-flight-ratio 50 --transfer-object 100 --delegation 0",
+                &format!("--client-metric-port {}", Self::CLIENT_METRIC_PORT),
             ]
             .join(" ");
             ["source $HOME/.cargo/env", &run].join(" && ")
@@ -499,8 +515,26 @@ impl<C> Testbed<C> {
         Ok(())
     }
 
+    pub async fn scrape(
+        &self,
+        aggregator: &mut MetricsAggregator<usize>,
+        parameters: &BenchmarkParameters,
+    ) -> TestbedResult<()> {
+        let instances = self.select_instances(parameters)?;
+
+        let command = format!("curl 127.0.0.1:{}/metrics", Self::CLIENT_METRIC_PORT);
+        let ssh_command = SshCommand::new(move |_| command.clone());
+        let stdio = self.ssh_manager.execute(&instances, ssh_command).await?;
+
+        for (i, (stdout, _stderr)) in stdio.iter().enumerate() {
+            aggregator.collect(i, stdout);
+        }
+
+        Ok(())
+    }
+
     pub async fn logs(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
-        print!("Downloading logs...");
+        crossterm::execute!(stdout(), Print("Downloading logs...")).unwrap();
 
         let instances = self.select_instances(parameters)?;
 
@@ -547,10 +581,10 @@ impl<C> Testbed<C> {
         self.kill(true).await?;
 
         // Update the software on all instances.
-        self.update().await?;
+        // self.update().await?;
 
         // Configure all instances.
-        self.configure(parameters).await?;
+        // self.configure(parameters).await?;
 
         // Deploy the validators.
         self.run_nodes(parameters).await?;
@@ -559,8 +593,24 @@ impl<C> Testbed<C> {
         self.run_clients(parameters).await?;
 
         // Wait for the benchmark to terminate.
-        println!("Waiting for {}s...", parameters.duration.as_secs());
-        self.wait_for_command(&self.instances, "client").await?;
+        println!("Waiting for about {}s...", parameters.duration.as_secs());
+
+        let mut aggregator = MetricsAggregator::new();
+        let mut interval = time::interval(Duration::from_secs(30));
+        interval.tick().await;
+        loop {
+            tokio::select! {
+                result = self.wait_for_command(&self.instances, "client") => {
+                    result?;
+                    break
+                },
+                _ = interval.tick() => {
+                    let _ = self.scrape(&mut aggregator, parameters).await;
+                }
+            }
+        }
+        aggregator.save();
+        aggregator.print_summary(parameters);
 
         // Kill the nodes and clients (without deleting the log files).
         self.kill(false).await?;

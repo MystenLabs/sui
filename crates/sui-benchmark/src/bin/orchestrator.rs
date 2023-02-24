@@ -24,7 +24,7 @@ async fn main() -> Result<()> {
         nodes: 4,
         faults: 0,
         load: 600,
-        duration: Duration::from_secs(120),
+        duration: Duration::from_secs(45),
     };
 
     let testbed = Testbed::new(settings, client)
