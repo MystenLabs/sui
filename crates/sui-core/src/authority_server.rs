@@ -317,7 +317,8 @@ impl ValidatorService {
                 .intent_message
                 .value
                 .kind
-                .input_objects()?
+                .input_objects()
+                .map_err(SuiError::from)?
                 .into_iter()
                 .map(|r| r.object_id())
                 .collect(),

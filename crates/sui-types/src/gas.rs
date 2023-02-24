@@ -2,10 +2,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::error::{UserInputError, UserInputResult};
 use crate::messages::TransactionEffects;
 use crate::{
     error::{ExecutionError, ExecutionErrorKind},
-    error::{SuiError, SuiResult},
     gas_coin::GasCoin,
     object::{Object, Owner},
 };
@@ -38,7 +38,7 @@ pub type SuiGas = GasQuantity<SuiGasUnit>;
 macro_rules! ok_or_gas_balance_error {
     ($balance:expr, $budget:expr, $price:expr) => {
         if $balance < $budget {
-            Err(SuiError::GasBalanceTooLowToCoverGasBudget {
+            Err(UserInputError::GasBalanceTooLowToCoverGasBudget {
                 gas_balance: $balance,
                 gas_budget: $budget,
                 gas_price: $price,
@@ -292,9 +292,13 @@ impl<'a> SuiGasStatus<'a> {
         Ok(())
     }
 
-    pub fn charge_min_tx_gas(&mut self) -> Result<(), ExecutionError> {
+    /// Try to charge the minimal amount of gas from the gas object.
+    /// This function is called in tx signing phase to make sure
+    /// the gas object has enough balance to cover minimal transaction cost.
+    pub fn charge_min_tx_gas(&mut self) -> UserInputResult {
         let cost = self.cost_table.min_transaction_cost.clone();
         self.deduct_computation_cost(cost.deref())
+            .map_err(|_e| UserInputError::InsufficientBalanceToCoverMinimalGas)
     }
 
     pub fn charge_publish_package(&mut self, size: usize) -> Result<(), ExecutionError> {
@@ -441,9 +445,9 @@ pub fn check_gas_balance(
     extra_amount: u64,
     extra_objs: Vec<Object>,
     cost_table: &SuiCostTable,
-) -> SuiResult {
+) -> UserInputResult {
     if !(matches!(gas_object.owner, Owner::AddressOwner(_))) {
-        return Err(SuiError::GasObjectNotOwnedObject {
+        return Err(UserInputError::GasObjectNotOwnedObject {
             owner: gas_object.owner,
         });
     }
@@ -452,14 +456,14 @@ pub fn check_gas_balance(
     let min_gas_budget = cost_table.min_gas_budget_external();
 
     if gas_budget > max_gas_budget {
-        return Err(SuiError::GasBudgetTooHigh {
+        return Err(UserInputError::GasBudgetTooHigh {
             gas_budget,
             max_budget: max_gas_budget,
         });
     }
 
     if gas_budget < min_gas_budget {
-        return Err(SuiError::GasBudgetTooLow {
+        return Err(UserInputError::GasBudgetTooLow {
             gas_budget,
             min_budget: min_gas_budget,
         });
@@ -490,7 +494,7 @@ pub fn start_gas_metering(
     computation_gas_unit_price: u64,
     storage_gas_unit_price: u64,
     cost_table: SuiCostTable,
-) -> SuiResult<SuiGasStatus<'static>> {
+) -> UserInputResult<SuiGasStatus<'static>> {
     let mut gas_status = SuiGasStatus::new_with_budget(
         gas_budget,
         computation_gas_unit_price.into(),
@@ -530,6 +534,10 @@ pub fn refund_gas(gas_object: &mut Object, amount: u64) {
     move_object.update_coin_contents(new_contents);
 }
 
-pub fn get_gas_balance(gas_object: &Object) -> SuiResult<u64> {
-    Ok(GasCoin::try_from(gas_object)?.value())
+pub fn get_gas_balance(gas_object: &Object) -> UserInputResult<u64> {
+    Ok(GasCoin::try_from(gas_object)
+        .map_err(|_e| UserInputError::InvalidGasObject {
+            object_id: gas_object.id(),
+        })?
+        .value())
 }

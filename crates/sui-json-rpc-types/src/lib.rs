@@ -38,7 +38,7 @@ use sui_types::coin::CoinMetadata;
 use sui_types::committee::EpochId;
 use sui_types::crypto::SuiAuthorityStrongQuorumSignInfo;
 use sui_types::dynamic_field::DynamicFieldInfo;
-use sui_types::error::{ExecutionError, SuiError};
+use sui_types::error::{ExecutionError, SuiError, UserInputError, UserInputResult};
 use sui_types::event::{BalanceChangeType, Event, EventID};
 use sui_types::event::{EventEnvelope, EventType};
 use sui_types::filter::EventFilter;
@@ -1025,12 +1025,12 @@ pub enum SuiObjectRead<T: SuiData> {
 impl<T: SuiData> SuiObjectRead<T> {
     /// Returns a reference to the object if there is any, otherwise an Err if
     /// the object does not exist or is deleted.
-    pub fn object(&self) -> Result<&SuiObject<T>, SuiError> {
+    pub fn object(&self) -> UserInputResult<&SuiObject<T>> {
         match &self {
-            Self::Deleted(oref) => Err(SuiError::ObjectDeleted {
+            Self::Deleted(oref) => Err(UserInputError::ObjectDeleted {
                 object_ref: oref.to_object_ref(),
             }),
-            Self::NotExists(id) => Err(SuiError::ObjectNotFound {
+            Self::NotExists(id) => Err(UserInputError::ObjectNotFound {
                 object_id: *id,
                 version: None,
             }),
@@ -1040,12 +1040,12 @@ impl<T: SuiData> SuiObjectRead<T> {
 
     /// Returns the object value if there is any, otherwise an Err if
     /// the object does not exist or is deleted.
-    pub fn into_object(self) -> Result<SuiObject<T>, SuiError> {
+    pub fn into_object(self) -> UserInputResult<SuiObject<T>> {
         match self {
-            Self::Deleted(oref) => Err(SuiError::ObjectDeleted {
+            Self::Deleted(oref) => Err(UserInputError::ObjectDeleted {
                 object_ref: oref.to_object_ref(),
             }),
-            Self::NotExists(id) => Err(SuiError::ObjectNotFound {
+            Self::NotExists(id) => Err(UserInputError::ObjectNotFound {
                 object_id: id,
                 version: None,
             }),
@@ -1091,17 +1091,17 @@ pub enum SuiPastObjectRead<T: SuiData> {
 
 impl<T: SuiData> SuiPastObjectRead<T> {
     /// Returns a reference to the object if there is any, otherwise an Err
-    pub fn object(&self) -> Result<&SuiObject<T>, SuiError> {
+    pub fn object(&self) -> UserInputResult<&SuiObject<T>> {
         match &self {
-            Self::ObjectDeleted(oref) => Err(SuiError::ObjectDeleted {
+            Self::ObjectDeleted(oref) => Err(UserInputError::ObjectDeleted {
                 object_ref: oref.to_object_ref(),
             }),
-            Self::ObjectNotExists(id) => Err(SuiError::ObjectNotFound {
+            Self::ObjectNotExists(id) => Err(UserInputError::ObjectNotFound {
                 object_id: *id,
                 version: None,
             }),
             Self::VersionFound(o) => Ok(o),
-            Self::VersionNotFound(id, seq_num) => Err(SuiError::ObjectNotFound {
+            Self::VersionNotFound(id, seq_num) => Err(UserInputError::ObjectNotFound {
                 object_id: *id,
                 version: Some(*seq_num),
             }),
@@ -1109,7 +1109,7 @@ impl<T: SuiData> SuiPastObjectRead<T> {
                 object_id,
                 asked_version,
                 latest_version,
-            } => Err(SuiError::ObjectSequenceNumberTooHigh {
+            } => Err(UserInputError::ObjectSequenceNumberTooHigh {
                 object_id: *object_id,
                 asked_version: *asked_version,
                 latest_version: *latest_version,
@@ -1118,17 +1118,17 @@ impl<T: SuiData> SuiPastObjectRead<T> {
     }
 
     /// Returns the object value if there is any, otherwise an Err
-    pub fn into_object(self) -> Result<SuiObject<T>, SuiError> {
+    pub fn into_object(self) -> UserInputResult<SuiObject<T>> {
         match self {
-            Self::ObjectDeleted(oref) => Err(SuiError::ObjectDeleted {
+            Self::ObjectDeleted(oref) => Err(UserInputError::ObjectDeleted {
                 object_ref: oref.to_object_ref(),
             }),
-            Self::ObjectNotExists(id) => Err(SuiError::ObjectNotFound {
+            Self::ObjectNotExists(id) => Err(UserInputError::ObjectNotFound {
                 object_id: id,
                 version: None,
             }),
             Self::VersionFound(o) => Ok(o),
-            Self::VersionNotFound(object_id, version) => Err(SuiError::ObjectNotFound {
+            Self::VersionNotFound(object_id, version) => Err(UserInputError::ObjectNotFound {
                 object_id,
                 version: Some(version),
             }),
@@ -1136,7 +1136,7 @@ impl<T: SuiData> SuiPastObjectRead<T> {
                 object_id,
                 asked_version,
                 latest_version,
-            } => Err(SuiError::ObjectSequenceNumberTooHigh {
+            } => Err(UserInputError::ObjectSequenceNumberTooHigh {
                 object_id,
                 asked_version,
                 latest_version,
