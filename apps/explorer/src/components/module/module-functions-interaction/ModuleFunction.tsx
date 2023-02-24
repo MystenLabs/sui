@@ -45,8 +45,7 @@ export function ModuleFunction({
     functionName,
     functionDetails,
 }: ModuleFunctionProps) {
-    const { isConnected, signAndExecuteTransaction, currentAccount } =
-        useWalletKit();
+    const { isConnected, signAndExecuteTransaction } = useWalletKit();
     const { handleSubmit, formState, register, control } = useZodForm({
         schema: argsSchema,
     });
@@ -69,11 +68,7 @@ export function ModuleFunction({
     );
     const execute = useMutation({
         mutationFn: async ({ params, types }: TypeOf<typeof argsSchema>) => {
-            if (!currentAccount) {
-                throw new Error('Current account not found');
-            }
             const result = await signAndExecuteTransaction({
-                account: currentAccount,
                 transaction: {
                     kind: 'moveCall',
                     data: {
