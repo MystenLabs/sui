@@ -44,9 +44,11 @@ export interface WalletKitCoreState extends InternalWalletKitCoreState {
   isError: boolean;
 }
 
-type WithOptionalParams<
-  T extends Pick<SuiSignTransactionInput, "account" | "chain">
-> = Omit<T, "chain" | "account"> & Partial<Pick<T, "chain" | "account">>;
+type OptionalProperties<T extends Record<any, any>, U extends keyof T> = Omit<
+  T,
+  U
+> &
+  Partial<Pick<T, U>>;
 
 export interface WalletKitCore {
   autoconnect(): Promise<void>;
@@ -55,10 +57,16 @@ export interface WalletKitCore {
   connect(walletName: string): Promise<void>;
   disconnect(): Promise<void>;
   signTransaction: (
-    transactionInput: WithOptionalParams<SuiSignTransactionInput>
+    transactionInput: OptionalProperties<
+      SuiSignTransactionInput,
+      "chain" | "account"
+    >
   ) => ReturnType<WalletAdapter["signTransaction"]>;
   signAndExecuteTransaction: (
-    transactionInput: WithOptionalParams<SuiSignTransactionInput>
+    transactionInput: OptionalProperties<
+      SuiSignTransactionInput,
+      "chain" | "account"
+    >
   ) => ReturnType<WalletAdapter["signAndExecuteTransaction"]>;
 }
 
