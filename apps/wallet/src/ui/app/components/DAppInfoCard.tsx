@@ -29,7 +29,7 @@ export function DAppInfoCard({ name, url, iconUrl }: DAppInfoCardProps) {
             body={
                 <>
                     <div className="flex flex-row flex-nowrap items-center gap-3.75 pb-3">
-                        <div className="flex items-stretch h-15 w-15 rounded-full overflow-hidden bg-steel/20">
+                        <div className="flex items-stretch h-15 w-15 rounded-full overflow-hidden bg-steel/20 shrink-0 grow-0">
                             {iconUrl ? (
                                 <img
                                     className="flex-1"
