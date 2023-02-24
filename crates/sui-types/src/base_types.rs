@@ -13,6 +13,7 @@ use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
 use crate::error::{ExecutionError, SuiResult};
 use crate::gas_coin::GasCoin;
+use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
 use crate::signature::GenericSignature;
@@ -363,6 +364,8 @@ pub struct TxContext {
     digest: Vec<u8>,
     /// The current epoch number
     epoch: EpochId,
+    /// Timestamp that the epoch started at
+    epoch_timestamp_ms: CheckpointTimestamp,
     /// Number of `ObjectID`'s generated during execution of the current transaction
     ids_created: u64,
 }
@@ -373,6 +376,7 @@ impl TxContext {
             sender: AccountAddress::new(sender.0),
             digest: digest.into_inner().to_vec(),
             epoch: epoch_data.epoch_id(),
+            epoch_timestamp_ms: epoch_data.epoch_start_timestamp(),
             ids_created: 0,
         }
     }
