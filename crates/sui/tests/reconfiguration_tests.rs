@@ -395,16 +395,16 @@ async fn test_reconfig_with_committee_change_basic() {
     assert!(effects.status.is_ok());
 
     trigger_reconfiguration(&authorities).await;
-    let count = authorities[0].with(|node| {
-        node.state()
-            .get_sui_system_state_object()
-            .unwrap()
-            .get_current_epoch_committee()
-            .committee
-            .num_members()
-    });
     // Check that a new validator has joined the committee.
-    assert_eq!(count, 5);
+    authorities[0].with(|node| {
+        assert_eq!(
+            node.state()
+                .epoch_store_for_testing()
+                .committee()
+                .num_members(),
+            5
+        );
+    });
 
     let mut new_node_config_clone = new_node_config.clone();
     // Make sure that the new validator config shares the same genesis as the initial one.
