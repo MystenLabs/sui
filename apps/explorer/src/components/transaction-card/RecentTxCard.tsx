@@ -4,7 +4,7 @@
 import { type JsonRpcProvider } from '@mysten/sui.js';
 import { type QueryStatus, useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import toast from 'react-hot-toast';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
@@ -127,17 +127,6 @@ export function LatestTxCard({
         },
         [setSearchParams]
     );
-    console.log(rpc);
-
-    useEffect(() => {
-        rpc.getLatestCheckpointSequenceNumber().then((res) => {
-            console.log('latest checkpoint sequence number');
-            console.log(res);
-            rpc.getCheckpoint(res).then((res) =>
-                console.log('checkpoint', res)
-            );
-        });
-    });
 
     const countQuery = useQuery(
         ['transactions', 'count'],
