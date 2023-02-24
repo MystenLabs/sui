@@ -1,7 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Coin, getObjectFields, getObjectId } from '@mysten/sui.js';
+import {
+    Coin,
+    getObjectFields,
+    getObjectId,
+    getObjectOwner,
+    getObjectType,
+} from '@mysten/sui.js';
 import {
     useCallback,
     useEffect,
@@ -71,7 +77,23 @@ function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
             return rpc.getObjectBatch(ids).then((results) => {
                 setResults(
                     results
-                        .filter(({ status }) => status === 'Exists')
+                        .filter((data) => {
+                            // show only objects owned by address
+                            if (
+                                byAddress &&
+                                getObjectType(data) === 'moveObject'
+                            ) {
+                                const owner = getObjectOwner(data) as {
+                                    AddressOwner: string;
+                                };
+                                return (
+                                    data.status === 'Exists' &&
+                                    owner.AddressOwner === id
+                                );
+                            }
+
+                            return data.status === 'Exists';
+                        })
                         .map(
                             (resp) => {
                                 const contents = getObjectFields(resp);
