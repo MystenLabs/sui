@@ -283,6 +283,7 @@ pub struct GenesisValidatorInfo {
 /// Initial set of parameters for a chain.
 #[derive(Serialize, Deserialize)]
 pub struct GenesisChainParameters {
+    #[serde(default = "GenesisChainParameters::default_timestamp_ms")]
     pub timestamp_ms: u64,
 
     /// protocol version that the chain starts at.
@@ -294,12 +295,16 @@ pub struct GenesisChainParameters {
 impl GenesisChainParameters {
     pub fn new() -> Self {
         Self {
-            timestamp_ms: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64,
+            timestamp_ms: Self::default_timestamp_ms(),
             protocol_version: ProtocolVersion::MAX,
         }
+    }
+
+    fn default_timestamp_ms() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64
     }
 }
 

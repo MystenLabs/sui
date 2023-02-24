@@ -350,6 +350,10 @@ impl AuthorityPerEpochStore {
         let epoch_start_configuration =
             if let Some(epoch_start_configuration) = epoch_start_configuration {
                 assert_eq!(epoch_start_configuration.epoch_id(), epoch_id);
+                debug!(
+                    "Epoch start configuration provided for epoch {}",
+                    epoch_start_configuration.epoch_id()
+                );
                 tables
                     .epoch_start_configuration
                     .insert(&(), &epoch_start_configuration)
@@ -359,6 +363,10 @@ impl AuthorityPerEpochStore {
                 assert!(
                     epoch_id > 0,
                     "epoch_start_configuration should be provided for epoch 0"
+                );
+                debug!(
+                    "Epoch start configuration not provided for epoch {}",
+                    epoch_id
                 );
                 tables
                     .epoch_start_configuration
