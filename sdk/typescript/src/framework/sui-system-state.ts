@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
+import { Commands, Transaction } from '../builder';
 import {
   normalizeSuiAddress,
   ObjectId,
@@ -37,29 +37,25 @@ export class SuiSystemStateUtil {
     coins: ObjectId[],
     amount: bigint,
     validatorAddress: SuiAddress,
-    gasBudget?: number,
-    gasPayment?: ObjectId,
-    gasPrice?: number,
-  ): Promise<UnserializedSignableTransaction> {
+  ): Promise<Transaction> {
     // TODO: validate coin types and handle locked coins
-    return {
-      kind: 'moveCall',
-      data: {
-        packageObjectId: SUI_FRAMEWORK_ADDRESS,
+    // TODO: Use split from gas to construct staking coin.
+    const tx = new Transaction();
+    tx.add(
+      Commands.MoveCall({
+        package: SUI_FRAMEWORK_ADDRESS,
         module: SUI_SYSTEM_MODULE_NAME,
         function: ADD_DELEGATION_MUL_COIN_FUN_NAME,
         typeArguments: [],
         arguments: [
-          SUI_SYSTEM_STATE_OBJECT_ID,
-          coins,
-          [String(amount)],
-          validatorAddress,
+          tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
+          tx.input(coins),
+          tx.input([String(amount)]),
+          tx.input(validatorAddress),
         ],
-        gasBudget,
-        gasPayment,
-        gasPrice,
-      },
-    };
+      }),
+    );
+    return tx;
   }
 
   /**
@@ -73,22 +69,21 @@ export class SuiSystemStateUtil {
   public static async newRequestWithdrawlDelegationTxn(
     delegation: ObjectId,
     stakedCoinId: ObjectId,
-    gasBudget?: number,
-    gasPayment?: ObjectId,
-    gasPrice?: number,
-  ): Promise<UnserializedSignableTransaction> {
-    return {
-      kind: 'moveCall',
-      data: {
-        packageObjectId: SUI_FRAMEWORK_ADDRESS,
+  ): Promise<Transaction> {
+    const tx = new Transaction();
+    tx.add(
+      Commands.MoveCall({
+        package: SUI_FRAMEWORK_ADDRESS,
         module: SUI_SYSTEM_MODULE_NAME,
         function: WITHDRAW_DELEGATION_FUN_NAME,
         typeArguments: [],
-        arguments: [SUI_SYSTEM_STATE_OBJECT_ID, delegation, stakedCoinId],
-        gasBudget,
-        gasPayment,
-        gasPrice,
-      },
-    };
+        arguments: [
+          tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
+          tx.input(delegation),
+          tx.input(stakedCoinId),
+        ],
+      }),
+    );
+    return tx;
   }
 }
