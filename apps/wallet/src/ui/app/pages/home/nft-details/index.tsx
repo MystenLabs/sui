@@ -13,7 +13,12 @@ import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import NFTDisplayCard from '_components/nft-display';
-import { useAppSelector, useNFTBasicData, useObjectsState } from '_hooks';
+import {
+    useAppSelector,
+    useNFTBasicData,
+    useObjectsState,
+    useSafeNft,
+} from '_hooks';
 import { createAccountNftByIdSelector } from '_redux/slices/account';
 import ExternalLink from '_src/ui/app/components/external-link';
 import PageTitle from '_src/ui/app/shared/PageTitle';
@@ -63,12 +68,16 @@ function NFTDetailsPage() {
         () => createAccountNftByIdSelector(nftId || ''),
         [nftId]
     );
-    const selectedNft = useAppSelector(nftSelector);
+    const walletNft = useAppSelector(nftSelector);
+    const { data: safeNft, loading: safesLoading } = useSafeNft(nftId);
+
+    const selectedNft = walletNft ?? safeNft;
     const isTransferable = !!selectedNft && hasPublicTransfer(selectedNft);
     const { nftFields, fileExtensionType, filePath } =
         useNFTBasicData(selectedNft);
-    const { loading } = useObjectsState();
+    const { loading: objectsLoading } = useObjectsState();
 
+    const loading = objectsLoading || safesLoading;
     // Extract either the attributes, or use the top-level NFT fields:
     const metaFields =
         nftFields?.metadata?.fields?.attributes?.fields ||
@@ -91,7 +100,7 @@ function NFTDetailsPage() {
                 'items-center': loading,
             })}
         >
-            <Loading loading={loading}>
+            <Loading loading={loading && !selectedNft}>
                 {selectedNft ? (
                     <>
                         <PageTitle back="/nfts" />

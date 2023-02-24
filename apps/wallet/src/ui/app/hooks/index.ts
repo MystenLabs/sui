@@ -25,3 +25,4 @@ export { useGetTransferAmount } from './useGetTransferAmount';
 export * from './useSigner';
 export * from './useIndividualCoinMaxBalance';
 export * from './useOriginbyteNft';
+export * from './useOriginByteSafes';

@@ -7,14 +7,16 @@ import Alert from '_components/alert';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import NFTdisplay from '_components/nft-display';
-import { useAppSelector, useObjectsState } from '_hooks';
+import { useAppSelector, useObjectsState, useOriginByteSafes } from '_hooks';
 import { accountNftsSelector } from '_redux/slices/account';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
 function NftsPage() {
     const nfts = useAppSelector(accountNftsSelector);
+    const { data: safeObjects = [] } = useOriginByteSafes();
+    const allObjects = [...nfts, ...safeObjects];
     const { error, loading, showError } = useObjectsState();
-    const isNftsFound = nfts.length > 0;
+    const isNftsFound = allObjects.length > 0;
     return (
         <div className="flex flex-col flex-nowrap items-center gap-4 flex-1">
             <PageTitle title="NFTs" />
@@ -29,7 +31,7 @@ function NftsPage() {
                 ) : null}
                 {isNftsFound ? (
                     <div className="grid grid-cols-2 gap-x-3.5 gap-y-4">
-                        {nfts.map((nft) => (
+                        {allObjects.map((nft) => (
                             <Link
                                 to={`/nft-details?${new URLSearchParams({
                                     objectId: nft.reference.objectId,

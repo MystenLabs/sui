@@ -43,7 +43,6 @@ type NftRpcResponse = {
 type NftRaw = {
     id: string;
     logicalOwner: string;
-    bagId: string;
 };
 
 type DomainRpcBase<T> = {
@@ -114,7 +113,6 @@ export const NftParser: SuiObjectParser<NftRpcResponse, NftRaw> = {
                 packageModuleClassName,
                 rawResponse: rpcResponse,
                 logicalOwner: data.logical_owner,
-                bagId: data.bag.fields.id.id,
             };
         }
         return undefined;
@@ -218,7 +216,7 @@ export class NftClient {
         const nfts = await this.fetchAndParseObjectsById(params.objectIds);
         const bags = await Promise.all(
             nfts.map(async (nft) => {
-                const content = await this.getBagContent(nft.bagId);
+                const content = await this.getBagContent(nft.id);
                 return {
                     nftId: nft.id,
                     content: parseDomains(content),
