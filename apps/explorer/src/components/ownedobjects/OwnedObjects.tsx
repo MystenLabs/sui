@@ -83,12 +83,14 @@ function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
                                 byAddress &&
                                 getObjectType(data) === 'moveObject'
                             ) {
-                                const owner = getObjectOwner(data) as {
+                                const { AddressOwner } = getObjectOwner(
+                                    data
+                                ) as {
                                     AddressOwner: string;
                                 };
                                 return (
                                     data.status === 'Exists' &&
-                                    owner.AddressOwner === id
+                                    AddressOwner === id
                                 );
                             }
 
