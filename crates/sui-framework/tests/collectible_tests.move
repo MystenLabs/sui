@@ -24,8 +24,6 @@ module sui::boars {
             otw, option::some(CAP), ctx
         );
 
-        transfer(creator_cap, sender(ctx));
-
         display::add_multiple(&pub, &mut display, vector[
             utf8(b"name"),
             utf8(b"description"),
@@ -34,7 +32,7 @@ module sui::boars {
             utf8(b"project_url")
         ], vector[
             utf8(b"{name}"),
-            utf8(b"{description}"),
+            utf8(b"Unique Boar from the Boars collection!"),
             utf8(b"https://get-a-boar.com/{img_url}"),
             utf8(b"Boarcognito"),
             utf8(b"https://get-a-boar.com/")
@@ -42,6 +40,7 @@ module sui::boars {
 
         display::update_version(&pub, &mut display);
         display::transfer(display, sender(ctx));
+        transfer(creator_cap, sender(ctx));
         transfer(pub, sender(ctx))
     }
 
