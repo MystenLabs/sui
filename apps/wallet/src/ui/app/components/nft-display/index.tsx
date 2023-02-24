@@ -45,7 +45,7 @@ export function NFTDisplayCard({
     const { data: originByteNft, isLoading: originByteLoading } =
         useOriginbyteNft(objectId);
     const nftName = nftMeta?.name;
-
+    // display title is the either originByteNft feild name or default nft name or fall back to it the object id
     const displayTitle = originByteNft?.fields.name || nftName || objectId;
 
     const nftUrl = nftMeta?.url || null;
