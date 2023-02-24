@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFormatCoin } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { Form, useFormikContext } from 'formik';
 import { useEffect } from 'react';
@@ -10,7 +11,6 @@ import { useGasBudgetInMist } from '../../hooks/useGasBudgetInMist';
 import { Heading } from '../../shared/heading';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
-import { useFormatCoin } from '_hooks';
 import { DEFAULT_GAS_BUDGET_FOR_STAKE } from '_redux/slices/sui-objects/Coin';
 
 import type { FormValues } from './StakingCard';

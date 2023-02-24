@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useRpcClient } from '@mysten/core';
 import { useIsMutating, useMutation } from '@tanstack/react-query';
 
 import useAppSelector from '../../hooks/useAppSelector';
-import { useRpc } from '../../hooks/useRpc';
 
 export function useFaucetMutation() {
-    const api = useRpc();
+    const api = useRpcClient();
     const address = useAppSelector(({ account: { address } }) => address);
     const mutationKey = ['faucet-request-tokens', address];
     const mutation = useMutation({

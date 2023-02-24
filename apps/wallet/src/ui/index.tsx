@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
+import { RpcClientContext } from '@mysten/core';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createRoot } from 'react-dom/client';
 import { IntlProvider } from 'react-intl';
@@ -17,7 +18,7 @@ import { getFromLocationSearch } from '_redux/slices/app/AppType';
 import { setAttributes } from '_src/shared/experimentation/features';
 import initSentry from '_src/shared/sentry';
 import store from '_store';
-import { thunkExtras } from '_store/thunk-extras';
+import { api, thunkExtras } from '_store/thunk-extras';
 
 import './styles/global.scss';
 import '@fontsource/inter/variable.css';
@@ -47,9 +48,13 @@ function renderApp() {
                 <Provider store={store}>
                     <IntlProvider locale={navigator.language}>
                         <QueryClientProvider client={queryClient}>
-                            <ErrorBoundary>
-                                <App />
-                            </ErrorBoundary>
+                            <RpcClientContext.Provider
+                                value={api.instance.fullNode}
+                            >
+                                <ErrorBoundary>
+                                    <App />
+                                </ErrorBoundary>
+                            </RpcClientContext.Provider>
                         </QueryClientProvider>
                     </IntlProvider>
                 </Provider>
