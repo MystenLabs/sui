@@ -19,13 +19,14 @@ use move_vm_runtime::{
     session::{LoadedFunctionInstantiation, SerializedReturnValues},
 };
 use move_vm_types::loaded_data::runtime_types::{StructType, Type};
-use sui_cost_tables::bytecode_tables::GasStatus;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     balance::Balance,
     base_types::{ObjectID, SuiAddress, TxContext, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
+    event::Event,
+    gas::SuiGasStatus,
     id::UID,
     messages::{
         Argument, Command, EntryArgumentErrorKind, ProgrammableMoveCall, ProgrammableTransaction,
@@ -48,26 +49,42 @@ use super::{context::*, types::*};
 pub fn execute<E: fmt::Debug, S: StorageView<E>>(
     protocol_config: &ProtocolConfig,
     vm: &MoveVM,
-    state_view: &S,
-    ctx: &mut TxContext,
-    gas_status: &mut GasStatus,
+    state_view: &mut S,
+    tx_context: &mut TxContext,
+    gas_status: &mut SuiGasStatus,
     gas_coin: ObjectID,
     pt: ProgrammableTransaction,
-) -> Result<ExecutionResults, ExecutionError> {
+) -> Result<(), ExecutionError> {
     let ProgrammableTransaction { inputs, commands } = pt;
     let mut context = ExecutionContext::new(
         protocol_config,
         vm,
         state_view,
-        ctx,
+        tx_context,
         gas_status,
         gas_coin,
         inputs,
     )?;
+    // execute commands
     for (idx, command) in commands.into_iter().enumerate() {
         execute_command(&mut context, command).map_err(|e| e.with_command_index(idx))?;
     }
-    context.finish()
+    // apply changes
+    let ExecutionResults {
+        object_changes,
+        user_events,
+    } = context.finish()?;
+    state_view.apply_object_changes(object_changes);
+    for (module_id, tag, contents) in user_events {
+        state_view.log_event(Event::move_event(
+            module_id.address(),
+            module_id.name(),
+            tx_context.sender(),
+            tag,
+            contents,
+        ))
+    }
+    Ok(())
 }
 
 /// Execute a single command
@@ -303,7 +320,7 @@ fn vm_move_call<E: fmt::Debug, S: StorageView<E>>(
             function,
             type_arguments,
             serialized_arguments,
-            context.gas_status,
+            context.gas_status.create_move_gas_status(),
         )
         .map_err(|e| context.convert_vm_error(e))?;
 
@@ -362,7 +379,7 @@ fn publish_and_verify_modules<E: fmt::Debug, S: StorageView<E>>(
             AccountAddress::from(package_id),
             // TODO: publish_module_bundle() currently doesn't charge gas.
             // Do we want to charge there?
-            context.gas_status,
+            context.gas_status.create_move_gas_status(),
         )
         .map_err(|e| context.convert_vm_error(e))?;
 
