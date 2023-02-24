@@ -19,6 +19,7 @@ use sui_network::{
 };
 use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignInfo};
 use sui_types::error::UserInputError;
+use sui_types::fp_ensure;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemState;
@@ -28,7 +29,6 @@ use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
 };
-use sui_types::{fp_ensure, SUI_SYSTEM_STATE_OBJECT_ID};
 use thiserror::Error;
 use tracing::{debug, error, info, trace, warn, Instrument};
 
@@ -805,7 +805,7 @@ where
                                 if state.latest_object_version.as_ref().map_or(true, |latest| {
                                     object_info.object.version() > latest.version()
                                 }) {
-                                    return ReduceOutput::Success(object_info.object);
+                                    state.latest_object_version = Some(object_info.object);
                                 }
                             }
                             Err(err) => {
@@ -813,7 +813,11 @@ where
                             }
                         };
                         if state.total_weight >= self.committee.quorum_threshold() {
-                            return ReduceOutput::Failed(state);
+                            if let Some(object) = state.latest_object_version {
+                                return ReduceOutput::Success(object);
+                            } else {
+                                return ReduceOutput::Failed(state);
+                            }
                         }
                         ReduceOutput::Continue(state)
                     })
@@ -833,19 +837,56 @@ where
     pub async fn get_latest_system_state_object_for_testing(
         &self,
     ) -> anyhow::Result<SuiSystemState> {
-        let object = self
-            .get_latest_object_version_for_testing(SUI_SYSTEM_STATE_OBJECT_ID)
-            .await?;
-        let system_state_object = bcs::from_bytes::<SuiSystemState>(
-            object
-                .data
-                .try_as_move()
-                .ok_or(UserInputError::MovePackageAsObject {
-                    object_id: object.id(),
-                })?
-                .contents(),
-        )?;
-        Ok(system_state_object)
+        #[derive(Debug, Default)]
+        struct State {
+            latest_system_state: Option<SuiSystemState>,
+            total_weight: StakeUnit,
+        }
+        let initial_state = State::default();
+        self.quorum_map_then_reduce_with_timeout(
+            initial_state,
+            |_name, client| Box::pin(async move { client.handle_system_state_object().await }),
+            |mut state, name, weight, result| {
+                Box::pin(async move {
+                    state.total_weight += weight;
+                    match result {
+                        Ok(system_state) => {
+                            debug!(
+                                "Received system state object from validator {:?} with epoch: {:?}",
+                                name.concise(),
+                                system_state.epoch
+                            );
+                            if state
+                                .latest_system_state
+                                .as_ref()
+                                .map_or(true, |latest| system_state.epoch > latest.epoch)
+                            {
+                                state.latest_system_state = Some(system_state);
+                            }
+                        }
+                        Err(err) => {
+                            debug!(
+                                "Received error from validator {:?}: {:?}",
+                                name.concise(),
+                                err
+                            );
+                        }
+                    };
+                    if state.total_weight >= self.committee.quorum_threshold() {
+                        if let Some(system_state) = state.latest_system_state {
+                            return ReduceOutput::Success(system_state);
+                        } else {
+                            return ReduceOutput::Failed(state);
+                        }
+                    }
+                    ReduceOutput::Continue(state)
+                })
+            },
+            // A long timeout before we hear back from a quorum
+            self.timeouts.pre_quorum_timeout,
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("Failed to get latest system state from the authorities"))
     }
 
     /// Submits the transaction to a quorum of validators to make a certificate.

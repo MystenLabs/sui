@@ -3116,3 +3116,9 @@ pub struct CommitteeInfo {
     // TODO: We could also return the certified checkpoint that contains this committee.
     // This would allows a client to verify the authenticity of the committee.
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SystemStateRequest {
+    // This is needed to make gRPC happy.
+    pub _unused: bool,
+}

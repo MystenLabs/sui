@@ -76,6 +76,15 @@ fn main() -> Result<()> {
                 .codec_path(codec_path)
                 .build(),
         )
+        .method(
+            Method::builder()
+                .name("get_system_state_object")
+                .route_name("GetSystemStateObject")
+                .input_type("sui_types::messages::SystemStateRequest")
+                .output_type("sui_types::sui_system_state::SuiSystemState")
+                .codec_path(codec_path)
+                .build(),
+        )
         .build();
 
     Builder::new()
