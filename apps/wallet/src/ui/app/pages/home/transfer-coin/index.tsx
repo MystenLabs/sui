@@ -34,7 +34,6 @@ import {
     useSigner,
     useGetCoinObjectsByCoinType,
 } from '_hooks';
-import {} from '_redux/slices/account';
 import { Coin } from '_redux/slices/sui-objects/Coin';
 import { trackEvent } from '_src/shared/plausible';
 import { useGasBudgetInMist } from '_src/ui/app/hooks/useGasBudgetInMist';
