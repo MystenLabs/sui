@@ -1470,10 +1470,19 @@ impl AuthorityState {
         info!("current protocol version is now {:?}", current_version);
         info!("supported versions are: {:?}", supported_protocol_versions);
         if !supported_protocol_versions.is_version_supported(current_version) {
-            panic!(
-                "Unsupported protocol version. The network is at {:?}, but this SuiNode only supports: {:?}",
+            let msg = format!(
+                "Unsupported protocol version. The network is at {:?}, but this SuiNode only supports: {:?}. Shutting down.",
                 current_version, supported_protocol_versions,
             );
+
+            error!("{}", msg);
+            eprintln!("{}", msg);
+
+            #[cfg(not(msim))]
+            std::process::exit(1);
+
+            #[cfg(msim)]
+            sui_simulator::task::shutdown_current_node();
         }
     }
     // TODO: This function takes both committee and genesis as parameter.

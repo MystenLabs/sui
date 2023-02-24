@@ -38,7 +38,7 @@ use sui_types::{
 use tokio::time::timeout;
 use tracing::{info, warn};
 
-const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(10);
+const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 2_000;
 
