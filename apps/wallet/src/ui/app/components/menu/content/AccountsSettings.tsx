@@ -15,6 +15,7 @@ import { Button } from '_src/ui/app/shared/ButtonUI';
 
 export function AccountsSettings() {
     const backUrl = useNextMenuUrl(true, '/');
+    const importPrivateKeyUrl = useNextMenuUrl(true, '/import-private-key');
     const accounts = useAccounts();
     const isMultiAccountsEnabled = useFeature(
         FEATURES.WALLET_MULTI_ACCOUNTS
@@ -39,13 +40,21 @@ export function AccountsSettings() {
                     <Account address={address} key={address} />
                 ))}
                 {isMultiAccountsEnabled ? (
-                    <Button
-                        variant="outline"
-                        size="tall"
-                        text="Create New Account"
-                        loading={createAccountMutation.isLoading}
-                        onClick={() => createAccountMutation.mutate()}
-                    />
+                    <>
+                        <Button
+                            variant="outline"
+                            size="tall"
+                            text="Create New Account"
+                            loading={createAccountMutation.isLoading}
+                            onClick={() => createAccountMutation.mutate()}
+                        />
+                        <Button
+                            variant="outline"
+                            size="tall"
+                            text="Import Private Key"
+                            to={importPrivateKeyUrl}
+                        />
+                    </>
                 ) : null}
             </div>
         </MenuLayout>
