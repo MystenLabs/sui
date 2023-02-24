@@ -135,6 +135,7 @@ export class JsonRpcProvider extends Provider {
     this.connection = connection;
 
     const opts = { ...DEFAULT_OPTIONS, ...options };
+    this.options = opts;
     // TODO: add header for websocket request
     this.client = opts.rpcClient ?? new JsonRpcClient(this.connection.fullnode);
 
