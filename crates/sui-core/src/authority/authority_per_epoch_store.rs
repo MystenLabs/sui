@@ -25,8 +25,8 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     AuthorityCapabilities, CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey,
     ConsensusTransactionKind, SenderSignedData, SharedInputObject, TransactionData,
-    TransactionEffects, TrustedExecutableTransaction, TrustedSignedTransactionEffects,
-    VerifiedCertificate, VerifiedExecutableTransaction, VerifiedSignedTransaction,
+    TransactionEffects, TrustedExecutableTransaction, VerifiedCertificate,
+    VerifiedExecutableTransaction, VerifiedSignedTransaction,
 };
 use sui_types::signature::GenericSignature;
 use tracing::{debug, info, trace, warn};
@@ -114,10 +114,7 @@ pub struct AuthorityPerEpochStore {
     /// A write-ahead/recovery log used to ensure we finish fully processing certs after errors or
     /// crashes.
     wal: Arc<
-        DBWriteAheadLog<
-            TrustedExecutableTransaction,
-            (InnerTemporaryStore, TrustedSignedTransactionEffects),
-        >,
+        DBWriteAheadLog<TrustedExecutableTransaction, (InnerTemporaryStore, TransactionEffects)>,
     >,
 
     /// The moment when the current epoch started locally on this validator. Note that this
@@ -434,10 +431,7 @@ impl AuthorityPerEpochStore {
     pub fn wal(
         &self,
     ) -> &Arc<
-        DBWriteAheadLog<
-            TrustedExecutableTransaction,
-            (InnerTemporaryStore, TrustedSignedTransactionEffects),
-        >,
+        DBWriteAheadLog<TrustedExecutableTransaction, (InnerTemporaryStore, TransactionEffects)>,
     > {
         &self.wal
     }
@@ -544,7 +538,7 @@ impl AuthorityPerEpochStore {
         &self,
         tx_digest: &TransactionDigest,
         cert_sig: Option<&AuthorityStrongQuorumSignInfo>,
-        effects_signature: &AuthoritySignInfo,
+        effects_signature: Option<&AuthoritySignInfo>,
     ) -> SuiResult {
         let mut batch = self.tables.effects_signatures.batch();
         if let Some(cert_sig) = cert_sig {
@@ -553,10 +547,12 @@ impl AuthorityPerEpochStore {
                 [(tx_digest, cert_sig)],
             )?;
         }
-        batch = batch.insert_batch(
-            &self.tables.effects_signatures,
-            [(tx_digest, effects_signature)],
-        )?;
+        if let Some(effects_signature) = effects_signature {
+            batch = batch.insert_batch(
+                &self.tables.effects_signatures,
+                [(tx_digest, effects_signature)],
+            )?;
+        }
         batch.write()?;
         Ok(())
     }
@@ -1630,7 +1626,7 @@ impl AuthorityPerEpochStore {
                     .should_accept_consensus_certs()
                 {
                     debug!(
-                        "Recieved CapabilityNotification from {:?}",
+                        "Received CapabilityNotification from {:?}",
                         authority.concise()
                     );
                     self.record_capabilities(capabilities)?;
