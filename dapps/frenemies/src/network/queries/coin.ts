@@ -11,10 +11,10 @@ const DEC = 9;
 export function useBalance() {
   const { currentAccount } = useWalletKit();
   return useQuery(
-    ["account-balance", currentAccount],
+    ["account-balance", currentAccount?.address],
     async () => {
       const { totalBalance } = await provider.getBalance(
-        currentAccount!,
+        currentAccount?.address!,
         SUI_TYPE_ARG
       );
 
@@ -24,7 +24,7 @@ export function useBalance() {
       };
     },
     {
-      enabled: !!currentAccount,
+      enabled: !!currentAccount?.address,
       refetchInterval: 60 * 1000,
       staleTime: 2000,
     }
