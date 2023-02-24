@@ -44,6 +44,7 @@ import {
   CheckpointContents,
   CheckpointDigest,
   CheckPointContentsDigest,
+  Checkpoint,
   CommitteeInfo,
 } from '../types';
 
@@ -387,6 +388,7 @@ export abstract class Provider {
   /**
    * Returns checkpoint summary based on a checkpoint sequence number
    * @param sequence_number - The sequence number of the desired checkpoint summary
+   * @deprecated - Prefer `getCheckpoint` instead
    */
   abstract getCheckpointSummary(
     sequenceNumber: number,
@@ -395,6 +397,7 @@ export abstract class Provider {
   /**
    * Returns checkpoint summary based on a checkpoint digest
    * @param digest - The checkpoint digest
+   * @deprecated - Prefer `getCheckpoint` instead
    */
   abstract getCheckpointSummaryByDigest(
     digest: CheckpointDigest,
@@ -403,6 +406,7 @@ export abstract class Provider {
   /**
    * Return contents of a checkpoint, namely a list of execution digests
    * @param sequence_number - The sequence number of the desired checkpoint contents
+   * @deprecated - Prefer `getCheckpoint` instead
    */
   abstract getCheckpointContents(
     sequenceNumber: number,
@@ -415,6 +419,12 @@ export abstract class Provider {
   abstract getCheckpointContentsByDigest(
     digest: CheckPointContentsDigest,
   ): Promise<CheckpointContents>;
+
+  /**
+   * Returns information about a given checkpoint
+   * @param id - The checkpoint digest or sequence number
+   */
+  abstract getCheckpoint(id: CheckpointDigest | number): Promise<Checkpoint>;
 
   /**
    * Return the committee information for the asked epoch

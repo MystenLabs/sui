@@ -54,6 +54,7 @@ import {
   CheckpointSummary,
   CheckpointContents,
   CheckpointDigest,
+  Checkpoint,
   CheckPointContentsDigest,
   CommitteeInfo,
 } from '../types';
@@ -981,6 +982,22 @@ export class JsonRpcProvider extends Provider {
     } catch (err) {
       throw new Error(
         `Error getting checkpoint summary with request type: ${err} for digest: ${digest}.`,
+      );
+    }
+  }
+
+  async getCheckpoint(id: CheckpointDigest | number): Promise<Checkpoint> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getCheckpoint',
+        [id],
+        Checkpoint,
+        this.options.skipDataValidation,
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(
+        `Error getting checkpoint with request type: ${err} for id: ${id}.`,
       );
     }
   }
