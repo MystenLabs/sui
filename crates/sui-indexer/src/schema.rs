@@ -18,12 +18,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    checkpoint_logs (next_cursor_sequence_number) {
-        next_cursor_sequence_number -> Int8,
-    }
-}
-
-diesel::table! {
     checkpoints (sequence_number) {
         sequence_number -> Int8,
         checkpoint_digest -> Varchar,
@@ -196,7 +190,6 @@ diesel::table! {
 diesel::allow_tables_to_appear_in_same_query!(
     address_logs,
     addresses,
-    checkpoint_logs,
     checkpoints,
     error_logs,
     events,

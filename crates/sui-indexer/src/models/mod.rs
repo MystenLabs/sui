@@ -3,7 +3,6 @@
 
 pub mod address_logs;
 pub mod addresses;
-pub mod checkpoint_logs;
 pub mod checkpoints;
 pub mod error_logs;
 pub mod events;

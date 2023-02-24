@@ -232,7 +232,8 @@ pub fn get_latest_checkpoint_sequence_number(
             checkpoints_table
                 .select(max(sequence_number))
                 .first::<Option<i64>>(conn)
-                .map(|o| o.unwrap_or(0))
+                // -1 to differentiate between no checkpoints and the first checkpoint
+                .map(|o| o.unwrap_or(-1))
         });
     latest_checkpoint_sequence_number_read_result.map_err(|e| {
         IndexerError::PostgresReadError(format!(
