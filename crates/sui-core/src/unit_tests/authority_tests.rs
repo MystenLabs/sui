@@ -33,6 +33,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use sui_json_rpc_types::{SuiExecutionResult, SuiExecutionStatus, SuiGasCostSummary};
+use sui_types::error::UserInputError;
 use sui_types::utils::{
     make_committee_key, mock_certified_checkpoint, to_sender_signed_transaction,
     to_sender_signed_transaction_with_multi_signers,
@@ -733,9 +734,7 @@ async fn test_dev_inspect_uses_unbound_object() {
         .dev_inspect_transaction(sender, kind, Some(1))
         .await;
     let Err(err) = result else { panic!() };
-    assert!(err
-        .to_string()
-        .contains("Error checking transaction input objects: [ObjectNotFound"));
+    assert!(err.to_string().contains("ObjectNotFound"));
 }
 
 #[tokio::test]
@@ -890,10 +889,8 @@ async fn test_handle_transfer_transaction_with_max_sequence_number() {
         .await;
 
     assert_eq!(
-        res.unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        &SuiError::InvalidSequenceNumber,
+        UserInputError::try_from(res.unwrap_err()).unwrap(),
+        UserInputError::InvalidSequenceNumber,
     );
 }
 
@@ -904,11 +901,8 @@ async fn test_handle_shared_object_with_max_sequence_number() {
     // Submit the transaction and assemble a certificate.
     let response = authority.handle_transaction(transaction.clone()).await;
     assert_eq!(
-        response
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        &SuiError::InvalidSequenceNumber,
+        UserInputError::try_from(response.unwrap_err()).unwrap(),
+        UserInputError::InvalidSequenceNumber,
     );
 }
 
@@ -1146,8 +1140,8 @@ async fn test_handle_sponsored_transaction() {
 
     assert!(
         matches!(
-            error.collapse_if_single_transaction_input_error().unwrap(),
-            &SuiError::IncorrectSigner { .. }
+            UserInputError::try_from(error.clone()).unwrap(),
+            UserInputError::IncorrectUserSignature { .. }
         ),
         "{}",
         error
@@ -1173,8 +1167,8 @@ async fn test_handle_sponsored_transaction() {
 
     assert!(
         matches!(
-            error.collapse_if_single_transaction_input_error().unwrap(),
-            &SuiError::IncorrectSigner { .. }
+            UserInputError::try_from(error.clone()).unwrap(),
+            UserInputError::IncorrectUserSignature { .. }
         ),
         "{}",
         error
@@ -1201,8 +1195,8 @@ async fn test_handle_sponsored_transaction() {
 
     assert!(
         matches!(
-            error.collapse_if_single_transaction_input_error().unwrap(),
-            &SuiError::IncorrectSigner { .. }
+            UserInputError::try_from(error.clone()).unwrap(),
+            UserInputError::IncorrectUserSignature { .. }
         ),
         "{}",
         error
@@ -1264,11 +1258,8 @@ async fn test_immutable_gas() {
         .handle_transaction(transfer_transaction.clone())
         .await;
     assert!(matches!(
-        *result
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        SuiError::GasObjectNotOwnedObject { .. }
+        UserInputError::try_from(result.unwrap_err()).unwrap(),
+        UserInputError::GasObjectNotOwnedObject { .. }
     ));
 }
 
@@ -1296,11 +1287,8 @@ async fn test_objected_owned_gas() {
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let result = authority_state.handle_transaction(transaction).await;
     assert!(matches!(
-        *result
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        SuiError::GasObjectNotOwnedObject { .. }
+        UserInputError::try_from(result.unwrap_err()).unwrap(),
+        UserInputError::GasObjectNotOwnedObject { .. }
     ));
 }
 
@@ -1742,11 +1730,8 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
     let result = authority_state.handle_transaction(transaction).await;
 
     assert!(matches!(
-        *result
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        SuiError::GasBalanceTooLowToCoverGasBudget { .. }
+        UserInputError::try_from(result.unwrap_err()).unwrap(),
+        UserInputError::GasBalanceTooLowToCoverGasBudget { .. }
     ));
 }
 
@@ -1837,13 +1822,10 @@ async fn test_missing_package() {
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let result = authority_state.handle_transaction(transaction).await;
-    let error = result.unwrap_err();
-    let error = error.collapse_if_single_transaction_input_error().unwrap();
-    assert!(
-        matches!(error, SuiError::DependentPackageNotFound { .. }),
-        "Wrong error {}",
-        error
-    );
+    assert!(matches!(
+        UserInputError::try_from(result.unwrap_err()).unwrap(),
+        UserInputError::DependentPackageNotFound { .. }
+    ));
 }
 
 #[tokio::test]
@@ -1909,7 +1891,7 @@ async fn test_type_argument_dependencies() {
         .unwrap()
         .status
         .into_signed_for_testing();
-    // missing package fails obj type tag succeeds
+    // missing package fails
     let data = TransactionData::new_move_call_with_dummy_gas_price(
         s3,
         object_basics,
@@ -1927,13 +1909,11 @@ async fn test_type_argument_dependencies() {
     );
     let transaction = to_sender_signed_transaction(data, &s3_key);
     let result = authority_state.handle_transaction(transaction).await;
-    let error = result.unwrap_err();
-    let error = error.collapse_if_single_transaction_input_error().unwrap();
-    assert!(
-        matches!(error, SuiError::DependentPackageNotFound { .. }),
-        "Wrong error {}",
-        error
-    );
+
+    assert!(matches!(
+        UserInputError::try_from(result.unwrap_err()).unwrap(),
+        UserInputError::DependentPackageNotFound { .. }
+    ));
 }
 
 #[tokio::test]
@@ -2901,10 +2881,10 @@ async fn test_invalid_mutable_clock_parameter() {
     };
 
     assert_eq!(
-        e,
-        SuiError::TransactionInputObjectsErrors {
-            errors: vec![SuiError::ImmutableParameterExpectedError]
-        },
+        UserInputError::try_from(e).unwrap(),
+        UserInputError::ImmutableParameterExpectedError {
+            object_id: SUI_CLOCK_OBJECT_ID
+        }
     );
 }
 
@@ -4541,11 +4521,8 @@ async fn test_blocked_move_calls() {
     );
     let response = authority_state.handle_transaction(tx).await;
     assert_eq!(
-        *response
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        SuiError::BlockedMoveFunction
+        UserInputError::try_from(response.unwrap_err()).unwrap(),
+        UserInputError::BlockedMoveFunction
     );
 }
 
