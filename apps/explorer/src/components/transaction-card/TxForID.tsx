@@ -17,7 +17,6 @@ import { useRpc } from '~/hooks/useRpc';
 import { Banner } from '~/ui/Banner';
 import { TableCard } from '~/ui/TableCard';
 
-const TRUNCATE_LENGTH = 14;
 const ITEMS_PER_PAGE = 20;
 
 const DATATYPE_DEFAULT = {
