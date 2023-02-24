@@ -42,16 +42,6 @@ export const respondToPermissionRequest = createAsyncThunk<
     }
 );
 
-export const revokeAppPermissionByOrigin = createAsyncThunk<
-    void,
-    { origin: string },
-    AppThunkConfig
->('revoke-app-permission', async ({ origin }, { extra: { background } }) => {
-    await background.disconnectApp(origin);
-    await background.sendGetPermissionRequests();
-    return;
-});
-
 const slice = createSlice({
     name: 'permissions',
     initialState: permissionsAdapter.getInitialState({ initialized: false }),

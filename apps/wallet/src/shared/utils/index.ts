@@ -52,3 +52,11 @@ export function isValidUrl(url: string | null) {
         return false;
     }
 }
+
+export function prepareLinkToCompare(link: string) {
+    let adjLink = link.toLowerCase();
+    if (!adjLink.endsWith('/')) {
+        adjLink += '/';
+    }
+    return adjLink;
+}

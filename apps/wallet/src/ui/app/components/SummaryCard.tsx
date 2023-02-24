@@ -12,6 +12,7 @@ export type SummaryCardProps = {
     body: ReactNode;
     footer?: ReactNode;
     minimalPadding?: boolean;
+    showDivider?: boolean;
 };
 
 export function SummaryCard({
@@ -19,11 +20,12 @@ export function SummaryCard({
     header,
     footer,
     minimalPadding,
+    showDivider = false,
 }: SummaryCardProps) {
     return (
-        <div className="bg-white flex flex-col flex-nowrap border border-solid border-gray-45 rounded-2xl overflow-hidden">
+        <div className="bg-white flex flex-col flex-nowrap border border-solid border-gray-45 rounded-2xl">
             {header ? (
-                <div className="flex flex-row flex-nowrap items-center justify-center uppercase bg-gray-40 px-3.75 py-3">
+                <div className="flex flex-row flex-nowrap items-center justify-center uppercase bg-gray-40 px-3.75 py-3 rounded-t-2xl">
                     <Text
                         variant="captionSmall"
                         weight="semibold"
@@ -37,13 +39,16 @@ export function SummaryCard({
             <div
                 className={cx(
                     'flex-1 flex flex-col items-stretch flex-nowrap px-4',
-                    minimalPadding ? 'py-2' : 'pb-5 pt-4'
+                    minimalPadding ? 'py-2' : 'py-4',
+                    showDivider
+                        ? 'divide-x-0 divide-y divide-gray-45 divide-solid'
+                        : ''
                 )}
             >
                 {body}
             </div>
             {footer ? (
-                <div className="p-4 pt-3 border-t border-solid border-gray-40">
+                <div className="p-4 pt-3 border-x-0 border-b-0 border-t border-solid border-gray-40">
                     {footer}
                 </div>
             ) : null}
