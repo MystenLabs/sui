@@ -102,6 +102,8 @@ use crate::{
 };
 use sui_adapter::execution_engine;
 
+use self::authority_store::InputKey;
+
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
 pub mod authority_tests;
@@ -853,7 +855,7 @@ impl AuthorityState {
         let output_keys: Vec<_> = inner_temporary_store
             .written
             .iter()
-            .map(|(_, ((id, seq, _), _, _))| ObjectKey(*id, *seq))
+            .map(|(_, ((id, seq, _), obj, _))| InputKey(*id, (!obj.is_package()).then_some(*seq)))
             .collect();
 
         self.commit_certificate(

@@ -11,14 +11,13 @@ use sui_types::{
     base_types::ObjectID,
     committee::EpochId,
     messages::{VerifiedCertificate, VerifiedExecutableTransaction},
-    storage::ObjectKey,
 };
 use sui_types::{base_types::TransactionDigest, error::SuiResult};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, warn};
 
 use crate::authority::{
-    authority_per_epoch_store::AuthorityPerEpochStore, authority_store::MissingInput,
+    authority_per_epoch_store::AuthorityPerEpochStore, authority_store::InputKey,
 };
 use crate::authority::{AuthorityMetrics, AuthorityStore};
 
@@ -38,7 +37,7 @@ pub struct TransactionManager {
 
 struct PendingCertificate {
     certificate: VerifiedExecutableTransaction,
-    missing: BTreeSet<MissingInput>,
+    missing: BTreeSet<InputKey>,
 }
 
 #[derive(Default)]
@@ -50,7 +49,7 @@ struct Inner {
     // Note that except for immutable objects, a given key may only have one TransactionDigest in
     // the set. Unfortunately we cannot easily verify that this invariant is upheld, because you
     // cannot determine from TransactionData whether an input is mutable or immutable.
-    missing_inputs: HashMap<MissingInput, BTreeSet<TransactionDigest>>,
+    missing_inputs: HashMap<InputKey, BTreeSet<TransactionDigest>>,
 
     // Number of transactions that depend on each object ID. Should match exactly with total
     // number of transactions per object ID prefix in the missing_inputs table.
@@ -205,7 +204,7 @@ impl TransactionManager {
                     digest,
                     input
                 );
-                let input_count = inner.input_objects.entry(input.id()).or_default();
+                let input_count = inner.input_objects.entry(input.0).or_default();
                 *input_count += 1;
             }
 
@@ -242,83 +241,60 @@ impl TransactionManager {
     /// Notifies TransactionManager that the given objects have been committed.
     pub(crate) fn objects_committed(
         &self,
-        object_keys: Vec<ObjectKey>,
+        input_keys: Vec<InputKey>,
         epoch_store: &AuthorityPerEpochStore,
     ) {
         let mut ready_digests = Vec::new();
 
-        {
-            let inner = &mut self.inner.write();
-            if inner.epoch != epoch_store.epoch() {
-                warn!(
-                    "Ignoring objects committed from wrong epoch. Expected={} Actual={} \
-                     Objects={:?}",
-                    inner.epoch,
-                    epoch_store.epoch(),
-                    object_keys,
-                );
-                return;
-            }
-            for object_key in object_keys {
-                let object_id = object_key.0;
-                let missing_id = MissingInput::ByID(object_id);
-                let missing_key = MissingInput::ByKey(object_key);
-
-                let waiting_for_id = inner
-                    .missing_inputs
-                    .remove(&missing_id)
-                    .into_iter()
-                    .flatten()
-                    .map(|digest| (&missing_id, digest));
-
-                let waiting_for_key = inner
-                    .missing_inputs
-                    .remove(&missing_key)
-                    .into_iter()
-                    .flatten()
-                    .map(|digest| (&missing_key, digest));
-
-                let mut satisfied_inputs = 0;
-                for (missing_input, digest) in waiting_for_id.chain(waiting_for_key) {
-                    satisfied_inputs += 1;
-
-                    // Pending certificate must exist.
-                    let pending_cert = inner.pending_certificates.get_mut(&digest).unwrap();
-                    assert!(pending_cert.missing.remove(missing_input));
-                    // When a certificate has no missing input, it is ready to execute.
-                    if pending_cert.missing.is_empty() {
-                        debug!(tx_digest = ?digest, "certificate ready");
-                        let pending_cert = inner.pending_certificates.remove(&digest).unwrap();
-                        assert!(inner.executing_certificates.insert(digest));
-                        ready_digests.push(digest);
-                        self.certificate_ready(pending_cert.certificate);
-                    } else {
-                        debug!(tx_digest = ?digest, missing = ?pending_cert.missing, "Certificate waiting on missing inputs");
-                    }
-                }
-
-                if satisfied_inputs == 0 {
-                    continue;
-                }
-
-                // Clean up object ID count table.
-                let input_count = inner.input_objects.get_mut(&object_id).unwrap();
-                *input_count -= satisfied_inputs;
-                if *input_count == 0 {
-                    inner.input_objects.remove(&object_id);
-                }
-            }
-
-            self.metrics
-                .transaction_manager_num_missing_objects
-                .set(inner.missing_inputs.len() as i64);
-            self.metrics
-                .transaction_manager_num_pending_certificates
-                .set(inner.pending_certificates.len() as i64);
-            self.metrics
-                .transaction_manager_num_executing_certificates
-                .set(inner.executing_certificates.len() as i64);
+        let inner = &mut self.inner.write();
+        if inner.epoch != epoch_store.epoch() {
+            warn!(
+                "Ignoring objects committed from wrong epoch. Expected={} Actual={} \
+                 Objects={:?}",
+                inner.epoch,
+                epoch_store.epoch(),
+                input_keys,
+            );
+            return;
         }
+        for input_key in input_keys {
+            let Some(digests) = inner.missing_inputs.remove(&input_key) else {
+                continue;
+            };
+
+            // Clean up object ID count table.
+            let input_count = inner.input_objects.get_mut(&input_key.0).unwrap();
+            *input_count -= digests.len();
+            if *input_count == 0 {
+                inner.input_objects.remove(&input_key.0);
+            }
+
+            for digest in digests {
+                // Pending certificate must exist.
+                let pending_cert = inner.pending_certificates.get_mut(&digest).unwrap();
+                assert!(pending_cert.missing.remove(&input_key));
+                // When a certificate has no missing input, it is ready to execute.
+                if pending_cert.missing.is_empty() {
+                    debug!(tx_digest = ?digest, "certificate ready");
+                    let pending_cert = inner.pending_certificates.remove(&digest).unwrap();
+                    assert!(inner.executing_certificates.insert(digest));
+                    ready_digests.push(digest);
+                    self.certificate_ready(pending_cert.certificate);
+                } else {
+                    debug!(tx_digest = ?digest, missing = ?pending_cert.missing, "Certificate waiting on missing inputs");
+                }
+            }
+        }
+
+        self.metrics
+            .transaction_manager_num_missing_objects
+            .set(inner.missing_inputs.len() as i64);
+        self.metrics
+            .transaction_manager_num_pending_certificates
+            .set(inner.pending_certificates.len() as i64);
+        self.metrics
+            .transaction_manager_num_executing_certificates
+            .set(inner.executing_certificates.len() as i64);
     }
 
     /// Notifies TransactionManager about a certificate that has been executed.

@@ -344,7 +344,7 @@ impl AuthorityStore {
         digest: &TransactionDigest,
         objects: &[InputObjectKind],
         epoch_store: &AuthorityPerEpochStore,
-    ) -> Result<Vec<MissingInput>, SuiError> {
+    ) -> Result<Vec<InputKey>, SuiError> {
         let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
 
         let mut missing = Vec::new();
@@ -369,18 +369,18 @@ impl AuthorityStore {
                     if !self.object_version_exists(id, *version)? {
                         // When this happens, other transactions that use smaller versions of this
                         // shared object haven't finished execution.
-                        missing.push(MissingInput::from(ObjectKey(*id, *version)));
+                        missing.push(InputKey(*id, Some(*version)));
                     }
                 }
                 InputObjectKind::MovePackage(id) => {
                     if !self.object_exists(*id)? {
                         // The cert cannot have been formed if the package was missing.
-                        missing.push(MissingInput::from(*id));
+                        missing.push(InputKey(*id, None));
                     }
                 }
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
                     if self.get_object_by_key(&objref.0, objref.1)?.is_none() {
-                        missing.push(MissingInput::from(objref));
+                        missing.push(InputKey(objref.0, Some(objref.1)));
                     }
                 }
             };
@@ -1254,39 +1254,6 @@ pub struct LockDetails {
     pub tx_digest: TransactionDigest,
 }
 
-/// Identifies an input to a transaction that is missing in the store
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
-pub enum MissingInput {
-    /// Input is identified by just its ID, and not its version.
-    ByID(ObjectID),
-
-    /// Input is identified by its ID and version.
-    ByKey(ObjectKey),
-}
-
-impl MissingInput {
-    pub fn id(&self) -> ObjectID {
-        match self {
-            MissingInput::ByID(id) => *id,
-            MissingInput::ByKey(ObjectKey(id, _version)) => *id,
-        }
-    }
-}
-
-impl From<&ObjectRef> for MissingInput {
-    fn from((id, version, _digest): &ObjectRef) -> Self {
-        MissingInput::ByKey(ObjectKey(*id, *version))
-    }
-}
-
-impl From<ObjectKey> for MissingInput {
-    fn from(key: ObjectKey) -> Self {
-        MissingInput::ByKey(key)
-    }
-}
-
-impl From<ObjectID> for MissingInput {
-    fn from(id: ObjectID) -> Self {
-        MissingInput::ByID(id)
-    }
-}
+/// A potential input to a transaction.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct InputKey(pub ObjectID, pub Option<SequenceNumber>);
