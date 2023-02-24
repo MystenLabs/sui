@@ -317,7 +317,11 @@ async fn test_validator_resign_effects() {
 async fn test_reconfig_with_committee_change_basic() {
     // This test exercise the full flow of a validator joining the network, catch up and then leave.
 
+    // TODO: In order to better "test" this flow we probably want to set the validators to ignore
+    // all p2p peer connections so that we can verify that new nodes joining can really "talk" with the
+    // other validators in the set.
     let init_configs = test_and_configure_authority_configs(4);
+
     // Generate a new validator config.
     // Our committee generation uses a fixed seed, so we need to generate a new committee
     // with one extra validator.
@@ -395,16 +399,16 @@ async fn test_reconfig_with_committee_change_basic() {
     assert!(effects.status.is_ok());
 
     trigger_reconfiguration(&authorities).await;
-    let count = authorities[0].with(|node| {
-        node.state()
-            .get_sui_system_state_object()
-            .unwrap()
-            .get_current_epoch_committee()
-            .committee
-            .num_members()
-    });
     // Check that a new validator has joined the committee.
-    assert_eq!(count, 5);
+    authorities[0].with(|node| {
+        assert_eq!(
+            node.state()
+                .epoch_store_for_testing()
+                .committee()
+                .num_members(),
+            5
+        );
+    });
 
     let mut new_node_config_clone = new_node_config.clone();
     // Make sure that the new validator config shares the same genesis as the initial one.
@@ -463,17 +467,15 @@ async fn test_reconfig_with_committee_change_basic() {
     authorities.push(handle);
     trigger_reconfiguration(&authorities).await;
 
-    let count = authorities[0].with(|node| {
-        node.state()
-            .get_sui_system_state_object()
-            .unwrap()
-            .get_current_epoch_committee()
-            .committee
-            .num_members()
-    });
     // Check that this validator has left the committee, and is no longer a validator.
-    assert_eq!(count, 4);
     authorities[4].with(|node| {
+        assert_eq!(
+            node.state()
+                .epoch_store_for_testing()
+                .committee()
+                .num_members(),
+            4
+        );
         assert!(node
             .state()
             .is_fullnode(&node.state().epoch_store_for_testing()));
