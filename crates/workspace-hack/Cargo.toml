@@ -85,7 +85,7 @@ block-buffer-93f6ce9d446188ac = { package = "block-buffer", version = "0.10", de
 block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", default-features = false, features = ["block-padding"] }
 block-padding-6f8ce4dd05d13bba = { package = "block-padding", version = "0.2", default-features = false }
 block-padding-468e82937335b1c9 = { package = "block-padding", version = "0.3", default-features = false, features = ["std"] }
-blst = { version = "0.3" }
+blst = { version = "0.3", features = ["no-threads"] }
 brotli = { version = "3", default-features = false, features = ["std"] }
 brotli-decompressor = { version = "2", default-features = false, features = ["std"] }
 bs58 = { version = "0.4", features = ["check"] }
@@ -199,9 +199,9 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
 fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "285e3f238112703cdfb7eb21e0ea3100e2882e14", features = ["copy_key"] }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "285e3f238112703cdfb7eb21e0ea3100e2882e14", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "285e3f238112703cdfb7eb21e0ea3100e2882e14", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9cae043d0821662c075fd054c5c5523dcb20b5fb", features = ["copy_key"] }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9cae043d0821662c075fd054c5c5523dcb20b5fb", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9cae043d0821662c075fd054c5c5523dcb20b5fb", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -628,8 +628,7 @@ unicode-width = { version = "0.1" }
 unicode_categories = { version = "0.1", default-features = false }
 universal-hash = { version = "0.5", default-features = false }
 unsigned-varint = { version = "0.7", default-features = false, features = ["std"] }
-untrusted-ca01ad9e24f5d932 = { package = "untrusted", version = "0.7", default-features = false }
-untrusted-274715c4dabd11b0 = { package = "untrusted", version = "0.9", default-features = false }
+untrusted = { version = "0.7", default-features = false }
 url = { version = "2" }
 utf8parse = { version = "0.2" }
 uuid = { version = "1", features = ["fast-rng", "v4"] }
@@ -738,7 +737,7 @@ block-buffer-93f6ce9d446188ac = { package = "block-buffer", version = "0.10", de
 block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", default-features = false, features = ["block-padding"] }
 block-padding-6f8ce4dd05d13bba = { package = "block-padding", version = "0.2", default-features = false }
 block-padding-468e82937335b1c9 = { package = "block-padding", version = "0.3", default-features = false, features = ["std"] }
-blst = { version = "0.3" }
+blst = { version = "0.3", features = ["no-threads"] }
 brotli = { version = "3", default-features = false, features = ["std"] }
 brotli-decompressor = { version = "2", default-features = false, features = ["std"] }
 bs58 = { version = "0.4", features = ["check"] }
@@ -873,10 +872,10 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
 fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "285e3f238112703cdfb7eb21e0ea3100e2882e14", features = ["copy_key"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "285e3f238112703cdfb7eb21e0ea3100e2882e14", default-features = false }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "285e3f238112703cdfb7eb21e0ea3100e2882e14", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "285e3f238112703cdfb7eb21e0ea3100e2882e14", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9cae043d0821662c075fd054c5c5523dcb20b5fb", features = ["copy_key"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9cae043d0821662c075fd054c5c5523dcb20b5fb", default-features = false }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9cae043d0821662c075fd054c5c5523dcb20b5fb", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9cae043d0821662c075fd054c5c5523dcb20b5fb", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -1372,8 +1371,7 @@ unicode-xid-6f8ce4dd05d13bba = { package = "unicode-xid", version = "0.2" }
 unicode_categories = { version = "0.1", default-features = false }
 universal-hash = { version = "0.5", default-features = false }
 unsigned-varint = { version = "0.7", default-features = false, features = ["std"] }
-untrusted-ca01ad9e24f5d932 = { package = "untrusted", version = "0.7", default-features = false }
-untrusted-274715c4dabd11b0 = { package = "untrusted", version = "0.9", default-features = false }
+untrusted = { version = "0.7", default-features = false }
 unzip-n = { version = "0.1", default-features = false }
 url = { version = "2" }
 utf8parse = { version = "0.2" }
