@@ -800,6 +800,7 @@ impl SuiNode {
                         self.config
                             .supported_protocol_versions
                             .expect("Supported versions should be populated"),
+                        self.state.get_available_system_packages(),
                     ));
                 info!(?transaction, "submitting capabilities to consensus");
                 components

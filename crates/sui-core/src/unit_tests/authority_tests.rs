@@ -4683,3 +4683,83 @@ async fn test_tallying_rule_score_updates() {
     assert_eq!(get_auth_score_metric(&auth_2_name), 2);
     assert_eq!(get_auth_score_metric(&auth_3_name), 1);
 }
+
+#[test]
+fn test_choose_next_system_packages() {
+    telemetry_subscribers::init_for_testing();
+    let o1 = random_object_ref();
+    let o2 = random_object_ref();
+    let o3 = random_object_ref();
+
+    fn sort(mut v: Vec<ObjectRef>) -> Vec<ObjectRef> {
+        v.sort();
+        v
+    }
+
+    macro_rules! make_capabilities {
+        ($name: expr, $packages: expr) => {
+            AuthorityCapabilities::new(
+                $name,
+                SupportedProtocolVersions::new_for_testing(1, 1),
+                $packages,
+            )
+        };
+    }
+
+    let committee = Committee::new_simple_test_committee().0;
+    let v = &committee.voting_rights;
+    let mut protocol_config = ProtocolConfig::get_for_max_version();
+
+    // all validators agree.
+    let capabilities = vec![
+        make_capabilities!(v[0].0, vec![o1, o2]),
+        make_capabilities!(v[1].0, vec![o1, o2]),
+        make_capabilities!(v[2].0, vec![o1, o2]),
+        make_capabilities!(v[3].0, vec![o1, o2]),
+    ];
+
+    assert_eq!(
+        sort(vec![o1, o2]),
+        AuthorityState::choose_next_system_packages(&committee, &protocol_config, capabilities)
+            .unwrap()
+    );
+
+    // one validator disagrees, stake buffer means no upgrade
+    let capabilities = vec![
+        make_capabilities!(v[0].0, vec![o1, o2]),
+        make_capabilities!(v[1].0, vec![o1, o2]),
+        make_capabilities!(v[2].0, vec![o1, o2]),
+        make_capabilities!(v[3].0, vec![o1, o3]),
+    ];
+
+    assert!(AuthorityState::choose_next_system_packages(
+        &committee,
+        &protocol_config,
+        capabilities.clone(),
+    )
+    .is_none());
+
+    // Now 2f+1 is enough to upgrade
+    protocol_config.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
+
+    assert_eq!(
+        sort(vec![o1, o2]),
+        AuthorityState::choose_next_system_packages(&committee, &protocol_config, capabilities)
+            .unwrap()
+    );
+
+    // committee is split, can't upgrade even with 0 stake buffer
+    let capabilities = vec![
+        make_capabilities!(v[0].0, vec![o1, o2]),
+        make_capabilities!(v[1].0, vec![o1, o2]),
+        make_capabilities!(v[2].0, vec![o1, o3]),
+        make_capabilities!(v[3].0, vec![o1, o3]),
+    ];
+
+    assert!(AuthorityState::choose_next_system_packages(
+        &committee,
+        &protocol_config,
+        capabilities,
+    )
+    .is_none());
+}

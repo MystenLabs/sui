@@ -8,6 +8,7 @@ use chrono::prelude::*;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::KeyPair;
+use itertools::Itertools;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag};
@@ -51,7 +52,7 @@ use sui_json_rpc_types::{
     SuiEventEnvelope, SuiMoveValue, SuiTransactionEvents,
 };
 use sui_macros::nondeterministic;
-use sui_protocol_config::SupportedProtocolVersions;
+use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::indexes::{ObjectIndexChanges, MAX_GET_OWNED_OBJECT_SIZE};
 use sui_storage::write_ahead_log::WriteAheadLog;
 use sui_storage::{
@@ -2653,6 +2654,32 @@ impl AuthorityState {
         self.database.get_latest_parent_entry(object_id)
     }
 
+    fn has_support(
+        msg: String,
+        stake_aggregator: &StakeAggregator<(), true>,
+        committee: &Committee,
+        protocol_config: &ProtocolConfig,
+    ) -> bool {
+        let total_votes = stake_aggregator.total_votes();
+        let quorum_threshold = committee.quorum_threshold();
+        let f = committee.total_votes - committee.quorum_threshold();
+        let buffer_bps = protocol_config.buffer_stake_for_protocol_upgrade_bps();
+        // multiple by buffer_bps / 10000, rounded up.
+        let buffer_stake = (f * buffer_bps + 9999) / 10000;
+        let effective_threshold = quorum_threshold + buffer_stake;
+
+        info!(
+            ?total_votes,
+            ?quorum_threshold,
+            ?buffer_bps,
+            ?effective_threshold,
+            "support for {}",
+            msg
+        );
+
+        total_votes >= effective_threshold
+    }
+
     fn choose_next_protocol_version(epoch_store: &Arc<AuthorityPerEpochStore>) -> ProtocolVersion {
         let protocol_config = epoch_store.protocol_config();
         let committee = epoch_store.committee();
@@ -2686,31 +2713,81 @@ impl AuthorityState {
             }
         }
 
-        let total_votes = stake_aggregator.total_votes();
-        let quorum_threshold = committee.quorum_threshold();
-        let f = committee.total_votes - committee.quorum_threshold();
-        let buffer_bps = protocol_config.buffer_stake_for_protocol_upgrade_bps();
-        let buffer_stake = (f * buffer_bps) / 10000;
-        let effective_threshold = quorum_threshold + buffer_stake;
-
-        info!(
-            ?total_votes,
-            ?quorum_threshold,
-            ?next_protocol_version,
-            ?buffer_bps,
-            ?effective_threshold,
-            "support for next protocol version"
-        );
-
         // Note that even if we don't support the next version, we vote with the majority. This
         // is needed to ensure that the final checkpoint can be certified. Otherwise, a validator
         // might vote that they support it, then be reverted to an earlier build, and decide not
         // to adhere to their vote.
-        if total_votes >= effective_threshold {
+        if Self::has_support(
+            format!("next_protocol_version: {:?}", next_protocol_version),
+            &stake_aggregator,
+            committee,
+            protocol_config,
+        ) {
             next_protocol_version
         } else {
             current_protocol_version
         }
+    }
+
+    pub fn get_available_system_packages(&self) -> Vec<ObjectRef> {
+        // TODO: determine the current object ref of each built-in system package.
+        // this starts with calling:
+        //
+        // sui_framework::get_move_stdlib()
+        // sui_framework::get_sui_framework()
+        //
+        // but then the resulting CompiledModules have to be turned into fully fledged objects.
+        // The next version of those objects must be determined (presumably by looking up the
+        // current highest version), then an ObjectRef can be formed which commits to the object
+        // contents and version.
+        todo!()
+    }
+
+    fn choose_next_system_packages(
+        committee: &Committee,
+        protocol_config: &ProtocolConfig,
+        capabilities: Vec<AuthorityCapabilities>,
+    ) -> Option<Vec<ObjectRef>> {
+        let mut available_packages: Vec<_> = capabilities
+            .into_iter()
+            .map(|mut cap| {
+                cap.available_system_packages.sort();
+                (cap.available_system_packages, cap.authority)
+            })
+            .collect();
+
+        available_packages.sort();
+
+        available_packages
+            .into_iter()
+            .group_by(|(packages, _authority)| packages.clone())
+            .into_iter()
+            .find_map(|(key, group)| {
+                let group: Vec<_> = group.collect();
+
+                let mut stake_aggregator: StakeAggregator<(), true> =
+                    StakeAggregator::new(Arc::new(committee.clone()));
+
+                for (packages, authority) in &group {
+                    info!(
+                        "validator {:?} has system packages: {:?}",
+                        authority.concise(),
+                        packages
+                    );
+                    stake_aggregator.insert_generic(*authority, ());
+                }
+
+                if Self::has_support(
+                    format!("system packages: {:?}", key),
+                    &stake_aggregator,
+                    committee,
+                    protocol_config,
+                ) {
+                    Some(key)
+                } else {
+                    None
+                }
+            })
     }
 
     /// Creates and execute the advance epoch transaction to effects without committing it to the database.
@@ -2727,6 +2804,12 @@ impl AuthorityState {
 
         let next_epoch_protocol_version = Self::choose_next_protocol_version(epoch_store);
 
+        let next_system_packages = Self::choose_next_system_packages(
+            epoch_store.committee(),
+            epoch_store.protocol_config(),
+            epoch_store.get_capabilities(),
+        );
+
         let tx = VerifiedTransaction::new_change_epoch(
             next_epoch,
             next_epoch_protocol_version,
@@ -2734,6 +2817,7 @@ impl AuthorityState {
             gas_cost_summary.computation_cost,
             gas_cost_summary.storage_rebate,
             epoch_start_timestamp_ms,
+            next_system_packages,
         );
 
         let executable_tx = VerifiedExecutableTransaction::new_from_checkpoint(
