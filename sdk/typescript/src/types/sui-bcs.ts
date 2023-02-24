@@ -194,9 +194,7 @@ export type TypeTag =
  */
 export type MoveCallTx = {
   Call: {
-    // TODO: restrict to just `string` once 0.24.0 is deployed in
-    // devnet and testnet
-    package: string | SuiObjectRef;
+    package: string;
     module: string;
     function: string;
     typeArguments: TypeTag[];

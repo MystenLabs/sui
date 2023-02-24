@@ -10,7 +10,6 @@ import {
     getTransferObjectTransaction,
     getTransactionSignature,
     getMovePackageContent,
-    getObjectId,
     SUI_TYPE_ARG,
     getExecutionStatusType,
     getTotalGasUsed,
@@ -118,12 +117,7 @@ function formatByTransactionKind(
                     category: 'address',
                 },
                 package: {
-                    // TODO: Simplify after v0.24.0 launched everywhere, when
-                    // moveCall.package is always an ObjectID (a string)
-                    value:
-                        typeof moveCall.package === 'string'
-                            ? moveCall.package
-                            : getObjectId(moveCall.package),
+                    value: moveCall.package,
                     link: true,
                     category: 'object',
                 },
@@ -394,7 +388,9 @@ function TransactionView({
                       {
                           label: 'Argument',
                           monotypeClass: true,
-                          value: JSON.stringify(txKindData.arguments.value),
+                          value: JSON.stringify(
+                              txKindData.arguments.value ?? []
+                          ),
                       },
                   ],
               }
