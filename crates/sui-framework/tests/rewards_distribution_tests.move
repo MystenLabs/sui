@@ -5,7 +5,7 @@
 module sui::rewards_distribution_tests {
     use sui::coin;
     use sui::test_scenario::{Self, Scenario};
-    use sui::sui_system::{Self, SuiSystemState};
+    use sui::sui_system::{Self, SuiSystemStateWrapper};
 
     use sui::governance_test_utils::{
         Self,
@@ -43,7 +43,7 @@ module sui::rewards_distribution_tests {
 
         test_scenario::next_tx(scenario, VALIDATOR_ADDR_2);
         {
-            let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+            let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
             let ctx = test_scenario::ctx(scenario);
             sui_system::request_add_stake(&mut system_state, coin::mint_for_testing(720, ctx), ctx);
             test_scenario::return_shared(system_state);
@@ -95,7 +95,7 @@ module sui::rewards_distribution_tests {
         assert!(total_sui_balance(DELEGATOR_ADDR_1, scenario) == 240, 0); // 40 SUI of rewards received
         assert_validator_stake_amounts(validator_addrs(), vector[120, 240, 360, 480], scenario);
         undelegate(DELEGATOR_ADDR_2, 0, 0, scenario);
-        governance_test_utils::advance_epoch(scenario); 
+        governance_test_utils::advance_epoch(scenario);
         assert!(total_sui_balance(DELEGATOR_ADDR_2, scenario) == 120, 0); // 20 SUI of rewards received
 
         // 10 SUI rewards for each 120 SUI of stake
@@ -115,15 +115,15 @@ module sui::rewards_distribution_tests {
 
         // delegate a large amount
         delegate_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_1, 200000000, scenario);
-        
+
         governance_test_utils::advance_epoch(scenario);
 
         advance_epoch_with_reward_amounts(0, 150000, scenario);
 
         // delegate a small amount
         delegate_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_1, 10, scenario);
-        advance_epoch_with_reward_amounts(0, 130, scenario); 
-        
+        advance_epoch_with_reward_amounts(0, 130, scenario);
+
         // undelegate the delegations
         undelegate(DELEGATOR_ADDR_1, 1, 1, scenario);
 
@@ -279,7 +279,7 @@ module sui::rewards_distribution_tests {
         let ctx = test_scenario::ctx(scenario);
 
         let validators = vector[
-            create_validator_for_testing(VALIDATOR_ADDR_1, 100000000, ctx), 
+            create_validator_for_testing(VALIDATOR_ADDR_1, 100000000, ctx),
             create_validator_for_testing(VALIDATOR_ADDR_2, 200000000, ctx),
             create_validator_for_testing(VALIDATOR_ADDR_3, 300000000, ctx),
             create_validator_for_testing(VALIDATOR_ADDR_4, 400000000, ctx),
@@ -293,7 +293,7 @@ module sui::rewards_distribution_tests {
 
     fun set_commission_rate_and_advance_epoch(addr: address, commission_rate: u64, scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, addr);
-        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
         let ctx = test_scenario::ctx(scenario);
         sui_system::request_set_commission_rate(&mut system_state, commission_rate, ctx);
         test_scenario::return_shared(system_state);
@@ -302,7 +302,7 @@ module sui::rewards_distribution_tests {
 
     fun report_validator(reporter: address, reportee: address, scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, reporter);
-        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
         let ctx = test_scenario::ctx(scenario);
         sui_system::report_validator(&mut system_state, reportee, ctx);
         test_scenario::return_shared(system_state);

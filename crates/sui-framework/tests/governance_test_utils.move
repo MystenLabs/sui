@@ -11,7 +11,7 @@ module sui::governance_test_utils {
     use sui::staking_pool::{StakedSui, Delegation};
     use sui::tx_context::{Self, TxContext};
     use sui::validator::{Self, Validator};
-    use sui::sui_system::{Self, SuiSystemState};
+    use sui::sui_system::{Self, SuiSystemStateWrapper};
     use sui::test_scenario::{Self, Scenario};
     use std::option;
     use std::vector;
@@ -92,7 +92,7 @@ module sui::governance_test_utils {
     ) {
         test_scenario::next_epoch(scenario, @0x0);
         let new_epoch = tx_context::epoch(test_scenario::ctx(scenario));
-        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
 
         let ctx = test_scenario::ctx(scenario);
 
@@ -105,7 +105,7 @@ module sui::governance_test_utils {
     ) {
         test_scenario::next_epoch(scenario, @0x0);
         let new_epoch = tx_context::epoch(test_scenario::ctx(scenario));
-        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
 
         let ctx = test_scenario::ctx(scenario);
 
@@ -121,7 +121,7 @@ module sui::governance_test_utils {
     ) {
         test_scenario::next_epoch(scenario, @0x0);
         let new_epoch = tx_context::epoch(test_scenario::ctx(scenario));
-        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
 
         let ctx = test_scenario::ctx(scenario);
 
@@ -135,7 +135,7 @@ module sui::governance_test_utils {
         delegator: address, validator: address, amount: u64, scenario: &mut Scenario
     ) {
         test_scenario::next_tx(scenario, delegator);
-        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
 
         let ctx = test_scenario::ctx(scenario);
 
@@ -151,7 +151,7 @@ module sui::governance_test_utils {
         let staked_sui = test_scenario::take_from_sender_by_id(scenario, *vector::borrow(&stake_sui_ids, staked_sui_idx));
         let delegation_ids = test_scenario::ids_for_sender<Delegation>(scenario);
         let delegation = test_scenario::take_from_sender_by_id(scenario, *vector::borrow(&delegation_ids, delegation_obj_idx));
-        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
 
         let ctx = test_scenario::ctx(scenario);
         sui_system::request_withdraw_delegation(&mut system_state, delegation, staked_sui, ctx);
@@ -160,7 +160,7 @@ module sui::governance_test_utils {
 
     public fun add_validator(validator: address, init_stake_amount: u64, scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, validator);
-        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
 
         let ctx = test_scenario::ctx(scenario);
 
@@ -188,7 +188,7 @@ module sui::governance_test_utils {
 
     public fun remove_validator(validator: address, scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, validator);
-        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
 
         let ctx = test_scenario::ctx(scenario);
 
@@ -206,7 +206,7 @@ module sui::governance_test_utils {
             let amount = *vector::borrow(&stake_amounts, i);
             assert!(sum_up_validator_stake_amounts(validator_addr, scenario) == amount, 0);
 
-            let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+            let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
             assert!(sui_system::validator_stake_amount(&mut system_state, validator_addr) == amount, 0);
             test_scenario::return_shared(system_state);
             i = i + 1;
@@ -219,7 +219,7 @@ module sui::governance_test_utils {
             let validator_addr = *vector::borrow(&validator_addrs, i);
             let amount = *vector::borrow(&delegate_amounts, i);
             test_scenario::next_tx(scenario, validator_addr);
-            let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+            let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
             assert!(sui_system::validator_delegate_amount(&mut system_state, validator_addr) == amount, 0);
             test_scenario::return_shared(system_state);
             i = i + 1;

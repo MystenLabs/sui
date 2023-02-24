@@ -5,7 +5,7 @@
 module sui::delegation_tests {
     use sui::coin;
     use sui::test_scenario::{Self, Scenario};
-    use sui::sui_system::{Self, SuiSystemState};
+    use sui::sui_system::{Self, SuiSystemStateWrapper};
     use sui::staking_pool::{Self, Delegation, StakedSui};
 
     use sui::governance_test_utils::{
@@ -28,7 +28,7 @@ module sui::delegation_tests {
 
         test_scenario::next_tx(scenario, DELEGATOR_ADDR_1);
         {
-            let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+            let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
             let system_state_mut_ref = &mut system_state;
 
             let ctx = test_scenario::ctx(scenario);
@@ -44,7 +44,7 @@ module sui::delegation_tests {
         };
 
         governance_test_utils::advance_epoch(scenario);
-        
+
         test_scenario::next_tx(scenario, DELEGATOR_ADDR_1);
         {
 
@@ -55,7 +55,7 @@ module sui::delegation_tests {
             assert!(staking_pool::staked_sui_amount(&staked_sui) == 60, 105);
 
 
-            let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+            let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
             let system_state_mut_ref = &mut system_state;
 
             assert!(sui_system::validator_delegate_amount(system_state_mut_ref, VALIDATOR_ADDR_1) == 60, 103);
@@ -67,7 +67,7 @@ module sui::delegation_tests {
             sui_system::request_withdraw_delegation(
                 system_state_mut_ref, delegation, staked_sui, ctx);
 
-            assert!(sui_system::validator_delegate_amount(system_state_mut_ref, VALIDATOR_ADDR_1) == 60, 107);            
+            assert!(sui_system::validator_delegate_amount(system_state_mut_ref, VALIDATOR_ADDR_1) == 60, 107);
             test_scenario::return_shared(system_state);
         };
 
@@ -75,7 +75,7 @@ module sui::delegation_tests {
 
         test_scenario::next_tx(scenario, DELEGATOR_ADDR_1);
         {
-            let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+            let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
             assert!(sui_system::validator_delegate_amount(&mut system_state, VALIDATOR_ADDR_1) == 0, 107);
             test_scenario::return_shared(system_state);
         };
