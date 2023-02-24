@@ -996,13 +996,18 @@ impl SingleTransactionKind {
                 .iter()
                 .map(|o| InputObjectKind::ImmOrOwnedMoveObject(*o))
                 .collect(),
-            Self::ChangeEpoch(_) => {
-                vec![InputObjectKind::SharedMoveObject {
+            Self::ChangeEpoch(ChangeEpoch {
+                system_packages, ..
+            }) => system_packages
+                .iter()
+                .flatten()
+                .map(|(id, _, _)| InputObjectKind::MovePackage(*id))
+                .chain(std::iter::once(InputObjectKind::SharedMoveObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
                     mutable: true,
-                }]
-            }
+                }))
+                .collect(),
             Self::Genesis(_) => {
                 vec![]
             }

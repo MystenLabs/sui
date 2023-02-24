@@ -363,6 +363,14 @@ impl Data {
         }
     }
 
+    pub fn try_as_package_mut(&mut self) -> Option<&mut MovePackage> {
+        use Data::*;
+        match self {
+            Move(_) => None,
+            Package(p) => Some(p),
+        }
+    }
+
     pub fn type_(&self) -> Option<&StructTag> {
         use Data::*;
         match self {
@@ -488,12 +496,13 @@ impl Object {
     // Note: this will panic if `modules` is empty
     pub fn new_package(
         modules: Vec<CompiledModule>,
+        version: SequenceNumber,
         previous_transaction: TransactionDigest,
         max_move_package_size: u64,
     ) -> Result<Self, ExecutionError> {
         Ok(Object {
             data: Data::Package(MovePackage::from_module_iter(
-                OBJECT_START_VERSION,
+                version,
                 modules,
                 max_move_package_size,
             )?),
@@ -509,6 +518,7 @@ impl Object {
     ) -> Result<Self, ExecutionError> {
         Self::new_package(
             modules,
+            OBJECT_START_VERSION,
             previous_transaction,
             ProtocolConfig::get_for_max_version().max_move_package_size(),
         )

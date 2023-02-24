@@ -39,7 +39,6 @@ use sui_adapter::{adapter::new_move_vm, execution_mode};
 use sui_core::transaction_input_checker::check_objects;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::clock::Clock;
 use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiCostTable;
 use sui_types::id::UID;
@@ -56,6 +55,7 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
     SUI_FRAMEWORK_ADDRESS,
 };
+use sui_types::{clock::Clock, object::OBJECT_START_VERSION};
 use sui_types::{gas::SuiGasStatus, temporary_store::TemporaryStore};
 
 pub(crate) type FakeID = u64;
@@ -125,12 +125,14 @@ fn create_genesis_module_objects() -> Genesis {
     let packages = vec![
         Object::new_package(
             std_modules.clone(),
+            OBJECT_START_VERSION,
             TransactionDigest::genesis(),
             PROTOCOL_CONSTANTS.max_move_package_size(),
         )
         .unwrap(),
         Object::new_package(
             sui_modules.clone(),
+            OBJECT_START_VERSION,
             TransactionDigest::genesis(),
             PROTOCOL_CONSTANTS.max_move_package_size(),
         )

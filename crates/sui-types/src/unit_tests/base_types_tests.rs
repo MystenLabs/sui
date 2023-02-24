@@ -356,6 +356,7 @@ fn test_move_package_size_for_gas_metering() {
     let module = file_format::empty_module();
     let package = Object::new_package(
         vec![module],
+        OBJECT_START_VERSION,
         TransactionDigest::genesis(),
         ProtocolConfig::get_for_max_version().max_move_package_size(),
     )

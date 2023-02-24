@@ -517,6 +517,11 @@ impl SequenceNumber {
         SequenceNumber(u)
     }
 
+    pub fn increment(&mut self) {
+        assert_ne!(self.0, u64::MAX);
+        self.0 += 1;
+    }
+
     pub fn increment_to(&mut self, next: SequenceNumber) {
         debug_assert!(*self < next, "Not an increment: {} to {}", self, next);
         *self = next;

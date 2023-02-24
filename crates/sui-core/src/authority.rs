@@ -9,6 +9,8 @@ use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
+use move_binary_format::compatibility::Compatibility;
+use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag};
@@ -33,6 +35,8 @@ use sui_types::intent::Intent;
 use sui_types::intent::IntentScope;
 use sui_types::message_envelope::Message;
 use sui_types::parse_sui_struct_tag;
+use sui_types::MOVE_STDLIB_OBJECT_ID;
+use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
@@ -2729,18 +2733,113 @@ impl AuthorityState {
         }
     }
 
-    pub fn get_available_system_packages(&self) -> Vec<ObjectRef> {
-        // TODO: determine the current object ref of each built-in system package.
-        // this starts with calling:
-        //
-        // sui_framework::get_move_stdlib()
-        // sui_framework::get_sui_framework()
-        //
-        // but then the resulting CompiledModules have to be turned into fully fledged objects.
-        // The next version of those objects must be determined (presumably by looking up the
-        // current highest version), then an ObjectRef can be formed which commits to the object
-        // contents and version.
-        todo!()
+    pub async fn get_available_system_packages(&self) -> Vec<ObjectRef> {
+        let Some(move_stdlib) = self.compare_system_package(
+            MOVE_STDLIB_OBJECT_ID,
+            sui_framework::get_move_stdlib(),
+        ) .await else {
+            return vec![];
+        };
+
+        let Some(sui_framework) = self.compare_system_package(
+            SUI_FRAMEWORK_OBJECT_ID,
+            sui_framework::get_sui_framework(),
+        ).await else {
+            return vec![];
+        };
+
+        vec![move_stdlib, sui_framework]
+    }
+
+    /// Check whether the framework defined by `modules` is compatible with the framework that is
+    /// already on-chain at `id`.
+    ///
+    /// - Returns `None` if the current package at `id` cannot be loaded, or the compatibility check
+    ///   fails (This is grounds not to upgrade).
+    /// - Panics if the object at `id` can be loaded but is not a package -- this is an invariant
+    ///   violation.
+    /// - Returns the digest of the current framework (and version) if it is equivalent to the new
+    ///   framework (indicates support for a protocol upgrade without a framework upgrade).
+    /// - Returns the digest of the new framework (and version) if it is compatible (indicates
+    ///   support for a protocol upgrade with a framework upgrade).
+    async fn compare_system_package(
+        &self,
+        id: ObjectID,
+        modules: Vec<CompiledModule>,
+    ) -> Option<ObjectRef> {
+        let cur_object = match self.get_object(&id).await {
+            Ok(Some(cur_object)) => cur_object,
+
+            Ok(None) => {
+                error!("No framework package at {id}");
+                return None;
+            }
+
+            Err(e) => {
+                error!("Error loading framework object at {id}: {e:?}");
+                return None;
+            }
+        };
+
+        let cur_ref = cur_object.compute_object_reference();
+        let cur_pkg = cur_object
+            .data
+            .try_as_package()
+            .expect("Framework not package");
+
+        let mut new_object = match Object::new_package(
+            modules,
+            // Start at the same version as the current package, and increment if compatibility is
+            // successful
+            cur_object.version(),
+            // We don't know what the digest is that will set the write the new system package until
+            // the change epoch transaction runs, so borrow the current object's for now, to
+            // simplify comparing digests below.
+            cur_object.previous_transaction,
+            // TODO: Should we set a max size for the framework?
+            u64::MAX,
+        ) {
+            Ok(object) => object,
+            Err(e) => {
+                error!("Failed to create new framework package for {id}: {e:?}");
+                return None;
+            }
+        };
+
+        if cur_ref == new_object.compute_object_reference() {
+            return Some(cur_ref);
+        }
+
+        let check_struct_and_pub_function_linking = true;
+        let check_struct_layout = true;
+        let check_friend_linking = false;
+        let compatibility = Compatibility::new(
+            check_struct_and_pub_function_linking,
+            check_struct_layout,
+            check_friend_linking,
+        );
+
+        let new_pkg = new_object
+            .data
+            .try_as_package_mut()
+            .expect("Created as package");
+
+        let cur_normalized = cur_pkg.normalize().expect("Normalize existing package");
+        let mut new_normalized = new_pkg.normalize().ok()?;
+
+        for (name, cur_module) in cur_normalized {
+            let Some(new_module) = new_normalized.remove(&name) else {
+                return None;
+            };
+
+            if let Err(e) = compatibility.check(&cur_module, &new_module) {
+                error!("Compatibility check failed, for new version of {id}: {e:?}");
+                return None;
+            }
+        }
+
+        new_pkg.increment_version();
+        Some(new_object.compute_object_reference())
     }
 
     fn choose_next_system_packages(
