@@ -10,6 +10,7 @@ use crossterm::{
 };
 use futures::future::try_join_all;
 use prettytable::{format, row, Table};
+use serde::{Deserialize, Serialize};
 use tokio::time::{self, sleep};
 
 use crate::{
@@ -29,6 +30,7 @@ use super::{
     ssh::{SshCommand, SshConnectionManager},
 };
 
+#[derive(Serialize, Deserialize, Clone)]
 pub struct BenchmarkParameters {
     /// The committee size.
     pub nodes: usize,
@@ -557,9 +559,12 @@ impl<C> Testbed<C> {
                         .expect("Cannot write file");
 
                     // Download the clients log files.
-                    let source = format!("client.log");
-                    let content = connection.download(source)?;
+                    let content = connection.download("client.log")?;
                     println!("{content}");
+                    let mut file = File::create(&format!("client-{i}.log"))
+                        .expect("Cannot open file to dump log");
+                    file.write_all(content.as_bytes())
+                        .expect("Cannot write file");
 
                     Ok(())
                 })
@@ -584,7 +589,7 @@ impl<C> Testbed<C> {
         // self.update().await?;
 
         // Configure all instances.
-        // self.configure(parameters).await?;
+        self.configure(parameters).await?;
 
         // Deploy the validators.
         self.run_nodes(parameters).await?;
@@ -595,7 +600,7 @@ impl<C> Testbed<C> {
         // Wait for the benchmark to terminate.
         println!("Waiting for about {}s...", parameters.duration.as_secs());
 
-        let mut aggregator = MetricsAggregator::new();
+        let mut aggregator = MetricsAggregator::new(parameters.clone());
         let mut interval = time::interval(Duration::from_secs(30));
         interval.tick().await;
         loop {

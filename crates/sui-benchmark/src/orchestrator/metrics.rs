@@ -51,6 +51,7 @@ impl DataPoint {
 pub struct MetricsAggregator<ScraperId: Serialize> {
     #[serde(skip_serializing)]
     start: DateTime<Utc>,
+    parameters: BenchmarkParameters,
     scrapers: HashMap<ScraperId, Vec<DataPoint>>,
 }
 
@@ -58,9 +59,10 @@ impl<ScraperId> MetricsAggregator<ScraperId>
 where
     ScraperId: Eq + Hash + Serialize,
 {
-    pub fn new() -> Self {
+    pub fn new(parameters: BenchmarkParameters) -> Self {
         Self {
             start: Utc::now(),
+            parameters,
             scrapers: HashMap::new(),
         }
     }
@@ -154,14 +156,14 @@ where
         table.set_format(format);
 
         println!();
-        table.set_titles(row![bH2->"Summary"]);
+        table.set_titles(row![bH2->"Benchmark Summary"]);
         table.add_row(row![b->"Nodes:", parameters.nodes]);
         table.add_row(row![b->"Faults:", parameters.faults]);
-        table.add_row(row![b->"Load:", parameters.load]);
-        table.add_row(row![b->"Duration:", duration.as_secs()]);
+        table.add_row(row![b->"Load:", format!("{} tx/s", parameters.load)]);
+        table.add_row(row![b->"Duration:", format!("{} s", duration.as_secs())]);
         table.add_row(row![bH2->""]);
-        table.add_row(row![b->"TPS:", total_tps]);
-        table.add_row(row![b->"Latency (avg):", average_latency]);
+        table.add_row(row![b->"TPS:", format!("{total_tps} tx/s")]);
+        table.add_row(row![b->"Latency (avg):", format!("{average_latency} ms")]);
         table.printstd();
         println!();
     }
@@ -201,11 +203,10 @@ mod test {
 
     #[test]
     fn collect() {
-        let mut aggregator = MetricsAggregator::new();
+        let mut aggregator = MetricsAggregator::new(BenchmarkParameters::default());
 
         let scraper_id = 1u8;
         aggregator.collect(scraper_id, EXAMPLE);
-        aggregator.print_summary(&BenchmarkParameters::default());
 
         assert_eq!(aggregator.scrapers.len(), 1);
         let data_points = aggregator.scrapers.get(&scraper_id).unwrap();

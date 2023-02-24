@@ -21,13 +21,13 @@ async fn main() -> Result<()> {
     client.upload_key(public_key).await?;
 
     let parameters = BenchmarkParameters {
-        nodes: 4,
+        nodes: 10,
         faults: 0,
         load: 600,
-        duration: Duration::from_secs(45),
+        duration: Duration::from_secs(120),
     };
 
-    let testbed = Testbed::new(settings, client)
+    let mut testbed = Testbed::new(settings, client)
         .await
         .wrap_err("Failed to crate testbed")?;
 
@@ -45,10 +45,15 @@ async fn main() -> Result<()> {
 
     // testbed.kill(true).await.wrap_err("Failed to kill tested")?;
 
-    testbed
-        .run_benchmark(&parameters)
-        .await
-        .wrap_err("Failed to deploy instances")?;
+    // testbed
+    //     .run_benchmark(&parameters)
+    //     .await
+    //     .wrap_err("Failed to deploy instances")?;
+
+    // testbed
+    //     .destroy()
+    //     .await
+    //     .wrap_err("Failed to destroy tested")?;
 
     // testbed.kill(true).await.wrap_err("Failed to kill tested")?;
 
