@@ -38,7 +38,9 @@ export function formatBalance(
     return formatAmount(bn);
 }
 
-export function useCoinDecimals(coinType?: string | null) {
+export function useCoinDecimals(
+    coinType?: string | null
+) {
     const rpc = useRpcClient();
     const queryResult = useQuery(
         ['denomination', coinType],
