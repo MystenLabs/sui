@@ -20,7 +20,10 @@ module sui::display {
     use sui::event;
     use std::vector;
 
-    /// For when T does not belong to package in Publisher.
+    // Collectible is a special case to avoid storing `Publisher`.
+    friend sui::collectible;
+
+    /// For when T does not belong to the package `Publisher`.
     const ENotOwner: u64 = 0;
 
     /// For when vectors passed into one of the multiple insert functions
@@ -89,20 +92,9 @@ module sui::display {
 
     /// Create an empty Display object. It can either be shared empty or filled
     /// with data right away via cheaper `set_owned` method.
-    public fun empty<T: key>(pub: &Publisher, ctx: &mut TxContext): Display<T> {
+    public fun new<T: key>(pub: &Publisher, ctx: &mut TxContext): Display<T> {
         assert!(is_package<T>(pub), ENotOwner);
-
-        let uid = object::new(ctx);
-
-        event::emit(DisplayCreated<T> {
-            id: object::uid_to_inner(&uid)
-        });
-
-        Display {
-            id: uid,
-            fields: vec_map::empty(),
-            version: 0,
-        }
+        create_internal(ctx)
     }
 
     /// Share an object after the initialization is complete.
@@ -115,27 +107,34 @@ module sui::display {
         transfer::transfer(d, receiver)
     }
 
+    /// Protected method to create an empty Display for the `Collectible<T>`.
+    /// Similar result can be achieved by freezing the Publisher for the
+    /// Container package.
+    public(friend) fun new_protected<T: key>(ctx: &mut TxContext): Display<T> {
+        create_internal(ctx)
+    }
+
     // === Entry functions: Create ===
 
     /// Create a new empty Display<T> object and share it.
     entry public fun create_and_share<T: key>(pub: &Publisher, ctx: &mut TxContext) {
-        share(empty<T>(pub, ctx))
+        share(new<T>(pub, ctx))
     }
 
     /// Create a new empty Display<T> object and keep it.
     entry public fun create_and_keep<T: key>(pub: &Publisher, ctx: &mut TxContext) {
-        transfer(empty<T>(pub, ctx), sender(ctx))
+        transfer(new<T>(pub, ctx), sender(ctx))
     }
 
     /// Create a new Display<T> object with a set of fields.
-    entry public fun create_with_fields<T: key>(
+    entry public fun new_with_fields<T: key>(
         pub: &Publisher, fields: vector<String>, values: vector<String>, ctx: &mut TxContext
     ) {
         let len = vector::length(&fields);
         assert!(len == vector::length(&values), EVecLengthMismatch);
 
         let i = 0;
-        let display = empty<T>(pub, ctx);
+        let display = new<T>(pub, ctx);
         while (i < len) {
             add_internal(&mut display, *vector::borrow(&fields, i), *vector::borrow(&values, i));
             i = i + 1;
@@ -206,6 +205,23 @@ module sui::display {
         &d.fields
     }
 
+    // === Private functions ===
+
+    /// Internal function to create a new `Display<T>`.
+    fun create_internal<T: key>(ctx: &mut TxContext): Display<T> {
+        let uid = object::new(ctx);
+
+        event::emit(DisplayCreated<T> {
+            id: object::uid_to_inner(&uid)
+        });
+
+        Display {
+            id: uid,
+            fields: vec_map::empty(),
+            version: 0,
+        }
+    }
+
     /// Private method for inserting fields without security checks.
     fun add_internal<T: key>(d: &mut Display<T>, name: String, value: String) {
         vec_map::insert(&mut d.fields, name, value)
@@ -236,7 +252,7 @@ module sui::display_tests {
         let pub = publisher::test_claim(CAPY {}, test::ctx(&mut test));
 
         // create a new display object
-        let display = display::empty<Capy>(&pub, test::ctx(&mut test));
+        let display = display::new<Capy>(&pub, test::ctx(&mut test));
 
         let d = display::add_owned(display, b"name", b"Capy {name}");
         let d = display::add_owned(d, b"link", b"https://capy.art/capy/{id}");
