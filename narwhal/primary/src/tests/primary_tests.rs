@@ -352,7 +352,6 @@ async fn test_request_vote_send_missing_parents() {
     let (certificates, _next_parents) =
         make_optimal_signed_certificates(1..=3, &genesis, &committee, keys.as_slice());
     let all_certificates = certificates.into_iter().collect_vec();
-    let _round_1_certs = all_certificates[..NUM_PARENTS].to_vec();
     let round_2_certs = all_certificates[NUM_PARENTS..(NUM_PARENTS * 2)].to_vec();
     let round_2_parents = round_2_certs[..(NUM_PARENTS / 2)].to_vec();
     let round_2_missing = round_2_certs[(NUM_PARENTS / 2)..].to_vec();
@@ -368,9 +367,8 @@ async fn test_request_vote_send_missing_parents() {
         .unwrap();
 
     // Write some certificates from round 2 into the store, and leave out the rest to test
-    // headers with some parents but not all available. All round 1 certificates should be written
-    // into the storage as well as parents of round 2 certificates. But to test phase 2 they are
-    // left out for now.
+    // headers with some parents but not all available. Round 1 certificates should be written
+    // into the storage as parents of round 2 certificates. But to test phase 2 they are left out.
     for cert in round_2_parents {
         for (digest, (worker_id, _)) in &cert.header.payload {
             payload_store.async_write((*digest, *worker_id), 1).await;

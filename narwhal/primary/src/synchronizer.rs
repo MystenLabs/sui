@@ -117,7 +117,7 @@ impl Inner {
         let digest = certificate.digest();
 
         // Store the certificate. After this, the certificate must be sent to consensus
-        // or Narwhal needs to shutdown, to avoid insistencies in certificate store and
+        // or Narwhal needs to shutdown, to avoid inconsistencies in certificate store and
         // consensus dag.
         self.certificate_store
             .write(certificate.clone())
@@ -332,9 +332,11 @@ impl Synchronizer {
     }
 
     /// Tries to accept a certificate from certificate fetcher.
-    /// Fetched certificates are already sanitized in parallel.
-    /// And in most cases, they have no missing parents. So it is useful to always check parents
-    /// for fetched certificates and use this information to validate suspended certificates state.
+    /// Fetched certificates are already sanitized, so it is unnecessary to duplicate the work.
+    /// Also, we always check parents of fetched certificates and use the result to validate the
+    /// suspended certificates state, instead of first checking suspended certificates to
+    /// potentially return early. This helps to verify consistency, and has little extra cost
+    /// because fetched certificates usually are not suspended.
     pub async fn try_accept_fetched_certificate(
         &self,
         certificate: Certificate,
@@ -459,7 +461,7 @@ impl Synchronizer {
         certificate: Certificate,
         network: &Network,
         sanitize: bool,
-        expect_missing_parents: bool,
+        early_suspend: bool,
     ) -> DagResult<()> {
         let digest = certificate.digest();
         if self.inner.certificate_store.contains(&digest)? {
@@ -467,7 +469,7 @@ impl Synchronizer {
             self.inner.metrics.duplicate_certificates_processed.inc();
             return Ok(());
         }
-        if expect_missing_parents {
+        if early_suspend {
             if let Some(notify) = self.inner.state.lock().await.get_waiter(&digest) {
                 trace!("Certificate {digest:?} is still suspended. Skip processing.");
                 return Err(DagError::Suspended(notify));
@@ -531,8 +533,9 @@ impl Synchronizer {
         // It is possible to reduce the critical section below, but it seems unnecessary for now.
         let mut state = self.inner.state.lock().await;
 
-        // The certificate could have been suspended already.
-        if expect_missing_parents {
+        if early_suspend {
+            // Re-check if the certificate has been suspended, which can happen before the lock is
+            // acquired.
             if let Some(notify) = state.get_waiter(&digest) {
                 trace!("Certificate {digest:?} is still suspended. Skip processing.");
                 return Err(DagError::Suspended(notify));
@@ -555,7 +558,7 @@ impl Synchronizer {
                     .inc();
                 // There is no upper round limit to suspended certificates. Currently there is no
                 // memory usage issue and this will speed up catching up. But we can revisit later.
-                let notify = state.insert(certificate, missing_parents);
+                let notify = state.insert(certificate, missing_parents, !early_suspend);
                 return Err(DagError::Suspended(notify));
             }
         }
@@ -899,9 +902,21 @@ impl State {
         &mut self,
         certificate: Certificate,
         missing_parents: Vec<CertificateDigest>,
+        allow_reinsert: bool,
     ) -> AcceptNotification {
         let digest = certificate.digest();
         let missing_round = certificate.round() - 1;
+        let missing_parents_map: HashSet<_> = missing_parents.iter().cloned().collect();
+        if allow_reinsert {
+            if let Some(suspended_cert) = self.suspended.get(&digest) {
+                assert_eq!(
+                    suspended_cert.missing_parents, missing_parents_map,
+                    "Inconsistent missing parents! {:?} vs {:?}",
+                    suspended_cert.missing_parents, missing_parents_map
+                );
+                return new_accept_notification(suspended_cert.notify.subscribe());
+            }
+        }
         let (tx, rx) = broadcast::channel(1);
         assert!(self
             .suspended
@@ -909,7 +924,7 @@ impl State {
                 digest,
                 SuspendedCertificate {
                     certificate,
-                    missing_parents: missing_parents.iter().cloned().collect(),
+                    missing_parents: missing_parents_map,
                     notify: tx,
                 }
             )

@@ -859,6 +859,7 @@ async fn gc_suspended_certificates() {
     let (certificates, _next_parents) =
         make_optimal_signed_certificates(1..=5, &genesis, &committee, keys.as_slice());
     let certificates = certificates.into_iter().collect_vec();
+
     // Try to aceept certificates from round 2 and above. All of them should be suspended.
     let accept = FuturesUnordered::new();
     for cert in &certificates[NUM_AUTHORITIES..] {
@@ -870,6 +871,20 @@ async fn gc_suspended_certificates() {
             Err(DagError::Suspended(notify)) => {
                 let mut notify = notify.lock().unwrap().take().unwrap();
                 accept.push(async move { notify.recv().await.unwrap() });
+                continue;
+            }
+            Err(e) => panic!("Unexpected error {e}"),
+        }
+    }
+
+    // Re-insertion of missing certificate as fetched certificates should be ok.
+    for cert in &certificates[NUM_AUTHORITIES * 2..NUM_AUTHORITIES * 4] {
+        match synchronizer
+            .try_accept_fetched_certificate(cert.clone(), &network)
+            .await
+        {
+            Ok(()) => panic!("Unexpected acceptance of {cert:?}"),
+            Err(DagError::Suspended(_)) => {
                 continue;
             }
             Err(e) => panic!("Unexpected error {e}"),
