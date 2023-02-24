@@ -171,9 +171,9 @@ export function LatestTxCard({
     const recentTx = useMemo(
         () =>
             transactionQuery.data
-                ? genTableDataFromTxData(transactionQuery.data, truncateLength)
+                ? genTableDataFromTxData(transactionQuery.data)
                 : null,
-        [transactionQuery.data, truncateLength]
+        [transactionQuery.data]
     );
 
     const stats = {
