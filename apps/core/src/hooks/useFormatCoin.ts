@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Coin, JsonRpcProvider } from '@mysten/sui.js';
+import { Coin } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
@@ -39,9 +39,7 @@ export function formatBalance(
     return formatAmount(bn);
 }
 
-export function useCoinDecimals(
-    coinType?: string | null
-) {
+export function useCoinDecimals(coinType?: string | null) {
     const rpc = useRpcClient();
     const queryResult = useQuery(
         ['denomination', coinType],

@@ -4,7 +4,9 @@
 import { type JsonRpcProvider } from '@mysten/sui.js';
 import { createContext, useContext } from 'react';
 
-export const RpcClientContext = createContext<JsonRpcProvider | undefined>(undefined);
+export const RpcClientContext = createContext<JsonRpcProvider | undefined>(
+    undefined
+);
 
 export function useRpcClient() {
     const rpcClient = useContext(RpcClientContext);

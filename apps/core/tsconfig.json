@@ -13,11 +13,9 @@
         "noEmit": false,
         "isolatedModules": true,
         "sourceMap": true,
-        "jsx": "react-jsx",
+        "jsx": "react-jsx"
     },
     "include": ["src"],
     "exclude": ["node_modules"],
-    "references": [
-        { "path": "../../sdk/typescript/" }
-    ]
+    "references": [{ "path": "../../sdk/typescript/" }]
 }
