@@ -111,7 +111,7 @@ This pattern is used in these examples:
 /// type authorization by module X to be used in another module Y. Or, possibly,
 /// there's a case where authorization should be performed after some time.
 ///
-/// For these rather rare scerarios, a storable witness is a perfect solution.
+/// For these rather rare scenarios, a storable witness is a perfect solution.
 module examples::transferable_witness {
     use sui::transfer;
     use sui::object::{Self, UID};
