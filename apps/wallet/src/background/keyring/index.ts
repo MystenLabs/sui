@@ -175,6 +175,11 @@ export class Keyring {
         }
         const added = await VaultStorage.importKeypair(keypair, password);
         if (added) {
+            const importedAccount = new Account({
+                type: 'imported',
+                keypair: added,
+            });
+            this.#accountsMap.set(importedAccount.address, importedAccount);
             this.notifyAccountsChanged();
         }
         return added;
@@ -272,6 +277,52 @@ export class Keyring {
             } else if (isKeyringPayload(payload, 'deriveNextAccount')) {
                 if (!(await this.deriveNextAccount())) {
                     throw new Error('Failed to derive next account');
+                }
+                uiConnection.send(createMessage({ type: 'done' }, id));
+            } else if (
+                isKeyringPayload(payload, 'verifyPassword') &&
+                payload.args
+            ) {
+                if (
+                    !(await VaultStorage.verifyPassword(payload.args.password))
+                ) {
+                    throw new Error('Wrong password');
+                }
+                uiConnection.send(createMessage({ type: 'done' }, id));
+            } else if (
+                isKeyringPayload(payload, 'exportAccount') &&
+                payload.args
+            ) {
+                const keyPair = await this.exportAccountKeypair(
+                    payload.args.accountAddress,
+                    payload.args.password
+                );
+
+                if (!keyPair) {
+                    throw new Error(
+                        `Account ${payload.args.accountAddress} not found`
+                    );
+                }
+                uiConnection.send(
+                    createMessage<KeyringPayload<'exportAccount'>>(
+                        {
+                            type: 'keyring',
+                            method: 'exportAccount',
+                            return: { keyPair },
+                        },
+                        id
+                    )
+                );
+            } else if (
+                isKeyringPayload(payload, 'importPrivateKey') &&
+                payload.args
+            ) {
+                const imported = await this.importAccountKeypair(
+                    payload.args.keyPair,
+                    payload.args.password
+                );
+                if (!imported) {
+                    throw new Error('Duplicate account not imported');
                 }
                 uiConnection.send(createMessage({ type: 'done' }, id));
             }

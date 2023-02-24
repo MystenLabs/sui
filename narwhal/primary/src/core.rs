@@ -148,7 +148,7 @@ impl Core {
 
         let mut missing_parents: Vec<CertificateDigest> = Vec::new();
         let mut attempt: u32 = 0;
-        let vote = loop {
+        let vote: Vote = loop {
             attempt += 1;
 
             let parents = if missing_parents.is_empty() {
@@ -212,7 +212,21 @@ impl Core {
             .await;
         };
 
-        // Verify the vote.
+        // Verify the vote. Note that only the header digest is signed by the vote.
+        ensure!(
+            vote.header_digest == header.digest()
+                && vote.origin == header.author
+                && vote.author == authority,
+            DagError::UnexpectedVote(vote.header_digest)
+        );
+        // Possible equivocations.
+        ensure!(
+            header.epoch == vote.epoch,
+            DagError::InvalidEpoch {
+                expected: header.epoch,
+                received: vote.epoch
+            }
+        );
         ensure!(
             header.round == vote.round,
             DagError::InvalidRound {
@@ -220,13 +234,8 @@ impl Core {
                 received: vote.round
             }
         );
-        ensure!(
-            vote.digest == header.digest()
-                && vote.origin == header.author
-                && vote.author == authority,
-            DagError::UnexpectedVote(vote.digest)
-        );
         vote.verify(&committee)?;
+
         Ok(vote)
     }
 

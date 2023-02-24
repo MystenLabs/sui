@@ -56,9 +56,7 @@ import {
   CheckpointDigest,
   CheckPointContentsDigest,
   CommitteeInfo,
-  versionToString,
 } from '../types';
-import { lt } from '@suchipi/femver';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
   DEFAULT_CLIENT_OPTIONS,
@@ -71,7 +69,6 @@ import { UnserializedSignableTransaction } from '../signers/txn-data-serializers
 import { LocalTxnDataSerializer } from '../signers/txn-data-serializers/local-txn-data-serializer';
 import { toB64 } from '@mysten/bcs';
 import { SerializedSignature } from '../cryptography/signature';
-import { pkgVersion } from '../pkg-version';
 import { Connection, devnetConnection } from '../rpc/connection';
 
 export const TARGETED_RPC_VERSION = '0.27.0';
@@ -122,7 +119,6 @@ export class JsonRpcProvider extends Provider {
   protected wsClient: WebsocketClient;
   private rpcApiVersion: RpcApiVersion | undefined;
   private cacheExpiry: number | undefined;
-  private addedHeaders = false;
   /**
    * Establish a connection to a Sui RPC endpoint
    *
@@ -139,17 +135,7 @@ export class JsonRpcProvider extends Provider {
     this.connection = connection;
 
     const opts = { ...DEFAULT_OPTIONS, ...options };
-
-    // TODO: uncomment this when 0.27.0 is released. We cannot do this now because
-    // the current Devnet(0.26.0) does not support the header. And we need to make
-    // a request to RPC to know which version it is running. Therefore, we do not
-    // add headers here, instead we add headers in the first call of the `getRpcApiVersion`
-    // method
-    // this.client = new JsonRpcClient(this.endpoints.fullNode, {
-    //   'Client-Sdk-Type': 'typescript',
-    //   'Client-Sdk-Version': pkgVersion,
-    //   'Client-Target-Api-Version': TARGETED_RPC_VERSION,
-    // });
+    this.options = opts;
     // TODO: add header for websocket request
     this.client = opts.rpcClient ?? new JsonRpcClient(this.connection.fullnode);
 
@@ -178,19 +164,6 @@ export class JsonRpcProvider extends Provider {
         this.options.skipDataValidation,
       );
       this.rpcApiVersion = parseVersionFromString(resp.info.version);
-      // TODO: Remove this once 0.27.0 is released
-      if (
-        !this.addedHeaders &&
-        this.rpcApiVersion &&
-        !lt(versionToString(this.rpcApiVersion), '0.27.0')
-      ) {
-        this.client = new JsonRpcClient(this.connection.fullnode, {
-          'Client-Sdk-Type': 'typescript',
-          'Client-Sdk-Version': pkgVersion,
-          'Client-Target-Api-Version': TARGETED_RPC_VERSION,
-        });
-        this.addedHeaders = true;
-      }
       this.cacheExpiry =
         // Date.now() is in milliseconds, but the timeout is in seconds
         Date.now() + (this.options.versionCacheTimeoutInSeconds ?? 0) * 1000;

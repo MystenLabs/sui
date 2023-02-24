@@ -156,11 +156,11 @@ pub trait ReadApi {
 
     /// Return the sequence number of the latest checkpoint that has been executed
     #[method(name = "getLatestCheckpointSequenceNumber")]
-    fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber>;
+    async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber>;
 
     /// Return a checkpoint
     #[method(name = "getCheckpoint")]
-    fn get_checkpoint(
+    async fn get_checkpoint(
         &self,
         /// Checkpoint identifier, can use either checkpoint digest, or checkpoint sequence number as input.
         id: CheckpointId,
@@ -168,28 +168,28 @@ pub trait ReadApi {
 
     /// Return a checkpoint summary based on a checkpoint sequence number
     #[method(name = "getCheckpointSummary")]
-    fn get_checkpoint_summary(
+    async fn get_checkpoint_summary(
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> RpcResult<CheckpointSummary>;
 
     /// Return a checkpoint summary based on checkpoint digest
     #[method(name = "getCheckpointSummaryByDigest")]
-    fn get_checkpoint_summary_by_digest(
+    async fn get_checkpoint_summary_by_digest(
         &self,
         digest: CheckpointDigest,
     ) -> RpcResult<CheckpointSummary>;
 
     /// Return contents of a checkpoint, namely a list of execution digests
     #[method(name = "getCheckpointContents")]
-    fn get_checkpoint_contents(
+    async fn get_checkpoint_contents(
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> RpcResult<CheckpointContents>;
 
     /// Return contents of a checkpoint based on checkpoint content digest
     #[method(name = "getCheckpointContentsByDigest")]
-    fn get_checkpoint_contents_by_digest(
+    async fn get_checkpoint_contents_by_digest(
         &self,
         digest: CheckpointContentsDigest,
     ) -> RpcResult<CheckpointContents>;

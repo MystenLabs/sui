@@ -403,7 +403,8 @@ ObjectArg:
               TYPENAME: SequenceNumber
           - mutable: BOOL
 ObjectDigest:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT:
+    TYPENAME: Sha3Digest
 ObjectID:
   NEWTYPESTRUCT:
     TYPENAME: AccountAddress

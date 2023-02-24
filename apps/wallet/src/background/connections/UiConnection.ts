@@ -103,7 +103,10 @@ export class UiConnection extends Connection {
                     id
                 );
             } else if (isDisconnectApp(payload)) {
-                await Permissions.delete(payload.origin);
+                await Permissions.delete(
+                    payload.origin,
+                    payload.specificAccounts
+                );
                 this.send(createMessage({ type: 'done' }, id));
             } else if (isBasePayload(payload) && payload.type === 'keyring') {
                 await Keyring.handleUiMessage(msg, this);

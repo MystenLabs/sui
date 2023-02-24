@@ -13,6 +13,8 @@ import {
 
 import { AccountsSettings } from './AccountsSettings';
 import { AutoLockSettings } from './AutoLockSettings';
+import { ExportAccount } from './ExportAccount';
+import { ImportPrivateKey } from './ImportPrivateKey';
 import MenuList from './MenuList';
 import { NetworkSettings } from './NetworkSettings';
 import { ErrorBoundary } from '_components/error-boundary';
@@ -59,10 +61,20 @@ function MenuContent() {
                     <Routes location={menuUrl || ''}>
                         <Route path="/" element={<MenuList />} />
                         {isMultiAccountsEnabled ? (
-                            <Route
-                                path="/accounts"
-                                element={<AccountsSettings />}
-                            />
+                            <>
+                                <Route
+                                    path="/accounts"
+                                    element={<AccountsSettings />}
+                                />
+                                <Route
+                                    path="/export/:account"
+                                    element={<ExportAccount />}
+                                />
+                                <Route
+                                    path="/import-private-key"
+                                    element={<ImportPrivateKey />}
+                                />
+                            </>
                         ) : null}
                         <Route path="/network" element={<NetworkSettings />} />
                         <Route

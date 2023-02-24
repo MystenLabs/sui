@@ -135,29 +135,43 @@ pub struct Parameters {
     pub min_header_delay: Duration,
 
     /// The depth of the garbage collection (Denominated in number of rounds).
+    #[serde(default = "Parameters::default_gc_depth")]
     pub gc_depth: u64,
     /// The delay after which the synchronizer retries to send sync requests. Denominated in ms.
-    #[serde(with = "duration_format")]
+    #[serde(
+        with = "duration_format",
+        default = "Parameters::default_sync_retry_delay"
+    )]
     pub sync_retry_delay: Duration,
     /// Determine with how many nodes to sync when re-trying to send sync-request. These nodes
     /// are picked at random from the committee.
+    #[serde(default = "Parameters::default_sync_retry_nodes")]
     pub sync_retry_nodes: usize,
     /// The preferred batch size. The workers seal a batch of transactions when it reaches this size.
     /// Denominated in bytes.
+    #[serde(default = "Parameters::default_batch_size")]
     pub batch_size: usize,
     /// The delay after which the workers seal a batch of transactions, even if `max_batch_size`
     /// is not reached.
-    #[serde(with = "duration_format")]
+    #[serde(
+        with = "duration_format",
+        default = "Parameters::default_max_batch_delay"
+    )]
     pub max_batch_delay: Duration,
     /// The parameters for the block synchronizer
+    #[serde(default = "BlockSynchronizerParameters::default")]
     pub block_synchronizer: BlockSynchronizerParameters,
     /// The parameters for the Consensus API gRPC server
+    #[serde(default = "ConsensusAPIGrpcParameters::default")]
     pub consensus_api_grpc: ConsensusAPIGrpcParameters,
     /// The maximum number of concurrent requests for messages accepted from an un-trusted entity
+    #[serde(default = "Parameters::default_max_concurrent_requests")]
     pub max_concurrent_requests: usize,
     /// Properties for the prometheus metrics
+    #[serde(default = "PrometheusMetricsParameters::default")]
     pub prometheus_metrics: PrometheusMetricsParameters,
     /// Network admin server ports for primary & worker.
+    #[serde(default = "NetworkAdminServerParameters::default")]
     pub network_admin_server: NetworkAdminServerParameters,
     /// Anemo network settings.
     #[serde(default = "AnemoParameters::default")]

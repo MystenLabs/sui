@@ -194,9 +194,7 @@ export type TypeTag =
  */
 export type MoveCallTx = {
   Call: {
-    // TODO: restrict to just `string` once 0.24.0 is deployed in
-    // devnet and testnet
-    package: string | SuiObjectRef;
+    package: string;
     module: string;
     function: string;
     typeArguments: TypeTag[];
@@ -382,7 +380,7 @@ const BCS_SPEC = {
     },
   },
   aliases: {
-    ObjectDigest: BCS.BASE64,
+    ObjectDigest: BCS.BASE58,
   },
 };
 
@@ -409,7 +407,7 @@ const BCS_0_27_SPEC = {
 const bcs = new BCS({ ...getSuiMoveConfig(), types: BCS_SPEC });
 registerUTF8String(bcs);
 
-// ========== Backward Compatibility (remove after v0.24 deploys) ===========
+// ========== Backward Compatibility ===========
 const bcs_0_27 = new BCS({ ...getSuiMoveConfig(), types: BCS_0_27_SPEC });
 registerUTF8String(bcs_0_27);
 

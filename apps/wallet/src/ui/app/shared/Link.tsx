@@ -6,25 +6,54 @@ import { forwardRef, type ReactNode, type Ref } from 'react';
 
 import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
 
-const styles = cva([
-    'flex flex-nowrap items-center justify-center outline-none gap-1 w-full',
-    'no-underline bg-transparent p-0 border-none',
-    'text-bodySmall font-semibold text-steel-dark',
-    'hover:text-steel-darker focus:text-steel-darker',
-    'active:opacity-70',
-    'disabled:opacity-40 disabled:text-steel-dark',
-    'cursor-pointer group',
-]);
+const styles = cva(
+    [
+        'transition flex flex-nowrap items-center justify-center outline-none gap-1 w-full',
+        'no-underline bg-transparent p-0 border-none',
+        'text-bodySmall',
+        'active:opacity-70',
+        'disabled:opacity-40',
+        'cursor-pointer group',
+    ],
+    {
+        variants: {
+            color: {
+                steelDark: [
+                    'text-steel-dark hover:text-steel-darker focus:text-steel-darker disabled:text-steel-dark',
+                ],
+                heroDark: [
+                    'text-hero-dark hover:text-hero-darkest focus:text-hero-darkest disabled:text-hero-dark',
+                ],
+                suiDark: ['text-sui-dark'],
+            },
+            weight: {
+                semibold: 'font-semibold',
+                medium: 'font-medium',
+            },
+        },
+    }
+);
 
-const iconStyles = cva([
-    'flex text-steel',
-    'group-hover:text-steel-darker group-focus:text-steel-darker group-disabled:text-steel-dark',
-]);
+const iconStyles = cva(['transition flex'], {
+    variants: {
+        color: {
+            steelDark: [
+                'text-steel group-hover:text-steel-darker group-focus:text-steel-darker group-disabled:text-steel-dark',
+            ],
+            heroDark: [
+                'text-hero group-hover:text-hero-darkest group-focus:text-hero-darkest group-disabled:text-hero-dark',
+            ],
+            suiDark: [
+                'text-steel group-hover:text-sui-dark group-focus:text-sui-dark group-disabled:text-steel',
+            ],
+        },
+    },
+});
 
 interface LinkProps
     extends VariantProps<typeof styles>,
         VariantProps<typeof iconStyles>,
-        Omit<ButtonOrLinkProps, 'className'> {
+        Omit<ButtonOrLinkProps, 'className' | 'color'> {
     before?: ReactNode;
     after?: ReactNode;
     text?: ReactNode;
@@ -32,15 +61,23 @@ interface LinkProps
 
 export const Link = forwardRef(
     (
-        { before, after, text, ...otherProps }: LinkProps,
+        { before, after, text, color, weight, ...otherProps }: LinkProps,
         ref: Ref<HTMLAnchorElement | HTMLButtonElement>
     ) => (
-        <ButtonOrLink className={styles()} {...otherProps} ref={ref}>
-            {before ? <div className={iconStyles()}>{before}</div> : null}
+        <ButtonOrLink
+            className={styles({ color, weight })}
+            {...otherProps}
+            ref={ref}
+        >
+            {before ? (
+                <div className={iconStyles({ color })}>{before}</div>
+            ) : null}
             {text ? (
                 <div className={'truncate leading-tight'}>{text}</div>
             ) : null}
-            {after ? <div className={iconStyles()}>{after}</div> : null}
+            {after ? (
+                <div className={iconStyles({ color })}>{after}</div>
+            ) : null}
         </ButtonOrLink>
     )
 );

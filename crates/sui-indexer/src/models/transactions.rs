@@ -19,6 +19,7 @@ pub struct Transaction {
     pub id: i64,
     pub transaction_digest: String,
     pub sender: String,
+    pub checkpoint_sequence_number: Option<i64>,
     pub transaction_time: Option<NaiveDateTime>,
     pub transaction_kinds: Vec<Option<String>>,
     pub created: Vec<Option<String>>,
@@ -43,6 +44,7 @@ pub struct Transaction {
 pub struct NewTransaction {
     pub transaction_digest: String,
     pub sender: String,
+    pub checkpoint_sequence_number: Option<i64>,
     pub transaction_time: Option<NaiveDateTime>,
     pub transaction_kinds: Vec<Option<String>>,
     pub created: Vec<Option<String>>,
@@ -132,6 +134,7 @@ pub fn transaction_response_to_new_transaction(
     let gas_budget = tx_resp.transaction.data.gas_data.budget;
     let gas_price = tx_resp.transaction.data.gas_data.price;
     let sender = tx_resp.transaction.data.sender.to_string();
+    let checkpoint_seq_number = tx_resp.checkpoint.map(|c| c as i64);
     let txn_kind_iter = tx_resp
         .transaction
         .data
@@ -184,8 +187,8 @@ pub fn transaction_response_to_new_transaction(
     let gas_object_ref = tx_resp.effects.gas_object.reference.clone();
     let gas_object_id = gas_object_ref.object_id.to_string();
     let gas_object_seq = gas_object_ref.version;
-    // canonical object digest is Base64 encoded
-    let gas_object_digest = gas_object_ref.digest.base64_encode();
+    // canonical object digest is Base58 encoded
+    let gas_object_digest = gas_object_ref.digest.base58_encode();
 
     let gas_summary = tx_resp.effects.gas_used;
     let computation_cost = gas_summary.computation_cost;
@@ -195,6 +198,7 @@ pub fn transaction_response_to_new_transaction(
     Ok(NewTransaction {
         transaction_digest: tx_digest,
         sender,
+        checkpoint_sequence_number: checkpoint_seq_number,
         transaction_kinds: txn_kind_iter.map(Some).collect::<Vec<Option<String>>>(),
         transaction_time: timestamp,
         created: vec_string_to_vec_opt_string(created),
