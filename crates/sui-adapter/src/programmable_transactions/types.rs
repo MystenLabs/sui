@@ -1,20 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use move_binary_format::file_format::AbilitySet;
 use move_core_types::{
     identifier::IdentStr,
-    language_storage::StructTag,
+    language_storage::{ModuleId, StructTag},
     resolver::{ModuleResolver, ResourceResolver},
 };
 use move_vm_types::loaded_data::runtime_types::Type;
 use serde::Deserialize;
 use sui_types::{
-    base_types::{ObjectID, SuiAddress},
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
     object::{Data, MoveObject, Object, Owner},
-    storage::{ChildObjectResolver, ParentSync, Storage},
+    storage::{ChildObjectResolver, ObjectChange, ParentSync, Storage},
 };
 
 pub trait StorageView<E: std::fmt::Debug>:
@@ -32,6 +34,43 @@ impl<
 {
 }
 
+pub struct ExecutionResults {
+    pub object_changes: BTreeMap<ObjectID, ObjectChange>,
+    pub user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
+}
+
+#[derive(Clone)]
+pub struct InputObjectMetadata {
+    pub id: ObjectID,
+    pub is_mutable_input: bool,
+    pub owner: Owner,
+    pub version: SequenceNumber,
+}
+
+#[derive(Clone)]
+pub struct InputValue {
+    /// Used to remember the object ID and owner even if the value is taken
+    pub object_metadata: Option<InputObjectMetadata>,
+    pub inner: ResultValue,
+}
+
+#[derive(Clone)]
+pub struct ResultValue {
+    /// This is used primarily for values that have `copy` but not `drop` as they must have been
+    /// copied after the last borrow, otherwise we cannot consider the last "copy" to be instead
+    /// a "move" of the value.
+    pub last_usage_kind: Option<UsageKind>,
+    pub value: Option<Value>,
+}
+
+#[derive(Clone, Copy)]
+pub enum UsageKind {
+    BorrowImm,
+    BorrowMut,
+    Take,
+    Clone,
+}
+
 #[derive(Clone)]
 pub enum Value {
     Object(ObjectValue),
@@ -40,8 +79,6 @@ pub enum Value {
 
 #[derive(Clone)]
 pub struct ObjectValue {
-    // None for objects created this transaction
-    pub owner: Option<Owner>,
     pub type_: StructTag,
     pub has_public_transfer: bool,
     // true if it has been used in a public, non-entry Move call
@@ -74,6 +111,31 @@ pub enum CommandKind<'a> {
     SplitCoin,
     MergeCoins,
     Publish,
+}
+
+impl InputValue {
+    pub fn new_object(object_metadata: InputObjectMetadata, value: ObjectValue) -> Self {
+        InputValue {
+            object_metadata: Some(object_metadata),
+            inner: ResultValue::new(Value::Object(value)),
+        }
+    }
+
+    pub fn new_raw(ty: ValueType, value: Vec<u8>) -> Self {
+        InputValue {
+            object_metadata: None,
+            inner: ResultValue::new(Value::Raw(ty, value)),
+        }
+    }
+}
+
+impl ResultValue {
+    pub fn new(value: Value) -> Self {
+        Self {
+            last_usage_kind: None,
+            value: Some(value),
+        }
+    }
 }
 
 impl Value {
@@ -112,7 +174,6 @@ impl Value {
 
 impl ObjectValue {
     pub fn new(
-        owner: Option<Owner>,
         type_: StructTag,
         has_public_transfer: bool,
         used_in_non_entry_move_call: bool,
@@ -124,7 +185,6 @@ impl ObjectValue {
             ObjectContents::Raw(contents.to_vec())
         };
         Ok(Self {
-            owner,
             type_,
             has_public_transfer,
             used_in_non_entry_move_call,
@@ -133,16 +193,15 @@ impl ObjectValue {
     }
 
     pub fn from_object(object: &Object) -> Result<Self, ExecutionError> {
-        let Object { data, owner, .. } = object;
+        let Object { data, .. } = object;
         match data {
             Data::Package(_) => invariant_violation!("Expected a Move object"),
-            Data::Move(move_object) => Self::from_move_object(*owner, move_object),
+            Data::Move(move_object) => Self::from_move_object(move_object),
         }
     }
 
-    pub fn from_move_object(owner: Owner, object: &MoveObject) -> Result<Self, ExecutionError> {
+    pub fn from_move_object(object: &MoveObject) -> Result<Self, ExecutionError> {
         Self::new(
-            Some(owner),
             object.type_.clone(),
             object.has_public_transfer(),
             false,
@@ -158,16 +217,12 @@ impl ObjectValue {
         Ok(Self {
             type_,
             has_public_transfer: true,
-            owner: None,
             used_in_non_entry_move_call: false,
             contents: ObjectContents::Coin(coin),
         })
     }
 
     pub fn ensure_public_transfer_eligible(&self) -> Result<(), ExecutionError> {
-        if !matches!(self.owner, None | Some(Owner::AddressOwner(_))) {
-            return Err(ExecutionErrorKind::InvalidTransferObject.into());
-        }
         if !self.has_public_transfer {
             return Err(ExecutionErrorKind::InvalidTransferObject.into());
         }
