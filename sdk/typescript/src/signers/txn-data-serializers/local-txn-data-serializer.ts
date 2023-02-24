@@ -450,15 +450,10 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         },
       };
     } else if ('Call' in tx) {
-      const packageObjectId =
-        typeof tx.Call.package === 'string'
-          ? tx.Call.package
-          : tx.Call.package.objectId;
-
       return {
         kind: 'moveCall',
         data: {
-          packageObjectId,
+          packageObjectId: tx.Call.package,
           module: tx.Call.module,
           function: tx.Call.function,
           typeArguments: tx.Call.typeArguments,
