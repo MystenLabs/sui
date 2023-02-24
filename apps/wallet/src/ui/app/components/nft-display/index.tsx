@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatAddress } from '@mysten/sui.js';
 import { cva } from 'class-variance-authority';
 import cl from 'classnames';
 
@@ -48,9 +47,7 @@ export function NFTDisplayCard({
     const nftName = nftMeta?.name;
 
     const displayTitle =
-        originByteNft?.fields.name || nftName
-            ? nftName
-            : formatAddress(objectId);
+        originByteNft?.fields.name || nftName ? nftName : objectId;
 
     const nftUrl = nftMeta?.url || null;
     const fileExtensionType = useFileExtensionType(nftUrl!);
