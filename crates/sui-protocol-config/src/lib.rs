@@ -240,9 +240,11 @@ pub struct ProtocolConfig {
     /// Note that this is constant and not a config as validators must have this set to the same value, otherwise they *will* fork
     max_transactions_per_checkpoint: Option<usize>,
 
-    /// Maximum allowable number of votes against a protocol upgrade. Counted in individual
-    /// validators, not stake units.
-    max_non_supporting_validators_for_protocol_upgrade: Option<u32>,
+    /// A protocol upgrade always requires 2f+1 stake to agree. We support a buffer of additional
+    /// stake (as a fraction of f, expressed in basis points) that is required before an upgrade
+    /// can happen automatically. 10000bps would indicate that complete unanimity is required (all
+    /// 3f+1 must vote), while 0bps would indicate that 2f+1 is sufficient.
+    buffer_stake_for_protocol_upgrade_bps: Option<u32>,
 }
 
 const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protocol version";
@@ -365,8 +367,8 @@ impl ProtocolConfig {
         self.max_transactions_per_checkpoint
             .expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_non_supporting_validators_for_protocol_upgrade(&self) -> u32 {
-        self.max_non_supporting_validators_for_protocol_upgrade
+    pub fn buffer_stake_for_protocol_upgrade_bps(&self) -> u32 {
+        self.buffer_stake_for_protocol_upgrade_bps
             .expect(CONSTANT_ERR_MSG)
     }
 
@@ -498,7 +500,7 @@ impl ProtocolConfig {
                 stake_subsidy_rate: Some(1),
                 storage_gas_price: Some(1),
                 max_transactions_per_checkpoint: Some(1000),
-                max_non_supporting_validators_for_protocol_upgrade: Some(3),
+                buffer_stake_for_protocol_upgrade_bps: Some(5000),
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },

@@ -2552,6 +2552,76 @@ impl AuthorityState {
         self.database.get_latest_parent_entry(object_id)
     }
 
+    fn choose_next_protocol_version(
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        capabilities_map: &BTreeMap<AuthorityName, AuthorityCapabilities>,
+    ) -> ProtocolVersion {
+        let protocol_config = epoch_store.protocol_config();
+
+        // Determine which protocol version to propose for the following epoch.
+        let current_protocol_version = epoch_store.committee().protocol_version;
+        let next_protocol_version = current_protocol_version + 1;
+
+        // Even if we don't support the next version, we vote with the majority. This is needed to
+        // ensure that the final checkpoint can be certified. Otherwise, a validator might vote
+        // that they support it, then be reverted to an earlier build, and decide not to adhere to
+        // their vote.
+
+        let mut stake_aggregator: StakeAggregator<bool, true> =
+            StakeAggregator::new(Arc::new(epoch_store.committee().clone()));
+
+        let mut non_supporting = 0;
+        for (authority, _) in &epoch_store.committee().voting_rights {
+            let Some(cap) = capabilities_map.get(authority) else {
+                    info!(
+                        "validator {:?} did not broadcast their capabilities",
+                        authority.concise(),
+                    );
+                    non_supporting += 1;
+                    continue;
+                };
+
+            if cap
+                .supported_protocol_versions
+                .is_version_supported(next_protocol_version)
+            {
+                info!(
+                    "validator {:?} supports {:?}",
+                    authority.concise(),
+                    next_protocol_version
+                );
+                stake_aggregator.insert_generic(*authority, true);
+            } else {
+                info!(
+                    "validator {:?} does not support {:?}",
+                    authority, next_protocol_version
+                );
+                non_supporting += 1;
+            }
+        }
+
+        let total_votes = stake_aggregator.total_votes();
+        let quorum_threshold = epoch_store.committee().quorum_threshold();
+        info!(
+            ?total_votes,
+            ?quorum_threshold,
+            ?non_supporting,
+            ?next_protocol_version,
+            "support for next protocol version"
+        );
+
+        // Quorum threshold is required in order to certify the change epoch tx no matter what.
+        // We further require that we don't leave more than N validators behind.
+        if total_votes >= quorum_threshold
+            && non_supporting
+                <= protocol_config.max_non_supporting_validators_for_protocol_upgrade()
+        {
+            next_protocol_version
+        } else {
+            current_protocol_version
+        }
+    }
+
     /// Creates and execute the advance epoch transaction to effects without committing it to the database.
     /// The effects of the change epoch tx are only written to the database after a certified checkpoint has been
     /// formed and executed by CheckpointExecutor.
@@ -2565,6 +2635,15 @@ impl AuthorityState {
         let next_epoch = epoch_store.epoch() + 1;
 
         let protocol_config = epoch_store.protocol_config();
+
+        let capabilities_map: BTreeMap<_, _> = epoch_store
+            .get_capabilities()
+            .into_iter()
+            .map(|cap| (cap.authority, cap))
+            .collect();
+
+        let next_protocol_version =
+            Self::choose_next_protocol_version(epoch_store, &capabilities_map);
 
         // Determine which protocol version to propose for the following epoch.
         let current_protocol_version = epoch_store.committee().protocol_version;
