@@ -5,7 +5,6 @@ import { Text } from '_app/shared/text';
 import { CoinIcon } from '_components/coin-icon';
 import { useFormatCoin } from '_hooks';
 
-//TODO: Get coin metadata from getCoinMetadata right now it's hardcoded because the metadata for most other cointype is undefined
 export function CoinItem({
     coinType,
     balance,
