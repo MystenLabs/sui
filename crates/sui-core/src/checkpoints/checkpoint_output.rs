@@ -69,7 +69,7 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
         debug!(
             "Sending checkpoint signature at sequence {checkpoint_seq} to consensus, timestamp {checkpoint_timestamp}. 
             {}ms left till end of epoch at timestamp {}",
-            self.next_reconfiguration_timestamp_ms - checkpoint_timestamp, self.next_reconfiguration_timestamp_ms
+            self.next_reconfiguration_timestamp_ms.saturating_sub(checkpoint_timestamp), self.next_reconfiguration_timestamp_ms
         );
         LogCheckpointOutput
             .checkpoint_created(summary, contents, epoch_store)
