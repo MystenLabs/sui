@@ -160,7 +160,7 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
             vec![],
             vec![],
             Some(gas.object_id),
-            10_000,
+            Some(10_000),
             None,
         )
         .await?;
@@ -218,7 +218,7 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
                 SuiJsonValue::from_bcs_bytes(&sig).unwrap(),
             ],
             Some(gas.object_id),
-            10_000,
+            Some(10_000),
             None,
         )
         .await?;
@@ -301,7 +301,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
             vec![GAS::type_tag().into()],
             json_args,
             Some(gas.object_id),
-            10_000,
+            Some(10_000),
             None,
         )
         .await?;
@@ -543,7 +543,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
                 SuiJsonValue::from_str(&address.to_string()).unwrap(),
             ],
             Some(gas.object_id),
-            10_000,
+            Some(10_000),
             None,
         )
         .await?;
@@ -934,7 +934,7 @@ async fn test_locked_sui() -> Result<(), anyhow::Error> {
                 SuiJsonValue::from_bcs_bytes(&bcs::to_bytes(&"20")?)?,
             ],
             None,
-            1000,
+            Some(1000),
             None,
         )
         .await?;
@@ -1114,7 +1114,7 @@ async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
                 SuiJsonValue::from_bcs_bytes(&bcs::to_bytes(&"20")?)?,
             ],
             None,
-            1000,
+            Some(1000),
             None,
         )
         .await?;

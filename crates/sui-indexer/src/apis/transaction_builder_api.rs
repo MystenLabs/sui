@@ -154,7 +154,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         type_arguments: Vec<SuiTypeTag>,
         rpc_arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
-        gas_budget: u64,
+        gas_budget: Option<u64>,
         txn_builder_mode: Option<SuiTransactionBuilderMode>,
     ) -> RpcResult<TransactionBytes> {
         self.fullnode
@@ -177,7 +177,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         params: Vec<RPCTransactionRequestParams>,
         gas: Option<ObjectID>,
-        gas_budget: u64,
+        gas_budget: Option<u64>,
         txn_builder_mode: Option<SuiTransactionBuilderMode>,
     ) -> RpcResult<TransactionBytes> {
         self.fullnode

@@ -16,7 +16,7 @@ use sui_transaction_builder::{DataReader, TransactionBuilder};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     digests::ObjectDigest,
-    messages::SingleTransactionKind,
+    messages::{SingleTransactionKind, TransactionKind},
 };
 
 use fastcrypto::encoding::Base64;
@@ -287,13 +287,47 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         params: Vec<RPCTransactionRequestParams>,
         gas: Option<ObjectID>,
-        gas_budget: u64,
+        gas_budget: Option<u64>,
+        txn_builder_mode: Option<SuiTransactionBuilderMode>,
     ) -> RpcResult<TransactionBytes> {
-        let data = self
-            .builder
-            .batch_transaction::<execution_mode::Normal>(signer, params, gas, gas_budget)
-            .await?;
-        Ok(TransactionBytes::from_data(data)?)
+        let mode = txn_builder_mode.unwrap_or(SuiTransactionBuilderMode::Commit);
+        match mode {
+            SuiTransactionBuilderMode::DevInspect => {
+                let tx_kinds = self
+                    .builder
+                    .batch_transaction_kinds::<execution_mode::DevInspect>(params)
+                    .await?;
+                let kind = TransactionKind::Batch(tx_kinds);
+                let tx_bytes = Base64::from_bytes(
+                    bcs::to_bytes(&kind)
+                        .map_err(anyhow::Error::from)?
+                        .as_slice(),
+                );
+                let input_objects = kind
+                    .input_objects()
+                    .map_err(anyhow::Error::from)?
+                    .into_iter()
+                    .map(SuiInputObjectKind::from)
+                    .collect();
+                Ok(TransactionBytes {
+                    tx_bytes,
+                    gas: (ObjectID::ZERO, SequenceNumber::MIN, ObjectDigest::MIN).into(),
+                    input_objects,
+                })
+            }
+            SuiTransactionBuilderMode::Commit => {
+                let Some(gas_budget) = gas_budget else {
+                    return Err(
+                        anyhow::anyhow!("gas_budget must be specified in Commit mode").into()
+                    )
+                };
+                let data = self
+                    .builder
+                    .batch_transaction::<execution_mode::Normal>(signer, params, gas, gas_budget)
+                    .await?;
+                Ok(TransactionBytes::from_data(data)?)
+            }
+        }
     }
 
     async fn request_add_delegation(

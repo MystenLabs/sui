@@ -130,10 +130,10 @@ pub trait TransactionBuilder {
         type_arguments: Vec<SuiTypeTag>,
         /// the arguments to be passed into the Move function, in [SuiJson](https://docs.sui.io/build/sui-json) format
         arguments: Vec<SuiJsonValue>,
-        /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
+        /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided. It will be ignored if execution_mode is set to `SuiTransactionBuilderMode::DevInspect`
         gas: Option<ObjectID>,
-        /// the gas budget, the transaction will fail if the gas cost exceed the budget
-        gas_budget: u64,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget. It will be ignored if execution_mode is set to `SuiTransactionBuilderMode::DevInspect`
+        gas_budget: Option<u64>,
         /// Whether this is a Normal transaction or a Dev Inspect Transaction. Default to be `SuiTransactionBuilderMode::Commit` when it's None.
         execution_mode: Option<SuiTransactionBuilderMode>,
     ) -> RpcResult<TransactionBytes>;
@@ -208,10 +208,10 @@ pub trait TransactionBuilder {
         signer: SuiAddress,
         /// list of transaction request parameters
         single_transaction_params: Vec<RPCTransactionRequestParams>,
-        /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
+        /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided. It will be ignored if execution_mode is set to `SuiTransactionBuilderMode::DevInspect`
         gas: Option<ObjectID>,
-        /// the gas budget, the transaction will fail if the gas cost exceed the budget
-        gas_budget: u64,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget. It will be ignored if execution_mode is set to `SuiTransactionBuilderMode::DevInspect`
+        gas_budget: Option<u64>,
         /// Whether this is a regular transaction or a Dev Inspect Transaction
         txn_builder_mode: Option<SuiTransactionBuilderMode>,
     ) -> RpcResult<TransactionBytes>;

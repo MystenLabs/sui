@@ -45,15 +45,14 @@
         },
         {
           "name": "gas",
-          "description": "gas object to be used in this transaction, node will pick one from the signer's possession if not provided",
+          "description": "gas object to be used in this transaction, node will pick one from the signer's possession if not provided. It will be ignored if execution_mode is set to `SuiTransactionBuilderMode::DevInspect`",
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
         },
         {
           "name": "gas_budget",
-          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
-          "required": true,
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget. It will be ignored if execution_mode is set to `SuiTransactionBuilderMode::DevInspect`",
           "schema": {
             "type": "integer",
             "format": "uint64",
@@ -1913,15 +1912,14 @@
         },
         {
           "name": "gas",
-          "description": "gas object to be used in this transaction, node will pick one from the signer's possession if not provided",
+          "description": "gas object to be used in this transaction, node will pick one from the signer's possession if not provided. It will be ignored if execution_mode is set to `SuiTransactionBuilderMode::DevInspect`",
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
         },
         {
           "name": "gas_budget",
-          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
-          "required": true,
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget. It will be ignored if execution_mode is set to `SuiTransactionBuilderMode::DevInspect`",
           "schema": {
             "type": "integer",
             "format": "uint64",

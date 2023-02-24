@@ -534,13 +534,10 @@ impl TransactionBuilder {
         ))
     }
 
-    pub async fn batch_transaction<Mode: ExecutionMode>(
+    pub async fn batch_transaction_kinds<Mode: ExecutionMode>(
         &self,
-        signer: SuiAddress,
         single_transaction_params: Vec<RPCTransactionRequestParams>,
-        gas: Option<ObjectID>,
-        gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
+    ) -> anyhow::Result<Vec<SingleTransactionKind>> {
         fp_ensure!(
             !single_transaction_params.is_empty(),
             SuiError::InvalidBatchTransaction {
@@ -570,6 +567,19 @@ impl TransactionBuilder {
             };
             tx_kinds.push(single_tx);
         }
+        Ok(tx_kinds)
+    }
+
+    pub async fn batch_transaction<Mode: ExecutionMode>(
+        &self,
+        signer: SuiAddress,
+        single_transaction_params: Vec<RPCTransactionRequestParams>,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> anyhow::Result<TransactionData> {
+        let tx_kinds = self
+            .batch_transaction_kinds::<Mode>(single_transaction_params)
+            .await?;
 
         let all_inputs = tx_kinds
             .iter()
