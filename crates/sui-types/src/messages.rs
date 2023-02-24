@@ -49,23 +49,11 @@ use tracing::debug;
 
 pub const DUMMY_GAS_PRICE: u64 = 1;
 
-const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 3] = [
-    (
-        SUI_FRAMEWORK_OBJECT_ID,
-        "sui_system",
-        "request_add_validator",
-    ),
-    (
-        SUI_FRAMEWORK_OBJECT_ID,
-        "sui_system",
-        "request_remove_validator",
-    ),
-    (
-        SUI_FRAMEWORK_OBJECT_ID,
-        "sui_system",
-        "request_set_commission_rate",
-    ),
-];
+const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 1] = [(
+    SUI_FRAMEWORK_OBJECT_ID,
+    "sui_system",
+    "request_set_commission_rate",
+)];
 
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
