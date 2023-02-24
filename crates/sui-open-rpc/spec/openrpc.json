@@ -127,7 +127,7 @@
               "gas": {
                 "objectId": "0xf5b70ccb10f1a705e061d0fdfa189618d28b0d44",
                 "version": 1,
-                "digest": "+N7M88PFGPFG3pVU8D8nqD1bEYXznnHvNX4r2eE5YlE="
+                "digest": "HkV9zVH43ELJvw3yX5M3DAG65QLsDEo2k4KGABFzKNw2"
               },
               "inputObjects": [
                 {
@@ -137,14 +137,14 @@
                   "ImmOrOwnedMoveObject": {
                     "objectId": "0xefef92cbf44b581f23222c10916b17a369b4da03",
                     "version": 1,
-                    "digest": "nQdZUrWANvKntWFEZZJAPGcvDb4Snx45ET+fYWTqKGc="
+                    "digest": "BZyWTosM9Sqb9h7tQxzv9Ym9vCqo1kbREX1iG9qAhk5c"
                   }
                 },
                 {
                   "ImmOrOwnedMoveObject": {
                     "objectId": "0xf5b70ccb10f1a705e061d0fdfa189618d28b0d44",
                     "version": 1,
-                    "digest": "+N7M88PFGPFG3pVU8D8nqD1bEYXznnHvNX4r2eE5YlE="
+                    "digest": "HkV9zVH43ELJvw3yX5M3DAG65QLsDEo2k4KGABFzKNw2"
                   }
                 }
               ]
@@ -299,7 +299,7 @@
                         "objectRef": {
                           "objectId": "0xe21ba497c54ab30a3d9adc07c1429c4d6bbecaf9",
                           "version": 2,
-                          "digest": "8nm+TGoQHpo69cgHARL4CGSLNu+/je6KGoLeRtlQTpY="
+                          "digest": "HKXLLDHZhfLQ15j4kP87htce6Lsn5kBnsC1a2uY75fiM"
                         }
                       }
                     }
@@ -309,7 +309,7 @@
                     "payment": {
                       "objectId": "0x457c9af77a91f631760853934d383634bcf7c326",
                       "version": 2,
-                      "digest": "VQCaYfHeDq5CCi5K4bt3KrLdXVp9+pScDvBpCOelSQA="
+                      "digest": "6ipBtH1oA2jP4vQ12uae1dTCLfaMmUpyJYQeThQAfXuZ"
                     },
                     "owner": "0x6a95dff693391f2fd199a51cd772be5c789e3f08",
                     "price": 1,
@@ -339,7 +339,7 @@
                     "reference": {
                       "objectId": "0x457c9af77a91f631760853934d383634bcf7c326",
                       "version": 2,
-                      "digest": "VQCaYfHeDq5CCi5K4bt3KrLdXVp9+pScDvBpCOelSQA="
+                      "digest": "6ipBtH1oA2jP4vQ12uae1dTCLfaMmUpyJYQeThQAfXuZ"
                     }
                   },
                   {
@@ -349,7 +349,7 @@
                     "reference": {
                       "objectId": "0xe21ba497c54ab30a3d9adc07c1429c4d6bbecaf9",
                       "version": 2,
-                      "digest": "8nm+TGoQHpo69cgHARL4CGSLNu+/je6KGoLeRtlQTpY="
+                      "digest": "HKXLLDHZhfLQ15j4kP87htce6Lsn5kBnsC1a2uY75fiM"
                     }
                   }
                 ],
@@ -360,7 +360,7 @@
                   "reference": {
                     "objectId": "0x457c9af77a91f631760853934d383634bcf7c326",
                     "version": 2,
-                    "digest": "VQCaYfHeDq5CCi5K4bt3KrLdXVp9+pScDvBpCOelSQA="
+                    "digest": "6ipBtH1oA2jP4vQ12uae1dTCLfaMmUpyJYQeThQAfXuZ"
                   }
                 },
                 "events": [
@@ -1265,7 +1265,7 @@
                 "reference": {
                   "objectId": "0x6b0a41403276437b25f0ffbe897cf476c0777e9d",
                   "version": 1,
-                  "digest": "rvMAWuZzOAnI7B1bhN1iieGTufiN5KmUNYyfhWE1I2w="
+                  "digest": "CmvrMzn3qVkwJtZfkCNAQEDN11pV6t8mR8zdDPaayAn7"
                 }
               }
             }
@@ -1316,7 +1316,7 @@
               {
                 "objectId": "0xf6c012cded9ef9ba5e5bf042464b5ca6488b897c",
                 "version": 0,
-                "digest": "AFsuF/APwLyOftPyq1nWB7DjWGvaHNpOQrQUWyb6Neo=",
+                "digest": "12Pe8JN96upsApMseeghANkkNMKUWA6Bz4JD5NTWko2q",
                 "type": "0x2::coin::Coin<0x2::sui::SUI>",
                 "owner": {
                   "AddressOwner": "0x3568c40e814d9d5396d23087a0fd641e91e0e00d"
@@ -1326,7 +1326,7 @@
               {
                 "objectId": "0xc11638af89d575beb99003d30a245ac74a02e26e",
                 "version": 0,
-                "digest": "RcuA7hucAKkzRc5fEr6p/+BHSNZpbDBjFzUZOuqVuPk=",
+                "digest": "5hT7RhY6v7aUL8CNJ91QyurVnXFQrG25ccgP5rQGwXfe",
                 "type": "0x2::coin::Coin<0x2::sui::SUI>",
                 "owner": {
                   "AddressOwner": "0x3568c40e814d9d5396d23087a0fd641e91e0e00d"
@@ -1336,7 +1336,7 @@
               {
                 "objectId": "0x6b632eafa229ec3dd885442b44972526c4e8ce25",
                 "version": 0,
-                "digest": "oEFsOVXYGLsasOgyh31igjPj4dZPdrcagOxPMy9NGmc=",
+                "digest": "Bna6Kzi331fiwRV61jWuigECAgmiP5BDRhXRWPSj44QE",
                 "type": "0x2::coin::Coin<0x2::sui::SUI>",
                 "owner": {
                   "AddressOwner": "0x3568c40e814d9d5396d23087a0fd641e91e0e00d"
@@ -1346,7 +1346,7 @@
               {
                 "objectId": "0x842f736ab973e87f53b4857842789a1dd5916762",
                 "version": 0,
-                "digest": "mzxcq+R9v0iCfsCBjgDeSyl/BHw77aQ9bp+bGxvETN8=",
+                "digest": "BSyaW5dEKRbS8JTSCD12egRkA22w2fNEZnpXx4vnG1BL",
                 "type": "0x2::coin::Coin<0x2::sui::SUI>",
                 "owner": {
                   "AddressOwner": "0x3568c40e814d9d5396d23087a0fd641e91e0e00d"
@@ -1412,7 +1412,7 @@
                 "reference": {
                   "objectId": "0x0a7c6df2389c373c8fbe06bda7a61120652668dd",
                   "version": 1,
-                  "digest": "5C79eCr1IDESMxrcLtb0Atyjlr/m36OsilfqCIYIcP0="
+                  "digest": "GMjWn2ePzjwK2NJF4qk5ce3mRyV5NeGJhrTFzb6jcvFe"
                 }
               }
             }
@@ -1557,7 +1557,7 @@
                         "objectRef": {
                           "objectId": "0x08e4eb229c44cb957d29cf7370af8a1b9c542d49",
                           "version": 2,
-                          "digest": "jtyJV52G/T/JDFL5oUxrgSuU/mE8W867XusdRJ4lFhY="
+                          "digest": "AcfwKyTf8fkvqFFL68m4NsgWzznkDgE6qpsaU2h51W5T"
                         }
                       }
                     }
@@ -1567,7 +1567,7 @@
                     "payment": {
                       "objectId": "0xb3c83cfb9c683fb7d0526e29d77e89e7bfefd4f7",
                       "version": 2,
-                      "digest": "Oto9GayH1FNR8BlqiAuVw+okTdBg0rZTgZbQSLem0Ew="
+                      "digest": "4xjfA3AWhAGB1nwf8F27k5WDGhY5prm6bGMz27tNP1Co"
                     },
                     "owner": "0xd4783daffa7f6913e7b0b8f7c0f1790bdc021fe6",
                     "price": 1,
@@ -1597,7 +1597,7 @@
                     "reference": {
                       "objectId": "0xb3c83cfb9c683fb7d0526e29d77e89e7bfefd4f7",
                       "version": 2,
-                      "digest": "Oto9GayH1FNR8BlqiAuVw+okTdBg0rZTgZbQSLem0Ew="
+                      "digest": "4xjfA3AWhAGB1nwf8F27k5WDGhY5prm6bGMz27tNP1Co"
                     }
                   },
                   {
@@ -1607,7 +1607,7 @@
                     "reference": {
                       "objectId": "0x08e4eb229c44cb957d29cf7370af8a1b9c542d49",
                       "version": 2,
-                      "digest": "jtyJV52G/T/JDFL5oUxrgSuU/mE8W867XusdRJ4lFhY="
+                      "digest": "AcfwKyTf8fkvqFFL68m4NsgWzznkDgE6qpsaU2h51W5T"
                     }
                   }
                 ],
@@ -1618,7 +1618,7 @@
                   "reference": {
                     "objectId": "0xb3c83cfb9c683fb7d0526e29d77e89e7bfefd4f7",
                     "version": 2,
-                    "digest": "Oto9GayH1FNR8BlqiAuVw+okTdBg0rZTgZbQSLem0Ew="
+                    "digest": "4xjfA3AWhAGB1nwf8F27k5WDGhY5prm6bGMz27tNP1Co"
                   }
                 },
                 "events": [
@@ -2531,7 +2531,7 @@
                         "objectRef": {
                           "objectId": "0x18eebf9fbae00bd38e57872f45224468e1fc17c8",
                           "version": 2,
-                          "digest": "XwGimIeh2V5bVIthbaY7DOB9gW6J73uaOCF3tEIruqI="
+                          "digest": "7PsBHpUW6yfGNov2WrbVafLjgT9nYziQ3gVDbRq6zTbF"
                         }
                       }
                     }
@@ -2541,7 +2541,7 @@
                     "payment": {
                       "objectId": "0x147089dc4318fdd400db67364ef350c952676d85",
                       "version": 2,
-                      "digest": "fcN/rn2TKYoSRcMbQgaIwWhstNE1bRcYDdguk6SDxas="
+                      "digest": "9Tvs1pGrMbNv7kkr1PoKLsWamyQpaFz5UWbL2AQ1ezk2"
                     },
                     "owner": "0x02ff3255e00ce42adfee12133f7222dd38a933eb",
                     "price": 1,
@@ -2571,7 +2571,7 @@
                     "reference": {
                       "objectId": "0x147089dc4318fdd400db67364ef350c952676d85",
                       "version": 2,
-                      "digest": "fcN/rn2TKYoSRcMbQgaIwWhstNE1bRcYDdguk6SDxas="
+                      "digest": "9Tvs1pGrMbNv7kkr1PoKLsWamyQpaFz5UWbL2AQ1ezk2"
                     }
                   },
                   {
@@ -2581,7 +2581,7 @@
                     "reference": {
                       "objectId": "0x18eebf9fbae00bd38e57872f45224468e1fc17c8",
                       "version": 2,
-                      "digest": "XwGimIeh2V5bVIthbaY7DOB9gW6J73uaOCF3tEIruqI="
+                      "digest": "7PsBHpUW6yfGNov2WrbVafLjgT9nYziQ3gVDbRq6zTbF"
                     }
                   }
                 ],
@@ -2592,7 +2592,7 @@
                   "reference": {
                     "objectId": "0x147089dc4318fdd400db67364ef350c952676d85",
                     "version": 2,
-                    "digest": "fcN/rn2TKYoSRcMbQgaIwWhstNE1bRcYDdguk6SDxas="
+                    "digest": "9Tvs1pGrMbNv7kkr1PoKLsWamyQpaFz5UWbL2AQ1ezk2"
                   }
                 },
                 "events": [
@@ -2873,7 +2873,7 @@
                 "reference": {
                   "objectId": "0x3e75a925e1c77ac34127c8baefbea0939f152471",
                   "version": 4,
-                  "digest": "Ea9LhE/5Sz++9uNrUY2jrUxYVvpoZGRSSodrRj0Sl2A="
+                  "digest": "2C2xqKAT9RFdZAKSRm7uFcRMQ6AF1TLnkhe9ZQnnz2xo"
                 }
               }
             }
@@ -4883,7 +4883,7 @@
         }
       },
       "ObjectDigest": {
-        "$ref": "#/components/schemas/Base64"
+        "$ref": "#/components/schemas/Sha3Digest"
       },
       "ObjectID": {
         "$ref": "#/components/schemas/Hex"

@@ -24,7 +24,7 @@ describe('Test common functions', () => {
           payment: {
             objectId: '2fab642a835afc9d68d296f50c332c9d32b5a0d5',
             version: 7,
-            digest: 'lGmQDt2ch1/4HwdgOlHmeeZZvCHUjfrKvBOND/c67n4=',
+            digest: 'DjnxhsPchJGa5crALRp8coJazNvV4s3mqpdcxVVKJrpt',
           },
           price: 1,
           budget: 100,
@@ -34,7 +34,7 @@ describe('Test common functions', () => {
 
       const transactionDigest = generateTransactionDigest(transactionData, bcs);
       expect(transactionDigest).toEqual(
-        'AXCK8UzvhACvD9qQYsaeYV26WUCFwgJXs2bzAJyWBQvb',
+        '14awCuj4UEw1g1oGDNRsrGajHC9qvFZV5gDeRqtdLQN3',
       );
     });
   });
