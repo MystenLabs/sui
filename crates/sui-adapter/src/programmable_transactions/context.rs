@@ -3,7 +3,7 @@
 
 use std::{
     collections::{BTreeMap, HashMap},
-    fmt::{self},
+    fmt,
     marker::PhantomData,
 };
 
@@ -28,7 +28,9 @@ use crate::adapter::{missing_unwrapped_msg, new_session};
 
 use super::types::*;
 
+/// Maintains all runtime state specific to programmable transactions
 pub struct ExecutionContext<'vm, 'state, 'a, 'b, E: fmt::Debug, S: StorageView<E>> {
+    /// The protocol config
     pub protocol_config: &'a ProtocolConfig,
     /// The MoveVM
     pub vm: &'vm MoveVM,
@@ -62,12 +64,17 @@ pub struct ExecutionContext<'vm, 'state, 'a, 'b, E: fmt::Debug, S: StorageView<E
     _e: PhantomData<E>,
 }
 
-pub type AdditionalWrite = (
-    /* recipient */ Owner,
-    StructTag,
-    /* has public transfer */ bool,
-    Vec<u8>,
-);
+/// A write for an object that was generated outside of the Move ObjectRuntime
+struct AdditionalWrite {
+    /// The new owner of the object
+    recipient: Owner,
+    /// the type of the object,
+    type_: StructTag,
+    /// if the object has public transfer or not, i.e. if it has store
+    has_public_transfer: bool,
+    /// contents of the object
+    bytes: Vec<u8>,
+}
 
 impl<'vm, 'state, 'a, 'b, E, S> ExecutionContext<'vm, 'state, 'a, 'b, E, S>
 where
@@ -137,8 +144,8 @@ where
             .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))
     }
 
-    /// Takes the user events from the runtime and tags them with the Move module of function that
-    /// was invoked for the command
+    /// Takes the user events from the runtime and tags them with the Move module of the function
+    /// that was invoked for the command
     pub fn take_user_events(&mut self, module_id: &ModuleId) -> Result<(), ExecutionError> {
         let object_runtime: &mut ObjectRuntime = self.session.get_native_extensions().get_mut();
         let events = object_runtime.take_user_events();
@@ -163,10 +170,9 @@ where
         Ok(())
     }
 
-    pub fn gas_is_taken(&self) -> bool {
-        self.gas.inner.value.is_none()
-    }
-
+    /// Take the argument value, setting its value to None, making it unavailable
+    /// Errors if out of bounds, if the argument is borrowed, if it is unavailable (already taken),
+    /// or if it is an object that cannot be taken by value (shared or immutable)
     pub fn take_arg<V: TryFromValue>(
         &mut self,
         command_kind: CommandKind<'_>,
@@ -207,6 +213,11 @@ where
         V::try_from_value(val_opt.take().unwrap())
     }
 
+    /// Mimic a mutable borrow by taking the argument value, setting its value to None,
+    /// making it unavailable. The value will be marked as borrowed and must be returned with
+    /// restore_arg
+    /// Errors if out of bounds, if the argument is borrowed, if it is unavailable (already taken),
+    /// or if it is an object that cannot be mutably borrowed (immutable)
     pub fn borrow_arg_mut<V: TryFromValue>(
         &mut self,
         arg_idx: usize,
@@ -242,6 +253,9 @@ where
         V::try_from_value(val_opt.take().unwrap())
     }
 
+    /// Clone the argument value without setting its value to None
+    /// Errors if out of bounds, if the argument is mutably borrowed,
+    /// or if it is unavailable (already taken)
     pub fn clone_arg<V: TryFromValue>(
         &mut self,
         _arg_idx: usize,
@@ -258,6 +272,9 @@ where
         V::try_from_value(val)
     }
 
+    /// Mimics an immutable borrow by cloning the argument value without setting its value to None
+    /// Errors if out of bounds, if the argument is mutably borrowed,
+    /// or if it is unavailable (already taken)
     pub fn borrow_arg<V: TryFromValue>(
         &mut self,
         _arg_idx: usize,
@@ -274,6 +291,7 @@ where
         V::try_from_value(val_opt.as_ref().unwrap().clone())
     }
 
+    /// Restore an argument after being mutably borrowed
     pub fn restore_arg(&mut self, arg: Argument, value: Value) -> Result<(), ExecutionError> {
         assert_invariant!(
             self.arg_is_mut_borrowed(&arg),
@@ -291,6 +309,10 @@ where
         Ok(())
     }
 
+    /// Taint a value showing it has been used in a non-entry Move call. This is important as it
+    /// means the value no longer behaves as if it was used in a series of independent transactions.
+    /// Particularly this is important for private entry functions, which assume this independent
+    /// behavior.
     pub fn mark_used_in_non_entry_move_call(&mut self, arg: Argument) {
         if let Ok((_, Some(val))) = self.borrow_mut_impl(arg, /* do not update usage */ None) {
             match val {
@@ -302,6 +324,7 @@ where
         }
     }
 
+    /// Transfer the object to a new owner
     pub fn transfer_object(
         &mut self,
         obj: ObjectValue,
@@ -311,6 +334,7 @@ where
         Ok(())
     }
 
+    /// Create a new package
     pub fn new_package(
         &mut self,
         modules: Vec<move_binary_format::CompiledModule>,
@@ -325,6 +349,7 @@ where
         Ok(())
     }
 
+    /// Finish a command: clearing the borrows and adding the results to the result vector
     pub fn push_command_results(&mut self, results: Vec<Value>) -> Result<(), ExecutionError> {
         assert_invariant!(
             self.borrowed.values().all(|is_mut| !is_mut),
@@ -350,7 +375,7 @@ where
             additional_transfers,
             new_packages,
             gas,
-            mut inputs,
+            inputs,
             results,
             user_events,
             ..
@@ -359,27 +384,29 @@ where
         let sender = tx_context.sender();
         let mut additional_writes = BTreeMap::new();
         let mut input_object_metadata = BTreeMap::new();
-        // check for unused inputs
-        // track by-ref input objects as being written
-        inputs.push(gas);
-        for input in inputs {
+        // Any object value that has not been taken (still has `Some` for it's value) needs to
+        // written as it's value might have changed (and eventually it's sequence number will need
+        // to increase)
+        let mut add_input_object_write = |input| {
             let InputValue {
                 object_metadata: object_metadata_opt,
-                inner:
-                    ResultValue {
-                        last_usage_kind,
-                        value,
-                    },
+                inner: ResultValue { value, .. },
             } = input;
-            if last_usage_kind.is_none() {
-                panic!("unused input")
-            }
-            let Some(object_metadata) = object_metadata_opt else { continue };
-            let Some(Value::Object(object_value)) = value else { continue };
+            let Some(object_metadata) = object_metadata_opt else { return };
+            let Some(Value::Object(object_value)) = value else { return };
             if object_metadata.is_mutable_input {
                 add_additional_write(&mut additional_writes, object_metadata.owner, object_value);
             }
             input_object_metadata.insert(object_metadata.id, object_metadata);
+        };
+        // gas can be unused
+        add_input_object_write(gas);
+        // all other inputs must be used at least once
+        for input in inputs {
+            if input.inner.last_usage_kind.is_none() {
+                panic!("unused input")
+            }
+            add_input_object_write(input)
         }
         // check for unused values
         for (i, command_result) in results.iter().enumerate() {
@@ -449,7 +476,13 @@ where
                 ObjectChange::Write(SingleTxContext::publish(sender), package, WriteKind::Create);
             object_changes.insert(id, change);
         }
-        for (id, (recipient, tag, has_public_transfer, contents)) in additional_writes {
+        for (id, additional_write) in additional_writes {
+            let AdditionalWrite {
+                recipient,
+                type_,
+                has_public_transfer,
+                bytes,
+            } = additional_write;
             let write_kind = if input_object_metadata.contains_key(&id)
                 || loaded_child_objects.contains_key(&id)
             {
@@ -463,16 +496,19 @@ where
             } else {
                 WriteKind::Unwrap
             };
-            let move_object = create_written_object(
-                protocol_config,
-                &input_object_metadata,
-                &loaded_child_objects,
-                id,
-                tag,
-                has_public_transfer,
-                contents,
-                write_kind,
-            )?;
+            // safe given the invariant that the runtime correctly propagates has_public_transfer
+            let move_object = unsafe {
+                create_written_object(
+                    protocol_config,
+                    &input_object_metadata,
+                    &loaded_child_objects,
+                    id,
+                    type_,
+                    has_public_transfer,
+                    bytes,
+                    write_kind,
+                )?
+            };
             let object = Object::new_move(move_object, recipient, tx_digest);
             let change = ObjectChange::Write(dummy_event_ctx.clone(), object, write_kind);
             object_changes.insert(id, change);
@@ -495,16 +531,19 @@ where
                 .get_type_layout(&TypeTag::Struct(Box::new(tag.clone())))
                 .map_err(|e| convert_vm_error(e, vm, state_view))?;
             let bytes = value.simple_serialize(&layout).unwrap();
-            let move_object = create_written_object(
-                protocol_config,
-                &input_object_metadata,
-                &loaded_child_objects,
-                id,
-                tag,
-                has_public_transfer,
-                bytes,
-                write_kind,
-            )?;
+            // safe because has_public_transfer has been determined by the abilities
+            let move_object = unsafe {
+                create_written_object(
+                    protocol_config,
+                    &input_object_metadata,
+                    &loaded_child_objects,
+                    id,
+                    tag,
+                    has_public_transfer,
+                    bytes,
+                    write_kind,
+                )?
+            };
             let object = Object::new_move(move_object, recipient, tx_digest);
             let change = ObjectChange::Write(dummy_event_ctx.clone(), object, write_kind);
             object_changes.insert(id, change);
@@ -539,18 +578,22 @@ where
         })
     }
 
+    /// Convert a VM Error to an execution one
     pub fn convert_vm_error(&self, error: VMError) -> ExecutionError {
         sui_types::error::convert_vm_error(error, self.vm, self.state_view)
     }
 
+    /// Returns true if the value at the argument's location is borrowed, mutably or immutably
     fn arg_is_borrowed(&self, arg: &Argument) -> bool {
         self.borrowed.contains_key(arg)
     }
 
+    /// Returns true if the value at the argument's location is mutably borrowed
     fn arg_is_mut_borrowed(&self, arg: &Argument) -> bool {
         matches!(self.borrowed.get(arg), Some(/* mut */ true))
     }
 
+    /// Internal helper to borrow the value for an argument and update the most recent usage
     fn borrow_mut(
         &mut self,
         arg: Argument,
@@ -559,6 +602,8 @@ where
         self.borrow_mut_impl(arg, Some(usage))
     }
 
+    /// Internal helper to borrow the value for an argument
+    /// Updates the most recent usage if specified
     fn borrow_mut_impl(
         &mut self,
         arg: Argument,
@@ -598,6 +643,7 @@ where
     }
 }
 
+/// Load an input object from the state_view
 fn load_object<S: Storage>(
     state_view: &S,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
@@ -635,6 +681,7 @@ fn load_object<S: Storage>(
     Ok(InputValue::new_object(object_metadata, obj_value))
 }
 
+/// Load an a CallArg, either an object or a raw set of BCS bytes
 fn load_call_arg<S: Storage>(
     state_view: &S,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
@@ -650,32 +697,29 @@ fn load_call_arg<S: Storage>(
     })
 }
 
+/// Load an ObjectArg from state view, marking if it can be treated as mutable or not
 fn load_object_arg<S: Storage>(
     state_view: &S,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
     obj_arg: ObjectArg,
 ) -> Result<InputValue, ExecutionError> {
     match obj_arg {
-        ObjectArg::ImmOrOwnedObject((id, _, _))
-        | ObjectArg::SharedObject {
-            id, mutable: true, ..
-        } => load_object(
+        ObjectArg::ImmOrOwnedObject((id, _, _)) => load_object(
             state_view,
             object_owner_map,
             /* imm override */ false,
             id,
         ),
-        ObjectArg::SharedObject {
-            id, mutable: false, ..
-        } => load_object(
+        ObjectArg::SharedObject { id, mutable, .. } => load_object(
             state_view,
             object_owner_map,
-            /* imm override */ true,
+            /* imm override */ !mutable,
             id,
         ),
     }
 }
 
+/// Generate an additional write for an ObjectValue
 fn add_additional_write(
     additional_writes: &mut BTreeMap<ObjectID, AdditionalWrite>,
     owner: Owner,
@@ -692,10 +736,21 @@ fn add_additional_write(
         ObjectContents::Raw(bytes) => bytes,
     };
     let object_id = MoveObject::id_opt(&bytes).unwrap();
-    additional_writes.insert(object_id, (owner, type_, has_public_transfer, bytes));
+    let additional_write = AdditionalWrite {
+        recipient: owner,
+        type_,
+        has_public_transfer,
+        bytes,
+    };
+    additional_writes.insert(object_id, additional_write);
 }
 
-fn create_written_object(
+/// Generate an MoveObject given an updated/written object
+/// # Safety
+///
+/// This function assumes proper generation of has_public_transfer, either from the abilities of
+/// the StructTag, or from the runtime correctly propagating from the inputs
+unsafe fn create_written_object(
     protocol_config: &ProtocolConfig,
     input_object_metadata: &BTreeMap<ObjectID, InputObjectMetadata>,
     loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
@@ -722,14 +777,11 @@ fn create_written_object(
 
     debug_assert!((write_kind == WriteKind::Mutate) == old_obj_ver.is_some());
 
-    // safe because `has_public_transfer` was properly determined from the abilities
-    unsafe {
-        MoveObject::new_from_execution(
-            tag,
-            has_public_transfer,
-            old_obj_ver.unwrap_or_else(SequenceNumber::new),
-            contents,
-            protocol_config,
-        )
-    }
+    MoveObject::new_from_execution(
+        tag,
+        has_public_transfer,
+        old_obj_ver.unwrap_or_else(SequenceNumber::new),
+        contents,
+        protocol_config,
+    )
 }
