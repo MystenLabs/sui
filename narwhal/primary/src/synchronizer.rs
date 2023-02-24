@@ -469,8 +469,10 @@ impl Synchronizer {
             self.inner.metrics.duplicate_certificates_processed.inc();
             return Ok(());
         }
+        // Ensure parents are checked if !early_suspend.
+        // See comments above `try_accept_fetched_certificate()` for details.
         if early_suspend {
-            if let Some(notify) = self.inner.state.lock().await.get_waiter(&digest) {
+            if let Some(notify) = self.inner.state.lock().await.check_suspended(&digest) {
                 trace!("Certificate {digest:?} is still suspended. Skip processing.");
                 return Err(DagError::Suspended(notify));
             }
@@ -533,10 +535,12 @@ impl Synchronizer {
         // It is possible to reduce the critical section below, but it seems unnecessary for now.
         let mut state = self.inner.state.lock().await;
 
+        // Ensure parents are checked if !early_suspend.
+        // See comments above `try_accept_fetched_certificate()` for details.
         if early_suspend {
             // Re-check if the certificate has been suspended, which can happen before the lock is
             // acquired.
-            if let Some(notify) = state.get_waiter(&digest) {
+            if let Some(notify) = state.check_suspended(&digest) {
                 trace!("Certificate {digest:?} is still suspended. Skip processing.");
                 return Err(DagError::Suspended(notify));
             }
@@ -826,7 +830,7 @@ impl Synchronizer {
         if certificate.round() == 1 {
             for digest in &certificate.header.parents {
                 if !self.inner.genesis.contains_key(digest) {
-                    result.push(*digest);
+                    return Err(DagError::InvalidGenesisParent(*digest));
                 }
             }
             return Ok(result);
@@ -890,8 +894,8 @@ struct State {
 }
 
 impl State {
-    /// Gets a waiter notification for the suspended certificate, if exists.
-    fn get_waiter(&self, digest: &CertificateDigest) -> Option<AcceptNotification> {
+    /// Checks if a digest is suspended. If it is, gets a notification for when it is accepted.
+    fn check_suspended(&self, digest: &CertificateDigest) -> Option<AcceptNotification> {
         self.suspended
             .get(digest)
             .map(|suspended_cert| new_accept_notification(suspended_cert.notify.subscribe()))
@@ -963,17 +967,15 @@ impl State {
                 continue;
             };
             for child in &child_digests {
-                let Some(suspended_cert) = self.suspended.get_mut(child) else {
-                    continue;
-                };
-                suspended_cert.missing_parents.remove(&digest);
-                if suspended_cert.missing_parents.is_empty() {
-                    let suspended_cert = self.suspended.remove(child).unwrap();
+                let suspended_child = self.suspended.get_mut(child).expect("Inconsistency found!");
+                suspended_child.missing_parents.remove(&digest);
+                if suspended_child.missing_parents.is_empty() {
+                    let suspended_child = self.suspended.remove(child).unwrap();
                     to_traverse.push_back((
-                        suspended_cert.certificate.round(),
-                        suspended_cert.certificate.digest(),
+                        suspended_child.certificate.round(),
+                        suspended_child.certificate.digest(),
                     ));
-                    to_accept.push(suspended_cert);
+                    to_accept.push(suspended_child);
                 }
             }
         }
@@ -1009,10 +1011,10 @@ impl State {
         // All certificates at gc round + 1 can be accepted.
         let mut to_accept = Vec::new();
         for digest in certificates_above_gc_round {
-            let Some(mut suspended_cert) = self.suspended.remove(&digest) else {
-                error!("Suspended certificate {digest} not found!");
-                continue;
-            };
+            let mut suspended_cert = self
+                .suspended
+                .remove(&digest)
+                .expect("Inconsistency found!");
             suspended_cert.missing_parents.clear();
             to_accept.push(suspended_cert);
         }
