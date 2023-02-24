@@ -5,6 +5,7 @@ interface ConnectionOptions {
   fullnode: string;
   websocket?: string;
   faucet?: string;
+  fetchOptions?: object;
 }
 
 export class Connection {
@@ -24,6 +25,10 @@ export class Connection {
 
   get faucet() {
     return this.#options.faucet;
+  }
+
+  get fetchOptions() {
+    return this.#options.fetchOptions;
   }
 }
 

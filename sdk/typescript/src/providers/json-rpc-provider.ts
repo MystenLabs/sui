@@ -148,10 +148,9 @@ export class JsonRpcProvider extends Provider {
     //   'Client-Sdk-Type': 'typescript',
     //   'Client-Sdk-Version': pkgVersion,
     //   'Client-Target-Api-Version': TARGETED_RPC_VERSION,
-    // }, opts.tlsOptions,
-    //);
+    // }, this.connection.fetchOptions);
     // TODO: add header for websocket request
-    this.client = new JsonRpcClient(this.connection.fullnode);
+    this.client = new JsonRpcClient(this.connection.fullnode, undefined, this.connection.fetchOptions);
     this.wsClient = new WebsocketClient(
       this.connection.websocket,
       opts.skipDataValidation!,

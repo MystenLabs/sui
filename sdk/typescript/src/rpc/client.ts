@@ -3,8 +3,6 @@
 
 import RpcClient from 'jayson/lib/client/browser/index.js';
 import fetch from 'cross-fetch';
-import https from 'https';
-import fs from 'fs';
 import {
   any,
   Infer,
@@ -28,14 +26,6 @@ export type HttpHeaders = { [header: string]: string };
 export type RpcParams = {
   method: string;
   args: Array<any>;
-};
-
-/**
- * An object defining client certificate and key path for mTLS protocol
- */
-export type TlsOptions = {
-  certificatePath: string;
-  keyPath: string;
 };
 
 const TYPE_MISMATCH_ERROR =
@@ -62,46 +52,33 @@ export const ErrorResponse = object({
 export class JsonRpcClient {
   private rpcClient: RpcClient;
 
-  constructor(url: string, httpHeaders?: HttpHeaders, tlsOptions?: TlsOptions) {
-    this.rpcClient = this.createRpcClient(url, httpHeaders, tlsOptions);
+  constructor(url: string, httpHeaders?: HttpHeaders, fetchOptions?: object) {
+    this.rpcClient = this.createRpcClient(url, httpHeaders, fetchOptions);
   }
 
   private createRpcClient(
     url: string,
     httpHeaders?: HttpHeaders,
-    tlsOptions?: TlsOptions,
+    fetchOptions?: object,
   ): RpcClient {
     const client = new RpcClient(
       async (
         request: any,
         callback: (arg0: Error | null, arg1?: string | undefined) => void,
       ) => {
-        let agent = null;
-        if (tlsOptions?.certificatePath && tlsOptions?.keyPath) {
-          if (
-            fs.existsSync(tlsOptions.certificatePath) &&
-            fs.existsSync(tlsOptions.keyPath)
-          ) {
-            agent = new https.Agent({
-              cert: fs.readFileSync(tlsOptions.certificatePath),
-              key: fs.readFileSync(tlsOptions.keyPath),
-            });
-          } else {
-            console.error('Certificate or Key path does not exist.');
-          }
-        }
-
-        const options = {
-          method: 'POST',
-          body: request,
-          headers: Object.assign(
-            {
-              'Content-Type': 'application/json',
-            },
-            httpHeaders || {},
-          ),
-          agent,
-        };
+        const options = Object.assign(
+          {
+            method: 'POST',
+            body: request,
+            headers: Object.assign(
+              {
+                'Content-Type': 'application/json',
+              },
+              httpHeaders || {},
+            ),
+          },
+          fetchOptions || {},
+        );
 
         try {
           let res: Response = await fetch(url, options);
