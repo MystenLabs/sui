@@ -2553,7 +2553,7 @@ impl AuthorityState {
         let current_protocol_version = committee.protocol_version;
         let next_protocol_version = current_protocol_version + 1;
 
-        let mut stake_aggregator: StakeAggregator<bool, true> =
+        let mut stake_aggregator: StakeAggregator<(), true> =
             StakeAggregator::new(Arc::new(committee.clone()));
 
         for cap in epoch_store.get_capabilities().into_iter() {
@@ -2568,7 +2568,7 @@ impl AuthorityState {
                     authority.concise(),
                     next_protocol_version
                 );
-                stake_aggregator.insert_generic(authority, true);
+                stake_aggregator.insert_generic(authority, ());
             } else {
                 info!(
                     "validator {:?} does not support {:?}",

@@ -501,6 +501,7 @@ impl ProtocolConfig {
                 storage_gas_price: Some(1),
                 max_transactions_per_checkpoint: Some(1000),
                 // require 2f+1 + 0.75 * f stake for automatic protocol upgrades.
+                // TODO: tune based on experience in testnet
                 buffer_stake_for_protocol_upgrade_bps: Some(7500),
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
