@@ -44,7 +44,10 @@ export function AddDelegation({ validator, amount }: Props) {
       throw new Error("No coins found.");
     }
 
-    const totalBalance = coins.reduce((acc, coin) => (acc += BigInt(coin.balance)), 0n);
+    const totalBalance = coins.reduce(
+      (acc, coin) => (acc += BigInt(coin.balance)),
+      0n
+    );
 
     const mistAmount = toMist(amount);
 
@@ -62,8 +65,8 @@ export function AddDelegation({ validator, amount }: Props) {
 
     const stakeCoin = await manageCoins(coins, mistAmount, gasRequired);
 
-    await signAndExecuteTransaction(
-      {
+    await signAndExecuteTransaction({
+      transaction: {
         kind: "moveCall",
         data: {
           packageObjectId: SUI_FRAMEWORK_ADDRESS,
@@ -79,10 +82,10 @@ export function AddDelegation({ validator, amount }: Props) {
           ],
         },
       },
-      {
-        // requestType: "WaitForEffectsCert",
-      }
-    );
+      // options: {
+      // requestType: "WaitForEffectsCert",
+      // },
+    });
   });
 
   return (
