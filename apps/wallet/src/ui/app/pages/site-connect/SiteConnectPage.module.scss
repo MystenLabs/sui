@@ -19,18 +19,21 @@
 }
 
 .checkmark {
-    font-size: 10px;
-    margin-right: 10px;
-    color: colors.$success;
+    font-size: 12px;
+    color: colors.$sui-steel-blue;
 }
 
 .permission {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
     margin-bottom: 6px;
     font-weight: 500;
     font-size: 13px;
-    line-height: 17px;
+    line-height: 1;
     margin-left: 0;
-    color: colors.$gray-100;
+    color: colors.$sui-steel-darker;
+    gap: 10px;
 }
 
 .warning-wrapper {
