@@ -4,13 +4,12 @@
 use crate::ValidatorProxy;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_types::{sui_system_state::SuiSystemState, SUI_SYSTEM_STATE_OBJECT_ID};
 use tokio::sync::oneshot::Sender;
 use tokio::sync::watch;
 use tokio::sync::watch::Receiver;
 use tokio::time;
 use tokio::time::Instant;
-use tracing::info;
+use tracing::{error, info};
 
 #[derive(Debug)]
 pub struct SystemStateObserver {
@@ -28,12 +27,14 @@ impl SystemStateObserver {
             loop {
                 tokio::select! {
                     _ = interval.tick() => {
-                        if let Ok(system_state) = proxy.get_object(SUI_SYSTEM_STATE_OBJECT_ID).await {
-                            let move_obj = system_state.data.try_as_move().unwrap();
-                            if let Ok(result) = bcs::from_bytes::<SuiSystemState>(move_obj.contents()) {
+                        match proxy.get_latest_system_state_object().await {
+                            Ok(result) => {
                                 if tx.send(result.reference_gas_price).is_ok() {
                                     info!("Reference gas price = {:?}", result.reference_gas_price);
                                 }
+                            }
+                            Err(err) => {
+                                error!("Failed to get system state object: {:?}", err);
                             }
                         }
                     }

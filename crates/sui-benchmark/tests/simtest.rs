@@ -64,7 +64,12 @@ mod test {
     async fn test_simulated_load_basic() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(7, 0).await;
-        test_simulated_load(test_cluster, 15).await;
+        tokio::time::timeout(
+            Duration::from_secs(30),
+            test_simulated_load(test_cluster, 15),
+        )
+        .await
+        .unwrap();
     }
 
     #[sim_test(config = "test_config()")]

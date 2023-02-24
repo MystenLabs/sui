@@ -48,6 +48,7 @@ use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::epoch_data::EpochData;
 use sui_types::object::Data;
+use sui_types::sui_system_state::SuiSystemStateWrapper;
 use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, Signature},
@@ -2935,8 +2936,9 @@ async fn test_genesis_sui_system_state_object() {
         .unwrap();
     assert_eq!(sui_system_object.version(), SequenceNumber::from(1));
     let move_object = sui_system_object.data.try_as_move().unwrap();
-    let _sui_system_state = bcs::from_bytes::<SuiSystemState>(move_object.contents()).unwrap();
-    assert_eq!(move_object.type_, SuiSystemState::type_());
+    let _sui_system_state =
+        bcs::from_bytes::<SuiSystemStateWrapper>(move_object.contents()).unwrap();
+    assert_eq!(move_object.type_, SuiSystemStateWrapper::type_());
 }
 
 #[tokio::test]
