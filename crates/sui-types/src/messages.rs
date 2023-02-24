@@ -3116,3 +3116,118 @@ pub struct CommitteeInfo {
     // TODO: We could also return the certified checkpoint that contains this committee.
     // This would allows a client to verify the authenticity of the committee.
 }
+
+/// Today we use BCS for our serialization format for the permanent types that make up the Sui
+/// blockchain. BCS provides a canonical serialization format for types but does not provide many
+/// mechanisms for data evolution. In fact the only real mechanism that exists with BCS for format
+/// evolution is the ability to add new variants to enums. For example if we look at the
+/// TransactionKind type we can see it has two variants.
+///
+///```
+/// #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, IntoStaticStr)]
+/// pub enum TransactionKind {
+///     /// A single transaction.
+///     Single(SingleTransactionKind),
+///     /// A batch of single transactions.
+///     Batch(Vec<SingleTransactionKind>),
+///     // .. more transaction types go here
+/// }
+///```
+///
+/// In serialized form each variant is
+/// serialized with a variant identifier based on the order the variants are defined. Eg `Single`
+/// will be serialized with a prefix value of "0" while `Batch` will have a prefix value of "1".
+///
+/// If in the future we'd like to evolve the TransactionKind type and add a new variant we can do
+/// so.
+///
+///```
+/// #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, IntoStaticStr)]
+/// pub enum TransactionKind {
+///     /// A single transaction.
+///     Single(SingleTransactionKind),
+///     /// A batch of single transactions.
+///     Batch(Vec<SingleTransactionKind>),
+///     Programmable(/* ... */),
+///     // .. more transaction types go here
+/// }
+///```
+///
+/// The new `Programmable` variant would now have a serialized variant prefix of `2` and the data
+/// contained by that variant can be completely new. In order to properly do a rollout with the new
+/// variant we would need to do the following:
+/// - introduce the variant in new code, but ensure it is never constructed or allowed to be
+/// included in the public ledger. We effectively need to gate it via protocol version.
+/// - Once its been rolled out to a large enough part of the ecosystem we can bump the protocol
+/// version and begin making use of the new variant. Newer code will be able to interpret the new
+/// variant, as well as the existing variants, but older code that wasn't ever updated will choke
+/// on deserializing the new variant as the deserializer will read the variant prefix `2` and
+/// recognize that it doesn't understand that variant. (although this would most likely be caught
+/// well beforehand via the use of the protocol version to gate the introduction of the new
+/// variant).
+///
+/// The above is how we'd be able to evolve sub types of the toplevel data structures (e.g.
+/// TransactionData without needing to introduce a new V2 of the TransactionData type
+///
+/// But if we did end up having a reason for wanting to introduce a new V2 of any toplevel type
+/// (even checkpoint headers if we really wanted to) we could use a similar principle:
+///
+///```
+/// #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+/// pub enum SuiType {
+///     Empty,
+///     TransactionData(TransactionData),
+///     CheckpointSummary(CheckpointSummary),
+///     checkpointContents(CheckpointContents),
+///     // ... more
+///     TransactionDataV2(TransactionDataV2),
+/// }
+///
+/// #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+/// pub enum SuiTypeRef<'a> {
+///     Empty, // Reserve variant 0 maybe?
+///     TransactionData(&'a TransactionData), // id 1
+///     CheckpointSummary(&'a CheckpointSummary), // id 2
+///     checkpointContents(&'a CheckpointContents), // id 3
+///     // ... more
+///     TransactionDataV2(&'a TransactionDataV2), // id X
+/// }
+///```
+///
+/// We could define enums like the above in order to assign variant numbers to each of the toplevel
+/// data types. We would then require that anytime we "sign" or calculate the hash of one of these
+/// types (or potentially serialize and deserialze these types to the wire in bcs format) we would
+/// need to handle it with a little extra care. eg.:
+///
+/// ```
+/// impl TransactionData {
+///     pub fn to_bytes(&self) -> Result<Vec<u8>> {
+///         bcs::to_bytes(SuiTypeRef::TransactionData(self))
+///     }
+///
+///     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+///         if let SuiType::TransactionData(data) = bcs::from_bytes(bytes)? {
+///             Ok(data)
+///         } else {
+///             Err("unexpected sui type")
+///         }
+///     }
+///
+///     pub fn sha3_hash(&self) -> Vec<u8> {
+///         sha3_hash(self.to_bytes())
+///     }
+/// }
+///```
+///
+/// Technically we already have "variant" ids assigned to each of these top level data types in the
+/// form of the "intent signing" mechanism. So Effectively we could remove the implicit "type id"
+/// from  the intent signing message and instead make said "variant id" explicit in the actually
+/// serialized form of each of our top level data types.
+///
+/// The one "downside" to this approach is that the actual "serde" impl of each of these types
+/// wouldn't exactly match as it would be missing the variant id. that is we'd need to ensure we
+/// didnt' call `bcs::to_bytes` directly on one of these types without going through the methods
+/// that wrap it in the enum before serializing. The big upside is that we'd have a concrete way to
+/// evolve and add new data types in the future.
+///
+struct Example;
