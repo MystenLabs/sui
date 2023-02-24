@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 0.29.1
+
+### Patch Changes
+
+- 31bfcae6a: Make arguments field optional for MoveCall to match Rust definition. This fixes a bug where the Explorer page does not load for transactions with no argument.
+
 ## 0.29.0
 
 ### Minor Changes
