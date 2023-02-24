@@ -46,8 +46,7 @@ export function NFTDisplayCard({
         useOriginbyteNft(objectId);
     const nftName = nftMeta?.name;
 
-    const displayTitle =
-        originByteNft?.fields.name || nftName ? nftName : objectId;
+    const displayTitle = originByteNft?.fields.name || nftName || objectId;
 
     const nftUrl = nftMeta?.url || null;
     const fileExtensionType = useFileExtensionType(nftUrl!);
