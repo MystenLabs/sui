@@ -73,8 +73,7 @@ impl Node {
             .lock()
             .unwrap()
             .as_ref()
-            .map(|c| c.is_alive())
-            .unwrap_or(false)
+            .map_or(false, |c| c.is_alive())
     }
 
     /// Perform a health check on this Node by:

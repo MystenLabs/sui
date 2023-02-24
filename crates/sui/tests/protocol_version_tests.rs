@@ -105,9 +105,9 @@ mod sim_only_tests {
                 .unwrap()
                 .is_version_supported(ProtocolVersion::new(2))
             {
-                assert!(!v.is_running());
+                assert!(!v.is_running(), "{:?}", v.name().concise());
             } else {
-                assert!(v.is_running());
+                assert!(v.is_running(), "{:?}", v.name().concise());
             }
         }
     }
