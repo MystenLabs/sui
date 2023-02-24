@@ -57,6 +57,7 @@ export function ExportAccount() {
     return (
         <PasswordInputDialog
             title="Export Private Key"
+            showArrowIcon
             onPasswordVerified={async (password) => {
                 await exportMutation.mutateAsync(password);
             }}

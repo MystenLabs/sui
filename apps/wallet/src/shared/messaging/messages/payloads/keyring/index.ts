@@ -69,6 +69,10 @@ type MethodToPayloads = {
         args: { password: string; accountAddress: SuiAddress };
         return: { keyPair: ExportedKeypair };
     };
+    importPrivateKey: {
+        args: { password: string; keyPair: ExportedKeypair };
+        return: void;
+    };
 };
 
 export interface KeyringPayload<Method extends keyof MethodToPayloads>
