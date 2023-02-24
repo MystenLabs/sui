@@ -56,6 +56,11 @@ pub trait AuthorityAPI {
         &self,
         request: CommitteeInfoRequest,
     ) -> Result<CommitteeInfoResponse, SuiError>;
+
+    async fn handle_system_state_object(
+        &self,
+        request: SystemStateRequest,
+    ) -> Result<SuiSystemState, SuiError>;
 }
 
 #[derive(Clone)]
@@ -155,6 +160,17 @@ impl AuthorityAPI for NetworkAuthorityClient {
     ) -> Result<CommitteeInfoResponse, SuiError> {
         self.client()
             .committee_info(request)
+            .await
+            .map(tonic::Response::into_inner)
+            .map_err(Into::into)
+    }
+
+    async fn handle_system_state_object(
+        &self,
+        request: SystemStateRequest,
+    ) -> Result<SuiSystemState, SuiError> {
+        self.client()
+            .get_system_state_object(request)
             .await
             .map(tonic::Response::into_inner)
             .map_err(Into::into)
