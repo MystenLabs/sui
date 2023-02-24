@@ -141,10 +141,6 @@ export const genTableDataFromTxData = (
     })),
     columns: [
         {
-            header: 'Time',
-            accessorKey: 'date',
-        },
-        {
             header: 'Type',
             accessorKey: 'txTypes',
         },
@@ -165,6 +161,10 @@ export const genTableDataFromTxData = (
         {
             header: 'Gas',
             accessorKey: 'gas',
+        },
+        {
+            header: 'Time',
+            accessorKey: 'date',
         },
     ],
 });
