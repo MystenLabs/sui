@@ -28,6 +28,9 @@ module sui::genesis {
 
     /// The initial balance of the Subsidy fund in Mist (1 Billion * 10^9)
     const INIT_STAKE_SUBSIDY_FUND_BALANCE: u64 = 1_000_000_000_000_000_000;
+    /// TODO: placeholder value. change this possibly.
+    /// Maximum number of delegation withdraws per epoch.
+    const INIT_MAX_DELEGATION_WITHDRAWS_PER_EPOCH: u64 = 10000;
 
     /// This function will be explicitly called once at genesis.
     /// It will create a singleton SuiSystemState object, which contains
@@ -124,6 +127,7 @@ module sui::genesis {
             INIT_STAKE_SUBSIDY_AMOUNT,
             protocol_version,
             epoch_start_timestamp_ms,
+            INIT_MAX_DELEGATION_WITHDRAWS_PER_EPOCH,
             ctx,
         );
 

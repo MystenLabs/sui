@@ -66,6 +66,7 @@ module sui::governance_test_utils {
             0, // stake subsidy
             1, // protocol version
             0, // epoch_start_timestamp_ms
+            100,
             ctx,
         )
     }

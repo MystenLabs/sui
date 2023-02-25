@@ -167,7 +167,7 @@ pub struct StakingPool {
     pub pool_token_balance: u64,
     pub exchange_rates: Table,
     pub pending_delegation: u64,
-    pub pending_withdraws: TableVec,
+    pub pending_withdraws: LinkedTable<PendingWithdrawEntry>,
 }
 
 /// Rust version of the Move sui::validator_set::ValidatorPair type

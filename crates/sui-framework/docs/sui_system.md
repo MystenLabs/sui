@@ -96,6 +96,12 @@ A list of system config parameters.
  Maximum number of validator candidates at any moment.
  We do not allow the number of validators in any epoch to go above this.
 </dd>
+<dt>
+<code>max_delegation_withdraws_per_epoch: u64</code>
+</dt>
+<dd>
+ Maximum number of delegation withdraws that we can process per epoch.
+</dd>
 </dl>
 
 
@@ -404,7 +410,7 @@ Create a new SuiSystemState object and make it shared.
 This function will be called only once in genesis.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, stake_subsidy_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_candidate_count: u64, min_validator_stake: u64, initial_stake_subsidy_amount: u64, protocol_version: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, stake_subsidy_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_candidate_count: u64, min_validator_stake: u64, initial_stake_subsidy_amount: u64, protocol_version: u64, epoch_start_timestamp_ms: u64, max_delegation_withdraws_per_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -422,6 +428,7 @@ This function will be called only once in genesis.
     initial_stake_subsidy_amount: u64,
     protocol_version: u64,
     epoch_start_timestamp_ms: u64,
+    max_delegation_withdraws_per_epoch: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> validators = <a href="validator_set.md#0x2_validator_set_new">validator_set::new</a>(validators, ctx);
@@ -435,6 +442,7 @@ This function will be called only once in genesis.
         parameters: <a href="sui_system.md#0x2_sui_system_SystemParameters">SystemParameters</a> {
             min_validator_stake,
             max_validator_candidate_count,
+            max_delegation_withdraws_per_epoch,
         },
         reference_gas_price,
         validator_report_records: <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
@@ -1097,6 +1105,7 @@ gas coins.
         &<b>mut</b> storage_fund_reward,
         self.validator_report_records,
         reward_slashing_rate,
+        self.parameters.max_delegation_withdraws_per_epoch,
         ctx,
     );
 

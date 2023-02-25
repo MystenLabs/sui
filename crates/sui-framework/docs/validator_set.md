@@ -37,7 +37,8 @@
 -  [Function `process_pending_removals`](#0x2_validator_set_process_pending_removals)
 -  [Function `process_pending_validators`](#0x2_validator_set_process_pending_validators)
 -  [Function `sort_removal_list`](#0x2_validator_set_sort_removal_list)
--  [Function `process_pending_delegations_and_withdraws`](#0x2_validator_set_process_pending_delegations_and_withdraws)
+-  [Function `process_pending_delegations`](#0x2_validator_set_process_pending_delegations)
+-  [Function `process_pending_delegation_withdraws`](#0x2_validator_set_process_pending_delegation_withdraws)
 -  [Function `calculate_total_stakes`](#0x2_validator_set_calculate_total_stakes)
 -  [Function `adjust_stake_and_gas_price`](#0x2_validator_set_adjust_stake_and_gas_price)
 -  [Function `compute_reward_adjustments`](#0x2_validator_set_compute_reward_adjustments)
@@ -56,6 +57,8 @@
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
+<b>use</b> <a href="linked_table.md#0x2_linked_table">0x2::linked_table</a>;
+<b>use</b> <a href="math.md#0x2_math">0x2::math</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="priority_queue.md#0x2_priority_queue">0x2::priority_queue</a>;
 <b>use</b> <a href="stake.md#0x2_stake">0x2::stake</a>;
@@ -133,6 +136,12 @@
 </dt>
 <dd>
  Mappings from staking pool's ID to the sui address of a validator.
+</dd>
+<dt>
+<code>delegation_withdraw_queue: <a href="linked_table.md#0x2_linked_table_LinkedTable">linked_table::LinkedTable</a>&lt;<a href="object.md#0x2_object_ID">object::ID</a>, <b>address</b>&gt;</code>
+</dt>
+<dd>
+ Table from the ID of the StakedSui object to the validator address.
 </dd>
 </dl>
 
@@ -343,6 +352,7 @@ each validator, emitted during epoch advancement.
         pending_removals: <a href="_empty">vector::empty</a>(),
         next_epoch_validators: <a href="_empty">vector::empty</a>(),
         staking_pool_mappings,
+        delegation_withdraw_queue: <a href="linked_table.md#0x2_linked_table_new">linked_table::new</a>(ctx),
     };
     validators.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(&validators);
     <a href="voting_power.md#0x2_voting_power_set_voting_power">voting_power::set_voting_power</a>(&<b>mut</b> validators.active_validators);
@@ -572,9 +582,13 @@ of the epoch.
 
     <b>assert</b>!(<a href="_is_some">option::is_some</a>(&validator_index_opt), 0);
 
+    <b>let</b> staked_sui_id = <a href="object.md#0x2_object_id">object::id</a>(&staked_sui);
     <b>let</b> validator_index = <a href="_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
     <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_borrow_mut">vector::borrow_mut</a>(&<b>mut</b> self.active_validators, validator_index);
     <a href="validator.md#0x2_validator_request_withdraw_delegation">validator::request_withdraw_delegation</a>(<a href="validator.md#0x2_validator">validator</a>, staked_sui, ctx);
+
+    // Add the delegation request <b>to</b> the queue.
+    <a href="linked_table.md#0x2_linked_table_push_back">linked_table::push_back</a>(&<b>mut</b> self.delegation_withdraw_queue, staked_sui_id, validator_address);
     self.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(self);
 }
 </code></pre>
@@ -656,7 +670,7 @@ It does the following things:
 5. At the end, we calculate the total stake for the new epoch.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, computation_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_report_records: <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, reward_slashing_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, computation_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_report_records: <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, reward_slashing_rate: u64, max_delegation_withdraw_per_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -671,6 +685,7 @@ It does the following things:
     storage_fund_reward: &<b>mut</b> Balance&lt;SUI&gt;,
     validator_report_records: VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
     reward_slashing_rate: u64,
+    max_delegation_withdraw_per_epoch: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> new_epoch = <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) + 1;
@@ -733,7 +748,9 @@ It does the following things:
 
     <a href="validator_set.md#0x2_validator_set_adjust_stake_and_gas_price">adjust_stake_and_gas_price</a>(&<b>mut</b> self.active_validators);
 
-    <a href="validator_set.md#0x2_validator_set_process_pending_delegations_and_withdraws">process_pending_delegations_and_withdraws</a>(&<b>mut</b> self.active_validators, ctx);
+    <a href="validator_set.md#0x2_validator_set_process_pending_delegations">process_pending_delegations</a>(&<b>mut</b> self.active_validators, new_epoch);
+
+    <a href="validator_set.md#0x2_validator_set_process_pending_delegation_withdraws">process_pending_delegation_withdraws</a>(self, max_delegation_withdraw_per_epoch, ctx);
 
     // Emit events after we have processed all the rewards distribution and pending delegations.
     <a href="validator_set.md#0x2_validator_set_emit_validator_epoch_events">emit_validator_epoch_events</a>(new_epoch, &self.active_validators, &adjusted_staking_reward_amounts,
@@ -1305,14 +1322,14 @@ Sort all the pending removal indexes.
 
 </details>
 
-<a name="0x2_validator_set_process_pending_delegations_and_withdraws"></a>
+<a name="0x2_validator_set_process_pending_delegations"></a>
 
-## Function `process_pending_delegations_and_withdraws`
+## Function `process_pending_delegations`
 
 Process all active validators' pending delegation deposits and withdraws.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_pending_delegations_and_withdraws">process_pending_delegations_and_withdraws</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_pending_delegations">process_pending_delegations</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, new_epoch: u64)
 </code></pre>
 
 
@@ -1321,16 +1338,74 @@ Process all active validators' pending delegation deposits and withdraws.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_pending_delegations_and_withdraws">process_pending_delegations_and_withdraws</a>(
-    validators: &<b>mut</b> <a href="">vector</a>&lt;Validator&gt;, ctx: &<b>mut</b> TxContext
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_pending_delegations">process_pending_delegations</a>(
+    validators: &<b>mut</b> <a href="">vector</a>&lt;Validator&gt;, new_epoch: u64
 ) {
     <b>let</b> length = <a href="_length">vector::length</a>(validators);
     <b>let</b> i = 0;
     <b>while</b> (i &lt; length) {
         <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_borrow_mut">vector::borrow_mut</a>(validators, i);
-        <a href="validator.md#0x2_validator_process_pending_delegations_and_withdraws">validator::process_pending_delegations_and_withdraws</a>(<a href="validator.md#0x2_validator">validator</a>, ctx);
+        <a href="validator.md#0x2_validator_process_pending_delegations">validator::process_pending_delegations</a>(<a href="validator.md#0x2_validator">validator</a>, new_epoch);
         i = i + 1;
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_process_pending_delegation_withdraws"></a>
+
+## Function `process_pending_delegation_withdraws`
+
+Go through the global withdraw queue, calculate the limit for each pool, and
+process withdraw request up to that limit for each pool.
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_pending_delegation_withdraws">process_pending_delegation_withdraws</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, max_delegation_withdraw_per_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_pending_delegation_withdraws">process_pending_delegation_withdraws</a>(
+    self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, max_delegation_withdraw_per_epoch: u64, ctx: &<b>mut</b> TxContext
+) {
+    // A temp <a href="table.md#0x2_table">table</a> (<b>address</b> -&gt; u64) that stores how many withdraw requests we are procssing for each
+    // staking pool.
+    <b>let</b> limit_for_each_pool = <a href="linked_table.md#0x2_linked_table_new">linked_table::new</a>(ctx);
+    <b>let</b> num_withdraws_to_be_processed = sui::math::min(
+        max_delegation_withdraw_per_epoch,
+        <a href="linked_table.md#0x2_linked_table_length">linked_table::length</a>(&self.delegation_withdraw_queue)
+    );
+    <b>let</b> i = 0;
+    // Pop withdraw requests from the queue until the limit, and <b>update</b> the limit_for_each_pool <a href="table.md#0x2_table">table</a>.
+    <b>while</b> (i &lt; num_withdraws_to_be_processed) {
+        <b>let</b> (_, validator_address) = <a href="linked_table.md#0x2_linked_table_pop_front">linked_table::pop_front</a>(&<b>mut</b> self.delegation_withdraw_queue);
+        // insert or increment the limit.
+        <b>if</b> (!<a href="linked_table.md#0x2_linked_table_contains">linked_table::contains</a>(&limit_for_each_pool, validator_address)) {
+            <a href="linked_table.md#0x2_linked_table_push_back">linked_table::push_back</a>(&<b>mut</b> limit_for_each_pool, validator_address, 1)
+        } <b>else</b> {
+            <b>let</b> limit = <a href="linked_table.md#0x2_linked_table_borrow_mut">linked_table::borrow_mut</a>(&<b>mut</b> limit_for_each_pool, validator_address);
+            *limit = *limit + 1
+        };
+        i = i + 1;
+    };
+
+    // Now that we have the <b>local</b> limit for each pool, we process each pool's withdraws up <b>to</b> this limit.
+    <b>while</b> (!<a href="linked_table.md#0x2_linked_table_is_empty">linked_table::is_empty</a>(&limit_for_each_pool)) {
+        <b>let</b> (validator_address, limit) = <a href="linked_table.md#0x2_linked_table_pop_front">linked_table::pop_front</a>(&<b>mut</b> limit_for_each_pool);
+        // TODO: this <a href="validator.md#0x2_validator">validator</a> could be an inactive one too, in which case we need <b>to</b> grab
+        // the pool from the inactive pool storage.
+        <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(&<b>mut</b> self.active_validators, validator_address);
+        <a href="validator.md#0x2_validator_process_pending_delegation_withdraws">validator::process_pending_delegation_withdraws</a>(<a href="validator.md#0x2_validator">validator</a>, limit, ctx);
+    };
+
+    <a href="linked_table.md#0x2_linked_table_destroy_empty">linked_table::destroy_empty</a>(limit_for_each_pool);
 }
 </code></pre>
 

@@ -27,6 +27,17 @@
 ## Constants
 
 
+<a name="0x2_genesis_INIT_MAX_DELEGATION_WITHDRAWS_PER_EPOCH"></a>
+
+TODO: placeholder value. change this possibly.
+Maximum number of delegation withdraws per epoch.
+
+
+<pre><code><b>const</b> <a href="genesis.md#0x2_genesis_INIT_MAX_DELEGATION_WITHDRAWS_PER_EPOCH">INIT_MAX_DELEGATION_WITHDRAWS_PER_EPOCH</a>: u64 = 10000;
+</code></pre>
+
+
+
 <a name="0x2_genesis_INIT_MAX_VALIDATOR_COUNT"></a>
 
 Initial value of the upper-bound on the number of validators.
@@ -188,6 +199,7 @@ all the information we need in the system.
         <a href="genesis.md#0x2_genesis_INIT_STAKE_SUBSIDY_AMOUNT">INIT_STAKE_SUBSIDY_AMOUNT</a>,
         protocol_version,
         epoch_start_timestamp_ms,
+        <a href="genesis.md#0x2_genesis_INIT_MAX_DELEGATION_WITHDRAWS_PER_EPOCH">INIT_MAX_DELEGATION_WITHDRAWS_PER_EPOCH</a>,
         ctx,
     );
 

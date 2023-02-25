@@ -8,7 +8,7 @@ module sui::validator {
 
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::TxContext;
     use sui::stake;
     use sui::stake::Stake;
     use sui::epoch_time_lock::EpochTimeLock;
@@ -259,9 +259,7 @@ module sui::validator {
         staked_sui: StakedSui,
         ctx: &mut TxContext,
     ) {
-        let principal_withdraw_amount = staking_pool::request_withdraw_delegation(
-                &mut self.delegation_staking_pool, staked_sui, ctx);
-        decrease_next_epoch_delegation(self, principal_withdraw_amount);
+        staking_pool::request_withdraw_delegation(&mut self.delegation_staking_pool, staked_sui, ctx);
     }
 
     /// Decrement the delegation amount for next epoch. Also called by `validator_set` when handling delegation switches.
@@ -285,12 +283,19 @@ module sui::validator {
     }
 
     /// Process pending delegations and withdraws, called at the end of the epoch.
-    public(friend) fun process_pending_delegations_and_withdraws(self: &mut Validator, ctx: &mut TxContext) {
-        let new_epoch = tx_context::epoch(ctx) + 1;
-        let reward_withdraw_amount = staking_pool::process_pending_delegation_withdraws(
-            &mut self.delegation_staking_pool, ctx);
-        self.next_epoch_delegation = self.next_epoch_delegation - reward_withdraw_amount;
+    public(friend) fun process_pending_delegations(self: &mut Validator, new_epoch: u64) {
         staking_pool::process_pending_delegation(&mut self.delegation_staking_pool, new_epoch);
+        // TODO: consider bringing this assert back when we are more confident.
+        // assert!(delegate_amount(self) == self.metadata.next_epoch_delegation, 0); 
+    }
+
+    /// Process pending delegations and withdraws, called at the end of the epoch.
+    public(friend) fun process_pending_delegation_withdraws(
+        self: &mut Validator, processing_limit: u64, ctx: &mut TxContext
+    ) {
+        let reward_withdraw_amount = staking_pool::process_pending_delegation_withdraws(
+            &mut self.delegation_staking_pool, processing_limit, ctx);
+        self.next_epoch_delegation = self.next_epoch_delegation - reward_withdraw_amount;
         // TODO: consider bringing this assert back when we are more confident.
         // assert!(delegate_amount(self) == self.metadata.next_epoch_delegation, 0);
     }

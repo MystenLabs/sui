@@ -42,6 +42,8 @@ module sui::sui_system {
         /// Maximum number of validator candidates at any moment.
         /// We do not allow the number of validators in any epoch to go above this.
         max_validator_candidate_count: u64,
+        /// Maximum number of delegation withdraws that we can process per epoch.
+        max_delegation_withdraws_per_epoch: u64,
     }
 
     /// The top-level object containing all information of the Sui system.
@@ -124,6 +126,7 @@ module sui::sui_system {
         initial_stake_subsidy_amount: u64,
         protocol_version: u64,
         epoch_start_timestamp_ms: u64,
+        max_delegation_withdraws_per_epoch: u64,
         ctx: &mut TxContext,
     ) {
         let validators = validator_set::new(validators, ctx);
@@ -137,6 +140,7 @@ module sui::sui_system {
             parameters: SystemParameters {
                 min_validator_stake,
                 max_validator_candidate_count,
+                max_delegation_withdraws_per_epoch,
             },
             reference_gas_price,
             validator_report_records: vec_map::empty(),
@@ -503,6 +507,7 @@ module sui::sui_system {
             &mut storage_fund_reward,
             self.validator_report_records,
             reward_slashing_rate,
+            self.parameters.max_delegation_withdraws_per_epoch,
             ctx,
         );
 

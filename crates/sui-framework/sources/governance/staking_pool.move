@@ -11,9 +11,9 @@ module sui::staking_pool {
     use sui::object::{Self, ID, UID};
     use sui::locked_coin;
     use sui::coin;
-    use sui::table_vec::{Self, TableVec};
     use sui::math;
     use sui::table::{Self, Table};
+    use sui::linked_table::{Self, LinkedTable};
 
     friend sui::validator;
     friend sui::validator_set;
@@ -49,7 +49,7 @@ module sui::staking_pool {
         pending_delegation: u64,
         /// Delegation withdraws requested during the current epoch. Similar to new delegation, the withdraws are processed
         /// at epoch boundaries. Rewards are withdrawn and distributed after the rewards for the current epoch have come in.
-        pending_withdraws: TableVec<PendingWithdrawEntry>,
+        pending_withdraws: LinkedTable<ID, PendingWithdrawEntry>,
     }
 
     /// Struct representing the exchange rate of the delegation pool token to SUI.
@@ -106,7 +106,7 @@ module sui::staking_pool {
             pool_token_balance: 0,
             exchange_rates,
             pending_delegation: 0,
-            pending_withdraws: table_vec::empty(ctx),
+            pending_withdraws: linked_table::new(ctx),
         }
     }
 
@@ -146,13 +146,20 @@ module sui::staking_pool {
         staked_sui: StakedSui,
         ctx: &mut TxContext
     ) : u64 {
+        let staked_sui_id = object::id(&staked_sui);
         let (pool_token_withdraw_amount, principal_withdraw, time_lock) =
             withdraw_from_principal(pool, staked_sui);
 
         let delegator = tx_context::sender(ctx);
         let principal_withdraw_amount = balance::value(&principal_withdraw);
-        table_vec::push_back(&mut pool.pending_withdraws, PendingWithdrawEntry {
-            delegator, principal_withdraw_amount, pool_token_withdraw_amount });
+
+        linked_table::push_back(
+            &mut pool.pending_withdraws,
+            staked_sui_id,
+            PendingWithdrawEntry {
+                delegator, principal_withdraw_amount, pool_token_withdraw_amount
+            }
+        );
 
         // TODO: implement withdraw bonding period here.
         if (option::is_some(&time_lock)) {
@@ -216,18 +223,22 @@ module sui::staking_pool {
     /// Called at epoch boundaries to process pending delegation withdraws requested during the epoch.
     /// For each pending withdraw entry, we withdraw the rewards from the pool at the new exchange rate and burn the pool
     /// tokens.
-    public(friend) fun process_pending_delegation_withdraws(pool: &mut StakingPool, ctx: &mut TxContext) : u64 {
+    public(friend) fun process_pending_delegation_withdraws(
+        pool: &mut StakingPool, processing_limit: u64, ctx: &mut TxContext
+    ) : u64 {
         let total_reward_withdraw = 0;
         let new_epoch = tx_context::epoch(ctx) + 1;
-
-        while (!table_vec::is_empty(&pool.pending_withdraws)) {
-            let PendingWithdrawEntry {
+        let num_withdraws_processed = 0;
+        // Process pending withdraws up to the provided limit.
+        while (num_withdraws_processed < processing_limit && !linked_table::is_empty(&pool.pending_withdraws)) {
+            let (_, PendingWithdrawEntry {
                 delegator, principal_withdraw_amount, pool_token_withdraw_amount
-            } = table_vec::pop_back(&mut pool.pending_withdraws);
+            }) = linked_table::pop_front(&mut pool.pending_withdraws);
             let reward_withdraw = withdraw_rewards_and_burn_pool_tokens(
                 pool, principal_withdraw_amount, pool_token_withdraw_amount, new_epoch);
             total_reward_withdraw = total_reward_withdraw + balance::value(&reward_withdraw);
             transfer::transfer(coin::from_balance(reward_withdraw, ctx), delegator);
+            num_withdraws_processed = num_withdraws_processed + 1;
         };
         total_reward_withdraw
     }

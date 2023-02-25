@@ -12,13 +12,14 @@ module sui::validator_set {
     use sui::stake::Stake;
     use sui::staking_pool::{PoolTokenExchangeRate, StakedSui, pool_id};
     use sui::epoch_time_lock::EpochTimeLock;
-    use sui::object::ID;
     use sui::priority_queue as pq;
     use sui::vec_map::{Self, VecMap};
     use sui::vec_set::{Self, VecSet};
     use sui::table::{Self, Table};
     use sui::event;
     use sui::voting_power;
+    use sui::linked_table::{Self, LinkedTable};
+    use sui::object::{Self, ID};
 
     friend sui::sui_system;
 
@@ -51,6 +52,9 @@ module sui::validator_set {
 
         /// Mappings from staking pool's ID to the sui address of a validator.
         staking_pool_mappings: Table<ID, address>,
+
+        /// Table from the ID of the StakedSui object to the validator address.
+        delegation_withdraw_queue: LinkedTable<ID, address>,
     }
 
 
@@ -106,6 +110,7 @@ module sui::validator_set {
             pending_removals: vector::empty(),
             next_epoch_validators: vector::empty(),
             staking_pool_mappings,
+            delegation_withdraw_queue: linked_table::new(ctx),
         };
         validators.next_epoch_validators = derive_next_epoch_validators(&validators);
         voting_power::set_voting_power(&mut validators.active_validators);
@@ -221,9 +226,13 @@ module sui::validator_set {
 
         assert!(option::is_some(&validator_index_opt), 0);
 
+        let staked_sui_id = object::id(&staked_sui);
         let validator_index = option::extract(&mut validator_index_opt);
         let validator = vector::borrow_mut(&mut self.active_validators, validator_index);
         validator::request_withdraw_delegation(validator, staked_sui, ctx);
+
+        // Add the delegation request to the queue.
+        linked_table::push_back(&mut self.delegation_withdraw_queue, staked_sui_id, validator_address);
         self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
@@ -265,6 +274,7 @@ module sui::validator_set {
         storage_fund_reward: &mut Balance<SUI>,
         validator_report_records: VecMap<address, VecSet<address>>,
         reward_slashing_rate: u64,
+        max_delegation_withdraw_per_epoch: u64,
         ctx: &mut TxContext,
     ) {
         let new_epoch = tx_context::epoch(ctx) + 1;
@@ -327,7 +337,9 @@ module sui::validator_set {
 
         adjust_stake_and_gas_price(&mut self.active_validators);
 
-        process_pending_delegations_and_withdraws(&mut self.active_validators, ctx);
+        process_pending_delegations(&mut self.active_validators, new_epoch);
+
+        process_pending_delegation_withdraws(self, max_delegation_withdraw_per_epoch, ctx);
 
         // Emit events after we have processed all the rewards distribution and pending delegations.
         emit_validator_epoch_events(new_epoch, &self.active_validators, &adjusted_staking_reward_amounts,
@@ -540,16 +552,54 @@ module sui::validator_set {
     }
 
     /// Process all active validators' pending delegation deposits and withdraws.
-    fun process_pending_delegations_and_withdraws(
-        validators: &mut vector<Validator>, ctx: &mut TxContext
+    fun process_pending_delegations(
+        validators: &mut vector<Validator>, new_epoch: u64
     ) {
         let length = vector::length(validators);
         let i = 0;
         while (i < length) {
             let validator = vector::borrow_mut(validators, i);
-            validator::process_pending_delegations_and_withdraws(validator, ctx);
+            validator::process_pending_delegations(validator, new_epoch);
             i = i + 1;
         }
+    }
+
+    /// Go through the global withdraw queue, calculate the limit for each pool, and
+    /// process withdraw request up to that limit for each pool.
+    fun process_pending_delegation_withdraws(
+        self: &mut ValidatorSet, max_delegation_withdraw_per_epoch: u64, ctx: &mut TxContext
+    ) {
+        // A temp table (address -> u64) that stores how many withdraw requests we are procssing for each
+        // staking pool. 
+        let limit_for_each_pool = linked_table::new(ctx);
+        let num_withdraws_to_be_processed = sui::math::min(
+            max_delegation_withdraw_per_epoch,
+            linked_table::length(&self.delegation_withdraw_queue)
+        );
+        let i = 0;
+        // Pop withdraw requests from the queue until the limit, and update the limit_for_each_pool table.
+        while (i < num_withdraws_to_be_processed) {
+            let (_, validator_address) = linked_table::pop_front(&mut self.delegation_withdraw_queue);
+            // insert or increment the limit.
+            if (!linked_table::contains(&limit_for_each_pool, validator_address)) {
+                linked_table::push_back(&mut limit_for_each_pool, validator_address, 1)
+            } else {
+                let limit = linked_table::borrow_mut(&mut limit_for_each_pool, validator_address);
+                *limit = *limit + 1
+            };
+            i = i + 1;
+        };
+
+        // Now that we have the local limit for each pool, we process each pool's withdraws up to this limit.
+        while (!linked_table::is_empty(&limit_for_each_pool)) {
+            let (validator_address, limit) = linked_table::pop_front(&mut limit_for_each_pool);
+            // TODO: this validator could be an inactive one too, in which case we need to grab
+            // the pool from the inactive pool storage.
+            let validator = get_validator_mut(&mut self.active_validators, validator_address);
+            validator::process_pending_delegation_withdraws(validator, limit, ctx);
+        };
+
+        linked_table::destroy_empty(limit_for_each_pool);
     }
 
     /// Calculate the total active validator and delegated stake.
@@ -887,10 +937,12 @@ module sui::validator_set {
             pending_removals: _,
             next_epoch_validators: _,
             staking_pool_mappings,
+            delegation_withdraw_queue,
         } = self;
         destroy_validators_for_testing(active_validators);
         vector::destroy_empty(pending_validators);
         table::drop(staking_pool_mappings);
+        linked_table::drop(delegation_withdraw_queue);
     }
 
     #[test_only]
