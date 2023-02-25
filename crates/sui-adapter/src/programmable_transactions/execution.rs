@@ -18,7 +18,7 @@ use move_vm_runtime::{
     move_vm::MoveVM,
     session::{LoadedFunctionInstantiation, SerializedReturnValues},
 };
-use move_vm_types::loaded_data::runtime_types::{StructType, Type};
+use move_vm_types::loaded_data::runtime_types::Type;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     balance::Balance,
@@ -34,9 +34,7 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 use sui_verifier::{
-    entry_points_verifier::{
-        TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID, RESOLVED_UTF8_STR,
-    },
+    entry_points_verifier::{TxContextKind, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR},
     INIT_FN_NAME,
 };
 
@@ -93,6 +91,55 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
     command: Command,
 ) -> Result<(), ExecutionError> {
     let results = match command {
+        Command::MakeMoveVec(args) if args.is_empty() => {
+            vec![Value::EmptyVec]
+        }
+        Command::MakeMoveVec(args) => {
+            let mut res = vec![];
+            leb128::write::unsigned(&mut res, args.len() as u64).unwrap();
+            let mut arg_iter = args.into_iter().enumerate();
+            let (idx, first_arg) = arg_iter.next().unwrap();
+            let first_value: Value = context.take_arg(CommandKind::MakeMoveVec, idx, first_arg)?;
+            let mut used_in_non_entry_move_call = first_value.was_used_in_non_entry_move_call();
+            let mut type_ = first_value.type_();
+            res.extend(first_value.to_bcs_bytes());
+            for (idx, v) in arg_iter {
+                let value: Value = context.take_arg(CommandKind::MakeMoveVec, idx, v)?;
+                if let Some(joined) = context.join(type_, value.type_())? {
+                    type_ = joined
+                } else {
+                    panic!("type mismatch")
+                }
+                used_in_non_entry_move_call =
+                    used_in_non_entry_move_call || value.was_used_in_non_entry_move_call();
+                res.extend(value.to_bcs_bytes());
+            }
+            let inner_ty = match type_ {
+                ValueType::AnyPrimitive | ValueType::AnyVec => panic!(
+                    "No concrete type for vector elements. This means the vector is composed \
+                    entirely of empty vectors and/or CallArg::Pure, in which case the vector \
+                    can be constructed ahead of time as a CallArg::Pure"
+                ),
+                ValueType::Loaded { ty, .. } => ty,
+                ValueType::Object(tag) => context
+                    .session
+                    .load_type(&TypeTag::Struct(Box::new(tag)))
+                    .map_err(|e| context.convert_vm_error(e))?,
+            };
+            let ty = Type::Vector(Box::new(inner_ty));
+            let abilities = context
+                .session
+                .get_type_abilities(&ty)
+                .map_err(|e| context.convert_vm_error(e))?;
+            vec![Value::Raw(
+                RawValueType::Loaded {
+                    ty,
+                    abilities,
+                    used_in_non_entry_move_call,
+                },
+                res,
+            )]
+        }
         Command::TransferObjects(objs, addr_arg) => {
             let objs: Vec<ObjectValue> = objs
                 .into_iter()
@@ -206,21 +253,16 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>>(
         by_mut_ref.len() == mutable_reference_outputs.len(),
         "lost mutable input"
     );
-    // write back mutable inputs
+    // write back mutable inputs. We also update if they were used in non entry Move calls
+    // though we do not care for immutable usages of objects or other values
     for ((i1, bytes, _layout), (i2, value_info)) in
         mutable_reference_outputs.into_iter().zip(by_mut_ref)
     {
         assert_invariant!(i1 == i2, "lost mutable input");
         let arg_idx = i1 as usize;
-        let value = make_value(value_info, bytes, /* return value */ false)?;
+        let used_in_non_entry_move_call = function_kind == FunctionKind::NonEntry;
+        let value = make_value(value_info, bytes, used_in_non_entry_move_call)?;
         context.restore_arg(arguments[arg_idx], value)?;
-    }
-    // taint arguments if this function is not an entry function (i.e. just some public function)
-    // &mut on primitive, non-object values will already have been tainted when updating the value
-    if function_kind == FunctionKind::NonEntry {
-        for arg in &arguments {
-            context.mark_used_in_non_entry_move_call(*arg);
-        }
     }
 
     context.take_user_events(module_id)?;
@@ -232,7 +274,10 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>>(
         .into_iter()
         .zip(return_values)
         .map(|(value_info, (bytes, _layout))| {
-            make_value(value_info, bytes, /* return value */ true)
+            // only non entry functions have return values
+            make_value(
+                value_info, bytes, /* used_in_non_entry_move_call */ true,
+            )
         })
         .collect()
 }
@@ -240,7 +285,7 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>>(
 fn make_value(
     value_info: ValueKind,
     bytes: Vec<u8>,
-    is_return_value: bool,
+    used_in_non_entry_move_call: bool,
 ) -> Result<Value, ExecutionError> {
     Ok(match value_info {
         ValueKind::Object {
@@ -249,10 +294,17 @@ fn make_value(
         } => Value::Object(ObjectValue::new(
             type_,
             has_public_transfer,
-            is_return_value,
+            used_in_non_entry_move_call,
             &bytes,
         )?),
-        ValueKind::Raw(ty, abilities) => Value::Raw(ValueType::Loaded { ty, abilities }, bytes),
+        ValueKind::Raw(ty, abilities) => Value::Raw(
+            RawValueType::Loaded {
+                ty,
+                abilities,
+                used_in_non_entry_move_call,
+            },
+            bytes,
+        ),
     })
 }
 
@@ -261,6 +313,10 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     module_bytes: Vec<Vec<u8>>,
 ) -> Result<(), ExecutionError> {
+    assert_invariant!(
+        !module_bytes.is_empty(),
+        "empty package is checked in transaction input checker"
+    );
     let modules = publish_and_verify_modules(context, module_bytes)?;
     let modules_to_init = modules
         .iter()
@@ -648,7 +704,7 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>>(
         let bytes = value.to_bcs_bytes();
         // Any means this was just some bytes passed in as an argument (as opposed to being
         // generated from a Move function). Meaning we will need to run validation
-        if matches!(value, Value::Raw(ValueType::Any, _)) {
+        if matches!(value, Value::Raw(RawValueType::Any, _)) {
             if let Some((string_struct, string_struct_layout)) = is_string_arg(context, param_ty)? {
                 validate_primitive_arg_string(
                     &bytes,
@@ -673,8 +729,8 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>>(
     let obj_ty;
     let ty = match value {
         // TODO dev inspect
-        Value::Raw(ValueType::Any, _) => {
-            if !is_entry_primitive_type(context, param_ty)? {
+        Value::Raw(RawValueType::Any, _) => {
+            if !context.is_entry_primitive_type(param_ty)? {
                 let msg = format!(
                     "Non-primitive argument at index {}. If it is an object, it must be \
                     populated by an object ID",
@@ -691,7 +747,7 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>>(
                 return Ok(());
             }
         }
-        Value::Raw(ValueType::Loaded { ty, abilities }, _) => {
+        Value::Raw(RawValueType::Loaded { ty, abilities, .. }, _) => {
             assert_invariant!(!abilities.has_key(), "Raw value should never be an object");
             ty
         }
@@ -701,6 +757,19 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>>(
                 .load_type(&TypeTag::Struct(Box::new(obj.type_.clone())))
                 .map_err(|e| context.convert_vm_error(e))?;
             &obj_ty
+        }
+        Value::EmptyVec => {
+            let Type::Vector(inner) = param_ty else {
+                panic!("expected a vector type")
+            };
+            let inner_abilities = context
+                .session
+                .get_type_abilities(inner)
+                .map_err(|e| context.convert_vm_error(e))?;
+            if !inner_abilities.has_key() {
+                panic!("expected a vector of objects")
+            }
+            return Ok(());
         }
     };
     if ty != param_ty {
@@ -771,61 +840,4 @@ pub fn is_tx_context<E: fmt::Debug, S: StorageView<E>>(
     } else {
         TxContextKind::None
     })
-}
-
-/// Returns true iff it is a primitive, an ID, a String, or an option/vector of a valid type
-fn is_entry_primitive_type<E: fmt::Debug, S: StorageView<E>>(
-    context: &mut ExecutionContext<E, S>,
-    param_ty: &Type,
-) -> Result<bool, ExecutionError> {
-    let mut stack = vec![param_ty];
-    while let Some(cur) = stack.pop() {
-        match cur {
-            Type::Signer => return Ok(false),
-            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => return Ok(false),
-            Type::Bool
-            | Type::U8
-            | Type::U16
-            | Type::U32
-            | Type::U64
-            | Type::U128
-            | Type::U256
-            | Type::Address => (),
-            Type::Vector(inner) => stack.push(&**inner),
-            Type::Struct(idx) => {
-                let Some(s) = context.session.get_struct_type(*idx) else {
-                    invariant_violation!("Loaded struct not found")
-                };
-                let resolved_struct = get_struct_ident(&s);
-                if ![RESOLVED_SUI_ID, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR]
-                    .contains(&resolved_struct)
-                {
-                    return Ok(false);
-                }
-            }
-            Type::StructInstantiation(idx, targs) => {
-                let Some(s) = context.session.get_struct_type(*idx) else {
-                    invariant_violation!("Loaded struct not found")
-                };
-                let resolved_struct = get_struct_ident(&s);
-                // is option of a primitive
-                let is_valid = resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1;
-                if !is_valid {
-                    return Ok(false);
-                }
-                stack.extend(targs)
-            }
-        }
-    }
-    Ok(true)
-}
-
-fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {
-    let module_id = &s.module;
-    let struct_name = &s.name;
-    (
-        module_id.address(),
-        module_id.name(),
-        struct_name.as_ident_str(),
-    )
 }

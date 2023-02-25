@@ -540,6 +540,9 @@ pub struct ProgrammableTransaction {
 pub enum Command {
     /// A call to either an entry or a public Move function
     MoveCall(Box<ProgrammableMoveCall>),
+    /// `forall T: Vec<T> -> vector<T>`
+    /// Given n-values of the same type, it constructs a vector
+    MakeMoveVec(Vec<Argument>),
     /// `(Vec<forall T:key+store. T>, address)`
     /// It sends n-objects to the specified address. These objects must have store
     /// (public transfer) and either the previous owner must be an address or the object must
@@ -629,7 +632,8 @@ impl Command {
         match self {
             Command::Publish(modules) => Self::publish_command_input_objects(modules),
             Command::MoveCall(c) => c.input_objects(),
-            Command::TransferObjects(_, _)
+            Command::MakeMoveVec(_)
+            | Command::TransferObjects(_, _)
             | Command::SplitCoin(_, _)
             | Command::MergeCoins(_, _) => vec![],
         }
@@ -664,29 +668,23 @@ impl Command {
                     }
                 );
             }
-            Command::TransferObjects(v, _) => {
+            Command::TransferObjects(args, _) | Command::MergeCoins(_, args) |
+            Command::MakeMoveVec(args) => {
+                fp_ensure!(!args.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
-                    v.len() < config.max_arguments() as usize,
+                    args.len() < config.max_arguments() as usize,
                     UserInputError::SizeLimitExceeded {
-                        limit: "maximum arguments in a programmable transaction transfer objects command".to_string(),
+                        limit: "maximum arguments in a programmable transaction command"
+                            .to_string(),
                         value: config.max_arguments().to_string()
                     }
                 );
             }
             Command::SplitCoin(_, _) => (),
-            Command::MergeCoins(_, v) => {
+            Command::Publish(modules) => {
+                fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput)
                 fp_ensure!(
-                    v.len() < config.max_coins() as usize,
-                    UserInputError::SizeLimitExceeded {
-                        limit: "maximum coins in a programmable transaction merge command"
-                            .to_string(),
-                        value: config.max_coins().to_string()
-                    }
-                );
-            }
-            Command::Publish(v) => {
-                fp_ensure!(
-                    v.len() < config.max_modules_in_publish() as usize,
+                    modules.len() < config.max_modules_in_publish() as usize,
                     UserInputError::SizeLimitExceeded {
                         limit: "maximum modules in a programmable transaction publish command"
                             .to_string(),
@@ -721,13 +719,19 @@ impl ProgrammableTransaction {
             .iter()
             .flat_map(|arg| arg.input_objects())
             .collect::<Vec<_>>();
+        // all objects, not just mutable, must be unique
         let mut used = HashSet::new();
         if !input_arg_objects.iter().all(|o| used.insert(o.object_id())) {
             return Err(UserInputError::DuplicateObjectRefInput);
         }
+        // do not duplicate packages referred to in commands
+        let command_input_objects: BTreeSet<InputObjectKind> = commands
+            .iter()
+            .flat_map(|command| command.input_objects())
+            .collect();
         Ok(input_arg_objects
             .into_iter()
-            .chain(commands.iter().flat_map(|command| command.input_objects()))
+            .chain(command_input_objects)
             .collect())
     }
 
@@ -788,6 +792,11 @@ impl Display for Command {
         match self {
             Command::MoveCall(p) => {
                 write!(f, "MoveCall({p})")
+            }
+            Command::MakeMoveVec(elems) => {
+                write!(f, "MakeMoveVec([")?;
+                write_sep(f, elems, ",")?;
+                write!(f, "])")
             }
             Command::TransferObjects(objs, addr) => {
                 write!(f, "TransferObjects([")?;
@@ -2914,7 +2923,7 @@ pub type VerifiedSignedTransactionEffects = VerifiedTransactionEffectsEnvelope<A
 pub type VerifiedCertifiedTransactionEffects =
     VerifiedTransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, PartialOrd, Ord)]
 pub enum InputObjectKind {
     // A Move package, must be immutable.
     MovePackage(ObjectID),

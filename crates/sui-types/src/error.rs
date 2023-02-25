@@ -169,6 +169,9 @@ pub enum UserInputError {
     #[error("Attempt to transfer object {object_id} that does not have public transfer. Object transfer must be done instead using a distinct Move function call.")]
     TransferObjectWithoutPublicTransferError { object_id: ObjectID },
 
+    #[error("TransferObjects, MergeCoin, and Publish cannot have empty arguments")]
+    EmptyCommandInput,
+
     #[error("Feature is not yet supported: {0}")]
     Unsupported(String),
 }

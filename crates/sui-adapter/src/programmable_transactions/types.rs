@@ -74,7 +74,9 @@ pub enum UsageKind {
 #[derive(Clone)]
 pub enum Value {
     Object(ObjectValue),
-    Raw(ValueType, Vec<u8>),
+    Raw(RawValueType, Vec<u8>),
+    /// Special cased empty vector generated from MakeMove that can be used to populate any type
+    EmptyVec,
 }
 
 #[derive(Clone)]
@@ -95,9 +97,21 @@ pub enum ObjectContents {
 }
 
 #[derive(Clone)]
-pub enum ValueType {
+pub enum RawValueType {
     Any,
+    Loaded {
+        ty: Type,
+        abilities: AbilitySet,
+        used_in_non_entry_move_call: bool,
+    },
+}
+
+#[derive(PartialEq, Eq)]
+pub enum ValueType {
+    AnyPrimitive,
+    AnyVec,
     Loaded { ty: Type, abilities: AbilitySet },
+    Object(StructTag),
 }
 
 #[derive(Clone, Copy)]
@@ -107,6 +121,7 @@ pub enum CommandKind<'a> {
         module: &'a IdentStr,
         function: &'a IdentStr,
     },
+    MakeMoveVec,
     TransferObjects,
     SplitCoin,
     MergeCoins,
@@ -121,7 +136,7 @@ impl InputValue {
         }
     }
 
-    pub fn new_raw(ty: ValueType, value: Vec<u8>) -> Self {
+    pub fn new_raw(ty: RawValueType, value: Vec<u8>) -> Self {
         InputValue {
             object_metadata: None,
             inner: ResultValue::new(Value::Raw(ty, value)),
@@ -142,22 +157,18 @@ impl Value {
     pub fn is_copyable(&self) -> bool {
         match self {
             Value::Object(_) => false,
-            Value::Raw(ValueType::Any, _) => true,
-            Value::Raw(ValueType::Loaded { abilities, .. }, _) => abilities.has_copy(),
+            Value::Raw(RawValueType::Any, _) => true,
+            Value::Raw(RawValueType::Loaded { abilities, .. }, _) => abilities.has_copy(),
+            Value::EmptyVec => false,
         }
     }
 
     pub fn to_bcs_bytes(&self) -> Vec<u8> {
         match self {
-            Value::Object(ObjectValue {
-                contents: ObjectContents::Raw(bytes),
-                ..
-            })
-            | Value::Raw(_, bytes) => bytes.clone(),
-            Value::Object(ObjectValue {
-                contents: ObjectContents::Coin(coin),
-                ..
-            }) => coin.to_bcs_bytes(),
+            Value::Object(obj_value) => obj_value.to_bcs_bytes(),
+            Value::Raw(_, bytes) => bytes.clone(),
+            // BCS layout for any empty vector should be the same
+            Value::EmptyVec => bcs::to_bytes::<Vec<u8>>(&vec![]).unwrap(),
         }
     }
 
@@ -166,8 +177,29 @@ impl Value {
             Value::Object(obj) => obj.used_in_non_entry_move_call,
             // Any is only used for Pure inputs, and if it was used by &mut it would have switched
             // to Loaded
-            Value::Raw(ValueType::Any, _) => false,
-            Value::Raw(ValueType::Loaded { .. }, _) => true,
+            Value::Raw(RawValueType::Any, _) => false,
+            Value::Raw(
+                RawValueType::Loaded {
+                    used_in_non_entry_move_call,
+                    ..
+                },
+                _,
+            ) => *used_in_non_entry_move_call,
+            // EmptyVec is generated only by MakeMoveVec and cannot be polluted by
+            // public move calls. If it is used by &mut, it would have switched to Loaded
+            Value::EmptyVec => false,
+        }
+    }
+
+    pub fn type_(&self) -> ValueType {
+        match self {
+            Value::Object(obj) => ValueType::Object(obj.type_.clone()),
+            Value::Raw(RawValueType::Loaded { ty, abilities, .. }, _) => ValueType::Loaded {
+                ty: ty.clone(),
+                abilities: *abilities,
+            },
+            Value::Raw(RawValueType::Any, _) => ValueType::AnyPrimitive,
+            Value::EmptyVec => ValueType::AnyVec,
         }
     }
 }
@@ -228,10 +260,14 @@ impl ObjectValue {
         }
         Ok(())
     }
-}
 
-impl ObjectContents {}
-impl ValueType {}
+    pub fn to_bcs_bytes(&self) -> Vec<u8> {
+        match &self.contents {
+            ObjectContents::Raw(bytes) => bytes.clone(),
+            ObjectContents::Coin(coin) => coin.to_bcs_bytes(),
+        }
+    }
+}
 
 pub trait TryFromValue: Sized {
     fn try_from_value(value: Value) -> Result<Self, ExecutionError>;
@@ -247,8 +283,11 @@ impl TryFromValue for ObjectValue {
     fn try_from_value(value: Value) -> Result<Self, ExecutionError> {
         match value {
             Value::Object(o) => Ok(o),
-            Value::Raw(_, _) => {
+            Value::Raw(RawValueType::Any, _) => {
                 todo!("support this for dev inspect")
+            }
+            Value::Raw(RawValueType::Loaded { .. }, _) | Value::EmptyVec => {
+                panic!("not an object")
             }
         }
     }
@@ -271,23 +310,23 @@ fn try_from_value_prim<'a, T: Deserialize<'a>>(
     expected_ty: Type,
 ) -> Result<T, ExecutionError> {
     match value {
-        Value::Object(_obj) => panic!("expected raw"),
-        Value::Raw(ValueType::Any, bytes) => {
+        Value::Object(_) | Value::EmptyVec => {
+            panic!("expected non object")
+        }
+        Value::Raw(RawValueType::Any, bytes) => {
             let Ok(val) = bcs::from_bytes(bytes) else {
                 panic!("invalid pure arg")
             };
             Ok(val)
         }
-        Value::Raw(ValueType::Loaded { ty, .. }, bytes) => {
+        Value::Raw(RawValueType::Loaded { ty, .. }, bytes) => {
             if ty == &expected_ty {
                 panic!("type mismatch")
             }
-            let res = bcs::from_bytes(bytes);
-            assert_invariant!(
-                res.is_ok(),
-                "Move values should be able to deserialize into their type"
-            );
-            Ok(res.unwrap())
+            let Ok(res) = bcs::from_bytes(bytes) else {
+                panic!("invalid bytes for type")
+            };
+            Ok(res)
         }
     }
 }
