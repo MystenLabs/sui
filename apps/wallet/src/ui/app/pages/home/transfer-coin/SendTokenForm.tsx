@@ -117,6 +117,7 @@ export function SendTokenForm({
                             actionType="button"
                             allowNegative={false}
                             allowDecimals
+                            amountInput
                             onActionClicked={setMaxToken}
                             actionDisabled={
                                 parsedAmount === balance ||

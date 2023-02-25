@@ -21,6 +21,7 @@ export interface InputWithActionProps
     actionDisabled?: boolean | 'auto';
     allowNegative?: boolean;
     allowDecimals?: boolean;
+    amountInput?: boolean;
 }
 
 export function InputWithAction({
@@ -34,6 +35,7 @@ export function InputWithAction({
     name,
     prefix,
     suffix,
+    amountInput,
     ...props
 }: InputWithActionProps) {
     const [field, meta] = useField(name);
@@ -48,9 +50,10 @@ export function InputWithAction({
             : actionDisabled;
     const shareStyle = cx(
         'transition flex flex-row items-center p-3 bg-white text-body font-semibold',
-        'placeholder:text-gray-60 w-full pr-[calc(20%_+_24px)] rounded-md shadow-button',
+        'placeholder:text-gray-60 w-full pr-[calc(20%_+_24px)] shadow-button',
         'border-solid border border-gray-45 text-steel-darker hover:border-steel focus:border-steel',
-        'disabled:border-gray-40 disabled:text-gray-55'
+        'disabled:border-gray-40 disabled:text-gray-55',
+        amountInput ? 'rounded-2lg' : 'rounded-md'
     );
 
     return (
@@ -85,11 +88,12 @@ export function InputWithAction({
                         disabled={isActionDisabled}
                         loading={isSubmitting}
                         onClick={onActionClicked}
+                        dark={amountInput}
                     />
                 </div>
             </div>
             {meta?.touched && meta?.error ? (
-                <div className="mt-3">
+                <div className="mt-1">
                     <Alert>{meta?.error}</Alert>
                 </div>
             ) : null}
