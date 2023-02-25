@@ -57,12 +57,7 @@ function StakingCard() {
     const accountAddress = useAppSelector(({ account }) => account.address);
     const { data: suiBalance, isLoading: loadingSuiBalances } =
         useGetCoinBalance(coinType, accountAddress);
-
-    const coinBalance = useMemo(() => {
-        if (!suiBalance) return BigInt(0);
-        return BigInt(suiBalance.totalBalance);
-    }, [suiBalance]);
-
+    const coinBalance = BigInt(suiBalance?.totalBalance || 0);
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
     const stakeIdParams = searchParams.get('staked');
