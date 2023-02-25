@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64 } from '@mysten/bcs';
+import { fromB64, toB64 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
 import { describe, it, expect } from 'vitest';
 import { Ed25519Keypair, PRIVATE_KEY_SIZE } from '../../../src';
@@ -58,6 +58,10 @@ describe('ed25519-keypair', () => {
       }
       const imported = Ed25519Keypair.fromSecretKey(raw.slice(1));
       expect(imported.getPublicKey().toSuiAddress()).toEqual(t[2]);
+
+      // Exported secret key matches the 32-byte secret key.
+      const exported = imported.export();
+      expect(exported.privateKey).toEqual(toB64(raw.slice(1)));
     }
   });
 
