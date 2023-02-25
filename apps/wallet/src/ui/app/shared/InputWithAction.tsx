@@ -95,7 +95,7 @@ export function InputWithAction({
                 </div>
             </div>
             {meta?.touched && meta?.error ? (
-                <div className="mt-1">
+                <div className="mt-3">
                     <Alert>{meta?.error}</Alert>
                 </div>
             ) : null}

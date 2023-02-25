@@ -13,7 +13,7 @@ import BottomMenuLayout, {
 } from '_app/shared/bottom-menu-layout';
 import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
-import AddressInput from '_components/address-input';
+import { AddressInput } from '_components/address-input';
 import { parseAmount } from '_helpers';
 import { useCoinDecimals, useFormatCoin } from '_hooks';
 import { GAS_SYMBOL, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
@@ -97,8 +97,8 @@ export function SendTokenForm({
         <BottomMenuLayout>
             <Content>
                 <Form autoComplete="off" noValidate>
-                    <div className="w-full flex gap-2.5 flex-col flex-grow">
-                        <div className="px-2">
+                    <div className="w-full flex flex-col flex-grow">
+                        <div className="px-2 mb-2.5">
                             <Text
                                 variant="caption"
                                 color="steel-dark"
@@ -107,6 +107,7 @@ export function SendTokenForm({
                                 Select SUI Amount to Send
                             </Text>
                         </div>
+
                         <InputWithAction
                             name="amount"
                             placeholder="0.00"
@@ -162,7 +163,6 @@ export function SendTokenForm({
                         <div className="w-full flex relative items-center flex-col">
                             <Field
                                 component={AddressInput}
-                                allowNegative={false}
                                 name="to"
                                 placeholder="Enter Address"
                             />

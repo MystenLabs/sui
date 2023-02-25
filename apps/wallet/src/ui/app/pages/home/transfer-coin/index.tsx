@@ -6,8 +6,6 @@ import {
     Coin as CoinAPI,
     getTransactionDigest,
     SUI_TYPE_ARG,
-    type SuiMoveObject,
-    getObjectExistsResponse,
 } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
 import { useMutation } from '@tanstack/react-query';
@@ -32,9 +30,10 @@ import { parseAmount } from '_helpers';
 import {
     useCoinDecimals,
     useSigner,
-    useGetCoinObjectsByCoinType,
+    useGetCoins,
+    useAppSelector,
+    useGasBudgetEstimationUnits,
 } from '_hooks';
-import { Coin } from '_redux/slices/sui-objects/Coin';
 import { trackEvent } from '_src/shared/plausible';
 import { useGasBudgetInMist } from '_src/ui/app/hooks/useGasBudgetInMist';
 
@@ -56,47 +55,43 @@ function TransferCoinPage() {
     const [searchParams] = useSearchParams();
     const [showModal, setShowModal] = useState(true);
     const coinType = searchParams.get('type') || SUI_TYPE_ARG;
+    const accountAddress = useAppSelector(({ account }) => account.address);
 
     // Get all coins of the type
-    const { data: coinsData, isLoading: coinsIsLoading } =
-        useGetCoinObjectsByCoinType(coinType);
+    const { data: coinsData, isLoading: coinsIsLoading } = useGetCoins(
+        coinType,
+        accountAddress!
+    );
 
     // Get SUI balance
-    const { data: suiCoinsData, isLoading: suiCoinsIsLoading } =
-        useGetCoinObjectsByCoinType(SUI_TYPE_ARG);
+    const { data: suiCoinsData, isLoading: suiCoinsIsLoading } = useGetCoins(
+        SUI_TYPE_ARG,
+        accountAddress!
+    );
 
-    const coins = useMemo(() => {
-        const coinsExists = coinsData?.filter(
-            ({ status }) => status === 'Exists'
-        );
-        return (
-            coinsExists?.map(
-                (data) => getObjectExistsResponse(data)?.data as SuiMoveObject
-            ) || null
-        );
-    }, [coinsData]);
+    // filter out locked coins
+    const coins = useMemo(
+        () => coinsData?.filter(({ lockedUntilEpoch }) => !lockedUntilEpoch),
+        [coinsData]
+    );
 
-    const suiCoins = useMemo(() => {
-        const coins = suiCoinsData?.filter(({ status }) => status === 'Exists');
-        return (
-            coins?.map(
-                (data) => getObjectExistsResponse(data)?.data as SuiMoveObject
-            ) || null
-        );
-    }, [suiCoinsData]);
+    const suiCoins = useMemo(
+        () => suiCoinsData?.filter(({ lockedUntilEpoch }) => !lockedUntilEpoch),
+        [suiCoinsData]
+    );
 
     const coinBalance = useMemo(() => {
         return (
-            coins?.reduce((acc, { fields }) => {
-                return acc + BigInt(fields.balance || 0);
+            coins?.reduce((acc, { balance }) => {
+                return acc + BigInt(balance);
             }, 0n) || BigInt(0n)
         );
     }, [coins]);
 
     const gasAggregateBalance = useMemo(() => {
         return (
-            suiCoins?.reduce((acc, { fields }) => {
-                return acc + BigInt(fields.balance || 0);
+            suiCoins?.reduce((acc, { balance }) => {
+                return acc + BigInt(balance);
             }, 0n) || BigInt(0n)
         );
     }, [suiCoins]);
@@ -112,19 +107,19 @@ function TransferCoinPage() {
     const [coinDecimals] = useCoinDecimals(coinType);
     const [gasDecimals] = useCoinDecimals(SUI_TYPE_ARG);
     const [amountToSend, setAmountToSend] = useState(BigInt(0));
-    const maxSuiSingleCoinBalance = useMemo(
-        () =>
-            suiCoins?.reduce(
-                (max, { fields }) =>
-                    max < fields.balance ? fields.balance : max,
-                BigInt(0)
-            ) || BigInt(0),
-        [suiCoins]
+    const maxSuiSingleCoinBalance = useMemo(() => {
+        const maxCoin = suiCoins?.reduce(
+            (max, { balance }) => (max < balance ? balance : max),
+            0
+        );
+        return BigInt(maxCoin || 0);
+    }, [suiCoins]);
+
+    const gasBudgetEstimationUnits = useGasBudgetEstimationUnits(
+        coins!,
+        amountToSend
     );
-    const gasBudgetEstimationUnits = useMemo(
-        () => (coins ? Coin.computeGasBudgetForPay(coins, amountToSend) : null),
-        [amountToSend, coins]
-    );
+
     const {
         gasBudget: gasBudgetEstimation,
         isLoading: loadingBudgetEstimation,
@@ -168,9 +163,9 @@ function TransferCoinPage() {
             if (
                 coinType === null ||
                 !gasBudgetEstimationUnits ||
+                !signer ||
                 !coins ||
-                !suiCoins ||
-                !signer
+                !suiCoins
             ) {
                 throw new Error('Missing data');
             }
@@ -183,20 +178,28 @@ function TransferCoinPage() {
                 return signer.payAllSui({
                     recipient: formData.to,
                     gasBudget: gasBudgetEstimationUnits,
-                    inputCoins: suiCoins.map((coin) => CoinAPI.getID(coin)),
+                    inputCoins: suiCoins.map(
+                        ({ coinObjectId }) => coinObjectId
+                    ),
                 });
             }
 
             const bigIntAmount = parseAmount(formData.amount, coinDecimals);
-            return signer.signAndExecuteTransaction(
-                await CoinAPI.newPayTransaction(
-                    coins,
-                    coinType,
-                    bigIntAmount,
-                    formData.to,
-                    gasBudgetEstimationUnits
-                )
-            );
+
+            // sort coins by balance
+            const coinsIDs = coins
+                .sort((a, b) => a.balance - b.balance)
+                .map(({ coinObjectId }) => coinObjectId);
+
+            return signer.signAndExecuteTransaction({
+                kind: coinType === SUI_TYPE_ARG ? 'paySui' : 'pay',
+                data: {
+                    inputCoins: coinsIDs,
+                    recipients: [formData.to],
+                    amounts: [Number(bigIntAmount)],
+                    gasBudget: Number(gasBudgetEstimationUnits),
+                },
+            });
         } catch (error) {
             transaction.setTag('failure', true);
             throw error;
