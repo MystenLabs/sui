@@ -441,7 +441,10 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         )?;
 
         assert!(
-            matches!(new_package.id(), MOVE_STDLIB_OBJECT_ID | SUI_FRAMEWORK_OBJECT_ID),
+            matches!(
+                new_package.id(),
+                MOVE_STDLIB_OBJECT_ID | SUI_FRAMEWORK_OBJECT_ID
+            ),
             "Can only set system packages this way."
         );
 

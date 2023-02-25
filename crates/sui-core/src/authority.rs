@@ -2793,11 +2793,73 @@ impl AuthorityState {
         Some(new_object.compute_object_reference())
     }
 
+    /// Return the new versions and module bytes for the packages that have been committed to for a
+    /// framework upgrade, in `system_packages`.  Loads the module contents from the binary, and
+    /// performs the following checks:
+    ///
+    /// - Whether its contents matches what is on-chain already, in which case no upgrade is
+    ///   required, and its contents are omitted from the output.
+    /// - Whether the contents in the binary can form a package whose digest matches the input,
+    ///   meaning the framework will be upgraded, and this authority can satisfy that upgrade, in
+    ///   which case the contents are included in the output.
+    ///
+    /// If the current version of the framework can't be loaded, the binary does not contain the
+    /// bytes for that framework ID, or the resulting package fails the digest check, `None` is
+    /// returned indicating that this authority cannot run the upgrade that the network voted on.
+    async fn get_system_package_bytes(
+        &self,
+        system_packages: Vec<ObjectRef>,
+    ) -> Option<Vec<(SequenceNumber, Vec<Vec<u8>>)>> {
+        let ids: Vec<_> = system_packages.iter().map(|(id, _, _)| *id).collect();
+        let objects = self.get_objects(&ids).await.expect("read cannot fail");
+
+        let mut res = Vec::with_capacity(system_packages.len());
+        for (system_package, object) in system_packages.into_iter().zip(objects.iter()) {
+            let cur_object = object
+                .as_ref()
+                .unwrap_or_else(|| panic!("system package {:?} must exist", system_package.0));
+
+            if cur_object.compute_object_reference() == system_package {
+                // Skip this one because it doesn't need to be upgraded.
+                info!("Framework {} does not need updating", system_package.0);
+                continue;
+            }
+
+            let bytes = match system_package.0 {
+                MOVE_STDLIB_OBJECT_ID => sui_framework::get_move_stdlib_bytes(),
+                SUI_FRAMEWORK_OBJECT_ID => sui_framework::get_sui_framework_bytes(),
+                _ => panic!("Unrecognised framework: {}", system_package.0),
+            };
+
+            let new_object = Object::new_package(
+                bytes
+                    .iter()
+                    .map(|m| CompiledModule::deserialize(m).unwrap())
+                    .collect(),
+                system_package.1,
+                cur_object.previous_transaction,
+                // System package is unbounded.
+                u64::MAX,
+            )
+            .unwrap();
+
+            let new_ref = new_object.compute_object_reference();
+            if new_ref != system_package {
+                error!("Framework mismatch -- binary: {new_ref:?}\n  upgrade: {system_package:?}");
+                return None;
+            }
+
+            res.push((system_package.1, bytes));
+        }
+
+        Some(res)
+    }
+
     fn choose_protocol_version_and_system_packages(
         committee: &Committee,
         protocol_config: &ProtocolConfig,
         capabilities: Vec<AuthorityCapabilities>,
-    ) -> (ProtocolVersion, Option<Vec<ObjectRef>>) {
+    ) -> (ProtocolVersion, Vec<ObjectRef>) {
         let current_protocol_version = committee.protocol_version;
         let next_protocol_version = current_protocol_version + 1;
 
@@ -2840,6 +2902,9 @@ impl AuthorityState {
                     StakeAggregator::new(Arc::new(committee.clone()));
 
                 for (protocol_version, packages, authority) in group {
+                    // should have been out filtered earlier.
+                    assert!(!packages.is_empty());
+
                     info!(
                         "validator {:?} would like to use {:?} has system packages: {:?}",
                         authority.concise(),
@@ -2860,14 +2925,20 @@ impl AuthorityState {
                     None
                 }
             })
-            .map(|(v, pkgs)| (v, Some(pkgs)))
             // if there was no majority, there is no upgrade
-            .unwrap_or((current_protocol_version, None))
+            .unwrap_or((current_protocol_version, vec![]))
     }
 
     /// Creates and execute the advance epoch transaction to effects without committing it to the database.
     /// The effects of the change epoch tx are only written to the database after a certified checkpoint has been
     /// formed and executed by CheckpointExecutor.
+    ///
+    /// When a framework upgraded has been decided on, but the validator does not have the new
+    /// versions of the packages locally, the validator cannot form the ChangeEpochTx. In this case
+    /// it returns Err, indicating that the checkpoint builder should give up trying to make the
+    /// final checkpoint. As long as the network is able to create a certified checkpoint (which
+    /// should be ensured by the capabilities vote), it will arrive via state sync and be executed
+    /// by CheckpointExecutor.
     pub async fn create_and_execute_advance_epoch_tx(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -2877,14 +2948,40 @@ impl AuthorityState {
     ) -> anyhow::Result<(SuiSystemState, TransactionEffects)> {
         let next_epoch = epoch_store.epoch() + 1;
 
-        let (next_epoch_protocol_version, _next_epoch_system_packages) =
+        let (next_epoch_protocol_version, next_epoch_system_packages) =
             Self::choose_protocol_version_and_system_packages(
                 epoch_store.committee(),
                 epoch_store.protocol_config(),
                 epoch_store.get_capabilities(),
             );
 
-        // TODO, convert _next_epoch_system_packages to package bytes, or bail out on the upgrade.
+        let Some(next_epoch_system_package_bytes) = self.get_system_package_bytes(
+            next_epoch_system_packages.clone()
+        ).await else {
+            error!(
+                "upgraded system packages {:?} are not locally available, cannot create \
+                ChangeEpochTx. validator binary must be upgraded to the correct version!",
+                next_epoch_system_packages
+            );
+            // the checkpoint builder will keep retrying forever when it hits this error.
+            // Eventually, one of two things will happen:
+            // - The operator will upgrade this binary to one that has the new packages locally,
+            //   and this function will succeed.
+            // - The final checkpoint will be certified by other validators, we will receive it via
+            //   state sync, and execute it. This will upgrade the framework packages, reconfigure,
+            //   and most likely shut down in the new epoch (this validator likely doesn't support
+            //   the new protocol version, or else it should have had the packages.)
+            return Err(anyhow!("cannot upgrade packages"));
+        };
+
+        let current_protocol_version = epoch_store.committee().protocol_version;
+
+        // framework update requires a protocol version bump.
+        assert!(
+            next_epoch_system_package_bytes.is_empty()
+                || next_epoch_protocol_version == current_protocol_version + 1
+        );
+
         let tx = VerifiedTransaction::new_change_epoch(
             next_epoch,
             next_epoch_protocol_version,
@@ -2892,7 +2989,7 @@ impl AuthorityState {
             gas_cost_summary.computation_cost,
             gas_cost_summary.storage_rebate,
             epoch_start_timestamp_ms,
-            vec![],
+            next_epoch_system_package_bytes,
         );
 
         let executable_tx = VerifiedExecutableTransaction::new_from_checkpoint(
