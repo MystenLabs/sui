@@ -9,14 +9,20 @@ import st from './ProgressBar.module.scss';
 type Props = {
     currentStep: number;
     stepsName: string[];
+    changeStep: (step: number) => void;
 };
 
-function ProgressBar({ currentStep, stepsName }: Props) {
+function ProgressBar({ currentStep, stepsName, changeStep }: Props) {
     const activeStep = currentStep - 1;
     return (
         <div className={st.progressBar}>
             {stepsName.map((step, index) => (
                 <div
+                    onClick={(_) => {
+                        if (index !== activeStep) {
+                            changeStep(index + 1);
+                        }
+                    }}
                     className={cl(
                         st.step,
                         index === activeStep && st.currentStep,
