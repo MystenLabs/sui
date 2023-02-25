@@ -21,15 +21,14 @@ function CheckpointDetail() {
     const { digest } = useParams<{ digest: string }>();
     const rpc = useRpc();
 
-    const checkpointQuery = useQuery(
-        ['checkpoints', digest],
-        async () => await rpc.getCheckpoint(digest!)
+    const checkpointQuery = useQuery(['checkpoints', digest], () =>
+        rpc.getCheckpoint(digest!)
     );
 
     // todo: add user_signatures to combined `getCheckpoint` endpoint
     const contentsQuery = useQuery(
         ['contents'],
-        async () => await rpc.getCheckpointContents(checkpoint.sequenceNumber),
+        () => rpc.getCheckpointContents(checkpoint.sequenceNumber),
         { enabled: !!checkpointQuery.data }
     );
 
