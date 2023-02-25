@@ -22,6 +22,7 @@ export interface InputWithActionProps
     allowNegative?: boolean;
     allowDecimals?: boolean;
     amountInput?: boolean;
+    darkPill?: boolean;
 }
 
 export function InputWithAction({
@@ -36,6 +37,7 @@ export function InputWithAction({
     prefix,
     suffix,
     amountInput,
+    darkPill = false,
     ...props
 }: InputWithActionProps) {
     const [field, meta] = useField(name);
@@ -88,7 +90,7 @@ export function InputWithAction({
                         disabled={isActionDisabled}
                         loading={isSubmitting}
                         onClick={onActionClicked}
-                        dark={amountInput}
+                        dark={darkPill}
                     />
                 </div>
             </div>

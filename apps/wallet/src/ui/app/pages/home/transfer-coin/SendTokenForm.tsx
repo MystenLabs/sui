@@ -118,6 +118,7 @@ export function SendTokenForm({
                             allowNegative={false}
                             allowDecimals
                             amountInput
+                            darkPill
                             onActionClicked={setMaxToken}
                             actionDisabled={
                                 parsedAmount === balance ||
