@@ -2684,55 +2684,6 @@ impl AuthorityState {
         total_votes >= effective_threshold
     }
 
-    fn choose_next_protocol_version(epoch_store: &Arc<AuthorityPerEpochStore>) -> ProtocolVersion {
-        let protocol_config = epoch_store.protocol_config();
-        let committee = epoch_store.committee();
-
-        // Determine which protocol version to propose for the following epoch.
-        let current_protocol_version = committee.protocol_version;
-        let next_protocol_version = current_protocol_version + 1;
-
-        let mut stake_aggregator: StakeAggregator<(), true> =
-            StakeAggregator::new(Arc::new(committee.clone()));
-
-        for cap in epoch_store.get_capabilities().into_iter() {
-            let authority = cap.authority;
-
-            if cap
-                .supported_protocol_versions
-                .is_version_supported(next_protocol_version)
-            {
-                info!(
-                    "validator {:?} supports {:?}",
-                    authority.concise(),
-                    next_protocol_version
-                );
-                stake_aggregator.insert_generic(authority, ());
-            } else {
-                info!(
-                    "validator {:?} does not support {:?}",
-                    authority.concise(),
-                    next_protocol_version
-                );
-            }
-        }
-
-        // Note that even if we don't support the next version, we vote with the majority. This
-        // is needed to ensure that the final checkpoint can be certified. Otherwise, a validator
-        // might vote that they support it, then be reverted to an earlier build, and decide not
-        // to adhere to their vote.
-        if Self::has_support(
-            format!("next_protocol_version: {:?}", next_protocol_version),
-            &stake_aggregator,
-            committee,
-            protocol_config,
-        ) {
-            next_protocol_version
-        } else {
-            current_protocol_version
-        }
-    }
-
     pub async fn get_available_system_packages(&self) -> Vec<ObjectRef> {
         let Some(move_stdlib) = self.compare_system_package(
             MOVE_STDLIB_OBJECT_ID,
@@ -2842,24 +2793,47 @@ impl AuthorityState {
         Some(new_object.compute_object_reference())
     }
 
-    fn choose_next_system_packages(
+    fn choose_protocol_version_and_system_packages(
         committee: &Committee,
         protocol_config: &ProtocolConfig,
         capabilities: Vec<AuthorityCapabilities>,
-    ) -> Option<Vec<ObjectRef>> {
-        let mut available_packages: Vec<_> = capabilities
+    ) -> (ProtocolVersion, Option<Vec<ObjectRef>>) {
+        let current_protocol_version = committee.protocol_version;
+        let next_protocol_version = current_protocol_version + 1;
+
+        // For each validator, gather the protocol version and system packages that it would like
+        // to upgrade to in the next epoch.
+        let mut desired_upgrades: Vec<_> = capabilities
             .into_iter()
-            .map(|mut cap| {
+            .filter_map(|mut cap| {
+                // A validator that lists no packages is voting against any change at all.
+                if cap.available_system_packages.is_empty() {
+                    return None;
+                }
+
                 cap.available_system_packages.sort();
-                (cap.available_system_packages, cap.authority)
+                let desired_protocol_version = if cap
+                    .supported_protocol_versions
+                    .is_version_supported(next_protocol_version)
+                {
+                    next_protocol_version
+                } else {
+                    current_protocol_version
+                };
+
+                Some((
+                    desired_protocol_version,
+                    cap.available_system_packages,
+                    cap.authority,
+                ))
             })
             .collect();
 
-        available_packages.sort();
-
-        available_packages
+        // There can only be one set of votes that have a majority, find one if it exists.
+        desired_upgrades.sort();
+        desired_upgrades
             .into_iter()
-            .group_by(|(packages, _authority)| packages.clone())
+            .group_by(|(version, packages, _authority)| (*version, packages.clone()))
             .into_iter()
             .find_map(|(key, group)| {
                 let group: Vec<_> = group.collect();
@@ -2867,10 +2841,11 @@ impl AuthorityState {
                 let mut stake_aggregator: StakeAggregator<(), true> =
                     StakeAggregator::new(Arc::new(committee.clone()));
 
-                for (packages, authority) in &group {
+                for (protocol_version, packages, authority) in &group {
                     info!(
-                        "validator {:?} has system packages: {:?}",
+                        "validator {:?} would like to use {:?} has system packages: {:?}",
                         authority.concise(),
+                        protocol_version,
                         packages
                     );
                     stake_aggregator.insert_generic(*authority, ());
@@ -2887,6 +2862,9 @@ impl AuthorityState {
                     None
                 }
             })
+            .map(|(v, pkgs)| (v, Some(pkgs)))
+            // if there was no majority, there is no upgrade
+            .unwrap_or((current_protocol_version, None))
     }
 
     /// Creates and execute the advance epoch transaction to effects without committing it to the database.
@@ -2901,13 +2879,12 @@ impl AuthorityState {
     ) -> anyhow::Result<(SuiSystemState, TransactionEffects)> {
         let next_epoch = epoch_store.epoch() + 1;
 
-        let next_epoch_protocol_version = Self::choose_next_protocol_version(epoch_store);
-
-        let next_system_packages = Self::choose_next_system_packages(
-            epoch_store.committee(),
-            epoch_store.protocol_config(),
-            epoch_store.get_capabilities(),
-        );
+        let (next_epoch_protocol_version, next_epoch_system_packages) =
+            Self::choose_protocol_version_and_system_packages(
+                epoch_store.committee(),
+                epoch_store.protocol_config(),
+                epoch_store.get_capabilities(),
+            );
 
         let tx = VerifiedTransaction::new_change_epoch(
             next_epoch,
@@ -2916,7 +2893,7 @@ impl AuthorityState {
             gas_cost_summary.computation_cost,
             gas_cost_summary.storage_rebate,
             epoch_start_timestamp_ms,
-            next_system_packages,
+            next_epoch_system_packages,
         );
 
         let executable_tx = VerifiedExecutableTransaction::new_from_checkpoint(
