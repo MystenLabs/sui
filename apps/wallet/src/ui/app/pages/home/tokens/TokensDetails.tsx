@@ -119,7 +119,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                         to={`/send${
                             coinBalance?.coinType
                                 ? `?${new URLSearchParams({
-                                      type: coinBalance?.coinType,
+                                      type: coinBalance.coinType,
                                   }).toString()}`
                                 : ''
                         }`}
