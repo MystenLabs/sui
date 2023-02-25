@@ -15,24 +15,19 @@ import { Link } from '~/ui/Link';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { Text } from '~/ui/Text';
-import { getName } from '~/utils/getName';
 
 const NUMBER_OF_VALIDATORS = 10;
 
 export function processValidators(set: Validator[]) {
     return set.map((av) => {
-        const rawName = av.metadata.name;
         const delegatedStake = +av.delegation_staking_pool.sui_balance;
         const selfStake = +av.stake_amount;
         const totalValidatorStake = selfStake + delegatedStake;
         return {
-            name: getName(rawName),
+            name: av.metadata.name,
             address: av.metadata.sui_address,
             stake: totalValidatorStake,
-            logo:
-                typeof av.metadata.image_url === 'string'
-                    ? av.metadata.image_url
-                    : null,
+            logo: av.metadata.image_url,
         };
     });
 }

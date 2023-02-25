@@ -6,7 +6,7 @@ import { useState, useMemo } from 'react';
 
 import { calculateAPY } from '../calculateAPY';
 import { calculateStakeShare } from '../calculateStakeShare';
-import { getName, useSystemState } from '../useSystemState';
+import { useSystemState } from '../useSystemState';
 import { ValidatorListItem } from './ValidatorListItem';
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
@@ -57,7 +57,7 @@ export function SelectValidatorCard() {
 
         const sortedAsc = data.validators.active_validators
             .map((validator) => ({
-                name: getName(validator.metadata.name),
+                name: validator.metadata.name,
                 address: validator.metadata.sui_address,
                 apy: calculateAPY(validator, +data.epoch),
                 stakeShare: calculateStakeShare(
@@ -65,11 +65,7 @@ export function SelectValidatorCard() {
                         BigInt(validator.stake_amount),
                     BigInt(totalStake)
                 ),
-                logo:
-                    validator.metadata.image_url &&
-                    typeof validator.metadata.image_url === 'string'
-                        ? validator.metadata.image_url
-                        : null,
+                logo: validator.metadata.image_url,
             }))
             .sort((a, b) => {
                 if (sortKey === 'name') {

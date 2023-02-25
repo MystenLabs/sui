@@ -20,7 +20,6 @@ import { Stats } from '~/ui/Stats';
 import { TableCard } from '~/ui/TableCard';
 import { TableHeader } from '~/ui/TableHeader';
 import { Text } from '~/ui/Text';
-import { getName } from '~/utils/getName';
 import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
 import { roundFloat } from '~/utils/roundFloat';
 
@@ -35,16 +34,12 @@ function validatorsTableData(
 ) {
     return {
         data: validators.map((validator) => {
-            const validatorName = getName(validator.metadata.name);
+            const validatorName = validator.metadata.name;
             const delegatedStake =
                 +validator.delegation_staking_pool.sui_balance;
             const selfStake = +validator.stake_amount;
             const totalStake = selfStake + delegatedStake;
-            const img =
-                validator.metadata.image_url &&
-                typeof validator.metadata.image_url === 'string'
-                    ? validator.metadata.image_url
-                    : null;
+            const img = validator.metadata.image_url;
 
             const event = getValidatorMoveEvent(
                 validatorsEvents,
