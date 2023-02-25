@@ -442,7 +442,7 @@ fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResol
                 initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
                 mutable: true,
             }),
-            CallArg::Pure(bcs::to_bytes(&prologue.checkpoint_start_timestamp_ms).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&prologue.commit_timestamp_ms).unwrap()),
         ],
         gas_status.create_move_gas_status(),
         tx_ctx,

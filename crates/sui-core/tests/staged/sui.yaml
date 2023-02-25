@@ -87,7 +87,9 @@ Command:
             SEQ: U8
 ConsensusCommitPrologue:
   STRUCT:
-    - checkpoint_start_timestamp_ms: U64
+    - epoch: U64
+    - round: U64
+    - commit_timestamp_ms: U64
 Data:
   ENUM:
     0:

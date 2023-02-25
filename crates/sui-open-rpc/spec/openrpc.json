@@ -3018,7 +3018,7 @@
             }
           },
           "user_signatures": {
-            "description": "This field 'pins' user signatures for the checkpoint:\n\n* For normal checkpoint this field will contain same number of elements as transactions. * Genesis checkpoint has transactions but this field is empty. * Last checkpoint in the epoch will have (last)extra system transaction in the transactions list not covered in the signatures list",
+            "description": "This field 'pins' user signatures for the checkpoint The length of this vector is same as length of transactions vector System transactions has empty signatures",
             "type": "array",
             "items": {
               "type": "array",
@@ -5671,10 +5671,22 @@
       "SuiConsensusCommitPrologue": {
         "type": "object",
         "required": [
-          "checkpoint_start_timestamp_ms"
+          "commit_timestamp_ms",
+          "epoch",
+          "round"
         ],
         "properties": {
-          "checkpoint_start_timestamp_ms": {
+          "commit_timestamp_ms": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "round": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0

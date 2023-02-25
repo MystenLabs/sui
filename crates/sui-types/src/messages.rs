@@ -11,7 +11,9 @@ use crate::crypto::{
 use crate::gas::GasCostSummary;
 use crate::intent::{Intent, IntentMessage};
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
-use crate::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMessage};
+use crate::messages_checkpoint::{
+    CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointTimestamp,
+};
 use crate::object::{MoveObject, Object, ObjectFormatOptions, Owner};
 use crate::signature::{AuthenticatorTrait, GenericSignature};
 use crate::storage::{DeleteKind, WriteKind};
@@ -189,10 +191,16 @@ pub enum GenesisObject {
     },
 }
 
+/// Only commit_timestamp_ms is passed to the move call currently.
+/// However we include epoch and round to make sure each ConsensusCommitPrologue has a unique tx digest.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct ConsensusCommitPrologue {
+    /// Epoch of the commit prologue transaction
+    pub epoch: u64,
+    /// Consensus round of the commit
+    pub round: u64,
     /// Unix timestamp from consensus
-    pub checkpoint_start_timestamp_ms: u64,
+    pub commit_timestamp_ms: CheckpointTimestamp,
 }
 
 impl GenesisObject {
@@ -854,7 +862,7 @@ impl Display for SingleTransactionKind {
             }
             Self::ConsensusCommitPrologue(p) => {
                 writeln!(writer, "Transaction Kind : Consensus Commit Prologue")?;
-                writeln!(writer, "Timestamp : {}", p.checkpoint_start_timestamp_ms)?;
+                writeln!(writer, "Timestamp : {}", p.commit_timestamp_ms)?;
             }
             Self::ProgrammableTransaction(p) => {
                 writeln!(writer, "Transaction Kind : Programmable")?;
@@ -1616,9 +1624,15 @@ impl VerifiedTransaction {
             .pipe(Self::new_system_transaction)
     }
 
-    pub fn new_consensus_commit_prologue(checkpoint_start_timestamp_ms: u64) -> Self {
+    pub fn new_consensus_commit_prologue(
+        epoch: u64,
+        round: u64,
+        commit_timestamp_ms: CheckpointTimestamp,
+    ) -> Self {
         ConsensusCommitPrologue {
-            checkpoint_start_timestamp_ms,
+            epoch,
+            round,
+            commit_timestamp_ms,
         }
         .pipe(SingleTransactionKind::ConsensusCommitPrologue)
         .pipe(Self::new_system_transaction)

@@ -56,7 +56,7 @@ export const ExecutionDigests = object({
 
 export const CheckpointContents = object({
   transactions: array(ExecutionDigests),
-  user_signatures: array(string()),
+  user_signatures: array(array(string())),
 });
 
 export const Checkpoint = object({

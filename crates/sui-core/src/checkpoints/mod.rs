@@ -24,6 +24,7 @@ use serde::{Deserialize, Serialize};
 use sui_types::accumulator::Accumulator;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::consensus_handler::SequencedConsensusTransactionKey;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
@@ -33,12 +34,15 @@ use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
 use sui_types::error::SuiResult;
 use sui_types::gas::GasCostSummary;
-use sui_types::messages::TransactionEffects;
+use sui_types::messages::{
+    ConsensusTransactionKey, SingleTransactionKind, TransactionEffects, TransactionKind,
+};
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp, EndOfEpochData,
     VerifiedCheckpoint,
 };
+use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::SuiSystemState;
 use tokio::sync::{watch, Notify};
 use tracing::{debug, error, info, warn};
@@ -605,11 +609,32 @@ impl CheckpointBuilder {
             let digests_without_epoch_augment: Vec<_> =
                 effects.iter().map(|e| e.transaction_digest).collect();
             debug!("Waiting for checkpoint user signatures for certificates {:?} to appear in consensus", digests_without_epoch_augment);
-            let signatures = self
-                .epoch_store
-                .user_signatures_for_checkpoint(&digests_without_epoch_augment)
-                .in_monitored_scope("CheckpointBuilder::wait_user_signatures")
-                .await?;
+            for digest in digests_without_epoch_augment.iter() {
+                let transaction = self
+                    .state
+                    .database
+                    .get_transaction(digest)?
+                    .expect("Could not find executed transaction");
+                // ConsensusCommitPrologue is guaranteed to be processed before we reach here
+                if !matches!(
+                    transaction.inner().transaction_data().kind,
+                    TransactionKind::Single(SingleTransactionKind::ConsensusCommitPrologue(..))
+                ) {
+                    // todo - use NotifyRead::register_all might be faster
+                    self.epoch_store
+                        .consensus_message_processed_notify(
+                            SequencedConsensusTransactionKey::External(
+                                ConsensusTransactionKey::Certificate(*digest),
+                            ),
+                        )
+                        .await?;
+                }
+            }
+            let mut signatures = {
+                let _guard = monitored_scope("CheckpointBuilder::wait_user_signatures");
+                self.epoch_store
+                    .user_signatures_for_checkpoint(&digests_without_epoch_augment)?
+            };
             debug!(
                 "Received {} checkpoint user signatures from consensus",
                 signatures.len()
@@ -641,6 +666,7 @@ impl CheckpointBuilder {
                         &epoch_rolling_gas_cost_summary,
                         timestamp_ms,
                         &mut effects,
+                        &mut signatures,
                         sequence_number,
                     )
                     .await?;
@@ -733,6 +759,7 @@ impl CheckpointBuilder {
         epoch_total_gas_cost: &GasCostSummary,
         epoch_start_timestamp_ms: CheckpointTimestamp,
         checkpoint_effects: &mut Vec<TransactionEffects>,
+        signatures: &mut Vec<Vec<GenericSignature>>,
         checkpoint: CheckpointSequenceNumber,
         // TODO: Check whether we must use anyhow::Result or can we use SuiResult.
     ) -> anyhow::Result<SuiSystemState> {
@@ -746,6 +773,7 @@ impl CheckpointBuilder {
             )
             .await?;
         checkpoint_effects.push(effects);
+        signatures.push(vec![]);
         Ok(system_state)
     }
 
@@ -1153,6 +1181,7 @@ mod tests {
     use fastcrypto::traits::KeyPair;
     use std::collections::HashMap;
     use sui_types::crypto::Signature;
+    use sui_types::messages::VerifiedTransaction;
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
     use tempfile::tempdir;
     use tokio::sync::mpsc;
@@ -1169,6 +1198,16 @@ mod tests {
             .copy();
         let state =
             AuthorityState::new_for_testing(committee.clone(), &keypair, None, &genesis).await;
+
+        let dummy_tx = VerifiedTransaction::new_genesis_transaction(vec![]);
+        for i in 0..15 {
+            state
+                .database
+                .perpetual_tables
+                .transactions
+                .insert(&d(i), dummy_tx.serializable_ref())
+                .unwrap();
+        }
 
         let mut store = HashMap::<TransactionDigest, TransactionEffects>::new();
         store.insert(

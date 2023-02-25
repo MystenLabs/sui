@@ -270,7 +270,8 @@ async fn check_objects(
         };
         // Check if the object contents match the type of lock we need for
         // this object.
-        check_one_object(&owner_address, object_kind, &object)?;
+        let system_transaction = transaction.kind.is_system_tx();
+        check_one_object(&owner_address, object_kind, &object, system_transaction)?;
         all_objects.push((object_kind, object));
     }
     if !transaction.kind.is_genesis_tx() && all_objects.is_empty() {
@@ -285,6 +286,7 @@ fn check_one_object(
     owner: &SuiAddress,
     object_kind: InputObjectKind,
     object: &Object,
+    system_transaction: bool,
 ) -> UserInputResult {
     match object_kind {
         InputObjectKind::MovePackage(package_id) => {
@@ -356,11 +358,15 @@ fn check_one_object(
             initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
             mutable: true,
         } => {
-            // Only system transactions (which don't perform input checks) can accept the Clock
+            // Only system transactions can accept the Clock
             // object as a mutable parameter.
-            return Err(UserInputError::ImmutableParameterExpectedError {
-                object_id: SUI_CLOCK_OBJECT_ID,
-            });
+            if system_transaction {
+                return Ok(());
+            } else {
+                return Err(UserInputError::ImmutableParameterExpectedError {
+                    object_id: SUI_CLOCK_OBJECT_ID,
+                });
+            }
         }
         InputObjectKind::SharedMoveObject {
             initial_shared_version: input_initial_shared_version,

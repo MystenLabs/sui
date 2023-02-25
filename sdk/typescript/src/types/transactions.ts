@@ -51,7 +51,9 @@ export const SuiChangeEpoch = object({
 export type SuiChangeEpoch = Infer<typeof SuiChangeEpoch>;
 
 export const SuiConsensusCommitPrologue = object({
-  checkpoint_start_timestamp_ms: number(),
+  epoch: number(),
+  round: number(),
+  commit_timestamp_ms: number(),
 });
 export type SuiConsensusCommitPrologue = Infer<
   typeof SuiConsensusCommitPrologue
