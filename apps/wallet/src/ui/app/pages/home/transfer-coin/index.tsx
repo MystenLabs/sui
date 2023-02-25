@@ -49,7 +49,7 @@ const DEFAULT_FORM_STEP = 1;
 
 export type FormValues = typeof initialValues;
 
-// Requesting object data for both SUI and the coin type, to estimate gas cost for the transaction for non SUI coins
+// Requesting object data for both SUI and the coins type, to estimate gas cost for the transaction for non SUI coins
 // since caching is involved, for SUI coins the second request will be served from cache
 function TransferCoinPage() {
     const [searchParams] = useSearchParams();
@@ -69,7 +69,7 @@ function TransferCoinPage() {
         accountAddress!
     );
 
-    // filter out locked coins
+    // filter out locked lockedUntilEpoch
     const coins = useMemo(
         () => coinsData?.filter(({ lockedUntilEpoch }) => !lockedUntilEpoch),
         [coinsData]

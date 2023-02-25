@@ -5,8 +5,8 @@ import { type CoinStruct } from '@mysten/sui.js';
 
 import { DEFAULT_GAS_BUDGET_FOR_PAY } from '_redux/slices/sui-objects/Coin';
 
-// this is a helper function to get a set of gas coins that can cover a given amount
-// this is abstracted out Coins.selectCoinSetWithCombinedBalanceGreaterThanOrEqual from sui.js
+// This is a helper function to get a set of gas coins that can cover a given amount
+// It is from Coins.selectCoinSetWithCombinedBalanceGreaterThanOrEqual from sui.js
 function getCoinSetWithCombinedBalanceGreaterThanOrEqual(
     coins: CoinStruct[],
     amount: bigint
