@@ -28,6 +28,7 @@ module sui::staking_pool {
     const EWrongDelegation: u64 = 7;
     const EPendingDelegationDoesNotExist: u64 = 8;
     const ETokenBalancesDoNotMatchExchangeRate: u64 = 9;
+    const EWithdrawalInSameEpoch: u64 = 10;
 
     /// A staking pool embedded in each validator struct in the system state object.
     struct StakingPool has key, store {
@@ -110,7 +111,6 @@ module sui::staking_pool {
         }
     }
 
-
     // ==== delegation requests ====
 
     /// Request to delegate to a staking pool. The delegation starts counting at the beginning of the next epoch,
@@ -120,6 +120,7 @@ module sui::staking_pool {
         sui_token_lock: Option<EpochTimeLock>,
         validator_address: address,
         delegator: address,
+        delegation_activation_epoch: u64,
         ctx: &mut TxContext
     ) {
         let sui_amount = balance::value(&stake);
@@ -128,7 +129,7 @@ module sui::staking_pool {
             id: object::new(ctx),
             pool_id: object::id(pool),
             validator_address,
-            delegation_activation_epoch: tx_context::epoch(ctx) + 1,
+            delegation_activation_epoch,
             principal: stake,
             sui_token_lock,
         };
@@ -148,7 +149,6 @@ module sui::staking_pool {
     ) : u64 {
         let (pool_token_withdraw_amount, principal_withdraw, time_lock) =
             withdraw_from_principal(pool, staked_sui);
-
         let delegator = tx_context::sender(ctx);
         let principal_withdraw_amount = balance::value(&principal_withdraw);
         table_vec::push_back(&mut pool.pending_withdraws, PendingWithdrawEntry {
@@ -296,6 +296,25 @@ module sui::staking_pool {
     public fun pool_token_exchange_rate_at_epoch(pool: &StakingPool, epoch: u64): PoolTokenExchangeRate {
         *table::borrow(&pool.exchange_rates, epoch)
     }
+
+    /// Calculate the total value of the pending staking requests for this staking pool.
+    public fun pending_stake_amount(staking_pool: &StakingPool): u64 {
+        staking_pool.pending_delegation
+    }
+
+    /// Calculate the current the total withdrawal requests (in terms of principal) for the staking pool
+    public fun pending_principal_withdrawal_amounts(staking_pool: &StakingPool): u64 {
+        let sum = 0;
+        let len = table_vec::length(&staking_pool.pending_withdraws);
+        let i = 0;
+        while (i < len) {
+            let pending_withdraw = table_vec::borrow(&staking_pool.pending_withdraws, i);
+            sum = sum + pending_withdraw.principal_withdraw_amount;
+            i = i + 1;
+        };
+        sum
+    }
+
     /// Create a new pending withdraw entry.
     public(friend) fun new_pending_withdraw_entry(
         delegator: address,
@@ -325,12 +344,37 @@ module sui::staking_pool {
         (res as u64)
     }
 
-
     fun check_balance_invariants(pool: &StakingPool, epoch: u64) {
         let exchange_rate = pool_token_exchange_rate_at_epoch(pool, epoch);
         // check that the pool token balance and sui balance ratio matches the exchange rate stored.
         let expected = get_token_amount(&exchange_rate, pool.sui_balance);
         let actual = pool.pool_token_balance;
         assert!(expected == actual, ETokenBalancesDoNotMatchExchangeRate)
+    }
+    // ==== test-related functions ====
+
+    // Given the `staked_sui` receipt calculate the current rewards (in terms of SUI) for it.
+    #[test_only]
+    public fun calculate_rewards(
+        pool: &StakingPool,
+        staked_sui: &StakedSui,
+        current_epoch: u64,
+    ): u64 {
+        let staked_amount = staked_sui_amount(staked_sui);
+        let pool_token_withdraw_amount = {
+            let exchange_rate_at_staking_epoch = pool_token_exchange_rate_at_epoch(pool, staked_sui.delegation_activation_epoch);
+            get_token_amount(&exchange_rate_at_staking_epoch, staked_amount)
+        };
+
+        let new_epoch_exchange_rate = pool_token_exchange_rate_at_epoch(pool, current_epoch);
+        let total_sui_withdraw_amount = get_sui_amount(&new_epoch_exchange_rate, pool_token_withdraw_amount);
+
+        let reward_withdraw_amount =
+            if (total_sui_withdraw_amount >= staked_amount)
+                total_sui_withdraw_amount - staked_amount
+            else 0;
+        reward_withdraw_amount = math::min(reward_withdraw_amount, balance::value(&pool.rewards_pool));
+
+        staked_amount + reward_withdraw_amount
     }
 }

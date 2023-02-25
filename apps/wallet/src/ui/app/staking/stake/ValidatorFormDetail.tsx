@@ -49,8 +49,7 @@ export function ValidatorFormDetail({
         );
     }, [validatorAddress, system]);
 
-    const totalValidatorStake =
-        validatorData?.delegation_staking_pool.sui_balance || 0;
+    const totalValidatorStake = validatorData?.staking_pool.sui_balance || 0;
 
     const totalStake = useMemo(() => {
         if (!allDelegation) return 0n;

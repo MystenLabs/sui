@@ -156,11 +156,8 @@ export const SystemParameters = object({
 export const Validator = object({
   metadata: ValidatorMetaData,
   voting_power: number(),
-  stake_amount: number(),
-  pending_stake: number(),
-  pending_withdraw: number(),
   gas_price: number(),
-  delegation_staking_pool: DelegationStakingPoolFields,
+  staking_pool: DelegationStakingPoolFields,
   commission_rate: number(),
   next_epoch_stake: number(),
   next_epoch_delegation: number(),
@@ -175,8 +172,7 @@ export const ValidatorPair = object({
 });
 
 export const ValidatorSet = object({
-  validator_stake: number(),
-  delegation_stake: number(),
+  total_stake: number(),
   active_validators: array(Validator),
   pending_validators: object({
     contents: object({

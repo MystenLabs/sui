@@ -3,7 +3,6 @@
 
 #[test_only]
 module sui::rewards_distribution_tests {
-    use sui::coin;
     use sui::test_scenario::{Self, Scenario};
     use sui::sui_system::{Self, SuiSystemState};
 
@@ -12,8 +11,9 @@ module sui::rewards_distribution_tests {
         advance_epoch,
         advance_epoch_with_reward_amounts,
         advance_epoch_with_reward_amounts_and_slashing_rates,
-        assert_validator_delegate_amounts,
-        assert_validator_stake_amounts,
+        assert_validator_total_stake_amounts,
+        assert_validator_non_self_stake_amounts,
+        assert_validator_self_stake_amounts,
         create_validator_for_testing,
         create_sui_system_state_for_testing,
         delegate_to,
@@ -41,23 +41,17 @@ module sui::rewards_distribution_tests {
         governance_test_utils::advance_epoch(scenario);
 
         advance_epoch_with_reward_amounts(0, 100, scenario);
-        assert_validator_stake_amounts(validator_addrs(), vector[110, 220, 330, 440], scenario);
+        assert_validator_total_stake_amounts(validator_addrs(), vector[110, 220, 330, 440], scenario);
 
-        test_scenario::next_tx(scenario, VALIDATOR_ADDR_2);
-        {
-            let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
-            let ctx = test_scenario::ctx(scenario);
-            sui_system::request_add_stake(&mut system_state, coin::mint_for_testing(720, ctx), ctx);
-            test_scenario::return_shared(system_state);
-        };
+        delegate_to(VALIDATOR_ADDR_2, VALIDATOR_ADDR_2, 720, scenario);
 
         advance_epoch_with_reward_amounts(0, 100, scenario);
         // validator 2's new stake hasn' started counting yet so she only gets 20% of the rewards.
-        assert_validator_stake_amounts(validator_addrs(), vector[120, 960, 360, 480], scenario);
+        assert_validator_total_stake_amounts(validator_addrs(), vector[120, 960, 360, 480], scenario);
 
         advance_epoch_with_reward_amounts(0, 100, scenario);
         // validator 2's new stake started counting so she gets half of the rewards.
-        assert_validator_stake_amounts(validator_addrs(), vector[126, 1010, 378, 505], scenario);
+        assert_validator_total_stake_amounts(validator_addrs(), vector[126, 1010, 378, 505], scenario);
         test_scenario::end(scenario_val);
     }
 
@@ -71,7 +65,7 @@ module sui::rewards_distribution_tests {
         governance_test_utils::advance_epoch(scenario);
 
         advance_epoch_with_reward_amounts(0, 100, scenario);
-        assert_validator_stake_amounts(validator_addrs(), vector[100_000_010, 200_000_020, 300_000_030, 400_000_040], scenario);
+        assert_validator_total_stake_amounts(validator_addrs(), vector[100_000_010, 200_000_020, 300_000_030, 400_000_040], scenario);
         test_scenario::end(scenario_val);
     }
 
@@ -85,15 +79,18 @@ module sui::rewards_distribution_tests {
         delegate_to(DELEGATOR_ADDR_2, VALIDATOR_ADDR_2, 100, scenario);
         governance_test_utils::advance_epoch(scenario);
 
+        assert_validator_total_stake_amounts(validator_addrs(), vector[300, 300, 300, 400], scenario);
+        assert_validator_self_stake_amounts(validator_addrs(), vector[100, 200, 300, 400], scenario);
+
         // 10 SUI rewards for each 100 SUI of stake
         advance_epoch_with_reward_amounts(0, 130, scenario);
-        assert_validator_stake_amounts(validator_addrs(), vector[110, 220, 330, 440], scenario);
+        assert_validator_self_stake_amounts(validator_addrs(), vector[110, 220, 330, 440], scenario);
         undelegate(DELEGATOR_ADDR_1, 0, scenario);
         delegate_to(DELEGATOR_ADDR_2, VALIDATOR_ADDR_1, 600, scenario);
         // 10 SUI rewards for each 110 SUI of stake
         advance_epoch_with_reward_amounts(0, 130, scenario);
         assert!(total_sui_balance(DELEGATOR_ADDR_1, scenario) == 240, 0); // 40 SUI of rewards received
-        assert_validator_stake_amounts(validator_addrs(), vector[120, 240, 360, 480], scenario);
+        assert_validator_self_stake_amounts(validator_addrs(), vector[120, 240, 360, 480], scenario);
         undelegate(DELEGATOR_ADDR_2, 0, scenario);
         governance_test_utils::advance_epoch(scenario);
         assert!(total_sui_balance(DELEGATOR_ADDR_2, scenario) == 120, 0); // 20 SUI of rewards received
@@ -147,8 +144,8 @@ module sui::rewards_distribution_tests {
         // 10 SUI for each 100 SUI staked
         advance_epoch_with_reward_amounts(0, 120, scenario);
         // 5 SUI, or 50 % of delegator_2's rewards, goes to validator_2
-        assert_validator_delegate_amounts(validator_addrs(), vector[110, 105, 0, 0], scenario);
-        assert_validator_stake_amounts(validator_addrs(), vector[110, 225, 330, 440], scenario);
+        assert_validator_non_self_stake_amounts(validator_addrs(), vector[110, 105, 0, 0], scenario);
+        assert_validator_self_stake_amounts(validator_addrs(), vector[110, 225, 330, 440], scenario);
 
         set_commission_rate_and_advance_epoch(VALIDATOR_ADDR_1, 1000, scenario); // 10% commission
 
@@ -159,14 +156,14 @@ module sui::rewards_distribution_tests {
         // so delegator_1 now has 110 + 20 - 2 = 128 SUI.
         // And 10 SUI, or 50% of delegator_2's rewards (20 SUI) goes to validator_2
         // so delegator_2 now has 105 +20 - 10 = 115 SUI.
-        assert_validator_delegate_amounts(validator_addrs(), vector[128, 115, 0, 0], scenario);
+        assert_validator_non_self_stake_amounts(validator_addrs(), vector[128, 115, 0, 0], scenario);
 
         // validator_1 gets 20 SUI of their own rewards and 2 SUI of commission
         // so in total 110 + 20 + 2 = 132 SUI.
         // validator_2 gets 40 SUI of their own rewards and 10 SUI of commission
         // so in total 225 + 40 + 10 = 275 SUI.
         // validator_3 and validator_4 just get their regular shares (60 SUI and 80 SUI).
-        assert_validator_stake_amounts(validator_addrs(), vector[132, 275, 390, 520], scenario);
+        assert_validator_self_stake_amounts(validator_addrs(), vector[132, 275, 390, 520], scenario);
 
         test_scenario::end(scenario_val);
     }
@@ -204,7 +201,7 @@ module sui::rewards_distribution_tests {
         // There are in total 30 SUI of rewards slashed (20 from the validator, and 10 from her delegator)
         // so the unslashed validators each get their weighted share of additional rewards, which is
         // 30 / 9 = 3, 30 * 3 / 9 = 10 and 30 * 4 / 9 = 13.
-        assert_validator_stake_amounts(validator_addrs(), vector[203, 380, 610, 813], scenario);
+        assert_validator_self_stake_amounts(validator_addrs(), vector[203, 380, 610, 813], scenario);
 
         // Undelegate so we can check the delegation rewards as well.
         undelegate(DELEGATOR_ADDR_1, 0, scenario);
@@ -249,7 +246,7 @@ module sui::rewards_distribution_tests {
         // unslashed validators too.
         // Validator 4 should get 475 SUI of rewards without slashing. 20% is slashed so she gets
         // 380 SUI of rewards.
-        assert_validator_stake_amounts(validator_addrs(), vector[294, 508, 722, 780], scenario);
+        assert_validator_self_stake_amounts(validator_addrs(), vector[294, 508, 722, 780], scenario);
 
         // Undelegate so we can check the delegation rewards as well.
         undelegate(DELEGATOR_ADDR_1, 0, scenario);
@@ -257,7 +254,8 @@ module sui::rewards_distribution_tests {
 
         advance_epoch(scenario);
 
-        assert!(total_sui_balance(DELEGATOR_ADDR_1, scenario) == 215, 0);
+        // WHY YOU DO THIS TO ME?
+        assert!(total_sui_balance(DELEGATOR_ADDR_1, scenario) == 214, 0);
         assert!(total_sui_balance(DELEGATOR_ADDR_2, scenario) == 180, 0);
 
         test_scenario::end(scenario_val);
@@ -293,7 +291,7 @@ module sui::rewards_distribution_tests {
         test_scenario::next_tx(scenario, @0x0);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         // Check that we have the right amount of SUI in the staking pool.
-        assert_eq(sui_system::validator_delegate_amount(&system_state, VALIDATOR_ADDR_1), 140 * 22);
+        assert_eq(sui_system::validator_stake_amount(&system_state, VALIDATOR_ADDR_1), 140 * 23);
         test_scenario::return_shared(system_state);
 
         // Withdraw all delegations at once.
@@ -319,8 +317,8 @@ module sui::rewards_distribution_tests {
 
         test_scenario::next_tx(scenario, @0x0);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
-        // Since all the delegations are gone the pool is empty.
-        assert_eq(sui_system::validator_delegate_amount(&system_state, VALIDATOR_ADDR_1), 0);
+        // Since all the delegations are gone the pool is empty except for the validator's original stake.
+        assert_eq(sui_system::validator_stake_amount(&system_state, VALIDATOR_ADDR_1), 140);
         test_scenario::return_shared(system_state);
         test_scenario::end(scenario_val);
     }

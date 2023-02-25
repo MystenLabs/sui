@@ -44,10 +44,7 @@ export function SelectValidatorCard() {
     const totalStake = useMemo(() => {
         if (!data) return 0;
         return data.validators.active_validators.reduce(
-            (acc, curr) =>
-                (acc +=
-                    BigInt(curr.delegation_staking_pool.sui_balance) +
-                    BigInt(curr.stake_amount)),
+            (acc, curr) => (acc += BigInt(curr.staking_pool.sui_balance)),
             0n
         );
     }, [data]);
@@ -61,8 +58,7 @@ export function SelectValidatorCard() {
                 address: validator.metadata.sui_address,
                 apy: calculateAPY(validator, +data.epoch),
                 stakeShare: calculateStakeShare(
-                    BigInt(validator.delegation_staking_pool.sui_balance) +
-                        BigInt(validator.stake_amount),
+                    BigInt(validator.staking_pool.sui_balance),
                     BigInt(totalStake)
                 ),
                 logo: validator.metadata.image_url,
