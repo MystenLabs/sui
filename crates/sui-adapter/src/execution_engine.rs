@@ -4,6 +4,7 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use crate::execution_mode::{self, ExecutionMode};
+use move_binary_format::CompiledModule;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_vm_runtime::move_vm::MoveVM;
 use sui_types::base_types::SequenceNumber;
@@ -398,6 +399,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         tx_ctx,
         protocol_config,
     );
+
     if result.is_err() {
         tracing::error!(
             "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. System state object: {:?}. Tx data: {:?}",
@@ -423,6 +425,36 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             protocol_config,
         )?;
     }
+
+    for (version, modules) in change_epoch.system_packages.into_iter() {
+        let modules = modules
+            .into_iter()
+            .map(|m| CompiledModule::deserialize(&m).unwrap())
+            .collect();
+
+        let new_package = Object::new_package(
+            modules,
+            version,
+            tx_ctx.digest(),
+            // Package limit does not apply to system packages.
+            u64::MAX,
+        )?;
+
+        assert!(
+            matches!(new_package.id(), MOVE_STDLIB_OBJECT_ID | SUI_FRAMEWORK_OBJECT_ID),
+            "Can only set system packages this way."
+        );
+
+        // TODO: What's going to happen when this gets converted to effects:
+        // - Will it complain that we're writing to an immutable object
+        // - Will lamport object versions kick in and mess up our nice versions?
+        temporary_store.write_object(
+            &SingleTxContext::sui_system(),
+            new_package,
+            WriteKind::Mutate,
+        );
+    }
+
     Ok(())
 }
 

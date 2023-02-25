@@ -343,9 +343,9 @@ pub struct ChangeEpoch {
     pub epoch_start_timestamp_ms: u64,
     /// System packages (specifically framework and move stdlib) that are written before the new
     /// epoch starts. This tracks framework upgrades on chain. When executing the ChangeEpoch txn,
-    /// the validator must write out the specified objects below.
-    /// If None, no upgrades were performed this epoch.
-    pub system_packages: Option<Vec<ObjectRef>>,
+    /// the validator must write out the modules below.  Modules are given in their serialized form,
+    /// and include the ObjectID within their serialized form.
+    pub system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>)>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -996,18 +996,13 @@ impl SingleTransactionKind {
                 .iter()
                 .map(|o| InputObjectKind::ImmOrOwnedMoveObject(*o))
                 .collect(),
-            Self::ChangeEpoch(ChangeEpoch {
-                system_packages, ..
-            }) => system_packages
-                .iter()
-                .flatten()
-                .map(|(id, _, _)| InputObjectKind::MovePackage(*id))
-                .chain(std::iter::once(InputObjectKind::SharedMoveObject {
+            Self::ChangeEpoch(ChangeEpoch { .. }) => {
+                vec![InputObjectKind::SharedMoveObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
                     mutable: true,
-                }))
-                .collect(),
+                }]
+            }
             Self::Genesis(_) => {
                 vec![]
             }
@@ -1901,7 +1896,7 @@ impl VerifiedTransaction {
         computation_charge: u64,
         storage_rebate: u64,
         epoch_start_timestamp_ms: u64,
-        system_packages: Option<Vec<ObjectRef>>,
+        system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>)>,
     ) -> Self {
         ChangeEpoch {
             epoch: next_epoch,

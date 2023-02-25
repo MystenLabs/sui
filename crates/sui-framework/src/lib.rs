@@ -25,9 +25,8 @@ pub mod natives;
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
 const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 100_000;
 
+static SUI_FRAMEWORK_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sui-framework"));
 static SUI_FRAMEWORK: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
-    const SUI_FRAMEWORK_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sui-framework"));
-
     let serialized_modules: Vec<Vec<u8>> = bcs::from_bytes(SUI_FRAMEWORK_BYTES).unwrap();
 
     serialized_modules
@@ -37,10 +36,10 @@ static SUI_FRAMEWORK: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
 });
 
 static SUI_FRAMEWORK_TEST: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
-    const SUI_FRAMEWORK_BYTES: &[u8] =
+    const SUI_FRAMEWORK_TEST_BYTES: &[u8] =
         include_bytes!(concat!(env!("OUT_DIR"), "/sui-framework-test"));
 
-    let serialized_modules: Vec<Vec<u8>> = bcs::from_bytes(SUI_FRAMEWORK_BYTES).unwrap();
+    let serialized_modules: Vec<Vec<u8>> = bcs::from_bytes(SUI_FRAMEWORK_TEST_BYTES).unwrap();
 
     serialized_modules
         .into_iter()
@@ -48,9 +47,8 @@ static SUI_FRAMEWORK_TEST: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
         .collect()
 });
 
+static MOVE_STDLIB_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/move-stdlib"));
 static MOVE_STDLIB: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
-    const MOVE_STDLIB_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/move-stdlib"));
-
     let serialized_modules: Vec<Vec<u8>> = bcs::from_bytes(MOVE_STDLIB_BYTES).unwrap();
 
     serialized_modules
@@ -60,9 +58,9 @@ static MOVE_STDLIB: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
 });
 
 static MOVE_STDLIB_TEST: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
-    const MOVE_STDLIB_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/move-stdlib-test"));
+    const MOVE_STDLIB_TEST_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/move-stdlib-test"));
 
-    let serialized_modules: Vec<Vec<u8>> = bcs::from_bytes(MOVE_STDLIB_BYTES).unwrap();
+    let serialized_modules: Vec<Vec<u8>> = bcs::from_bytes(MOVE_STDLIB_TEST_BYTES).unwrap();
 
     serialized_modules
         .into_iter()

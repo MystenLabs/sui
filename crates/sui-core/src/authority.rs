@@ -2743,11 +2743,11 @@ impl AuthorityState {
             // Start at the same version as the current package, and increment if compatibility is
             // successful
             cur_object.version(),
-            // We don't know what the digest is that will set the write the new system package until
-            // the change epoch transaction runs, so borrow the current object's for now, to
+            // We don't know the digest for the transaction that will write the new system package
+            // until the change epoch transaction runs, so borrow the current object's for now, to
             // simplify comparing digests below.
             cur_object.previous_transaction,
-            // TODO: Should we set a max size for the framework?
+            // System objects are not subject to limits
             u64::MAX,
         ) {
             Ok(object) => object,
@@ -2836,19 +2836,17 @@ impl AuthorityState {
             .group_by(|(version, packages, _authority)| (*version, packages.clone()))
             .into_iter()
             .find_map(|(key, group)| {
-                let group: Vec<_> = group.collect();
-
                 let mut stake_aggregator: StakeAggregator<(), true> =
                     StakeAggregator::new(Arc::new(committee.clone()));
 
-                for (protocol_version, packages, authority) in &group {
+                for (protocol_version, packages, authority) in group {
                     info!(
                         "validator {:?} would like to use {:?} has system packages: {:?}",
                         authority.concise(),
                         protocol_version,
                         packages
                     );
-                    stake_aggregator.insert_generic(*authority, ());
+                    stake_aggregator.insert_generic(authority, ());
                 }
 
                 if Self::has_support(
@@ -2879,13 +2877,14 @@ impl AuthorityState {
     ) -> anyhow::Result<(SuiSystemState, TransactionEffects)> {
         let next_epoch = epoch_store.epoch() + 1;
 
-        let (next_epoch_protocol_version, next_epoch_system_packages) =
+        let (next_epoch_protocol_version, _next_epoch_system_packages) =
             Self::choose_protocol_version_and_system_packages(
                 epoch_store.committee(),
                 epoch_store.protocol_config(),
                 epoch_store.get_capabilities(),
             );
 
+        // TODO, convert _next_epoch_system_packages to package bytes, or bail out on the upgrade.
         let tx = VerifiedTransaction::new_change_epoch(
             next_epoch,
             next_epoch_protocol_version,
@@ -2893,7 +2892,7 @@ impl AuthorityState {
             gas_cost_summary.computation_cost,
             gas_cost_summary.storage_rebate,
             epoch_start_timestamp_ms,
-            next_epoch_system_packages,
+            vec![],
         );
 
         let executable_tx = VerifiedExecutableTransaction::new_from_checkpoint(
