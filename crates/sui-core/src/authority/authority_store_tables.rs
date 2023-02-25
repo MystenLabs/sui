@@ -8,7 +8,7 @@ use std::path::Path;
 use sui_storage::default_db_options;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
-use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
+use sui_types::storage::ObjectStore;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::{DBMap, DBOptions, MetricConf, ReadWriteOptions};
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
@@ -106,44 +106,6 @@ impl AuthorityPerpetualTables {
         Self::get_read_only_handle(Self::path(parent_path), None, None, MetricConf::default())
     }
 
-    /// Read an object and return it, or Ok(None) if the object was not found.
-    pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        let obj_entry = self
-            .objects
-            .iter()
-            .skip_prior_to(&ObjectKey::max_for_id(object_id))?
-            .next();
-
-        let obj = match obj_entry {
-            Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => obj,
-            _ => return Ok(None),
-        };
-
-        // Note that the two reads in this function are (obviously) not atomic, and the
-        // object may be deleted after we have read it. Hence we check get_latest_parent_entry
-        // last, so that the write to self.parent_sync gets the last word.
-        //
-        // TODO: verify this race is ok.
-        //
-        // I believe it is - Even if the reads were atomic, calls to this function would still
-        // race with object deletions (the object could be deleted between when the function is
-        // called and when the first read takes place, which would be indistinguishable to the
-        // caller with the case in which the object is deleted in between the two reads).
-        let parent_entry = self.get_latest_parent_entry(*object_id)?;
-
-        match parent_entry {
-            None => {
-                error!(
-                    ?object_id,
-                    "Object is missing parent_sync entry, data store is inconsistent"
-                );
-                Ok(None)
-            }
-            Some((obj_ref, _)) if obj_ref.2.is_alive() => Ok(Some(obj)),
-            _ => Ok(None),
-        }
-    }
-
     // This is used by indexer to find the correct version of dynamic field child object.
     // We do not store the version of the child object, but because of lamport timestamp,
     // we know the child must have version number less then or eq to the parent.
@@ -179,19 +141,6 @@ impl AuthorityPerpetualTables {
         }))
     }
 
-    pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
-        let sui_system_object = self
-            .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)?
-            .expect("Sui System State object must always exist");
-        let move_object = sui_system_object
-            .data
-            .try_as_move()
-            .expect("Sui System State object must be a Move object");
-        let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
-            .expect("Sui System State object deserialization cannot fail");
-        Ok(result)
-    }
-
     pub fn get_recovery_epoch_at_restart(&self) -> SuiResult<EpochId> {
         Ok(self
             .current_epoch
@@ -217,6 +166,46 @@ impl AuthorityPerpetualTables {
         LiveSetIter {
             iter: self.parent_sync.keys(),
             prev: None,
+        }
+    }
+}
+
+impl ObjectStore for &AuthorityPerpetualTables {
+    /// Read an object and return it, or Ok(None) if the object was not found.
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        let obj_entry = self
+            .objects
+            .iter()
+            .skip_prior_to(&ObjectKey::max_for_id(object_id))?
+            .next();
+
+        let obj = match obj_entry {
+            Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => obj,
+            _ => return Ok(None),
+        };
+
+        // Note that the two reads in this function are (obviously) not atomic, and the
+        // object may be deleted after we have read it. Hence we check get_latest_parent_entry
+        // last, so that the write to self.parent_sync gets the last word.
+        //
+        // TODO: verify this race is ok.
+        //
+        // I believe it is - Even if the reads were atomic, calls to this function would still
+        // race with object deletions (the object could be deleted between when the function is
+        // called and when the first read takes place, which would be indistinguishable to the
+        // caller with the case in which the object is deleted in between the two reads).
+        let parent_entry = self.get_latest_parent_entry(*object_id)?;
+
+        match parent_entry {
+            None => {
+                error!(
+                    ?object_id,
+                    "Object is missing parent_sync entry, data store is inconsistent"
+                );
+                Ok(None)
+            }
+            Some((obj_ref, _)) if obj_ref.2.is_alive() => Ok(Some(obj)),
+            _ => Ok(None),
         }
     }
 }

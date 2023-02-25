@@ -5,6 +5,8 @@ use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::collection_types::{VecMap, VecSet};
 use crate::committee::{Committee, CommitteeWithNetAddresses, ProtocolVersion, StakeUnit};
 use crate::crypto::{AuthorityPublicKeyBytes, NetworkPublicKey};
+use crate::error::SuiError;
+use crate::storage::ObjectStore;
 use crate::{
     balance::{Balance, Supply},
     id::UID,
@@ -348,4 +350,20 @@ impl Default for SuiSystemState {
             epoch_start_timestamp_ms: 0,
         }
     }
+}
+
+pub fn get_sui_system_state<S>(object_store: S) -> Result<SuiSystemState, SuiError>
+where
+    S: ObjectStore,
+{
+    let sui_system_object = object_store
+        .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)?
+        .ok_or(SuiError::SuiSystemStateNotFound)?;
+    let move_object = sui_system_object
+        .data
+        .try_as_move()
+        .ok_or(SuiError::SuiSystemStateNotFound)?;
+    let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
+        .expect("Sui System State object deserialization cannot fail");
+    Ok(result)
 }

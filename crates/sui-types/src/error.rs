@@ -568,6 +568,9 @@ pub enum SuiError {
     #[error("Index store not available on this Fullnode.")]
     IndexStoreNotAvailable,
 
+    #[error("Failed to get the system state object content")]
+    SuiSystemStateNotFound,
+
     #[error("unknown error: {0}")]
     Unknown(String),
 }
