@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-  any,
   array,
   boolean,
   literal,
@@ -165,6 +164,7 @@ export const Validator = object({
   delegation_staking_pool: DelegationStakingPoolFields,
   commission_rate: number(),
 });
+export type Validator = Infer<typeof Validator>;
 
 export const ValidatorPair = object({
   from: SuiAddress,
@@ -205,167 +205,3 @@ export const SuiSystemState = object({
 });
 
 export type SuiSystemState = Infer<typeof SuiSystemState>;
-
-/* ---------------- Types for the SuiSystemState Move object ---------------- */
-
-const MovePendingWithdrawals = object({
-  type: string(),
-  fields: object({
-    contents: object({
-      type: string(),
-      fields: object({
-        id: object({
-          id: string(),
-        }),
-        size: string(),
-      }),
-    }),
-  }),
-});
-
-const MovePendingDelegations = object({
-  type: string(),
-  fields: object({
-    id: object({
-      id: string(),
-    }),
-    head: nullable(string()),
-    size: string(),
-    tail: nullable(string()),
-  }),
-});
-
-export const MoveDelegationStakingPoolFields = object({
-  delegation_token_supply: object({
-    type: string(),
-    fields: object({
-      value: string(),
-    }),
-  }),
-  id: object({ id: string() }),
-  pending_delegations: MovePendingDelegations,
-  pending_withdraws: MovePendingWithdrawals,
-  rewards_pool: string(),
-  starting_epoch: string(),
-  sui_balance: string(),
-});
-
-export type MoveSuiSystemObjectFields = Infer<typeof MoveSuiSystemObjectFields>;
-export type MoveSuiSystemObject = Infer<typeof MoveSuiSystemObject>;
-export type MoveActiveValidator = Infer<typeof MoveActiveValidator>;
-
-const ValidatorReportRecords = object({
-  type: string(),
-  fields: object({
-    contents: array(any()),
-  }),
-});
-
-export const MoveNextEpochValidatorFields = object({
-  consensus_address: array(number()),
-  name: union([string(), array(number())]),
-  description: optional(union([string(), array(number())])),
-  image_url: optional(union([string(), array(number())])),
-  project_url: optional(union([string(), array(number())])),
-  p2p_address: array(number()),
-  net_address: array(number()),
-  network_pubkey_bytes: array(number()),
-  next_epoch_commission_rate: string(),
-  next_epoch_delegation: string(),
-  next_epoch_gas_price: string(),
-  next_epoch_stake: string(),
-  proof_of_possession: array(number()),
-  pubkey_bytes: array(number()),
-  sui_address: string(),
-  worker_address: array(number()),
-  worker_pubkey_bytes: array(number()),
-});
-
-const MoveNextEpochValidator = object({
-  type: string(),
-  fields: MoveNextEpochValidatorFields,
-});
-
-export const MoveActiveValidatorFields = object({
-  commission_rate: string(),
-  delegation_staking_pool: object({
-    type: string(),
-    fields: MoveDelegationStakingPoolFields,
-  }),
-  gas_price: string(),
-  metadata: MoveNextEpochValidator,
-  pending_stake: string(),
-  pending_withdraw: string(),
-  stake_amount: string(),
-  voting_power: nullable(string()),
-});
-
-export const MoveActiveValidator = object({
-  type: string(),
-  fields: MoveActiveValidatorFields,
-});
-
-export const MoveStakingPoolMappings = object({
-  type: string(),
-  fields: object({
-    id: object({
-      id: string(),
-    }),
-    size: string(),
-  }),
-});
-
-export const MoveValidatorsFieldsClass = object({
-  active_validators: array(MoveActiveValidator),
-  next_epoch_validators: array(MoveNextEpochValidator),
-  // TODO: Remove this after 0.28.0 is released
-  pending_delegation_switches: optional(ValidatorReportRecords),
-  pending_removals: array(number()),
-  pending_validators: array(number()),
-  quorum_stake_threshold: optional(string()),
-  staking_pool_mappings: MoveStakingPoolMappings,
-  total_delegation_stake: string(),
-  total_validator_stake: string(),
-});
-
-export const MoveSuiSystemObjectFields = object({
-  chain_id: optional(number()),
-  epoch: string(),
-  // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
-  protocol_version: optional(string()),
-  // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
-  epoch_start_timestamp_ms: optional(string()),
-  safe_mode: boolean(),
-  id: object({
-    id: string(),
-  }),
-  parameters: Parameters,
-  reference_gas_price: string(),
-  stake_subsidy: object({
-    type: string(),
-    fields: object({
-      balance: string(),
-      current_epoch_amount: string(),
-      epoch_counter: string(),
-    }),
-  }),
-  storage_fund: string(),
-  sui_supply: object({
-    type: string(),
-    fields: object({
-      value: string(),
-    }),
-  }),
-  validator_report_records: ValidatorReportRecords,
-  validators: object({
-    type: string(),
-    fields: MoveValidatorsFieldsClass,
-  }),
-});
-
-export const MoveSuiSystemObject = object({
-  dataType: literal('moveObject'),
-  type: string(),
-  has_public_transfer: boolean(),
-  fields: MoveSuiSystemObjectFields,
-});

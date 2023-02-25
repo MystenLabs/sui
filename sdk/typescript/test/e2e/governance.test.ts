@@ -7,10 +7,6 @@ import {
   getExecutionStatusType,
   SuiSystemStateUtil,
   LocalTxnDataSerializer,
-  SUI_SYSTEM_STATE_OBJECT_ID,
-  assert as superStructAssert,
-  getMoveObject,
-  MoveSuiSystemObjectFields,
 } from '../../src';
 import { DEFAULT_GAS_BUDGET, setup, TestToolbox } from './utils/setup';
 
@@ -65,12 +61,6 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
 
     it('test getSuiSystemState', async () => {
       await toolbox.provider.getSuiSystemState();
-    });
-
-    it('test Validator definition', async () => {
-      const data = await toolbox.provider.getObject(SUI_SYSTEM_STATE_OBJECT_ID);
-      const moveObject = getMoveObject(data);
-      superStructAssert(moveObject!.fields, MoveSuiSystemObjectFields);
     });
   },
 );
