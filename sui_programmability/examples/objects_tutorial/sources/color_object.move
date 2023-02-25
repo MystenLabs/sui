@@ -6,7 +6,7 @@ module tutorial::color_object {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    struct ColorObject has key {
+    struct ColorObject has key, store {
         id: UID,
         red: u8,
         green: u8,
