@@ -4,7 +4,7 @@
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import cl from 'classnames';
 import { Form, Field, useFormikContext } from 'formik';
-import { useEffect, useRef, memo, useMemo } from 'react';
+import { useEffect, useRef, memo } from 'react';
 
 import { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
@@ -47,11 +47,7 @@ function TransferNFTForm({
         accountAddress
     );
 
-    const maxGasCoinBalance = useMemo(
-        () => coinBalance?.totalBalance || BigInt(0),
-        [coinBalance]
-    );
-
+    const maxGasCoinBalance = coinBalance?.totalBalance || BigInt(0);
     const { gasBudget: gasBudgetInMist } = useGasBudgetInMist(gasBudget);
     const isInsufficientGas = maxGasCoinBalance < BigInt(gasBudgetInMist || 0);
     return (

@@ -75,9 +75,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
         error,
     } = useGetCoinBalance(activeCoinType, accountAddress);
 
-    const tokenBalance = useMemo(() => {
-        return coinBalance?.totalBalance || BigInt(0);
-    }, [coinBalance]);
+    const tokenBalance = coinBalance?.totalBalance || BigInt(0);
 
     const coinSymbol = useMemo(
         () => Coin.getCoinSymbol(activeCoinType),
@@ -96,7 +94,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                     <Alert>
                         <div>
                             <strong>Sync error (data might be outdated)</strong>
-                            <small>{error?.message}</small>
+                            <small>{error.message}</small>
                         </div>
                     </Alert>
                 ) : null}
@@ -146,10 +144,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                         >
                             SUI Stake
                         </Text>
-                        <TokenIconLink
-                            accountAddress={accountAddress}
-                            noSuiToken={!tokenBalance}
-                        />
+                        <TokenIconLink accountAddress={accountAddress} />
                     </div>
                 ) : null}
 
