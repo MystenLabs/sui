@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type SuiAddress } from '@mysten/sui.js';
 import cl from 'classnames';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { Button } from '../../shared/ButtonUI';
 import AccountAddress from '_components/account-address';
@@ -23,9 +24,10 @@ type UserApproveContainerProps = {
     isConnect?: boolean;
     isWarning?: boolean;
     addressHidden?: boolean;
+    address?: SuiAddress;
 };
 
-function UserApproveContainer({
+export function UserApproveContainer({
     origin,
     originFavIcon,
     children,
@@ -36,6 +38,7 @@ function UserApproveContainer({
     isConnect,
     isWarning,
     addressHidden = false,
+    address,
 }: UserApproveContainerProps) {
     const [submitting, setSubmitting] = useState(false);
     const handleOnResponse = useCallback(
@@ -80,6 +83,7 @@ function UserApproveContainer({
                                 mode="normal"
                                 copyable
                                 className={st.address}
+                                address={address}
                             />
                         </div>
                     ) : null}
@@ -114,5 +118,3 @@ function UserApproveContainer({
         </div>
     );
 }
-
-export default memo(UserApproveContainer);

@@ -220,7 +220,15 @@ export class SuiWallet implements Wallet {
         return mapToPromise(
             this.#send<SignTransactionRequest, SignTransactionResponse>({
                 type: 'sign-transaction-request',
-                transaction: input,
+                transaction: {
+                    ...input,
+                    // account might be undefined if previous version of adapters is used
+                    // in that case use the first account address
+                    account:
+                        input.account?.address ||
+                        this.#accounts[0]?.address ||
+                        '',
+                },
             }),
             (response) => response.result
         );
@@ -236,6 +244,12 @@ export class SuiWallet implements Wallet {
                     type: 'v2',
                     data: input.transaction,
                     options: input.options,
+                    // account might be undefined if previous version of adapters is used
+                    // in that case use the first account address
+                    account:
+                        input.account?.address ||
+                        this.#accounts[0]?.address ||
+                        '',
                 },
             }),
             (response) => response.result
