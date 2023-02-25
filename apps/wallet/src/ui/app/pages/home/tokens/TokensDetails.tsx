@@ -72,7 +72,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
     const {
         data: coinBalance,
         isLoading: loadingBalances,
-        error,
+        isError,
     } = useGetCoinBalance(activeCoinType, accountAddress);
 
     const tokenBalance = coinBalance?.totalBalance || BigInt(0);
@@ -90,11 +90,10 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                 className="flex flex-col h-full flex-1 flex-grow items-center"
                 data-testid="coin-page"
             >
-                {error instanceof Error ? (
+                {isError ? (
                     <Alert>
                         <div>
-                            <strong>Sync error (data might be outdated)</strong>
-                            <small>{error.message}</small>
+                            <small>Something went wrong</small>
                         </div>
                     </Alert>
                 ) : null}
