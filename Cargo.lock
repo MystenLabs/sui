@@ -6586,6 +6586,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "prometheus-parse"
+version = "0.3.0"
+source = "git+https://github.com/suiwombat/prometheus-parse-rs?rev=daa964c#daa964cff5b83fbcf0ff08c0ab50dc7130239df3"
+dependencies = [
+ "chrono",
+ "itertools",
+ "lazy_static 1.4.0",
+ "regex",
+]
+
+[[package]]
 name = "proptest"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7683,9 +7694,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.91"
+version = "1.0.93"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "877c235533714907a8c2464236f5c4b2a17262ef1bd71f38f35ea592c8da6883"
+checksum = "cad406b69c91885b5107daf2c29572f6c8cdb3c66826821e286c533490c0bc76"
 dependencies = [
  "indexmap",
  "itoa 1.0.5",
@@ -8858,6 +8869,34 @@ version = "0.7.0"
 dependencies = [
  "once_cell",
  "sui-proc-macros",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-metrics-proxy"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "axum",
+ "axum-server",
+ "clap 3.2.23",
+ "const-str",
+ "fastcrypto",
+ "futures",
+ "git-version",
+ "hyper",
+ "mime",
+ "prometheus-parse",
+ "rand 0.8.5",
+ "reqwest",
+ "serde 1.0.152",
+ "serde_json",
+ "sui-tls",
+ "sui-types",
+ "telemetry-subscribers",
+ "tokio",
+ "tower",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -11443,6 +11482,7 @@ dependencies = [
  "proc-macro2 0.4.30",
  "proc-macro2 1.0.51",
  "prometheus",
+ "prometheus-parse",
  "proptest",
  "proptest-derive",
  "prost",

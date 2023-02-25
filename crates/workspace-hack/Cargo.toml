@@ -436,6 +436,7 @@ primeorder = { version = "0.12", default-features = false }
 primitive-types = { version = "0.10", features = ["impl-serde"] }
 proc-macro2-dff4ba8e3ae991db = { package = "proc-macro2", version = "1", features = ["span-locations"] }
 prometheus = { version = "0.13" }
+prometheus-parse = { git = "https://github.com/suiwombat/prometheus-parse-rs", rev = "daa964c", default-features = false }
 proptest = { version = "1" }
 prost = { version = "0.11" }
 prost-types = { version = "0.11" }
@@ -1146,6 +1147,7 @@ proc-macro-hack = { version = "0.5", default-features = false }
 proc-macro2-9fbad63c4bcf4a8f = { package = "proc-macro2", version = "0.4" }
 proc-macro2-dff4ba8e3ae991db = { package = "proc-macro2", version = "1", features = ["span-locations"] }
 prometheus = { version = "0.13" }
+prometheus-parse = { git = "https://github.com/suiwombat/prometheus-parse-rs", rev = "daa964c", default-features = false }
 proptest = { version = "1" }
 proptest-derive = { version = "0.3", default-features = false }
 prost = { version = "0.11" }

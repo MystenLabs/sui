@@ -24,6 +24,7 @@ members = [
     "crates/sui-json-rpc-types",
     "crates/sui-keys",
     "crates/sui-macros",
+    "crates/sui-metrics-proxy",
     "crates/sui-move",
     "crates/sui-network",
     "crates/sui-node",

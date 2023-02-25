@@ -1,0 +1,39 @@
+[package]
+name = "sui-metrics-proxy"
+version = "0.0.1"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+axum = "0.6.2"
+axum-server = { version = "0.4.4", default-features = false, features = ["tls-rustls"] }
+anyhow = { version = "1.0.64", features = ["backtrace"] }
+clap = { version = "3.2.17", features = ["derive"] }
+tokio = { workspace = true, features = ["full"] }
+tracing = "0.1.36"
+futures = "0.3.23"
+const-str = "0.5.3"
+serde = { version = "1.0.144", features = ["derive", "rc"] }
+serde_json = "1.0.93"
+git-version = "0.3.5"
+rand = "0.8.5"
+reqwest = { version = "0.11.4", default-features = false, features = ["rustls-tls"] }
+hyper = { version = "0.14", features = ["full"] }
+sui-tls = { path = "../sui-tls" }
+sui-types = { path = "../sui-types" }
+prometheus-parse = { git = "https://github.com/suiwombat/prometheus-parse-rs", rev = "daa964c" }
+
+
+telemetry-subscribers.workspace = true
+fastcrypto.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+mime = "0.3"
+serde_json = "1.0"
+tower = { version = "0.4", features = ["util"] }
+axum-server = { version = "0.4.4", default-features = false, features = ["tls-rustls"] }
+
+

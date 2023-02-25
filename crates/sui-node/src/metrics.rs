@@ -126,6 +126,10 @@ pub fn start_metrics_push_task(config: &sui_config::NodeConfig, registry: Regist
         let response = client
             .client()
             .post(url.to_owned())
+            .header(
+                reqwest::header::CONTENT_TYPE,
+                "application/mysten.proxy.promexposition",
+            )
             .body(metrics)
             .send()
             .await?;
