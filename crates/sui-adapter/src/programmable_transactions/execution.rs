@@ -18,7 +18,7 @@ use move_vm_runtime::{
     move_vm::MoveVM,
     session::{LoadedFunctionInstantiation, SerializedReturnValues},
 };
-use move_vm_types::loaded_data::runtime_types::Type;
+use move_vm_types::loaded_data::runtime_types::{StructType, Type};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     balance::Balance,
@@ -34,7 +34,9 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 use sui_verifier::{
-    entry_points_verifier::{TxContextKind, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR},
+    entry_points_verifier::{
+        TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID, RESOLVED_UTF8_STR,
+    },
     INIT_FN_NAME,
 };
 
@@ -91,42 +93,65 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
     command: Command,
 ) -> Result<(), ExecutionError> {
     let results = match command {
-        Command::MakeMoveVec(args) if args.is_empty() => {
-            vec![Value::EmptyVec]
+        Command::MakeMoveVec(tag_opt, args) if args.is_empty() => {
+            let Some(tag) = tag_opt else {
+                invariant_violation!(
+                    "input checker ensures if args are empty, there is a type specified"
+                );
+            };
+            let ty = context
+                .session
+                .load_type(&tag)
+                .map_err(|e| context.convert_vm_error(e))?;
+            let abilities = context
+                .session
+                .get_type_abilities(&ty)
+                .map_err(|e| context.convert_vm_error(e))?;
+            let type_ = RawValueType::Loaded {
+                ty,
+                abilities,
+                used_in_non_entry_move_call: false,
+            };
+            // BCS layout for any empty vector should be the same
+            let bytes = bcs::to_bytes::<Vec<u8>>(&vec![]).unwrap();
+            vec![Value::Raw(type_, bytes)]
         }
-        Command::MakeMoveVec(args) => {
+        Command::MakeMoveVec(tag_opt, args) => {
             let mut res = vec![];
             leb128::write::unsigned(&mut res, args.len() as u64).unwrap();
             let mut arg_iter = args.into_iter().enumerate();
-            let (idx, first_arg) = arg_iter.next().unwrap();
-            let first_value: Value = context.take_arg(CommandKind::MakeMoveVec, idx, first_arg)?;
-            let mut used_in_non_entry_move_call = first_value.was_used_in_non_entry_move_call();
-            let mut type_ = first_value.type_();
-            res.extend(first_value.to_bcs_bytes());
-            for (idx, v) in arg_iter {
-                let value: Value = context.take_arg(CommandKind::MakeMoveVec, idx, v)?;
-                if let Some(joined) = context.join(type_, value.type_())? {
-                    type_ = joined
-                } else {
-                    panic!("type mismatch")
+            let (mut used_in_non_entry_move_call, tag) = match tag_opt {
+                Some(tag) => (false, tag),
+                // If no tag specified, it _must_ be an object
+                None => {
+                    // empty args covered above
+                    let (idx, arg) = arg_iter.next().unwrap();
+                    let obj: ObjectValue = context.take_arg(CommandKind::MakeMoveVec, idx, arg)?;
+                    res.extend(obj.to_bcs_bytes());
+                    let tag = TypeTag::Struct(Box::new(obj.type_.clone()));
+                    (obj.used_in_non_entry_move_call, tag)
                 }
+            };
+            let elem_ty = context
+                .session
+                .load_type(&tag)
+                .map_err(|e| context.convert_vm_error(e))?;
+            let elem_abilities = context
+                .session
+                .get_type_abilities(&elem_ty)
+                .map_err(|e| context.convert_vm_error(e))?;
+            for (idx, arg) in arg_iter {
+                let value: Value = if elem_abilities.has_copy() {
+                    context.clone_arg(idx, arg)?
+                } else {
+                    context.take_arg(CommandKind::MakeMoveVec, idx, arg)?
+                };
+                check_param_type(context, idx, &value, &elem_ty)?;
                 used_in_non_entry_move_call =
                     used_in_non_entry_move_call || value.was_used_in_non_entry_move_call();
                 res.extend(value.to_bcs_bytes());
             }
-            let inner_ty = match type_ {
-                ValueType::AnyPrimitive | ValueType::AnyVec => panic!(
-                    "No concrete type for vector elements. This means the vector is composed \
-                    entirely of empty vectors and/or CallArg::Pure, in which case the vector \
-                    can be constructed ahead of time as a CallArg::Pure"
-                ),
-                ValueType::Loaded { ty, .. } => ty,
-                ValueType::Object(tag) => context
-                    .session
-                    .load_type(&TypeTag::Struct(Box::new(tag)))
-                    .map_err(|e| context.convert_vm_error(e))?,
-            };
-            let ty = Type::Vector(Box::new(inner_ty));
+            let ty = Type::Vector(Box::new(elem_ty));
             let abilities = context
                 .session
                 .get_type_abilities(&ty)
@@ -730,7 +755,7 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>>(
     let ty = match value {
         // TODO dev inspect
         Value::Raw(RawValueType::Any, _) => {
-            if !context.is_entry_primitive_type(param_ty)? {
+            if !is_entry_primitive_type(context, param_ty)? {
                 let msg = format!(
                     "Non-primitive argument at index {}. If it is an object, it must be \
                     populated by an object ID",
@@ -757,19 +782,6 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>>(
                 .load_type(&TypeTag::Struct(Box::new(obj.type_.clone())))
                 .map_err(|e| context.convert_vm_error(e))?;
             &obj_ty
-        }
-        Value::EmptyVec => {
-            let Type::Vector(inner) = param_ty else {
-                panic!("expected a vector type")
-            };
-            let inner_abilities = context
-                .session
-                .get_type_abilities(inner)
-                .map_err(|e| context.convert_vm_error(e))?;
-            if !inner_abilities.has_key() {
-                panic!("expected a vector of objects")
-            }
-            return Ok(());
         }
     };
     if ty != param_ty {
@@ -840,4 +852,61 @@ pub fn is_tx_context<E: fmt::Debug, S: StorageView<E>>(
     } else {
         TxContextKind::None
     })
+}
+
+/// Returns true iff it is a primitive, an ID, a String, or an option/vector of a valid type
+fn is_entry_primitive_type<E: fmt::Debug, S: StorageView<E>>(
+    context: &mut ExecutionContext<E, S>,
+    param_ty: &Type,
+) -> Result<bool, ExecutionError> {
+    let mut stack = vec![param_ty];
+    while let Some(cur) = stack.pop() {
+        match cur {
+            Type::Signer => return Ok(false),
+            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => return Ok(false),
+            Type::Bool
+            | Type::U8
+            | Type::U16
+            | Type::U32
+            | Type::U64
+            | Type::U128
+            | Type::U256
+            | Type::Address => (),
+            Type::Vector(inner) => stack.push(&**inner),
+            Type::Struct(idx) => {
+                let Some(s) = context.session.get_struct_type(*idx) else {
+                    invariant_violation!("Loaded struct not found")
+                };
+                let resolved_struct = get_struct_ident(&s);
+                if ![RESOLVED_SUI_ID, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR]
+                    .contains(&resolved_struct)
+                {
+                    return Ok(false);
+                }
+            }
+            Type::StructInstantiation(idx, targs) => {
+                let Some(s) = context.session.get_struct_type(*idx) else {
+                    invariant_violation!("Loaded struct not found")
+                };
+                let resolved_struct = get_struct_ident(&s);
+                // is option of a primitive
+                let is_valid = resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1;
+                if !is_valid {
+                    return Ok(false);
+                }
+                stack.extend(targs)
+            }
+        }
+    }
+    Ok(true)
+}
+
+fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {
+    let module_id = &s.module;
+    let struct_name = &s.name;
+    (
+        module_id.address(),
+        module_id.name(),
+        struct_name.as_ident_str(),
+    )
 }

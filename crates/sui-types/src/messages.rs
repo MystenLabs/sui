@@ -541,8 +541,9 @@ pub enum Command {
     /// A call to either an entry or a public Move function
     MoveCall(Box<ProgrammableMoveCall>),
     /// `forall T: Vec<T> -> vector<T>`
-    /// Given n-values of the same type, it constructs a vector
-    MakeMoveVec(Vec<Argument>),
+    /// Given n-values of the same type, it constructs a vector. For non objects or an empty vector,
+    /// the type tag must be specified.
+    MakeMoveVec(Option<TypeTag>, Vec<Argument>),
     /// `(Vec<forall T:key+store. T>, address)`
     /// It sends n-objects to the specified address. These objects must have store
     /// (public transfer) and either the previous owner must be an address or the object must
@@ -632,7 +633,15 @@ impl Command {
         match self {
             Command::Publish(modules) => Self::publish_command_input_objects(modules),
             Command::MoveCall(c) => c.input_objects(),
-            Command::MakeMoveVec(_)
+            Command::MakeMoveVec(Some(t), _) => {
+                let mut packages = BTreeSet::new();
+                add_type_tag_packages(&mut packages, t);
+                packages
+                    .into_iter()
+                    .map(InputObjectKind::MovePackage)
+                    .collect()
+            }
+            Command::MakeMoveVec(None, _)
             | Command::TransferObjects(_, _)
             | Command::SplitCoin(_, _)
             | Command::MergeCoins(_, _) => vec![],
@@ -668,8 +677,7 @@ impl Command {
                     }
                 );
             }
-            Command::TransferObjects(args, _) | Command::MergeCoins(_, args) |
-            Command::MakeMoveVec(args) => {
+            Command::TransferObjects(args, _) | Command::MergeCoins(_, args) => {
                 fp_ensure!(!args.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
                     args.len() < config.max_arguments() as usize,
@@ -680,9 +688,24 @@ impl Command {
                     }
                 );
             }
-            Command::SplitCoin(_, _) => (),
+            Command::MakeMoveVec(ty_opt, args) => {
+                // ty_opt.is_none() ==> !args.is_empty()
+                fp_ensure!(
+                    ty_opt.is_some() || !args.is_empty(),
+                    UserInputError::EmptyCommandInput
+                );
+                fp_ensure!(!args.is_empty(), UserInputError::EmptyCommandInput);
+                fp_ensure!(
+                    args.len() < config.max_arguments() as usize,
+                    UserInputError::SizeLimitExceeded {
+                        limit: "maximum arguments in a programmable transaction command"
+                            .to_string(),
+                        value: config.max_arguments().to_string()
+                    }
+                );
+            }
             Command::Publish(modules) => {
-                fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput)
+                fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
                     modules.len() < config.max_modules_in_publish() as usize,
                     UserInputError::SizeLimitExceeded {
@@ -692,6 +715,7 @@ impl Command {
                     }
                 );
             }
+            Command::SplitCoin(_, _) => (),
         };
         Ok(())
     }
@@ -793,8 +817,14 @@ impl Display for Command {
             Command::MoveCall(p) => {
                 write!(f, "MoveCall({p})")
             }
-            Command::MakeMoveVec(elems) => {
-                write!(f, "MakeMoveVec([")?;
+            Command::MakeMoveVec(ty_opt, elems) => {
+                write!(f, "MakeMoveVec(")?;
+                if let Some(ty) = ty_opt {
+                    write!(f, "Some{ty}")?;
+                } else {
+                    write!(f, "None")?;
+                }
+                write!(f, ",[")?;
                 write_sep(f, elems, ",")?;
                 write!(f, "])")
             }

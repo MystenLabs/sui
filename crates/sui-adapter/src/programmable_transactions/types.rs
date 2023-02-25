@@ -75,8 +75,6 @@ pub enum UsageKind {
 pub enum Value {
     Object(ObjectValue),
     Raw(RawValueType, Vec<u8>),
-    /// Special cased empty vector generated from MakeMove that can be used to populate any type
-    EmptyVec,
 }
 
 #[derive(Clone)]
@@ -104,14 +102,6 @@ pub enum RawValueType {
         abilities: AbilitySet,
         used_in_non_entry_move_call: bool,
     },
-}
-
-#[derive(PartialEq, Eq)]
-pub enum ValueType {
-    AnyPrimitive,
-    AnyVec,
-    Loaded { ty: Type, abilities: AbilitySet },
-    Object(StructTag),
 }
 
 #[derive(Clone, Copy)]
@@ -159,7 +149,6 @@ impl Value {
             Value::Object(_) => false,
             Value::Raw(RawValueType::Any, _) => true,
             Value::Raw(RawValueType::Loaded { abilities, .. }, _) => abilities.has_copy(),
-            Value::EmptyVec => false,
         }
     }
 
@@ -167,8 +156,6 @@ impl Value {
         match self {
             Value::Object(obj_value) => obj_value.to_bcs_bytes(),
             Value::Raw(_, bytes) => bytes.clone(),
-            // BCS layout for any empty vector should be the same
-            Value::EmptyVec => bcs::to_bytes::<Vec<u8>>(&vec![]).unwrap(),
         }
     }
 
@@ -185,21 +172,6 @@ impl Value {
                 },
                 _,
             ) => *used_in_non_entry_move_call,
-            // EmptyVec is generated only by MakeMoveVec and cannot be polluted by
-            // public move calls. If it is used by &mut, it would have switched to Loaded
-            Value::EmptyVec => false,
-        }
-    }
-
-    pub fn type_(&self) -> ValueType {
-        match self {
-            Value::Object(obj) => ValueType::Object(obj.type_.clone()),
-            Value::Raw(RawValueType::Loaded { ty, abilities, .. }, _) => ValueType::Loaded {
-                ty: ty.clone(),
-                abilities: *abilities,
-            },
-            Value::Raw(RawValueType::Any, _) => ValueType::AnyPrimitive,
-            Value::EmptyVec => ValueType::AnyVec,
         }
     }
 }
@@ -286,7 +258,7 @@ impl TryFromValue for ObjectValue {
             Value::Raw(RawValueType::Any, _) => {
                 todo!("support this for dev inspect")
             }
-            Value::Raw(RawValueType::Loaded { .. }, _) | Value::EmptyVec => {
+            Value::Raw(RawValueType::Loaded { .. }, _) => {
                 panic!("not an object")
             }
         }
@@ -310,7 +282,7 @@ fn try_from_value_prim<'a, T: Deserialize<'a>>(
     expected_ty: Type,
 ) -> Result<T, ExecutionError> {
     match value {
-        Value::Object(_) | Value::EmptyVec => {
+        Value::Object(_) => {
             panic!("expected non object")
         }
         Value::Raw(RawValueType::Any, bytes) => {

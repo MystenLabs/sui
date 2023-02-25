@@ -11,13 +11,8 @@ use move_binary_format::{
     errors::{Location, VMError},
     file_format::LocalIndex,
 };
-use move_core_types::{
-    account_address::AccountAddress,
-    identifier::IdentStr,
-    language_storage::{ModuleId, StructTag, TypeTag},
-};
+use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
-use move_vm_types::loaded_data::runtime_types::{StructType, Type};
 use sui_framework::natives::object_runtime::{max_event_error, ObjectRuntime, RuntimeResults};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
@@ -29,9 +24,6 @@ use sui_types::{
     messages::{Argument, CallArg, EntryArgumentErrorKind, ObjectArg},
     object::{MoveObject, Object, Owner},
     storage::{ObjectChange, SingleTxContext, Storage, WriteKind},
-};
-use sui_verifier::entry_points_verifier::{
-    RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID, RESOLVED_UTF8_STR,
 };
 
 use crate::adapter::{missing_unwrapped_msg, new_session};
@@ -427,7 +419,7 @@ where
                 } = result_value;
                 match value {
                     None => (),
-                    Some(Value::EmptyVec) | Some(Value::Object(_)) => {
+                    Some(Value::Object(_)) => {
                         panic!("unused value without drop {i} {j}")
                     }
                     Some(Value::Raw(RawValueType::Any, _)) => (),
@@ -592,87 +584,6 @@ where
         })
     }
 
-    /// Returns true iff it is a primitive, an ID, a String, or an option/vector of a valid type
-    pub fn is_entry_primitive_type(&self, param_ty: &Type) -> Result<bool, ExecutionError> {
-        let mut stack = vec![param_ty];
-        while let Some(cur) = stack.pop() {
-            match cur {
-                Type::Signer => return Ok(false),
-                Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
-                    return Ok(false)
-                }
-                Type::Bool
-                | Type::U8
-                | Type::U16
-                | Type::U32
-                | Type::U64
-                | Type::U128
-                | Type::U256
-                | Type::Address => (),
-                Type::Vector(inner) => stack.push(&**inner),
-                Type::Struct(idx) => {
-                    let Some(s) = self.session.get_struct_type(*idx) else {
-                    invariant_violation!("Loaded struct not found")
-                };
-                    let resolved_struct = get_struct_ident(&s);
-                    if ![RESOLVED_SUI_ID, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR]
-                        .contains(&resolved_struct)
-                    {
-                        return Ok(false);
-                    }
-                }
-                Type::StructInstantiation(idx, targs) => {
-                    let Some(s) = self.session.get_struct_type(*idx) else {
-                    invariant_violation!("Loaded struct not found")
-                };
-                    let resolved_struct = get_struct_ident(&s);
-                    // is option of a primitive
-                    let is_valid = resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1;
-                    if !is_valid {
-                        return Ok(false);
-                    }
-                    stack.extend(targs)
-                }
-            }
-        }
-        Ok(true)
-    }
-
-    pub fn join(&self, t1: ValueType, t2: ValueType) -> Result<Option<ValueType>, ExecutionError> {
-        Ok(match (t1, t2) {
-            // everything joins with itValueType
-            (t1, t2) if t1 == t2 => Some(t1),
-            // AnyPrimitive joins with primitive types types. It is otherwise unsafe to join with
-            // AnyPrimitive as it is just a series of BCS bytes
-            // TODO dev-inspect, allow AnyPrimitive to join with any type?
-            (ValueType::AnyPrimitive, ValueType::Loaded { ty, abilities })
-            | (ValueType::Loaded { ty, abilities }, ValueType::AnyPrimitive) => {
-                if self.is_entry_primitive_type(&ty)? {
-                    Some(ValueType::Loaded { ty, abilities })
-                } else {
-                    None
-                }
-            }
-            // AnyVec joins with any Loaded Vector
-            (
-                ValueType::AnyVec,
-                loaded @ ValueType::Loaded {
-                    ty: Type::Vector(_),
-                    ..
-                },
-            )
-            | (
-                loaded @ ValueType::Loaded {
-                    ty: Type::Vector(_),
-                    ..
-                },
-                ValueType::AnyVec,
-            ) => Some(loaded),
-            // Otherwise, type mismatch
-            _ => None,
-        })
-    }
-
     /// Convert a VM Error to an execution one
     pub fn convert_vm_error(&self, error: VMError) -> ExecutionError {
         sui_types::error::convert_vm_error(error, self.vm, self.state_view)
@@ -736,16 +647,6 @@ where
         }
         Ok((metadata, &mut result_value.value))
     }
-}
-
-pub fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {
-    let module_id = &s.module;
-    let struct_name = &s.name;
-    (
-        module_id.address(),
-        module_id.name(),
-        struct_name.as_ident_str(),
-    )
 }
 
 /// Load an input object from the state_view
