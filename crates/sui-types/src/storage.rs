@@ -4,6 +4,7 @@
 use crate::base_types::{SuiAddress, TransactionDigest, VersionNumber};
 use crate::committee::{Committee, EpochId};
 use crate::digests::{CheckpointContentsDigest, CheckpointDigest, TransactionEffectsDigest};
+use crate::error::SuiError;
 use crate::message_envelope::Message;
 use crate::messages::InputObjectKind::{ImmOrOwnedMoveObject, MovePackage, SharedMoveObject};
 use crate::messages::{SenderSignedData, TransactionEffects, VerifiedTransaction};
@@ -630,4 +631,20 @@ pub fn transaction_input_object_keys(tx: &SenderSignedData) -> SuiResult<Vec<Obj
             ImmOrOwnedMoveObject(obj) => Some(obj.into()),
         })
         .collect())
+}
+
+pub trait ObjectStore {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError>;
+}
+
+impl ObjectStore for &[Object] {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        Ok(self.iter().find(|o| o.id() == *object_id).cloned())
+    }
+}
+
+impl ObjectStore for &BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)> {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        Ok(self.get(object_id).map(|(_, obj, _)| obj).cloned())
+    }
 }

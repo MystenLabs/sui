@@ -18,7 +18,10 @@ use sui_types::accumulator::Accumulator;
 use sui_types::error::UserInputError;
 use sui_types::message_envelope::Message;
 use sui_types::object::Owner;
-use sui_types::storage::{BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectKey};
+use sui_types::storage::{
+    BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectKey, ObjectStore,
+};
+use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tracing::{debug, info, trace};
@@ -298,7 +301,7 @@ impl AuthorityStore {
 
     /// Read an object and return it, or Ok(None) if the object was not found.
     pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        self.perpetual_tables.get_object(object_id)
+        self.perpetual_tables.as_ref().get_object(object_id)
     }
 
     /// Get many objects
@@ -1149,7 +1152,7 @@ impl AuthorityStore {
 
     // TODO: Transaction Orchestrator also calls this, which is not ideal.
     pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
-        self.perpetual_tables.get_sui_system_state_object()
+        get_sui_system_state(self.perpetual_tables.as_ref())
     }
 
     pub fn iter_live_object_set(&self) -> impl Iterator<Item = ObjectRef> + '_ {
