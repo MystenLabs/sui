@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress } from '@mysten/sui.js';
+import { type SuiAddress, type PaginatedCoins } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../redux/store/thunk-extras';
@@ -12,35 +12,22 @@ const MIN_COINS_PER_REQUEST = 100;
 async function fetchCoins(address: SuiAddress, coinType: string) {
     const rpc = api.instance.fullNode;
     let cursor: string | null = null;
-    const firstPageCoins = await rpc.getCoins(
-        address,
-        coinType,
-        cursor,
-        MIN_COINS_PER_REQUEST
-    );
-    if (!firstPageCoins) {
-        return [];
-    }
-
-    const allData = [...firstPageCoins.data];
-    cursor = firstPageCoins?.nextCursor || null;
-
+    const allData = [];
     // keep fetching until cursor is null or undefined
-    while (cursor) {
-        const data = await rpc.getCoins(
+    do {
+        const { data, nextCursor } = (await rpc.getCoins(
             address,
             coinType,
             cursor,
             MIN_COINS_PER_REQUEST
-        );
-        if (!data) {
-            // if data is null, then we should stop fetching
+        )) as PaginatedCoins;
+        if (!data || !data.length) {
             break;
         }
 
-        allData.push(...data.data);
-        cursor = data.nextCursor;
-    }
+        allData.push(...data);
+        cursor = nextCursor;
+    } while (cursor != null);
 
     return allData;
 }

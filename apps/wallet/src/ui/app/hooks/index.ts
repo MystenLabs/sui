@@ -23,7 +23,6 @@ export { useGetTxnRecipientAddress } from './useGetTxnRecipientAddress';
 export { useGetTransactionsByAddress } from './useGetTransactionsByAddress';
 export { useGetTransferAmount } from './useGetTransferAmount';
 export { useGetCoins } from './useGetCoins';
-export { useGetObjectBatch } from './useGetObjectBatch';
 export { useGetCoinObjectsByCoinType } from './useGetCoinObjectsByCoinType';
 export * from './useSigner';
 export * from './useIndividualCoinMaxBalance';
