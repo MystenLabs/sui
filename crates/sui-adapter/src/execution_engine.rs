@@ -47,8 +47,8 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_types::{
-    MOVE_STDLIB_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    is_system_package, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+    SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 
 use sui_types::temporary_store::TemporaryStore;
@@ -127,7 +127,7 @@ fn charge_gas_for_object_read<S>(
         .objects()
         .iter()
         // don't charge for loading Sui Framework or Move stdlib
-        .filter(|(id, _)| *id != &SUI_FRAMEWORK_OBJECT_ID && *id != &MOVE_STDLIB_OBJECT_ID)
+        .filter(|(id, _)| !is_system_package(**id))
         .map(|(_, obj)| obj.object_size_for_gas_metering())
         .sum();
     gas_status.charge_storage_read(total_size)
@@ -441,16 +441,9 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         )?;
 
         assert!(
-            matches!(
-                new_package.id(),
-                MOVE_STDLIB_OBJECT_ID | SUI_FRAMEWORK_OBJECT_ID
-            ),
+            is_system_package(new_package.id()),
             "Can only set system packages this way."
         );
-
-        // TODO: What's going to happen when this gets converted to effects:
-        // - Will it complain that we're writing to an immutable object
-        // - Will lamport object versions kick in and mess up our nice versions?
         temporary_store.write_object(
             &SingleTxContext::sui_system(),
             new_package,

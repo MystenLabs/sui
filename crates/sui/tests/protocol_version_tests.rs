@@ -56,6 +56,7 @@ mod sim_only_tests {
 
     use super::*;
     use std::sync::Arc;
+    use sui_core::authority::framework_upgrade_injection;
     use sui_macros::*;
     use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
     use test_utils::network::{TestCluster, TestClusterBuilder};
@@ -135,6 +136,22 @@ mod sim_only_tests {
             .unwrap();
 
         monitor_version_change(&test_cluster, 1 /* expected proto version */).await;
+    }
+
+    #[sim_test]
+    async fn test_framework_upgrade() {
+        ProtocolConfig::poison_get_for_min_version();
+
+        framework_upgrade_injection::set_framework_upgrade_callback(Arc::new(|_| Some(1)));
+
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(10000)
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(1, 2))
+            .build()
+            .await
+            .unwrap();
+
+        monitor_version_change(&test_cluster, 2 /* expected proto version */).await;
     }
 
     async fn monitor_version_change(test_cluster: &TestCluster, final_version: u64) {

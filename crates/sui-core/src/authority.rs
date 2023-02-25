@@ -2743,10 +2743,7 @@ impl AuthorityState {
             // Start at the same version as the current package, and increment if compatibility is
             // successful
             cur_object.version(),
-            // We don't know the digest for the transaction that will write the new system package
-            // until the change epoch transaction runs, so borrow the current object's for now, to
-            // simplify comparing digests below.
-            cur_object.previous_transaction,
+            self.get_previous_tx_framework_upgrade(cur_object.previous_transaction),
             // System objects are not subject to limits
             u64::MAX,
         ) {
@@ -2793,6 +2790,28 @@ impl AuthorityState {
         Some(new_object.compute_object_reference())
     }
 
+    // We don't know the digest for the transaction that will write the new system package
+    // until the change epoch transaction runs, so borrow the current object's for now, to
+    // simplify comparing digests below.
+    #[cfg(not(msim))]
+    fn get_previous_tx_framework_upgrade(&self, default: TransactionDigest) -> TransactionDigest {
+        default
+    }
+
+    // Allow the tests to force an upgrade without having to actually inject different package
+    // bytes.
+    #[cfg(msim)]
+    fn get_previous_tx_framework_upgrade(&self, default: TransactionDigest) -> TransactionDigest {
+        framework_upgrade_injection::get_framework_upgrade_callback()
+            .map(|cb| cb(self.name))
+            .flatten()
+            .map(|seed| {
+                use rand::SeedableRng;
+                TransactionDigest::generate(rand::rngs::StdRng::seed_from_u64(seed))
+            })
+            .unwrap_or(default)
+    }
+
     /// Return the new versions and module bytes for the packages that have been committed to for a
     /// framework upgrade, in `system_packages`.  Loads the module contents from the binary, and
     /// performs the following checks:
@@ -2837,7 +2856,7 @@ impl AuthorityState {
                     .map(|m| CompiledModule::deserialize(m).unwrap())
                     .collect(),
                 system_package.1,
-                cur_object.previous_transaction,
+                self.get_previous_tx_framework_upgrade(cur_object.previous_transaction),
                 // System package is unbounded.
                 u64::MAX,
             )
@@ -3128,5 +3147,26 @@ impl AuthorityState {
             .unwrap()
             .send(())
             .unwrap();
+    }
+}
+
+#[cfg(msim)]
+pub mod framework_upgrade_injection {
+    use super::*;
+    use std::cell::RefCell;
+
+    type InjectUpgradeCb = Arc<dyn Fn(AuthorityName) -> Option<u64> + Send + Sync + 'static>;
+
+    // Thread local cache because all simtests run in a single unique thread.
+    thread_local! {
+        static INJECT_UPGRADE: RefCell<Option<InjectUpgradeCb>> = RefCell::new(None);
+    }
+
+    pub fn set_framework_upgrade_callback(func: InjectUpgradeCb) {
+        INJECT_UPGRADE.with(|i| *i.borrow_mut() = Some(func));
+    }
+
+    pub(super) fn get_framework_upgrade_callback() -> Option<InjectUpgradeCb> {
+        INJECT_UPGRADE.with(|i| i.borrow().clone())
     }
 }
