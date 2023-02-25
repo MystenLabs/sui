@@ -186,7 +186,7 @@ function TransferCoinPage() {
 
             const bigIntAmount = parseAmount(formData.amount, coinDecimals);
 
-            // sort coins by balance
+            // sort coins by highest balance 
             const coinsIDs = coins
                 .sort((a, b) => a.balance - b.balance)
                 .map(({ coinObjectId }) => coinObjectId);
