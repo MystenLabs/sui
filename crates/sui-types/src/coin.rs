@@ -161,6 +161,53 @@ impl Coin {
     }
 }
 
+pub fn check_coins(
+    coin_objects: &[Object],
+    mut coin_type: Option<StructTag>,
+) -> Result<(Vec<Coin>, StructTag), ExecutionError> {
+    if coin_objects.is_empty() {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::EmptyInputCoins,
+            "Pay transaction requires a non-empty list of input coins".to_string(),
+        ));
+    }
+    let mut coins = Vec::new();
+    for coin_obj in coin_objects {
+        match &coin_obj.data {
+            Data::Move(move_obj) => {
+                if !Coin::is_coin(&move_obj.type_) {
+                    return Err(ExecutionError::new_with_source(
+                        ExecutionErrorKind::InvalidCoinObject,
+                        "Provided non-Coin<T> object as input to pay/pay_sui/pay_all_sui transaction".to_string(),
+                    ));
+                }
+                if let Some(typ) = &coin_type {
+                    if typ != &move_obj.type_ {
+                        return Err(ExecutionError::new_with_source(
+                            ExecutionErrorKind::CoinTypeMismatch,
+                            format!("Coin type check failed in pay/pay_sui/pay_all_sui transaction, expected: {:?}, found: {:}", typ, move_obj.type_),
+                        ));
+                    }
+                } else {
+                    coin_type = Some(move_obj.type_.clone())
+                }
+
+                let coin = Coin::from_bcs_bytes(move_obj.contents())
+                    .expect("Deserializing coin object should not fail");
+                coins.push(coin)
+            }
+            _ => {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::InvalidCoinObject,
+                    "Provided non-Coin<T> object as input to pay transaction".to_string(),
+                ))
+            }
+        }
+    }
+    // safe because coin_objects must be non-empty, and coin_type must be set in loop above.
+    Ok((coins, coin_type.unwrap()))
+}
+
 // Rust version of the Move sui::coin::TreasuryCap type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct TreasuryCap {

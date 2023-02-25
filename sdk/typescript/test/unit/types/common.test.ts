@@ -21,11 +21,13 @@ describe('Test common functions', () => {
         sender: 'cba4a48bb0f8b586c167e5dcefaa1c5e96ab3f08',
         gasData: {
           owner: 'cba4a48bb0f8b586c167e5dcefaa1c5e96ab3f08',
-          payment: {
-            objectId: '2fab642a835afc9d68d296f50c332c9d32b5a0d5',
-            version: 7,
-            digest: 'DjnxhsPchJGa5crALRp8coJazNvV4s3mqpdcxVVKJrpt',
-          },
+          payment: [
+            {
+              objectId: '2fab642a835afc9d68d296f50c332c9d32b5a0d5',
+              version: 7,
+              digest: 'DjnxhsPchJGa5crALRp8coJazNvV4s3mqpdcxVVKJrpt',
+            },
+          ],
           price: 1,
           budget: 100,
         },
@@ -34,7 +36,7 @@ describe('Test common functions', () => {
 
       const transactionDigest = generateTransactionDigest(transactionData, bcs);
       expect(transactionDigest).toEqual(
-        '14awCuj4UEw1g1oGDNRsrGajHC9qvFZV5gDeRqtdLQN3',
+        'HFQ3HBaF3k6ZvWEfeVi3vLhmX3oKyvKg1nxiTpUKdMyZ',
       );
     });
   });

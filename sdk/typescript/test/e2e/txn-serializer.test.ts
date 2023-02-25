@@ -177,7 +177,7 @@ describe('Transaction Serialization and deserialization', () => {
       gasBudget: DEFAULT_GAS_BUDGET,
       gasPayment: coins[0].objectId,
     } as MoveCallTransaction;
-    const serArgsExpected = await new CallArgSerializer(
+    const setArgsExpected = await new CallArgSerializer(
       toolbox.provider,
     ).serializeMoveCallArguments(moveCallExpected);
 
@@ -198,10 +198,10 @@ describe('Transaction Serialization and deserialization', () => {
       gasBudget: DEFAULT_GAS_BUDGET,
       gasPayment: coins[0].objectId,
     } as MoveCallTransaction;
-    const serArgs = await new CallArgSerializer(
+    const setArgs = await new CallArgSerializer(
       toolbox.provider,
     ).serializeMoveCallArguments(moveCall);
-    expect(serArgs).toEqual(serArgsExpected);
+    expect(setArgs).toEqual(setArgsExpected);
   });
 
   it('Serialize and deserialize paySui', async () => {
@@ -227,7 +227,7 @@ describe('Transaction Serialization and deserialization', () => {
         owner: DEFAULT_RECIPIENT_2,
         budget: gasBudget,
         price: 100,
-        payment: getObjectReference(coins[1]),
+        payment: [getObjectReference(coins[1])],
       },
       expiration: { None: null },
     } as TransactionData;
@@ -273,7 +273,7 @@ describe('Transaction Serialization and deserialization', () => {
         owner: DEFAULT_RECIPIENT_2,
         budget: gasBudget,
         price: 100,
-        payment: getObjectReference(coins[1]),
+        payment: [getObjectReference(coins[1])],
       },
       expiration: { None: null },
     } as TransactionData;

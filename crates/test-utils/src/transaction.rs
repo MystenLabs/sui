@@ -343,7 +343,7 @@ pub async fn transfer_coin(
         sender,
         receiver,
         digest,
-        gas.to_object_ref(),
+        gas[0].to_object_ref(),
         gas_used,
     ))
 }

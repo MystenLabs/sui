@@ -155,7 +155,7 @@ async fn test_native_transfer_gas_price_is_used() {
     // test overflow with insufficient gas
     let gas_balance = *MAX_GAS_BUDGET - 1;
     let gas_budget = *MAX_GAS_BUDGET;
-    let gas_price = 10;
+    let gas_price = 1;
     let result = execute_transfer_with_price(gas_balance, gas_budget, gas_price, true).await;
     assert_eq!(
         UserInputError::try_from(result.response.unwrap_err()).unwrap(),

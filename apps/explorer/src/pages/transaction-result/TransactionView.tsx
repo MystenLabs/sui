@@ -584,7 +584,8 @@ function TransactionView({
                                 <DescriptionItem title="Gas Payment">
                                     <ObjectLink
                                         noTruncate
-                                        objectId={gasPayment.objectId}
+                                        // TODO: support multiple gas coins
+                                        objectId={gasPayment[0].objectId}
                                     />
                                 </DescriptionItem>
 
