@@ -34,10 +34,10 @@ function ConnectToWallet() {
   return (
     <ConnectButton
       connectText={"Connect Wallet"}
-      connectedFallback={(wallet, select) => {
+      connectedCallback={(wallet, select) => {
         alert(`${select}: ${currentAccount?.address} ${wallet?.connected}`);
       }}
-      disconnectFallback={() => alert("disconnected")}
+      disconnectCallback={() => alert("disconnected")}
     />
   );
 }

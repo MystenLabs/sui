@@ -11,7 +11,7 @@ import { useWalletKit } from "./WalletKitContext";
 interface AccountModalProps {
   open: boolean;
   onClose(): void;
-  disconnectFallback?: () => void;
+  disconnectCallback?: () => void;
 }
 
 const Account = styled("div", {
@@ -31,7 +31,7 @@ const ButtonGroup = styled("div", {
 export function AccountModal({
   open,
   onClose,
-  disconnectFallback,
+  disconnectCallback,
 }: AccountModalProps) {
   const { disconnect, currentAccount } = useWalletKit();
   const account = currentAccount?.address || "";
@@ -57,7 +57,7 @@ export function AccountModal({
               onClick={() => {
                 disconnect();
                 onClose();
-                if (disconnectFallback) disconnectFallback();
+                if (disconnectCallback) disconnectCallback();
               }}
             >
               Disconnect
