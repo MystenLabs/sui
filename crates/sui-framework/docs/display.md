@@ -430,7 +430,7 @@ TODO (long run): version changes;
 
 
 <pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_edit">edit</a>&lt;T: key&gt;(self: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, name: String, value: String) {
-    <b>let</b> (_k, _v) = <a href="vec_map.md#0x2_vec_map_remove">vec_map::remove</a>(&<b>mut</b> self.fields, &name);
+    <b>let</b> (_, _) = <a href="vec_map.md#0x2_vec_map_remove">vec_map::remove</a>(&<b>mut</b> self.fields, &name);
     <a href="display.md#0x2_display_add_internal">add_internal</a>(self, name, value)
 }
 </code></pre>
