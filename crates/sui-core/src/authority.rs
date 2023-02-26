@@ -2893,20 +2893,18 @@ impl AuthorityState {
                 }
 
                 cap.available_system_packages.sort();
-                let desired_protocol_version = if cap
-                    .supported_protocol_versions
-                    .is_version_supported(next_protocol_version)
-                {
-                    next_protocol_version
-                } else {
-                    current_protocol_version
-                };
 
-                Some((
-                    desired_protocol_version,
-                    cap.available_system_packages,
-                    cap.authority,
-                ))
+                info!(
+                    "validator {:?} would supports {:?} with system packages: {:?}",
+                    cap.authority, cap.supported_protocol_versions, cap.available_system_packages,
+                );
+
+                // A validator that only supports the current protocol version is also voting
+                // against any change, because framework upgrades always require a protocol version
+                // bump.
+                cap.supported_protocol_versions
+                    .is_version_supported(next_protocol_version)
+                    .then_some((cap.available_system_packages, cap.authority))
             })
             .collect();
 
@@ -2914,35 +2912,26 @@ impl AuthorityState {
         desired_upgrades.sort();
         desired_upgrades
             .into_iter()
-            .group_by(|(version, packages, _authority)| (*version, packages.clone()))
+            .group_by(|(packages, _authority)| packages.clone())
             .into_iter()
-            .find_map(|(key, group)| {
+            .find_map(|(packages, group)| {
+                // should have been filtered out earlier.
+                assert!(!packages.is_empty());
+
                 let mut stake_aggregator: StakeAggregator<(), true> =
                     StakeAggregator::new(Arc::new(committee.clone()));
 
-                for (protocol_version, packages, authority) in group {
-                    // should have been out filtered earlier.
-                    assert!(!packages.is_empty());
-
-                    info!(
-                        "validator {:?} would like to use {:?} has system packages: {:?}",
-                        authority.concise(),
-                        protocol_version,
-                        packages
-                    );
+                for (_, authority) in group {
                     stake_aggregator.insert_generic(authority, ());
                 }
 
-                if Self::has_support(
-                    format!("system packages: {:?}", key),
+                Self::has_support(
+                    format!("system packages: {:?}", packages),
                     &stake_aggregator,
                     committee,
                     protocol_config,
-                ) {
-                    Some(key)
-                } else {
-                    None
-                }
+                )
+                .then_some((next_protocol_version, packages))
             })
             // if there was no majority, there is no upgrade
             .unwrap_or((current_protocol_version, vec![]))
@@ -2992,14 +2981,6 @@ impl AuthorityState {
             //   the new protocol version, or else it should have had the packages.)
             return Err(anyhow!("cannot upgrade packages"));
         };
-
-        let current_protocol_version = epoch_store.committee().protocol_version;
-
-        // framework update requires a protocol version bump.
-        assert!(
-            next_epoch_system_package_bytes.is_empty()
-                || next_epoch_protocol_version == current_protocol_version + 1
-        );
 
         let tx = VerifiedTransaction::new_change_epoch(
             next_epoch,
