@@ -331,11 +331,12 @@ impl CheckpointStore {
 
     pub fn update_highest_pruned_checkpoint(
         &self,
-        checkpoint: &VerifiedCheckpoint,
+        sequence_number: CheckpointSequenceNumber,
+        digest: CheckpointDigest,
     ) -> Result<(), TypedStoreError> {
         self.watermarks.insert(
             &CheckpointWatermark::HighestPruned,
-            &(checkpoint.sequence_number(), checkpoint.digest()),
+            &(sequence_number, digest),
         )
     }
 
