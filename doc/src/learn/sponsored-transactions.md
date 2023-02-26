@@ -153,7 +153,7 @@ pub struct GasData {
 }
 ```
 
-To learn more about Transaction in Sui, see [Transactions](../learn/transactions.md)
+To learn more about Transaction in Sui, see [Transactions](../learn/transactions.md).
 
 
 
