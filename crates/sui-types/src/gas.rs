@@ -69,6 +69,24 @@ impl GasCostSummary {
         self.computation_cost + self.storage_cost
     }
 
+    /// Portion of the storage rebate that gets passed on to the transaction sender. The remainder
+    /// will be burned, then re-minted + added to the storage fund at the next epoch change
+    pub fn sender_rebate(&self, storage_rebate_rate: u64) -> u64 {
+        // we round storage rebate such that `>= x.5` goes to x+1 (rounds up) and
+        // `< x.5` goes to x (truncates). We replicate `f32/64::round()`
+        const BASIS_POINTS: u128 = 10000;
+        (((self.storage_rebate as u128 * storage_rebate_rate as u128)
+            + (BASIS_POINTS / 2)) // integer rounding adds half of the BASIS_POINTS (denominator)
+            / BASIS_POINTS) as u64
+    }
+
+    /// Portion of the storage rebate that flows back into the storage fund.
+    /// This will be burned, then re-minted + added to the storage fund at the next epoch change.
+    /// Note: these funds are not accounted for in the `storage_refund` field of any Sui object
+    pub fn storage_fund_rebate_inflow(&self, storage_rebate_rate: u64) -> u64 {
+        self.storage_rebate - self.sender_rebate(storage_rebate_rate)
+    }
+
     /// Get net gas usage, positive number means used gas; negative number means refund.
     pub fn net_gas_usage(&self) -> i64 {
         self.gas_used() as i64 - self.storage_rebate as i64

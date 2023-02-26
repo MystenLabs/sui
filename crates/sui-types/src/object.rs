@@ -10,16 +10,18 @@ use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
-use move_core_types::value::{MoveStruct, MoveStructLayout, MoveTypeLayout};
+use move_core_types::value::{MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 
+use crate::balance::Balance;
 use crate::base_types::ObjectIDParseError;
 use crate::crypto::{deterministic_random_account_key, sha3_hash};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
 use crate::error::{SuiError, SuiResult};
+use crate::gas_coin::GAS;
 use crate::move_package::MovePackage;
 use crate::{
     base_types::{
@@ -55,6 +57,14 @@ pub struct ObjectFormatOptions {
     ///  If false, include field names only; e.g.:
     /// `{ "f": 20, "g": { "h": true } }`
     include_types: bool,
+}
+
+impl ObjectFormatOptions {
+    pub fn with_types() -> Self {
+        ObjectFormatOptions {
+            include_types: true,
+        }
+    }
 }
 
 impl MoveObject {
@@ -286,6 +296,33 @@ impl MoveObject {
         // + 1 for 'has_public_transfer'
         // + 8 for `version`
         self.contents.len() + seriealized_type_tag.len() + 1 + 8
+    }
+
+    /// Get the total amount of SUI embedded in `self`. Intended for testing purposes
+    pub fn get_total_sui(&self, resolver: &impl GetModule) -> Result<u64, SuiError> {
+        let layout = self.get_layout(ObjectFormatOptions::with_types(), resolver)?;
+        let move_struct = self.to_move_struct(&layout)?;
+        Ok(Self::get_total_sui_(&move_struct, 0))
+    }
+
+    /// Get all SUI in `s`, either directly or in its (transitive) fields. Intended for testing purposes
+    fn get_total_sui_(s: &MoveStruct, acc: u64) -> u64 {
+        match s {
+            MoveStruct::WithTypes { type_, fields } => {
+                if type_ == &Balance::type_(GAS::type_()) {
+                    match fields[0].1 {
+                        MoveValue::U64(n) => acc + n,
+                        _ => unreachable!(), // a Balance<SUI> object should have exactly one field, of type int
+                    }
+                } else {
+                    fields.iter().fold(acc, |acc, (_, v)| match v {
+                        MoveValue::Struct(s) => Self::get_total_sui_(s, acc),
+                        _ => acc,
+                    })
+                }
+            }
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -603,6 +640,15 @@ impl Object {
 
 // Testing-related APIs.
 impl Object {
+    /// Get the total amount of SUI embedded in `self`, including both Move objects and the storage rebate
+    pub fn get_total_sui(&self, resolver: &impl GetModule) -> Result<u64, SuiError> {
+        Ok(self.storage_rebate
+            + match &self.data {
+                Data::Move(m) => m.get_total_sui(resolver)?,
+                Data::Package(_) => 0,
+            })
+    }
+
     pub fn immutable_with_id_for_testing(id: ObjectID) -> Self {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
