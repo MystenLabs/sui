@@ -540,10 +540,6 @@ pub struct ProgrammableTransaction {
 pub enum Command {
     /// A call to either an entry or a public Move function
     MoveCall(Box<ProgrammableMoveCall>),
-    /// `forall T: Vec<T> -> vector<T>`
-    /// Given n-values of the same type, it constructs a vector. For non objects or an empty vector,
-    /// the type tag must be specified.
-    MakeMoveVec(Option<TypeTag>, Vec<Argument>),
     /// `(Vec<forall T:key+store. T>, address)`
     /// It sends n-objects to the specified address. These objects must have store
     /// (public transfer) and either the previous owner must be an address or the object must
@@ -557,6 +553,10 @@ pub enum Command {
     MergeCoins(Argument, Vec<Argument>),
     /// Publishes a Move package
     Publish(Vec<Vec<u8>>),
+    /// `forall T: Vec<T> -> vector<T>`
+    /// Given n-values of the same type, it constructs a vector. For non objects or an empty vector,
+    /// the type tag must be specified.
+    MakeMoveVec(Option<TypeTag>, Vec<Argument>),
 }
 
 /// An argument to a programmable transaction command
