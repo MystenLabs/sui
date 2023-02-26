@@ -27,7 +27,7 @@ async function fetchCoins(address: SuiAddress, coinType: string) {
 
         allData.push(...data);
         cursor = nextCursor;
-    } while (cursor != null);
+    } while (cursor);
 
     return allData;
 }
