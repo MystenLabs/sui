@@ -2763,7 +2763,7 @@ async fn test_authority_persist() {
             None,
             checkpoint_store,
             &registry,
-            &AuthorityStorePruningConfig::default(),
+            AuthorityStorePruningConfig::default(),
             &[], // no genesis objects
             10000,
             &StateSnapshotConfig::default(),

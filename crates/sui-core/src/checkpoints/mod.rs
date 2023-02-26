@@ -78,7 +78,7 @@ pub struct CheckpointStore {
     checkpoint_content: DBMap<CheckpointContentsDigest, CheckpointContents>,
 
     /// Stores certified checkpoints
-    certified_checkpoints: DBMap<CheckpointSequenceNumber, CertifiedCheckpointSummary>,
+    pub(crate) certified_checkpoints: DBMap<CheckpointSequenceNumber, CertifiedCheckpointSummary>,
     /// Map from checkpoint digest to certified checkpoint
     checkpoint_by_digest: DBMap<CheckpointDigest, CertifiedCheckpointSummary>,
 
@@ -331,11 +331,12 @@ impl CheckpointStore {
 
     pub fn update_highest_pruned_checkpoint(
         &self,
-        checkpoint: &VerifiedCheckpoint,
+        sequence_number: CheckpointSequenceNumber,
+        digest: CheckpointDigest,
     ) -> Result<(), TypedStoreError> {
         self.watermarks.insert(
             &CheckpointWatermark::HighestPruned,
-            &(checkpoint.sequence_number(), checkpoint.digest()),
+            &(sequence_number, digest),
         )
     }
 
