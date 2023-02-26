@@ -153,7 +153,7 @@ module sui::display {
     /// Change the value of the field.
     /// TODO (long run): version changes;
     entry public fun edit<T: key>(self: &mut Display<T>, name: String, value: String) {
-        let (_k, _v) = vec_map::remove(&mut self.fields, &name);
+        let  _ = vec_map::remove(&mut self.fields, &name);
         add_internal(self, name, value)
     }
 
