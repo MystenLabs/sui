@@ -5,7 +5,7 @@
 use crate::{
     base_types::*,
     committee::{Committee, EpochId, StakeUnit},
-    messages::{ExecutionFailureStatus, MoveLocation},
+    messages::{CommandIndex, ExecutionFailureStatus, MoveLocation},
     object::Owner,
 };
 use fastcrypto::error::FastCryptoError;
@@ -572,17 +572,27 @@ pub struct ExecutionError {
 struct ExecutionErrorInner {
     kind: ExecutionErrorKind,
     source: Option<BoxError>,
+    command: Option<CommandIndex>,
 }
 
 impl ExecutionError {
     pub fn new(kind: ExecutionErrorKind, source: Option<BoxError>) -> Self {
         Self {
-            inner: Box::new(ExecutionErrorInner { kind, source }),
+            inner: Box::new(ExecutionErrorInner {
+                kind,
+                source,
+                command: None,
+            }),
         }
     }
 
     pub fn new_with_source<E: Into<BoxError>>(kind: ExecutionErrorKind, source: E) -> Self {
         Self::new(kind, Some(source.into()))
+    }
+
+    pub fn with_command_index(mut self, command: CommandIndex) -> Self {
+        self.inner.command = Some(command);
+        self
     }
 
     pub fn from_kind(kind: ExecutionErrorKind) -> Self {
@@ -593,12 +603,16 @@ impl ExecutionError {
         &self.inner.kind
     }
 
+    pub fn command(&self) -> Option<CommandIndex> {
+        self.inner.command
+    }
+
     pub fn source(&self) -> &Option<BoxError> {
         &self.inner.source
     }
 
-    pub fn to_execution_status(&self) -> ExecutionFailureStatus {
-        self.kind().clone()
+    pub fn to_execution_status(&self) -> (ExecutionFailureStatus, Option<CommandIndex>) {
+        (self.kind().clone(), self.command())
     }
 }
 

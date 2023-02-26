@@ -209,7 +209,7 @@ impl TestEnvironment {
             )
             .await;
 
-        if let ExecutionStatus::Failure { error } = fx.status {
+        if let ExecutionStatus::Failure { error, .. } = fx.status {
             return Err(error);
         }
 

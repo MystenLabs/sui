@@ -259,6 +259,8 @@ ExecutionStatus:
         STRUCT:
           - error:
               TYPENAME: ExecutionFailureStatus
+          - command:
+              OPTION: U64
 GenesisObject:
   ENUM:
     0:

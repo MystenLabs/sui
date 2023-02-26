@@ -1900,9 +1900,16 @@ pub enum CallResult {
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum ExecutionStatus {
     Success,
-    // Gas used in the failed case, and the error.
-    Failure { error: ExecutionFailureStatus },
+    /// Gas used in the failed case, and the error.
+    Failure {
+        /// The error
+        error: ExecutionFailureStatus,
+        /// Which command the error occurred
+        command: Option<CommandIndex>,
+    },
 }
+
+pub type CommandIndex = usize;
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum ExecutionFailureStatus {
@@ -2360,8 +2367,11 @@ impl Display for InvalidSharedByValue {
 impl std::error::Error for ExecutionFailureStatus {}
 
 impl ExecutionStatus {
-    pub fn new_failure(error: ExecutionFailureStatus) -> ExecutionStatus {
-        ExecutionStatus::Failure { error }
+    pub fn new_failure(
+        error: ExecutionFailureStatus,
+        command: Option<CommandIndex>,
+    ) -> ExecutionStatus {
+        ExecutionStatus::Failure { error, command }
     }
 
     pub fn is_ok(&self) -> bool {
@@ -2381,12 +2391,12 @@ impl ExecutionStatus {
         }
     }
 
-    pub fn unwrap_err(self) -> ExecutionFailureStatus {
+    pub fn unwrap_err(self) -> (ExecutionFailureStatus, Option<CommandIndex>) {
         match self {
             ExecutionStatus::Success { .. } => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
-            ExecutionStatus::Failure { error } => error,
+            ExecutionStatus::Failure { error, command } => (error, command),
         }
     }
 }

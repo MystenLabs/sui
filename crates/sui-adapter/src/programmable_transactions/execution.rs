@@ -64,8 +64,8 @@ pub fn execute<E: fmt::Debug, S: StorageView<E>>(
         gas_coin,
         inputs,
     )?;
-    for command in commands {
-        execute_command(&mut context, command)?;
+    for (idx, command) in commands.into_iter().enumerate() {
+        execute_command(&mut context, command).map_err(|e| e.with_command_index(idx))?;
     }
     context.finish()
 }

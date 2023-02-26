@@ -32,7 +32,7 @@ async fn test_pay_sui_failure_empty_recipients() {
     let effects = res.txn_result.unwrap().into_data();
     assert_eq!(
         effects.status,
-        ExecutionStatus::new_failure(ExecutionFailureStatus::EmptyRecipients)
+        ExecutionStatus::new_failure(ExecutionFailureStatus::EmptyRecipients, None)
     );
 }
 
@@ -56,7 +56,7 @@ async fn test_pay_sui_failure_arity_mismatch() {
     let effects = res.txn_result.unwrap().into_data();
     assert_eq!(
         effects.status,
-        ExecutionStatus::new_failure(ExecutionFailureStatus::RecipientsAmountsArityMismatch)
+        ExecutionStatus::new_failure(ExecutionFailureStatus::RecipientsAmountsArityMismatch, None)
     );
 }
 

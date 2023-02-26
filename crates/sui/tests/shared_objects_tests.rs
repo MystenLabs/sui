@@ -195,7 +195,8 @@ async fn call_shared_object_contract() {
             error: ExecutionFailureStatus::EntryArgumentError(EntryArgumentError {
                 kind: EntryArgumentErrorKind::ObjectMutabilityMismatch,
                 ..
-            })
+            }),
+            ..
         }
     ));
     assert_eq!(effects.dependencies.len(), 2);
