@@ -21,7 +21,7 @@
 use std::{
     collections::HashMap,
     sync::Arc,
-    time::{Duration, SystemTime},
+    time::{Duration, Instant, SystemTime},
 };
 
 use futures::stream::FuturesOrdered;
@@ -142,6 +142,13 @@ impl CheckpointExecutor {
                 0
             });
         let mut pending: CheckpointExecutionBuffer = FuturesOrdered::new();
+
+        let mut now_time = Instant::now();
+        let mut now_transaction_num = highest_executed
+            .as_ref()
+            .map(|c| c.summary.network_total_transactions)
+            .unwrap_or(0);
+
         loop {
             // If we have executed the last checkpoint of the current epoch, stop.
             if let Some(next_epoch_committee) =
@@ -169,6 +176,17 @@ impl CheckpointExecutor {
                 Some(Ok(checkpoint)) = pending.next() => {
                     self.process_executed_checkpoint(&checkpoint);
                     highest_executed = Some(checkpoint);
+
+                    // Estimate TPS every 10k transactions or 30 sec
+                    let elapsed = now_time.elapsed().as_millis();
+                    let current_transaction_num =  highest_executed.as_ref().map(|c| c.summary.network_total_transactions).unwrap_or(0);
+                    if current_transaction_num - now_transaction_num > 10_000 || elapsed > 30_000{
+                        let tps = (1000.0 * (current_transaction_num - now_transaction_num) as f64 / elapsed as f64) as i32;
+                        self.metrics.checkpoint_exec_sync_tps.set(tps as i64);
+                        now_time = Instant::now();
+                        now_transaction_num = current_transaction_num;
+                    }
+
                 }
                 // Check for newly synced checkpoints from StateSync.
                 received = self.mailbox.recv() => match received {

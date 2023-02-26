@@ -9,6 +9,7 @@ use prometheus::{
 use std::sync::Arc;
 
 pub struct CheckpointExecutorMetrics {
+    pub checkpoint_exec_sync_tps: IntGauge,
     pub last_executed_checkpoint: IntGauge,
     pub checkpoint_exec_errors: IntCounter,
     pub checkpoint_exec_epoch: IntGauge,
@@ -19,6 +20,12 @@ pub struct CheckpointExecutorMetrics {
 impl CheckpointExecutorMetrics {
     pub fn new(registry: &Registry) -> Arc<Self> {
         let this = Self {
+            checkpoint_exec_sync_tps: register_int_gauge_with_registry!(
+                "checkpoint_exec_sync_tps",
+                "Checkpoint sync estimated transactions per second",
+                registry
+            )
+            .unwrap(),
             last_executed_checkpoint: register_int_gauge_with_registry!(
                 "last_executed_checkpoint",
                 "Last executed checkpoint",
