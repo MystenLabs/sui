@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use hyper::body::HttpBody;
 use std::collections::HashSet;
 use std::net::SocketAddr;
 
@@ -32,6 +33,10 @@ pub struct Metrics {
     client: IntCounterVec,
     /// Connection count
     inflight_connection: IntGaugeVec,
+    /// Request size
+    rpc_request_size: HistogramVec,
+    /// Response size
+    rpc_response_size: HistogramVec,
 }
 
 #[derive(Clone)]
@@ -94,6 +99,26 @@ impl MetricsLogger {
                 registry,
             )
             .unwrap(),
+            rpc_request_size: register_histogram_vec_with_registry!(
+                "rpc_request_size",
+                "Request size of rpc requests",
+                &["protocol"],
+                prometheus::exponential_buckets(32.0, 2.0, 19)
+                    .unwrap()
+                    .to_vec(),
+                registry,
+            )
+            .unwrap(),
+            rpc_response_size: register_histogram_vec_with_registry!(
+                "rpc_response_size",
+                "Response size of rpc requests",
+                &["protocol"],
+                prometheus::exponential_buckets(1024.0, 2.0, 20)
+                    .unwrap()
+                    .to_vec(),
+                registry,
+            )
+            .unwrap(),
         };
 
         Self {
@@ -126,6 +151,16 @@ impl Logger for MetricsLogger {
             .inflight_connection
             .with_label_values(&[&t.to_string()])
             .inc();
+
+        self.metrics
+            .rpc_request_size
+            .with_label_values(&[&t.to_string()])
+            .observe(
+                request
+                    .size_hint()
+                    .exact()
+                    .unwrap_or_else(|| request.size_hint().lower()) as f64,
+            );
     }
 
     fn on_request(&self, _transport: TransportProtocol) -> Self::Instant {
@@ -176,12 +211,11 @@ impl Logger for MetricsLogger {
         }
     }
 
-    fn on_response(
-        &self,
-        _result: &str,
-        _started_at: Self::Instant,
-        _transport: TransportProtocol,
-    ) {
+    fn on_response(&self, result: &str, _started_at: Self::Instant, t: TransportProtocol) {
+        self.metrics
+            .rpc_response_size
+            .with_label_values(&[&t.to_string()])
+            .observe(std::mem::size_of_val(result) as f64)
     }
 
     fn on_disconnect(&self, _remote_addr: SocketAddr, t: TransportProtocol) {
