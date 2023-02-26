@@ -11,6 +11,7 @@ import { Body, CloseButton, Content, Overlay, Title } from "./utils/Dialog";
 import { SELECTED_GETTING_STARTED, WalletList } from "./WalletList";
 import { GettingStarted } from "./GettingStarted";
 import { useWalletKit } from "./WalletKitContext";
+import { WalletAdapter } from "@mysten/wallet-adapter-base/src/index";
 
 export interface ConnectModalProps {
   open: boolean;
@@ -108,6 +109,10 @@ const ConnectionText = styled("div", {
 export interface ConnectModalProps {
   open: boolean;
   onClose(): void;
+  loginedFallback?: (
+    wallet: WalletAdapter | null,
+    selected: string | null
+  ) => void;
 }
 
 const MobileInfoButton = styled("button", {
@@ -128,7 +133,11 @@ const MobileInfoButton = styled("button", {
 
 const SELECTED_INFO = "@@internal/what-is-wallet";
 
-export function ConnectModal({ open, onClose }: ConnectModalProps) {
+export function ConnectModal({
+  open,
+  onClose,
+  loginedFallback,
+}: ConnectModalProps) {
   const { connect, currentWallet, isConnected, isError } = useWalletKit();
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -141,6 +150,7 @@ export function ConnectModal({ open, onClose }: ConnectModalProps) {
   useEffect(() => {
     if (isConnected && currentWallet?.name === selected) {
       onClose();
+      if (loginedFallback) loginedFallback(currentWallet, selected);
     }
   }, [currentWallet, selected, isConnected]);
 

@@ -11,10 +11,16 @@ import { formatAddress } from "@mysten/sui.js";
 
 interface ConnectButtonProps extends ComponentProps<typeof Button> {
   connectText?: ReactNode;
+  loginedText?: string;
+  loginedFallback?: (e: any) => void;
+  disconnectFallback?: () => void;
 }
 
 export function ConnectButton({
   connectText = "Connect Wallet",
+  loginedText,
+  loginedFallback,
+  disconnectFallback,
   ...props
 }: ConnectButtonProps) {
   const [accountModalOpen, setAccountModalOpen] = useState(false);
@@ -32,7 +38,7 @@ export function ConnectButton({
           type="button"
           {...props}
         >
-          {formatAddress(currentAccount.address)}
+          {loginedText ?? formatAddress(currentAccount.address)}
         </Button>
       ) : (
         <Button
