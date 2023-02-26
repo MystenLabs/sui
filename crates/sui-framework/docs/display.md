@@ -513,7 +513,7 @@ Sets multiple <code>fields</code> with <code>values</code>.
     <b>assert</b>!(len == <a href="_length">vector::length</a>(&values), <a href="display.md#0x2_display_EVecLengthMismatch">EVecLengthMismatch</a>);
 
     <b>let</b> i = 0;
-    <b>while</b> (i &lt; 0) {
+    <b>while</b> (i &lt; len) {
         <a href="display.md#0x2_display_add_internal">add_internal</a>(d, *<a href="_borrow">vector::borrow</a>(&fields, i), *<a href="_borrow">vector::borrow</a>(&values, i));
         i = i + 1;
     };
