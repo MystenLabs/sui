@@ -84,8 +84,12 @@ use typed_store::Map;
 ///├──────────────────────────────┤
 ///│    address_len <8 bytes>     │
 ///├──────────────────────────────┤
-///│    padding(0) <3 byte>       │
+///│    epoch <8 byte>            │
 ///├──────────────────────────────┤
+///│checkpoint seq num <8 bytes>  │
+///├──────────────────────────────┤
+///│     padding(0) <3 byte>      │
+// ├──────────────────────────────┤
 ///│ ┌──────────────────────────┐ │
 ///│ │      FileMetadata 1      │ │
 ///│ ├──────────────────────────┤ │
@@ -107,8 +111,10 @@ const MAGIC_BYTES: usize = 4;
 const SNAPSHOT_VERSION_BYTES: usize = 1;
 const ADDRESS_LENGTH_BYTES: usize = 8;
 const PADDING_BYTES: usize = 3;
+const EPOCH_BYTES: usize = 8;
+const CHECKPOINT_SEQ_NUMBER_BYTES: usize = 8;
 const MANIFEST_FILE_HEADER_BYTES: usize =
-    MAGIC_BYTES + SNAPSHOT_VERSION_BYTES + ADDRESS_LENGTH_BYTES + PADDING_BYTES;
+    MAGIC_BYTES + SNAPSHOT_VERSION_BYTES + ADDRESS_LENGTH_BYTES + EPOCH_BYTES + CHECKPOINT_SEQ_NUMBER_BYTES + PADDING_BYTES;
 const OBJECT_FILE_MAX_BYTES: usize = 128 * 1024 * 1024 * 1024;
 const OBJECT_ENCODING_BYTES: usize = 1;
 const TRANSACTION_DIGEST_BYTES: usize = 32;
@@ -416,14 +422,17 @@ impl StateSnapshotWriterV1 {
         mut self,
         objects: impl Iterator<Item = ObjectRef>,
         perpetual_db: &AuthorityPerpetualTables,
+        checkpoint_seq_number: u64,
     ) -> Result<()> {
+        let epoch = perpetual_db.get_recovery_epoch_at_restart()?;
         let num_objects_written =
             self.write_object_with_bucket_func(objects, perpetual_db, Self::bucket_func)?;
         debug!(
-            "Wrote a total of {} objects in snapshot",
-            num_objects_written
+            "Wrote a total of {} objects in snapshot for epoch: {}",
+            num_objects_written,
+            epoch
         );
-        self.finalize()?;
+        self.finalize(epoch, checkpoint_seq_number)?;
         Ok(())
     }
     fn bucket_func(_object_ref: &ObjectRef) -> u32 {
@@ -457,17 +466,17 @@ impl StateSnapshotWriterV1 {
         }
         Ok(counter)
     }
-    pub(crate) fn finalize(mut self) -> Result<()> {
+    pub(crate) fn finalize(mut self, epoch: u64, checkpoint_seq_number: u64) -> Result<()> {
         for (_i, writer) in self.bucket_writers.iter_mut() {
             writer.finalize()?;
             writer.finalize_ref()?;
             self.dir.sync_data()?;
         }
-        self.write_manifest()?;
+        self.write_manifest(epoch, checkpoint_seq_number)?;
         Ok(())
     }
-    fn write_manifest(mut self) -> Result<()> {
-        let (f, manifest_file_path) = self.manifest_file()?;
+    fn write_manifest(mut self, epoch: u64, checkpoint_seq_number: u64) -> Result<()> {
+        let (f, manifest_file_path) = self.manifest_file(epoch, checkpoint_seq_number)?;
         let mut wbuf = BufWriter::new(f);
         let files = read_dir(self.dir_path.clone())?;
         for file_path in files {
@@ -529,16 +538,28 @@ impl StateSnapshotWriterV1 {
         self.dir.sync_data()?;
         Ok(())
     }
-    fn manifest_file(&mut self) -> Result<(File, PathBuf)> {
+    fn manifest_file(&mut self, epoch: u64, checkpoint_seq_number: u64) -> Result<(File, PathBuf)> {
         let manifest_file_path = self.dir_path.join("MANIFEST");
         let manifest_file_tmp_path = self.dir_path.join("MANIFEST.tmp");
         let mut f = File::create(manifest_file_tmp_path.clone())?;
-        let mut metab = vec![0u8; MANIFEST_FILE_HEADER_BYTES];
+        let mut metab = [0u8; MANIFEST_FILE_HEADER_BYTES];
         BigEndian::write_u32(&mut metab, MANIFEST_FILE_MAGIC);
         metab[MAGIC_BYTES] = self.snapshot_version;
         BigEndian::write_u64(
             &mut metab[MAGIC_BYTES + SNAPSHOT_VERSION_BYTES..MANIFEST_FILE_HEADER_BYTES],
             ObjectID::LENGTH as u64,
+        );
+        BigEndian::write_u64(
+            &mut metab[MAGIC_BYTES + SNAPSHOT_VERSION_BYTES..MANIFEST_FILE_HEADER_BYTES],
+            ObjectID::LENGTH as u64,
+        );
+        BigEndian::write_u64(
+            &mut metab[MAGIC_BYTES + SNAPSHOT_VERSION_BYTES + ADDRESS_LENGTH_BYTES..MANIFEST_FILE_HEADER_BYTES],
+            epoch,
+        );
+        BigEndian::write_u64(
+            &mut metab[MAGIC_BYTES + SNAPSHOT_VERSION_BYTES + ADDRESS_LENGTH_BYTES + EPOCH_BYTES..MANIFEST_FILE_HEADER_BYTES],
+            checkpoint_seq_number,
         );
         f.rewind()?;
         f.write_all(&metab)?;
@@ -641,12 +662,29 @@ impl StateSnapshotReader {
             ))
         }
     }
+    pub fn epoch(&self) -> u64 {
+        match self {
+            StateSnapshotReader::StateSnapshotReaderV1(reader) => reader.epoch,
+        }
+    }
+    pub fn checkpoint_seq_number(&self) -> u64 {
+        match self {
+            StateSnapshotReader::StateSnapshotReaderV1(reader) => reader.checkpoint_seq_number,
+        }
+    }
+    pub fn version(&self) -> u64 {
+        match self {
+            StateSnapshotReader::StateSnapshotReaderV1(_) => 1,
+        }
+    }
 }
 
 pub struct StateSnapshotReaderV1 {
     dir_path: PathBuf,
     object_files: BTreeMap<u32, BTreeMap<u32, FileMetadata>>,
     ref_files: BTreeMap<u32, FileMetadata>,
+    pub(crate) epoch: u64,
+    checkpoint_seq_number: u64,
 }
 
 impl StateSnapshotReaderV1 {
@@ -679,6 +717,8 @@ impl StateSnapshotReaderV1 {
                 ObjectID::LENGTH
             ));
         }
+        let epoch = manifest_reader.read_u64::<BigEndian>()?;
+        let checkpoint_seq_number = manifest_reader.read_u64::<BigEndian>()?;
         let mut object_files = BTreeMap::new();
         let mut ref_files = BTreeMap::new();
         manifest_reader.seek(SeekFrom::Start(MANIFEST_FILE_HEADER_BYTES as u64))?;
@@ -713,12 +753,12 @@ impl StateSnapshotReaderV1 {
             }
             offset += FILE_METADATA_BYTES;
         }
-        // TODO: Compute root state hash from object references using object ref iterator and
-        // compare it with the one in checkpoint summary
         Ok(StateSnapshotReaderV1 {
             dir_path: dir_path.to_path_buf(),
             object_files,
             ref_files,
+            epoch,
+            checkpoint_seq_number
         })
     }
     fn read_file_metadata(reader: &mut BufReader<File>) -> Result<FileMetadata> {
@@ -739,7 +779,7 @@ impl StateSnapshotReaderV1 {
     pub fn buckets(&self) -> Result<Vec<u32>> {
         Ok(self.ref_files.keys().copied().collect())
     }
-    fn num_parts_for_bucket(&self, bucket_num: u32) -> Result<u32> {
+    pub fn num_parts_for_bucket(&self, bucket_num: u32) -> Result<u32> {
         Ok(self
             .object_files
             .get(&bucket_num)

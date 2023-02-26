@@ -42,11 +42,14 @@ fn insert_keys(
 async fn test_snapshot_basic() -> Result<(), anyhow::Error> {
     let db_path = temp_dir();
     let snapshot_path = temp_dir().join("snapshot");
+    let epoch = 10;
+    let end_of_epoch_checkpoint_seq_number = 1_000_000;
     let perpetual_db = AuthorityPerpetualTables::open(&db_path, None);
     insert_keys(&perpetual_db.objects, &perpetual_db.parent_sync, 1000)?;
+    perpetual_db.set_recovery_epoch(epoch)?;
     let iter = perpetual_db.iter_live_object_set();
     let snapshot_writer = StateSnapshotWriterV1::new(&snapshot_path)?;
-    snapshot_writer.write_objects(iter, &perpetual_db)?;
+    snapshot_writer.write_objects(iter, &perpetual_db, end_of_epoch_checkpoint_seq_number)?;
     let snapshot_reader = StateSnapshotReader::new(&snapshot_path)?;
     match snapshot_reader {
         StateSnapshotReaderV1(mut reader) => {
@@ -61,6 +64,8 @@ async fn test_snapshot_basic() -> Result<(), anyhow::Error> {
             let object_refs_in_live_set: HashSet<ObjectRef> =
                 perpetual_db.iter_live_object_set().collect();
             assert_eq!(object_refs_in_snapshot, object_refs_in_live_set);
+            assert_eq!(reader.epoch(), epoch);
+            assert_eq!(reader.checkpoint_seq_number(), end_of_epoch_checkpoint_seq_number);
         }
     }
     Ok(())
@@ -70,10 +75,13 @@ async fn test_snapshot_basic() -> Result<(), anyhow::Error> {
 async fn test_snapshot_empty_db() -> Result<(), anyhow::Error> {
     let db_path = temp_dir();
     let snapshot_path = temp_dir().join("snapshot");
+    let epoch = 10;
+    let end_of_epoch_checkpoint_seq_number = 1_000_000;
     let perpetual_db = AuthorityPerpetualTables::open(&db_path, None);
+    perpetual_db.set_recovery_epoch(epoch)?;
     let iter = perpetual_db.iter_live_object_set();
     let snapshot_writer = StateSnapshotWriterV1::new(&snapshot_path)?;
-    snapshot_writer.write_objects(iter, &perpetual_db)?;
+    snapshot_writer.write_objects(iter, &perpetual_db, end_of_epoch_checkpoint_seq_number)?;
     let snapshot_reader = StateSnapshotReader::new(&snapshot_path)?;
     match snapshot_reader {
         StateSnapshotReaderV1(mut reader) => {
@@ -88,6 +96,8 @@ async fn test_snapshot_empty_db() -> Result<(), anyhow::Error> {
             let object_refs_in_live_set: HashSet<ObjectRef> =
                 perpetual_db.iter_live_object_set().collect();
             assert_eq!(object_refs_in_snapshot, object_refs_in_live_set);
+            assert_eq!(reader.epoch(), epoch);
+            assert_eq!(reader.checkpoint_seq_number(), end_of_epoch_checkpoint_seq_number);
         }
     }
     Ok(())
@@ -97,7 +107,10 @@ async fn test_snapshot_empty_db() -> Result<(), anyhow::Error> {
 async fn test_snapshot_multiple_buckets() -> Result<(), anyhow::Error> {
     let db_path = temp_dir();
     let snapshot_path = temp_dir().join("snapshot");
+    let epoch = 10;
+    let end_of_epoch_checkpoint_seq_number = 1_000_000;
     let perpetual_db = AuthorityPerpetualTables::open(&db_path, None);
+    perpetual_db.set_recovery_epoch(epoch)?;
     insert_keys(&perpetual_db.objects, &perpetual_db.parent_sync, 1_000)?;
     let iter = perpetual_db.iter_live_object_set();
     let mut snapshot_writer = StateSnapshotWriterV1::new(&snapshot_path)?;
@@ -106,7 +119,7 @@ async fn test_snapshot_multiple_buckets() -> Result<(), anyhow::Error> {
         object_ref.2.base58_encode().hash(&mut hasher);
         (hasher.finish() % 1024) as u32
     })?;
-    snapshot_writer.finalize()?;
+    snapshot_writer.finalize(epoch, end_of_epoch_checkpoint_seq_number)?;
     let snapshot_reader = StateSnapshotReader::new(&snapshot_path)?;
     match snapshot_reader {
         StateSnapshotReaderV1(mut reader) => {
@@ -121,6 +134,8 @@ async fn test_snapshot_multiple_buckets() -> Result<(), anyhow::Error> {
             let object_refs_in_live_set: HashSet<ObjectRef> =
                 perpetual_db.iter_live_object_set().collect();
             assert_eq!(object_refs_in_snapshot, object_refs_in_live_set);
+            assert_eq!(reader.epoch(), epoch);
+            assert_eq!(reader.checkpoint_seq_number(), end_of_epoch_checkpoint_seq_number);
         }
     }
     Ok(())

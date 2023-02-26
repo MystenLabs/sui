@@ -90,7 +90,12 @@ pub struct NodeConfig {
     #[serde(default)]
     pub checkpoint_executor_config: CheckpointExecutorConfig,
 
+    #[serde(default)]
     pub state_snapshot_config: StateSnapshotConfig,
+
+    #[serde(default)]
+    pub state_snapshot_recovery_config: StateSnapshotRecoveryConfig,
+
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
@@ -203,6 +208,10 @@ impl NodeConfig {
     pub fn genesis(&self) -> Result<&genesis::Genesis> {
         self.genesis.genesis()
     }
+
+    pub fn snapshot_recovery_enabled(&self) -> bool {
+        self.state_snapshot_recovery_config.enable_snapshot_recovery
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -269,6 +278,56 @@ impl Default for CheckpointExecutorConfig {
             local_execution_timeout_sec: default_local_execution_timeout_sec(),
         }
     }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+struct StateSnapshotConfig {
+    /// Check to see if new snapshot can be taken at this interval.
+    ///
+    /// If unspecified, this will default to `300` seconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interval_period_s: Option<u64>,
+    /// Number of latest `snapshots` to keep in the `output_path`. Older
+    /// snapshots will be deleted
+    ///
+    /// If unspecified, this will default to `1`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub num_latest_snapshots_to_keep: Option<u32>,
+    /// Absolute path on the local disk where snapshots are stored.
+    ///
+    /// If unspecified, this will default to `/opt/sui/snapshot`
+    pub snapshot_path: Option<PathBuf>,
+    /// Explicit flag to enable snapshots
+    ///
+    /// If unspecified, this will default to `false`
+    pub enable_snapshots: bool,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+struct StateSnapshotRecoveryConfig {
+    /// Check to see if we have the verified checkpoint at which
+    /// the snapshot was taken at this interval.
+    ///
+    /// If unspecified, this will default to `10` seconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interval_period_s: Option<u64>,
+    /// Timeout snapshot recover after waiting for the checkpoints
+    /// after this duration
+    ///
+    /// If unspecified, this will default to `3600` seconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout: Option<u64>,
+    /// Absolute path on the local disk where snapshots are stored.
+    /// When recovering we will pick the latest snapshot to recover from
+    ///
+    /// If unspecified, this will default to `/opt/sui/snapshot`
+    pub snapshot_path: Option<PathBuf>,
+    /// Explicit flag to enable snapshot recovery
+    ///
+    /// If unspecified, this will default to `false`
+    pub enable_snapshot_recovery: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

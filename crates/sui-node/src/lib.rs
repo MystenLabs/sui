@@ -7,7 +7,7 @@ use anemo_tower::callback::CallbackLayer;
 use anemo_tower::trace::DefaultMakeSpan;
 use anemo_tower::trace::DefaultOnFailure;
 use anemo_tower::trace::TraceLayer;
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use anyhow::Result;
 use checkpoint_executor::CheckpointExecutor;
 use futures::TryFutureExt;
@@ -17,12 +17,14 @@ use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::Registry;
 use std::collections::HashMap;
+use std::{fs, mem};
 use std::sync::Arc;
 use std::time::Duration;
+use tempfile::TempDir;
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority_aggregator::{AuthorityAggregator, NetworkTransactionCertifier};
 use sui_core::authority_server::ValidatorService;
-use sui_core::checkpoints::checkpoint_executor;
+use sui_core::checkpoints::{checkpoint_executor, CheckpointWatermark};
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::storage::RocksDbStore;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
@@ -58,8 +60,8 @@ use tokio::sync::{broadcast, mpsc};
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
-use tracing::{error_span, info, warn, Instrument};
-use typed_store::DBMetrics;
+use tracing::{error_span, info, warn, Instrument, error};
+use typed_store::{DBMetrics, Map};
 pub mod admin;
 mod handle;
 pub mod metrics;
@@ -67,6 +69,7 @@ pub use handle::SuiNodeHandle;
 use narwhal_config::SharedWorkerCache;
 use narwhal_types::TransactionsClient;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::checkpoints::checkpoint_executor::CheckpointExecutionMessage;
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
@@ -97,6 +100,8 @@ pub struct ValidatorComponents {
     sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
 }
 use sui_json_rpc::governance_api::GovernanceReadApi;
+use sui_snapshot::StateSnapshotRecoveryLoop;
+use typed_store::rocks::MetricConf;
 
 pub struct SuiNode {
     config: NodeConfig,
@@ -139,28 +144,33 @@ impl SuiNode {
 
         let secret = Arc::pin(config.protocol_key_pair().copy());
         let genesis_committee = genesis.committee()?;
+
+        if let Some(new_epoch) = Self::perform_snapshot_recovery(config, &prometheus_registry).await? {
+            info!("Successfully performed snapshot recovery to epoch: {new_epoch}");
+        }
+
         let committee_store = Arc::new(CommitteeStore::new(
             config.db_path().join("epochs"),
             &genesis_committee,
             None,
         ));
         let (checkpoint_sender, checkpoint_receiver) = mpsc::channel(10);
-        let store = Arc::new(
-            AuthorityStore::open(
+        let (store) = {
+            let store = AuthorityStore::open(
                 &config.db_path().join("store"),
                 None,
                 genesis,
                 &committee_store,
                 &config.authority_store_pruning_config,
                 checkpoint_receiver,
-            )
-            .await?,
-        );
-        let cur_epoch = store.get_recovery_epoch_at_restart()?;
-        let committee = committee_store
+            ).await?;
+            Arc::new(store)
+        };
+        let mut cur_epoch = store.get_recovery_epoch_at_restart()?;
+        let mut committee = committee_store
             .get_committee(&cur_epoch)?
             .expect("Committee of the current epoch must exist");
-        let epoch_store = AuthorityPerEpochStore::new(
+        let mut epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
             committee,
             &config.db_path().join("store"),
@@ -170,6 +180,7 @@ impl SuiNode {
         );
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
+
         checkpoint_store.insert_genesis_checkpoint(
             genesis.checkpoint(),
             genesis.checkpoint_contents().clone(),
@@ -439,6 +450,97 @@ impl SuiNode {
         let discovery_handle = discovery.start(p2p_network.clone());
         let state_sync_handle = state_sync.start(p2p_network.clone());
         Ok((p2p_network, discovery_handle, state_sync_handle))
+    }
+
+    async fn perform_snapshot_recovery(
+        config: &NodeConfig,
+        prometheus_registry: &Registry,
+    ) -> Result<Option<EpochId>> {
+        if !config.state_snapshot_recovery_config.enable_snapshot_recovery {
+            info!("Snapshot recovery is disabled");
+            return Ok(None);
+        }
+        let checkpoint_store_read_only = CheckpointStore::get_read_only_handle(config.db_path().join("checkpoints"), None, None, MetricConf::default());
+        let highest_executed_checkpoint = if let Some(highest_executed) =
+            checkpoint_store_read_only.watermarks.get(&CheckpointWatermark::HighestExecuted)? {
+            highest_executed.0
+        } else {
+            0
+        };
+        mem::drop(checkpoint_store_read_only);
+        if highest_executed_checkpoint > 0 {
+            // We are only going to be invoking snapshot recovery for nodes starting with no
+            // previous state for now. Later, we can decide if snapshot recovery is a better viable
+            // option compared to state sync based on how far behind the node is from its peers
+            info!("Not doing snapshot recovery as highest executed checkpoint sequence is > 0");
+            return Ok(None);
+        }
+        let snapshot_recovery = StateSnapshotRecoveryLoop::new(
+            config.state_snapshot_recovery_config.clone(), highest_executed_checkpoint, &prometheus_registry);
+        if let Err(e) = snapshot_recovery {
+            error!("Failed to initialize snapshot recovery with error: {:?}", e);
+            return Ok(None);
+        }
+        // unwrap is safe because of above check
+        let snapshot_recovery = snapshot_recovery.unwrap();
+        let genesis = &config.genesis()?;
+        let tmp_path = TempDir::new()?.path().to_owned();
+        let committee_store = Arc::new(CommitteeStore::new(
+            tmp_path.join("epochs"),
+            &genesis.committee()?,
+            None,
+        ));
+        let authority_store = Arc::new(AuthorityStore::open(
+            &tmp_path.join("store"),
+            None,
+            &genesis,
+            &committee_store,
+            &config.authority_store_pruning_config,
+            checkpoint_receiver,
+        ).await?);
+        let mut cur_epoch = authority_store.get_recovery_epoch_at_restart()?;
+        let mut committee = committee_store
+            .get_committee(&cur_epoch)?
+            .expect("Committee of the current epoch must exist");
+        let mut epoch_store = AuthorityPerEpochStore::new(
+            config.protocol_public_key(),
+            committee,
+            &config.db_path().join("store"),
+            None,
+            EpochMetrics::new(&registry_service.default_registry()),
+            None,
+        );
+        let checkpoint_store = CheckpointStore::new(&tmp_path.join("checkpoints"));
+        checkpoint_store.insert_genesis_checkpoint(
+            genesis.checkpoint(),
+            genesis.checkpoint_contents().clone(),
+            &epoch_store,
+        );
+        let state_sync_store = RocksDbStore::new(
+            authority_store.clone(),
+            committee_store,
+            checkpoint_store
+        );
+        let (p2p_network, discovery_handle, state_sync_handle) =
+            Self::create_p2p_network(config, state_sync_store, &prometheus_registry)?;
+        if let Err(err) = snapshot_recovery.start(&authority_store.perpetual_tables, &checkpoint_store).await {
+            // Returning ok here will let us fall back to state sync based recovery
+            error!("Failed snapshot recovery with error: {:?}", err);
+            return Ok(None);
+        }
+
+        let new_epoch = authority_store.get_recovery_epoch_at_restart()?;
+
+        mem::drop(authority_store);
+        mem::drop(state_sync_handle);
+        mem::drop(discovery_handle);
+        mem::drop(p2p_network);
+
+        // Persist the temporary directory to disk, getting the path where it is.
+        let tmp_path = tmp_dir.into_path();
+        fs::rename(config.db_path(), config.db_path().with_extension("tmp"))?;
+        fs::rename(tmp_path, config.db_path())?;
+        Ok(Some(new_epoch))
     }
 
     async fn construct_validator_components(

@@ -15,7 +15,7 @@ use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
 use typed_store_derive::DBMapUtils;
 
-const CURRENT_EPOCH_KEY: u64 = 0;
+pub const CURRENT_EPOCH_KEY: u64 = 0;
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
 #[derive(DBMapUtils)]
@@ -83,7 +83,7 @@ pub struct AuthorityPerpetualTables {
     /// crash recovery so that when we restart we know which epoch we are at. This is needed because
     /// there will be moments where the on-chain epoch doesn't match with the per-epoch table epoch.
     /// This number should match the epoch of the per-epoch table in the authority store.
-    current_epoch: DBMap<u64, u64>,
+    pub current_epoch: DBMap<u64, u64>,
 }
 
 impl AuthorityPerpetualTables {
@@ -215,6 +215,13 @@ impl AuthorityPerpetualTables {
             .skip_to(&ObjectKey::ZERO)?
             .next()
             .is_none())
+    }
+
+    pub fn database_undergoing_recovery(&self) -> SuiResult<bool> {
+        Ok(self
+            .snapshot_recovery_marker
+            .get(&SNASPHOT_RECOVERY_MARKER_KEY)?
+            .is_some())
     }
 
     pub fn iter_live_object_set(&self) -> LiveSetIter<'_> {

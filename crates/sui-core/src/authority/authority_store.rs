@@ -37,7 +37,7 @@ pub struct AuthorityStore {
     /// Internal vector of locks to manage concurrent writes to the database
     mutex_table: MutexTable<ObjectDigest>,
 
-    pub(crate) perpetual_tables: Arc<AuthorityPerpetualTables>,
+    pub perpetual_tables: Arc<AuthorityPerpetualTables>,
 
     // Implementation detail to support notify_read_effects().
     pub(crate) executed_effects_notify_read: NotifyRead<TransactionDigest, TransactionEffects>,
@@ -71,14 +71,14 @@ impl AuthorityStore {
         let committee = committee_store
             .get_committee(&cur_epoch)?
             .expect("Committee of the current epoch must exist");
-        Self::open_inner(
+        Ok(Self::open_inner(
             genesis,
             perpetual_tables,
             committee,
             pruning_config,
             checkpoint_stream,
         )
-        .await
+        .await?)
     }
 
     pub async fn open_with_committee_for_testing(
@@ -158,6 +158,10 @@ impl AuthorityStore {
 
     pub fn get_recovery_epoch_at_restart(&self) -> SuiResult<EpochId> {
         self.perpetual_tables.get_recovery_epoch_at_restart()
+    }
+
+    pub fn eligible_for_snapshot_recovery(&self) -> SuiResult<bool> {
+        self.perpetual_tables.database_is_empty()
     }
 
     pub fn get_effects(

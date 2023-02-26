@@ -23,6 +23,7 @@ chrono = "0.4.23"
 tower = "0.4.13"
 git-version = "0.3.5"
 const-str = "0.5.3"
+tempfile = "3.3.0"
 
 sui-config = { path = "../sui-config" }
 sui-core = { path = "../sui-core" }
@@ -30,6 +31,7 @@ sui-storage = { path = "../sui-storage" }
 sui-network = { path = "../sui-network" }
 sui-json-rpc = { path = "../sui-json-rpc" }
 sui-protocol-constants = { path = "../sui-protocol-constants" }
+sui-snapshot = { path = "../sui-snapshot"}
 sui-telemetry = { path = "../sui-telemetry" }
 sui-types = { path = "../sui-types" }
 mysten-metrics = { path = "../mysten-metrics" }
