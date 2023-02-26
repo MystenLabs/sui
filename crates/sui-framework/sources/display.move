@@ -173,7 +173,7 @@ module sui::display {
         assert!(len == vector::length(&values), EVecLengthMismatch);
 
         let i = 0;
-        while (i < 0) {
+        while (i < len) {
             add_internal(d, *vector::borrow(&fields, i), *vector::borrow(&values, i));
             i = i + 1;
         };
