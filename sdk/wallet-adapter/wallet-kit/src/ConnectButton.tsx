@@ -8,18 +8,22 @@ import { Button } from "./utils/ui";
 import { AccountModal } from "./AccountModal";
 import { useWalletKit } from "./WalletKitContext";
 import { formatAddress } from "@mysten/sui.js";
+import { WalletAdapter } from "@mysten/wallet-adapter-base/src/index";
 
 interface ConnectButtonProps extends ComponentProps<typeof Button> {
   connectText?: ReactNode;
   loginedText?: string;
-  loginedFallback?: (e: any) => void;
+  connectedFallback?: (
+    wallet: WalletAdapter | null,
+    selected: string | null
+  ) => void;
   disconnectFallback?: () => void;
 }
 
 export function ConnectButton({
   connectText = "Connect Wallet",
   loginedText,
-  loginedFallback,
+  connectedFallback,
   disconnectFallback,
   ...props
 }: ConnectButtonProps) {
@@ -56,11 +60,13 @@ export function ConnectButton({
         <AccountModal
           open={accountModalOpen}
           onClose={() => setAccountModalOpen(false)}
+          disconnectFallback={disconnectFallback}
         />
       ) : (
         <ConnectModal
           open={connectModalOpen}
           onClose={() => setConnectModalOpen(false)}
+          connectedFallback={connectedFallback}
         />
       )}
     </>
