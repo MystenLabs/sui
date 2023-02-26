@@ -201,4 +201,13 @@ pub trait ReadApi {
         /// the id of the object
         object_id: ObjectID,
     ) -> RpcResult<GetRawObjectDataResponse>;
+
+    // TODO: this will be replaced by the new queryObjects API
+    /// Return the Display string of a object
+    #[method(name = "getDisplayDeprecated")]
+    async fn get_display_deprecated(
+        &self,
+        /// the id of the object
+        object_id: ObjectID,
+    ) -> RpcResult<BTreeMap<String, String>>;
 }

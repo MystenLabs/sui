@@ -213,6 +213,13 @@ impl ReadApiServer for ReadApi {
     async fn get_raw_object(&self, object_id: ObjectID) -> RpcResult<GetRawObjectDataResponse> {
         self.fullnode.get_raw_object(object_id).await
     }
+
+    async fn get_display_deprecated(
+        &self,
+        object_id: ObjectID,
+    ) -> RpcResult<BTreeMap<String, String>> {
+        self.fullnode.get_display_deprecated(object_id).await
+    }
 }
 
 impl SuiRpcModule for ReadApi {

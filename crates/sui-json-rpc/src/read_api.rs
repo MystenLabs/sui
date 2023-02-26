@@ -6,8 +6,10 @@ use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::StructTag;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use sui_types::display::{DisplayCreatedEvent, DisplayObject};
 use sui_types::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use tap::TapFallible;
 
@@ -17,13 +19,14 @@ use jsonrpsee::RpcModule;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
-    GetRawObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page,
+    GetRawObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page, SuiEvent,
     SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
     SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
+use sui_types::collection_types::Entry;
 use sui_types::crypto::sha3_hash;
 use sui_types::messages::TransactionData;
 use sui_types::messages_checkpoint::{
@@ -32,7 +35,7 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead};
-use sui_types::query::TransactionQuery;
+use sui_types::query::{EventQuery, TransactionQuery};
 
 use sui_types::dynamic_field::DynamicFieldName;
 use tracing::debug;
@@ -372,6 +375,19 @@ impl ReadApiServer for ReadApi {
             .map_err(|e| anyhow!("{e}"))?
             .try_into()?)
     }
+
+    async fn get_display_deprecated(
+        &self,
+        object_id: ObjectID,
+    ) -> RpcResult<BTreeMap<String, String>> {
+        let display_object = get_display_object(self, object_id).await?;
+        Ok(display_object
+            .fields
+            .contents
+            .into_iter()
+            .map(|Entry { key, value }| (key, value))
+            .collect::<BTreeMap<_, _>>())
+    }
 }
 
 impl SuiRpcModule for ReadApi {
@@ -381,6 +397,72 @@ impl SuiRpcModule for ReadApi {
 
     fn rpc_doc_module() -> Module {
         crate::api::ReadApiOpenRpc::module_doc()
+    }
+}
+
+async fn get_display_object(
+    fullnode_api: &ReadApi,
+    object_id: ObjectID,
+) -> RpcResult<DisplayObject> {
+    let display_object_id = get_display_object_id(fullnode_api, object_id).await?;
+    if let ObjectRead::Exists(_, display_object, _) = fullnode_api
+        .state
+        .get_object_read(&display_object_id)
+        .await
+        .map_err(|e| anyhow!("Failed to fetch display object {display_object_id}: {e}"))?
+    {
+        let move_object = display_object
+            .data
+            .try_as_move()
+            .ok_or_else(|| anyhow!("Failed to extract Move object from {display_object_id}"))?;
+        Ok(bcs::from_bytes::<DisplayObject>(move_object.contents())
+            .map_err(|e| anyhow!("Failed to deserialize DisplayObject {display_object_id}: {e}"))?)
+    } else {
+        return Err(anyhow!("Display object {display_object_id} does not exist"))?;
+    }
+}
+
+async fn get_display_object_id(fullnode_api: &ReadApi, object_id: ObjectID) -> RpcResult<ObjectID> {
+    let object_type = get_object_type(fullnode_api, object_id).await?;
+    let display_created_event = fullnode_api
+        .state
+        .get_events(
+            EventQuery::MoveEvent(DisplayCreatedEvent::type_(&object_type).to_string()),
+            /* cursor */ None,
+            /* limit */ 1,
+            /* descending */ false,
+        )
+        .await?;
+    if display_created_event.is_empty() {
+        return Err(anyhow!(
+            "Failed to find DisplayCreated event for {object_type}"
+        ))?;
+    }
+    if let SuiEvent::MoveEvent { bcs, .. } = display_created_event[0].clone().1.event {
+        let display_object_id = bcs::from_bytes::<DisplayCreatedEvent>(&bcs)
+            .map_err(|e| anyhow!("Failed to deserialize DisplayCreatedEvent: {e}"))?
+            .id
+            .bytes;
+        Ok(display_object_id)
+    } else {
+        return Err(anyhow!("Failed to extract display object id from event"))?;
+    }
+}
+
+async fn get_object_type(fullnode_api: &ReadApi, object_id: ObjectID) -> RpcResult<StructTag> {
+    let object_read = fullnode_api
+        .state
+        .get_object_read(&object_id)
+        .await
+        .map_err(|e| anyhow!("Failed to fetch {object_id}: {e}"))?;
+    if let ObjectRead::Exists(_, o, _) = object_read {
+        let object_type = o
+            .type_()
+            .ok_or(anyhow!("Failed to extract object type"))?
+            .clone();
+        Ok(object_type)
+    } else {
+        return Err(anyhow!("Object {object_id} does not exist"))?;
     }
 }
 
