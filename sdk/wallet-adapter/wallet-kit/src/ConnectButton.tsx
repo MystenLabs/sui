@@ -12,7 +12,7 @@ import { WalletAdapter } from "@mysten/wallet-adapter-base/src/index";
 
 interface ConnectButtonProps extends ComponentProps<typeof Button> {
   connectText?: ReactNode;
-  loginedText?: string;
+  connectedText?: string;
   connectedFallback?: (
     wallet: WalletAdapter | null,
     selected: string | null
@@ -22,7 +22,7 @@ interface ConnectButtonProps extends ComponentProps<typeof Button> {
 
 export function ConnectButton({
   connectText = "Connect Wallet",
-  loginedText,
+  connectedText,
   connectedFallback,
   disconnectFallback,
   ...props
@@ -42,7 +42,7 @@ export function ConnectButton({
           type="button"
           {...props}
         >
-          {loginedText ?? formatAddress(currentAccount.address)}
+          {connectedText ?? formatAddress(currentAccount.address)}
         </Button>
       ) : (
         <Button
