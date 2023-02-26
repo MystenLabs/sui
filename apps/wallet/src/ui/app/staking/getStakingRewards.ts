@@ -15,11 +15,9 @@ export function getStakingRewards(
         delegation.delegation_status === 'Pending'
     )
         return 0;
-    const validatorAddress = delegation.staked_sui.validator_address;
+    const pool_id = delegation.staked_sui.pool_id;
     const validator = activeValidators.find(
-        ({ fields }) =>
-            fields.delegation_staking_pool.fields.validator_address ===
-            validatorAddress
+        ({ fields }) => fields.delegation_staking_pool.fields.id.id === pool_id
     );
 
     if (!validator) return 0;

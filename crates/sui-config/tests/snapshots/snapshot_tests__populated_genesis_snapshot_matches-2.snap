@@ -241,7 +241,7 @@ validators:
       pending_withdraw: 0
       gas_price: 1
       delegation_staking_pool:
-        validator_address: "0x21b60aa9a8cb189ccbe20461dbfad2202fdef55b"
+        id: "0xd5d9aa879b78dc1f516d71ab979189086eff752f"
         starting_epoch: 1
         sui_balance: 0
         rewards_pool:
@@ -249,7 +249,7 @@ validators:
         delegation_token_supply:
           value: 0
         pending_delegations:
-          id: "0xd5d9aa879b78dc1f516d71ab979189086eff752f"
+          id: "0xab8235dace3d68c7fb48110d63cbf4d6fd81ce10"
           size: 0
           head:
             vec: []
@@ -257,7 +257,7 @@ validators:
             vec: []
         pending_withdraws:
           contents:
-            id: "0xab8235dace3d68c7fb48110d63cbf4d6fd81ce10"
+            id: "0x18b8140c8a6ea340142f128061016fc4bd8220ec"
             size: 0
       commission_rate: 0
   pending_validators: []
@@ -487,6 +487,9 @@ validators:
       next_epoch_delegation: 0
       next_epoch_gas_price: 1
       next_epoch_commission_rate: 0
+  staking_pool_mappings:
+    id: "0x628ffd0e51e9a6ea32c13c2739a31a8f344b557d"
+    size: 1
 treasury_cap:
   value: 2
 storage_fund:

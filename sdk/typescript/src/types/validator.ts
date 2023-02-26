@@ -53,8 +53,8 @@ export const StakedSui = object({
   id: object({
     id: string(),
   }),
-  validator_address: SuiAddress,
-  pool_starting_epoch: number(),
+  pool_id: string(),
+  validator_address: string(),
   delegation_request_epoch: number(),
   principal: Balance,
   sui_token_lock: union([number(), literal(null)]),
@@ -126,13 +126,13 @@ export const PendingWithdawFields = object({
 });
 
 export const DelegationStakingPoolFields = object({
+  id: string(),
   delegation_token_supply: SuiSupplyFields,
   pending_delegations: ContentsFields,
   pending_withdraws: PendingWithdawFields,
   rewards_pool: object({ value: number() }),
   starting_epoch: number(),
   sui_balance: number(),
-  validator_address: string(),
 });
 
 export const DelegationStakingPool = object({
@@ -181,6 +181,10 @@ export const ValidatorSet = object({
   pending_delegation_switches: optional(
     object({ contents: array(ValidatorPair) }),
   ),
+  staking_pool_mappings: object({
+    id: string(),
+    size: number(),
+  }),
 });
 
 export const SuiSystemState = object({
@@ -237,12 +241,12 @@ export const MoveDelegationStakingPoolFields = object({
       value: string(),
     }),
   }),
+  id: object({ id: string() }),
   pending_delegations: MovePendingDelegations,
   pending_withdraws: MovePendingWithdrawals,
   rewards_pool: string(),
   starting_epoch: string(),
   sui_balance: string(),
-  validator_address: string(),
 });
 
 export type MoveSuiSystemObjectFields = Infer<typeof MoveSuiSystemObjectFields>;
@@ -299,6 +303,16 @@ export const MoveActiveValidator = object({
   fields: MoveActiveValidatorFields,
 });
 
+export const MoveStakingPoolMappings = object({
+  type: string(),
+  fields: object({
+    id: object({
+      id: string(),
+    }),
+    size: string(),
+  }),
+});
+
 export const MoveValidatorsFieldsClass = object({
   active_validators: array(MoveActiveValidator),
   next_epoch_validators: array(MoveNextEpochValidator),
@@ -307,6 +321,7 @@ export const MoveValidatorsFieldsClass = object({
   pending_removals: array(number()),
   pending_validators: array(number()),
   quorum_stake_threshold: optional(string()),
+  staking_pool_mappings: MoveStakingPoolMappings,
   total_delegation_stake: string(),
   total_validator_stake: string(),
 });

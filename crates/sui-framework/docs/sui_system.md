@@ -31,6 +31,8 @@
 -  [Function `epoch_start_timestamp_ms`](#0x2_sui_system_epoch_start_timestamp_ms)
 -  [Function `validator_delegate_amount`](#0x2_sui_system_validator_delegate_amount)
 -  [Function `validator_stake_amount`](#0x2_sui_system_validator_stake_amount)
+-  [Function `validator_staking_pool_id`](#0x2_sui_system_validator_staking_pool_id)
+-  [Function `validator_staking_pool_mappings`](#0x2_sui_system_validator_staking_pool_mappings)
 -  [Function `get_reporters_of`](#0x2_sui_system_get_reporters_of)
 -  [Function `extract_coin_balance`](#0x2_sui_system_extract_coin_balance)
 -  [Function `extract_locked_coin_balance`](#0x2_sui_system_extract_locked_coin_balance)
@@ -50,6 +52,7 @@
 <b>use</b> <a href="stake_subsidy.md#0x2_stake_subsidy">0x2::stake_subsidy</a>;
 <b>use</b> <a href="staking_pool.md#0x2_staking_pool">0x2::staking_pool</a>;
 <b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
+<b>use</b> <a href="table.md#0x2_table">0x2::table</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="validator.md#0x2_validator">0x2::validator</a>;
@@ -365,7 +368,7 @@ Create a new SuiSystemState object and make it shared.
 This function will be called only once in genesis.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, sui_supply: <a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_candidate_count: u64, min_validator_stake: u64, initial_stake_subsidy_amount: u64, protocol_version: u64, epoch_start_timestamp_ms: u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, sui_supply: <a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_candidate_count: u64, min_validator_stake: u64, initial_stake_subsidy_amount: u64, protocol_version: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -383,8 +386,9 @@ This function will be called only once in genesis.
     initial_stake_subsidy_amount: u64,
     protocol_version: u64,
     epoch_start_timestamp_ms: u64,
+    ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> validators = <a href="validator_set.md#0x2_validator_set_new">validator_set::new</a>(validators);
+    <b>let</b> validators = <a href="validator_set.md#0x2_validator_set_new">validator_set::new</a>(validators, ctx);
     <b>let</b> reference_gas_price = <a href="validator_set.md#0x2_validator_set_derive_reference_gas_price">validator_set::derive_reference_gas_price</a>(&validators);
     <b>let</b> state = <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a> {
         // Use a hardcoded ID.
@@ -1257,6 +1261,57 @@ Aborts if <code>validator_addr</code> is not an active validator.
 
 <pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_validator_stake_amount">validator_stake_amount</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>, validator_addr: <b>address</b>): u64 {
     <a href="validator_set.md#0x2_validator_set_validator_stake_amount">validator_set::validator_stake_amount</a>(&self.validators, validator_addr)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_validator_staking_pool_id"></a>
+
+## Function `validator_staking_pool_id`
+
+Returns the staking pool id of a given validator.
+Aborts if <code>validator_addr</code> is not an active validator.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_validator_staking_pool_id">validator_staking_pool_id</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, validator_addr: <b>address</b>): <a href="object.md#0x2_object_ID">object::ID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_validator_staking_pool_id">validator_staking_pool_id</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>, validator_addr: <b>address</b>): ID {
+    <a href="validator_set.md#0x2_validator_set_validator_staking_pool_id">validator_set::validator_staking_pool_id</a>(&self.validators, validator_addr)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_validator_staking_pool_mappings"></a>
+
+## Function `validator_staking_pool_mappings`
+
+Returns reference to the staking pool mappings that map pool ids to active validator addresses
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_validator_staking_pool_mappings">validator_staking_pool_mappings</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<a href="table.md#0x2_table_Table">table::Table</a>&lt;<a href="object.md#0x2_object_ID">object::ID</a>, <b>address</b>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_validator_staking_pool_mappings">validator_staking_pool_mappings</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &Table&lt;ID, <b>address</b>&gt; {
+    <a href="validator_set.md#0x2_validator_set_staking_pool_mappings">validator_set::staking_pool_mappings</a>(&self.validators)
 }
 </code></pre>
 

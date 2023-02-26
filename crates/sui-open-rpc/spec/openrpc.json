@@ -5486,7 +5486,7 @@
         "required": [
           "delegation_request_epoch",
           "id",
-          "pool_starting_epoch",
+          "pool_id",
           "principal",
           "validator_address"
         ],
@@ -5499,10 +5499,8 @@
           "id": {
             "$ref": "#/components/schemas/UID"
           },
-          "pool_starting_epoch": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+          "pool_id": {
+            "$ref": "#/components/schemas/ObjectID"
           },
           "principal": {
             "$ref": "#/components/schemas/Balance"
@@ -5525,16 +5523,19 @@
         "type": "object",
         "required": [
           "delegation_token_supply",
+          "id",
           "pending_delegations",
           "pending_withdraws",
           "rewards_pool",
           "starting_epoch",
-          "sui_balance",
-          "validator_address"
+          "sui_balance"
         ],
         "properties": {
           "delegation_token_supply": {
             "$ref": "#/components/schemas/Supply"
+          },
+          "id": {
+            "$ref": "#/components/schemas/ObjectID"
           },
           "pending_delegations": {
             "$ref": "#/components/schemas/LinkedTable_for_ObjectID"
@@ -5554,9 +5555,6 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
-          },
-          "validator_address": {
-            "$ref": "#/components/schemas/SuiAddress"
           }
         }
       },
@@ -6903,6 +6901,7 @@
           "next_epoch_validators",
           "pending_removals",
           "pending_validators",
+          "staking_pool_mappings",
           "validator_stake"
         ],
         "properties": {
@@ -6936,6 +6935,9 @@
             "items": {
               "$ref": "#/components/schemas/Validator"
             }
+          },
+          "staking_pool_mappings": {
+            "$ref": "#/components/schemas/Table"
           },
           "validator_stake": {
             "type": "integer",

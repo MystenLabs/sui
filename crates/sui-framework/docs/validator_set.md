@@ -25,6 +25,8 @@
 -  [Function `validator_total_stake_amount`](#0x2_validator_set_validator_total_stake_amount)
 -  [Function `validator_stake_amount`](#0x2_validator_set_validator_stake_amount)
 -  [Function `validator_delegate_amount`](#0x2_validator_set_validator_delegate_amount)
+-  [Function `validator_staking_pool_id`](#0x2_validator_set_validator_staking_pool_id)
+-  [Function `staking_pool_mappings`](#0x2_validator_set_staking_pool_mappings)
 -  [Function `next_epoch_validator_count`](#0x2_validator_set_next_epoch_validator_count)
 -  [Function `is_active_validator`](#0x2_validator_set_is_active_validator)
 -  [Function `contains_duplicate_validator`](#0x2_validator_set_contains_duplicate_validator)
@@ -54,10 +56,12 @@
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
+<b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="priority_queue.md#0x2_priority_queue">0x2::priority_queue</a>;
 <b>use</b> <a href="stake.md#0x2_stake">0x2::stake</a>;
 <b>use</b> <a href="staking_pool.md#0x2_staking_pool">0x2::staking_pool</a>;
 <b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
+<b>use</b> <a href="table.md#0x2_table">0x2::table</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="validator.md#0x2_validator">0x2::validator</a>;
 <b>use</b> <a href="vec_map.md#0x2_vec_map">0x2::vec_map</a>;
@@ -123,6 +127,12 @@
  The metadata of the validator set for the next epoch. This is kept up-to-dated.
  Every time a change request is received, this set is updated.
  TODO: This is currently not used. We may use it latter for enforcing min/max stake.
+</dd>
+<dt>
+<code>staking_pool_mappings: <a href="table.md#0x2_table_Table">table::Table</a>&lt;<a href="object.md#0x2_object_ID">object::ID</a>, <b>address</b>&gt;</code>
+</dt>
+<dd>
+ Mappings from staking pool's ID to the sui address of a validator.
 </dd>
 </dl>
 
@@ -305,7 +315,7 @@ each validator, emitted during epoch advancement.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_new">new</a>(init_active_validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;): <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_new">new</a>(init_active_validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>
 </code></pre>
 
 
@@ -314,9 +324,17 @@ each validator, emitted during epoch advancement.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_new">new</a>(init_active_validators: <a href="">vector</a>&lt;Validator&gt;): <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a> {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_new">new</a>(init_active_validators: <a href="">vector</a>&lt;Validator&gt;, ctx: &<b>mut</b> TxContext): <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a> {
     <b>let</b> (total_validator_stake, total_delegation_stake) =
         <a href="validator_set.md#0x2_validator_set_calculate_total_stakes">calculate_total_stakes</a>(&init_active_validators);
+    <b>let</b> staking_pool_mappings = <a href="table.md#0x2_table_new">table::new</a>(ctx);
+    <b>let</b> num_validators = <a href="_length">vector::length</a>(&init_active_validators);
+    <b>let</b> i = 0;
+    <b>while</b> (i &lt; num_validators) {
+        <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_borrow">vector::borrow</a>(&init_active_validators, i);
+        <a href="table.md#0x2_table_add">table::add</a>(&<b>mut</b> staking_pool_mappings, staking_pool_id(<a href="validator.md#0x2_validator">validator</a>), sui_address(<a href="validator.md#0x2_validator">validator</a>));
+        i = i + 1;
+    };
     <b>let</b> validators = <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a> {
         total_validator_stake,
         total_delegation_stake,
@@ -324,6 +342,7 @@ each validator, emitted during epoch advancement.
         pending_validators: <a href="_empty">vector::empty</a>(),
         pending_removals: <a href="_empty">vector::empty</a>(),
         next_epoch_validators: <a href="_empty">vector::empty</a>(),
+        staking_pool_mappings,
     };
     validators.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(&validators);
     <a href="voting_power.md#0x2_voting_power_set_voting_power">voting_power::set_voting_power</a>(&<b>mut</b> validators.active_validators);
@@ -549,7 +568,7 @@ of the epoch.
     staked_sui: StakedSui,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> validator_address = <a href="staking_pool.md#0x2_staking_pool_validator_address">staking_pool::validator_address</a>(&staked_sui);
+    <b>let</b> validator_address = *<a href="table.md#0x2_table_borrow">table::borrow</a>(&self.staking_pool_mappings, pool_id(&staked_sui));
     <b>let</b> validator_index_opt = <a href="validator_set.md#0x2_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address);
 
     <b>assert</b>!(<a href="_is_some">option::is_some</a>(&validator_index_opt), 0);
@@ -721,7 +740,7 @@ It does the following things:
     <a href="validator_set.md#0x2_validator_set_emit_validator_epoch_events">emit_validator_epoch_events</a>(new_epoch, &self.active_validators, &adjusted_staking_reward_amounts,
         &validator_report_records, &slashed_validators);
 
-    <a href="validator_set.md#0x2_validator_set_process_pending_validators">process_pending_validators</a>(&<b>mut</b> self.active_validators, &<b>mut</b> self.pending_validators);
+    <a href="validator_set.md#0x2_validator_set_process_pending_validators">process_pending_validators</a>(self);
 
     <a href="validator_set.md#0x2_validator_set_process_pending_removals">process_pending_removals</a>(self, ctx);
 
@@ -905,6 +924,55 @@ gas price, weighted by stake.
 <pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_validator_delegate_amount">validator_delegate_amount</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): u64 {
     <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_validator_ref">get_validator_ref</a>(&self.active_validators, validator_address);
     <a href="validator.md#0x2_validator_delegate_amount">validator::delegate_amount</a>(<a href="validator.md#0x2_validator">validator</a>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_validator_staking_pool_id"></a>
+
+## Function `validator_staking_pool_id`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_validator_staking_pool_id">validator_staking_pool_id</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): <a href="object.md#0x2_object_ID">object::ID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_validator_staking_pool_id">validator_staking_pool_id</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): ID {
+    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_validator_ref">get_validator_ref</a>(&self.active_validators, validator_address);
+    <a href="validator.md#0x2_validator_staking_pool_id">validator::staking_pool_id</a>(<a href="validator.md#0x2_validator">validator</a>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_staking_pool_mappings"></a>
+
+## Function `staking_pool_mappings`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_staking_pool_mappings">staking_pool_mappings</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>): &<a href="table.md#0x2_table_Table">table::Table</a>&lt;<a href="object.md#0x2_object_ID">object::ID</a>, <b>address</b>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_staking_pool_mappings">staking_pool_mappings</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>): &Table&lt;ID, <b>address</b>&gt; {
+    &self.staking_pool_mappings
 }
 </code></pre>
 
@@ -1157,6 +1225,7 @@ is removed from <code>validators</code> and sent back to the address of the vali
     <b>while</b> (!<a href="_is_empty">vector::is_empty</a>(&self.pending_removals)) {
         <b>let</b> index = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> self.pending_removals);
         <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_remove">vector::remove</a>(&<b>mut</b> self.active_validators, index);
+        <a href="table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> self.staking_pool_mappings, staking_pool_id(&<a href="validator.md#0x2_validator">validator</a>));
         self.total_delegation_stake = self.total_delegation_stake - <a href="validator.md#0x2_validator_delegate_amount">validator::delegate_amount</a>(&<a href="validator.md#0x2_validator">validator</a>);
         <a href="validator.md#0x2_validator_destroy">validator::destroy</a>(<a href="validator.md#0x2_validator">validator</a>, ctx);
     }
@@ -1174,7 +1243,7 @@ is removed from <code>validators</code> and sent back to the address of the vali
 Process the pending new validators. They are simply inserted into <code>validators</code>.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_pending_validators">process_pending_validators</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, pending_validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;)
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_pending_validators">process_pending_validators</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>)
 </code></pre>
 
 
@@ -1184,11 +1253,12 @@ Process the pending new validators. They are simply inserted into <code>validato
 
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_pending_validators">process_pending_validators</a>(
-    validators: &<b>mut</b> <a href="">vector</a>&lt;Validator&gt;, pending_validators: &<b>mut</b> <a href="">vector</a>&lt;Validator&gt;
+    self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
 ) {
-    <b>while</b> (!<a href="_is_empty">vector::is_empty</a>(pending_validators)) {
-        <b>let</b> v = <a href="_pop_back">vector::pop_back</a>(pending_validators);
-        <a href="_push_back">vector::push_back</a>(validators, v);
+    <b>while</b> (!<a href="_is_empty">vector::is_empty</a>(&self.pending_validators)) {
+        <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> self.pending_validators);
+        <a href="table.md#0x2_table_add">table::add</a>(&<b>mut</b> self.staking_pool_mappings, staking_pool_id(&<a href="validator.md#0x2_validator">validator</a>), sui_address(&<a href="validator.md#0x2_validator">validator</a>));
+        <a href="_push_back">vector::push_back</a>(&<b>mut</b> self.active_validators, <a href="validator.md#0x2_validator">validator</a>);
     }
 }
 </code></pre>
