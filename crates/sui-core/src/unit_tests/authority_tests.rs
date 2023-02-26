@@ -1529,7 +1529,8 @@ async fn test_package_size_limit() {
             error: ExecutionFailureStatus::MovePackageTooBig {
                 object_size: package_size,
                 max_object_size: max_move_package_size
-            }
+            },
+            command: None,
         }
     )
 }

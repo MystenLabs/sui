@@ -87,10 +87,10 @@ pub fn execute_transaction_to_effects<
 
     let (status, execution_result) = match execution_result {
         Ok(results) => (ExecutionStatus::Success, Ok(results)),
-        Err(error) => (
-            ExecutionStatus::new_failure(error.to_execution_status()),
-            Err(error),
-        ),
+        Err(error) => {
+            let (status, command) = error.to_execution_status();
+            (ExecutionStatus::new_failure(status, command), Err(error))
+        }
     };
     debug!(
         computation_gas_cost = gas_cost_summary.computation_cost,
@@ -777,7 +777,8 @@ fn test_pay_empty_coins() {
     assert_eq!(
         pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
             .unwrap_err()
-            .to_execution_status(),
+            .to_execution_status()
+            .0,
         ExecutionFailureStatus::EmptyInputCoins
     );
 }
@@ -796,7 +797,8 @@ fn test_pay_empty_recipients() {
     assert_eq!(
         pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
             .unwrap_err()
-            .to_execution_status(),
+            .to_execution_status()
+            .0,
         ExecutionFailureStatus::EmptyRecipients
     );
 }
@@ -815,7 +817,8 @@ fn test_pay_empty_amounts() {
     assert_eq!(
         pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
             .unwrap_err()
-            .to_execution_status(),
+            .to_execution_status()
+            .0,
         ExecutionFailureStatus::RecipientsAmountsArityMismatch
     );
 }
@@ -838,7 +841,8 @@ fn test_pay_arity_mismatch() {
     assert_eq!(
         pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
             .unwrap_err()
-            .to_execution_status(),
+            .to_execution_status()
+            .0,
         ExecutionFailureStatus::RecipientsAmountsArityMismatch
     );
 }
@@ -860,7 +864,8 @@ fn test_pay_amount_overflow() {
     assert_eq!(
         pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
             .unwrap_err()
-            .to_execution_status(),
+            .to_execution_status()
+            .0,
         ExecutionFailureStatus::TotalAmountOverflow
     );
 }
@@ -888,7 +893,8 @@ fn test_pay_insufficient_balance() {
     assert_eq!(
         pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
             .unwrap_err()
-            .to_execution_status(),
+            .to_execution_status()
+            .0,
         ExecutionFailureStatus::InsufficientBalance
     );
 }
