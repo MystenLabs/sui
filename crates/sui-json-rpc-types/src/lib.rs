@@ -2107,8 +2107,17 @@ impl From<ExecutionStatus> for SuiExecutionStatus {
     fn from(status: ExecutionStatus) -> Self {
         match status {
             ExecutionStatus::Success => Self::Success,
-            ExecutionStatus::Failure { error } => Self::Failure {
-                error: format!("{:?}", error),
+            ExecutionStatus::Failure {
+                error,
+                command: None,
+            } => Self::Failure {
+                error: format!("{error:?}"),
+            },
+            ExecutionStatus::Failure {
+                error,
+                command: Some(idx),
+            } => Self::Failure {
+                error: format!("{error:?} in command {idx}"),
             },
         }
     }

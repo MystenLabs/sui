@@ -22,7 +22,7 @@ Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui
 
 task 5 'transfer-object'. lines 35-35:
 Error: Transaction Effects Status: Invalid Transfer Object Transaction. Possibly not address-owned or possibly does not have public transfer.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidTransferObject, source: None } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidTransferObject, source: None, command: None } }
 
 task 6 'view-object'. lines 37-37:
 Owner: Object ID: ( fake(108) )

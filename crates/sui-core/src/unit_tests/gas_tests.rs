@@ -193,7 +193,7 @@ async fn test_transfer_sui_insufficient_gas() {
     // We expect this to fail due to insufficient gas.
     assert_eq!(
         effects.status,
-        ExecutionStatus::new_failure(ExecutionFailureStatus::InsufficientGas)
+        ExecutionStatus::new_failure(ExecutionFailureStatus::InsufficientGas, None)
     );
     // Ensure that the owner of the object did not change if the transfer failed.
     assert_eq!(effects.mutated[0].1, sender);
@@ -213,7 +213,7 @@ async fn test_native_transfer_insufficient_gas_reading_objects() {
         .into_effects_for_testing()
         .into_data();
     assert_eq!(
-        effects.status.unwrap_err(),
+        effects.status.unwrap_err().0,
         ExecutionFailureStatus::InsufficientGas
     );
 }
@@ -256,7 +256,7 @@ async fn test_native_transfer_insufficient_gas_execution() {
     assert_eq!(owner, &gas_object.owner);
 
     assert_eq!(
-        effects.status.unwrap_err(),
+        effects.status.unwrap_err().0,
         ExecutionFailureStatus::InsufficientGas,
     );
 }
@@ -359,7 +359,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     .await;
     let effects = response.1.into_data();
     let gas_cost = effects.gas_used;
-    let err = effects.status.unwrap_err();
+    let err = effects.status.unwrap_err().0;
 
     assert_eq!(err, ExecutionFailureStatus::InsufficientGas);
 
@@ -391,7 +391,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     .await;
     let effects = response.1.into_data();
     let gas_cost = effects.gas_used;
-    let err = effects.status.unwrap_err();
+    let err = effects.status.unwrap_err().0;
     assert_eq!(err, ExecutionFailureStatus::InsufficientGas);
     assert_eq!(gas_cost.storage_cost, 0);
     assert_eq!(gas_cost.storage_rebate, 0);
@@ -521,7 +521,7 @@ async fn test_move_call_gas() -> SuiResult {
     let response = send_and_confirm_transaction(&authority_state, transaction).await?;
     let effects = response.1.into_data();
     let gas_cost = effects.gas_used;
-    let err = effects.status.unwrap_err();
+    let err = effects.status.unwrap_err().0;
     // We will run out of gas during VM execution.
     assert!(matches!(err, ExecutionFailureStatus::InsufficientGas));
     let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();

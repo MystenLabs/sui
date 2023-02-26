@@ -807,6 +807,7 @@ async fn test_handle_transaction_response() {
         transaction_digest: *cert_epoch_0.digest(),
         status: ExecutionStatus::Failure {
             error: ExecutionFailureStatus::InsufficientGas,
+            command: None,
         },
         ..Default::default()
     };
