@@ -9,7 +9,6 @@ import {
     localnetConnection,
 } from '@mysten/sui.js';
 
-
 export enum Network {
     LOCAL = 'LOCAL',
     DEVNET = 'DEVNET',
