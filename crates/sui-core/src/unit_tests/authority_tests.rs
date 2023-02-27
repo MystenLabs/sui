@@ -2940,16 +2940,24 @@ async fn test_genesis_sui_system_state_object() {
     // This test verifies that we can read the genesis SuiSystemState object.
     // And its Move layout matches the definition in Rust (so that we can deserialize it).
     let authority_state = init_state().await;
-    let sui_system_object = authority_state
+    let wrapper = authority_state
         .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(sui_system_object.version(), SequenceNumber::from(1));
-    let move_object = sui_system_object.data.try_as_move().unwrap();
+    assert_eq!(wrapper.version(), SequenceNumber::from(1));
+    let move_object = wrapper.data.try_as_move().unwrap();
     let _sui_system_state =
         bcs::from_bytes::<SuiSystemStateWrapper>(move_object.contents()).unwrap();
     assert_eq!(move_object.type_, SuiSystemStateWrapper::type_());
+    let sui_system_state = authority_state
+        .database
+        .get_sui_system_state_object()
+        .unwrap();
+    assert_eq!(
+        &sui_system_state.get_current_epoch_committee().committee,
+        authority_state.epoch_store_for_testing().committee()
+    );
 }
 
 #[tokio::test]

@@ -159,7 +159,7 @@ impl Genesis {
     }
 
     pub fn sui_system_wrapper_object(&self) -> SuiSystemStateWrapper {
-        get_sui_system_state_wrapper(self.objects())
+        get_sui_system_state_wrapper(&self.objects())
             .expect("Sui System State Wrapper object must always exist")
     }
 

@@ -192,7 +192,6 @@ export const ValidatorSet = object({
 });
 
 export const SuiSystemState = object({
-  info: object({ id: string() }),
   epoch: number(),
   // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
   protocol_version: optional(number()),

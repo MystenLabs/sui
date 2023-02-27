@@ -8,13 +8,11 @@ use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{
     get_key_pair, AuthorityPublicKeyBytes, KeypairTraits, NetworkKeyPair, ToFromBytes,
 };
-use sui_types::id::UID;
 use sui_types::sui_system_state::SystemParameters;
 use sui_types::sui_system_state::{
     StakeSubsidy, StakingPool, SuiSystemState, Table, TableVec, Validator, ValidatorMetadata,
     ValidatorSet,
 };
-use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 
 pub fn test_validatdor_metadata(
     sui_address: SuiAddress,
@@ -81,7 +79,6 @@ pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiS
         staking_pool_mappings: Table::default(),
     };
     SuiSystemState {
-        info: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),
         epoch,
         protocol_version: ProtocolVersion::MAX.as_u64(),
         validators: validator_set,

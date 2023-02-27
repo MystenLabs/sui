@@ -2,8 +2,6 @@
 source: crates/sui-config/tests/snapshot_tests.rs
 expression: genesis.sui_system_object()
 ---
-info:
-  id: "0x9dc97c4be6f1d0e61fbdf2cc9d78f9df04cdff7a473e2ec3a65853766dca1177"
 epoch: 0
 protocol_version: 1
 validators:

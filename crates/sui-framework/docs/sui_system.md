@@ -6,7 +6,7 @@
 
 
 -  [Struct `SystemParameters`](#0x2_sui_system_SystemParameters)
--  [Resource `SuiSystemStateInner`](#0x2_sui_system_SuiSystemStateInner)
+-  [Struct `SuiSystemStateInner`](#0x2_sui_system_SuiSystemStateInner)
 -  [Resource `SuiSystemState`](#0x2_sui_system_SuiSystemState)
 -  [Struct `SystemEpochInfo`](#0x2_sui_system_SystemEpochInfo)
 -  [Constants](#@Constants_0)
@@ -25,14 +25,14 @@
 -  [Function `advance_epoch`](#0x2_sui_system_advance_epoch)
 -  [Function `advance_epoch_safe_mode`](#0x2_sui_system_advance_epoch_safe_mode)
 -  [Function `consensus_commit_prologue`](#0x2_sui_system_consensus_commit_prologue)
--  [Function `load_system_state`](#0x2_sui_system_load_system_state)
--  [Function `load_system_state_mut`](#0x2_sui_system_load_system_state_mut)
 -  [Function `epoch`](#0x2_sui_system_epoch)
 -  [Function `epoch_start_timestamp_ms`](#0x2_sui_system_epoch_start_timestamp_ms)
 -  [Function `validator_stake_amount`](#0x2_sui_system_validator_stake_amount)
 -  [Function `validator_staking_pool_id`](#0x2_sui_system_validator_staking_pool_id)
 -  [Function `validator_staking_pool_mappings`](#0x2_sui_system_validator_staking_pool_mappings)
 -  [Function `get_reporters_of`](#0x2_sui_system_get_reporters_of)
+-  [Function `load_system_state`](#0x2_sui_system_load_system_state)
+-  [Function `load_system_state_mut`](#0x2_sui_system_load_system_state_mut)
 -  [Function `extract_coin_balance`](#0x2_sui_system_extract_coin_balance)
 -  [Function `extract_locked_coin_balance`](#0x2_sui_system_extract_locked_coin_balance)
 -  [Function `validators`](#0x2_sui_system_validators)
@@ -42,6 +42,7 @@
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="clock.md#0x2_clock">0x2::clock</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
+<b>use</b> <a href="dynamic_field.md#0x2_dynamic_field">0x2::dynamic_field</a>;
 <b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="locked_coin.md#0x2_locked_coin">0x2::locked_coin</a>;
@@ -98,12 +99,12 @@ A list of system config parameters.
 
 <a name="0x2_sui_system_SuiSystemStateInner"></a>
 
-## Resource `SuiSystemStateInner`
+## Struct `SuiSystemStateInner`
 
 The top-level object containing all information of the Sui system.
 
 
-<pre><code><b>struct</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> <b>has</b> store, key
+<pre><code><b>struct</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> <b>has</b> store
 </code></pre>
 
 
@@ -113,12 +114,6 @@ The top-level object containing all information of the Sui system.
 
 
 <dl>
-<dt>
-<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
-</dt>
-<dd>
-
-</dd>
 <dt>
 <code>epoch: u64</code>
 </dt>
@@ -216,12 +211,6 @@ The top-level object containing all information of the Sui system.
 </dd>
 <dt>
 <code>version: u64</code>
-</dt>
-<dd>
-
-</dd>
-<dt>
-<code>system_state: <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">sui_system::SuiSystemStateInner</a></code>
 </dt>
 <dd>
 
@@ -422,7 +411,6 @@ This function will be called only once in genesis.
     <b>let</b> validators = <a href="validator_set.md#0x2_validator_set_new">validator_set::new</a>(validators, ctx);
     <b>let</b> reference_gas_price = <a href="validator_set.md#0x2_validator_set_derive_reference_gas_price">validator_set::derive_reference_gas_price</a>(&validators);
     <b>let</b> system_state = <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> {
-        id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
         epoch: 0,
         protocol_version,
         validators,
@@ -441,9 +429,8 @@ This function will be called only once in genesis.
         // Use a hardcoded ID.
         id: <a href="object.md#0x2_object_sui_system_state">object::sui_system_state</a>(),
         version: protocol_version,
-        system_state,
     };
-    // <a href="dynamic_object_field.md#0x2_dynamic_object_field_add">dynamic_object_field::add</a>(&<b>mut</b> self.id, self.version, system_state);
+    <a href="dynamic_field.md#0x2_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> self.id, protocol_version, system_state);
     <a href="transfer.md#0x2_transfer_share_object">transfer::share_object</a>(self);
 }
 </code></pre>
@@ -1097,56 +1084,6 @@ version
 
 </details>
 
-<a name="0x2_sui_system_load_system_state"></a>
-
-## Function `load_system_state`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state">load_system_state</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">sui_system::SuiSystemStateInner</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state">load_system_state</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &<a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> {
-    &self.system_state
-    // <a href="dynamic_object_field.md#0x2_dynamic_object_field_borrow">dynamic_object_field::borrow</a>(&self.id, self.version)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_sui_system_load_system_state_mut"></a>
-
-## Function `load_system_state_mut`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">sui_system::SuiSystemStateInner</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> {
-    &<b>mut</b> self.system_state
-    // <a href="dynamic_object_field.md#0x2_dynamic_object_field_borrow_mut">dynamic_object_field::borrow_mut</a>(&<b>mut</b> self.id, self.version)
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_sui_system_epoch"></a>
 
 ## Function `epoch`
@@ -1303,6 +1240,54 @@ Returns all the validators who have reported <code>addr</code> this epoch.
     } <b>else</b> {
         <a href="vec_set.md#0x2_vec_set_empty">vec_set::empty</a>()
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_load_system_state"></a>
+
+## Function `load_system_state`
+
+
+
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state">load_system_state</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">sui_system::SuiSystemStateInner</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state">load_system_state</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &<a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> {
+    <a href="dynamic_field.md#0x2_dynamic_field_borrow">dynamic_field::borrow</a>(&self.id, self.version)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_load_system_state_mut"></a>
+
+## Function `load_system_state_mut`
+
+
+
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">sui_system::SuiSystemStateInner</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> {
+    <a href="dynamic_field.md#0x2_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, self.version)
 }
 </code></pre>
 

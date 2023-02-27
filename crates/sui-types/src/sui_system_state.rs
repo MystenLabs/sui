@@ -5,13 +5,18 @@ use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::collection_types::{VecMap, VecSet};
 use crate::committee::{Committee, CommitteeWithNetAddresses, ProtocolVersion, StakeUnit};
 use crate::crypto::AuthorityPublicKeyBytes;
+use crate::dynamic_field::{derive_dynamic_field_id, Field};
 use crate::error::SuiError;
+use crate::id::UID;
 use crate::storage::ObjectStore;
-use crate::{balance::Balance, id::UID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
+use crate::{balance::Balance, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
 
 use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;
+use move_core_types::language_storage::TypeTag;
+use move_core_types::value::MoveTypeLayout;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
+use move_vm_types::values::Value;
 use multiaddr::Multiaddr;
 use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
 use schemars::JsonSchema;
@@ -285,7 +290,6 @@ pub struct ValidatorSet {
 /// We want to keep it named as SuiSystemState in Rust since this is the primary interface type.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct SuiSystemState {
-    pub info: UID,
     pub epoch: u64,
     pub protocol_version: u64,
     pub validators: ValidatorSet,
@@ -302,9 +306,8 @@ pub struct SuiSystemState {
 /// Rust version of the Move sui::sui_system::SuiSystemState type
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SuiSystemStateWrapper {
-    pub info: UID,
+    pub id: UID,
     pub version: u64,
-    pub system_state: SuiSystemState,
 }
 
 impl SuiSystemStateWrapper {
@@ -421,7 +424,6 @@ impl Default for SuiSystemState {
             staking_pool_mappings: Table::default(),
         };
         SuiSystemState {
-            info: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),
             epoch: 0,
             protocol_version: ProtocolVersion::MIN.as_u64(),
             validators: validator_set,
@@ -443,7 +445,7 @@ impl Default for SuiSystemState {
     }
 }
 
-pub fn get_sui_system_state_wrapper<S>(object_store: S) -> Result<SuiSystemStateWrapper, SuiError>
+pub fn get_sui_system_state_wrapper<S>(object_store: &S) -> Result<SuiSystemStateWrapper, SuiError>
 where
     S: ObjectStore,
 {
@@ -463,6 +465,22 @@ pub fn get_sui_system_state<S>(object_store: S) -> Result<SuiSystemState, SuiErr
 where
     S: ObjectStore,
 {
-    let wrapper = get_sui_system_state_wrapper(object_store)?;
-    Ok(wrapper.system_state)
+    let wrapper = get_sui_system_state_wrapper(&object_store)?;
+    let inner_id = derive_dynamic_field_id(
+        wrapper.id.id.bytes,
+        &TypeTag::U64,
+        &MoveTypeLayout::U64,
+        &Value::u64(wrapper.version),
+    )
+    .expect("Sui System State object must exist");
+    let inner = object_store
+        .get_object(&inner_id)?
+        .ok_or(SuiError::SuiSystemStateNotFound)?;
+    let move_object = inner
+        .data
+        .try_as_move()
+        .ok_or(SuiError::SuiSystemStateNotFound)?;
+    let result = bcs::from_bytes::<Field<u64, SuiSystemState>>(move_object.contents())
+        .expect("Sui System State object deserialization cannot fail");
+    Ok(result.value)
 }

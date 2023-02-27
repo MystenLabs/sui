@@ -6073,7 +6073,6 @@
         "required": [
           "epoch",
           "epoch_start_timestamp_ms",
-          "info",
           "parameters",
           "protocol_version",
           "reference_gas_price",
@@ -6093,9 +6092,6 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
-          },
-          "info": {
-            "$ref": "#/components/schemas/UID"
           },
           "parameters": {
             "$ref": "#/components/schemas/SystemParameters"
