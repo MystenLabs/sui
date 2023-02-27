@@ -10,7 +10,7 @@ export const RpcClientContext = createContext<JsonRpcProvider | undefined>(
 
 export function useRpcClient() {
     const rpcClient = useContext(RpcClientContext);
-    if (rpcClient === undefined) {
+    if (!rpcClient) {
         throw new Error('useRpcClient must be within RpcClientContext');
     }
     return rpcClient;
