@@ -28,6 +28,7 @@ export const ValidatorMetaData = object({
   description: string(),
   image_url: string(),
   project_url: string(),
+  p2p_address: array(number()),
   net_address: array(number()),
   consensus_address: array(number()),
   worker_address: array(number()),
