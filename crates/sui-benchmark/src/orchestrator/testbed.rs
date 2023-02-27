@@ -25,7 +25,7 @@ use crate::{
 
 use super::{
     config::Config,
-    metrics::MetricsAggregator,
+    metrics::MetricsCollector,
     ssh::{SshCommand, SshConnectionManager},
     BenchmarkParameters,
 };
@@ -509,7 +509,7 @@ impl<C> Testbed<C> {
 
     pub async fn scrape(
         &self,
-        aggregator: &mut MetricsAggregator<usize>,
+        aggregator: &mut MetricsCollector<usize>,
         parameters: &BenchmarkParameters,
     ) -> TestbedResult<()> {
         let instances = self.select_instances(parameters)?;

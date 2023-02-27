@@ -8623,7 +8623,6 @@ dependencies = [
  "async-trait",
  "base64",
  "bcs",
- "chrono",
  "clap 3.2.23",
  "color-eyre",
  "comfy-table",

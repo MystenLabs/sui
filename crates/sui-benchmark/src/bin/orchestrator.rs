@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
     client.upload_key(public_key).await?;
 
     let parameters = BenchmarkParameters {
-        nodes: 10,
+        nodes: 4,
         faults: 0,
         load: 600,
         duration: Duration::from_secs(120),

@@ -3,7 +3,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tokio::time;
 
-use crate::orchestrator::metrics::MetricsAggregator;
+use crate::orchestrator::metrics::MetricsCollector;
 
 use self::{client::VultrClient, error::TestbedResult, testbed::Testbed};
 
@@ -120,7 +120,7 @@ impl Orchestrator {
             // Wait for the benchmark to terminate.
             println!("Waiting for about {}s...", parameters.duration.as_secs());
 
-            let mut aggregator = MetricsAggregator::new(parameters.clone());
+            let mut aggregator = MetricsCollector::new(parameters.clone());
             let mut interval = time::interval(Duration::from_secs(30));
             interval.tick().await;
             loop {

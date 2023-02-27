@@ -1,6 +1,5 @@
 use std::{collections::HashMap, fs, hash::Hash, io::BufRead, path::PathBuf, time::Duration};
 
-use chrono::{DateTime, Utc};
 use num_integer::Roots;
 use prettytable::{format, row, Table};
 use prometheus_parse::Scrape;
@@ -59,23 +58,55 @@ impl DataPoint {
         let stdev = variance.unwrap_or_default().sqrt();
         Duration::from_millis(stdev as u64)
     }
+
+    /// Aggregate the benchmark duration of multiple data points by taking the max.
+    pub fn aggregate_duration(data_points: &[&Self]) -> Duration {
+        data_points
+            .iter()
+            .map(|x| x.timestamp)
+            .max()
+            .unwrap_or_default()
+    }
+
+    /// Aggregate the tps of multiple data points by taking the sum.
+    pub fn aggregate_tps(data_points: &[&Self]) -> u64 {
+        data_points.iter().map(|x| x.tps()).sum()
+    }
+
+    /// Aggregate the average latency of multiple data points by taking the average.
+    pub fn aggregate_average_latency(data_points: &[&Self]) -> Duration {
+        Duration::from_millis(
+            data_points
+                .iter()
+                .map(|x| x.average_latency().as_millis())
+                .sum::<u128>()
+                .checked_div(data_points.len() as u128)
+                .unwrap_or_default() as u64,
+        )
+    }
+
+    /// Aggregate the stdev latency of multiple data points by taking the max.
+    pub fn aggregate_stdev_latency(data_points: &[&Self]) -> Duration {
+        data_points
+            .iter()
+            .map(|x| x.stdev_latency())
+            .max()
+            .unwrap_or_default()
+    }
 }
 
 #[derive(Serialize)]
-pub struct MetricsAggregator<ScraperId: Serialize> {
-    #[serde(skip_serializing)]
-    start: DateTime<Utc>,
+pub struct MetricsCollector<ScraperId: Serialize> {
     parameters: BenchmarkParameters,
     scrapers: HashMap<ScraperId, Vec<DataPoint>>,
 }
 
-impl<ScraperId> MetricsAggregator<ScraperId>
+impl<ScraperId> MetricsCollector<ScraperId>
 where
     ScraperId: Eq + Hash + Serialize,
 {
     pub fn new(parameters: BenchmarkParameters) -> Self {
         Self {
-            start: Utc::now(),
             parameters,
             scrapers: HashMap::new(),
         }
@@ -112,17 +143,13 @@ where
             })
             .unwrap_or_default();
 
-        let (count, timestamp) = parsed
+        let count = parsed
             .samples
             .iter()
             .find(|x| x.metric == "latency_s_count")
-            .map(|x| {
-                let count = match x.value {
-                    prometheus_parse::Value::Untyped(value) => value as usize,
-                    _ => panic!("Unexpected scraped value"),
-                };
-                let timestamp = x.timestamp;
-                (count, timestamp)
+            .map(|x| match x.value {
+                prometheus_parse::Value::Untyped(value) => value as usize,
+                _ => panic!("Unexpected scraped value"),
             })
             .unwrap_or_default();
 
@@ -136,7 +163,7 @@ where
             })
             .unwrap_or_default();
 
-        let benchmark_duration = parsed
+        let duration = parsed
             .samples
             .iter()
             .find(|x| x.metric == "benchmark_duration")
@@ -146,18 +173,10 @@ where
             })
             .unwrap_or_default();
 
-        let duration = (timestamp - self.start.clone()).to_std().unwrap();
-
         self.scrapers
             .entry(scraper_id)
             .or_insert_with(Vec::new)
-            .push(DataPoint::new(
-                benchmark_duration,
-                buckets,
-                sum,
-                count,
-                squared_sum,
-            ));
+            .push(DataPoint::new(duration, buckets, sum, count, squared_sum));
     }
 
     pub fn save(&self) {
@@ -168,18 +187,10 @@ where
 
     pub fn print_summary(&self, parameters: &BenchmarkParameters) {
         let last_data_points: Vec<_> = self.scrapers.values().filter_map(|x| x.last()).collect();
-        let duration = last_data_points
-            .iter()
-            .map(|x| x.timestamp)
-            .max()
-            .unwrap_or_default();
-        let total_tps: u64 = last_data_points.iter().map(|x| x.tps()).sum();
-        let average_latency = last_data_points
-            .iter()
-            .map(|x| x.average_latency().as_millis())
-            .sum::<u128>()
-            .checked_div(last_data_points.len() as u128)
-            .unwrap_or_default();
+        let duration = DataPoint::aggregate_duration(&last_data_points);
+        let total_tps = DataPoint::aggregate_tps(&last_data_points);
+        let average_latency = DataPoint::aggregate_average_latency(&last_data_points);
+        let stdev_latency = DataPoint::aggregate_stdev_latency(&last_data_points);
 
         let mut table = Table::new();
         let format = format::FormatBuilder::new()
@@ -203,7 +214,8 @@ where
         table.add_row(row![b->"Duration:", format!("{} s", duration.as_secs())]);
         table.add_row(row![bH2->""]);
         table.add_row(row![b->"TPS:", format!("{total_tps} tx/s")]);
-        table.add_row(row![b->"Latency (avg):", format!("{average_latency} ms")]);
+        table.add_row(row![b->"Latency (avg):", format!("{} ms", average_latency.as_millis())]);
+        table.add_row(row![b->"Latency (stdev):", format!("{} ms", stdev_latency.as_millis())]);
         table.printstd();
         println!();
     }
@@ -211,46 +223,76 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
+    use std::{collections::HashMap, time::Duration};
 
-    use super::{BenchmarkParameters, MetricsAggregator};
+    use super::{BenchmarkParameters, DataPoint, MetricsCollector};
 
-    const EXAMPLE: &'static str = r#"
-        # HELP benchmark_duration Duration of the benchmark
-        # TYPE benchmark_duration counter
-        benchmark_duration 30
-        # HELP latency_s Total time in seconds to return a response
-        # TYPE latency_s histogram
-        latency_s_bucket{workload=transfer_object,le=0.1} 0
-        latency_s_bucket{workload=transfer_object,le=0.25} 0
-        latency_s_bucket{workload=transfer_object,le=0.5} 506
-        latency_s_bucket{workload=transfer_object,le=0.75} 1282
-        latency_s_bucket{workload=transfer_object,le=1} 1693
-        latency_s_bucket{workload="transfer_object",le="1.25"} 1816
-        latency_s_bucket{workload="transfer_object",le="1.5"} 1860
-        latency_s_bucket{workload="transfer_object",le="1.75"} 1860
-        latency_s_bucket{workload="transfer_object",le="2"} 1860
-        latency_s_bucket{workload=transfer_object,le=2.5} 1860
-        latency_s_bucket{workload=transfer_object,le=5} 1860
-        latency_s_bucket{workload=transfer_object,le=10} 1860
-        latency_s_bucket{workload=transfer_object,le=20} 1860
-        latency_s_bucket{workload=transfer_object,le=30} 1860
-        latency_s_bucket{workload=transfer_object,le=60} 1860
-        latency_s_bucket{workload=transfer_object,le=90} 1860
-        latency_s_bucket{workload=transfer_object,le=+Inf} 1860
-        latency_s_sum{workload=transfer_object} 1265.287933130998
-        latency_s_count{workload=transfer_object} 1860
-        # HELP latency_squared_s Square of total time in seconds to return a response
-        # TYPE latency_squared_s counter
-        latency_squared_s{workload="transfer_object"} 952.8160642745289
-    "#;
+    #[test]
+    fn average_latency() {
+        let data = DataPoint::new(
+            Duration::from_secs(10), // benchmark_timestamp
+            HashMap::new(),          // buckets
+            Duration::from_secs(2),  // sum
+            100,                     // count
+            Duration::from_secs(0),  // squared_sum
+        );
+
+        assert_eq!(data.average_latency(), Duration::from_millis(20));
+    }
+
+    #[test]
+    fn stdev_latency() {
+        let data = DataPoint::new(
+            Duration::from_secs(10),  // benchmark_timestamp
+            HashMap::new(),           // buckets
+            Duration::from_secs(2),   // sum
+            100,                      // count
+            Duration::from_secs(290), // squared_sum
+        );
+
+        // squared_sum / count
+        assert_eq!(data.squared_sum.as_millis() / data.count as u128, 2900);
+        // avg^2
+        assert_eq!(data.average_latency().as_millis().pow(2), 400);
+        // sqrt( squared_sum / count - avg^2 )
+        assert_eq!(data.stdev_latency(), Duration::from_millis(50));
+    }
 
     #[test]
     fn collect() {
-        let mut aggregator = MetricsAggregator::new(BenchmarkParameters::default());
+        let report = r#"
+            # HELP benchmark_duration Duration of the benchmark
+            # TYPE benchmark_duration counter
+            benchmark_duration 30
+            # HELP latency_s Total time in seconds to return a response
+            # TYPE latency_s histogram
+            latency_s_bucket{workload=transfer_object,le=0.1} 0
+            latency_s_bucket{workload=transfer_object,le=0.25} 0
+            latency_s_bucket{workload=transfer_object,le=0.5} 506
+            latency_s_bucket{workload=transfer_object,le=0.75} 1282
+            latency_s_bucket{workload=transfer_object,le=1} 1693
+            latency_s_bucket{workload="transfer_object",le="1.25"} 1816
+            latency_s_bucket{workload="transfer_object",le="1.5"} 1860
+            latency_s_bucket{workload="transfer_object",le="1.75"} 1860
+            latency_s_bucket{workload="transfer_object",le="2"} 1860
+            latency_s_bucket{workload=transfer_object,le=2.5} 1860
+            latency_s_bucket{workload=transfer_object,le=5} 1860
+            latency_s_bucket{workload=transfer_object,le=10} 1860
+            latency_s_bucket{workload=transfer_object,le=20} 1860
+            latency_s_bucket{workload=transfer_object,le=30} 1860
+            latency_s_bucket{workload=transfer_object,le=60} 1860
+            latency_s_bucket{workload=transfer_object,le=90} 1860
+            latency_s_bucket{workload=transfer_object,le=+Inf} 1860
+            latency_s_sum{workload=transfer_object} 1265.287933130998
+            latency_s_count{workload=transfer_object} 1860
+            # HELP latency_squared_s Square of total time in seconds to return a response
+            # TYPE latency_squared_s counter
+            latency_squared_s{workload="transfer_object"} 952.8160642745289
+        "#;
 
+        let mut aggregator = MetricsCollector::new(BenchmarkParameters::default());
         let scraper_id = 1u8;
-        aggregator.collect(scraper_id, EXAMPLE);
+        aggregator.collect(scraper_id, report);
 
         assert_eq!(aggregator.scrapers.len(), 1);
         let data_points = aggregator.scrapers.get(&scraper_id).unwrap();
@@ -287,7 +329,8 @@ mod test {
         assert_eq!(data.timestamp, Duration::from_secs(30));
         assert_eq!(data.squared_sum, Duration::from_secs(952));
 
-        assert_eq!(data.average_latency(), Duration::from_millis(302));
-        assert_eq!(data.tps(), 0);
+        assert_eq!(data.tps(), 62);
+        assert_eq!(data.average_latency(), Duration::from_millis(680));
+        assert_eq!(data.stdev_latency(), Duration::from_millis(680));
     }
 }
