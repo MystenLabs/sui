@@ -6,7 +6,6 @@ import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
 import { useRpcClient } from '../api/RpcClientContext';
-
 import { formatAmount } from '../utils/formatAmount';
 
 type FormattedCoin = [
