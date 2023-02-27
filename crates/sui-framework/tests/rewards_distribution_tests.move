@@ -11,7 +11,6 @@ module sui::rewards_distribution_tests {
         Self,
         advance_epoch,
         advance_epoch_with_reward_amounts,
-        advance_epoch_with_reward_amounts_and_subsidy_rate,
         advance_epoch_with_reward_amounts_and_slashing_rates,
         assert_validator_delegate_amounts,
         assert_validator_stake_amounts,
@@ -68,8 +67,8 @@ module sui::rewards_distribution_tests {
         // need to advance epoch so validator's staking starts counting
         governance_test_utils::advance_epoch(scenario);
 
-        advance_epoch_with_reward_amounts_and_subsidy_rate(0, 100, 1, scenario);
-        assert_validator_stake_amounts(validator_addrs(), vector[100_010_010, 200_020_020, 300_030_030, 400_040_040], scenario);
+        advance_epoch_with_reward_amounts(0, 100, scenario);
+        assert_validator_stake_amounts(validator_addrs(), vector[100_000_010, 200_000_020, 300_000_030, 400_000_040], scenario);
         test_scenario::end(scenario_val);
     }
 

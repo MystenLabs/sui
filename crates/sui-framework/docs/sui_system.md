@@ -969,7 +969,7 @@ gas coins.
 4. Update all validators.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, next_protocol_version: u64, storage_charge: u64, computation_charge: u64, storage_rebate: u64, storage_fund_reinvest_rate: u64, reward_slashing_rate: u64, stake_subsidy_rate: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, next_protocol_version: u64, storage_charge: u64, computation_charge: u64, storage_rebate: u64, storage_fund_reinvest_rate: u64, reward_slashing_rate: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -988,7 +988,6 @@ gas coins.
     storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                      // into storage fund, in basis point.
     reward_slashing_rate: u64, // how much rewards are slashed <b>to</b> punish a <a href="validator.md#0x2_validator">validator</a>, in bps.
-    stake_subsidy_rate: u64, // what percentage of the total <a href="stake.md#0x2_stake">stake</a> do we mint <b>as</b> <a href="stake.md#0x2_stake">stake</a> subsidy.
     epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
     ctx: &<b>mut</b> TxContext,
 ) {
@@ -1014,9 +1013,7 @@ gas coins.
     <b>let</b> computation_reward = <a href="balance.md#0x2_balance_create_staking_rewards">balance::create_staking_rewards</a>(computation_charge);
 
     // Include <a href="stake.md#0x2_stake">stake</a> subsidy in the rewards given out <b>to</b> validators and delegators.
-    <a href="stake_subsidy.md#0x2_stake_subsidy_mint_stake_subsidy_proportional_to_total_stake_testnet">stake_subsidy::mint_stake_subsidy_proportional_to_total_stake_testnet</a>(
-        &<b>mut</b> self.<a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>, &<b>mut</b> self.sui_supply, stake_subsidy_rate, delegation_stake + validator_stake);
-    <b>let</b> <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a> = <a href="stake_subsidy.md#0x2_stake_subsidy_withdraw_all">stake_subsidy::withdraw_all</a>(&<b>mut</b> self.<a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>);
+    <b>let</b> <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a> = <a href="stake_subsidy.md#0x2_stake_subsidy_advance_epoch">stake_subsidy::advance_epoch</a>(&<b>mut</b> self.<a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>);
     <b>let</b> stake_subsidy_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&<a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>);
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> computation_reward, <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>);
 

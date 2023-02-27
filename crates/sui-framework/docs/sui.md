@@ -8,6 +8,7 @@ It has 9 decimals, and the smallest unit (10^-9) is called "mist".
 
 
 -  [Struct `SUI`](#0x2_sui_SUI)
+-  [Constants](#@Constants_0)
 -  [Function `new`](#0x2_sui_new)
 -  [Function `transfer`](#0x2_sui_transfer)
 
@@ -49,6 +50,42 @@ Name of the coin
 
 
 </details>
+
+<a name="@Constants_0"></a>
+
+## Constants
+
+
+<a name="0x2_sui_MIST_PER_SUI"></a>
+
+The amount of Mist per Sui token based on the the fact that mist is
+10^-9 of a Sui token
+
+
+<pre><code><b>const</b> <a href="sui.md#0x2_sui_MIST_PER_SUI">MIST_PER_SUI</a>: u64 = 1000000000;
+</code></pre>
+
+
+
+<a name="0x2_sui_TOTAL_SUPPLY_MIST"></a>
+
+The total supply of Sui denominated in Mist (10 Billion * 10^9)
+
+
+<pre><code><b>const</b> <a href="sui.md#0x2_sui_TOTAL_SUPPLY_MIST">TOTAL_SUPPLY_MIST</a>: u64 = 10000000000000000000;
+</code></pre>
+
+
+
+<a name="0x2_sui_TOTAL_SUPPLY_SUI"></a>
+
+The total supply of Sui denominated in whole Sui tokens (10 Billion)
+
+
+<pre><code><b>const</b> <a href="sui.md#0x2_sui_TOTAL_SUPPLY_SUI">TOTAL_SUPPLY_SUI</a>: u64 = 10000000000;
+</code></pre>
+
+
 
 <a name="0x2_sui_new"></a>
 

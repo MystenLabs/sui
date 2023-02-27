@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::stake_subsidy {
-    use sui::balance::{Self, Balance, Supply};
+    use sui::balance::{Self, Balance};
+    use sui::math;
     use sui::sui::SUI;
 
     friend sui::sui_system;
@@ -11,9 +12,10 @@ module sui::stake_subsidy {
         /// This counter may be different from the current epoch number if
         /// in some epochs we decide to skip the subsidy. 
         epoch_counter: u64,
-        /// Balance storing the accumulated stake subsidy.
+        /// Balance of Sui set asside for Staking subsidies that will be drawn down over time.
         balance: Balance<SUI>,
-        /// The amount of stake subsidy to be minted this epoch.
+        /// The amount of stake subsidy to be drawn down per epoch.
+        /// This amount decays and decreases over time.
         current_epoch_amount: u64,
     }
 
@@ -31,36 +33,26 @@ module sui::stake_subsidy {
         }
     }
 
-    public(friend) fun mint_stake_subsidy_proportional_to_total_stake_testnet(
-        subsidy: &mut StakeSubsidy, supply: &mut Supply<SUI>, stake_subsidy_rate: u64, total_stake: u64
-    ) {
-        let amount_to_mint = ((total_stake as u128) * (stake_subsidy_rate as u128)) / BASIS_POINT_DENOMINATOR;
-        balance::join(
-            &mut subsidy.balance, 
-            balance::increase_supply(supply, (amount_to_mint as u64))
-        );
-    }
+    /// Advance the epoch counter and draw down the subsidy for the epoch.
+    public(friend) fun advance_epoch(subsidy: &mut StakeSubsidy): Balance<SUI> {
+        // Take the minimum of the reward amount and the remaining balance in
+        // order to ensure we don't overdraft the remaining stake subsidy
+        // balance
+        let to_withdrawl = math::min(subsidy.current_epoch_amount, balance::value(&subsidy.balance));
 
-    /// Advance the epoch counter and mint new subsidy for the epoch.
-    public(friend) fun advance_epoch(subsidy: &mut StakeSubsidy, supply: &mut Supply<SUI>) {
-        // Mint new subsidy for this epoch.
-        balance::join(
-            &mut subsidy.balance, 
-            balance::increase_supply(supply, subsidy.current_epoch_amount)
-        );
+        // Drawn down the subsidy for this epoch.
+        let stake_subsidy = balance::split(&mut subsidy.balance, to_withdrawl);
+
         subsidy.epoch_counter = subsidy.epoch_counter + 1;
+
         // Decrease the subsidy amount only when the current period ends.
         if (subsidy.epoch_counter % STAKE_SUBSIDY_PERIOD_LENGTH == 0) {
             let decrease_amount = (subsidy.current_epoch_amount as u128)
                 * STAKE_SUBSIDY_DECREASE_RATE / BASIS_POINT_DENOMINATOR;
             subsidy.current_epoch_amount = subsidy.current_epoch_amount - (decrease_amount as u64)
         };
-    }
 
-    /// Withdraw all the minted stake subsidy.
-    public(friend) fun withdraw_all(subsidy: &mut StakeSubsidy): Balance<SUI> {
-        let amount = balance::value(&subsidy.balance);
-        balance::split(&mut subsidy.balance, amount)
+        stake_subsidy
     }
 
     /// Returns the amount of stake subsidy to be added at the end of the current epoch.

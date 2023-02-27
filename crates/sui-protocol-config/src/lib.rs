@@ -227,10 +227,6 @@ pub struct ProtocolConfig {
     /// In basis point.
     reward_slashing_rate: Option<u64>,
 
-    /// The stake subsidy we mint each epoch is 0.01% of the total stake.
-    /// In basis point.
-    stake_subsidy_rate: Option<u64>,
-
     /// Unit gas price, Mist per internal gas unit.
     storage_gas_price: Option<u64>,
 
@@ -356,9 +352,6 @@ impl ProtocolConfig {
     }
     pub fn reward_slashing_rate(&self) -> u64 {
         self.reward_slashing_rate.expect(CONSTANT_ERR_MSG)
-    }
-    pub fn stake_subsidy_rate(&self) -> u64 {
-        self.stake_subsidy_rate.expect(CONSTANT_ERR_MSG)
     }
     pub fn storage_gas_price(&self) -> u64 {
         self.storage_gas_price.expect(CONSTANT_ERR_MSG)
@@ -497,7 +490,6 @@ impl ProtocolConfig {
                 storage_rebate_rate: Some(9900),
                 storage_fund_reinvest_rate: Some(500),
                 reward_slashing_rate: Some(5000),
-                stake_subsidy_rate: Some(1),
                 storage_gas_price: Some(1),
                 max_transactions_per_checkpoint: Some(1000),
                 // require 2f+1 + 0.75 * f stake for automatic protocol upgrades.
