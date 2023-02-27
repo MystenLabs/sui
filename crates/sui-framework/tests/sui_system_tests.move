@@ -9,7 +9,7 @@
 module sui::sui_system_tests {
     use sui::test_scenario::{Self, Scenario};
     use sui::governance_test_utils::{add_validator, advance_epoch, remove_validator, set_up_sui_system_state};
-    use sui::sui_system::{Self, SuiSystemStateWrapper};
+    use sui::sui_system::{Self, SuiSystemState};
     use sui::vec_set;
     use sui::table;
     use sui::test_utils::assert_eq;
@@ -82,7 +82,7 @@ module sui::sui_system_tests {
 
         set_up_sui_system_state(vector[@0x1, @0x2, @0x3], scenario);
         test_scenario::next_tx(scenario, @0x1);
-        let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         let pool_id_1 = sui_system::validator_staking_pool_id(&system_state, @0x1);
         let pool_id_2 = sui_system::validator_staking_pool_id(&system_state, @0x2);
         let pool_id_3 = sui_system::validator_staking_pool_id(&system_state, @0x3);
@@ -101,7 +101,7 @@ module sui::sui_system_tests {
         advance_epoch(scenario);
 
         test_scenario::next_tx(scenario, @0x1);
-        let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         let pool_id_4 = sui_system::validator_staking_pool_id(&system_state, new_validator_addr);
         pool_mappings = sui_system::validator_staking_pool_mappings(&system_state);
         // Check that the previous mappings didn't change as well.
@@ -117,7 +117,7 @@ module sui::sui_system_tests {
         advance_epoch(scenario);
 
         test_scenario::next_tx(scenario, @0x1);
-        let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         pool_mappings = sui_system::validator_staking_pool_mappings(&system_state);
         // Check that the previous mappings didn't change as well.
         assert_eq(table::length(pool_mappings), 3);
@@ -133,7 +133,7 @@ module sui::sui_system_tests {
     fun report_helper(reporter: address, reported: address, is_undo: bool, scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, reporter);
 
-        let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         let ctx = test_scenario::ctx(scenario);
         if (is_undo) {
             sui_system::undo_report_validator(&mut system_state, reported, ctx);
@@ -145,7 +145,7 @@ module sui::sui_system_tests {
 
     fun get_reporters_of(addr: address, scenario: &mut Scenario): vector<address> {
         test_scenario::next_tx(scenario, addr);
-        let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         let res = vec_set::into_keys(sui_system::get_reporters_of(&system_state, addr));
         test_scenario::return_shared(system_state);
         res

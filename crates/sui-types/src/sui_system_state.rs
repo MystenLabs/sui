@@ -20,7 +20,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemStateWrapper");
+const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
 pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
 pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch_safe_mode");
@@ -203,7 +203,8 @@ pub struct ValidatorSet {
     pub staking_pool_mappings: Table,
 }
 
-/// Rust version of the Move sui::sui_system::SuiSystemState type
+/// Rust version of the Move sui::sui_system::SuiSystemStateInner type
+/// We want to keep it named as SuiSystemState in Rust since this is the primary interface type.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct SuiSystemState {
     pub info: UID,
@@ -221,6 +222,7 @@ pub struct SuiSystemState {
     // TODO: Use getters instead of all pub.
 }
 
+/// Rust version of the Move sui::sui_system::SuiSystemState type
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SuiSystemStateWrapper {
     pub info: UID,

@@ -5,7 +5,7 @@
 module sui::rewards_distribution_tests {
     use sui::coin;
     use sui::test_scenario::{Self, Scenario};
-    use sui::sui_system::{Self, SuiSystemStateWrapper};
+    use sui::sui_system::{Self, SuiSystemState};
 
     use sui::governance_test_utils::{
         Self,
@@ -43,7 +43,7 @@ module sui::rewards_distribution_tests {
 
         test_scenario::next_tx(scenario, VALIDATOR_ADDR_2);
         {
-            let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
+            let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
             let ctx = test_scenario::ctx(scenario);
             sui_system::request_add_stake(&mut system_state, coin::mint_for_testing(720, ctx), ctx);
             test_scenario::return_shared(system_state);
@@ -293,7 +293,7 @@ module sui::rewards_distribution_tests {
 
     fun set_commission_rate_and_advance_epoch(addr: address, commission_rate: u64, scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, addr);
-        let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         let ctx = test_scenario::ctx(scenario);
         sui_system::request_set_commission_rate(&mut system_state, commission_rate, ctx);
         test_scenario::return_shared(system_state);
@@ -302,7 +302,7 @@ module sui::rewards_distribution_tests {
 
     fun report_validator(reporter: address, reportee: address, scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, reporter);
-        let system_state = test_scenario::take_shared<SuiSystemStateWrapper>(scenario);
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         let ctx = test_scenario::ctx(scenario);
         sui_system::report_validator(&mut system_state, reportee, ctx);
         test_scenario::return_shared(system_state);
