@@ -178,7 +178,7 @@ nextCursor : {"txDigest": "GZQN9pE3Zr9ZfLzBK1BfVCXtbjx5xKMxPSEKaHDvL3E2","eventS
 ## Blocks vs Checkpoints
 
 Sui is a DAG-based blockchain and uses checkpoints for node synchronization and global transaction ordering. Checkpoints differ from blocks in the following ways:
- * Sui creates checkpoints and adds transaction after finality
+ * Sui creates checkpoints and adds finalized transactions. Note that transactions are finalized even before they are included in a checkpoint
  * Checkpoints do not fork, roll back, or reorganize.
  * Sui creates one checkpoint about every 3 seconds.
 
