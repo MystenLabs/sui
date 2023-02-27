@@ -11,7 +11,6 @@ export * from './cryptography/signature';
 
 export * from './providers/provider';
 export * from './providers/json-rpc-provider';
-export * from './providers/json-rpc-provider-with-cache';
 
 export * from './rpc/client';
 export * from './rpc/faucet-client';
