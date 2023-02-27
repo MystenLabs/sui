@@ -333,8 +333,8 @@ impl Synchronizer {
 
     /// Tries to accept a certificate from certificate fetcher.
     /// Fetched certificates are already sanitized, so it is unnecessary to duplicate the work.
-    /// Also, we always check parents of fetched certificates and use the result to validate the
-    /// suspended certificates state, instead of first checking suspended certificates to
+    /// Also, this method always checks parents of fetched certificates and uses the result to
+    /// validate the suspended certificates state, instead of relying on suspended certificates to
     /// potentially return early. This helps to verify consistency, and has little extra cost
     /// because fetched certificates usually are not suspended.
     pub async fn try_accept_fetched_certificate(
@@ -474,6 +474,11 @@ impl Synchronizer {
         if early_suspend {
             if let Some(notify) = self.inner.state.lock().await.check_suspended(&digest) {
                 trace!("Certificate {digest:?} is still suspended. Skip processing.");
+                self.inner
+                    .metrics
+                    .certificates_suspended
+                    .with_label_values(&["dedup"])
+                    .inc();
                 return Err(DagError::Suspended(notify));
             }
         }
@@ -542,6 +547,11 @@ impl Synchronizer {
             // acquired.
             if let Some(notify) = state.check_suspended(&digest) {
                 trace!("Certificate {digest:?} is still suspended. Skip processing.");
+                self.inner
+                    .metrics
+                    .certificates_suspended
+                    .with_label_values(&["dedup_locked"])
+                    .inc();
                 return Err(DagError::Suspended(notify));
             }
         }
@@ -563,6 +573,10 @@ impl Synchronizer {
                 // There is no upper round limit to suspended certificates. Currently there is no
                 // memory usage issue and this will speed up catching up. But we can revisit later.
                 let notify = state.insert(certificate, missing_parents, !early_suspend);
+                self.inner
+                    .metrics
+                    .certificates_currently_suspended
+                    .set(state.num_suspended() as i64);
                 return Err(DagError::Suspended(notify));
             }
         }
@@ -573,6 +587,11 @@ impl Synchronizer {
         for suspended in suspended_certs {
             self.inner.accept_suspended_certificate(suspended).await?;
         }
+
+        self.inner
+            .metrics
+            .certificates_currently_suspended
+            .set(state.num_suspended() as i64);
 
         Ok(())
     }
@@ -884,6 +903,8 @@ struct SuspendedCertificate {
 /// 1. If a certificate exists in `missing`, remove its entry.
 /// 2. Find children of the certificate, update their missing parents.
 /// 3. If a child certificate no longer has missing parent, traverse from it with step 1.
+///
+/// Synchronizer should access this struct via its methods, to avoid making inconsistent changes.
 #[derive(Default)]
 struct State {
     // Maps digests of suspended certificates to details including the certificate itself.
@@ -902,6 +923,9 @@ impl State {
     }
 
     /// Inserts a certificate with its missing parents into the suspended state.
+    /// When `allow_reinsert` is false and the same certificate digest is inserted again,
+    /// this function will panic. Otherwise, this function checks the missing parents of
+    /// the certificate and verifies the same set is stored, before allowing a reinsertion.
     fn insert(
         &mut self,
         certificate: Certificate,
@@ -1019,5 +1043,9 @@ impl State {
             to_accept.push(suspended_cert);
         }
         to_accept
+    }
+
+    fn num_suspended(&self) -> usize {
+        self.suspended.len()
     }
 }
