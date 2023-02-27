@@ -75,15 +75,16 @@ export function SendTokenForm({
         () => (coinType && aggregateBalances[coinType]) || BigInt(0),
         [coinType, aggregateBalances]
     );
-    const formFields = useFormikContext<FormValues>();
+
+    const { values } = useFormikContext<FormValues>() ?? {};
     const maxSuiSingleCoinBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
     const gasBudgetEstimationUnits = useMemo(
         () =>
             Coin.computeGasBudgetForPay(
                 allCoinsOfTransferType,
-                BigInt(formFields?.values?.amount || '0')
+                BigInt(values?.amount || '0')
             ),
-        [allCoinsOfTransferType, formFields?.values?.amount]
+        [allCoinsOfTransferType, values?.amount]
     );
     const { gasBudget: gasBudgetEstimation, isLoading } = useGasBudgetInMist(
         gasBudgetEstimationUnits
@@ -127,8 +128,8 @@ export function SendTokenForm({
     );
 
     const parsedAmount = useMemo(() => {
-        return parseAmount(formFields?.values?.amount, coinDecimals);
-    }, [formFields?.values?.amount, coinDecimals]);
+        return parseAmount(values?.amount, coinDecimals);
+    }, [values?.amount, coinDecimals]);
 
     const onHandleSubmit = useCallback(
         ({ to, amount, isPayAllSui }: FormValues) => {
