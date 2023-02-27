@@ -7,7 +7,6 @@ import {
   getEvents,
   getExecutionStatusType,
   JsonRpcProvider,
-  JsonRpcProviderWithCache,
   ObjectId,
   RawSigner,
   SUI_SYSTEM_STATE_OBJECT_ID,
@@ -52,13 +51,8 @@ export class TestToolbox {
   }
 }
 
-type ProviderType = 'rpc' | 'rpc-with-cache';
-
-export function getProvider(providerType: ProviderType): JsonRpcProvider {
-  const Provider =
-    providerType === 'rpc' ? JsonRpcProvider : JsonRpcProviderWithCache;
-
-  return new Provider(
+export function getProvider(): JsonRpcProvider {
+  return new JsonRpcProvider(
     new Connection({
       fullnode: DEFAULT_FULLNODE_URL,
       faucet: DEFAULT_FAUCET_URL,
@@ -69,10 +63,10 @@ export function getProvider(providerType: ProviderType): JsonRpcProvider {
   );
 }
 
-export async function setup(providerType: ProviderType = 'rpc') {
+export async function setup() {
   const keypair = Ed25519Keypair.generate();
   const address = keypair.getPublicKey().toSuiAddress();
-  const provider = getProvider(providerType);
+  const provider = getProvider();
   await retry(() => provider.requestSuiFromFaucet(address), {
     backoff: 'EXPONENTIAL',
     // overall timeout in 60 seconds
