@@ -90,7 +90,7 @@ function CheckpointDetail() {
                         <TabPanel>
                             <DescriptionList>
                                 {contentsQuery.data?.user_signatures.map(
-                                    (signature) => (
+                                    ([signature]) => (
                                         <DescriptionItem
                                             key={signature}
                                             title="Signature"
