@@ -133,7 +133,7 @@ class VaultStorageClass {
      * NOTE: make sure you verify the password before calling this method
      * @param keypair The keypair to import
      * @param password The password to be used to store the vault. Make sure to verify that it's the correct password (of the current vault) and then call this function. It doesn't verify the password see {@link VaultStorage.verifyPassword}.
-     * @param existingAccounts All the current account of the wallet derived and imported
+     * @param existingAccounts The wallet's derived and imported accounts
      * @returns The keyPair if the key was imported, null otherwise
      */
     public async importKeypair(
