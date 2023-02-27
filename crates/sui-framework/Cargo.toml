@@ -12,6 +12,7 @@ anyhow = { version = "1.0.64", features = ["backtrace"] }
 better_any = "0.1.1"
 bcs = "0.1.4"
 linked-hash-map = "0.5.6"
+multiaddr = "0.17.0"
 smallvec = "1.9.0"
 once_cell = "1.16"
 curve25519-dalek-ng = "4.1.1"
@@ -38,6 +39,7 @@ move-unit-test.workspace = true
 move-vm-runtime.workspace = true
 move-vm-test-utils.workspace = true
 move-vm-types.workspace = true
+narwhal-crypto = { path = "../../narwhal/crypto" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
