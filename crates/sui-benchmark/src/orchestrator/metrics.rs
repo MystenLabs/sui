@@ -8,7 +8,7 @@ use super::BenchmarkParameters;
 
 type BucketId = String;
 
-#[derive(Serialize, Default)]
+#[derive(Serialize, Default, Clone)]
 pub struct DataPoint {
     /// Duration since the beginning of the benchmark.
     timestamp: Duration,
@@ -72,56 +72,27 @@ impl DataPoint {
         let stdev = variance.sqrt();
         Duration::from_secs_f64(stdev)
     }
-
-    /// Aggregate the benchmark duration of multiple data points by taking the max.
-    pub fn aggregate_duration(data_points: &[&Self]) -> Duration {
-        data_points
-            .iter()
-            .map(|x| x.timestamp)
-            .max()
-            .unwrap_or_default()
-    }
-
-    /// Aggregate the tps of multiple data points by taking the sum.
-    pub fn aggregate_tps(data_points: &[&Self]) -> u64 {
-        data_points.iter().map(|x| x.tps()).sum()
-    }
-
-    /// Aggregate the average latency of multiple data points by taking the average.
-    pub fn aggregate_average_latency(data_points: &[&Self]) -> Duration {
-        data_points
-            .iter()
-            .map(|x| x.average_latency())
-            .sum::<Duration>()
-            .checked_div(data_points.len() as u32)
-            .unwrap_or_default()
-    }
-
-    /// Aggregate the stdev latency of multiple data points by taking the max.
-    pub fn aggregate_stdev_latency(data_points: &[&Self]) -> Duration {
-        data_points
-            .iter()
-            .map(|x| x.stdev_latency())
-            .max()
-            .unwrap_or_default()
-    }
 }
 
-#[derive(Serialize)]
-pub struct MetricsCollector<ScraperId: Serialize> {
+#[derive(Serialize, Clone)]
+pub struct MetricsCollector<ScraperId: Serialize + Clone> {
     parameters: BenchmarkParameters,
     scrapers: HashMap<ScraperId, Vec<DataPoint>>,
 }
 
 impl<ScraperId> MetricsCollector<ScraperId>
 where
-    ScraperId: Eq + Hash + Serialize,
+    ScraperId: Eq + Hash + Serialize + Clone,
 {
     pub fn new(parameters: BenchmarkParameters) -> Self {
         Self {
             parameters,
             scrapers: HashMap::new(),
         }
+    }
+
+    pub fn load(&self) -> usize {
+        self.parameters.load
     }
 
     pub fn collect(&mut self, scraper_id: ScraperId, text: &str) {
@@ -191,9 +162,44 @@ where
             .push(DataPoint::new(duration, buckets, sum, count, squared_sum));
     }
 
+    /// Aggregate the benchmark duration of multiple data points by taking the max.
     pub fn benchmark_duration(&self) -> Duration {
+        self.scrapers
+            .values()
+            .filter_map(|x| x.last())
+            .map(|x| x.timestamp)
+            .max()
+            .unwrap_or_default()
+    }
+
+    /// Aggregate the tps of multiple data points by taking the sum.
+    pub fn aggregate_tps(&self) -> u64 {
+        self.scrapers
+            .values()
+            .filter_map(|x| x.last())
+            .map(|x| x.tps())
+            .sum()
+    }
+
+    /// Aggregate the average latency of multiple data points by taking the average.
+    pub fn aggregate_average_latency(&self) -> Duration {
         let last_data_points: Vec<_> = self.scrapers.values().filter_map(|x| x.last()).collect();
-        DataPoint::aggregate_duration(&last_data_points)
+        last_data_points
+            .iter()
+            .map(|x| x.average_latency())
+            .sum::<Duration>()
+            .checked_div(last_data_points.len() as u32)
+            .unwrap_or_default()
+    }
+
+    /// Aggregate the stdev latency of multiple data points by taking the max.
+    pub fn aggregate_stdev_latency(&self) -> Duration {
+        self.scrapers
+            .values()
+            .filter_map(|x| x.last())
+            .map(|x| x.stdev_latency())
+            .max()
+            .unwrap_or_default()
     }
 
     pub fn save(&self) {
@@ -203,11 +209,10 @@ where
     }
 
     pub fn print_summary(&self, parameters: &BenchmarkParameters) {
-        let last_data_points: Vec<_> = self.scrapers.values().filter_map(|x| x.last()).collect();
-        let duration = DataPoint::aggregate_duration(&last_data_points);
-        let total_tps = DataPoint::aggregate_tps(&last_data_points);
-        let average_latency = DataPoint::aggregate_average_latency(&last_data_points);
-        let stdev_latency = DataPoint::aggregate_stdev_latency(&last_data_points);
+        let duration = self.benchmark_duration();
+        let total_tps = self.aggregate_tps();
+        let average_latency = self.aggregate_average_latency();
+        let stdev_latency = self.aggregate_stdev_latency();
 
         let mut table = Table::new();
         let format = format::FormatBuilder::new()
