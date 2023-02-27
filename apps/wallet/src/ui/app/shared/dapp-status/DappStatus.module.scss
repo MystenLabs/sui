@@ -60,6 +60,8 @@
 .origin-text {
     @include utils.overflow-ellipsis;
     @include utils.typography('Primary/SubtitleSmall-M');
+
+    color: white;
 }
 
 .origin-url {
