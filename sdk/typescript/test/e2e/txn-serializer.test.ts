@@ -11,7 +11,6 @@ import {
   PureArg,
   RawSigner,
   RpcTxnDataSerializer,
-  SuiMoveObject,
   SUI_SYSTEM_STATE_OBJECT_ID,
   UnserializedSignableTransaction,
   getObjectReference,
