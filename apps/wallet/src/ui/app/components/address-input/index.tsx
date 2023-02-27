@@ -10,22 +10,19 @@ import { SUI_ADDRESS_VALIDATION } from './validation';
 import { Text } from '_app/shared/text';
 import Alert from '_src/ui/app/components/alert';
 
-import type { SuiAddress } from '@mysten/sui.js';
-import type { FieldProps } from 'formik';
 import type { ChangeEventHandler } from 'react';
 
-export interface AddressInputProps<Values>
-    extends FieldProps<SuiAddress, Values> {
+export interface AddressInputProps {
     disabled?: boolean;
     placeholder?: string;
     name: string;
 }
 
-export function AddressInput<FormValues>({
+export function AddressInput({
     disabled: forcedDisabled,
     placeholder = '0x...',
-    field: { name },
-}: AddressInputProps<FormValues>) {
+    name = 'to',
+}: AddressInputProps) {
     const [field, meta] = useField(name);
 
     const { isSubmitting, setFieldValue } = useFormikContext();

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowRight16, ArrowLeft16 } from '@mysten/icons';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { PreviewTransfer } from './PreviewTransfer';
@@ -16,36 +16,19 @@ import ActiveCoinsCard from '_components/active-coins-card';
 import { SuiIcons } from '_components/icon';
 import Overlay from '_components/overlay';
 import { parseAmount } from '_helpers';
-import { useAppSelector, useCoinDecimals } from '_hooks';
-import { accountCoinsSelector } from '_redux/slices/account';
-import { Coin } from '_redux/slices/sui-objects/Coin';
-import { useGasBudgetInMist } from '_src/ui/app/hooks/useGasBudgetInMist';
+import { useCoinDecimals } from '_hooks';
 
 import type { SubmitProps } from './SendTokenForm';
 
-const DEFAULT_FORM_STEP = 1;
-
 function TransferCoinPage() {
     const [searchParams] = useSearchParams();
-    const [showModal, setShowModal] = useState(true);
+    const [, setShowModal] = useState(true);
 
     const coinType = searchParams.get('type');
-    const [currentStep, setCurrentStep] = useState<number>(DEFAULT_FORM_STEP);
+    const [showTransactionPreview, setShowTransactionPreview] =
+        useState<boolean>(false);
     const [formData, setFormData] = useState<SubmitProps>();
-    const allCoins = useAppSelector(accountCoinsSelector);
-    const allCoinsOfTransferType = useMemo(
-        () => allCoins.filter((aCoin) => aCoin.type === coinType),
-        [allCoins, coinType]
-    );
     const [coinDecimals] = useCoinDecimals(coinType);
-
-    const gasBudgetEstimationUnits = useMemo(
-        () => Coin.computeGasBudgetForPay(allCoinsOfTransferType, 5000n),
-        [allCoinsOfTransferType]
-    );
-    const { gasBudget: gasBudgetEstimation } = useGasBudgetInMist(
-        gasBudgetEstimationUnits
-    );
 
     const navigate = useNavigate();
 
@@ -61,7 +44,7 @@ function TransferCoinPage() {
     }, [formData, coinDecimals]);
 
     const handleNextStep = useCallback((formData: SubmitProps) => {
-        setCurrentStep((prev) => prev + 1);
+        setShowTransactionPreview(true);
         setFormData(formData);
     }, []);
 
@@ -71,14 +54,14 @@ function TransferCoinPage() {
 
     return (
         <Overlay
-            showModal={showModal}
+            showModal={true}
             setShowModal={setShowModal}
-            title={currentStep === 1 ? 'Send Coins' : 'Review & Send'}
+            title={showTransactionPreview ? 'Send Coins' : 'Review & Send'}
             closeOverlay={closeSendToken}
             closeIcon={SuiIcons.Close}
         >
             <div className="flex flex-col w-full mt-2.5">
-                {currentStep > 1 &&
+                {showTransactionPreview &&
                 formData &&
                 formData.amount &&
                 formData.to ? (
@@ -88,7 +71,8 @@ function TransferCoinPage() {
                                 coinType={coinType}
                                 amount={formData.amount}
                                 to={formData.to}
-                                gasCostEstimation={gasBudgetEstimation || null}
+                                gasCostEstimation={formData.gasBudget}
+                                approx={formData.isPayAllSui}
                             />
                         </Content>
                         <Menu
@@ -98,7 +82,7 @@ function TransferCoinPage() {
                             <Button
                                 type="button"
                                 variant="secondary"
-                                onClick={() => setCurrentStep(1)}
+                                onClick={() => setShowTransactionPreview(false)}
                                 text={'Back'}
                                 before={<ArrowLeft16 />}
                             />
