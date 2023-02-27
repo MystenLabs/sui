@@ -15,27 +15,51 @@ import {
 import { Provider } from '../providers/provider';
 import { Commands, TransactionArgument, TransactionCommand } from './Commands';
 
-class TransactionResult {
-  // TODO: Avoid keeping track of the command index, to allow it to be computed
-  #index: number;
-  constructor(index: number) {
-    this.#index = index;
-  }
+type TransactionResult = TransactionArgument & TransactionArgument[];
 
-  get index() {
-    return this.#index;
-  }
+function createTransactionResult(index: number): TransactionResult {
+  const baseResult: TransactionArgument = { kind: 'Result', index };
 
-  // TODO: Move this to array-based format instead of this:
-  // TODO: Instead of making this return a concrete argument, we should ideally
-  // make it reference-based (so that this gets resolved at build-time), which
-  // allows re-ordering transactions.
-  result(index?: number): TransactionArgument {
-    if (typeof index === 'number') {
-      return { kind: 'NestedResult', index: this.#index, resultIndex: index };
-    }
-    return { kind: 'Result', index: this.#index };
-  }
+  return new Proxy(baseResult, {
+    set() {
+      throw new Error(
+        'The transaction result is a proxy, and does not support setting properties directly',
+      );
+    },
+    // TODO: Instead of making this return a concrete argument, we should ideally
+    // make it reference-based (so that this gets resolved at build-time), which
+    // allows re-ordering transactions.
+    get(target, property) {
+      // This allows this transaction argument to be used in the singular form:
+      if (property in target) {
+        return Reflect.get(target, property);
+      }
+
+      // Support destructuring:
+      if (property === Symbol.iterator) {
+        return function* () {
+          let i = 0;
+          while (true) {
+            yield { kind: 'NestedResult', index, resultIndex: i };
+            i++;
+          }
+        };
+      }
+
+      if (typeof property === 'symbol') {
+        throw new Error(
+          `Unexpected symbol property access: "${String(property)}"`,
+        );
+      }
+
+      const resultIndex = parseInt(property, 10);
+      if (Number.isNaN(resultIndex) || resultIndex < 0) {
+        throw new Error(`Invalid result index: "${property}"`);
+      }
+
+      return { kind: 'NestedResult', index, resultIndex };
+    },
+  }) as TransactionResult;
 }
 
 // TODO: Does this need to be a class? Can this instead just be a `TransactionArgument` with hidden implementation details?
@@ -204,7 +228,7 @@ export class Transaction<Inputs extends string = never> {
   // any referenced commands that are not present in this transaction.
   add(command: TransactionCommand) {
     const index = this.#commands.push(command);
-    return new TransactionResult(index);
+    return createTransactionResult(index - 1);
   }
 
   /**
