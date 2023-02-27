@@ -2299,6 +2299,25 @@ pub enum ExecutionFailureStatus {
     TotalPaymentAmountOverflow,
     /// The total balance of coins is larger than the maximum value of u64.
     TotalCoinBalanceOverflow,
+
+    //
+    // Programmable Transaction Errors
+    //
+    CommandArgumentError {
+        arg_idx: u16,
+        kind: CommandArgumentError,
+    },
+    UnusedInput {
+        input_idx: u16,
+    },
+    UnusedValueWithoutDrop {
+        result_idx: u16,
+        secondary_idx: u16,
+    },
+    InvalidPublicFunctionReturnType {
+        idx: u16,
+    },
+    ArityMismatch,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }
@@ -2357,6 +2376,22 @@ pub struct InvalidSharedByValue {
     pub object: ObjectID,
 }
 
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash)]
+pub enum CommandArgumentError {
+    TypeMismatch,
+    InvalidBCSBytes,
+    InvalidUsageOfPureArg,
+    InvalidArgumentToPrivateEntryFunction,
+    IndexOutOfBounds { idx: u16 },
+    SecondaryIndexOutOfBounds { result_idx: u16, secondary_idx: u16 },
+    InvalidResultArity { result_idx: u16 },
+    InvalidGasCoinUsage,
+    InvalidUsageOfBorrowedValue,
+    InvalidUsageOfTakenValue,
+    InvalidObjectByValue,
+    InvalidObjectByMutRef,
+}
+
 impl ExecutionFailureStatus {
     pub fn entry_argument_error(argument_idx: LocalIndex, kind: EntryArgumentErrorKind) -> Self {
         EntryArgumentError { argument_idx, kind }.into()
@@ -2380,6 +2415,10 @@ impl ExecutionFailureStatus {
     pub fn invalid_shared_by_value(object: ObjectID) -> Self {
         InvalidSharedByValue { object }.into()
     }
+
+    pub fn command_argument_error(kind: CommandArgumentError, arg_idx: u16) -> Self {
+        Self::CommandArgumentError { arg_idx, kind }
+    }
 }
 
 impl Display for ExecutionFailureStatus {
@@ -2392,11 +2431,8 @@ impl Display for ExecutionFailureStatus {
                 )
             }
             ExecutionFailureStatus::CoinTooLarge => {
-                write!(
-                    f,
-                    "Coin exceeds maximum value for a single coin"
-                )
-            },
+                write!(f, "Coin exceeds maximum value for a single coin")
+            }
             ExecutionFailureStatus::EmptyInputCoins => {
                 write!(f, "Expected a non-empty list of input Coin objects")
             }
@@ -2417,8 +2453,22 @@ impl Display for ExecutionFailureStatus {
             ExecutionFailureStatus::InvalidTransactionUpdate => {
                 write!(f, "Invalid Transaction Update.")
             }
-            ExecutionFailureStatus::MoveObjectTooBig { object_size, max_object_size } => write!(f, "Move object with size {object_size} is larger than the maximum object size {max_object_size}"),
-            ExecutionFailureStatus::MovePackageTooBig { object_size, max_object_size } => write!(f, "Move package with size {object_size} is larger than the maximum object size {max_object_size}"),
+            ExecutionFailureStatus::MoveObjectTooBig {
+                object_size,
+                max_object_size,
+            } => write!(
+                f,
+                "Move object with size {object_size} is larger \
+                than the maximum object size {max_object_size}"
+            ),
+            ExecutionFailureStatus::MovePackageTooBig {
+                object_size,
+                max_object_size,
+            } => write!(
+                f,
+                "Move package with size {object_size} is larger than the \
+                maximum object size {max_object_size}"
+            ),
             ExecutionFailureStatus::FunctionNotFound => write!(f, "Function Not Found."),
             ExecutionFailureStatus::InvariantViolation => write!(f, "INVARIANT VIOLATION."),
             ExecutionFailureStatus::InvalidTransferObject => write!(
@@ -2534,19 +2584,43 @@ impl Display for ExecutionFailureStatus {
             ),
             ExecutionFailureStatus::VMInvariantViolation => {
                 write!(f, "MOVE VM INVARIANT VIOLATION.")
-            },
+            }
             ExecutionFailureStatus::TotalPaymentAmountOverflow => {
-                write!(
-                    f,
-                    "The total amount of coins to be paid overflows of u64"
-                )
-            },
+                write!(f, "The total amount of coins to be paid overflows of u64")
+            }
             ExecutionFailureStatus::TotalCoinBalanceOverflow => {
+                write!(f, "The total balance of coins overflows u64")
+            }
+            ExecutionFailureStatus::CommandArgumentError { arg_idx, kind } => {
+                write!(f, "Invalid command argument at {arg_idx}. {kind}")
+            }
+            ExecutionFailureStatus::UnusedInput { input_idx } => {
+                write!(f, "Unused input {input_idx}")
+            }
+            ExecutionFailureStatus::UnusedValueWithoutDrop {
+                result_idx,
+                secondary_idx,
+            } => {
                 write!(
                     f,
-                    "The total balance of coins overflows u64"
+                    "Unused result without the drop ability. \
+                    Command result {result_idx}, return value {secondary_idx}"
                 )
-            },
+            }
+            ExecutionFailureStatus::InvalidPublicFunctionReturnType { idx } => {
+                write!(
+                    f,
+                    "Invalid public Move function signature. \
+                    Unsupported return type for return value {idx}"
+                )
+            }
+            ExecutionFailureStatus::ArityMismatch => {
+                write!(
+                    f,
+                    "Arity mismatch for Move function. \
+                    The number of arguments does not match the number of parameters"
+                )
+            }
         }
     }
 }
@@ -2669,6 +2743,71 @@ impl Display for InvalidSharedByValue {
         the shared object's type must be defined in the same module as the called function. The \
         shared object {object} is not defined in this module",
         )
+    }
+}
+
+impl Display for CommandArgumentError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CommandArgumentError::TypeMismatch => {
+                write!(f, "The type of the value does not match the expected type")
+            }
+            CommandArgumentError::InvalidBCSBytes => write!(
+                f,
+                "The argument cannot be deserialized into a value of the specified type"
+            ),
+            CommandArgumentError::InvalidUsageOfPureArg => {
+                write!(f, "The argument cannot be instantiated from raw bytes")
+            }
+            CommandArgumentError::InvalidArgumentToPrivateEntryFunction => {
+                write!(
+                    f,
+                    "Invalid argument to private entry function. \
+                    These functions cannot take arguments from other Move functions"
+                )
+            }
+            CommandArgumentError::IndexOutOfBounds { idx } => {
+                write!(f, "Out of bounds access to input or result vector {idx}")
+            }
+            CommandArgumentError::SecondaryIndexOutOfBounds {
+                result_idx,
+                secondary_idx,
+            } => write!(
+                f,
+                "Out of bounds secondary access to result vector \
+                {result_idx} at secondary index {secondary_idx}"
+            ),
+            CommandArgumentError::InvalidResultArity { result_idx } => {
+                write!(
+                    f,
+                    "Invalid usage of result {result_idx}, \
+                    expected a single result but found multiple return values"
+                )
+            }
+            CommandArgumentError::InvalidGasCoinUsage => write!(
+                f,
+                "Invalid taking of the Gas coin. \
+                It can only be used by-value with TransferObjects"
+            ),
+            CommandArgumentError::InvalidUsageOfBorrowedValue => write!(
+                f,
+                "Invalid usage of borrowed value. \
+                Mutably borrowed values require unique usage. \
+                Immutably borrowed values cannot be taken or borrowed mutably"
+            ),
+            CommandArgumentError::InvalidUsageOfTakenValue => write!(
+                f,
+                "Invalid usage of already taken value. \
+            There is now no value available at this location"
+            ),
+            CommandArgumentError::InvalidObjectByValue => {
+                write!(f, "Immutable and shared objects cannot be passed by-value.")
+            }
+            CommandArgumentError::InvalidObjectByMutRef => write!(
+                f,
+                "Immutable objects cannot be passed by mutable reference, &mut."
+            ),
+        }
     }
 }
 
