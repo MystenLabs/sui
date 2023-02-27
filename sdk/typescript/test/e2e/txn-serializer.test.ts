@@ -133,10 +133,8 @@ describe('Transaction Serialization and deserialization', () => {
       toolbox.address(),
     );
 
-    const validators = await toolbox.getActiveValidators();
-    const validator_metadata = (validators[0] as SuiMoveObject).fields.metadata;
-    const validator_address = (validator_metadata as SuiMoveObject).fields
-      .sui_address;
+    const [{ sui_address: validator_address }] =
+        await toolbox.getActiveValidators();
 
     const moveCall = {
       packageObjectId: '0000000000000000000000000000000000000002',
