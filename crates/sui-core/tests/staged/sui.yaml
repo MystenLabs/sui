@@ -249,7 +249,9 @@ ExecutionFailureStatus:
     34:
       VMInvariantViolation: UNIT
     35:
-      TotalAmountOverflow: UNIT
+      TotalPaymentAmountOverflow: UNIT
+    36:
+      TotalCoinBalanceOverflow: UNIT
 ExecutionStatus:
   ENUM:
     0:
