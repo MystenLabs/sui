@@ -1,8 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer } from '../../serialization/base64';
-import { ObjectId, SuiAddress, SuiJsonValue, TypeTag } from '../../types';
+import { SerializedSignature } from '../../cryptography/signature';
+import {
+  ObjectId,
+  PureArg,
+  SuiAddress,
+  SuiJsonValue,
+  TypeTag,
+} from '../../types';
 
 ///////////////////////////////
 // Exported Types
@@ -17,6 +23,7 @@ export interface TransferObjectTransaction extends TransactionCommon {
   objectId: ObjectId;
   recipient: SuiAddress;
   gasPayment?: ObjectId;
+  gasOwner?: SuiAddress;
 }
 
 export interface TransferSuiTransaction extends TransactionCommon {
@@ -39,6 +46,7 @@ export interface PayTransaction extends TransactionCommon {
   recipients: SuiAddress[];
   amounts: number[];
   gasPayment?: ObjectId;
+  gasOwner?: SuiAddress;
 }
 
 /// Send SUI coins to a list of addresses, following a list of amounts.
@@ -77,12 +85,14 @@ export interface MergeCoinTransaction extends TransactionCommon {
   primaryCoin: ObjectId;
   coinToMerge: ObjectId;
   gasPayment?: ObjectId;
+  gasOwner?: SuiAddress;
 }
 
 export interface SplitCoinTransaction extends TransactionCommon {
   coinObjectId: ObjectId;
   splitAmounts: number[];
   gasPayment?: ObjectId;
+  gasOwner?: SuiAddress;
 }
 
 export interface MoveCallTransaction extends TransactionCommon {
@@ -90,8 +100,17 @@ export interface MoveCallTransaction extends TransactionCommon {
   module: string;
   function: string;
   typeArguments: string[] | TypeTag[];
-  arguments: SuiJsonValue[];
+  arguments: (SuiJsonValue | PureArg)[];
   gasPayment?: ObjectId;
+  gasOwner?: SuiAddress;
+}
+
+export interface RawMoveCall {
+  packageObjectId: ObjectId;
+  module: string;
+  function: string;
+  typeArguments: string[];
+  arguments: SuiJsonValue[];
 }
 
 export type UnserializedSignableTransaction =
@@ -132,6 +151,11 @@ export type UnserializedSignableTransaction =
       data: PublishTransaction;
     };
 
+export type SignedTransaction = {
+  transactionBytes: string;
+  signature: SerializedSignature;
+};
+
 /** A type that represents the possible transactions that can be signed: */
 export type SignableTransaction =
   | UnserializedSignableTransaction
@@ -159,7 +183,7 @@ export type SignableTransactionData = SignableTransaction['data'];
  *
  * // Include the following line if you are using `LocalTxnDataSerializer`, skip
  * // if you are using `RpcTxnDataSerializer`
- * // const modulesInBytes = modules.map((m) => Array.from(new Base64DataBuffer(m).getData()));
+ * // const modulesInBytes = modules.map((m) => Array.from(fromB64(m)));
  * // ... publish logic ...
  * ```
  *
@@ -167,6 +191,7 @@ export type SignableTransactionData = SignableTransaction['data'];
 export interface PublishTransaction extends TransactionCommon {
   compiledModules: ArrayLike<string> | ArrayLike<ArrayLike<number>>;
   gasPayment?: ObjectId;
+  gasOwner?: SuiAddress;
 }
 
 export type TransactionBuilderMode = 'Commit' | 'DevInspect';
@@ -180,6 +205,6 @@ export interface TxnDataSerializer {
   serializeToBytes(
     signerAddress: SuiAddress,
     txn: UnserializedSignableTransaction,
-    mode: TransactionBuilderMode
-  ): Promise<Base64DataBuffer>;
+    mode: TransactionBuilderMode,
+  ): Promise<Uint8Array>;
 }

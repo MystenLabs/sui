@@ -5,53 +5,67 @@ import cl from 'classnames';
 import { useState, useMemo } from 'react';
 
 import { calculateAPY } from '../calculateAPY';
-import { STATE_OBJECT, getName } from '../usePendingDelegation';
+import { calculateStakeShare } from '../calculateStakeShare';
+import { useSystemState } from '../useSystemState';
 import { ValidatorListItem } from './ValidatorListItem';
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import { Text } from '_app/shared/text';
-import { validatorsFields } from '_app/staking/validatorsFields';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useGetObject } from '_hooks';
+
+type SortKeys = 'name' | 'stakeShare' | 'apy';
+const sortKeys: Record<SortKeys, string> = {
+    name: 'Name',
+    stakeShare: 'Stake Share',
+    apy: 'APY',
+};
 
 export function SelectValidatorCard() {
     const [selectedValidator, setSelectedValidator] = useState<null | string>(
         null
     );
-    const [sortKey, setSortKey] = useState<'name' | 'apy'>('apy');
-    const [sortAscending, setSortAscending] = useState(false);
-
-    const { data, isLoading, isError } = useGetObject(STATE_OBJECT);
-
-    const validatorsData = data && validatorsFields(data);
+    const [sortKey, setSortKey] = useState<SortKeys>('stakeShare');
+    const [sortAscending, setSortAscending] = useState(true);
+    const { data, isLoading, isError } = useSystemState();
 
     const selectValidator = (address: string) => {
         setSelectedValidator((state) => (state !== address ? address : null));
     };
 
-    const handleSortByKey = (key: 'name' | 'apy') => {
+    const handleSortByKey = (key: SortKeys) => {
         if (key === sortKey) {
             setSortAscending(!sortAscending);
         }
         setSortKey(key);
     };
 
-    const validatorList = useMemo(() => {
-        if (!validatorsData) return [];
+    const totalStake = useMemo(() => {
+        if (!data) return 0;
+        return data.validators.active_validators.reduce(
+            (acc, curr) =>
+                (acc +=
+                    BigInt(curr.delegation_staking_pool.sui_balance) +
+                    BigInt(curr.stake_amount)),
+            0n
+        );
+    }, [data]);
 
-        const sortedAsc = validatorsData.validators.fields.active_validators
+    const validatorList = useMemo(() => {
+        if (!data) return [];
+
+        const sortedAsc = data.validators.active_validators
             .map((validator) => ({
-                name: getName(validator.fields.metadata.fields.name),
-                address: validator.fields.metadata.fields.sui_address,
-                apy: calculateAPY(validator, +validatorsData.epoch),
-                logo:
-                    validator.fields.metadata.fields.image_url &&
-                    typeof validator.fields.metadata.fields.image_url ===
-                        'string'
-                        ? validator.fields.metadata.fields.image_url
-                        : null,
+                name: validator.metadata.name,
+                address: validator.metadata.sui_address,
+                apy: calculateAPY(validator, +data.epoch),
+                stakeShare: calculateStakeShare(
+                    BigInt(validator.delegation_staking_pool.sui_balance) +
+                        BigInt(validator.stake_amount),
+                    BigInt(totalStake)
+                ),
+                logo: validator.metadata.image_url,
             }))
             .sort((a, b) => {
                 if (sortKey === 'name') {
@@ -63,7 +77,7 @@ export function SelectValidatorCard() {
                 return a[sortKey] - b[sortKey];
             });
         return sortAscending ? sortedAsc : sortedAsc.reverse();
-    }, [sortAscending, sortKey, validatorsData]);
+    }, [sortAscending, sortKey, data, totalStake]);
 
     if (isLoading) {
         return (
@@ -98,64 +112,42 @@ export function SelectValidatorCard() {
                             Sort by:
                         </Text>
                         <div className="flex items-center ml-2 gap-1.5">
-                            <button
-                                className="bg-transparent border-0 p-0 flex gap-1 cursor-pointer"
-                                onClick={() => handleSortByKey('apy')}
-                            >
-                                <Text
-                                    variant="caption"
-                                    weight="medium"
-                                    color={
-                                        sortKey === 'apy'
-                                            ? 'hero'
-                                            : 'steel-darker'
-                                    }
-                                >
-                                    APY
-                                </Text>
-                                {sortKey === 'apy' && (
-                                    <Icon
-                                        icon={SuiIcons.ArrowLeft}
-                                        className={cl(
-                                            'text-captionSmall font-thin  text-hero',
-                                            sortAscending
-                                                ? 'rotate-90'
-                                                : '-rotate-90'
+                            {Object.entries(sortKeys).map(([key, value]) => {
+                                return (
+                                    <button
+                                        key={key}
+                                        className="bg-transparent border-0 p-0 flex gap-1 cursor-pointer"
+                                        onClick={() =>
+                                            handleSortByKey(key as SortKeys)
+                                        }
+                                    >
+                                        <Text
+                                            variant="caption"
+                                            weight="medium"
+                                            color={
+                                                sortKey === key
+                                                    ? 'hero'
+                                                    : 'steel-darker'
+                                            }
+                                        >
+                                            {value}
+                                        </Text>
+                                        {sortKey === key && (
+                                            <Icon
+                                                icon={SuiIcons.ArrowLeft}
+                                                className={cl(
+                                                    'text-captionSmall font-thin  text-hero',
+                                                    sortAscending
+                                                        ? 'rotate-90'
+                                                        : '-rotate-90'
+                                                )}
+                                            />
                                         )}
-                                    />
-                                )}
-                            </button>
-
-                            <button
-                                className="bg-transparent border-0 p-0 flex gap-1 cursor-pointer"
-                                onClick={() => handleSortByKey('name')}
-                            >
-                                <Text
-                                    variant="caption"
-                                    weight="medium"
-                                    color={
-                                        sortKey === 'name'
-                                            ? 'hero'
-                                            : 'steel-darker'
-                                    }
-                                >
-                                    Name
-                                </Text>
-                                {sortKey === 'name' && (
-                                    <Icon
-                                        icon={SuiIcons.ArrowLeft}
-                                        className={cl(
-                                            'text-captionSmall font-thin  text-hero',
-                                            sortAscending
-                                                ? 'rotate-90'
-                                                : '-rotate-90'
-                                        )}
-                                    />
-                                )}
-                            </button>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
-
                     <div className="flex items-start w-full">
                         <Text
                             variant="subtitle"
@@ -167,19 +159,28 @@ export function SelectValidatorCard() {
                     </div>
                 </div>
                 <div className="flex items-start flex-col w-full mt-1 flex-1">
-                    {validatorsData &&
-                        validatorList.map(({ name, address, apy, logo }) => (
+                    {data &&
+                        validatorList.map((validator) => (
                             <div
                                 className="cursor-pointer w-full relative"
-                                key={address}
-                                onClick={() => selectValidator(address)}
+                                key={validator.address}
+                                onClick={() =>
+                                    selectValidator(validator.address)
+                                }
                             >
                                 <ValidatorListItem
-                                    selected={selectedValidator === address}
-                                    validatorAddress={address}
-                                    validatorName={name}
-                                    logo={logo}
-                                    apy={apy}
+                                    selected={
+                                        selectedValidator === validator.address
+                                    }
+                                    validatorAddress={validator.address}
+                                    validatorName={validator.name}
+                                    label={sortKey}
+                                    value={
+                                        sortKey === 'name'
+                                            ? '-'
+                                            : `${validator[sortKey]}%`
+                                    }
+                                    logo={validator.logo}
                                 />
                             </div>
                         ))}

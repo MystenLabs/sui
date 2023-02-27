@@ -15,7 +15,7 @@ describe('Test Coin Metadata', () => {
     signer = new RawSigner(
       toolbox.keypair,
       toolbox.provider,
-      new LocalTxnDataSerializer(toolbox.provider)
+      new LocalTxnDataSerializer(toolbox.provider),
     );
     const packagePath = __dirname + '/./data/coin_metadata';
     packageId = await publishPackage(signer, true, packagePath);
@@ -23,7 +23,7 @@ describe('Test Coin Metadata', () => {
 
   it('Test accessing coin metadata', async () => {
     const coinMetadata = await signer.provider.getCoinMetadata(
-      `${packageId}::test::TEST`
+      `${packageId}::test::TEST`,
     );
     expect(coinMetadata.decimals).to.equal(2);
     expect(coinMetadata.name).to.equal('Test Coin');

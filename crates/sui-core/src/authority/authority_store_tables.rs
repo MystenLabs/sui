@@ -6,11 +6,12 @@ use crate::authority::authority_store::LockDetails;
 use rocksdb::Options;
 use std::path::Path;
 use sui_storage::default_db_options;
+use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
-use sui_types::messages::TrustedCertificate;
+use sui_types::storage::ObjectStore;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::{DBMap, DBOptions, MetricConf, ReadWriteOptions};
-use typed_store::traits::{TableSummary, TypedStoreDebug};
+use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
 use typed_store_derive::DBMapUtils;
 
@@ -42,12 +43,11 @@ pub struct AuthorityPerpetualTables {
     #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
     pub(crate) owned_object_transaction_locks: DBMap<ObjectRef, Option<LockDetails>>,
 
-    /// This is a map between the transaction digest and the corresponding certificate for all
-    /// certificates that have been successfully processed by this authority. This set of certificates
-    /// along with the genesis allows the reconstruction of all other state, and a full sync to this
-    /// authority.
-    #[default_options_override_fn = "certificates_table_default_config"]
-    pub(crate) certificates: DBMap<TransactionDigest, TrustedCertificate>,
+    /// This is a map between the transaction digest and the corresponding transaction that's known to be
+    /// executable. This means that it may have been executed locally, or it may have been synced through
+    /// state-sync but hasn't been executed yet.
+    #[default_options_override_fn = "transactions_table_default_config"]
+    pub(crate) transactions: DBMap<TransactionDigest, TrustedTransaction>,
 
     /// The map between the object ref of objects processed at all versions and the transaction
     /// digest of the certificate that lead to the creation of this version of the object.
@@ -56,19 +56,30 @@ pub struct AuthorityPerpetualTables {
     /// a digest of ObjectDigest::deleted(), along with a link to the transaction that deleted it.
     pub(crate) parent_sync: DBMap<ObjectRef, TransactionDigest>,
 
-    /// A map between the transaction digest of a certificate that was successfully processed
-    /// (ie in `certificates`) and the effects its execution has on the authority state. This
-    /// structure is used to ensure we do not double process a certificate, and that we can return
-    /// the same response for any call after the first (ie. make certificate processing idempotent).
+    /// A map between the transaction digest of a certificate to the effects of its execution.
+    /// We store effects into this table in two different cases:
+    /// 1. When a transaction is synced through state_sync, we store the effects here. These effects
+    /// are known to be final in the network, but may not have been executed locally yet.
+    /// 2. When the transaction is executed locally on this node, we store the effects here. This means that
+    /// it's possible to store the same effects twice (once for the synced transaction, and once for the executed).
+    /// It's also possible for the effects to be reverted if the transaction didn't make it into the epoch.
     #[default_options_override_fn = "effects_table_default_config"]
-    pub(crate) executed_effects: DBMap<TransactionDigest, TrustedSignedTransactionEffects>,
-
     pub(crate) effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
-    pub(crate) synced_transactions: DBMap<TransactionDigest, TrustedCertificate>,
+
+    /// Transactions that have been executed locally on this node. We need this table since the `effects` table
+    /// doesn't say anything about the execution status of the transaction on this node. When we wait for transactions
+    /// to be executed, we wait for them to appear in this table. When we revert transactions, we remove them from both
+    /// tables.
+    pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
     /// When transaction is executed via checkpoint executor, we store association here
     pub(crate) executed_transactions_to_checkpoint:
         DBMap<TransactionDigest, (EpochId, CheckpointSequenceNumber)>,
+
+    // Finalized root state accumulator for epoch, to be included in CheckpointSummary
+    // of last checkpoint of epoch. These values should only ever be written once
+    // and never changed
+    pub(crate) root_state_hash_by_epoch: DBMap<EpochId, (CheckpointSequenceNumber, Accumulator)>,
 
     /// A singleton table that stores the current epoch number. This is used only for the purpose of
     /// crash recovery so that when we restart we know which epoch we are at. This is needed because
@@ -93,44 +104,6 @@ impl AuthorityPerpetualTables {
 
     pub fn open_readonly(parent_path: &Path) -> AuthorityPerpetualTablesReadOnly {
         Self::get_read_only_handle(Self::path(parent_path), None, None, MetricConf::default())
-    }
-
-    /// Read an object and return it, or Ok(None) if the object was not found.
-    pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        let obj_entry = self
-            .objects
-            .iter()
-            .skip_prior_to(&ObjectKey::max_for_id(object_id))?
-            .next();
-
-        let obj = match obj_entry {
-            Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => obj,
-            _ => return Ok(None),
-        };
-
-        // Note that the two reads in this function are (obviously) not atomic, and the
-        // object may be deleted after we have read it. Hence we check get_latest_parent_entry
-        // last, so that the write to self.parent_sync gets the last word.
-        //
-        // TODO: verify this race is ok.
-        //
-        // I believe it is - Even if the reads were atomic, calls to this function would still
-        // race with object deletions (the object could be deleted between when the function is
-        // called and when the first read takes place, which would be indistinguishable to the
-        // caller with the case in which the object is deleted in between the two reads).
-        let parent_entry = self.get_latest_parent_entry(*object_id)?;
-
-        match parent_entry {
-            None => {
-                error!(
-                    ?object_id,
-                    "Object is missing parent_sync entry, data store is inconsistent"
-                );
-                Ok(None)
-            }
-            Some((obj_ref, _)) if obj_ref.2.is_alive() => Ok(Some(obj)),
-            _ => Ok(None),
-        }
     }
 
     // This is used by indexer to find the correct version of dynamic field child object.
@@ -168,19 +141,6 @@ impl AuthorityPerpetualTables {
         }))
     }
 
-    pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
-        let sui_system_object = self
-            .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)?
-            .expect("Sui System State object must always exist");
-        let move_object = sui_system_object
-            .data
-            .try_as_move()
-            .expect("Sui System State object must be a Move object");
-        let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
-            .expect("Sui System State object deserialization cannot fail");
-        Ok(result)
-    }
-
     pub fn get_recovery_epoch_at_restart(&self) -> SuiResult<EpochId> {
         Ok(self
             .current_epoch
@@ -201,6 +161,84 @@ impl AuthorityPerpetualTables {
             .next()
             .is_none())
     }
+
+    pub fn iter_live_object_set(&self) -> LiveSetIter<'_> {
+        LiveSetIter {
+            iter: self.parent_sync.keys(),
+            prev: None,
+        }
+    }
+}
+
+impl ObjectStore for &AuthorityPerpetualTables {
+    /// Read an object and return it, or Ok(None) if the object was not found.
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        let obj_entry = self
+            .objects
+            .iter()
+            .skip_prior_to(&ObjectKey::max_for_id(object_id))?
+            .next();
+
+        let obj = match obj_entry {
+            Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => obj,
+            _ => return Ok(None),
+        };
+
+        // Note that the two reads in this function are (obviously) not atomic, and the
+        // object may be deleted after we have read it. Hence we check get_latest_parent_entry
+        // last, so that the write to self.parent_sync gets the last word.
+        //
+        // TODO: verify this race is ok.
+        //
+        // I believe it is - Even if the reads were atomic, calls to this function would still
+        // race with object deletions (the object could be deleted between when the function is
+        // called and when the first read takes place, which would be indistinguishable to the
+        // caller with the case in which the object is deleted in between the two reads).
+        let parent_entry = self.get_latest_parent_entry(*object_id)?;
+
+        match parent_entry {
+            None => {
+                error!(
+                    ?object_id,
+                    "Object is missing parent_sync entry, data store is inconsistent"
+                );
+                Ok(None)
+            }
+            Some((obj_ref, _)) if obj_ref.2.is_alive() => Ok(Some(obj)),
+            _ => Ok(None),
+        }
+    }
+}
+
+pub struct LiveSetIter<'a> {
+    iter: <DBMap<ObjectRef, TransactionDigest> as Map<'a, ObjectRef, TransactionDigest>>::Keys,
+    prev: Option<ObjectRef>,
+}
+
+impl Iterator for LiveSetIter<'_> {
+    type Item = ObjectRef;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(next) = self.iter.next() {
+                let prev = self.prev;
+                self.prev = Some(next);
+
+                match prev {
+                    Some(prev) if prev.0 != next.0 && prev.2.is_alive() => return Some(prev),
+                    _ => continue,
+                }
+            }
+
+            return match self.prev {
+                Some(prev) if prev.2.is_alive() => {
+                    self.prev = None;
+                    Some(prev)
+                }
+                _ => None,
+            };
+        }
+    }
 }
 
 // These functions are used to initialize the DB tables
@@ -216,7 +254,7 @@ fn objects_table_default_config() -> DBOptions {
         },
     }
 }
-fn certificates_table_default_config() -> DBOptions {
+fn transactions_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
 fn effects_table_default_config() -> DBOptions {

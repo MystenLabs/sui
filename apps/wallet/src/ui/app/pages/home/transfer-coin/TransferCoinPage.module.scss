@@ -8,11 +8,7 @@
     flex: 1;
     align-self: stretch;
     height: 100%;
-
-    .page-title {
-        margin-bottom: 8px;
-        @include utils.typography('page-title');
-    }
+    gap: 8px;
 
     .btn {
         background-color: colors.$cta-blue;

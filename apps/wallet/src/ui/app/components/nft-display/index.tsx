@@ -1,17 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { formatAddress, type SuiObject as SuiObjectType } from '@mysten/sui.js';
 import { cva } from 'class-variance-authority';
 import cl from 'classnames';
 
 import { NftImage, type NftImageProps } from './NftImage';
-import { useMiddleEllipsis, useNFTBasicData, useOriginbyteNft } from '_hooks';
+import { useNFTBasicData, useOriginbyteNft } from '_hooks';
 
-import type { SuiObject as SuiObjectType } from '@mysten/sui.js';
 import type { VariantProps } from 'class-variance-authority';
-
-const OBJ_TYPE_MAX_LENGTH = 20;
-const OBJ_TYPE_MAX_PREFIX_LENGTH = 3;
 
 const nftDisplayCardStyles = cva('flex flex-nowrap items-center', {
     variants: {
@@ -49,23 +46,17 @@ function NFTDisplayCard({
     const { data: originByteNft } = useOriginbyteNft(nftObjectID);
 
     const name = nftFields?.name || nftFields?.metadata?.fields?.name;
-    const objIDShort = useMiddleEllipsis(nftObjectID);
-    const nftTypeShort = useMiddleEllipsis(
-        objType,
-        OBJ_TYPE_MAX_LENGTH,
-        OBJ_TYPE_MAX_PREFIX_LENGTH
-    );
 
     const displayTitle =
         originByteNft?.fields.name ||
-        (typeof name === 'string' ? name : objIDShort);
+        (typeof name === 'string' ? name : formatAddress(nftObjectID || ''));
 
     return (
         <div className={nftDisplayCardStyles({ animateHover, wideView })}>
             <NftImage
                 src={originByteNft?.fields.url || filePath}
                 name={originByteNft?.fields.name || fileExtensionType.name}
-                title={originByteNft?.fields.description || nftTypeShort}
+                title={originByteNft?.fields.description || objType || ''}
                 showLabel={!wideView}
                 animateHover={animateHover}
                 borderRadius={borderRadius}

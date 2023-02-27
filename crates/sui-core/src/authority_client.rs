@@ -27,7 +27,7 @@ pub trait AuthorityAPI {
     async fn handle_transaction(
         &self,
         transaction: Transaction,
-    ) -> Result<TransactionInfoResponse, SuiError>;
+    ) -> Result<HandleTransactionResponse, SuiError>;
 
     /// Execute a certificate.
     async fn handle_certificate(
@@ -56,6 +56,11 @@ pub trait AuthorityAPI {
         &self,
         request: CommitteeInfoRequest,
     ) -> Result<CommitteeInfoResponse, SuiError>;
+
+    async fn handle_system_state_object(
+        &self,
+        request: SystemStateRequest,
+    ) -> Result<SuiSystemState, SuiError>;
 }
 
 #[derive(Clone)]
@@ -94,7 +99,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
     async fn handle_transaction(
         &self,
         transaction: Transaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
+    ) -> Result<HandleTransactionResponse, SuiError> {
         self.client()
             .transaction(transaction)
             .await
@@ -155,6 +160,17 @@ impl AuthorityAPI for NetworkAuthorityClient {
     ) -> Result<CommitteeInfoResponse, SuiError> {
         self.client()
             .committee_info(request)
+            .await
+            .map(tonic::Response::into_inner)
+            .map_err(Into::into)
+    }
+
+    async fn handle_system_state_object(
+        &self,
+        request: SystemStateRequest,
+    ) -> Result<SuiSystemState, SuiError> {
+        self.client()
+            .get_system_state_object(request)
             .await
             .map(tonic::Response::into_inner)
             .map_err(Into::into)

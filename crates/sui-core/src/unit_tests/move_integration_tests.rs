@@ -20,6 +20,9 @@ use sui_types::{
     messages::ExecutionStatus,
 };
 
+use expect_test::expect;
+use std::fs::File;
+use std::io::Read;
 use std::{collections::HashSet, path::PathBuf};
 use std::{env, str::FromStr};
 
@@ -160,9 +163,10 @@ async fn test_object_wrapping_unwrapping() {
         (
             effects.created.len(),
             effects.deleted.len(),
+            effects.unwrapped_then_deleted.len(),
             effects.wrapped.len()
         ),
-        (1, 0, 1)
+        (1, 0, 0, 1)
     );
     let new_child_object_ref = effects.wrapped[0];
     let expected_child_object_ref = (
@@ -172,7 +176,7 @@ async fn test_object_wrapping_unwrapping() {
     );
     // Make sure that the child's version gets increased after wrapped.
     assert_eq!(new_child_object_ref, expected_child_object_ref);
-    check_latest_object_ref(&authority, &expected_child_object_ref).await;
+    check_latest_object_ref(&authority, &expected_child_object_ref, true).await;
 
     let parent_object_ref = effects.created[0].0;
     assert_eq!(parent_object_ref.1, wrapped_version);
@@ -211,7 +215,7 @@ async fn test_object_wrapping_unwrapping() {
     );
     // Make sure that version increments again when unwrapped.
     assert_eq!(effects.unwrapped[0].0 .1, unwrapped_version);
-    check_latest_object_ref(&authority, &effects.unwrapped[0].0).await;
+    check_latest_object_ref(&authority, &effects.unwrapped[0].0, false).await;
     let child_object_ref = effects.unwrapped[0].0;
 
     let rewrap_version = SequenceNumber::lamport_increment([
@@ -251,7 +255,7 @@ async fn test_object_wrapping_unwrapping() {
         ObjectDigest::OBJECT_DIGEST_WRAPPED,
     );
     assert_eq!(effects.wrapped[0], expected_child_object_ref);
-    check_latest_object_ref(&authority, &expected_child_object_ref).await;
+    check_latest_object_ref(&authority, &expected_child_object_ref, true).await;
     let child_object_ref = effects.wrapped[0];
     let parent_object_ref = effects.mutated_excluding_gas().next().unwrap().0;
 
@@ -277,22 +281,25 @@ async fn test_object_wrapping_unwrapping() {
         "{:?}",
         effects.status
     );
-    assert_eq!(effects.deleted.len(), 2);
+    assert_eq!(effects.deleted.len(), 1);
+    assert_eq!(effects.unwrapped_then_deleted.len(), 1);
     // Check that both objects are marked as deleted in the authority.
     let expected_child_object_ref = (
         child_object_ref.0,
         deleted_version,
         ObjectDigest::OBJECT_DIGEST_DELETED,
     );
-    assert!(effects.deleted.contains(&expected_child_object_ref));
-    check_latest_object_ref(&authority, &expected_child_object_ref).await;
+    assert!(effects
+        .unwrapped_then_deleted
+        .contains(&expected_child_object_ref));
+    check_latest_object_ref(&authority, &expected_child_object_ref, true).await;
     let expected_parent_object_ref = (
         parent_object_ref.0,
         deleted_version,
         ObjectDigest::OBJECT_DIGEST_DELETED,
     );
     assert!(effects.deleted.contains(&expected_parent_object_ref));
-    check_latest_object_ref(&authority, &expected_parent_object_ref).await;
+    check_latest_object_ref(&authority, &expected_parent_object_ref, true).await;
 }
 
 #[tokio::test]
@@ -420,8 +427,7 @@ async fn test_object_owning_another_object() {
     )
     .await;
     assert!(effects.is_err());
-    assert!(format!("{effects:?}")
-        .contains("TransactionInputObjectsErrors { errors: [InvalidChildObjectArgument"));
+    assert!(format!("{effects:?}").contains("InvalidChildObjectArgument"));
 
     // Create another parent.
     let effects = call_move(
@@ -654,6 +660,8 @@ async fn test_create_then_delete_parent_child_wrap() {
     // The parent and field are considered deleted, the child doesn't count because it wasn't
     // considered created in the first place.
     assert_eq!(effects.deleted.len(), 2);
+    // The child was never created so it is not unwrapped.
+    assert_eq!(effects.unwrapped_then_deleted.len(), 0);
     assert_eq!(effects.events.len(), 3);
 
     assert_eq!(
@@ -757,8 +765,10 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     .await
     .unwrap();
     assert!(effects.status.is_ok());
-    // Check that both objects were deleted.
-    assert_eq!(effects.deleted.len(), 3);
+    // Check that parent object was deleted.
+    assert_eq!(effects.deleted.len(), 2);
+    // Check that child object was unwrapped and deleted.
+    assert_eq!(effects.unwrapped_then_deleted.len(), 1);
     assert_eq!(effects.events.len(), 4);
 }
 
@@ -977,8 +987,7 @@ async fn test_entry_point_vector() {
     )
     .await;
     assert!(effects.is_err());
-    assert!(format!("{effects:?}")
-        .contains("TransactionInputObjectsErrors { errors: [InvalidChildObjectArgument"));
+    assert!(format!("{effects:?}").contains("InvalidChildObjectArgument"));
 }
 
 #[tokio::test]
@@ -1180,11 +1189,8 @@ async fn test_entry_point_vector_error() {
     .await;
     // should fail as we have the same object passed in vector and as a separate by-value argument
     assert!(matches!(
-        result
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        &SuiError::DuplicateObjectRefInput { .. }
+        UserInputError::try_from(result.unwrap_err()).unwrap(),
+        UserInputError::DuplicateObjectRefInput { .. }
     ));
 
     // mint an owned object
@@ -1226,11 +1232,8 @@ async fn test_entry_point_vector_error() {
     .await;
     // should fail as we have the same object passed in vector and as a separate by-reference argument
     assert!(matches!(
-        result
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        &SuiError::DuplicateObjectRefInput { .. }
+        UserInputError::try_from(result.unwrap_err()).unwrap(),
+        UserInputError::DuplicateObjectRefInput { .. }
     ));
 }
 
@@ -1354,8 +1357,7 @@ async fn test_entry_point_vector_any() {
     )
     .await;
     assert!(effects.is_err());
-    assert!(format!("{effects:?}")
-        .contains("TransactionInputObjectsErrors { errors: [InvalidChildObjectArgument"));
+    assert!(format!("{effects:?}").contains("InvalidChildObjectArgument"));
 }
 
 #[tokio::test]
@@ -1560,11 +1562,8 @@ async fn test_entry_point_vector_any_error() {
     .await;
     // should fail as we have the same object passed in vector and as a separate by-value argument
     assert!(matches!(
-        result
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        &SuiError::DuplicateObjectRefInput { .. }
+        UserInputError::try_from(result.unwrap_err()).unwrap(),
+        UserInputError::DuplicateObjectRefInput { .. }
     ));
 
     // mint an owned object
@@ -1605,11 +1604,8 @@ async fn test_entry_point_vector_any_error() {
     )
     .await;
     assert!(matches!(
-        result
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        &SuiError::DuplicateObjectRefInput { .. }
+        UserInputError::try_from(result.unwrap_err()).unwrap(),
+        UserInputError::DuplicateObjectRefInput { .. }
     ));
 }
 
@@ -1896,7 +1892,7 @@ async fn test_entry_point_string_vec_error() {
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
 async fn test_object_no_id_error() {
-    let mut build_config = BuildConfig::default();
+    let mut build_config = BuildConfig::new_for_testing();
     build_config.config.test_mode = true;
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     // in this package object struct (NotObject) is defined incorrectly and publishing should
@@ -1910,6 +1906,59 @@ async fn test_object_no_id_error() {
                  && err_str.contains("First field of struct NotObject must be 'id'"));
 }
 
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
+async fn test_generate_lock_file() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["src", "unit_tests", "data", "generate_move_lock_file"]);
+
+    let tmp = tempfile::tempdir().expect("Could not create temp dir for Move.lock");
+    let lock_file_path = tmp.path().join("Move.lock");
+
+    let mut build_config = BuildConfig::new_for_testing();
+    build_config.config.lock_file = Some(lock_file_path.clone());
+    sui_framework::build_move_package(&path, build_config).expect("Move package did not build");
+
+    let mut lock_file_contents = String::new();
+    File::open(lock_file_path)
+        .expect("Cannot open lock file")
+        .read_to_string(&mut lock_file_contents)
+        .expect("Error reading Move.lock file");
+
+    let expected = expect![[r##"
+        # @generated by Move, please check-in and do not edit manually.
+
+        [move]
+        version = 0
+
+        dependencies = [
+          { name = "Examples" },
+          { name = "Sui" },
+        ]
+
+        [[move.package]]
+        name = "Examples"
+        source = { local = "../object_basics" }
+
+        dependencies = [
+          { name = "Sui" },
+        ]
+
+        [[move.package]]
+        name = "MoveStdlib"
+        source = { local = "../../../../../sui-framework/deps/move-stdlib" }
+
+        [[move.package]]
+        name = "Sui"
+        source = { local = "../../../../../sui-framework" }
+
+        dependencies = [
+          { name = "MoveStdlib" },
+        ]
+    "##]];
+    expected.assert_eq(lock_file_contents.as_str());
+}
+
 pub async fn build_and_try_publish_test_package(
     authority: &AuthorityState,
     sender: &SuiAddress,
@@ -1919,7 +1968,7 @@ pub async fn build_and_try_publish_test_package(
     gas_budget: u64,
     with_unpublished_deps: bool,
 ) -> (Transaction, SignedTransactionEffects) {
-    let build_config = BuildConfig::default();
+    let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/");
     path.push(test_dir);
@@ -1942,11 +1991,12 @@ pub async fn build_and_try_publish_test_package(
         transaction.clone().into_inner(),
         send_and_confirm_transaction(authority, transaction)
             .await
-            .unwrap(),
+            .unwrap()
+            .1,
     )
 }
 
-async fn build_and_publish_test_package(
+pub async fn build_and_publish_test_package(
     authority: &AuthorityState,
     sender: &SuiAddress,
     sender_key: &AccountKeyPair,
@@ -1973,13 +2023,27 @@ async fn build_and_publish_test_package(
     effects.created[0].0
 }
 
-async fn check_latest_object_ref(authority: &AuthorityState, object_ref: &ObjectRef) {
+async fn check_latest_object_ref(
+    authority: &AuthorityState,
+    object_ref: &ObjectRef,
+    expect_not_found: bool,
+) {
     let response = authority
         .handle_object_info_request(ObjectInfoRequest {
             object_id: object_ref.0,
-            request_kind: ObjectInfoRequestKind::LatestObjectInfo(None),
+            object_format_options: None,
+            request_kind: ObjectInfoRequestKind::LatestObjectInfo,
         })
-        .await
-        .unwrap();
-    assert_eq!(&response.requested_object_reference.unwrap(), object_ref,);
+        .await;
+    if expect_not_found {
+        assert!(matches!(
+            UserInputError::try_from(response.unwrap_err()).unwrap(),
+            UserInputError::ObjectNotFound { .. },
+        ));
+    } else {
+        assert_eq!(
+            &response.unwrap().object.compute_object_reference(),
+            object_ref
+        );
+    }
 }

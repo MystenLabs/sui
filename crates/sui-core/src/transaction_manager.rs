@@ -7,25 +7,37 @@ use std::{
 };
 
 use parking_lot::RwLock;
-use sui_types::{base_types::ObjectID, committee::EpochId, storage::ObjectKey};
-use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
+use sui_types::{
+    base_types::ObjectID,
+    committee::EpochId,
+    messages::{VerifiedCertificate, VerifiedExecutableTransaction},
+};
+use sui_types::{base_types::TransactionDigest, error::SuiResult};
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::{
+    authority_per_epoch_store::AuthorityPerEpochStore, authority_store::InputKey,
+};
 use crate::authority::{AuthorityMetrics, AuthorityStore};
 
-/// TransactionManager is responsible for managing pending certificates and publishes a stream
-/// of certificates ready to be executed. It works together with AuthorityState for receiving
-/// pending certificates, and getting notified about committed objects. Executing driver
-/// subscribes to the stream of ready certificates published by the TransactionManager, and can
-/// execute them in parallel.
-/// TODO: use TransactionManager for fullnode.
+/// TransactionManager is responsible for managing object dependencies of pending transactions,
+/// and publishing a stream of certified transactions (certificates) ready to execute.
+/// It receives certificates from Narwhal, RPC, and checkpoint executor.
+/// Executing driver subscribes to the stream of ready certificates from TransactionManager, and
+/// executes them in parallel.
+/// The actual execution logic is in AuthorityState. After a transaction commits and updates
+/// storage, committed objects are notified back to TransactionManager.
 pub struct TransactionManager {
     authority_store: Arc<AuthorityStore>,
-    tx_ready_certificates: UnboundedSender<VerifiedCertificate>,
+    tx_ready_certificates: UnboundedSender<VerifiedExecutableTransaction>,
     metrics: Arc<AuthorityMetrics>,
     inner: RwLock<Inner>,
+}
+
+struct PendingCertificate {
+    certificate: VerifiedExecutableTransaction,
+    missing: BTreeSet<InputKey>,
 }
 
 #[derive(Default)]
@@ -37,7 +49,7 @@ struct Inner {
     // Note that except for immutable objects, a given key may only have one TransactionDigest in
     // the set. Unfortunately we cannot easily verify that this invariant is upheld, because you
     // cannot determine from TransactionData whether an input is mutable or immutable.
-    missing_inputs: HashMap<ObjectKey, BTreeSet<TransactionDigest>>,
+    missing_inputs: HashMap<InputKey, BTreeSet<TransactionDigest>>,
 
     // Number of transactions that depend on each object ID. Should match exactly with total
     // number of transactions per object ID prefix in the missing_inputs table.
@@ -47,8 +59,8 @@ struct Inner {
     // A transaction enqueued to TransactionManager must be in either pending_certificates or
     // executing_certificates.
 
-    // Maps transactions to their missing input objects.
-    pending_certificates: HashMap<TransactionDigest, BTreeSet<ObjectKey>>,
+    // Maps transaction digests to their content and missing input objects.
+    pending_certificates: HashMap<TransactionDigest, PendingCertificate>,
     // Transactions that have all input objects available, but have not finished execution.
     executing_certificates: HashSet<TransactionDigest>,
 }
@@ -63,12 +75,13 @@ impl Inner {
 }
 
 impl TransactionManager {
-    /// If a node restarts, transaction manager recovers in-memory data from pending certificates and
-    /// other persistent data.
+    /// If a node restarts, transaction manager recovers in-memory data from pending_certificates,
+    /// which contains certificates not yet executed from Narwhal output and RPC.
+    /// Transactions from other sources, e.g. checkpoint executor, do not write to the table.
     pub(crate) fn new(
         authority_store: Arc<AuthorityStore>,
         epoch_store: &AuthorityPerEpochStore,
-        tx_ready_certificates: UnboundedSender<VerifiedCertificate>,
+        tx_ready_certificates: UnboundedSender<VerifiedExecutableTransaction>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
         let transaction_manager = TransactionManager {
@@ -78,9 +91,21 @@ impl TransactionManager {
             tx_ready_certificates,
         };
         transaction_manager
-            .enqueue(epoch_store.all_pending_certificates().unwrap(), epoch_store)
+            .enqueue(epoch_store.all_pending_execution().unwrap(), epoch_store)
             .expect("Initialize TransactionManager with pending certificates failed.");
         transaction_manager
+    }
+
+    pub(crate) fn enqueue_certificates(
+        &self,
+        certs: Vec<VerifiedCertificate>,
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiResult<()> {
+        let executable_txns = certs
+            .into_iter()
+            .map(VerifiedExecutableTransaction::new_from_certificate)
+            .collect();
+        self.enqueue(executable_txns, epoch_store)
     }
 
     /// Enqueues certificates into TransactionManager. Once all of the input objects are available
@@ -94,7 +119,7 @@ impl TransactionManager {
     /// have many callsites. Investigate the alternatives here.
     pub(crate) fn enqueue(
         &self,
-        certs: Vec<VerifiedCertificate>,
+        certs: Vec<VerifiedExecutableTransaction>,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<()> {
         let inner = &mut self.inner.write();
@@ -127,9 +152,9 @@ impl TransactionManager {
                 continue;
             }
             // skip already executed txes
-            if self.authority_store.effects_exists(&digest)? {
+            if self.authority_store.is_tx_already_executed(&digest)? {
                 // also ensure the transaction will not be retried after restart.
-                let _ = epoch_store.remove_pending_certificate(&digest);
+                let _ = epoch_store.remove_pending_execution(&digest);
                 self.metrics
                     .transaction_manager_num_enqueued_certificates
                     .with_label_values(&["already_executed"])
@@ -167,26 +192,32 @@ impl TransactionManager {
             // objects_committed() can only arrive after the current enqueue() call finishes.
             debug!(tx_digest = ?digest, ?missing, "certificate waiting on missing objects");
 
-            for objkey in missing.iter() {
-                debug!(?objkey, ?digest, "adding missing object entry");
+            for input in missing.iter() {
+                debug!(?input, ?digest, "adding missing object entry");
                 assert!(
                     inner
                         .missing_inputs
-                        .entry(*objkey)
+                        .entry(*input)
                         .or_default()
                         .insert(digest),
                     "Duplicated certificate {:?} for missing object {:?}",
                     digest,
-                    objkey
+                    input
                 );
-                let input_count = inner.input_objects.entry(objkey.0).or_default();
+                let input_count = inner.input_objects.entry(input.0).or_default();
                 *input_count += 1;
             }
 
             assert!(
                 inner
                     .pending_certificates
-                    .insert(digest, missing.into_iter().collect())
+                    .insert(
+                        digest,
+                        PendingCertificate {
+                            certificate: cert,
+                            missing: missing.into_iter().collect()
+                        }
+                    )
                     .is_none(),
                 "Duplicated pending certificate {:?}",
                 digest
@@ -210,78 +241,60 @@ impl TransactionManager {
     /// Notifies TransactionManager that the given objects have been committed.
     pub(crate) fn objects_committed(
         &self,
-        object_keys: Vec<ObjectKey>,
+        input_keys: Vec<InputKey>,
         epoch_store: &AuthorityPerEpochStore,
     ) {
         let mut ready_digests = Vec::new();
 
-        {
-            let inner = &mut self.inner.write();
-            if inner.epoch != epoch_store.epoch() {
-                warn!("Ignoring objects committed from wrong epoch. Expected={} Actual={} Objects={:?}", inner.epoch, epoch_store.epoch(), object_keys);
-                return;
-            }
-            for object_key in object_keys {
-                if let Some(digests) = inner.missing_inputs.remove(&object_key) {
-                    // Clean up object ID count table.
-                    let input_count = inner.input_objects.get_mut(&object_key.0).unwrap();
-                    *input_count -= digests.len();
-                    if *input_count == 0 {
-                        inner.input_objects.remove(&object_key.0);
-                    }
-                    // Clean up pending certificates table.
-                    for digest in digests.iter() {
-                        // Pending certificate must exist.
-                        let set = inner.pending_certificates.get_mut(digest).unwrap();
-                        assert!(set.remove(&object_key));
-                        // When a certificate has no missing input, it is ready to execute.
-                        if set.is_empty() {
-                            debug!(tx_digest = ?digest, "certificate ready");
-                            inner.pending_certificates.remove(digest).unwrap();
-                            assert!(inner.executing_certificates.insert(*digest));
-                            ready_digests.push(*digest);
-                        } else {
-                            debug!(tx_digest = ?digest, missing = ?set, "Certificate waiting on missing inputs");
-                        }
-                    }
-                } else {
-                    // No pending transaction is using this object ref as input.
-                    continue;
-                };
-            }
-
-            self.metrics
-                .transaction_manager_num_missing_objects
-                .set(inner.missing_inputs.len() as i64);
-            self.metrics
-                .transaction_manager_num_pending_certificates
-                .set(inner.pending_certificates.len() as i64);
-            self.metrics
-                .transaction_manager_num_executing_certificates
-                .set(inner.executing_certificates.len() as i64);
+        let inner = &mut self.inner.write();
+        if inner.epoch != epoch_store.epoch() {
+            warn!(
+                "Ignoring objects committed from wrong epoch. Expected={} Actual={} \
+                 Objects={:?}",
+                inner.epoch,
+                epoch_store.epoch(),
+                input_keys,
+            );
+            return;
         }
-
-        for digest in ready_digests.iter() {
-            // NOTE: failing and ignoring the certificate is fine, if it will be retried at a higher level.
-            // Otherwise, this has to crash.
-            let cert = match epoch_store.get_pending_certificate(digest) {
-                Ok(Some(cert)) => cert,
-                Ok(None) => {
-                    error!(tx_digest = ?digest,
-                        "Ready certificate not found in the pending table",
-                    );
-                    continue;
-                }
-                Err(e) => {
-                    error!(tx_digest = ?digest,
-                        "Failed to read pending table: {e}",
-                    );
-
-                    continue;
-                }
+        for input_key in input_keys {
+            let Some(digests) = inner.missing_inputs.remove(&input_key) else {
+                continue;
             };
-            self.certificate_ready(cert);
+
+            // Clean up object ID count table.
+            let input_count = inner.input_objects.get_mut(&input_key.0).unwrap();
+            *input_count -= digests.len();
+            if *input_count == 0 {
+                inner.input_objects.remove(&input_key.0);
+            }
+
+            for digest in digests {
+                // Pending certificate must exist.
+                let pending_cert = inner.pending_certificates.get_mut(&digest).unwrap();
+                assert!(pending_cert.missing.remove(&input_key));
+                // When a certificate has no missing input, it is ready to execute.
+                if pending_cert.missing.is_empty() {
+                    debug!(tx_digest = ?digest, "certificate ready");
+                    let pending_cert = inner.pending_certificates.remove(&digest).unwrap();
+                    assert!(inner.executing_certificates.insert(digest));
+                    ready_digests.push(digest);
+                    self.certificate_ready(pending_cert.certificate);
+                } else {
+                    debug!(tx_digest = ?digest, missing = ?pending_cert.missing, "Certificate waiting on missing inputs");
+                }
+            }
         }
+
+        self.metrics
+            .transaction_manager_num_missing_objects
+            .set(inner.missing_inputs.len() as i64);
+        self.metrics
+            .transaction_manager_num_pending_certificates
+            .set(inner.pending_certificates.len() as i64);
+        self.metrics
+            .transaction_manager_num_executing_certificates
+            .set(inner.executing_certificates.len() as i64);
     }
 
     /// Notifies TransactionManager about a certificate that has been executed.
@@ -301,11 +314,11 @@ impl TransactionManager {
                 .transaction_manager_num_executing_certificates
                 .set(inner.executing_certificates.len() as i64);
         }
-        let _ = epoch_store.remove_pending_certificate(digest);
+        let _ = epoch_store.remove_pending_execution(digest);
     }
 
     /// Sends the ready certificate for execution.
-    fn certificate_ready(&self, certificate: VerifiedCertificate) {
+    fn certificate_ready(&self, certificate: VerifiedExecutableTransaction) {
         self.metrics.transaction_manager_num_ready.inc();
         let _ = self.tx_ready_certificates.send(certificate);
     }

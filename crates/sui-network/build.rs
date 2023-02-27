@@ -27,7 +27,7 @@ fn main() -> Result<()> {
                 .name("transaction")
                 .route_name("Transaction")
                 .input_type("sui_types::messages::Transaction")
-                .output_type("sui_types::messages::TransactionInfoResponse")
+                .output_type("sui_types::messages::HandleTransactionResponse")
                 .codec_path(codec_path)
                 .build(),
         )
@@ -76,6 +76,15 @@ fn main() -> Result<()> {
                 .codec_path(codec_path)
                 .build(),
         )
+        .method(
+            Method::builder()
+                .name("get_system_state_object")
+                .route_name("GetSystemStateObject")
+                .input_type("sui_types::messages::SystemStateRequest")
+                .output_type("sui_types::sui_system_state::SuiSystemState")
+                .codec_path(codec_path)
+                .build(),
+        )
         .build();
 
     Builder::new()
@@ -94,15 +103,6 @@ fn build_anemo_services(out_dir: &Path) {
     let discovery = anemo_build::manual::Service::builder()
         .name("Discovery")
         .package("sui")
-        .method(
-            anemo_build::manual::Method::builder()
-                .name("get_external_address")
-                .route_name("GetExternalAddress")
-                .request_type("()")
-                .response_type("std::net::SocketAddr")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
-                .build(),
-        )
         .method(
             anemo_build::manual::Method::builder()
                 .name("get_known_peers")
@@ -149,7 +149,7 @@ fn build_anemo_services(out_dir: &Path) {
                 .name("get_transaction_and_effects")
                 .route_name("GetTransactionAndEffects")
                 .request_type("sui_types::base_types::ExecutionDigests")
-                .response_type("Option<(sui_types::messages::CertifiedTransaction, sui_types::messages::TransactionEffects)>")
+                .response_type("Option<(sui_types::messages::Transaction, sui_types::messages::TransactionEffects)>")
                 .codec_path("anemo::rpc::codec::BincodeCodec")
                 .build(),
         )

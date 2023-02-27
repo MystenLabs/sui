@@ -1,12 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SignableTransaction } from "@mysten/sui.js";
 import {
   WalletAdapter,
   WalletAdapterEvents,
 } from "@mysten/wallet-adapter-base";
-import { StandardWalletAdapterWallet } from "@mysten/wallet-standard";
+import {
+  StandardWalletAdapterWallet,
+  SuiSignAndExecuteTransactionVersion,
+  SuiSignTransactionVersion,
+} from "@mysten/wallet-standard";
 import mitt from "mitt";
 
 export interface StandardWalletAdapterConfig {
@@ -16,6 +19,16 @@ export interface StandardWalletAdapterConfig {
 type WalletAdapterEventsMap = {
   [E in keyof WalletAdapterEvents]: Parameters<WalletAdapterEvents[E]>[0];
 };
+
+const suiSignTransactionLatestVersion: SuiSignTransactionVersion = "2.0.0";
+const suiSignAndExecuteTransactionLatestVersion: SuiSignAndExecuteTransactionVersion =
+  "2.0.0";
+
+function isFeatureCompatible(featureVersion: string, adapterVersion: string) {
+  const [featureMajor] = featureVersion.split(".");
+  const [adapterMajor] = adapterVersion.split(".");
+  return +adapterMajor === +featureMajor;
+}
 
 export class StandardWalletAdapter implements WalletAdapter {
   connected = false;
@@ -42,7 +55,7 @@ export class StandardWalletAdapter implements WalletAdapter {
   }
 
   async getAccounts() {
-    return this.#wallet.accounts.map((account) => account.address);
+    return this.#wallet.accounts;
   }
 
   async connect() {
@@ -86,13 +99,34 @@ export class StandardWalletAdapter implements WalletAdapter {
     }
   }
 
-  async signAndExecuteTransaction(transaction: SignableTransaction) {
+  signTransaction: WalletAdapter["signTransaction"] = (transactionInput) => {
+    const version = this.#wallet.features["sui:signTransaction"].version;
+    if (!isFeatureCompatible(version, suiSignTransactionLatestVersion)) {
+      throw new Error(
+        `Version mismatch, signTransaction feature version ${version} is not compatible with version ${suiSignTransactionLatestVersion}`
+      );
+    }
+    return this.#wallet.features["sui:signTransaction"].signTransaction(
+      transactionInput
+    );
+  };
+
+  signAndExecuteTransaction: WalletAdapter["signAndExecuteTransaction"] = (
+    transactionInput
+  ) => {
+    const version =
+      this.#wallet.features["sui:signAndExecuteTransaction"].version;
+    if (
+      !isFeatureCompatible(version, suiSignAndExecuteTransactionLatestVersion)
+    ) {
+      throw new Error(
+        `Version mismatch, signAndExecuteTransaction feature version ${version} is not compatible with version ${suiSignAndExecuteTransactionLatestVersion}`
+      );
+    }
     return this.#wallet.features[
       "sui:signAndExecuteTransaction"
-    ].signAndExecuteTransaction({
-      transaction,
-    });
-  }
+    ].signAndExecuteTransaction(transactionInput);
+  };
 
   on: <E extends keyof WalletAdapterEvents>(
     event: E,

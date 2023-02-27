@@ -17,18 +17,23 @@ use tracing::info;
 use mysten_metrics::RegistryService;
 use sui::config::SuiEnv;
 use sui::{client_commands::WalletContext, config::SuiClientConfig};
+use sui_config::builder::{ProtocolVersionsConfig, SupportedProtocolVersionsCallback};
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{FullnodeConfigBuilder, NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNode;
 use sui_node::SuiNodeHandle;
+use sui_protocol_config::SupportedProtocolVersions;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
 use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
+use sui_types::intent::Intent;
+use sui_types::messages::TransactionData;
+use sui_types::object::Object;
 
 const NUM_VALIDAOTR: usize = 4;
 
@@ -51,6 +56,10 @@ pub struct TestCluster {
 impl TestCluster {
     pub fn rpc_client(&self) -> &HttpClient {
         &self.fullnode_handle.rpc_client
+    }
+
+    pub fn sui_client(&self) -> &SuiClient {
+        &self.fullnode_handle.sui_client
     }
 
     pub fn rpc_url(&self) -> &str {
@@ -80,6 +89,30 @@ impl TestCluster {
             .addresses()
             .get(1)
             .cloned()
+            .unwrap()
+    }
+
+    // Helper function to get the 2nd address in WalletContext
+    pub fn get_address_2(&self) -> SuiAddress {
+        self.wallet
+            .config
+            .keystore
+            .addresses()
+            .get(2)
+            .cloned()
+            .unwrap()
+    }
+
+    // Sign a transaction with a key currently managed by the WalletContext
+    pub fn sign_transaction(
+        &self,
+        signer_address: &SuiAddress,
+        data: &TransactionData,
+    ) -> sui_types::crypto::Signature {
+        self.wallet
+            .config
+            .keystore
+            .sign_secure(signer_address, data, Intent::default())
             .unwrap()
     }
 
@@ -169,20 +202,24 @@ impl RandomNodeRestarter {
 
 pub struct TestClusterBuilder {
     genesis_config: Option<GenesisConfig>,
+    additional_objects: Vec<Object>,
     num_validators: Option<usize>,
     fullnode_rpc_port: Option<u16>,
     enable_fullnode_events: bool,
-    checkpoints_per_epoch: Option<u64>,
+    epoch_duration_ms: Option<u64>,
+    supported_protocol_versions_config: ProtocolVersionsConfig,
 }
 
 impl TestClusterBuilder {
     pub fn new() -> Self {
         TestClusterBuilder {
             genesis_config: None,
+            additional_objects: vec![],
             fullnode_rpc_port: None,
             num_validators: None,
             enable_fullnode_events: false,
-            checkpoints_per_epoch: None,
+            epoch_duration_ms: None,
+            supported_protocol_versions_config: ProtocolVersionsConfig::Default,
         }
     }
 
@@ -196,6 +233,11 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn with_objects<I: IntoIterator<Item = Object>>(mut self, objects: I) -> Self {
+        self.additional_objects.extend(objects);
+        self
+    }
+
     pub fn with_num_validators(mut self, num: usize) -> Self {
         self.num_validators = Some(num);
         self
@@ -206,8 +248,21 @@ impl TestClusterBuilder {
         self
     }
 
-    pub fn with_checkpoints_per_epoch(mut self, ckpts: u64) -> Self {
-        self.checkpoints_per_epoch = Some(ckpts);
+    pub fn with_epoch_duration_ms(mut self, epoch_duration_ms: u64) -> Self {
+        self.epoch_duration_ms = Some(epoch_duration_ms);
+        self
+    }
+
+    pub fn with_supported_protocol_versions(mut self, c: SupportedProtocolVersions) -> Self {
+        self.supported_protocol_versions_config = ProtocolVersionsConfig::Global(c);
+        self
+    }
+
+    pub fn with_supported_protocol_version_callback(
+        mut self,
+        func: SupportedProtocolVersionsCallback,
+    ) -> Self {
+        self.supported_protocol_versions_config = ProtocolVersionsConfig::PerValidator(func);
         self
     }
 
@@ -228,6 +283,9 @@ impl TestClusterBuilder {
         let fullnode_config = swarm
             .config()
             .fullnode_config_builder()
+            .with_supported_protocol_versions_config(
+                self.supported_protocol_versions_config.clone(),
+            )
             .set_event_store(self.enable_fullnode_events)
             .set_rpc_port(self.fullnode_rpc_port)
             .build()
@@ -261,16 +319,21 @@ impl TestClusterBuilder {
 
     /// Start a Swarm and set up WalletConfig
     async fn start_swarm(&mut self) -> Result<Swarm, anyhow::Error> {
-        let mut builder: SwarmBuilder = Swarm::builder().committee_size(
-            NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDAOTR)).unwrap(),
-        );
+        let mut builder: SwarmBuilder = Swarm::builder()
+            .committee_size(
+                NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDAOTR)).unwrap(),
+            )
+            .with_objects(self.additional_objects.clone())
+            .with_supported_protocol_versions_config(
+                self.supported_protocol_versions_config.clone(),
+            );
 
         if let Some(genesis_config) = self.genesis_config.take() {
             builder = builder.initial_accounts_config(genesis_config);
         }
 
-        if let Some(checkpoints_per_epoch) = self.checkpoints_per_epoch {
-            builder = builder.with_checkpoints_per_epoch(checkpoints_per_epoch);
+        if let Some(epoch_duration_ms) = self.epoch_duration_ms {
+            builder = builder.with_epoch_duration_ms(epoch_duration_ms);
         }
 
         let mut swarm = builder.build();
@@ -297,7 +360,7 @@ impl TestClusterBuilder {
             active_address,
             active_env: Default::default(),
         }
-        .save(&wallet_path)?;
+        .save(wallet_path)?;
 
         // Return network handle
         Ok(swarm)
@@ -344,7 +407,7 @@ pub async fn wait_for_nodes_transition_to_epoch<'a>(
         .map(|handle| {
             handle.with_async(|node| async move {
                 let mut rx = node.subscribe_to_epoch_change();
-                let epoch = node.current_epoch();
+                let epoch = node.current_epoch_for_testing();
                 if epoch != expected_epoch {
                     let committee = rx.recv().await.unwrap();
                     assert_eq!(committee.epoch, expected_epoch);

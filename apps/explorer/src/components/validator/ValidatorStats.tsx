@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ActiveValidator } from '@mysten/sui.js';
+import { type Validator } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { DelegationAmount } from './DelegationAmount';
@@ -13,15 +13,15 @@ import { Stats } from '~/ui/Stats';
 import { getStakedPercent } from '~/utils/getStakedPercent';
 
 type StatsCardProps = {
-    validatorData: ActiveValidator;
-    totalValidatorStake: string;
+    validatorData: Validator;
     epoch: number | string;
+    epochRewards: string;
 };
 
 export function ValidatorStats({
     validatorData,
     epoch,
-    totalValidatorStake,
+    epochRewards,
 }: StatsCardProps) {
     // TODO: add missing fields
     // const numberOfDelegators = 0;
@@ -34,13 +34,12 @@ export function ValidatorStats({
         () => calculateAPY(validatorData, +epoch),
         [validatorData, epoch]
     );
-    const delegatedStake =
-        +validatorData.fields.delegation_staking_pool.fields.sui_balance;
-    const selfStake = +validatorData.fields.stake_amount;
+    const delegatedStake = +validatorData.delegation_staking_pool.sui_balance;
+    const selfStake = +validatorData.stake_amount;
     const totalStake = selfStake + delegatedStake;
-    const commission = +validatorData.fields.commission_rate / 100;
+    const commission = +validatorData.commission_rate / 100;
     const rewardsPoolBalance =
-        +validatorData.fields.delegation_staking_pool.fields.rewards_pool;
+        +validatorData.delegation_staking_pool.rewards_pool;
 
     const delegatedStakePercentage = useMemo(
         () => getStakedPercent(BigInt(delegatedStake), BigInt(totalStake)),
@@ -130,8 +129,10 @@ export function ValidatorStats({
                         <Stats
                             label="Last Epoch SUI Rewards"
                             tooltip="The stake rewards collected during the last epoch."
-                            unavailable
-                        />
+                            unavailable={+epochRewards <= 0}
+                        >
+                            <DelegationAmount amount={epochRewards} isStats />
+                        </Stats>
 
                         <Stats
                             label="Reward Pool"

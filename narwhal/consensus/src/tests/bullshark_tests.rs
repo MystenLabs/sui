@@ -458,6 +458,106 @@ async fn committed_round_after_restart() {
     }
 }
 
+/// Advance the DAG for 4 rounds, commit, and then send a certificate
+/// from round 2. Certificate 2 should not get committed.
+#[tokio::test]
+async fn delayed_certificates_are_rejected() {
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let epoch = committee.epoch();
+    let gc_depth = 10;
+
+    // Make certificates for rounds 1 to 11.
+    let genesis = Certificate::genesis(&committee)
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let (certificates, _) =
+        test_utils::make_certificates_with_epoch(&committee, 1..=5, epoch, &genesis, &keys);
+
+    let store = make_consensus_store(&test_utils::temp_dir());
+    let mut state = ConsensusState::new(metrics.clone());
+    let mut bullshark = Bullshark::new(committee, store, gc_depth, metrics);
+
+    // Populate DAG with the rounds up to round 5 so we trigger commits
+    let mut all_subdags = Vec::new();
+    for certificate in certificates.clone() {
+        let (_, committed_subdags) = bullshark
+            .process_certificate(&mut state, certificate)
+            .unwrap();
+        all_subdags.extend(committed_subdags);
+    }
+
+    // ensure the leaders of rounds 2 and 4 have been committed
+    assert_eq!(all_subdags.drain(0..).len(), 2);
+
+    // now populate again the certificates of round 2 and 3
+    // Since we committed everything of rounds <= 4, then those certificates should get rejected.
+    for certificate in certificates.iter().filter(|c| c.round() <= 3) {
+        let (outcome, _) = bullshark
+            .process_certificate(&mut state, certificate.clone())
+            .unwrap();
+
+        assert_eq!(outcome, Outcome::CertificateBelowCommitRound);
+    }
+}
+
+#[tokio::test]
+async fn submitting_equivocating_certificate_should_error() {
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let epoch = committee.epoch();
+    let gc_depth = 10;
+
+    // Make certificates for rounds 1 to 11.
+    let genesis = Certificate::genesis(&committee)
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let (certificates, _) =
+        test_utils::make_certificates_with_epoch(&committee, 1..=1, epoch, &genesis, &keys);
+
+    let store = make_consensus_store(&test_utils::temp_dir());
+    let mut state = ConsensusState::new(metrics.clone());
+    let mut bullshark = Bullshark::new(committee.clone(), store, gc_depth, metrics);
+
+    // Populate DAG with all the certificates
+    for certificate in certificates.clone() {
+        let _ = bullshark
+            .process_certificate(&mut state, certificate)
+            .unwrap();
+    }
+
+    // Try to re-submit the exact same certificates - no error should be produced.
+    for certificate in certificates {
+        let _ = bullshark
+            .process_certificate(&mut state, certificate)
+            .unwrap();
+    }
+
+    // Try to submit certificates for same rounds but equivocating certificates (we just create
+    // them with different epoch as a way to trigger the difference)
+    let (certificates, _) =
+        test_utils::make_certificates_with_epoch(&committee, 1..=1, 100, &genesis, &keys);
+    assert_eq!(certificates.len(), 4);
+
+    for certificate in certificates {
+        let err = bullshark
+            .process_certificate(&mut state, certificate.clone())
+            .unwrap_err();
+        match err {
+            ConsensusError::CertificateEquivocation(this_cert, _) => {
+                assert_eq!(this_cert, certificate);
+            }
+            err => panic!("Unexpected error returned: {err}"),
+        }
+    }
+}
+
 // Run for 4 dag rounds in ideal conditions (all nodes reference all other nodes). We should commit
 // the leader of round 2. Then shutdown consensus and restart in a new epoch.
 #[tokio::test]

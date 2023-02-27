@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { fromB64 } from '@mysten/bcs';
 import { JsonRpcClient } from '../../rpc/client';
-import { Base64DataBuffer } from '../../serialization/base64';
+import { isPureArg } from '../../types';
 import { TransactionBytes } from '../../types/transactions';
 import {
   MoveCallTransaction,
@@ -50,8 +51,8 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
   async serializeToBytes(
     signerAddress: string,
     unserializedTxn: UnserializedSignableTransaction,
-    mode: TransactionBuilderMode = 'Commit'
-  ): Promise<Base64DataBuffer> {
+    mode: TransactionBuilderMode = 'Commit',
+  ): Promise<Uint8Array> {
     let endpoint: string;
     let args: Array<any>;
     if (!unserializedTxn.data.gasBudget) {
@@ -115,6 +116,13 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
         break;
       case 'moveCall':
         const moveCall = unserializedTxn.data as MoveCallTransaction;
+        for (const arg of moveCall.arguments) {
+          if (isPureArg(arg)) {
+            throw new Error(
+              'PureArg is not allowed as argument in RpcTxnDataSerializer. Please use LocalTxnDataSerializer instead.',
+            );
+          }
+        }
         endpoint = 'sui_moveCall';
         args = [
           signerAddress,
@@ -167,17 +175,17 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
         endpoint,
         args,
         TransactionBytes,
-        this.skipDataValidation
+        this.skipDataValidation,
       );
-      return new Base64DataBuffer(resp.txBytes);
+      return fromB64(resp.txBytes);
     } catch (e) {
       throw new Error(
         `Encountered error when calling RpcTxnDataSerialize for a ${unserializedTxn.kind} transaction for ` +
           `address ${signerAddress} for transaction ${JSON.stringify(
             unserializedTxn,
             null,
-            2
-          )}: ${e}`
+            2,
+          )}: ${e}`,
       );
     }
   }

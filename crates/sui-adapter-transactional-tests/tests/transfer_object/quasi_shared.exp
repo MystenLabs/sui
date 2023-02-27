@@ -4,27 +4,27 @@ init:
 A: object(100), B: object(101)
 
 task 1 'publish'. lines 8-27:
-created: object(105)
-written: object(104)
+created: object(106)
+written: object(105)
 
 task 2 'run'. lines 29-29:
-created: object(107)
-written: object(106)
+created: object(108)
+written: object(107)
 
 task 3 'run'. lines 31-31:
-created: object(109), object(110)
-written: object(107), object(108)
+created: object(110), object(111)
+written: object(108), object(109)
 
 task 4 'view-object'. lines 33-33:
-Owner: Object ID: ( fake(107) )
+Owner: Object ID: ( fake(108) )
 Version: 3
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(109)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(110)}}
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(110)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(111)}}
 
 task 5 'transfer-object'. lines 35-35:
 Error: Transaction Effects Status: Invalid Transfer Object Transaction. Possibly not address-owned or possibly does not have public transfer.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidTransferObject, source: None } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidTransferObject, source: None, command: None } }
 
 task 6 'view-object'. lines 37-37:
-Owner: Object ID: ( fake(107) )
+Owner: Object ID: ( fake(108) )
 Version: 4
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(109)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(110)}}
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(110)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(111)}}

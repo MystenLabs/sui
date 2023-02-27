@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer } from '../../serialization/base64';
 import {
   Coin,
   PAY_JOIN_COIN_FUNC_NAME,
@@ -15,10 +14,11 @@ import {
   TransactionData,
   TransactionKind,
   TypeTag,
-  SuiObjectRef,
   deserializeTransactionBytesToTransactionData,
   normalizeSuiObjectId,
   bcsForVersion,
+  GasData,
+  RpcApiVersion,
 } from '../../types';
 import {
   MoveCallTransaction,
@@ -46,14 +46,18 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
    */
   constructor(private provider: Provider) {}
 
+  async getRpcApiVersion(): Promise<RpcApiVersion | undefined> {
+    return await this.provider.getRpcApiVersion();
+  }
+
   async serializeToBytes(
     signerAddress: string,
     txn: UnserializedSignableTransaction,
-    _mode: TransactionBuilderMode = 'Commit'
-  ): Promise<Base64DataBuffer> {
+    _mode: TransactionBuilderMode = 'Commit',
+  ): Promise<Uint8Array> {
     try {
       return await this.serializeTransactionData(
-        await this.constructTransactionData(signerAddress, txn)
+        await this.constructTransactionData(signerAddress, txn),
       );
     } catch (e) {
       throw new Error(
@@ -61,8 +65,8 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
           `address ${signerAddress} for transaction ${JSON.stringify(
             txn,
             null,
-            2
-          )}: ${e}`
+            2,
+          )}: ${e}`,
       );
     }
   }
@@ -73,13 +77,13 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
    */
   async serializeToBytesWithoutGasInfo(
     signerAddress: string,
-    txn: UnserializedSignableTransaction
-  ): Promise<Base64DataBuffer> {
+    txn: UnserializedSignableTransaction,
+  ): Promise<Uint8Array> {
     try {
       return await this.serializeTransactionKind(
         (
           await this.constructTransactionKindAndPayment(signerAddress, txn)
-        )[0]
+        )[0],
       );
     } catch (e) {
       throw new Error(
@@ -87,15 +91,15 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
           `address ${signerAddress} for transaction ${JSON.stringify(
             txn,
             null,
-            2
-          )}: ${e}`
+            2,
+          )}: ${e}`,
       );
     }
   }
 
   async constructTransactionKindAndPayment(
     signerAddress: string,
-    unserializedTxn: UnserializedSignableTransaction
+    unserializedTxn: UnserializedSignableTransaction,
   ): Promise<[TransactionKind, ObjectId | undefined]> {
     let tx: Transaction;
     let gasPayment: ObjectId | undefined;
@@ -128,7 +132,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         const pay = unserializedTxn.data as PayTransaction;
         const inputCoinRefs = (
           await Promise.all(
-            pay.inputCoins.map((coin) => this.provider.getObjectRef(coin))
+            pay.inputCoins.map((coin) => this.provider.getObjectRef(coin)),
           )
         ).map((ref) => ref!);
         tx = {
@@ -144,7 +148,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         const paySui = unserializedTxn.data as PaySuiTransaction;
         const paySuiInputCoinRefs = (
           await Promise.all(
-            paySui.inputCoins.map((coin) => this.provider.getObjectRef(coin))
+            paySui.inputCoins.map((coin) => this.provider.getObjectRef(coin)),
           )
         ).map((ref) => ref!);
         tx = {
@@ -160,7 +164,9 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         const payAllSui = unserializedTxn.data as PayAllSuiTransaction;
         const payAllSuiInputCoinRefs = (
           await Promise.all(
-            payAllSui.inputCoins.map((coin) => this.provider.getObjectRef(coin))
+            payAllSui.inputCoins.map((coin) =>
+              this.provider.getObjectRef(coin),
+            ),
           )
         ).map((ref) => ref!);
         tx = {
@@ -173,13 +179,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         break;
       case 'moveCall':
         const moveCall = unserializedTxn.data as MoveCallTransaction;
-        const api = await this.provider.getRpcApiVersion();
-
-        // TODO: remove after 0.24.0 is deployed for devnet and testnet
-        const pkg =
-          api?.major === 0 && api?.minor < 24
-            ? (await this.provider.getObjectRef(moveCall.packageObjectId))!
-            : normalizeSuiObjectId(moveCall.packageObjectId);
+        const pkg = normalizeSuiObjectId(moveCall.packageObjectId);
 
         tx = {
           Call: {
@@ -189,10 +189,10 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
             typeArguments: moveCall.typeArguments.map((a) =>
               typeof a === 'string'
                 ? TypeTagSerializer.parseFromStr(a, true)
-                : (a as TypeTag)
+                : (a as TypeTag),
             ),
             arguments: await new CallArgSerializer(
-              this.provider
+              this.provider,
             ).serializeMoveCallArguments(moveCall),
           },
         };
@@ -244,17 +244,17 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
 
   async constructTransactionData(
     signerAddress: string,
-    unserializedTxn: UnserializedSignableTransaction
+    unserializedTxn: UnserializedSignableTransaction,
   ): Promise<TransactionData> {
     const [tx, gasPayment] = await this.constructTransactionKindAndPayment(
       signerAddress,
-      unserializedTxn
+      unserializedTxn,
     );
     return this.constructTransactionDataHelper(
       tx,
       unserializedTxn,
       gasPayment,
-      signerAddress
+      signerAddress,
     );
   }
 
@@ -271,7 +271,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   public async selectGasPaymentForTransaction(
     txn: SignableTransaction,
     signerAddress: string,
-    exclude: ObjectId[] = []
+    exclude: ObjectId[] = [],
   ): Promise<ObjectId | undefined> {
     if (txn.kind === 'bytes') {
       return undefined;
@@ -282,7 +282,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
       signerAddress,
       requiredGasAmount,
       SUI_TYPE_ARG,
-      exclude.concat(await this.extractObjectIds(txn))
+      exclude.concat(await this.extractObjectIds(txn)),
     );
 
     return coins.length > 0 ? Coin.getID(coins[0]) : undefined;
@@ -300,12 +300,12 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   }
 
   private async extractInputObjectIds(
-    txn: SignableTransaction
+    txn: SignableTransaction,
   ): Promise<ObjectId[]> {
     switch (txn.kind) {
       case 'moveCall':
         return await new CallArgSerializer(this.provider).extractObjectIds(
-          txn.data
+          txn.data,
         );
       case 'transferSui':
         return [txn.data.suiObjectId];
@@ -334,33 +334,37 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     tx: TransactionKind,
     originalTx: UnserializedSignableTransaction,
     gasObjectId: ObjectId | undefined,
-    signerAddress: SuiAddress
+    signerAddress: SuiAddress,
   ): Promise<TransactionData> {
     // TODO: Allow people to add tip to the reference gas price by using originalTx.data.gasPrice
     originalTx.data.gasPrice = await this.provider.getReferenceGasPrice();
     if (gasObjectId === undefined) {
       gasObjectId = await this.selectGasPaymentForTransaction(
         originalTx,
-        signerAddress
+        signerAddress,
       );
       if (gasObjectId === undefined) {
         throw new Error(
-          `Unable to select a gas object with balance greater than or equal to ${originalTx.data.gasBudget}`
+          `Unable to select a gas object with balance greater than or equal to ${originalTx.data.gasBudget}`,
         );
       }
     }
     const gasPayment = await this.provider.getObjectRef(gasObjectId);
     if (!originalTx.data.gasBudget) {
       throw new Error(
-        'Must provide a valid gas budget for contructing TransactionData'
+        'Must provide a valid gas budget for contructing TransactionData',
       );
     }
     return {
       kind: tx,
-      gasPayment: gasPayment!,
-      gasPrice: originalTx.data.gasPrice!,
-      gasBudget: originalTx.data.gasBudget!,
       sender: signerAddress,
+      gasData: {
+        payment: gasPayment!,
+        price: originalTx.data.gasPrice!,
+        budget: originalTx.data.gasBudget!,
+        owner: signerAddress,
+      },
+      expiration: { None: null },
     };
   }
 
@@ -370,11 +374,11 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   public async serializeTransactionData(
     tx: TransactionData,
     // TODO: derive the buffer size automatically
-    size: number = 8192
-  ): Promise<Base64DataBuffer> {
+    size: number = 8192,
+  ): Promise<Uint8Array> {
     const bcs = bcsForVersion(await this.provider.getRpcApiVersion());
     const dataBytes = bcs.ser('TransactionData', tx, size).toBytes();
-    return new Base64DataBuffer(dataBytes);
+    return dataBytes;
   }
 
   /**
@@ -383,18 +387,18 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   public async serializeTransactionKind(
     tx: TransactionKind,
     // TODO: derive the buffer size automatically
-    size: number = 8192
-  ): Promise<Base64DataBuffer> {
+    size: number = 8192,
+  ): Promise<Uint8Array> {
     const bcs = bcsForVersion(await this.provider.getRpcApiVersion());
     const dataBytes = bcs.ser('TransactionKind', tx, size).toBytes();
-    return new Base64DataBuffer(dataBytes);
+    return dataBytes;
   }
 
   /**
    * Deserialize BCS encoded bytes into `SignableTransaction`
    */
   public async deserializeTransactionBytesToSignableTransaction(
-    bytes: Base64DataBuffer
+    bytes: Uint8Array,
   ): Promise<
     UnserializedSignableTransaction | UnserializedSignableTransaction[]
   > {
@@ -402,8 +406,8 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     return this.transformTransactionDataToSignableTransaction(
       deserializeTransactionBytesToTransactionData(
         bcsForVersion(version),
-        bytes
-      )
+        bytes,
+      ),
     );
   }
 
@@ -411,35 +415,26 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
    * Deserialize `TransactionData` to `SignableTransaction`
    */
   public async transformTransactionDataToSignableTransaction(
-    tx: TransactionData
+    tx_data: TransactionData,
   ): Promise<
     UnserializedSignableTransaction | UnserializedSignableTransaction[]
   > {
-    if ('Single' in tx.kind) {
+    if ('Single' in tx_data.kind) {
       return this.transformTransactionToSignableTransaction(
-        tx.kind.Single,
-        tx.gasBudget,
-        tx.gasPayment,
-        tx.gasPrice
+        tx_data.kind.Single,
+        tx_data.gasData,
       );
     }
     return Promise.all(
-      tx.kind.Batch.map((t) =>
-        this.transformTransactionToSignableTransaction(
-          t,
-          tx.gasBudget,
-          tx.gasPayment,
-          tx.gasPrice
-        )
-      )
+      tx_data.kind.Batch.map((t) =>
+        this.transformTransactionToSignableTransaction(t, tx_data.gasData),
+      ),
     );
   }
 
   public async transformTransactionToSignableTransaction(
     tx: Transaction,
-    gasBudget: number,
-    gasPayment?: SuiObjectRef,
-    gasPrice?: number
+    gasData: GasData,
   ): Promise<UnserializedSignableTransaction> {
     if ('Pay' in tx) {
       return {
@@ -448,30 +443,27 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
           inputCoins: tx.Pay.coins.map((c) => c.objectId),
           recipients: tx.Pay.recipients,
           amounts: tx.Pay.amounts,
-          gasPayment: gasPayment?.objectId,
-          gasBudget,
-          gasPrice,
+          gasPayment: gasData.payment?.objectId,
+          gasBudget: gasData.budget,
+          gasOwner: gasData.owner,
+          gasPrice: gasData.price,
         },
       };
     } else if ('Call' in tx) {
-      const packageObjectId =
-        typeof tx.Call.package === 'string'
-          ? tx.Call.package
-          : tx.Call.package.objectId;
-
       return {
         kind: 'moveCall',
         data: {
-          packageObjectId,
+          packageObjectId: tx.Call.package,
           module: tx.Call.module,
           function: tx.Call.function,
           typeArguments: tx.Call.typeArguments,
           arguments: await new CallArgSerializer(
-            this.provider
+            this.provider,
           ).deserializeCallArgs(tx),
-          gasPayment: gasPayment?.objectId,
-          gasBudget,
-          gasPrice,
+          gasPayment: gasData.payment?.objectId,
+          gasBudget: gasData.budget,
+          gasOwner: gasData.owner,
+          gasPrice: gasData.price,
         },
       };
     } else if ('TransferObject' in tx) {
@@ -480,21 +472,22 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         data: {
           objectId: tx.TransferObject.object_ref.objectId,
           recipient: tx.TransferObject.recipient,
-          gasPayment: gasPayment?.objectId,
-          gasBudget,
-          gasPrice,
+          gasPayment: gasData.payment?.objectId,
+          gasBudget: gasData.budget,
+          gasOwner: gasData.owner,
+          gasPrice: gasData.price,
         },
       };
     } else if ('TransferSui' in tx) {
       return {
         kind: 'transferSui',
         data: {
-          suiObjectId: gasPayment!.objectId,
+          suiObjectId: gasData.payment!.objectId,
           recipient: tx.TransferSui.recipient,
           amount:
             'Some' in tx.TransferSui.amount ? tx.TransferSui.amount.Some : null,
-          gasBudget,
-          gasPrice,
+          gasBudget: gasData.budget,
+          gasPrice: gasData.price,
         },
       };
     } else if ('Publish' in tx) {
@@ -502,9 +495,26 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         kind: 'publish',
         data: {
           compiledModules: tx.Publish.modules,
-          gasPayment: gasPayment?.objectId,
-          gasBudget,
-          gasPrice,
+          gasPayment: gasData.payment?.objectId,
+          gasBudget: gasData.budget,
+          gasOwner: gasData.owner,
+        },
+      };
+    } else if ('PaySui' in tx) {
+      return {
+        kind: 'paySui',
+        data: {
+          inputCoins: tx.PaySui.coins.map((c) => c.objectId),
+          recipients: tx.PaySui.recipients,
+          amounts: tx.PaySui.amounts,
+        },
+      };
+    } else if ('PayAllSui' in tx) {
+      return {
+        kind: 'payAllSui',
+        data: {
+          inputCoins: tx.PayAllSui.coins.map((c) => c.objectId),
+          recipient: tx.PayAllSui.recipient,
         },
       };
     }

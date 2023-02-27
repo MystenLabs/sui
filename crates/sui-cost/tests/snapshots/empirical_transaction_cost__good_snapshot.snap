@@ -10,21 +10,21 @@ expression: common_costs_actual
   },
   "Publish": {
     "computation_cost": 326,
-    "storage_cost": 119,
+    "storage_cost": 120,
     "storage_rebate": 0
   },
   "SharedCounterAssertValue": {
-    "computation_cost": 196,
+    "computation_cost": 200,
     "storage_cost": 31,
     "storage_rebate": 15
   },
   "SharedCounterCreate": {
-    "computation_cost": 202,
+    "computation_cost": 206,
     "storage_cost": 31,
     "storage_rebate": 0
   },
   "SharedCounterIncrement": {
-    "computation_cost": 196,
+    "computation_cost": 200,
     "storage_cost": 31,
     "storage_rebate": 15
   },

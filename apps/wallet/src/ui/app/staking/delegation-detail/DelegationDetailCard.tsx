@@ -4,12 +4,12 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import { useMemo } from 'react';
 
+import { Heading } from '../../shared/heading';
 import { calculateAPY } from '../calculateAPY';
 import { getStakingRewards } from '../getStakingRewards';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { STATE_OBJECT } from '../usePendingDelegation';
-import { validatorsFields } from '../validatorsFields';
+import { useSystemState } from '../useSystemState';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import { Card } from '_app/shared/card';
@@ -19,7 +19,7 @@ import { IconTooltip } from '_app/shared/tooltip';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useAppSelector, useGetObject } from '_hooks';
+import { useAppSelector } from '_hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
 
 type DelegationDetailCardProps = {
@@ -32,10 +32,10 @@ export function DelegationDetailCard({
     stakedId,
 }: DelegationDetailCardProps) {
     const {
-        data: validators,
+        data: system,
         isLoading: loadingValidators,
         isError: errorValidators,
-    } = useGetObject(STATE_OBJECT);
+    } = useSystemState();
 
     const accountAddress = useAppSelector(({ account }) => account.address);
 
@@ -45,14 +45,12 @@ export function DelegationDetailCard({
         isError,
     } = useGetDelegatedStake(accountAddress || '');
 
-    const validatorsData = validatorsFields(validators);
-
     const validatorData = useMemo(() => {
-        if (!validatorsData) return null;
-        return validatorsData.validators.fields.active_validators.find(
-            (av) => av.fields.metadata.fields.sui_address === validatorAddress
+        if (!system) return null;
+        return system.validators.active_validators.find(
+            (av) => av.metadata.sui_address === validatorAddress
         );
-    }, [validatorAddress, validatorsData]);
+    }, [validatorAddress, system]);
 
     const delegationData = useMemo(() => {
         if (!allDelegation) return null;
@@ -65,17 +63,17 @@ export function DelegationDetailCard({
     const totalStake = delegationData?.staked_sui.principal.value || 0n;
 
     const suiEarned = useMemo(() => {
-        if (!validatorsData || !delegationData) return 0n;
+        if (!system || !delegationData) return 0n;
         return getStakingRewards(
-            validatorsData.validators.fields.active_validators,
+            system.validators.active_validators,
             delegationData
         );
-    }, [delegationData, validatorsData]);
+    }, [delegationData, system]);
 
     const apy = useMemo(() => {
-        if (!validatorData || !validatorsData) return 0;
-        return calculateAPY(validatorData, +validatorsData.epoch);
-    }, [validatorData, validatorsData]);
+        if (!validatorData || !system) return 0;
+        return calculateAPY(validatorData, +system.epoch);
+    }, [validatorData, system]);
 
     const delegationId = useMemo(() => {
         if (!delegationData || delegationData.delegation_status === 'Pending')
@@ -90,7 +88,7 @@ export function DelegationDetailCard({
 
     const commission = useMemo(() => {
         if (!validatorData) return 0;
-        return +validatorData.fields.commission_rate / 100;
+        return +validatorData.commission_rate / 100;
     }, [validatorData]);
 
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
@@ -157,13 +155,14 @@ export function DelegationDetailCard({
                                         }
                                     >
                                         <div className="flex gap-0.5 items-baseline">
-                                            <Text
+                                            <Heading
                                                 variant="heading4"
                                                 weight="semibold"
                                                 color="gray-90"
+                                                leading="none"
                                             >
                                                 {apy}
-                                            </Text>
+                                            </Heading>
 
                                             <Text
                                                 variant="subtitleSmall"
@@ -189,13 +188,14 @@ export function DelegationDetailCard({
                                         }
                                     >
                                         <div className="flex gap-0.5 items-baseline">
-                                            <Text
+                                            <Heading
                                                 variant="heading4"
                                                 weight="semibold"
                                                 color="gray-90"
+                                                leading="none"
                                             >
                                                 {commission}
-                                            </Text>
+                                            </Heading>
 
                                             <Text
                                                 variant="subtitleSmall"
@@ -209,12 +209,12 @@ export function DelegationDetailCard({
                                 </div>
                             </Card>
                         </div>
-                        <div className="flex gap-2.5  w-full my-3.75">
+                        <div className="flex gap-2.5 w-full my-3.75">
                             <Button
                                 size="large"
                                 mode="outline"
                                 href={stakeByValidatorAddress}
-                                className="border-bg-steel-dark border-solid w-full hover:border-bg-steel-darker text-steel-dark hover:text-steel-darker"
+                                className="border-bg-steel-dark border-solid w-full hover:border-bg-steel-darker"
                                 disabled={!stakingEnabled}
                             >
                                 <Icon
@@ -231,7 +231,7 @@ export function DelegationDetailCard({
                                         stakeByValidatorAddress +
                                         '&unstake=true'
                                     }
-                                    className="border-bg-steel-dark border-solid w-full hover:border-bg-steel-darker text-steel-dark hover:text-steel-darker"
+                                    className="border-bg-steel-dark border-solid w-full hover:border-bg-steel-darker"
                                 >
                                     <Icon
                                         icon={SuiIcons.Remove}

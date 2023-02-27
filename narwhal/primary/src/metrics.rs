@@ -70,10 +70,6 @@ pub struct PrimaryChannelMetrics {
     pub tx_headers: IntGauge,
     /// occupancy of the channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`
     pub tx_certificate_fetcher: IntGauge,
-    /// occupancy of the channel from the `primary::CertificateFetcher` to the `primary::Core`
-    pub tx_certificates_loopback: IntGauge,
-    /// occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::Core`
-    pub tx_certificates: IntGauge,
     /// occupancy of the channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`
     pub tx_block_synchronizer_commands: IntGauge,
     /// occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`
@@ -98,10 +94,6 @@ pub struct PrimaryChannelMetrics {
     pub tx_headers_total: IntCounter,
     /// total received on channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`
     pub tx_certificate_fetcher_total: IntCounter,
-    /// total received on channel from the `primary::CertificateFetcher` to the `primary::Core`
-    pub tx_certificates_loopback_total: IntCounter,
-    /// total received on channel from the `primary::PrimaryReceiverHandler` to the `primary::Core`
-    pub tx_certificates_total: IntCounter,
     /// total received on channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`
     pub tx_block_synchronizer_commands_total: IntCounter,
     /// total received on channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`
@@ -166,16 +158,6 @@ impl PrimaryChannelMetrics {
                 "occupancy of the channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`",
                 registry
             ).unwrap(),
-            tx_certificates_loopback: register_int_gauge_with_registry!(
-                "tx_certificates_loopback",
-                "occupancy of the channel from the `primary::CertificateFetcher` to the `primary::Core`",
-                registry
-            ).unwrap(),
-            tx_certificates: register_int_gauge_with_registry!(
-                "tx_certificates",
-                "occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::Core`",
-                registry
-            ).unwrap(),
             tx_block_synchronizer_commands: register_int_gauge_with_registry!(
                 "tx_block_synchronizer_commands",
                 "occupancy of the channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`",
@@ -231,16 +213,6 @@ impl PrimaryChannelMetrics {
             tx_certificate_fetcher_total: register_int_counter_with_registry!(
                 "tx_certificate_fetcher_total",
                 "total received on channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`",
-                registry
-            ).unwrap(),
-            tx_certificates_loopback_total: register_int_counter_with_registry!(
-                "tx_certificates_loopback_total",
-                "total received on channel from the `primary::CertificateFetcher` to the `primary::Core`",
-                registry
-            ).unwrap(),
-            tx_certificates_total: register_int_counter_with_registry!(
-                "tx_certificates_total",
-                "total received on channel from the `primary::PrimaryReceiverHandler` to the `primary::Core`",
                 registry
             ).unwrap(),
             tx_block_synchronizer_commands_total: register_int_counter_with_registry!(
@@ -318,6 +290,8 @@ pub struct PrimaryMetrics {
     pub proposed_header_round: IntGauge,
     /// The number of received votes for the proposed last round
     pub votes_received_last_round: IntGauge,
+    // total number of parent certificates included in votes.
+    pub certificates_in_votes: IntCounter,
     /// The round of the latest created certificate by our node
     pub certificate_created_round: IntGauge,
     /// count number of certificates that the node created
@@ -326,16 +300,18 @@ pub struct PrimaryMetrics {
     pub certificates_processed: IntCounterVec,
     /// count number of certificates that the node suspended their processing
     pub certificates_suspended: IntCounterVec,
+    /// number of certificates that are currently suspended.
+    pub certificates_currently_suspended: IntGauge,
     /// count number of duplicate certificates that the node processed (others + own)
     pub duplicate_certificates_processed: IntCounter,
     /// Latency to perform a garbage collection in core module
     pub gc_core_latency: Histogram,
     /// The current Narwhal round in proposer
     pub current_round: IntGauge,
+    /// The highest Narwhal round of certificates that have been accepted.
+    pub highest_processed_round: IntGaugeVec,
     /// The highest Narwhal round that has been received.
     pub highest_received_round: IntGaugeVec,
-    /// The highest Narwhal round that has been processed.
-    pub highest_processed_round: IntGaugeVec,
     /// 0 if there is no inflight certificates fetching, 1 otherwise.
     pub certificate_fetcher_inflight_fetch: IntGauge,
     /// Number of fetched certificates successfully processed by core.
@@ -390,6 +366,11 @@ impl PrimaryMetrics {
                 "The number of received votes for the proposed last round",
                 registry
             ).unwrap(),
+            certificates_in_votes: register_int_counter_with_registry!(
+                "certificates_in_votes",
+                "Total number of parent certificates included in votes.",
+                registry
+            ).unwrap(),
             certificate_created_round: register_int_gauge_with_registry!(
                 "certificate_created_round",
                 "The round of the latest created certificate by our node",
@@ -412,6 +393,12 @@ impl PrimaryMetrics {
                 "certificates_suspended",
                 "Number of certificates that node suspended processing of",
                 &["reason"],
+                registry
+            )
+            .unwrap(),
+            certificates_currently_suspended: register_int_gauge_with_registry!(
+                "certificates_currently_suspended",
+                "Number of certificates that are suspended in memory",
                 registry
             )
             .unwrap(),

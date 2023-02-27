@@ -1,17 +1,17 @@
 processed 5 tasks
 
 task 1 'publish'. lines 9-12:
-created: object(103)
-written: object(102)
+created: object(104)
+written: object(103)
 
 task 2 'publish'. lines 14-22:
-created: object(105)
-written: object(104)
+created: object(106)
+written: object(105)
 
 task 3 'publish'. lines 24-32:
-created: object(107)
-written: object(106)
+created: object(108)
+written: object(107)
 
 task 4 'publish'. lines 34-42:
-created: object(109)
-written: object(108)
+created: object(110)
+written: object(109)

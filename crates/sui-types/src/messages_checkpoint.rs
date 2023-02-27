@@ -1,28 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::{Base58, Encoding, Hex};
+use fastcrypto::hash::Digest;
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::base_types::ExecutionDigests;
-use crate::committee::{EpochId, StakeUnit};
-use crate::crypto::{
-    AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo, Signature,
-};
+use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
+use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
-use crate::sui_serde::Readable;
+use crate::signature::GenericSignature;
 use crate::{
     base_types::AuthorityName,
     committee::Committee,
     crypto::{sha3_hash, AuthoritySignature, VerificationObligation},
     error::SuiError,
 };
+use fastcrypto::traits::Signer;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, Bytes};
+
+pub use crate::digests::CheckpointContentsDigest;
+pub use crate::digests::CheckpointDigest;
 
 pub type CheckpointSequenceNumber = u64;
 pub type CheckpointTimestamp = u64;
@@ -44,74 +46,28 @@ pub struct CheckpointResponse {
     pub contents: Option<CheckpointContents>,
 }
 
-#[serde_as]
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Default,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-)]
-pub struct CheckpointDigest(
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Readable<Base58, Bytes>")]
-    pub [u8; 32],
-);
-
-impl AsRef<[u8]> for CheckpointDigest {
-    fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl AsRef<[u8; 32]> for CheckpointDigest {
-    fn as_ref(&self) -> &[u8; 32] {
-        &self.0
-    }
-}
-
-impl CheckpointDigest {
-    pub fn encode(&self) -> String {
-        Base58::encode(self.0)
-    }
-}
-
-#[serde_as]
-#[derive(
-    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
-)]
-pub struct CheckpointContentsDigest(
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Readable<Base58, Bytes>")]
-    pub [u8; 32],
-);
-
-impl AsRef<[u8]> for CheckpointContentsDigest {
-    fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl AsRef<[u8; 32]> for CheckpointContentsDigest {
-    fn as_ref(&self) -> &[u8; 32] {
-        &self.0
-    }
-}
-
-impl CheckpointContentsDigest {
-    pub fn encode(&self) -> String {
-        Base58::encode(self.0)
-    }
-}
-
 // The constituent parts of checkpoints, signed and certified
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+pub struct EndOfEpochData {
+    /// next_epoch_committee is `Some` if and only if the current checkpoint is
+    /// the last checkpoint of an epoch.
+    /// Therefore next_epoch_committee can be used to pick the last checkpoint of an epoch,
+    /// which is often useful to get epoch level summary stats like total gas cost of an epoch,
+    /// or the total number of transactions from genesis to the end of an epoch.
+    /// The committee is stored as a vector of validator pub key and stake pairs. The vector
+    /// should be sorted based on the Committee data structure.
+    pub next_epoch_committee: Vec<(AuthorityName, StakeUnit)>,
+
+    /// The protocol version that is in effect during the epoch that starts immediately after this
+    /// checkpoint.
+    pub next_epoch_protocol_version: ProtocolVersion,
+
+    /// The digest of the union of all checkpoint accumulators,
+    /// representing the state of the system at the end of the epoch.
+    #[schemars(with = "[u8; 32]")]
+    pub root_state_digest: Digest<32>,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 pub struct CheckpointSummary {
@@ -125,18 +81,20 @@ pub struct CheckpointSummary {
     /// The running total gas costs of all transactions included in the current epoch so far
     /// until this checkpoint.
     pub epoch_rolling_gas_cost_summary: GasCostSummary,
-    /// next_epoch_committee is `Some` if and only if the current checkpoint is
-    /// the last checkpoint of an epoch.
-    /// Therefore next_epoch_committee can be used to pick the last checkpoint of an epoch,
-    /// which is often useful to get epoch level summary stats like total gas cost of an epoch,
-    /// or the total number of transactions from genesis to the end of an epoch.
-    /// The committee is stored as a vector of validator pub key and stake pairs. The vector
-    /// should be sorted based on the Committee data structure.
-    pub next_epoch_committee: Option<Vec<(AuthorityName, StakeUnit)>>,
+
     /// Timestamp of the checkpoint - number of milliseconds from the Unix epoch
     /// Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent
     /// checkpoints can have same timestamp if they originate from the same underlining consensus commit
     pub timestamp_ms: CheckpointTimestamp,
+
+    /// Present only on the final checkpoint of the epoch.
+    pub end_of_epoch_data: Option<EndOfEpochData>,
+
+    /// CheckpointSummary is not an evolvable structure - it must be readable by any version of the
+    /// code. Therefore, in order to allow extensions to be added to CheckpointSummary, we allow
+    /// opaque data to be added to checkpoints which can be deserialized based on the current
+    /// protocol version.
+    pub version_specific_data: Vec<u8>,
 }
 
 impl CheckpointSummary {
@@ -147,7 +105,7 @@ impl CheckpointSummary {
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
         epoch_rolling_gas_cost_summary: GasCostSummary,
-        next_epoch_committee: Option<Committee>,
+        end_of_epoch_data: Option<EndOfEpochData>,
         timestamp_ms: CheckpointTimestamp,
     ) -> CheckpointSummary {
         let content_digest = transactions.digest();
@@ -159,8 +117,9 @@ impl CheckpointSummary {
             content_digest,
             previous_digest,
             epoch_rolling_gas_cost_summary,
-            next_epoch_committee: next_epoch_committee.map(|c| c.voting_rights),
+            end_of_epoch_data,
             timestamp_ms,
+            version_specific_data: Vec::new(),
         }
     }
 
@@ -169,7 +128,11 @@ impl CheckpointSummary {
     }
 
     pub fn digest(&self) -> CheckpointDigest {
-        CheckpointDigest(sha3_hash(self))
+        CheckpointDigest::new(sha3_hash(self))
+    }
+
+    pub fn timestamp(&self) -> SystemTime {
+        UNIX_EPOCH + Duration::from_millis(self.timestamp_ms)
     }
 }
 
@@ -181,7 +144,7 @@ impl Display for CheckpointSummary {
             epoch_rolling_gas_cost_summary: {:?}}}",
             self.epoch,
             self.sequence_number,
-            Hex::encode(self.content_digest),
+            self.content_digest,
             self.epoch_rolling_gas_cost_summary,
         )
     }
@@ -219,7 +182,10 @@ impl<S> CheckpointSummaryEnvelope<S> {
     }
 
     pub fn next_epoch_committee(&self) -> Option<&[(AuthorityName, StakeUnit)]> {
-        self.summary.next_epoch_committee.as_deref()
+        self.summary
+            .end_of_epoch_data
+            .as_ref()
+            .map(|e| e.next_epoch_committee.as_slice())
     }
 }
 
@@ -240,11 +206,11 @@ impl SignedCheckpointSummary {
         sequence_number: CheckpointSequenceNumber,
         network_total_transactions: u64,
         authority: AuthorityName,
-        signer: &dyn signature::Signer<AuthoritySignature>,
+        signer: &dyn Signer<AuthoritySignature>,
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
         epoch_rolling_gas_cost_summary: GasCostSummary,
-        next_epoch_committee: Option<Committee>,
+        end_of_epoch_data: Option<EndOfEpochData>,
         timestamp_ms: CheckpointTimestamp,
     ) -> SignedCheckpointSummary {
         let checkpoint = CheckpointSummary::new(
@@ -254,7 +220,7 @@ impl SignedCheckpointSummary {
             transactions,
             previous_digest,
             epoch_rolling_gas_cost_summary,
-            next_epoch_committee,
+            end_of_epoch_data,
             timestamp_ms,
         );
         SignedCheckpointSummary::new_from_summary(checkpoint, authority, signer)
@@ -263,7 +229,7 @@ impl SignedCheckpointSummary {
     pub fn new_from_summary(
         checkpoint: CheckpointSummary,
         authority: AuthorityName,
-        signer: &dyn signature::Signer<AuthoritySignature>,
+        signer: &dyn Signer<AuthoritySignature>,
     ) -> SignedCheckpointSummary {
         let epoch = checkpoint.epoch;
         let auth_signature = AuthoritySignInfo::new(epoch, &checkpoint, authority, signer);
@@ -311,7 +277,7 @@ impl SignedCheckpointSummary {
 // or other authenticated data structures to support light
 // clients and more efficient sync protocols.
 
-pub type CertifiedCheckpointSummary = CheckpointSummaryEnvelope<AuthorityWeakQuorumSignInfo>;
+pub type CertifiedCheckpointSummary = CheckpointSummaryEnvelope<AuthorityStrongQuorumSignInfo>;
 
 impl CertifiedCheckpointSummary {
     /// Aggregate many checkpoint signatures to form a checkpoint certificate.
@@ -332,7 +298,7 @@ impl CertifiedCheckpointSummary {
 
         let certified_checkpoint = CertifiedCheckpointSummary {
             summary: signed_checkpoints[0].summary.clone(),
-            auth_signature: AuthorityWeakQuorumSignInfo::new_from_auth_sign_infos(
+            auth_signature: AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(
                 signed_checkpoints
                     .into_iter()
                     .map(|v| v.auth_signature)
@@ -437,13 +403,10 @@ pub struct CheckpointSignatureMessage {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct CheckpointContents {
     transactions: Vec<ExecutionDigests>,
-    /// This field 'pins' user signatures for the checkpoint:
-    ///
-    /// * For normal checkpoint this field will contain same number of elements as transactions.
-    /// * Genesis checkpoint has transactions but this field is empty.
-    /// * Last checkpoint in the epoch will have (last)extra system transaction
-    /// in the transactions list not covered in the signatures list
-    user_signatures: Vec<Signature>,
+    /// This field 'pins' user signatures for the checkpoint
+    /// The length of this vector is same as length of transactions vector
+    /// System transactions has empty signatures
+    user_signatures: Vec<Vec<GenericSignature>>,
 }
 
 impl CheckpointSignatureMessage {
@@ -457,22 +420,26 @@ impl CheckpointContents {
     where
         T: IntoIterator<Item = ExecutionDigests>,
     {
+        let transactions: Vec<_> = contents.into_iter().collect();
+        let user_signatures = transactions.iter().map(|_| vec![]).collect();
         Self {
-            transactions: contents.into_iter().collect(),
-            user_signatures: vec![],
+            transactions,
+            user_signatures,
         }
     }
 
     pub fn new_with_causally_ordered_transactions_and_signatures<T>(
         contents: T,
-        signatures: Vec<Signature>,
+        user_signatures: Vec<Vec<GenericSignature>>,
     ) -> Self
     where
         T: IntoIterator<Item = ExecutionDigests>,
     {
+        let transactions: Vec<_> = contents.into_iter().collect();
+        assert_eq!(transactions.len(), user_signatures.len());
         Self {
-            transactions: contents.into_iter().collect(),
-            user_signatures: signatures,
+            transactions,
+            user_signatures,
         }
     }
 
@@ -504,7 +471,7 @@ impl CheckpointContents {
     }
 
     pub fn digest(&self) -> CheckpointContentsDigest {
-        CheckpointContentsDigest(sha3_hash(self))
+        CheckpointContentsDigest::new(sha3_hash(self))
     }
 }
 

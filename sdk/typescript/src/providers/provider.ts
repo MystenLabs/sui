@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { PublicKey, SignatureScheme } from '../cryptography/publickey';
+import { SerializedSignature } from '../cryptography/signature';
 import { HttpHeaders } from '../rpc/client';
-import { Base64DataBuffer } from '../serialization/base64';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
   GetObjectDataResponse,
@@ -35,6 +34,9 @@ import {
   TransactionEffects,
   CoinMetadata,
   DevInspectResults,
+  SuiSystemState,
+  DelegatedStake,
+  ValidatorMetaData,
   PaginatedCoins,
   CoinBalance,
   CoinSupply,
@@ -42,10 +44,11 @@ import {
   CheckpointContents,
   CheckpointDigest,
   CheckPointContentsDigest,
+  Checkpoint,
   CommitteeInfo,
 } from '../types';
 
-import { DynamicFieldPage } from '../types/dynamic_fields';
+import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 
 ///////////////////////////////
 // Exported Abstracts
@@ -67,7 +70,7 @@ export abstract class Provider {
    */
   abstract requestSuiFromFaucet(
     recipient: SuiAddress,
-    httpHeaders?: HttpHeaders
+    httpHeaders?: HttpHeaders,
   ): Promise<FaucetResponse>;
 
   // RPC Endpoint
@@ -76,10 +79,7 @@ export abstract class Provider {
    * @param endpoint the endpoint to be invoked
    * @param params the arguments to be passed to the RPC request
    */
-  abstract call(
-    endpoint: string,
-    params: Array<any>
-  ) : Promise<any>;
+  abstract call(endpoint: string, params: Array<any>): Promise<any>;
 
   // Coins
   /**
@@ -90,10 +90,10 @@ export abstract class Provider {
    */
   abstract getCoins(
     owner: SuiAddress,
-    coinType: String | null,
+    coinType: string | null,
     cursor: ObjectId | null,
-    limit: number | null
-  ) : Promise<PaginatedCoins>;
+    limit: number | null,
+  ): Promise<PaginatedCoins>;
 
   /**
    * Get all Coin objects owned by an address.
@@ -103,8 +103,8 @@ export abstract class Provider {
   abstract getAllCoins(
     owner: SuiAddress,
     cursor: ObjectId | null,
-    limit: number | null
-  ) : Promise<PaginatedCoins>;
+    limit: number | null,
+  ): Promise<PaginatedCoins>;
 
   /**
    * Get the total coin balance for one coin type, owned by the address owner.
@@ -112,15 +112,13 @@ export abstract class Provider {
    */
   abstract getBalance(
     owner: SuiAddress,
-    coinType: String | null
-  ) : Promise<CoinBalance>;
+    coinType: string | null,
+  ): Promise<CoinBalance>;
 
   /**
    * Get the total coin balance for all coin type, owned by the address owner.
    */
-  abstract getAllBalances(
-    owner: SuiAddress
-  ) : Promise<CoinBalance[]>;
+  abstract getAllBalances(owner: SuiAddress): Promise<CoinBalance[]>;
 
   /**
    * Fetch CoinMetadata for a given coin type
@@ -134,23 +132,21 @@ export abstract class Provider {
    *  Fetch total supply for a coin
    * @param coinType fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
    */
-  abstract getTotalSupply(
-    coinType: string
-  ) : Promise<CoinSupply>;
+  abstract getTotalSupply(coinType: string): Promise<CoinSupply>;
 
   // Objects
   /**
    * Get all objects owned by an address
    */
   abstract getObjectsOwnedByAddress(
-    addressOrObjectId: string
+    addressOrObjectId: string,
   ): Promise<SuiObjectInfo[]>;
 
   /**
    * Convenience method for getting all gas objects(SUI Tokens) owned by an address
    */
   abstract getGasObjectsOwnedByAddress(
-    _address: string
+    _address: string,
   ): Promise<SuiObjectInfo[]>;
 
   /**
@@ -158,7 +154,7 @@ export abstract class Provider {
    */
   abstract getCoinBalancesOwnedByAddress(
     address: string,
-    typeArg?: string
+    typeArg?: string,
   ): Promise<GetObjectDataResponse[]>;
 
   /**
@@ -173,7 +169,7 @@ export abstract class Provider {
     address: string,
     amount: bigint,
     typeArg: string,
-    exclude: ObjectId[]
+    exclude: ObjectId[],
   ): Promise<GetObjectDataResponse[]>;
 
   /**
@@ -190,7 +186,7 @@ export abstract class Provider {
     address: string,
     amount: bigint,
     typeArg: string,
-    exclude: ObjectId[]
+    exclude: ObjectId[],
   ): Promise<GetObjectDataResponse[]>;
 
   /**
@@ -212,7 +208,7 @@ export abstract class Provider {
    */
   abstract getTransactionDigestsInRange(
     start: GatewayTxSeqNumber,
-    end: GatewayTxSeqNumber
+    end: GatewayTxSeqNumber,
   ): Promise<GetTxnDigestsResponse>;
 
   /**
@@ -222,7 +218,7 @@ export abstract class Provider {
     query: TransactionQuery,
     cursor: TransactionDigest | null,
     limit: number | null,
-    order: Order
+    order: Order,
   ): Promise<PaginatedTransactionDigests>;
 
   /**
@@ -237,11 +233,9 @@ export abstract class Provider {
    * Gateway
    */
   abstract executeTransaction(
-    txnBytes: Base64DataBuffer,
-    signatureScheme: SignatureScheme,
-    signature: Base64DataBuffer,
-    pubkey: PublicKey,
-    requestType: ExecuteTransactionRequestType
+    txnBytes: Uint8Array | string,
+    signature: SerializedSignature,
+    requestType: ExecuteTransactionRequestType,
   ): Promise<SuiExecuteTransactionResponse>;
 
   // Move info
@@ -251,7 +245,7 @@ export abstract class Provider {
   abstract getMoveFunctionArgTypes(
     objectId: string,
     moduleName: string,
-    functionName: string
+    functionName: string,
   ): Promise<SuiMoveFunctionArgTypes>;
 
   /**
@@ -259,7 +253,7 @@ export abstract class Provider {
    * structured representations of Move modules
    */
   abstract getNormalizedMoveModulesByPackage(
-    objectId: string
+    objectId: string,
   ): Promise<SuiMoveNormalizedModules>;
 
   /**
@@ -267,7 +261,7 @@ export abstract class Provider {
    */
   abstract getNormalizedMoveModule(
     objectId: string,
-    moduleName: string
+    moduleName: string,
   ): Promise<SuiMoveNormalizedModule>;
 
   /**
@@ -276,7 +270,7 @@ export abstract class Provider {
   abstract getNormalizedMoveFunction(
     objectId: string,
     moduleName: string,
-    functionName: string
+    functionName: string,
   ): Promise<SuiMoveNormalizedFunction>;
 
   /**
@@ -285,7 +279,7 @@ export abstract class Provider {
   abstract getNormalizedMoveStruct(
     objectId: string,
     moduleName: string,
-    structName: string
+    structName: string,
   ): Promise<SuiMoveNormalizedStruct>;
 
   /**
@@ -299,7 +293,7 @@ export abstract class Provider {
     query: EventQuery,
     cursor: EventId | null,
     limit: number | null,
-    order: Order
+    order: Order,
   ): Promise<PaginatedEvents>;
 
   /**
@@ -309,7 +303,7 @@ export abstract class Provider {
    */
   abstract subscribeEvent(
     filter: SuiEventFilter,
-    onMessage: (event: SuiEventEnvelope) => void
+    onMessage: (event: SuiEventEnvelope) => void,
   ): Promise<SubscriptionId>;
 
   /**
@@ -332,9 +326,9 @@ export abstract class Provider {
    */
   abstract devInspectTransaction(
     sender: SuiAddress,
-    txn: UnserializedSignableTransaction | string | Base64DataBuffer,
+    txn: UnserializedSignableTransaction | string | Uint8Array,
     gasPrice: number | null,
-    epoch: number | null
+    epoch: number | null,
   ): Promise<DevInspectResults>;
 
   /**
@@ -342,7 +336,7 @@ export abstract class Provider {
    * gas budget and the transaction effects
    * @param txBytes
    */
-  abstract dryRunTransaction(txBytes: string): Promise<TransactionEffects>;
+  abstract dryRunTransaction(txBytes: Uint8Array): Promise<TransactionEffects>;
 
   /**
    * Return the list of dynamic field objects owned by an object
@@ -353,7 +347,7 @@ export abstract class Provider {
   abstract getDynamicFields(
     parent_object_id: ObjectId,
     cursor: ObjectId | null,
-    limit: number | null
+    limit: number | null,
   ): Promise<DynamicFieldPage>;
 
   /**
@@ -363,13 +357,28 @@ export abstract class Provider {
    */
   abstract getDynamicFieldObject(
     parent_object_id: ObjectId,
-    name: string
+    name: string | DynamicFieldName,
   ): Promise<GetObjectDataResponse>;
 
   /**
    * Getting the reference gas price for the network
    */
   abstract getReferenceGasPrice(): Promise<number>;
+
+  /**
+   * Return the delegated stakes for an address
+   */
+  abstract getDelegatedStakes(address: SuiAddress): Promise<DelegatedStake[]>;
+
+  /**
+   * Return all validators available for stake delegation.
+   */
+  abstract getValidators(): Promise<ValidatorMetaData[]>;
+
+  /**
+   * Return the content of `0x5` object
+   */
+  abstract getSuiSystemState(): Promise<SuiSystemState>;
 
   /**
    * Get the sequence number of the latest checkpoint that has been executed
@@ -379,25 +388,28 @@ export abstract class Provider {
   /**
    * Returns checkpoint summary based on a checkpoint sequence number
    * @param sequence_number - The sequence number of the desired checkpoint summary
+   * @deprecated - Prefer `getCheckpoint` instead
    */
   abstract getCheckpointSummary(
-    sequenceNumber: number
+    sequenceNumber: number,
   ): Promise<CheckpointSummary>;
 
   /**
    * Returns checkpoint summary based on a checkpoint digest
    * @param digest - The checkpoint digest
+   * @deprecated - Prefer `getCheckpoint` instead
    */
   abstract getCheckpointSummaryByDigest(
-    digest: CheckpointDigest
+    digest: CheckpointDigest,
   ): Promise<CheckpointSummary>;
 
   /**
    * Return contents of a checkpoint, namely a list of execution digests
    * @param sequence_number - The sequence number of the desired checkpoint contents
+   * @deprecated - Prefer `getCheckpoint` instead
    */
   abstract getCheckpointContents(
-    sequenceNumber: number
+    sequenceNumber: number,
   ): Promise<CheckpointContents>;
 
   /**
@@ -405,8 +417,14 @@ export abstract class Provider {
    * @param digest - The checkpoint summary digest
    */
   abstract getCheckpointContentsByDigest(
-    digest: CheckPointContentsDigest
+    digest: CheckPointContentsDigest,
   ): Promise<CheckpointContents>;
+
+  /**
+   * Returns information about a given checkpoint
+   * @param id - The checkpoint digest or sequence number
+   */
+  abstract getCheckpoint(id: CheckpointDigest | number): Promise<Checkpoint>;
 
   /**
    * Return the committee information for the asked epoch

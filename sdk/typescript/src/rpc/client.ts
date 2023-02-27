@@ -12,7 +12,10 @@ import {
   optional,
   string,
   Struct,
+  validate,
 } from 'superstruct';
+import { pkgVersion } from '../pkg-version';
+import { TARGETED_RPC_VERSION } from '../providers/json-rpc-provider';
 
 /**
  * An object defining headers to be passed to the RPC server
@@ -52,24 +55,21 @@ export class JsonRpcClient {
   private rpcClient: RpcClient;
 
   constructor(url: string, httpHeaders?: HttpHeaders) {
-    this.rpcClient = this.createRpcClient(url, httpHeaders);
-  }
-
-  private createRpcClient(url: string, httpHeaders?: HttpHeaders): RpcClient {
-    const client = new RpcClient(
+    this.rpcClient = new RpcClient(
       async (
         request: any,
-        callback: (arg0: Error | null, arg1?: string | undefined) => void
+        callback: (arg0: Error | null, arg1?: string | undefined) => void,
       ) => {
         const options = {
           method: 'POST',
           body: request,
-          headers: Object.assign(
-            {
-              'Content-Type': 'application/json',
-            },
-            httpHeaders || {}
-          ),
+          headers: {
+            'Content-Type': 'application/json',
+            'Client-Sdk-Type': 'typescript',
+            'Client-Sdk-Version': pkgVersion,
+            'Client-Target-Api-Version': TARGETED_RPC_VERSION,
+            ...httpHeaders,
+          },
         };
 
         try {
@@ -81,40 +81,39 @@ export class JsonRpcClient {
             const isHtml = res.headers.get('content-type') === 'text/html';
             callback(
               new Error(
-                `${res.status} ${res.statusText}${isHtml ? '' : `: ${result}`}`
-              )
+                `${res.status} ${res.statusText}${isHtml ? '' : `: ${result}`}`,
+              ),
             );
           }
         } catch (err) {
           if (err instanceof Error) callback(err);
         }
       },
-      {}
+      {},
     );
-
-    return client;
   }
 
   async requestWithType<T>(
     method: string,
     args: Array<any>,
     struct: Struct<T>,
-    skipDataValidation: boolean = false
+    skipDataValidation: boolean = false,
   ): Promise<T> {
     const response = await this.request(method, args);
     if (is(response, ErrorResponse)) {
       throw new Error(`RPC Error: ${response.error.message}`);
     } else if (is(response, ValidResponse)) {
-      // TODO: Improve error messaging here using superstruct asserts
-      const expectedSchema = is(response.result, struct);
+      const err = validate(response.result, struct)[0];
       const errMsg =
         TYPE_MISMATCH_ERROR +
-        `Result received was: ${JSON.stringify(response.result)}`;
+        `Result received was: ${JSON.stringify(
+          response.result,
+        )}. Debug info: ${err}`;
 
-      if (skipDataValidation && !expectedSchema) {
+      if (skipDataValidation && err) {
         console.warn(errMsg);
         return response.result;
-      } else if (!expectedSchema) {
+      } else if (err) {
         throw new Error(`RPC Error: ${errMsg}`);
       }
       return response.result;
@@ -138,49 +137,49 @@ export class JsonRpcClient {
   async batchRequestWithType<T>(
     requests: RpcParams[],
     struct: Struct<T>,
-    skipDataValidation: boolean = false
+    skipDataValidation: boolean = false,
   ): Promise<T[]> {
     const responses = await this.batchRequest(requests);
     // TODO: supports other error modes such as throw or return
     const validResponses = responses.filter(
       (response: any) =>
         is(response, ValidResponse) &&
-        (skipDataValidation || is(response.result, struct))
+        (skipDataValidation || is(response.result, struct)),
     );
 
     if (responses.length > validResponses.length) {
       console.warn(
         `Batch request contains invalid responses. ${
           responses.length - validResponses.length
-        } of the ${responses.length} requests has invalid schema.`
+        } of the ${responses.length} requests has invalid schema.`,
       );
       const exampleTypeMismatch = responses.find(
-        (r: any) => !is(r.result, struct)
+        (r: any) => !is(r.result, struct),
       );
       const exampleInvalidResponseIndex = responses.findIndex(
-        (r: any) => !is(r, ValidResponse)
+        (r: any) => !is(r, ValidResponse),
       );
       if (exampleTypeMismatch) {
         console.warn(
           TYPE_MISMATCH_ERROR +
             `One example mismatch is: ${JSON.stringify(
-              exampleTypeMismatch.result
-            )}`
+              exampleTypeMismatch.result,
+            )}`,
         );
       }
       if (exampleInvalidResponseIndex !== -1) {
         console.warn(
           `The request ${JSON.stringify(
-            requests[exampleInvalidResponseIndex]
+            requests[exampleInvalidResponseIndex],
           )} within a batch request returns an invalid response ${JSON.stringify(
-            responses[exampleInvalidResponseIndex]
-          )}`
+            responses[exampleInvalidResponseIndex],
+          )}`,
         );
       }
     }
 
     return validResponses.map(
-      (response: Infer<typeof ValidResponse>) => response.result
+      (response: Infer<typeof ValidResponse>) => response.result,
     );
   }
 

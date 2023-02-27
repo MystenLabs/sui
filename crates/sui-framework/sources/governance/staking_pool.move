@@ -11,7 +11,6 @@ module sui::staking_pool {
     use sui::object::{Self, ID, UID};
     use sui::locked_coin;
     use sui::coin;
-    use std::vector;
     use sui::table_vec::{Self, TableVec};
     use sui::linked_table::{Self, LinkedTable};
     use sui::math;
@@ -19,20 +18,19 @@ module sui::staking_pool {
     friend sui::validator;
     friend sui::validator_set;
     
-    const EINSUFFICIENT_POOL_TOKEN_BALANCE: u64 = 0;
-    const EWRONG_POOL: u64 = 1;
-    const EWITHDRAW_AMOUNT_CANNOT_BE_ZERO: u64 = 2;
-    const EINSUFFICIENT_SUI_TOKEN_BALANCE: u64 = 3;
-    const EINSUFFICIENT_REWARDS_POOL_BALANCE: u64 = 4;
-    const EDESTROY_NON_ZERO_BALANCE: u64 = 5;
-    const ETOKEN_TIME_LOCK_IS_SOME: u64 = 6;
-    const EWRONG_DELEGATION: u64 = 7;
-    const EPENDING_DELEGATION_DOES_NOT_EXIST: u64 = 8;
+    const EInsufficientPoolTokenBalance: u64 = 0;
+    const EWrongPool: u64 = 1;
+    const EWithdrawAmountCannotBeZero: u64 = 2;
+    const EInsufficientSuiTokenBalance: u64 = 3;
+    const EInsufficientRewardsPoolBalance: u64 = 4;
+    const EDestroyNonzeroBalance: u64 = 5;
+    const ETokenTimeLockIsSome: u64 = 6;
+    const EWrongDelegation: u64 = 7;
+    const EPendingDelegationDoesNotExist: u64 = 8;
 
     /// A staking pool embedded in each validator struct in the system state object.
-    struct StakingPool has store {
-        /// The sui address of the validator associated with this pool.
-        validator_address: address,
+    struct StakingPool has key, store {
+        id: UID,
         /// The epoch at which this pool started operating. Should be the epoch at which the validator became active.
         starting_epoch: u64,
         /// The total number of SUI tokens in this pool, including the SUI in the rewards_pool, as well as in all the principal
@@ -97,10 +95,10 @@ module sui::staking_pool {
     /// A self-custodial object holding the staked SUI tokens.
     struct StakedSui has key {
         id: UID,
-        /// The validator we are staking with.
+        /// ID of the staking pool we are staking with.
+        pool_id: ID,
+        // TODO: keeping this field here because the apps depend on it. consider removing it.
         validator_address: address,
-        /// The epoch at which the staking pool started operating.
-        pool_starting_epoch: u64,
         /// The epoch at which the delegation is requested.
         delegation_request_epoch: u64,
         /// The staked SUI tokens.
@@ -113,10 +111,10 @@ module sui::staking_pool {
     // ==== initializer ====
 
     /// Create a new, empty staking pool.
-    public(friend) fun new(validator_address: address, starting_epoch: u64, ctx: &mut TxContext) : StakingPool {
+    public(friend) fun new(ctx: &mut TxContext) : StakingPool {
         StakingPool {
-            validator_address,
-            starting_epoch,
+            id: object::new(ctx),
+            starting_epoch: tx_context::epoch(ctx) + 1, // active beginning next epoch
             sui_balance: 0,
             rewards_pool: balance::zero(),
             delegation_token_supply: balance::create_supply(DelegationToken {}),
@@ -135,6 +133,7 @@ module sui::staking_pool {
         pool: &mut StakingPool, 
         stake: Balance<SUI>, 
         sui_token_lock: Option<EpochTimeLock>,
+        validator_address: address,
         delegator: address,
         ctx: &mut TxContext
     ) {
@@ -142,8 +141,8 @@ module sui::staking_pool {
         assert!(sui_amount > 0, 0);
         let staked_sui = StakedSui {
             id: object::new(ctx),
-            validator_address: pool.validator_address,
-            pool_starting_epoch: pool.starting_epoch,
+            pool_id: object::id(pool),
+            validator_address,
             delegation_request_epoch: tx_context::epoch(ctx),
             principal: stake,
             sui_token_lock,
@@ -186,37 +185,6 @@ module sui::staking_pool {
         principal_withdraw_amount
     }
 
-    public(friend) fun cancel_delegation_request(pool: &mut StakingPool, staked_sui: StakedSui, ctx: &mut TxContext) {
-        let delegator = tx_context::sender(ctx);
-        let staked_sui_id = object::id(&staked_sui);
-        assert!(linked_table::contains(&mut pool.pending_delegations, staked_sui_id), EPENDING_DELEGATION_DOES_NOT_EXIST);
-
-        linked_table::remove(&mut pool.pending_delegations, staked_sui_id);
-
-        let StakedSui { 
-            id,
-            validator_address,
-            pool_starting_epoch,
-            delegation_request_epoch: _,
-            principal,
-            sui_token_lock
-        } = staked_sui;
-
-        // sanity check that the StakedSui is indeed from this pool. Should never fail.
-        assert!(
-            validator_address == pool.validator_address &&
-            pool_starting_epoch == pool.starting_epoch,
-            EWRONG_POOL
-        );
-        object::delete(id);
-        if (option::is_some(&sui_token_lock)) {
-            locked_coin::new_from_balance(principal, option::destroy_some(sui_token_lock), delegator, ctx);
-        } else {
-            transfer::transfer(coin::from_balance(principal, ctx), delegator);
-            option::destroy_none(sui_token_lock);
-        };
-    }
-
     /// Withdraw the requested amount of the principal SUI stored in the StakedSui object, as
     /// well as a proportional amount of pool tokens from the delegation object.
     /// For example, suppose the delegation object contains 15 pool tokens and the principal SUI 
@@ -230,16 +198,12 @@ module sui::staking_pool {
         staked_sui: StakedSui,
     ) : (Balance<DelegationToken>, Balance<SUI>, Option<EpochTimeLock>) {
         // Check that the delegation and staked sui objects match.
-        assert!(object::id(&staked_sui) == delegation.staked_sui_id, EWRONG_DELEGATION);
+        assert!(object::id(&staked_sui) == delegation.staked_sui_id, EWrongDelegation);
 
         // Check that the delegation information matches the pool. 
-        assert!(
-            staked_sui.validator_address == pool.validator_address &&
-            staked_sui.pool_starting_epoch == pool.starting_epoch,
-            EWRONG_POOL
-        );
+        assert!(staked_sui.pool_id == object::id(pool), EWrongPool);
 
-        assert!(delegation.principal_sui_amount == balance::value(&staked_sui.principal), EINSUFFICIENT_SUI_TOKEN_BALANCE);
+        assert!(delegation.principal_sui_amount == balance::value(&staked_sui.principal), EInsufficientSuiTokenBalance);
 
         let pool_tokens = destroy_delegation_and_return_pool_tokens(delegation);
         let (principal_withdraw, time_lock) = unwrap_staked_sui(staked_sui);
@@ -260,8 +224,8 @@ module sui::staking_pool {
     fun unwrap_staked_sui(staked_sui: StakedSui): (Balance<SUI>, Option<EpochTimeLock>) {
         let StakedSui { 
             id,
+            pool_id: _,
             validator_address: _,
-            pool_starting_epoch: _,
             delegation_request_epoch: _,
             principal,
             sui_token_lock
@@ -296,8 +260,6 @@ module sui::staking_pool {
     }
 
     /// Called at epoch boundaries to mint new pool tokens to new delegators at the new exchange rate.
-    /// New delegators include both entirely new delegations and delegations switched to this staking pool
-    /// during the previous epoch.
     public(friend) fun process_pending_delegations(pool: &mut StakingPool, ctx: &mut TxContext) {
         while (!linked_table::is_empty(&pool.pending_delegations)) {
             let (staked_sui_id, PendingDelegationEntry { delegator, sui_amount }) =
@@ -305,31 +267,6 @@ module sui::staking_pool {
             mint_delegation_tokens_to_delegator(pool, delegator, sui_amount, staked_sui_id, ctx);
             pool.sui_balance = pool.sui_balance + sui_amount;
         };
-    }
-
-    /// Called by validator_set at epoch boundaries for delegation switches.
-    /// This function goes through the provided vector of pending withdraw entries, 
-    /// and for each entry, calls `withdraw_rewards_and_burn_pool_tokens` to withdraw
-    /// the rewards portion of the delegation and burn the pool tokens. We then aggregate
-    /// the delegator addresses and their rewards into vectors, as well as calculate 
-    /// the total amount of rewards SUI withdrawn. These three return values are then
-    /// used in `validator_set`'s delegation switching code to deposit the rewards part
-    /// into the new validator's staking pool.
-    public(friend) fun batch_withdraw_rewards_and_burn_pool_tokens(
-        pool: &mut StakingPool,
-        entries: TableVec<PendingWithdrawEntry>,
-    ) : (vector<address>, vector<Balance<SUI>>, u64) {
-        let (delegators, rewards, total_rewards_withdraw_amount) = (vector::empty(), vector::empty(), 0);
-        while (!table_vec::is_empty(&mut entries)) {
-            let PendingWithdrawEntry { delegator, principal_withdraw_amount, withdrawn_pool_tokens } 
-                = table_vec::pop_back(&mut entries);
-            let reward = withdraw_rewards_and_burn_pool_tokens(pool, principal_withdraw_amount, withdrawn_pool_tokens);
-            total_rewards_withdraw_amount = total_rewards_withdraw_amount + balance::value(&reward);
-            vector::push_back(&mut delegators, delegator);
-            vector::push_back(&mut rewards, reward);
-        };
-        table_vec::destroy_empty(entries);
-        (delegators, rewards, total_rewards_withdraw_amount)
     }
 
     /// This function does the following:
@@ -440,8 +377,8 @@ module sui::staking_pool {
             principal_sui_amount,
         } = delegation;
         object::delete(id);
-        assert!(balance::value(&pool_tokens) == 0, EDESTROY_NON_ZERO_BALANCE);
-        assert!(principal_sui_amount == 0, EDESTROY_NON_ZERO_BALANCE);
+        assert!(balance::value(&pool_tokens) == 0, EDestroyNonzeroBalance);
+        assert!(principal_sui_amount == 0, EDestroyNonzeroBalance);
         balance::destroy_zero(pool_tokens);
     }
 
@@ -449,16 +386,16 @@ module sui::staking_pool {
     public entry fun destroy_empty_staked_sui(staked_sui: StakedSui) {
         let StakedSui {
             id,
+            pool_id: _,
             validator_address: _,
-            pool_starting_epoch: _,
             delegation_request_epoch: _,
             principal,
             sui_token_lock
         } = staked_sui;
         object::delete(id);
-        assert!(balance::value(&principal) == 0, EDESTROY_NON_ZERO_BALANCE);
+        assert!(balance::value(&principal) == 0, EDestroyNonzeroBalance);
         balance::destroy_zero(principal);
-        assert!(option::is_none(&sui_token_lock), ETOKEN_TIME_LOCK_IS_SOME);
+        assert!(option::is_none(&sui_token_lock), ETokenTimeLockIsSome);
         option::destroy_none(sui_token_lock);
     }
 
@@ -467,7 +404,7 @@ module sui::staking_pool {
 
     public fun sui_balance(pool: &StakingPool) : u64 { pool.sui_balance }
 
-    public fun validator_address(staked_sui: &StakedSui) : address { staked_sui.validator_address }
+    public fun pool_id(staked_sui: &StakedSui) : ID { staked_sui.pool_id }
 
     public fun staked_sui_amount(staked_sui: &StakedSui): u64 { balance::value(&staked_sui.principal) }
 

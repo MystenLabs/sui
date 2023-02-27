@@ -15,10 +15,10 @@ import {
     type SuiEvent,
     type SuiAddress,
     type ObjectId,
+    formatAddress,
 } from '@mysten/sui.js';
 
 import { getOwnerStr } from '../../utils/objectUtils';
-import { truncate } from '../../utils/stringUtils';
 
 import type { Category } from '../../pages/transaction-result/TransactionResultType';
 import type { LinkObj } from '../transaction-card/TxCardUtils';
@@ -66,16 +66,14 @@ function objectContent(label: string, id: ObjectId) {
 
 function fieldsContent(fields: { [key: string]: any } | undefined) {
     if (!fields) return [];
-    return Object.keys(fields).map((k) => {
-        return {
-            label: k,
-            value:
-                typeof fields[k] === 'object'
-                    ? JSON.stringify(fields[k])
-                    : fields[k].toString(),
-            monotypeClass: true,
-        };
-    });
+    return Object.keys(fields).map((k) => ({
+        label: k,
+        value:
+            typeof fields[k] === 'object'
+                ? JSON.stringify(fields[k])
+                : fields[k].toString(),
+        monotypeClass: true,
+    }));
 }
 
 function contentLine(
@@ -191,13 +189,14 @@ export function coinBalanceChangeEventDisplay(
 export function getAddressesLinks(item: ContentItem[]): LinkObj[] {
     return item
         .filter((itm) => !!itm.category)
-        .map((content) => {
-            return {
-                url: content.value,
-                name: truncate(content.value, 20),
-                category: content.category,
-            } as LinkObj;
-        });
+        .map(
+            (content) =>
+                ({
+                    url: content.value,
+                    name: formatAddress(content.value),
+                    category: content.category,
+                } as LinkObj)
+        );
 }
 
 export function deleteObjectEventDisplay(

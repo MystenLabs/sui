@@ -59,10 +59,11 @@ impl TestCaseImpl for CallContractTest {
         let data = ctx
             .build_transaction_remotely("sui_moveCall", params)
             .await?;
-        let (_, effects) = ctx.sign_and_execute(data, "call contract").await;
+        let response = ctx.sign_and_execute(data, "call contract").await;
 
         // Retrieve created nft
-        let nft_id = effects
+        let nft_id = response
+            .effects
             .created
             .first()
             .expect("Failed to create NFT")
@@ -70,7 +71,7 @@ impl TestCaseImpl for CallContractTest {
             .object_id;
 
         // Examine effects
-        let events = &effects.events;
+        let events = &response.effects.events;
         assert_eq!(
             events.len(),
             3,
@@ -119,7 +120,7 @@ impl TestCaseImpl for CallContractTest {
         )).unwrap_or_else(|| panic!("Expect such a MoveEvent in events {:?}", events));
 
         // Verify fullnode observes the txn
-        ctx.let_fullnode_sync(vec![effects.transaction_digest], 5)
+        ctx.let_fullnode_sync(vec![response.effects.transaction_digest], 5)
             .await;
 
         let object = ObjectChecker::new(nft_id)

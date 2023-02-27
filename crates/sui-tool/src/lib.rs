@@ -12,7 +12,6 @@ use std::path::PathBuf;
 use sui_config::{genesis::Genesis, ValidatorInfo};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_network::default_mysten_network_config;
-use sui_types::message_envelope::Message;
 use sui_types::object::ObjectFormatOptions;
 use sui_types::{base_types::*, messages::*, object::Owner};
 use tokio::time::Instant;
@@ -122,19 +121,13 @@ impl std::fmt::Display for GroupedObjectOutput {
             writeln!(f, "seq num: {}", seq_num.opt_debug("latest-seq-num"))?;
             let cur_version_resp = group.group_by(|(_, _, _, r, _)| match r {
                 Ok(result) => {
-                    let parent_tx_digest = result.parent_certificate.as_ref().map(|tx| tx.digest());
-                    let obj_digest = result
-                        .requested_object_reference
-                        .as_ref()
-                        .map(|(_, _, digest)| digest);
+                    let parent_tx_digest = result.object.previous_transaction;
+                    let obj_digest = result.object.compute_object_reference().2;
                     let lock = result
-                        .object_and_lock
+                        .lock_for_debugging
                         .as_ref()
-                        .map(|obj_n_lock| obj_n_lock.lock.as_ref().map(|lock| *lock.digest()));
-                    let owner = result
-                        .object_and_lock
-                        .as_ref()
-                        .map(|obj_n_lock| obj_n_lock.object.owner);
+                        .map(|lock| *lock.digest());
+                    let owner = result.object.owner;
                     Some((parent_tx_digest, obj_digest, lock, owner))
                 }
                 Err(_) => None,
@@ -142,12 +135,9 @@ impl std::fmt::Display for GroupedObjectOutput {
             for (result, group) in &cur_version_resp {
                 match result {
                     Some((parent_tx_digest, obj_digest, lock, owner)) => {
-                        let objref = obj_digest.opt_debug("objref-not-available");
-                        let parent_cert = parent_tx_digest.opt_debug("<genesis>");
-                        let owner = owner.opt_display("no-owner-available");
                         let lock = lock.opt_debug("no-known-lock");
-                        writeln!(f, "obj ref: {objref}")?;
-                        writeln!(f, "parent cert: {parent_cert}")?;
+                        writeln!(f, "obj ref: {obj_digest}")?;
+                        writeln!(f, "parent tx: {parent_tx_digest}")?;
                         writeln!(f, "owner: {owner}")?;
                         writeln!(f, "lock: {lock}")?;
                         for (i, (name, multiaddr, _, _, timespent)) in group.enumerate() {
@@ -210,21 +200,10 @@ impl std::fmt::Display for ConciseObjectOutput {
                         "object-fetch-failed", "no-cert-available", "no-owner-available"
                     )?,
                     Ok(resp) => {
-                        let objref = resp
-                            .requested_object_reference
-                            .map(|(_, _, digest)| digest)
-                            .opt_debug("objref-not-available");
-                        let cert = resp
-                            .parent_certificate
-                            .as_ref()
-                            .map(|c| *c.digest())
-                            .opt_debug("<genesis>");
-                        let owner = resp
-                            .object_and_lock
-                            .as_ref()
-                            .map(|o| OwnerOutput(o.object.owner))
-                            .opt_display("no-owner-available");
-                        write!(f, " {:<66} {:<45} {:<51}", objref, cert, owner)?;
+                        let obj_digest = resp.object.compute_object_reference().2;
+                        let parent = resp.object.previous_transaction;
+                        let owner = resp.object.owner;
+                        write!(f, " {:<66} {:<45} {:<51}", obj_digest, parent, owner)?;
                     }
                 }
                 writeln!(f)?;
@@ -254,42 +233,31 @@ impl std::fmt::Display for VerboseObjectOutput {
                 match resp {
                     Err(e) => writeln!(f, "Error fetching object: {}", e)?,
                     Ok(resp) => {
-                        let objref = resp.requested_object_reference.opt_debug("<no object>");
-                        writeln!(f, "  -- ref: {}", objref)?;
-
-                        write!(f, "  -- cert:")?;
-                        match &resp.parent_certificate {
-                            None => writeln!(f, " <genesis>")?,
-                            Some(cert) => {
-                                let cert = format!("{}", cert);
-                                let cert = textwrap::indent(&cert, "     | ");
-                                write!(f, "\n{}", cert)?;
-                            }
+                        writeln!(
+                            f,
+                            "  -- object digest: {}",
+                            resp.object.compute_object_reference().2
+                        )?;
+                        if resp.object.is_package() {
+                            writeln!(f, "  -- object: <Move Package>")?;
+                        } else if let Some(layout) = &resp.layout {
+                            writeln!(
+                                f,
+                                "  -- object: Move Object: {}",
+                                resp.object
+                                    .data
+                                    .try_as_move()
+                                    .unwrap()
+                                    .to_move_struct(layout)
+                                    .unwrap()
+                            )?;
                         }
-
-                        if let Some(ObjectResponse {
-                            lock,
-                            object,
-                            layout,
-                        }) = &resp.object_and_lock
-                        {
-                            if object.is_package() {
-                                writeln!(f, "  -- object: <Move Package>")?;
-                            } else if let Some(layout) = layout {
-                                writeln!(
-                                    f,
-                                    "  -- object: Move Object: {}",
-                                    object
-                                        .data
-                                        .try_as_move()
-                                        .unwrap()
-                                        .to_move_struct(layout)
-                                        .unwrap()
-                                )?;
-                            }
-                            writeln!(f, "  -- owner: {}", object.owner)?;
-                            writeln!(f, "  -- locked by: {}", lock.opt_debug("<not locked>"))?;
-                        }
+                        writeln!(f, "  -- owner: {}", resp.object.owner)?;
+                        writeln!(
+                            f,
+                            "  -- locked by: {}",
+                            resp.lock_for_debugging.opt_debug("<not locked>")
+                        )?;
                     }
                 }
             }
@@ -350,48 +318,46 @@ pub async fn get_transaction(tx_digest: TransactionDigest, genesis: PathBuf) -> 
 
     let responses = responses
         .iter()
-        .sorted_by(|(_, _, resp_a, _), (_, _, resp_b, _)| {
-            let sort_key_a = resp_a
-                .as_ref()
-                .map(|ok_result| {
-                    (ok_result.signed_effects)
-                        .as_ref()
-                        .map(|effects| *effects.digest())
-                })
-                .ok();
-            let sort_key_b = resp_b
-                .as_ref()
-                .map(|ok_result| {
-                    (ok_result.signed_effects)
-                        .as_ref()
-                        .map(|effects| *effects.digest())
-                })
-                .ok();
-            Ord::cmp(&sort_key_a, &sort_key_b)
+        .map(|r| {
+            let key =
+                r.2.as_ref()
+                    .map(|ok_result| match &ok_result.status {
+                        TransactionStatus::Signed(_) => None,
+                        TransactionStatus::Executed(_, effects) => Some(effects.digest()),
+                    })
+                    .ok();
+            (key, r)
         })
-        .group_by(|(_name, _addr, resp, _ts)| {
-            resp.as_ref().map(|ok_result| {
-                (ok_result.signed_effects)
-                    .as_ref()
-                    .map(|effects| (effects.data(), effects.data().digest()))
+        .sorted_by(|(k1, _), (k2, _)| Ord::cmp(k1, k2))
+        .group_by(|(_, r)| {
+            r.2.as_ref().map(|ok_result| match &ok_result.status {
+                TransactionStatus::Signed(_) => None,
+                TransactionStatus::Executed(_, effects) => Some((effects.data(), effects.digest())),
             })
         });
     let mut s = String::new();
-    for (i, (st, group)) in (&responses).into_iter().enumerate() {
-        match st {
-            Ok(Some((effects, effect_digest))) => {
+    for (i, (key, group)) in responses.into_iter().enumerate() {
+        match key {
+            Ok(Some((effects, effects_digest))) => {
                 writeln!(
                     &mut s,
                     "#{:<2} tx_digest: {:<68?} effects_digest: {:?}",
-                    i, tx_digest, effect_digest
+                    i, tx_digest, effects_digest,
                 )?;
                 writeln!(&mut s, "{:#?}", effects)?;
+            }
+            Ok(None) => {
+                writeln!(
+                    &mut s,
+                    "#{:<2} tx_digest: {:<68?} Signed but not executed",
+                    i, tx_digest
+                )?;
             }
             other => {
                 writeln!(&mut s, "#{:<2} {:#?}", i, other)?;
             }
         }
-        for (j, res) in group.enumerate() {
+        for (j, (_, res)) in group.enumerate() {
             writeln!(
                 &mut s,
                 "        {:<4} {:<66} {:<56} (using {:.3} seconds)",
@@ -420,25 +386,19 @@ async fn get_object_impl(
         let resp = client
             .handle_object_info_request(ObjectInfoRequest {
                 object_id: id,
+                object_format_options: Some(ObjectFormatOptions::default()),
                 request_kind: match version {
-                    None => ObjectInfoRequestKind::LatestObjectInfo(Some(
-                        ObjectFormatOptions::default(),
-                    )),
-                    Some(v) => ObjectInfoRequestKind::PastObjectInfoDebug(
-                        SequenceNumber::from_u64(v),
-                        Some(ObjectFormatOptions::default()),
-                    ),
+                    None => ObjectInfoRequestKind::LatestObjectInfo,
+                    Some(v) => {
+                        ObjectInfoRequestKind::PastObjectInfoDebug(SequenceNumber::from_u64(v))
+                    }
                 },
             })
             .await
             .map_err(anyhow::Error::from);
         let elapsed = start.elapsed().as_secs_f64();
 
-        let resp_version = resp
-            .as_ref()
-            .ok()
-            .and_then(|r| r.requested_object_reference)
-            .map(|(_, v, _)| v.value());
+        let resp_version = resp.as_ref().ok().map(|r| r.object.version().value());
         ret.push((resp_version.map(SequenceNumber::from), resp, elapsed));
 
         version = match (version, resp_version) {
@@ -446,6 +406,7 @@ async fn get_object_impl(
                 if v == 1 || !full_history {
                     break;
                 } else {
+                    // TODO: With lamport versioning, this is very inefficient.
                     Some(v - 1)
                 }
             }
@@ -454,4 +415,120 @@ async fn get_object_impl(
     }
 
     ret
+}
+
+pub(crate) fn make_anemo_config() -> anemo_cli::Config {
+    use narwhal_types::*;
+    use sui_network::discovery::*;
+    use sui_network::state_sync::*;
+
+    // TODO: implement `ServiceInfo` generation in anemo-build and use here.
+    anemo_cli::Config::new()
+        // Narwhal primary-to-primary
+        .add_service(
+            "PrimaryToPrimary",
+            anemo_cli::ServiceInfo::new()
+                .add_method(
+                    "SendCertificate",
+                    anemo_cli::ron_method!(
+                        PrimaryToPrimaryClient,
+                        send_certificate,
+                        SendCertificateRequest
+                    ),
+                )
+                .add_method(
+                    "RequestVote",
+                    anemo_cli::ron_method!(
+                        PrimaryToPrimaryClient,
+                        request_vote,
+                        RequestVoteRequest
+                    ),
+                )
+                .add_method(
+                    "GetPayloadAvailability",
+                    anemo_cli::ron_method!(
+                        PrimaryToPrimaryClient,
+                        get_payload_availability,
+                        PayloadAvailabilityRequest
+                    ),
+                )
+                .add_method(
+                    "GetCertificates",
+                    anemo_cli::ron_method!(
+                        PrimaryToPrimaryClient,
+                        get_certificates,
+                        GetCertificatesRequest
+                    ),
+                )
+                .add_method(
+                    "FetchCertificates",
+                    anemo_cli::ron_method!(
+                        PrimaryToPrimaryClient,
+                        fetch_certificates,
+                        FetchCertificatesRequest
+                    ),
+                ),
+        )
+        // Narwhal worker-to-worker
+        .add_service(
+            "WorkerToWorker",
+            anemo_cli::ServiceInfo::new()
+                .add_method(
+                    "ReportBatch",
+                    anemo_cli::ron_method!(WorkerToWorkerClient, report_batch, WorkerBatchMessage),
+                )
+                .add_method(
+                    "RequestBatch",
+                    anemo_cli::ron_method!(
+                        WorkerToWorkerClient,
+                        request_batch,
+                        RequestBatchRequest
+                    ),
+                ),
+        )
+        // Sui discovery
+        .add_service(
+            "Discovery",
+            anemo_cli::ServiceInfo::new().add_method(
+                "GetKnownPeers",
+                anemo_cli::ron_method!(DiscoveryClient, get_known_peers, ()),
+            ),
+        )
+        // Sui state sync
+        .add_service(
+            "StateSync",
+            anemo_cli::ServiceInfo::new()
+                .add_method(
+                    "PushCheckpointSummary",
+                    anemo_cli::ron_method!(
+                        StateSyncClient,
+                        push_checkpoint_summary,
+                        sui_types::messages_checkpoint::CertifiedCheckpointSummary
+                    ),
+                )
+                .add_method(
+                    "GetCheckpointSummary",
+                    anemo_cli::ron_method!(
+                        StateSyncClient,
+                        get_checkpoint_summary,
+                        GetCheckpointSummaryRequest
+                    ),
+                )
+                .add_method(
+                    "GetCheckpointContents",
+                    anemo_cli::ron_method!(
+                        StateSyncClient,
+                        get_checkpoint_contents,
+                        sui_types::messages_checkpoint::CheckpointContentsDigest
+                    ),
+                )
+                .add_method(
+                    "GetTransactionAndEffects",
+                    anemo_cli::ron_method!(
+                        StateSyncClient,
+                        get_transaction_and_effects,
+                        sui_types::base_types::ExecutionDigests
+                    ),
+                ),
+        )
 }

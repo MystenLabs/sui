@@ -7,6 +7,7 @@ import {
   DELEGATION,
   GENERIC_COIN,
   LEADERBOARD,
+  OLD_SCORECARD,
   SCORECARD,
   SCORECARD_UPDATED,
   STAKED_SUI,
@@ -21,6 +22,14 @@ export const bcs = suiBcs
     epoch: "u64",
   })
   .registerStructType(SCORECARD, {
+    id: "address",
+    name: "string",
+    assignment: ASSIGNMENT,
+    score: "u16",
+    participation: "u16",
+    epoch: "u64",
+  })
+  .registerStructType(OLD_SCORECARD, {
     id: "address",
     name: "string",
     assignment: ASSIGNMENT,
@@ -55,7 +64,7 @@ export const bcs = suiBcs
   // Sui System + Validators schema
   .registerStructType(GENERIC_COIN, {
     id: "address",
-    value: "u64"
+    value: "u64",
   })
   .registerStructType(STAKED_SUI, {
     id: "address",
@@ -158,6 +167,8 @@ export const bcs = suiBcs
     projectUrl: "string",
     /** The network address of the validator (could also contain extra info such as port, DNS and etc.).  */
     netAddress: "vector<u8>",
+    /** The p2p address of the validator (could also contain extra info such as port, DNS and etc.).  */
+    p2pAddress: "vector<u8>",
     /** The address of the narwhal primary  */
     consensusAddress: "vector<u8>",
     /** The address of the narwhal worker  */

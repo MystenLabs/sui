@@ -69,13 +69,13 @@ fn test_authority_signature_intent() {
     let data2 = data.clone();
     let signature =
         Signature::new_secure(&IntentMessage::new(Intent::default(), data1), &sender_key);
-    let tx = Transaction::from_data(data2, Intent::default(), signature);
+    let tx = Transaction::from_data(data2, Intent::default(), vec![signature]);
     let tx1 = tx.clone();
     assert!(tx.verify().is_ok());
 
     // signature does not sign on intent fails.
     let signature_insecure = Signature::new(&data, &sender_key);
-    let tx_1 = Transaction::from_data(data, Intent::default(), signature_insecure);
+    let tx_1 = Transaction::from_data(data, Intent::default(), vec![signature_insecure]);
     assert!(tx_1.verify().is_err());
 
     // Create an intent with signed data.

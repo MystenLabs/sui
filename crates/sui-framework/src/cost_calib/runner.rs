@@ -55,7 +55,7 @@ pub fn run_calib_tests(
             BuildConfig::default(),
             UnitTestingConfig {
                 report_stacktrace_on_abort: true,
-                report_statistics: true,
+                report_statistics: Some(Some("csv".to_owned())),
                 filter: Some(CALIB_TEST_FILTER.to_string()),
                 num_threads: 1,
                 ..config

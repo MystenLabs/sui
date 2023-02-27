@@ -6,7 +6,7 @@ import { ConnectButton, useWalletKit } from "@mysten/wallet-kit";
 import { useEffect } from "react";
 
 function App() {
-  const { currentWallet } = useWalletKit();
+  const { currentWallet, signTransaction } = useWalletKit();
 
   useEffect(() => {
     // You can do something with `currentWallet` here.
@@ -15,6 +15,27 @@ function App() {
   return (
     <div className="App">
       <ConnectButton />
+      <button
+        onClick={async () => {
+          console.log(
+            await signTransaction({
+              transaction: {
+                kind: "moveCall",
+                data: {
+                  packageObjectId: "0x2",
+                  module: "devnet_nft",
+                  function: "mint",
+                  typeArguments: [],
+                  arguments: ["foo", "bar", "baz"],
+                  gasBudget: 2000,
+                },
+              },
+            })
+          );
+        }}
+      >
+        Sign
+      </button>
     </div>
   );
 }

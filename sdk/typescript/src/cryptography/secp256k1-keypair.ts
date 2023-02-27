@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import * as secp from '@noble/secp256k1';
-import { Base64DataBuffer } from '../serialization/base64';
 import type { ExportedKeypair, Keypair } from './keypair';
-import { PublicKey, SignatureScheme } from './publickey';
+import { PublicKey } from './publickey';
 import { hmac } from '@noble/hashes/hmac';
 import { sha256 } from '@noble/hashes/sha256';
 import { Secp256k1PublicKey } from './secp256k1-publickey';
@@ -12,6 +11,7 @@ import { Signature } from '@noble/secp256k1';
 import { isValidBIP32Path, mnemonicToSeed } from './mnemonics';
 import { HDKey } from '@scure/bip32';
 import { toB64 } from '@mysten/bcs';
+import { SignatureScheme } from './signature';
 
 export const DEFAULT_SECP256K1_DERIVATION_PATH = "m/54'/784'/0'/0/0";
 
@@ -84,7 +84,7 @@ export class Secp256k1Keypair implements Keypair {
 
   static fromSecretKey(
     secretKey: Uint8Array,
-    options?: { skipValidation?: boolean }
+    options?: { skipValidation?: boolean },
   ): Secp256k1Keypair {
     const publicKey: Uint8Array = secp.getPublicKey(secretKey, true);
     if (!options || !options.skipValidation) {
@@ -119,27 +119,27 @@ export class Secp256k1Keypair implements Keypair {
   /**
    * Return the signature for the provided data.
    */
-  signData(data: Base64DataBuffer, useRecoverable: boolean): Base64DataBuffer {
-    const msgHash = sha256(data.getData());
-    // Starting from sui 0.25.0, sui accepts 64-byte nonrecoverable signature instead of 65-byte recoverable signature for Secp256k1. 
+  signData(data: Uint8Array, useRecoverable: boolean): Uint8Array {
+    const msgHash = sha256(data);
+    // Starting from sui 0.25.0, sui accepts 64-byte nonrecoverable signature instead of 65-byte recoverable signature for Secp256k1.
     // TODO(joyqvq): Remove recoverable signature support after 0.25.0 is released.
     if (useRecoverable) {
       const [sig, rec_id] = secp.signSync(msgHash, this.keypair.secretKey, {
-      canonical: true,
-      recovered: true,
-    });
-    var recoverable_sig = new Uint8Array(65);
-    recoverable_sig.set(Signature.fromDER(sig).toCompactRawBytes());
-    recoverable_sig.set([rec_id], 64);
-    return new Base64DataBuffer(recoverable_sig);
-   } else {
-    const sig = secp.signSync(msgHash, this.keypair.secretKey, {
-      canonical: true,
-      recovered: false,
-    });
-    return new Base64DataBuffer(Signature.fromDER(sig).toCompactRawBytes());
+        canonical: true,
+        recovered: true,
+      });
+      var recoverable_sig = new Uint8Array(65);
+      recoverable_sig.set(Signature.fromDER(sig).toCompactRawBytes());
+      recoverable_sig.set([rec_id], 64);
+      return recoverable_sig;
+    } else {
+      const sig = secp.signSync(msgHash, this.keypair.secretKey, {
+        canonical: true,
+        recovered: false,
+      });
+      return Signature.fromDER(sig).toCompactRawBytes();
+    }
   }
-}
 
   /**
    * Derive Secp256k1 keypair from mnemonics and path. The mnemonics must be normalized

@@ -3,7 +3,7 @@
 
 import { isBasePayload } from '_payloads';
 
-import type { SuiAddress } from '@mysten/sui.js/src';
+import type { SuiAddress } from '@mysten/sui.js';
 import type { BasePayload, Payload } from '_payloads';
 import type { NetworkEnvType } from '_src/background/NetworkEnv';
 

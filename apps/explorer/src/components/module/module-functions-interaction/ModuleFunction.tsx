@@ -69,14 +69,16 @@ export function ModuleFunction({
     const execute = useMutation({
         mutationFn: async ({ params, types }: TypeOf<typeof argsSchema>) => {
             const result = await signAndExecuteTransaction({
-                kind: 'moveCall',
-                data: {
-                    packageObjectId: packageId,
-                    module: moduleName,
-                    function: functionName,
-                    arguments: params || [],
-                    typeArguments: types || [],
-                    gasBudget: 2000,
+                transaction: {
+                    kind: 'moveCall',
+                    data: {
+                        packageObjectId: packageId,
+                        module: moduleName,
+                        function: functionName,
+                        arguments: params || [],
+                        typeArguments: types || [],
+                        gasBudget: 2000,
+                    },
                 },
             });
             if (getExecutionStatusType(result) === 'failure') {
@@ -141,7 +143,7 @@ export function ModuleFunction({
                         className={clsx(
                             '!rounded-md !text-bodySmall',
                             isConnected
-                                ? '!border !border-solid !border-steel !font-mono !text-hero-dark !shadow-sm !shadow-ebony/5'
+                                ? '!border !border-solid !border-steel !bg-white !font-mono !text-hero-dark !shadow-sm !shadow-ebony/5'
                                 : '!flex !flex-nowrap !items-center !gap-1 !bg-sui-dark !font-sans !text-sui-light hover:!bg-sui-dark hover:!text-white'
                         )}
                     />

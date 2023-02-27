@@ -5,6 +5,7 @@ module sui::genesis {
     use std::vector;
 
     use sui::balance;
+    use sui::clock;
     use sui::sui;
     use sui::sui_system;
     use sui::tx_context::TxContext;
@@ -38,11 +39,13 @@ module sui::genesis {
         validator_image_urls: vector<vector<u8>>,
         validator_project_urls: vector<vector<u8>>,
         validator_net_addresses: vector<vector<u8>>,
+        validator_p2p_addresses: vector<vector<u8>>,
         validator_consensus_addresses: vector<vector<u8>>,
         validator_worker_addresses: vector<vector<u8>>,
         validator_stakes: vector<u64>,
         validator_gas_prices: vector<u64>,
         validator_commission_rates: vector<u64>,
+        protocol_version: u64,
         epoch_start_timestamp_ms: u64,
         ctx: &mut TxContext,
     ) {
@@ -58,6 +61,7 @@ module sui::genesis {
                 && vector::length(&validator_image_urls) == count
                 && vector::length(&validator_project_urls) == count
                 && vector::length(&validator_net_addresses) == count
+                && vector::length(&validator_p2p_addresses) == count
                 && vector::length(&validator_consensus_addresses) == count
                 && vector::length(&validator_worker_addresses) == count
                 && vector::length(&validator_gas_prices) == count
@@ -76,6 +80,7 @@ module sui::genesis {
             let image_url = *vector::borrow(&validator_image_urls, i);
             let project_url = *vector::borrow(&validator_project_urls, i);
             let net_address = *vector::borrow(&validator_net_addresses, i);
+            let p2p_address = *vector::borrow(&validator_p2p_addresses, i);
             let consensus_address = *vector::borrow(&validator_consensus_addresses, i);
             let worker_address = *vector::borrow(&validator_worker_addresses, i);
             let stake = *vector::borrow(&validator_stakes, i);
@@ -92,6 +97,7 @@ module sui::genesis {
                 image_url,
                 project_url,
                 net_address,
+                p2p_address,
                 consensus_address,
                 worker_address,
                 balance::increase_supply(&mut sui_supply, stake),
@@ -102,6 +108,7 @@ module sui::genesis {
             ));
             i = i + 1;
         };
+
         sui_system::create(
             validators,
             sui_supply,
@@ -109,24 +116,11 @@ module sui::genesis {
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
             INIT_STAKE_SUBSIDY_AMOUNT,
+            protocol_version,
             epoch_start_timestamp_ms,
+            ctx,
         );
-    }
 
-    #[test_only]
-    public fun create_for_testing(ctx: &mut TxContext) {
-        let validators = vector[];
-        let sui_supply = sui::new(ctx);
-        let storage_fund = balance::increase_supply(&mut sui_supply, INIT_STORAGE_FUND);
-
-        sui_system::create(
-            validators,
-            sui_supply,
-            storage_fund,
-            INIT_MAX_VALIDATOR_COUNT,
-            INIT_MIN_VALIDATOR_STAKE,
-            INIT_STAKE_SUBSIDY_AMOUNT,
-            0,
-        )
+        clock::create();
     }
 }

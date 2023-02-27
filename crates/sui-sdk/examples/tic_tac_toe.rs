@@ -102,17 +102,17 @@ impl TicTacToe {
             .client
             .quorum_driver()
             .execute_transaction(
-                Transaction::from_data(create_game_call, Intent::default(), signature).verify()?,
+                Transaction::from_data(create_game_call, Intent::default(), vec![signature])
+                    .verify()?,
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?;
 
-        assert!(response.confirmed_local_execution);
+        assert!(response.confirmed_local_execution.unwrap());
 
         // We know `create_game` move function will create 1 object.
         let game_id = response
             .effects
-            .unwrap()
             .created
             .first()
             .unwrap()
@@ -198,16 +198,16 @@ impl TicTacToe {
                 .client
                 .quorum_driver()
                 .execute_transaction(
-                    Transaction::from_data(place_mark_call, Intent::default(), signature)
+                    Transaction::from_data(place_mark_call, Intent::default(), vec![signature])
                         .verify()?,
                     Some(ExecuteTransactionRequestType::WaitForLocalExecution),
                 )
                 .await?;
 
-            assert!(response.confirmed_local_execution);
+            assert!(response.confirmed_local_execution.unwrap());
 
             // Print any execution error.
-            let status = response.effects.unwrap().status;
+            let status = response.effects.status;
             if status.is_err() {
                 eprintln!("{:?}", status);
             }

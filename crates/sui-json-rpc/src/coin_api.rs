@@ -38,7 +38,12 @@ impl CoinReadApi {
     }
 
     async fn get_object(&self, object_id: &ObjectID) -> Result<Object, Error> {
-        Ok(self.state.get_object_read(object_id).await?.into_object()?)
+        Ok(self
+            .state
+            .get_object_read(object_id)
+            .await?
+            .into_object()
+            .map_err(SuiError::from)?)
     }
 
     async fn get_coin(&self, coin_id: &ObjectID) -> Result<SuiCoin, Error> {
@@ -118,7 +123,10 @@ impl CoinReadApi {
         object_struct_tag: StructTag,
     ) -> Result<Object, Error> {
         let publish_txn_digest = self.get_object(package_id).await?.previous_transaction;
-        let (_, effects) = self.state.get_transaction(publish_txn_digest).await?;
+        let (_, effects) = self
+            .state
+            .get_executed_transaction_and_effects(publish_txn_digest)
+            .await?;
 
         let object_id = effects
             .events
@@ -271,13 +279,11 @@ impl CoinReadApiServer for CoinReadApi {
     }
 
     async fn get_total_supply(&self, coin_type: String) -> RpcResult<Supply> {
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let coin_struct = parse_sui_struct_tag(&coin_type)?;
 
         Ok(if GAS::is_gas(&coin_struct) {
-            self.state
-                .get_sui_system_state_object()
-                .map_err(Error::from)?
-                .treasury_cap
+            epoch_store.system_state_object().treasury_cap.clone()
         } else {
             let treasury_cap_object = self
                 .find_package_object(&coin_struct.address.into(), TreasuryCap::type_(coin_struct))

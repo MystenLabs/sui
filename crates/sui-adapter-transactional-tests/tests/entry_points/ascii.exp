@@ -4,18 +4,18 @@ init:
 A: object(100)
 
 task 1 'publish'. lines 6-27:
-created: object(104)
-written: object(103)
+created: object(105)
+written: object(104)
 
 task 2 'run'. lines 29-32:
-written: object(105)
-
-task 3 'run'. lines 34-37:
 written: object(106)
 
-task 4 'run'. lines 39-47:
+task 3 'run'. lines 34-37:
 written: object(107)
+
+task 4 'run'. lines 39-47:
+written: object(108)
 
 task 5 'run'. lines 49-49:
 Error: Transaction Effects Status: Entry Argument Error. Error for argument at index 0: Type mismatch.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: TypeMismatch }), source: Some("Unexpected non-ASCII value (outside of ASCII character range) in argument 0") } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: TypeMismatch }), source: Some("Unexpected non-ASCII value (outside of ASCII character range) in argument 0"), command: None } }

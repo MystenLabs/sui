@@ -272,7 +272,7 @@ module sui::rewards_distribution_tests {
             create_validator_for_testing(VALIDATOR_ADDR_3, 300, ctx),
             create_validator_for_testing(VALIDATOR_ADDR_4, 400, ctx),
         ];
-        create_sui_system_state_for_testing(validators, 1000, 0);
+        create_sui_system_state_for_testing(validators, 1000, 0, ctx);
     }
 
     fun set_up_sui_system_state_with_big_amounts(scenario: &mut Scenario) {
@@ -284,7 +284,7 @@ module sui::rewards_distribution_tests {
             create_validator_for_testing(VALIDATOR_ADDR_3, 300000000, ctx),
             create_validator_for_testing(VALIDATOR_ADDR_4, 400000000, ctx),
         ];
-        create_sui_system_state_for_testing(validators, 1000000000, 0);
+        create_sui_system_state_for_testing(validators, 1000000000, 0, ctx);
     }
 
     fun validator_addrs() : vector<address> {

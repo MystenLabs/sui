@@ -7,6 +7,7 @@ import { ConnectModal } from "./ConnectModal";
 import { Button } from "./utils/ui";
 import { AccountModal } from "./AccountModal";
 import { useWalletKit } from "./WalletKitContext";
+import { formatAddress } from "@mysten/sui.js";
 
 interface ConnectButtonProps extends ComponentProps<typeof Button> {
   connectText?: ReactNode;
@@ -18,7 +19,7 @@ export function ConnectButton({
 }: ConnectButtonProps) {
   const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [connectModalOpen, setConnectModalOpen] = useState(false);
-  const { currentAccount, } = useWalletKit();
+  const { currentAccount } = useWalletKit();
 
   return (
     <>
@@ -31,7 +32,7 @@ export function ConnectButton({
           type="button"
           {...props}
         >
-          {`${currentAccount.slice(0, 4)}...${currentAccount.slice(-4)}`}
+          {formatAddress(currentAccount.address)}
         </Button>
       ) : (
         <Button

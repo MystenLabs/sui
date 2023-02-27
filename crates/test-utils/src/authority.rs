@@ -12,7 +12,7 @@ use sui_core::authority_client::NetworkAuthorityClient;
 pub use sui_node::{SuiNode, SuiNodeHandle};
 use sui_types::base_types::ObjectID;
 use sui_types::crypto::TEST_COMMITTEE_SIZE;
-use sui_types::messages::{ObjectInfoRequest, ObjectInfoRequestKind};
+use sui_types::messages::ObjectInfoRequest;
 use sui_types::object::Object;
 
 /// The default network buffer size of a test authority.
@@ -33,6 +33,7 @@ pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkCon
         // Narwhal parameters may result in tests taking >60 seconds.
         parameters.header_num_of_batches_threshold = 1;
         parameters.max_header_delay = Duration::from_millis(200);
+        parameters.min_header_delay = Duration::from_millis(200);
         parameters.batch_size = 1;
         parameters.max_batch_delay = Duration::from_millis(200);
     }
@@ -54,6 +55,7 @@ pub fn test_authority_configs_with_objects(objects: Vec<Object>) -> (NetworkConf
         // Narwhal parameters may result in tests taking >60 seconds.
         parameters.header_num_of_batches_threshold = 1;
         parameters.max_header_delay = Duration::from_millis(200);
+        parameters.min_header_delay = Duration::from_millis(200);
         parameters.batch_size = 1;
         parameters.max_batch_delay = Duration::from_millis(200);
     }
@@ -164,13 +166,10 @@ pub fn get_client(config: &ValidatorInfo) -> NetworkAuthorityClient {
 
 pub async fn get_object(config: &ValidatorInfo, object_id: ObjectID) -> Object {
     get_client(config)
-        .handle_object_info_request(ObjectInfoRequest {
-            object_id,
-            request_kind: ObjectInfoRequestKind::LatestObjectInfo(None),
-        })
+        .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
+            object_id, None,
+        ))
         .await
         .unwrap()
-        .object()
-        .unwrap()
-        .clone()
+        .object
 }

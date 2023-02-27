@@ -14,8 +14,7 @@ use derive_builder::Builder;
 use fastcrypto::{
     hash::{Digest, Hash, HashFunction},
     signature_service::SignatureService,
-    traits::{AggregateAuthenticator, EncodeDecodeBase64, Signer, VerifyingKey},
-    Verifier,
+    traits::{AggregateAuthenticator, EncodeDecodeBase64, InsecureDefault, Signer, VerifyingKey},
 };
 use indexmap::IndexMap;
 use mysten_util_mem::MallocSizeOf;
@@ -152,7 +151,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Batch {
     }
 }
 
-#[derive(Builder, Clone, Default, Deserialize, MallocSizeOf, Serialize)]
+#[derive(Builder, Clone, Deserialize, MallocSizeOf, Serialize)]
 #[builder(pattern = "owned", build_fn(skip))]
 pub struct Header {
     pub author: PublicKey,
@@ -185,9 +184,7 @@ impl HeaderBuilder {
         h.digest.set(Hash::digest(&h)).unwrap();
 
         Ok(Header {
-            signature: signer
-                .try_sign(Digest::from(Hash::digest(&h)).as_ref())
-                .map_err(|_| fastcrypto::error::FastCryptoError::GeneralError)?,
+            signature: signer.sign(Digest::from(Hash::digest(&h)).as_ref()),
             ..h
         })
     }
@@ -281,6 +278,21 @@ impl Header {
     }
 }
 
+impl Default for Header {
+    fn default() -> Self {
+        Self {
+            author: PublicKey::insecure_default(),
+            round: Round::default(),
+            epoch: Epoch::default(),
+            created_at: TimestampMs::default(),
+            payload: IndexMap::default(),
+            parents: BTreeSet::default(),
+            digest: OnceCell::default(),
+            signature: Signature::default(),
+        }
+    }
+}
+
 #[derive(
     Clone,
     Copy,
@@ -369,13 +381,18 @@ impl PartialEq for Header {
     }
 }
 
+/// A Vote on a Header is a claim by the voting authority that all payloads and the full history
+/// of Certificates included in the Header are available.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Vote {
-    pub digest: HeaderDigest,
+    // HeaderDigest, round, epoch and origin for the header being voted on.
+    pub header_digest: HeaderDigest,
     pub round: Round,
     pub epoch: Epoch,
     pub origin: PublicKey,
+    // Author of this vote.
     pub author: PublicKey,
+    // Signature of the HeaderDigest.
     pub signature: <PublicKey as VerifyingKey>::Sig,
 }
 
@@ -386,7 +403,7 @@ impl Vote {
         signature_service: &SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
     ) -> Self {
         let vote = Self {
-            digest: header.digest(),
+            header_digest: header.digest(),
             round: header.round,
             epoch: header.epoch,
             origin: header.author.clone(),
@@ -404,7 +421,7 @@ impl Vote {
         S: Signer<Signature>,
     {
         let vote = Self {
-            digest: header.digest(),
+            header_digest: header.digest(),
             round: header.round,
             epoch: header.epoch,
             origin: header.author.clone(),
@@ -472,12 +489,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Vote {
     type TypedDigest = VoteDigest;
 
     fn digest(&self) -> VoteDigest {
-        let mut hasher = crypto::DefaultHashFunction::default();
-        hasher.update(Digest::from(self.digest));
-        hasher.update(self.round.to_le_bytes());
-        hasher.update(self.epoch.to_le_bytes());
-        hasher.update(&self.origin);
-        VoteDigest(hasher.finalize().into())
+        VoteDigest(self.header_digest.0)
     }
 }
 
@@ -489,7 +501,7 @@ impl fmt::Debug for Vote {
             self.digest(),
             self.round,
             self.author.encode_base64(),
-            self.digest,
+            self.origin.encode_base64(),
             self.epoch
         )
     }
@@ -757,12 +769,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Certificate {
     type TypedDigest = CertificateDigest;
 
     fn digest(&self) -> CertificateDigest {
-        let mut hasher = crypto::DefaultHashFunction::new();
-        hasher.update(Digest::from(self.header.digest()));
-        hasher.update(self.round().to_le_bytes());
-        hasher.update(self.epoch().to_le_bytes());
-        hasher.update(&self.origin());
-        CertificateDigest(hasher.finalize().into())
+        CertificateDigest(self.header.digest().0)
     }
 }
 
@@ -803,10 +810,15 @@ impl Affiliated for Certificate {
     }
 }
 
+/// Request for broadcasting certificates to peers.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum PrimaryMessage {
-    Certificate(Certificate),
+pub struct SendCertificateRequest {
+    pub certificate: Certificate,
 }
+
+/// Response from peers after receiving a certificate.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SendCertificateResponse {}
 
 /// Used by the primary to request a vote from other primaries on newly produced headers.
 #[derive(Clone, Debug, Serialize, Deserialize)]

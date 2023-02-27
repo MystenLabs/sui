@@ -3,7 +3,8 @@
 
 use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, Registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, IntCounter,
+    IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 use std::sync::Arc;
 
@@ -16,6 +17,9 @@ pub struct CheckpointMetrics {
     pub transactions_included_in_checkpoint: IntCounter,
     pub checkpoint_roots_count: IntCounter,
     pub checkpoint_participation: IntCounterVec,
+    pub last_received_checkpoint_signatures: IntGaugeVec,
+    pub last_sent_checkpoint_signature: IntGauge,
+    pub highest_accumulated_epoch: IntGauge,
 }
 
 impl CheckpointMetrics {
@@ -67,6 +71,25 @@ impl CheckpointMetrics {
                 "checkpoint_participation",
                 "Participation in checkpoint certification by validator",
                 &["signer"],
+                registry
+            )
+            .unwrap(),
+            last_received_checkpoint_signatures: register_int_gauge_vec_with_registry!(
+                "last_received_checkpoint_signatures",
+                "Last received checkpoint signatures by validator",
+                &["signer"],
+                registry
+            )
+            .unwrap(),
+            last_sent_checkpoint_signature: register_int_gauge_with_registry!(
+                "last_sent_checkpoint_signature",
+                "Last checkpoint signature sent by myself",
+                registry
+            )
+            .unwrap(),
+            highest_accumulated_epoch: register_int_gauge_with_registry!(
+                "highest_accumulated_epoch",
+                "Highest accumulated epoch",
                 registry
             )
             .unwrap(),

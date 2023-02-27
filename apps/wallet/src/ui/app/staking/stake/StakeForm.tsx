@@ -2,49 +2,44 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
-import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
-import { useRef, memo, useCallback } from 'react';
+import { Field, Form, useFormikContext } from 'formik';
+import { memo, useCallback, useEffect } from 'react';
 
 import Loading from '../../components/loading';
 import { useGasBudgetInMist } from '../../hooks/useGasBudgetInMist';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
-import Alert from '_components/alert';
 import NumberInput from '_components/number-input';
 import { useFormatCoin } from '_hooks';
-import { DEFAULT_GAS_BUDGET_FOR_STAKE } from '_redux/slices/sui-objects/Coin';
+import {
+    DEFAULT_GAS_BUDGET_FOR_PAY,
+    DEFAULT_GAS_BUDGET_FOR_STAKE,
+} from '_redux/slices/sui-objects/Coin';
 
 import type { FormValues } from './StakingCard';
 
 const HIDE_MAX = true;
 
 export type StakeFromProps = {
-    submitError: string | null;
     coinBalance: bigint;
     coinType: string;
-    epoch: string;
-    onClearSubmitError: () => void;
+    epoch?: string | number;
 };
 
-function StakeForm({
-    submitError,
-    coinBalance,
-    coinType,
-    onClearSubmitError,
-    epoch,
-}: StakeFromProps) {
+function StakeForm({ coinBalance, coinType, epoch }: StakeFromProps) {
     const { setFieldValue } = useFormikContext<FormValues>();
 
-    const onClearRef = useRef(onClearSubmitError);
-    onClearRef.current = onClearSubmitError;
     const { gasBudget: gasBudgetInMist, isLoading } = useGasBudgetInMist(
-        DEFAULT_GAS_BUDGET_FOR_STAKE
+        DEFAULT_GAS_BUDGET_FOR_PAY * 4 + DEFAULT_GAS_BUDGET_FOR_STAKE
     );
     const [gasBudgetEstimation] = useFormatCoin(gasBudgetInMist, SUI_TYPE_ARG);
 
-    const totalAvailableBalance =
+    let totalAvailableBalance =
         coinBalance -
         BigInt(coinType === SUI_TYPE_ARG ? gasBudgetInMist || 0 : 0);
+    if (totalAvailableBalance < 0) {
+        totalAvailableBalance = 0n;
+    }
 
     const [maxToken, symbol, queryResult] = useFormatCoin(
         totalAvailableBalance,
@@ -55,6 +50,12 @@ function StakeForm({
         if (!maxToken) return;
         setFieldValue('amount', maxToken);
     }, [maxToken, setFieldValue]);
+    useEffect(() => {
+        setFieldValue(
+            'gasBudget',
+            isLoading ? '' : (gasBudgetInMist || 0).toString()
+        );
+    }, [setFieldValue, gasBudgetInMist, isLoading]);
 
     return (
         <Form
@@ -126,28 +127,10 @@ function StakeForm({
                             weight="medium"
                             color="steel-darker"
                         >
-                            Epoch #{+epoch + 2}
+                            {epoch ? `Epoch #${+epoch + 2}` : '--'}
                         </Text>
                     </div>
                 </Card>
-                <ErrorMessage name="amount" component="div">
-                    {(msg) => (
-                        <div className="mt-2 flex flex-col flex-nowrap">
-                            <Alert mode="warning" className="text-body">
-                                {msg}
-                            </Alert>
-                        </div>
-                    )}
-                </ErrorMessage>
-
-                {submitError ? (
-                    <div className="mt-2 flex flex-col flex-nowrap">
-                        <Alert mode="warning">
-                            <strong>Stake failed</strong>
-                            <small>{submitError}</small>
-                        </Alert>
-                    </div>
-                ) : null}
             </Loading>
         </Form>
     );

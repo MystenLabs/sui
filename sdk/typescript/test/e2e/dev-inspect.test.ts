@@ -32,7 +32,7 @@ describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
         toolbox.provider,
         useLocalTxnBuilder
           ? new LocalTxnDataSerializer(toolbox.provider)
-          : undefined
+          : undefined,
       );
       const packagePath = __dirname + '/./data/serializer';
       packageId = await publishPackage(signer, useLocalTxnBuilder, packagePath);
@@ -43,7 +43,7 @@ describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
       const coins =
         await toolbox.provider.selectCoinsWithBalanceGreaterThanOrEqual(
           toolbox.address(),
-          BigInt(DEFAULT_GAS_BUDGET)
+          BigInt(DEFAULT_GAS_BUDGET),
         );
 
       const splitTxn = await signer.splitCoin({
@@ -53,7 +53,7 @@ describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
         gasPayment: getObjectId(coins[1]),
       });
       const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
-        getObjectId(c)
+        getObjectId(c),
       );
 
       await validateDevInspectTransaction(
@@ -67,13 +67,13 @@ describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
             gasBudget: gasBudget,
           },
         },
-        'success'
+        'success',
       );
     });
 
     it('Move Call that returns struct', async () => {
       const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-        toolbox.address()
+        toolbox.address(),
       );
       const moveCall = {
         packageObjectId: packageId,
@@ -90,7 +90,7 @@ describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
           kind: 'moveCall',
           data: moveCall,
         },
-        'success'
+        'success',
       );
     });
 
@@ -110,16 +110,16 @@ describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
           kind: 'moveCall',
           data: moveCall,
         },
-        'failure'
+        'failure',
       );
     });
-  }
+  },
 );
 
 async function validateDevInspectTransaction(
   signer: RawSigner,
   txn: UnserializedSignableTransaction,
-  status: 'success' | 'failure'
+  status: 'success' | 'failure',
 ) {
   const result = await signer.devInspectTransaction(txn);
   expect(result.effects.status.status).toEqual(status);

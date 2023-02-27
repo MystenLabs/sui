@@ -130,9 +130,7 @@ export function LatestTxCard({
 
     const countQuery = useQuery(
         ['transactions', 'count'],
-        () => {
-            return rpc.getTotalTransactionNumber();
-        },
+        () => rpc.getTotalTransactionNumber(),
         {
             refetchInterval: paused ? false : TRANSACTION_POLL_TIME,
         }
@@ -256,12 +254,12 @@ export function LatestTxCard({
                                 rowCount={15}
                                 rowHeight="16px"
                                 colHeadings={[
-                                    'Time',
                                     'Type',
                                     'Transaction ID',
                                     'Addresses',
                                     'Amount',
                                     'Gas',
+                                    'Time',
                                 ]}
                                 colWidths={[
                                     '85px',

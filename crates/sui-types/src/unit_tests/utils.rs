@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::traits::KeyPair as KeypairTraits;
-use signature::Signer;
 
+use crate::crypto::Signer;
 use crate::{
     base_types::{dbg_addr, ExecutionDigests, ObjectID},
-    committee::Committee,
+    committee::{Committee, ProtocolVersion},
     crypto::{
         get_key_pair, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
         AuthorityPublicKeyBytes, Signature,
@@ -44,7 +44,7 @@ where
         keys.push(inner_authority_key);
     }
 
-    let committee = Committee::new(0, authorities).unwrap();
+    let committee = Committee::new(0, ProtocolVersion::MIN, authorities).unwrap();
     (keys, committee)
 }
 
@@ -70,10 +70,17 @@ pub fn to_sender_signed_transaction(
     data: TransactionData,
     signer: &dyn Signer<Signature>,
 ) -> VerifiedTransaction {
+    to_sender_signed_transaction_with_multi_signers(data, vec![signer])
+}
+
+pub fn to_sender_signed_transaction_with_multi_signers(
+    data: TransactionData,
+    signers: Vec<&dyn Signer<Signature>>,
+) -> VerifiedTransaction {
     VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
         data,
         Intent::default(),
-        signer,
+        signers,
     ))
 }
 

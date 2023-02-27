@@ -5,6 +5,7 @@ expression: genesis.sui_system_object()
 info:
   id: "0x0000000000000000000000000000000000000005"
 epoch: 0
+protocol_version: 1
 validators:
   validator_stake: 1
   delegation_stake: 0
@@ -223,12 +224,12 @@ validators:
           - 101
           - 131
           - 137
-        name:
-          - 48
-        description: []
-        image_url: []
-        project_url: []
+        name: "0"
+        description: ""
+        image_url: ""
+        project_url: ""
         net_address: []
+        p2p_address: []
         consensus_address: []
         worker_address: []
         next_epoch_stake: 1
@@ -241,7 +242,7 @@ validators:
       pending_withdraw: 0
       gas_price: 1
       delegation_staking_pool:
-        validator_address: "0x21b60aa9a8cb189ccbe20461dbfad2202fdef55b"
+        id: "0xd5d9aa879b78dc1f516d71ab979189086eff752f"
         starting_epoch: 1
         sui_balance: 0
         rewards_pool:
@@ -249,7 +250,7 @@ validators:
         delegation_token_supply:
           value: 0
         pending_delegations:
-          id: "0xd5d9aa879b78dc1f516d71ab979189086eff752f"
+          id: "0xab8235dace3d68c7fb48110d63cbf4d6fd81ce10"
           size: 0
           head:
             vec: []
@@ -257,7 +258,7 @@ validators:
             vec: []
         pending_withdraws:
           contents:
-            id: "0xab8235dace3d68c7fb48110d63cbf4d6fd81ce10"
+            id: "0x18b8140c8a6ea340142f128061016fc4bd8220ec"
             size: 0
       commission_rate: 0
   pending_validators: []
@@ -476,20 +477,21 @@ validators:
         - 101
         - 131
         - 137
-      name:
-        - 48
-      description: []
-      image_url: []
-      project_url: []
+      name: "0"
+      description: ""
+      image_url: ""
+      project_url: ""
       net_address: []
+      p2p_address: []
       consensus_address: []
       worker_address: []
       next_epoch_stake: 1
       next_epoch_delegation: 0
       next_epoch_gas_price: 1
       next_epoch_commission_rate: 0
-  pending_delegation_switches:
-    contents: []
+  staking_pool_mappings:
+    id: "0x628ffd0e51e9a6ea32c13c2739a31a8f344b557d"
+    size: 1
 treasury_cap:
   value: 2
 storage_fund:
@@ -507,3 +509,4 @@ stake_subsidy:
   current_epoch_amount: 1000000
 safe_mode: false
 epoch_start_timestamp_ms: 10
+

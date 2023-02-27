@@ -13,7 +13,7 @@ Before diving into this be sure to read [How Sui Works?](how-sui-works.md) to fa
 We designed Sui to provide very high security guarantees to asset owners. We ensure that assets on Sui can be used only by their owners, according to the logic pre-defined by smart contracts that can be audited, and that the network will be available to process them correctly despite some of the validators operating Sui not following the protocol correctly (fault tolerance).
 
 The security features of the Sui system ensure a number of properties:
-* Only the owner of an owned asset can authorize a transaction that operates on this asset. Authoritzation is performed through the use of a private signature key that is known only to the asset owner.
+* Only the owner of an owned asset can authorize a transaction that operates on this asset. Authorization is performed through the use of a private signature key that is known only to the asset owner.
 * Everyone can operate on shared assets or immutable assets, but additional access control logic can be implemented by the smart contract. 
 * Transactions operate on assets according to predefined rules set by the smart contract creator that defined the asset type. These are expressed using the Move language.
 * Once a transaction is finalized, its effects - namely changes to the assets it operates on or new assets created - will be persisted, and the resulting assets will be available for further processing.
@@ -50,7 +50,7 @@ A valid transaction submitted to all validators has to be certified and its cert
 
 All transactions in Sui have to be associated with a gas asset to cover the cost of processing by Sui. A valid  transaction may result in a status of successful execution or an aborted execution. An execution may abort due to a condition within the smart contract defining the asset, or because it has ran out of sufficient gas to pay for the cost of execution. In cases of success, the effects of the operation will be finalized; otherwise, the state of assets in the transaction is not changed. However, the gas asset is always charged some amount of gas, to alleviate denial-of-service attacks on the system as a whole.
 
-A user client can perform the process of submitting the transaction and certificate itself or rely on third party services to submit the transaction and interact with validators. Such third parties need not have user private signature keys and cannot forge transactions on the users' behalf. They can reassure a user client a transaction has been finalized through a set of signatures from validators attesting to the transactions finality and its effects. After that point, the users can be assured that changes the transaction resulted in are final. 
+A user client can perform the process of submitting the transaction and certificate itself or rely on third party services to submit the transaction and interact with validators. Such third parties need not have user private signature keys and cannot forge transactions on the users' behalf. They can reassure a user client a transaction has been finalized through a set of signatures from validators attesting to the transactions finality and its effects. After that point, the users can be assured that changes the transaction resulted in will persist on the state of Sui. 
 
 ### Auditing and privacy
 

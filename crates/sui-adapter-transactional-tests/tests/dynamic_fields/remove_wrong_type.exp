@@ -4,13 +4,13 @@ init:
 A: object(100)
 
 task 1 'publish'. lines 9-31:
-created: object(104)
-written: object(103)
+created: object(105)
+written: object(104)
 
 task 2 'run'. lines 33-33:
-created: object(106), object(107)
-written: object(105)
+created: object(107), object(108)
+written: object(106)
 
 task 3 'run'. lines 35-35:
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::remove_child_object (function index 14) at offset 0, Abort Code: 2
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 14, instruction: 0, function_name: Some("remove_child_object") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(14), 0)] }) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::remove_child_object (function index 12) at offset 0, Abort Code: 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 12, instruction: 0, function_name: Some("remove_child_object") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(12), 0)] }), command: None } }

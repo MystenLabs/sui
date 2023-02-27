@@ -2,58 +2,33 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowUpRight12 } from '@mysten/icons';
-import { Base64DataBuffer } from '@mysten/sui.js';
-import { useMemo } from 'react';
+import { toB64, type Validator } from '@mysten/sui.js';
 
 import { StakeButton } from './StakeButton';
-
-import type { ActiveValidator } from '~/pages/validator/ValidatorDataTypes';
 
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { Heading } from '~/ui/Heading';
 import { ImageIcon } from '~/ui/ImageIcon';
 import { AddressLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
-import { getName } from '~/utils/getName';
 
 type ValidatorMetaProps = {
-    validatorData: ActiveValidator;
+    validatorData: Validator;
 };
 
 export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
-    const metadata = validatorData.fields.metadata.fields;
-
-    const validatorName = useMemo(() => {
-        return getName(metadata.name);
-    }, [metadata]);
-
-    const validatorPublicKey = useMemo(
-        () =>
-            new Base64DataBuffer(
-                new Uint8Array(metadata.pubkey_bytes)
-            ).toString(),
-        [metadata]
+    const validatorPublicKey = toB64(
+        new Uint8Array(validatorData.metadata.pubkey_bytes)
     );
 
-    // NOTE: We only support the string-encoded metadata fields, which will become the only encoding soon:
-    const logo =
-        !metadata.image_url || typeof metadata.image_url !== 'string'
-            ? null
-            : metadata.image_url;
-
-    const description =
-        !metadata.description || typeof metadata.description !== 'string'
-            ? null
-            : metadata.description;
-
-    const projectUrl =
-        !metadata.project_url || typeof metadata.project_url !== 'string'
-            ? null
-            : metadata.project_url;
+    const validatorName = validatorData.metadata.name;
+    const logo = validatorData.metadata.image_url;
+    const description = validatorData.metadata.description;
+    const projectUrl = validatorData.metadata.project_url;
 
     return (
         <>
-            <div className="flex basis-full gap-5 border-r border-solid border-transparent border-r-gray-45 md:mr-7.5 md:basis-1/4">
+            <div className="flex basis-full gap-5 border-r border-transparent border-r-gray-45 md:mr-7.5 md:basis-1/4">
                 <ImageIcon
                     src={logo}
                     label={validatorName}
@@ -94,9 +69,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
                     </DescriptionItem>
                     <DescriptionItem title="Address">
                         <AddressLink
-                            address={
-                                validatorData.fields.metadata.fields.sui_address
-                            }
+                            address={validatorData.metadata.sui_address}
                             noTruncate
                         />
                     </DescriptionItem>

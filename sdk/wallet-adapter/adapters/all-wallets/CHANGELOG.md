@@ -1,5 +1,58 @@
 # @mysten/wallet-adapter-all-wallets
 
+## 0.4.3
+
+### Patch Changes
+
+- @mysten/wallet-adapter-unsafe-burner@0.7.1
+- @mysten/wallet-adapter-wallet-standard@0.6.3
+
+## 0.4.2
+
+### Patch Changes
+
+- 0e202a543: Remove pending delegation switches.
+- Updated dependencies [0e202a543]
+- Updated dependencies [aa650aa3b]
+  - @mysten/wallet-adapter-wallet-standard@0.6.2
+  - @mysten/wallet-adapter-unsafe-burner@0.7.0
+
+## 0.4.1
+
+### Patch Changes
+
+- @mysten/wallet-adapter-unsafe-burner@0.6.1
+- @mysten/wallet-adapter-wallet-standard@0.6.1
+
+## 0.4.0
+
+### Minor Changes
+
+- 473005d8f: Add protocol_version to CheckpointSummary and SuiSystemObject. Consolidate end-of-epoch information in CheckpointSummary.
+
+### Patch Changes
+
+- Updated dependencies [473005d8f]
+  - @mysten/wallet-adapter-wallet-standard@0.6.0
+  - @mysten/wallet-adapter-unsafe-burner@0.6.0
+
+## 0.3.13
+
+### Patch Changes
+
+- @mysten/wallet-adapter-unsafe-burner@0.5.1
+- @mysten/wallet-adapter-wallet-standard@0.5.1
+
+## 0.3.12
+
+### Patch Changes
+
+- a8746d4e9: update SuiExecuteTransactionResponse
+- Updated dependencies [96e883fc1]
+- Updated dependencies [a8746d4e9]
+  - @mysten/wallet-adapter-wallet-standard@0.5.0
+  - @mysten/wallet-adapter-unsafe-burner@0.5.0
+
 ## 0.3.11
 
 ### Patch Changes

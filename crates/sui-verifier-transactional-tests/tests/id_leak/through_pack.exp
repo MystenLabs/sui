@@ -2,8 +2,8 @@ processed 2 tasks
 
 task 0 'publish'. lines 4-36:
 Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("ID is leaked into a struct.") } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("ID is leaked into a struct. Found in _::test::test"), command: None } }
 
 task 1 'publish'. lines 38-60:
 Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("ID is leaked into a struct.") } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("ID is leaked into a struct. Found in _::m::foo"), command: None } }

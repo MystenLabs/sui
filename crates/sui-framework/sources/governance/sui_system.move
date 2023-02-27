@@ -3,9 +3,10 @@
 
 module sui::sui_system {
     use sui::balance::{Self, Balance, Supply};
+    use sui::clock::{Self, Clock};
     use sui::coin::{Self, Coin};
     use sui::staking_pool::{Delegation, StakedSui};
-    use sui::object::{Self, UID};
+    use sui::object::{Self, ID, UID};
     use sui::locked_coin::{Self, LockedCoin};
     use sui::sui::SUI;
     use sui::transfer;
@@ -22,7 +23,7 @@ module sui::sui_system {
     use sui::epoch_time_lock;
     use sui::pay;
     use sui::event;
-    use sui::staking_pool;
+    use sui::table::Table;
 
     friend sui::genesis;
 
@@ -48,6 +49,8 @@ module sui::sui_system {
         id: UID,
         /// The current epoch ID, starting from 0.
         epoch: u64,
+        /// The current protocol version, starting from 1.
+        protocol_version: u64,
         /// Contains all information about the validators.
         validators: ValidatorSet,
         /// The SUI treasury capability needed to mint SUI.
@@ -81,6 +84,7 @@ module sui::sui_system {
     /// the epoch advancement transaction.
     struct SystemEpochInfo has copy, drop {
         epoch: u64,
+        protocol_version: u64,
         reference_gas_price: u64,
         total_stake: u64,
         storage_fund_inflows: u64,
@@ -92,13 +96,13 @@ module sui::sui_system {
     }
 
     // Errors
-    const ENOT_VALIDATOR: u64 = 0;
-    const ELIMIT_EXCEEDED: u64 = 1;
-    const EEPOCH_NUMBER_MISMATCH: u64 = 2;
-    const ECANNOT_REPORT_ONESELF: u64 = 3;
-    const EREPORT_RECORD_NOT_FOUND: u64 = 4;
-    const EBPS_TOO_LARGE: u64 = 5;
-    const ESTAKED_SUI_FROM_WRONG_EPOCH: u64 = 6;
+    const ENotValidator: u64 = 0;
+    const ELimitExceeded: u64 = 1;
+    const EEpochNumberMismatch: u64 = 2;
+    const ECannotReportOneself: u64 = 3;
+    const EReportRecordNotFound: u64 = 4;
+    const EBpsTooLarge: u64 = 5;
+    const EStakedSuiFromWrongEpoch: u64 = 6;
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
 
@@ -113,14 +117,17 @@ module sui::sui_system {
         max_validator_candidate_count: u64,
         min_validator_stake: u64,
         initial_stake_subsidy_amount: u64,
+        protocol_version: u64,
         epoch_start_timestamp_ms: u64,
+        ctx: &mut TxContext,
     ) {
-        let validators = validator_set::new(validators);
+        let validators = validator_set::new(validators, ctx);
         let reference_gas_price = validator_set::derive_reference_gas_price(&validators);
         let state = SuiSystemState {
             // Use a hardcoded ID.
             id: object::sui_system_state(),
             epoch: 0,
+            protocol_version,
             validators,
             sui_supply,
             storage_fund,
@@ -155,6 +162,7 @@ module sui::sui_system {
         image_url: vector<u8>,
         project_url: vector<u8>,
         net_address: vector<u8>,
+        p2p_address: vector<u8>,
         consensus_address: vector<u8>,
         worker_address: vector<u8>,
         stake: Coin<SUI>,
@@ -164,12 +172,12 @@ module sui::sui_system {
     ) {
         assert!(
             validator_set::next_epoch_validator_count(&self.validators) < self.parameters.max_validator_candidate_count,
-            ELIMIT_EXCEEDED,
+            ELimitExceeded,
         );
         let stake_amount = coin::value(&stake);
         assert!(
             stake_amount >= self.parameters.min_validator_stake,
-            ELIMIT_EXCEEDED,
+            ELimitExceeded,
         );
         let validator = validator::new(
             tx_context::sender(ctx),
@@ -182,6 +190,7 @@ module sui::sui_system {
             image_url,
             project_url,
             net_address,
+            p2p_address,
             consensus_address,
             worker_address,
             coin::into_balance(stake),
@@ -360,33 +369,6 @@ module sui::sui_system {
         );
     }
 
-    // Switch delegation from the current validator to a new one.
-    public entry fun request_switch_delegation(
-        self: &mut SuiSystemState,
-        delegation: Delegation,
-        staked_sui: StakedSui,
-        new_validator_address: address,
-        ctx: &mut TxContext,
-    ) {
-        validator_set::request_switch_delegation(
-            &mut self.validators, delegation, staked_sui, new_validator_address, ctx
-        );
-    }
-
-    /// Cancel a delegation requests sent during the current epoch.
-    public entry fun cancel_delegation_request(
-        self: &mut SuiSystemState,
-        staked_sui: StakedSui,
-        ctx: &mut TxContext,
-    ) {
-        // The delegation request has to have happened within the current epoch.
-        assert!(staking_pool::delegation_request_epoch(&staked_sui) == self.epoch, ESTAKED_SUI_FROM_WRONG_EPOCH);
-        validator_set::cancel_delegation_request(
-            &mut self.validators, staked_sui, ctx
-        );
-    }
-
-
     /// Report a validator as a bad or non-performant actor in the system.
     /// Succeeds iff both the sender and the input `validator_addr` are active validators
     /// and they are not the same address. This function is idempotent within an epoch.
@@ -397,9 +379,9 @@ module sui::sui_system {
     ) {
         let sender = tx_context::sender(ctx);
         // Both the reporter and the reported have to be validators.
-        assert!(validator_set::is_active_validator(&self.validators, sender), ENOT_VALIDATOR);
-        assert!(validator_set::is_active_validator(&self.validators, validator_addr), ENOT_VALIDATOR);
-        assert!(sender != validator_addr, ECANNOT_REPORT_ONESELF);
+        assert!(validator_set::is_active_validator(&self.validators, sender), ENotValidator);
+        assert!(validator_set::is_active_validator(&self.validators, validator_addr), ENotValidator);
+        assert!(sender != validator_addr, ECannotReportOneself);
 
         if (!vec_map::contains(&self.validator_report_records, &validator_addr)) {
             vec_map::insert(&mut self.validator_report_records, validator_addr, vec_set::singleton(sender));
@@ -420,9 +402,9 @@ module sui::sui_system {
     ) {
         let sender = tx_context::sender(ctx);
 
-        assert!(vec_map::contains(&self.validator_report_records, &validator_addr), EREPORT_RECORD_NOT_FOUND);
+        assert!(vec_map::contains(&self.validator_report_records, &validator_addr), EReportRecordNotFound);
         let reporters = vec_map::get_mut(&mut self.validator_report_records, &validator_addr);
-        assert!(vec_set::contains(reporters, &sender), EREPORT_RECORD_NOT_FOUND);
+        assert!(vec_set::contains(reporters, &sender), EReportRecordNotFound);
         vec_set::remove(reporters, &sender);
     }
 
@@ -436,6 +418,7 @@ module sui::sui_system {
     public entry fun advance_epoch(
         self: &mut SuiSystemState,
         new_epoch: u64,
+        next_protocol_version: u64,
         storage_charge: u64,
         computation_charge: u64,
         storage_rebate: u64,
@@ -456,7 +439,7 @@ module sui::sui_system {
         assert!(
             storage_fund_reinvest_rate <= bps_denominator_u64
             && reward_slashing_rate <= bps_denominator_u64,
-            EBPS_TOO_LARGE,
+            EBpsTooLarge,
         );
 
         let delegation_stake = validator_set::total_delegation_stake(&self.validators);
@@ -504,6 +487,9 @@ module sui::sui_system {
             reward_slashing_rate,
             ctx,
         );
+
+        self.protocol_version = next_protocol_version;
+
         // Derive the reference gas price for the new epoch
         self.reference_gas_price = validator_set::derive_reference_gas_price(&self.validators);
         // Because of precision issues with integer divisions, we expect that there will be some
@@ -527,6 +513,7 @@ module sui::sui_system {
         event::emit(
             SystemEpochInfo {
                 epoch: self.epoch,
+                protocol_version: self.protocol_version,
                 reference_gas_price: self.reference_gas_price,
                 total_stake: new_total_stake,
                 storage_fund_inflows: storage_charge + (storage_fund_reinvestment_amount as u64),
@@ -542,18 +529,34 @@ module sui::sui_system {
     }
 
     /// An extremely simple version of advance_epoch.
-    /// This is only called when the call to advance_epoch failed due to a bug, and we want to be able to keep the system
-    /// running and continue making epoch changes.
+    /// This is called in two situations:
+    ///   - When the call to advance_epoch failed due to a bug, and we want to be able to keep the
+    ///     system running and continue making epoch changes.
+    ///   - When advancing to a new protocol version, we want to be able to change the protocol
+    ///     version
     public entry fun advance_epoch_safe_mode(
         self: &mut SuiSystemState,
         new_epoch: u64,
+        next_protocol_version: u64,
         ctx: &mut TxContext,
     ) {
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, 0);
 
         self.epoch = new_epoch;
+        self.protocol_version = next_protocol_version;
         self.safe_mode = true;
+    }
+
+    public entry fun consensus_commit_prologue(
+        clock: &mut Clock,
+        timestamp_ms: u64,
+        ctx: &TxContext,
+    ) {
+        // Validator will make a special system call with sender set as 0x0.
+        assert!(tx_context::sender(ctx) == @0x0, 0);
+
+        clock::set_timestamp(clock, timestamp_ms);
     }
 
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
@@ -577,6 +580,17 @@ module sui::sui_system {
     /// Aborts if `validator_addr` is not an active validator.
     public fun validator_stake_amount(self: &SuiSystemState, validator_addr: address): u64 {
         validator_set::validator_stake_amount(&self.validators, validator_addr)
+    }
+
+    /// Returns the staking pool id of a given validator.
+    /// Aborts if `validator_addr` is not an active validator.
+    public fun validator_staking_pool_id(self: &SuiSystemState, validator_addr: address): ID {
+        validator_set::validator_staking_pool_id(&self.validators, validator_addr)
+    }
+
+    /// Returns reference to the staking pool mappings that map pool ids to active validator addresses
+    public fun validator_staking_pool_mappings(self: &SuiSystemState): &Table<ID, address> {
+        validator_set::staking_pool_mappings(&self.validators)
     }
 
     /// Returns all the validators who have reported `addr` this epoch.

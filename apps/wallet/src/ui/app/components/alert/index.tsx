@@ -26,7 +26,7 @@ function Alert({ children, className, mode = 'warning' }: AlertProps) {
     return (
         <div className={cl(st.container, st[mode], className)}>
             {mode === 'loading' ? (
-                <LoadingIndicator className={st.loader} />
+                <LoadingIndicator color="inherit" />
             ) : (
                 <Icon className={st.icon} icon={modeToIcon[mode]} />
             )}

@@ -3,12 +3,14 @@
 
 use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::collection_types::{VecMap, VecSet};
-use crate::committee::{Committee, CommitteeWithNetAddresses, StakeUnit};
+use crate::committee::{Committee, CommitteeWithNetAddresses, ProtocolVersion, StakeUnit};
 use crate::crypto::{AuthorityPublicKeyBytes, NetworkPublicKey};
+use crate::error::SuiError;
+use crate::storage::ObjectStore;
 use crate::{
     balance::{Balance, Supply},
     id::UID,
-    SUI_FRAMEWORK_ADDRESS,
+    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use fastcrypto::traits::ToFromBytes;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
@@ -22,6 +24,8 @@ const SUI_SYSTEM_STATE_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
 pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
 pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch_safe_mode");
+pub const CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME: &IdentStr =
+    ident_str!("consensus_commit_prologue");
 
 /// Rust version of the Move sui::sui_system::SystemParameters type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
@@ -44,11 +48,12 @@ pub struct ValidatorMetadata {
     pub network_pubkey_bytes: Vec<u8>,
     pub worker_pubkey_bytes: Vec<u8>,
     pub proof_of_possession_bytes: Vec<u8>,
-    pub name: Vec<u8>,
-    pub description: Vec<u8>,
-    pub image_url: Vec<u8>,
-    pub project_url: Vec<u8>,
+    pub name: String,
+    pub description: String,
+    pub image_url: String,
+    pub project_url: String,
     pub net_address: Vec<u8>,
+    pub p2p_address: Vec<u8>,
     pub consensus_address: Vec<u8>,
     pub worker_address: Vec<u8>,
     pub next_epoch_stake: u64,
@@ -137,6 +142,15 @@ pub struct Table {
     pub size: u64,
 }
 
+impl Default for Table {
+    fn default() -> Self {
+        Table {
+            id: ObjectID::from(SuiAddress::ZERO),
+            size: 0,
+        }
+    }
+}
+
 /// Rust version of the Move sui::linked_table::LinkedTable type. Putting it here since
 /// we only use it in sui_system in the framework.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
@@ -161,7 +175,7 @@ impl<K> Default for LinkedTable<K> {
 /// Rust version of the Move sui::staking_pool::StakingPool type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct StakingPool {
-    pub validator_address: SuiAddress,
+    pub id: ObjectID,
     pub starting_epoch: u64,
     pub sui_balance: u64,
     pub rewards_pool: Balance,
@@ -186,7 +200,7 @@ pub struct ValidatorSet {
     pub pending_validators: Vec<Validator>,
     pub pending_removals: Vec<u64>,
     pub next_epoch_validators: Vec<ValidatorMetadata>,
-    pub pending_delegation_switches: VecMap<ValidatorPair, TableVec>,
+    pub staking_pool_mappings: Table,
 }
 
 /// Rust version of the Move sui::sui_system::SuiSystemState type
@@ -194,6 +208,7 @@ pub struct ValidatorSet {
 pub struct SuiSystemState {
     pub info: UID,
     pub epoch: u64,
+    pub protocol_version: u64,
     pub validators: ValidatorSet,
     pub treasury_cap: Supply,
     pub storage_fund: Balance,
@@ -233,10 +248,14 @@ impl SuiSystemState {
             net_addresses.insert(name, net_address);
         }
         CommitteeWithNetAddresses {
-            committee: Committee::new(self.epoch, voting_rights)
-                // unwrap is safe because we should have verified the committee on-chain.
-                // TODO: Make sure we actually verify it.
-                .unwrap(),
+            committee: Committee::new(
+                self.epoch,
+                ProtocolVersion::new(self.protocol_version),
+                voting_rights,
+            )
+            // unwrap is safe because we should have verified the committee on-chain.
+            // TODO: Make sure we actually verify it.
+            .unwrap(),
             net_addresses,
         }
     }
@@ -307,4 +326,56 @@ impl SuiSystemState {
             epoch: self.epoch,
         }
     }
+}
+
+// The default implementation for tests
+impl Default for SuiSystemState {
+    fn default() -> Self {
+        let validator_set = ValidatorSet {
+            validator_stake: 1,
+            delegation_stake: 1,
+            active_validators: vec![],
+            pending_validators: vec![],
+            pending_removals: vec![],
+            next_epoch_validators: vec![],
+            staking_pool_mappings: Table::default(),
+        };
+        SuiSystemState {
+            info: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),
+            epoch: 0,
+            protocol_version: ProtocolVersion::MIN.as_u64(),
+            validators: validator_set,
+            treasury_cap: Supply { value: 0 },
+            storage_fund: Balance::new(0),
+            parameters: SystemParameters {
+                min_validator_stake: 1,
+                max_validator_candidate_count: 100,
+            },
+            reference_gas_price: 1,
+            validator_report_records: VecMap { contents: vec![] },
+            stake_subsidy: StakeSubsidy {
+                epoch_counter: 0,
+                balance: Balance::new(0),
+                current_epoch_amount: 0,
+            },
+            safe_mode: false,
+            epoch_start_timestamp_ms: 0,
+        }
+    }
+}
+
+pub fn get_sui_system_state<S>(object_store: S) -> Result<SuiSystemState, SuiError>
+where
+    S: ObjectStore,
+{
+    let sui_system_object = object_store
+        .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)?
+        .ok_or(SuiError::SuiSystemStateNotFound)?;
+    let move_object = sui_system_object
+        .data
+        .try_as_move()
+        .ok_or(SuiError::SuiSystemStateNotFound)?;
+    let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
+        .expect("Sui System State object deserialization cannot fail");
+    Ok(result)
 }

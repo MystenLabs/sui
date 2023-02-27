@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer, Ed25519Keypair } from '@mysten/sui.js';
+import { Ed25519Keypair, fromB64 } from '@mysten/sui.js';
 import mitt from 'mitt';
 import { throttle } from 'throttle-debounce';
 
@@ -162,7 +162,8 @@ export class Keyring {
         keypair: ExportedKeypair,
         password: string
     ) {
-        if (this.isLocked) {
+        const currentAccounts = this.getAccounts();
+        if (this.isLocked || !currentAccounts) {
             // this function is expected to be called from UI when unlocked
             // so this shouldn't happen
             throw new Error('Wallet is locked');
@@ -173,8 +174,17 @@ export class Keyring {
             // update the vault and encrypt it to persist the new keypair in storage
             throw new Error('Wrong password');
         }
-        const added = await VaultStorage.importKeypair(keypair, password);
+        const added = await VaultStorage.importKeypair(
+            keypair,
+            password,
+            currentAccounts
+        );
         if (added) {
+            const importedAccount = new Account({
+                type: 'imported',
+                keypair: added,
+            });
+            this.#accountsMap.set(importedAccount.address, importedAccount);
             this.notifyAccountsChanged();
         }
         return added;
@@ -245,22 +255,81 @@ export class Keyring {
                         `Account for address ${address} not found in keyring`
                     );
                 }
-                const { signature, signatureScheme, pubKey } =
-                    await account.sign(new Base64DataBuffer(data));
+                const signature = await account.sign(fromB64(data));
                 uiConnection.send(
                     createMessage<KeyringPayload<'signData'>>(
                         {
                             type: 'keyring',
                             method: 'signData',
-                            return: {
-                                signatureScheme,
-                                signature: signature.toString(),
-                                pubKey: pubKey.toBase64(),
-                            },
+                            return: signature,
                         },
                         id
                     )
                 );
+            } else if (isKeyringPayload(payload, 'switchAccount')) {
+                if (this.#locked) {
+                    throw new Error('Keyring is locked. Unlock it first.');
+                }
+                if (!payload.args) {
+                    throw new Error('Missing parameters.');
+                }
+                const { address } = payload.args;
+                const changed = await this.changeActiveAccount(address);
+                if (!changed) {
+                    throw new Error(`Failed to change account to ${address}`);
+                }
+                uiConnection.send(createMessage({ type: 'done' }, id));
+            } else if (isKeyringPayload(payload, 'deriveNextAccount')) {
+                if (!(await this.deriveNextAccount())) {
+                    throw new Error('Failed to derive next account');
+                }
+                uiConnection.send(createMessage({ type: 'done' }, id));
+            } else if (
+                isKeyringPayload(payload, 'verifyPassword') &&
+                payload.args
+            ) {
+                if (
+                    !(await VaultStorage.verifyPassword(payload.args.password))
+                ) {
+                    throw new Error('Wrong password');
+                }
+                uiConnection.send(createMessage({ type: 'done' }, id));
+            } else if (
+                isKeyringPayload(payload, 'exportAccount') &&
+                payload.args
+            ) {
+                const keyPair = await this.exportAccountKeypair(
+                    payload.args.accountAddress,
+                    payload.args.password
+                );
+
+                if (!keyPair) {
+                    throw new Error(
+                        `Account ${payload.args.accountAddress} not found`
+                    );
+                }
+                uiConnection.send(
+                    createMessage<KeyringPayload<'exportAccount'>>(
+                        {
+                            type: 'keyring',
+                            method: 'exportAccount',
+                            return: { keyPair },
+                        },
+                        id
+                    )
+                );
+            } else if (
+                isKeyringPayload(payload, 'importPrivateKey') &&
+                payload.args
+            ) {
+                const imported = await this.importAccountKeypair(
+                    payload.args.keyPair,
+                    payload.args.password
+                );
+                if (!imported) {
+                    throw new Error('Duplicate account not imported');
+                }
+                uiConnection.send(createMessage({ type: 'done' }, id));
             }
         } catch (e) {
             uiConnection.send(
@@ -325,7 +394,11 @@ export class Keyring {
                 type: 'imported',
                 keypair: anImportedKey,
             });
-            this.#accountsMap.set(account.address, account);
+            // there is a case where we can import a private key of an account that can be derived from the mnemonic but not yet derived
+            // if later we derive it skip overriding the derived account with the imported one (convert the imported as derived in a way)
+            if (!this.#accountsMap.has(account.address)) {
+                this.#accountsMap.set(account.address, account);
+            }
         });
         mnemonic = null;
         this.#locked = false;

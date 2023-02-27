@@ -39,6 +39,7 @@ use sui_types::{
 
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 2_000;
+pub const MAX_DELEGATION_GAS: u64 = 15_000;
 
 /// A helper function to get all accounts and their owned GasCoin
 /// with a WalletContext
@@ -315,7 +316,7 @@ pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> VerifiedTransac
     let (sender, keypair) = deterministic_random_account_key();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sui_programmability/examples/basics");
-    let build_config = BuildConfig::default();
+    let build_config = BuildConfig::new_for_testing();
     let all_module_bytes = sui_framework::build_move_package(&path, build_config)
         .unwrap()
         .get_package_bytes(/* with_unpublished_deps */ false);
@@ -415,7 +416,7 @@ pub fn make_delegation_transaction(
             CallArg::Object(ObjectArg::ImmOrOwnedObject(coin)),
             CallArg::Pure(bcs::to_bytes(&validator).unwrap()),
         ],
-        MAX_GAS,
+        MAX_DELEGATION_GAS,
         gas_price.unwrap_or(DUMMY_GAS_PRICE),
     );
     to_sender_signed_transaction(data, keypair)

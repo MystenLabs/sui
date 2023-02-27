@@ -18,7 +18,7 @@ use anemo_tower::{
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
 use anemo_tower::{rate_limit, set_header::SetResponseHeaderLayer};
-use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
+use config::{Committee, Parameters, SharedWorkerCache, WorkerId};
 use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey, PublicKey};
 use multiaddr::{Multiaddr, Protocol};
 use mysten_metrics::spawn_logged_monitored_task;
@@ -57,7 +57,7 @@ pub struct Worker {
     /// The id of this worker used for index-based lookup by other NW nodes.
     id: WorkerId,
     /// The committee information.
-    committee: SharedCommittee,
+    committee: Committee,
     /// The worker information cache.
     worker_cache: SharedWorkerCache,
     /// The configuration parameters
@@ -71,7 +71,7 @@ impl Worker {
         primary_name: PublicKey,
         keypair: NetworkKeyPair,
         id: WorkerId,
-        committee: SharedCommittee,
+        committee: Committee,
         worker_cache: SharedWorkerCache,
         parameters: Parameters,
         validator: impl TransactionValidator,
@@ -164,11 +164,10 @@ impl Worker {
             .unwrap();
         let addr = network::multiaddr_to_address(&address).unwrap();
 
-        let epoch_string: String = committee.load().epoch.to_string();
+        let epoch_string: String = committee.epoch.to_string();
 
         // Set up anemo Network.
         let our_primary_peer_id = committee
-            .load()
             .network_key(&primary_name)
             .map(|public_key| PeerId(public_key.0.to_bytes()))
             .unwrap();
@@ -197,6 +196,7 @@ impl Worker {
             )
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 inbound_network_metrics,
+                parameters.anemo.excessive_message_size(),
             )))
             .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
             .layer(SetResponseHeaderLayer::overriding(
@@ -213,6 +213,7 @@ impl Worker {
             )
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 outbound_network_metrics,
+                parameters.anemo.excessive_message_size(),
             )))
             .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
             .layer(SetRequestHeaderLayer::overriding(
@@ -227,10 +228,9 @@ impl Worker {
             quic_config.keep_alive_interval_ms = Some(5_000);
             let mut config = anemo::Config::default();
             config.quic = Some(quic_config);
-            // Set a default size limit of 8 MiB for all RPCs
-            // TODO: remove this and revert to default anemo max_frame_size once size
-            // limits are fully implemented on narwhal data structures.
-            config.max_frame_size = Some(8 << 20);
+            // Set the max_frame_size to be 2 GB to work around the issue of there being too many
+            // delegation events in the epoch change txn.
+            config.max_frame_size = Some(2 << 30);
             // Set a default timeout of 300s for all RPC requests
             config.inbound_request_timeout_ms = Some(300_000);
             config.outbound_request_timeout_ms = Some(300_000);
@@ -294,12 +294,10 @@ impl Worker {
 
         // Connect worker to its corresponding primary.
         let primary_address = committee
-            .load()
             .primary(&primary_name)
             .expect("Our primary is not in the committee");
 
         let primary_network_key = committee
-            .load()
             .network_key(&primary_name)
             .expect("Our primary is not in the committee");
 
@@ -314,7 +312,7 @@ impl Worker {
         // update the peer_types with the "other_primary". We do not add them in the Network
         // struct, otherwise the networking library will try to connect to it
         let other_primaries: Vec<(PublicKey, Multiaddr, NetworkPublicKey)> =
-            committee.load().others_primaries(&primary_name);
+            committee.others_primaries(&primary_name);
         for (_, _, network_key) in other_primaries {
             peer_types.insert(
                 PeerId(network_key.0.to_bytes()),
@@ -494,7 +492,7 @@ impl Worker {
         let quorum_waiter_handle = QuorumWaiter::spawn(
             self.primary_name.clone(),
             self.id,
-            (*(*(*self.committee).load()).clone()).clone(),
+            self.committee.clone(),
             self.worker_cache.clone(),
             shutdown_receivers.pop().unwrap(),
             /* rx_message */ rx_quorum_waiter,

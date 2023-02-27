@@ -72,9 +72,12 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
                             .get_committee_info(Some(epoch_id))
                             .await
                         {
-                            Ok(committee) if committee.committee_info.is_some() => {
+                            Ok(committee) => {
                                 // Safe to unwrap, checked above
-                                Committee::new(committee.epoch, BTreeMap::from_iter(committee.committee_info.unwrap().into_iter())).unwrap_or_else(
+                                Committee::new(
+                                    committee.epoch,
+                                    committee.protocol_version,
+                                    BTreeMap::from_iter(committee.committee_info.into_iter())).unwrap_or_else(
                                     |e| panic!("Can't create a valid Committee given info returned from Full Node: {:?}", e)
                                 )
                             }
