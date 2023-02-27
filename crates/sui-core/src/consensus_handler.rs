@@ -75,8 +75,8 @@ fn update_hash(
     previous_hash.hash(&mut hasher);
     v.hash(&mut hasher);
     let hash = hasher.finish();
-    // Log hash for every sub dag
-    if index.sub_dag_index == 1 && last_seen_guard.index.sub_dag_index == 1 {
+    // Log hash every 100th transaction of the subdag
+    if index.transaction_index % 100 == 0 {
         debug!(
             "Integrity hash for consensus output at subdag {} is {:016x}",
             index.sub_dag_index, hash
