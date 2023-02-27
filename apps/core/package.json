@@ -24,9 +24,7 @@
         "@mysten/sui.js": "workspace:*",
         "@sentry/react": "^7.38.0",
         "@sentry/tracing": "^7.38.0",
-        "@tanstack/react-query": "^4.20.9",
-        "bignumber.js": "^9.1.1",
-        "react": "^18.2.0"
+        "bignumber.js": "^9.1.1"
     },
     "devDependencies": {
         "@headlessui/tailwindcss": "^0.1.2",
@@ -40,5 +38,11 @@
         "typescript": "^4.9.4",
         "vite": "^4.0.4",
         "vitest": "^0.26.3"
+    },
+    "peerDependencies": {
+        "@tanstack/react-query": "^4.20.9",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0"
+
     }
 }
