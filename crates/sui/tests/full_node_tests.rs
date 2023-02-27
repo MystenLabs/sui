@@ -147,7 +147,7 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
             payment: gas_obj,
             owner: sponsor,
             price: 100,
-            budget: 10000,
+            budget: 1000000,
         },
     );
 

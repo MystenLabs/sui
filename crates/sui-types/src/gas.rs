@@ -36,12 +36,11 @@ pub type GasPrice = GasQuantity<GasPriceUnit>;
 pub type SuiGas = GasQuantity<SuiGasUnit>;
 
 macro_rules! ok_or_gas_balance_error {
-    ($balance:expr, $budget:expr, $price:expr) => {
+    ($balance:expr, $budget:expr) => {
         if $balance < $budget {
             Err(UserInputError::GasBalanceTooLowToCoverGasBudget {
                 gas_balance: $balance,
                 gas_budget: $budget,
-                gas_price: $price,
             })
         } else {
             Ok(())
@@ -275,9 +274,11 @@ impl<'a> SuiGasStatus<'a> {
         storage_gas_unit_price: GasPrice,
         cost_table: SuiCostTable,
     ) -> SuiGasStatus<'a> {
+        let gas_price: u64 = computation_gas_unit_price.into();
+        let budget_in_unit = gas_budget / gas_price; // truncate the value and move to units
         Self::new(
-            GasStatus::new(&INITIAL_COST_SCHEDULE, GasUnits::new(gas_budget)),
-            gas_budget,
+            GasStatus::new(&INITIAL_COST_SCHEDULE, GasUnits::new(budget_in_unit)),
+            budget_in_unit,
             true,
             computation_gas_unit_price,
             storage_gas_unit_price.into(),
@@ -476,20 +477,20 @@ pub fn check_gas_balance(
         });
     }
 
-    let max_gas_budget = cost_table.max_gas_budget;
-    let min_gas_budget = cost_table.min_gas_budget_external();
+    let max_gas_budget = cost_table.max_gas_budget as u128 * gas_price as u128;
+    let min_gas_budget = cost_table.min_gas_budget_external() as u128 * gas_price as u128;
 
-    if gas_budget > max_gas_budget {
+    if (gas_budget as u128) > max_gas_budget {
         return Err(UserInputError::GasBudgetTooHigh {
             gas_budget,
-            max_budget: max_gas_budget,
+            max_budget: cost_table.max_gas_budget,
         });
     }
 
-    if gas_budget < min_gas_budget {
+    if (gas_budget as u128) < min_gas_budget {
         return Err(UserInputError::GasBudgetTooLow {
             gas_budget,
-            min_budget: min_gas_budget,
+            min_budget: cost_table.min_gas_budget_external(),
         });
     }
 
@@ -499,17 +500,16 @@ pub fn check_gas_balance(
     // Meanwhile we need to make sure that the pre-transaction balance is sufficient
     // to pay for gas cost before execution error occurs.
     let gas_balance = get_gas_balance(gas_object)?;
-    let gas_budget_amount = (gas_budget as u128) * (gas_price as u128);
 
-    ok_or_gas_balance_error!((gas_balance as u128), gas_budget_amount, gas_price)?;
+    ok_or_gas_balance_error!(gas_balance as u128, gas_budget as u128)?;
 
     let mut total_balance = gas_balance as u128;
     for extra_obj in extra_objs {
         total_balance += get_gas_balance(&extra_obj)? as u128;
     }
 
-    let total_amount = gas_budget_amount + extra_amount as u128;
-    ok_or_gas_balance_error!(total_balance, total_amount, gas_price)
+    let total_amount = (gas_budget as u128) + (extra_amount as u128);
+    ok_or_gas_balance_error!(total_balance, total_amount)
 }
 
 /// Create a new gas status with the given `gas_budget`, and charge the transaction flat fee.
