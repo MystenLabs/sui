@@ -139,21 +139,46 @@ module sui::kiosk {
 
     // === Place and take from the Kiosk ===
 
-    public fun place<T: key + store>(self: &mut Kiosk, item: T) {
+    /// Place any object into a Safe.
+    /// Performs an authorization check to make sure only owner can do that.
+    public fun place<T: key + store>(
+        self: &mut Kiosk, cap: &Option<KioskOwnerCap>, item: T, ctx: &TxContext
+    ) {
+        try_access(self, cap, ctx);
         dof::add(&mut self.id, Key { id: object::id(&item) }, item)
     }
 
-    public fun take<T: key + store>(self: &mut Kiosk, id: ID): T {
+    /// Take any object from the Safe.
+    /// Performs an authorization check to make sure only owner can do that.
+    public fun take<T: key + store>(
+        self: &mut Kiosk, id: ID, cap: &Option<KioskOwnerCap>, ctx: &TxContext
+    ): T {
+        try_access(self, cap, ctx);
         dof::remove(&mut self.id, Key { id })
     }
 
     // === Trading functionality ===
 
-    public fun make_offer<T: key + store>(self: &mut Kiosk, id: ID, price: u64) {
+    /// Make an offer by setting a price for the item and making it publicly
+    /// purchasable by anyone on the network.
+    ///
+    /// Performs an authorization check to make sure only owner can sell.
+    public fun make_offer<T: key + store>(
+        self: &mut Kiosk, id: ID, price: u64, cap: &Option<KioskOwnerCap>, ctx: &TxContext
+    ) {
+        try_access(self, cap, ctx);
         df::add(&mut self.id, Offer { id }, price)
     }
 
-    /// Make a trade - pay the owner of the item
+    /// Make a trade: pay the owner of the item.
+    ///
+    /// Received `TransferRequest` needs to be handled by the publisher of the T,
+    /// if they have a method implemented that allows a trade, it is possible to
+    /// request their approval (by calling some function) so that the trade can be
+    /// finalized.
+    ///
+    /// After a confirmation is received from the creator, an item can be placed to
+    /// a destination safe.
     public fun purchase<T: key + store>(
         self: &mut Kiosk, id: ID, payment: Coin<SUI>
     ): TransferRequest<T> {
