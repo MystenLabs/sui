@@ -21,7 +21,7 @@
         align-items: center;
 
         &.active {
-            background: v.use(v.$colors-filter-item-background-color);
+            background: colors.$hero-dark;
             color: colors.$white;
             border: 1px solid transparent;
         }

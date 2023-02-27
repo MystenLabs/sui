@@ -55,11 +55,6 @@
     }
 }
 
-.icon {
-    font-size: 32px;
-    margin-bottom: 2px;
-}
-
 .link {
     display: flex;
     flex-flow: column nowrap;
@@ -91,6 +86,11 @@
             );
         }
     }
+}
+
+.icon {
+    font-size: 32px;
+    margin-bottom: 2px;
 }
 
 .title {
