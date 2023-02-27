@@ -290,7 +290,11 @@ impl<C> Testbed<C> {
     }
 
     pub async fn install(&self) -> TestbedResult<()> {
-        print!("Installing dependencies on all machines...");
+        crossterm::execute!(
+            stdout(),
+            Print("Installing dependencies on all machines...")
+        )
+        .unwrap();
 
         let url = self.settings.repository.url.clone();
         let name = self.settings.repository.name.clone();
@@ -331,7 +335,7 @@ impl<C> Testbed<C> {
         crossterm::execute!(
             stdout(),
             Print(format!(
-                "Updating {} instances (branch '{branch}')..",
+                "Updating {} instances (branch '{branch}')...",
                 self.instances.len()
             ))
         )
@@ -442,14 +446,19 @@ impl<C> Testbed<C> {
     }
 
     pub async fn run_nodes(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
+        crossterm::execute!(
+            stdout(),
+            Print(format!(
+                "Deploying {} nodes ({} faulty)...",
+                parameters.nodes, parameters.faults
+            ))
+        )
+        .unwrap();
+
         // Select the instances to run.
         let instances = self.select_instances(parameters)?;
 
         // Deploy the committee.
-        let branch = self.settings.repository.branch.clone();
-        let message = format!("Deploying {} nodes (branch '{branch}')...", instances.len());
-        crossterm::execute!(stdout(), Print(message)).unwrap();
-
         let command = |i: usize| -> String {
             let path = format!("~/.sui/sui_config/validator-config-{i}.yaml");
             let run = format!("cargo run --release --bin sui-node -- --config-path {path}");
@@ -468,7 +477,14 @@ impl<C> Testbed<C> {
     }
 
     pub async fn run_clients(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
-        crossterm::execute!(stdout(), Print("Setting up load generators...")).unwrap();
+        crossterm::execute!(
+            stdout(),
+            Print(format!(
+                "Setting up load generators ({} tx/s)...",
+                parameters.load
+            ))
+        )
+        .unwrap();
 
         // Select the instances to run.
         let instances = self.select_instances(parameters)?;

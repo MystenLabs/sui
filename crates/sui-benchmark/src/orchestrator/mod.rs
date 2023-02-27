@@ -1,5 +1,10 @@
-use std::time::Duration;
+use std::{
+    fmt::{Debug, Display},
+    io::stdout,
+    time::Duration,
+};
 
+use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
 use serde::{Deserialize, Serialize};
 use tokio::time;
 
@@ -39,10 +44,30 @@ impl Default for BenchmarkParameters {
     }
 }
 
+impl Debug for BenchmarkParameters {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}-{}-{}-{}",
+            self.nodes,
+            self.faults,
+            self.load,
+            self.duration.as_secs()
+        )
+    }
+}
+
+impl Display for BenchmarkParameters {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} nodes ({} faulty)", self.nodes, self.faults)
+    }
+}
+
 pub struct Benchmark {
     parameters: BenchmarkParameters,
     skip_update: bool,
     skip_configure: bool,
+    download_logs: bool,
 }
 
 impl Benchmark {
@@ -51,6 +76,7 @@ impl Benchmark {
             parameters,
             skip_update: false,
             skip_configure: false,
+            download_logs: false,
         }
     }
 
@@ -61,6 +87,11 @@ impl Benchmark {
 
     pub fn skip_configure(mut self) -> Self {
         self.skip_configure = true;
+        self
+    }
+
+    pub fn download_logs(mut self) -> Self {
+        self.download_logs = true;
         self
     }
 }
@@ -99,17 +130,34 @@ impl Orchestrator {
     }
 
     pub async fn run_benchmarks(&self, benchmarks: Vec<Benchmark>) -> TestbedResult<()> {
+        crossterm::execute!(
+            stdout(),
+            SetForegroundColor(Color::Green),
+            SetAttribute(Attribute::Bold),
+            Print("\nStarting benchmarks\n"),
+            ResetColor
+        )
+        .unwrap();
+
+        // Cleanup the testbed (in case the previous run was not completed).
+        self.testbed.cleanup(true).await?;
+
+        // Update the software on all instances.
+        self.testbed.update().await?;
+
+        // Run all benchmarks.
+        let mut latest_comittee_status = (0, 0);
         for benchmark in benchmarks {
             let parameters = &benchmark.parameters;
 
             // Cleanup the testbed (in case the previous run was not completed).
             self.testbed.cleanup(true).await?;
 
-            // Update the software on all instances.
-            // self.testbed.update().await?;
-
-            // Configure all instances.
-            self.testbed.configure(parameters).await?;
+            // Configure all instances (if needed).
+            if latest_comittee_status != (parameters.nodes, parameters.faults) {
+                self.testbed.configure(parameters).await?;
+                latest_comittee_status = (parameters.nodes, parameters.faults);
+            }
 
             // Deploy the validators.
             self.testbed.run_nodes(parameters).await?;

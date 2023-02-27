@@ -8635,7 +8635,6 @@ dependencies = [
  "move-core-types",
  "multiaddr",
  "narwhal-node",
- "num-integer",
  "num_cpus",
  "once_cell",
  "prettytable-rs",

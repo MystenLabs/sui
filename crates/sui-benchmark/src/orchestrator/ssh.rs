@@ -23,9 +23,12 @@ pub struct SshCommand<C: Fn(usize) -> String> {
     pub path: Option<PathBuf>,
     pub log_file: Option<PathBuf>,
     pub timeout: Option<Duration>,
+    pub retrials: usize,
 }
 
 impl<C: Fn(usize) -> String> SshCommand<C> {
+    const DEFAULT_RETRIALS: usize = 5;
+
     pub fn new(command: C) -> Self {
         Self {
             command,
@@ -33,6 +36,7 @@ impl<C: Fn(usize) -> String> SshCommand<C> {
             path: None,
             log_file: None,
             timeout: None,
+            retrials: Self::DEFAULT_RETRIALS,
         }
     }
 
@@ -53,6 +57,11 @@ impl<C: Fn(usize) -> String> SshCommand<C> {
 
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
+        self
+    }
+
+    pub fn with_retrials(mut self, retrials: usize) -> Self {
+        self.retrials = retrials;
         self
     }
 
@@ -109,11 +118,23 @@ impl SshConnectionManager {
                 let command = command.clone();
 
                 tokio::spawn(async move {
-                    ssh_manager
-                        .connect(instance.ssh_address())
-                        .await?
-                        .with_timeout(&command.timeout)
-                        .execute(command.stringify(i))
+                    let mut error = None;
+                    for _ in 0..command.retrials {
+                        let connection = match ssh_manager.connect(instance.ssh_address()).await {
+                            Ok(x) => x,
+                            Err(e) => {
+                                error = Some(e);
+                                continue;
+                            }
+                        }
+                        .with_timeout(&command.timeout);
+
+                        match connection.execute(command.stringify(i)) {
+                            r @ Ok(..) => return r,
+                            Err(e) => error = Some(e),
+                        }
+                    }
+                    Err(error.unwrap())
                 })
             })
             .collect::<Vec<_>>();

@@ -1,6 +1,5 @@
 use std::{collections::HashMap, fs, hash::Hash, io::BufRead, path::PathBuf, time::Duration};
 
-use num_integer::Roots;
 use prettytable::{format, row, Table};
 use prometheus_parse::Scrape;
 use serde::Serialize;
@@ -199,7 +198,7 @@ where
 
     pub fn save(&self) {
         let json = serde_json::to_string(self).expect("Cannot serialize metrics");
-        let path = PathBuf::from("results.json");
+        let path = PathBuf::from(format!("results-{:?}.json", self.parameters));
         fs::write(path, json).unwrap();
     }
 
@@ -224,7 +223,6 @@ where
             .build();
         table.set_format(format);
 
-        println!();
         table.set_titles(row![bH2->"Benchmark Summary"]);
         table.add_row(row![b->"Nodes:", parameters.nodes]);
         table.add_row(row![b->"Faults:", parameters.faults]);
@@ -234,6 +232,8 @@ where
         table.add_row(row![b->"TPS:", format!("{total_tps} tx/s")]);
         table.add_row(row![b->"Latency (avg):", format!("{} ms", average_latency.as_millis())]);
         table.add_row(row![b->"Latency (stdev):", format!("{} ms", stdev_latency.as_millis())]);
+
+        println!();
         table.printstd();
         println!();
     }
