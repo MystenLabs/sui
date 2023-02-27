@@ -1,4 +1,5 @@
 @use '_variables' as v;
+@use '_utils';
 @use '_values' as values;
 @use '_values/colors';
 
@@ -7,18 +8,20 @@
     gap: 8px;
 
     .filter {
+        @include utils.typography('Primary/BodySmall-SB');
+
         height: 25px;
         background: colors.$white;
-        color: colors.$sui-steel-blue;
+        color: colors.$sui-blue-steel-dark;
         padding: 6px 10px;
-        border: 1px solid colors.$gray-60;
+        border: 1px solid colors.$sui-steel-blue;
         border-radius: 16px;
         text-decoration: none;
         display: flex;
         align-items: center;
 
         &.active {
-            background: v.use(v.$colors-nav-item-highlighted-color);
+            background: v.use(v.$colors-filter-item-background-color);
             color: colors.$white;
             border: 1px solid transparent;
         }

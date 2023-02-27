@@ -17,6 +17,7 @@
     padding: 8px 10px;
     padding-bottom: 0;
     overflow: hidden;
+    border: 1px solid rgb(111 188 240 / 1%);
     border-top-left-radius: 20px;
     border-top-right-radius: 20px;
     transition: transform 300ms ease-in-out;
@@ -54,6 +55,11 @@
     }
 }
 
+.icon {
+    font-size: 32px;
+    margin-bottom: 2px;
+}
+
 .link {
     display: flex;
     flex-flow: column nowrap;
@@ -71,38 +77,19 @@
     border-bottom-color: transparent;
 
     &:hover {
-        color: colors.$sui-blue-steel-darker;
-
-        i {
-            color: colors.$sui-blue-steel-darker;
-        }
+        color: v.use(v.$colors-nav-item-highlighted-color);
     }
 
     &.active {
-        color: v.use(v.$colors-nav-item-highlighted-color);
-        border-bottom-color: v.use(v.$colors-nav-item-highlighted-color);
+        color: v.use(v.$colors-nav-item-active-color);
+        border-bottom-color: v.use(v.$colors-nav-item-active-color);
 
         &:hover {
-            color: v.use(v.$colors-nav-item-highlighted-color);
-
-            i {
-                color: v.use(v.$colors-nav-item-highlighted-color);
-            }
+            color: v.use(v.$colors-nav-item-active-highlighted-color);
+            border-bottom-color: v.use(
+                v.$colors-nav-item-active-highlighted-color
+            );
         }
-    }
-}
-
-.icon {
-    font-size: 32px;
-    margin-bottom: 2px;
-    color: colors.$gray-60;
-
-    .active > & {
-        color: v.use(v.$colors-nav-item-icon-highlighted-color);
-        background-clip: text;
-        background-image: v.use(
-            v.$colors-nav-item-icon-highlighted-gradient-color
-        );
     }
 }
 
