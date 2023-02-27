@@ -162,7 +162,8 @@ export class Keyring {
         keypair: ExportedKeypair,
         password: string
     ) {
-        if (this.isLocked) {
+        const currentAccounts = this.getAccounts();
+        if (this.isLocked || !currentAccounts) {
             // this function is expected to be called from UI when unlocked
             // so this shouldn't happen
             throw new Error('Wallet is locked');
@@ -173,7 +174,11 @@ export class Keyring {
             // update the vault and encrypt it to persist the new keypair in storage
             throw new Error('Wrong password');
         }
-        const added = await VaultStorage.importKeypair(keypair, password);
+        const added = await VaultStorage.importKeypair(
+            keypair,
+            password,
+            currentAccounts
+        );
         if (added) {
             const importedAccount = new Account({
                 type: 'imported',
@@ -389,7 +394,11 @@ export class Keyring {
                 type: 'imported',
                 keypair: anImportedKey,
             });
-            this.#accountsMap.set(account.address, account);
+            // there is a case where we can import a private key of an account that can be derived from the mnemonic but not yet derived
+            // if later we derive it skip overriding the derived account with the imported one (convert the imported as derived in a way)
+            if (!this.#accountsMap.has(account.address)) {
+                this.#accountsMap.set(account.address, account);
+            }
         });
         mnemonic = null;
         this.#locked = false;
