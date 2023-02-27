@@ -167,6 +167,8 @@ export const bcs = suiBcs
     projectUrl: "string",
     /** The network address of the validator (could also contain extra info such as port, DNS and etc.).  */
     netAddress: "vector<u8>",
+    /** The p2p address of the validator (could also contain extra info such as port, DNS and etc.).  */
+    p2pAddress: "vector<u8>",
     /** The address of the narwhal primary  */
     consensusAddress: "vector<u8>",
     /** The address of the narwhal worker  */

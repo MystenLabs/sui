@@ -282,6 +282,12 @@ impl<'a> SuiGasStatus<'a> {
         !self.charge
     }
 
+    pub fn max_gax_budget_in_balance(&self) -> u64 {
+        let max_gas_unit_price =
+            std::cmp::max(self.computation_gas_unit_price, self.storage_gas_unit_price);
+        self.init_budget.mul(max_gas_unit_price).into()
+    }
+
     pub fn create_move_gas_status(&mut self) -> &mut GasStatus<'a> {
         &mut self.gas_status
     }

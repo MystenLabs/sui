@@ -53,6 +53,7 @@ pub struct ValidatorMetadata {
     pub image_url: String,
     pub project_url: String,
     pub net_address: Vec<u8>,
+    pub p2p_address: Vec<u8>,
     pub consensus_address: Vec<u8>,
     pub worker_address: Vec<u8>,
     pub next_epoch_stake: u64,

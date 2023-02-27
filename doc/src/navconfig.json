@@ -61,6 +61,10 @@
             "fileName": "learn/transactions"
           },
           {
+            "label": "Sponsored Transactions",
+            "fileName": "learn/sponsored-transactions"
+          },          
+          {
             "label": "Single-Writer Apps",
             "fileName": "learn/single-writer-apps"
           },
