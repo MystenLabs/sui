@@ -12,6 +12,29 @@ import {
 } from 'superstruct';
 import { TransactionArgument, TransactionCommand } from './Commands';
 
+class TransactionResult {
+  // TODO: Avoid keeping track of the command index, to allow it to be computed
+  #index: number;
+  constructor(index: number) {
+    this.#index = index;
+  }
+
+  get index() {
+    return this.#index;
+  }
+
+  // TODO: Move this to array-based format instead of this:
+  // TODO: Instead of making this return a concrete argument, we should ideally
+  // make it reference-based (so that this gets resolved at build-time), which
+  // allows re-ordering transactions.
+  result(index?: number): TransactionArgument {
+    if (typeof index === 'number') {
+      return { kind: 'NestedResult', index: this.#index, resultIndex: index };
+    }
+    return { kind: 'Result', index: this.#index };
+  }
+}
+
 class TransactionInput {
   #name?: string;
   #value: unknown;
@@ -111,11 +134,9 @@ export class Transaction<Inputs extends string> {
 
   // TODO: This could also look at the command arguments and add
   // any referenced commands that are not present in this transaction.
-  // This sill require
   add(command: TransactionCommand) {
-    this.#commands.push(command);
-    // TODO: Remove as any and make `TransactionResult` struct:
-    return command as any;
+    const index = this.#commands.push(command);
+    return new TransactionResult(index);
   }
 
   /**
@@ -135,24 +156,29 @@ export class Transaction<Inputs extends string> {
     throw new Error('Not implemented');
   }
 
-  // TODO: Do input values need to be provided before we serialize? I imagine yes
-  // because otherwise it's very unclear how input values would be provided.
-  // The wallet can fill out things like gas coin, but should we expect it to
-  // also know how to fill in other types?
-  // It might make sense for some things though, like other non-SUI coin types.
-  // I need to ask around and see what the intuition is here, specifically:
-  // - Do we expect expect the wallet to be able to fill out non-SUI coin inputs.
-  //
-  // If we do though, that's probably _fairly_ simple to do, using similar mechanisms
-  // to the Sui coin. Basically, don't put it as a named input (because those are user-provided),
-  // and have some special internal representation for places we use coins in commands.
-  // Then, when we construct the transaction, we just need to walk through the commands
-  // and determine all of the coin objects that we need (annoying but possible).
-  // We could also keep track of this in internal state to avoid the traversal,
-  // but the added benefit of the traversal is that if we update the logic, there's
-  // less likelihood of state sync issues due to incompatible serializations of the
-  // transaction.
   serialize() {
+    // TODO: Do input values need to be provided before we serialize?
+    // The wallet can fill out things like gas coin, but should we expect it to
+    // also know how to fill in other types?
+    // It might make sense for some things though, like other non-SUI coin types.
+    // I need to ask around and see what the intuition is here, specifically:
+    // - Do we expect expect the wallet to be able to fill out non-SUI coin inputs.
+    //
+    // If we do though, that's probably _fairly_ simple to do, using similar mechanisms
+    // to the Sui coin. Basically, don't put it as a named input (because those are user-provided),
+    // and have some special internal representation for places we use coins in commands.
+    // Then, when we construct the transaction, we just need to walk through the commands
+    // and determine all of the coin objects that we need (annoying but possible).
+    // We could also keep track of this in internal state to avoid the traversal,
+    // but the added benefit of the traversal is that if we update the logic, there's
+    // less likelihood of state sync issues due to incompatible serializations of the
+    // transaction.
+    const allInputsProvided = this.#inputs.every((input) => !!input.getValue());
+
+    if (!allInputsProvided) {
+      throw new Error('All input values must be provided before serializing.');
+    }
+
     const data: SerializedTransactionBuilder = {
       version: 1,
       inputs: this.#inputs.map((input) => input.getValue()),
