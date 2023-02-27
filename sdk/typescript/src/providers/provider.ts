@@ -140,12 +140,12 @@ export abstract class Provider {
    */
   /**
    * @param addressOrObjectId owner address or object id
-   * @param typefilter? a fully qualified type name for the object(e.g., 0x2::coin::Coin<0x2::sui::SUI>)
+   * @param typeFilter? a fully qualified type name for the object(e.g., 0x2::coin::Coin<0x2::sui::SUI>)
    * or type name without generics (e.g., 0x2::coin::Coin will match all 0x2::coin::Coin<T>)
    */
   abstract getObjectsOwnedByAddress(
     addressOrObjectId: string,
-    typefilter?: string,
+    typeFilter?: string,
   ): Promise<SuiObjectInfo[]>;
 
   /**

@@ -32,11 +32,16 @@ describe('Test Object Display Standard', () => {
       boarId,
     ]);
     expect(display).toEqual({
-      description: 'Unique Boar from the Boars collection!',
-      creator: 'Boarcognito',
-      img_url: 'https://get-a-boar.com/{img_url}',
-      name: '{name}',
+      age: '10',
+      buyer: `0x${toolbox.address()}`,
+      creator: 'Chris',
+      description: `Unique Boar from the Boars collection with First Boar and ${boarId}`,
+      img_url: 'https://get-a-boar.com/first.png',
+      name: 'First Boar',
+      price: 'None',
       project_url: 'https://get-a-boar.com/',
+      full_url: 'https://get-a-boar.fullurl.com/',
+      escape_syntax: '{name}',
     });
   });
 });

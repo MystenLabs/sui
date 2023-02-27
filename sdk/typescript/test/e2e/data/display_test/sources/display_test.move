@@ -3,9 +3,11 @@
 
 module display_test::boars {
     use sui::object::{Self, UID};
+    use std::option::{Self, Option};
     use sui::tx_context::{TxContext, sender};
     use sui::transfer::transfer;
     use sui::publisher;
+    use sui::url::{Self, Url};
     use sui::display;
     use std::string::{utf8, String};
 
@@ -20,7 +22,15 @@ module display_test::boars {
         img_url: String,
         name: String,
         description: String,
-        creator: String,
+        creator: Option<String>,
+        price: Option<String>,
+        metadata: Metadata,
+        buyer: address,
+        full_url: Url,
+    }
+
+    struct Metadata has store {
+        age: u64,
     }
 
     fun init(otw: BOARS, ctx: &mut TxContext) {
@@ -29,22 +39,39 @@ module display_test::boars {
         let pub = publisher::claim(otw, ctx);
         let display = display::new<Boar>(&pub, ctx);
 
-        display::add_multiple(&pub, &mut display, vector[
+        display::add_multiple(&mut display, vector[
             utf8(b"name"),
             utf8(b"description"),
             utf8(b"img_url"),
             utf8(b"creator"),
-            utf8(b"project_url")
+            utf8(b"price"),
+            utf8(b"project_url"),
+            utf8(b"age"),
+            utf8(b"buyer"),
+            utf8(b"full_url"),
+            utf8(b"escape_syntax"),
         ], vector[
             utf8(b"{name}"),
-            utf8(b"Unique Boar from the Boars collection!"),
+            // test multiple fields and UID
+            utf8(b"Unique Boar from the Boars collection with {name} and {id}"),
             utf8(b"https://get-a-boar.com/{img_url}"),
-            utf8(b"Boarcognito"),
-            utf8(b"https://get-a-boar.com/")
+            // test option::some
+            utf8(b"{creator}"),
+            // test option::none
+            utf8(b"{price}"),
+            // test no template value
+            utf8(b"https://get-a-boar.com/"),
+            // test nested field
+            utf8(b"{metadata.age}"),
+            // test address
+            utf8(b"{buyer}"),
+            // test Url type
+            utf8(b"{full_url}"),
+            // test escape syntax
+            utf8(b"\\{name\\}"),
         ]);
 
-        display::update_version(&pub, &mut display);
-        display::transfer(display, sender(ctx));
+        transfer(display, sender(ctx));
         transfer(pub, sender(ctx));
 
         let boar = Boar {
@@ -52,7 +79,13 @@ module display_test::boars {
             img_url: utf8(b"first.png"),
             name: utf8(b"First Boar"),
             description: utf8(b"First Boar from the Boars collection!"),
-            creator: utf8(b"Chris"),
+            creator: option::some(utf8(b"Chris")),
+            price: option::none(),
+            metadata: Metadata {
+                age: 10,
+            },
+            buyer: sender(ctx),
+            full_url: url::new_unsafe_from_bytes(b"https://get-a-boar.fullurl.com/"),
         };
         transfer(boar, sender(ctx))
     }

@@ -7,8 +7,10 @@ use jsonrpsee::core::RpcResult;
 use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
+use move_core_types::value::{MoveStruct, MoveValue};
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use sui_types::collection_types::VecMap;
 use sui_types::display::{DisplayCreatedEvent, DisplayObject};
 use sui_types::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use tap::TapFallible;
@@ -20,13 +22,12 @@ use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
     GetRawObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page, SuiEvent,
-    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
-    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct,
+    SuiMoveValue, SuiObjectInfo, SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
-use sui_types::collection_types::Entry;
 use sui_types::crypto::sha3_hash;
 use sui_types::messages::TransactionData;
 use sui_types::messages_checkpoint::{
@@ -43,6 +44,8 @@ use tracing::debug;
 use crate::api::cap_page_limit;
 use crate::error::Error;
 use crate::SuiRpcModule;
+
+const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
 
 // An implementation of the read portion of the JSON-RPC interface intended for use in
 // Fullnodes.
@@ -380,13 +383,9 @@ impl ReadApiServer for ReadApi {
         &self,
         object_id: ObjectID,
     ) -> RpcResult<BTreeMap<String, String>> {
-        let display_object = get_display_object(self, object_id).await?;
-        Ok(display_object
-            .fields
-            .contents
-            .into_iter()
-            .map(|Entry { key, value }| (key, value))
-            .collect::<BTreeMap<_, _>>())
+        let (object_type, move_struct) = get_object_type_and_struct(self, object_id).await?;
+        let display_object = get_display_object(self, object_type).await?;
+        Ok(get_rendered_fields(display_object.fields, &move_struct).map_err(|e| anyhow!("{e}"))?)
     }
 }
 
@@ -402,9 +401,9 @@ impl SuiRpcModule for ReadApi {
 
 async fn get_display_object(
     fullnode_api: &ReadApi,
-    object_id: ObjectID,
+    object_type: StructTag,
 ) -> RpcResult<DisplayObject> {
-    let display_object_id = get_display_object_id(fullnode_api, object_id).await?;
+    let display_object_id = get_display_object_id(fullnode_api, object_type).await?;
     if let ObjectRead::Exists(_, display_object, _) = fullnode_api
         .state
         .get_object_read(&display_object_id)
@@ -418,12 +417,14 @@ async fn get_display_object(
         Ok(bcs::from_bytes::<DisplayObject>(move_object.contents())
             .map_err(|e| anyhow!("Failed to deserialize DisplayObject {display_object_id}: {e}"))?)
     } else {
-        return Err(anyhow!("Display object {display_object_id} does not exist"))?;
+        Err(anyhow!("Display object {display_object_id} does not exist"))?
     }
 }
 
-async fn get_display_object_id(fullnode_api: &ReadApi, object_id: ObjectID) -> RpcResult<ObjectID> {
-    let object_type = get_object_type(fullnode_api, object_id).await?;
+async fn get_display_object_id(
+    fullnode_api: &ReadApi,
+    object_type: StructTag,
+) -> RpcResult<ObjectID> {
     let display_created_event = fullnode_api
         .state
         .get_events(
@@ -445,24 +446,34 @@ async fn get_display_object_id(fullnode_api: &ReadApi, object_id: ObjectID) -> R
             .bytes;
         Ok(display_object_id)
     } else {
-        return Err(anyhow!("Failed to extract display object id from event"))?;
+        Err(anyhow!("Failed to extract display object id from event"))?
     }
 }
 
-async fn get_object_type(fullnode_api: &ReadApi, object_id: ObjectID) -> RpcResult<StructTag> {
+async fn get_object_type_and_struct(
+    fullnode_api: &ReadApi,
+    object_id: ObjectID,
+) -> RpcResult<(StructTag, MoveStruct)> {
     let object_read = fullnode_api
         .state
         .get_object_read(&object_id)
         .await
         .map_err(|e| anyhow!("Failed to fetch {object_id}: {e}"))?;
-    if let ObjectRead::Exists(_, o, _) = object_read {
+    if let ObjectRead::Exists(_, o, layout) = object_read {
+        let layout = layout.ok_or_else(|| anyhow!("Failed to extract layout"))?;
         let object_type = o
             .type_()
-            .ok_or(anyhow!("Failed to extract object type"))?
+            .ok_or_else(|| anyhow!("Failed to extract object type"))?
             .clone();
-        Ok(object_type)
+        let move_struct = o
+            .data
+            .try_as_move()
+            .ok_or_else(|| anyhow!("Failed to extract Move object from {object_id}"))?
+            .to_move_struct(&layout)
+            .map_err(|err| anyhow!("{err}"))?;
+        Ok((object_type, move_struct))
     } else {
-        return Err(anyhow!("Object {object_id} does not exist"))?;
+        Err(anyhow!("Object {object_id} does not exist"))?
     }
 }
 
@@ -514,4 +525,108 @@ pub fn get_transaction_data_and_digest(
     );
     let txn_digest = TransactionDigest::new(sha3_hash(&intent_msg.value));
     Ok((intent_msg.value, txn_digest))
+}
+
+pub fn get_rendered_fields(
+    fields: VecMap<String, String>,
+    move_struct: &MoveStruct,
+) -> RpcResult<BTreeMap<String, String>> {
+    let sui_move_value: SuiMoveValue = MoveValue::Struct(move_struct.clone()).into();
+    if let SuiMoveValue::Struct(move_struct) = sui_move_value {
+        return fields
+            .contents
+            .iter()
+            .map(|entry| match parse_template(&entry.value, &move_struct) {
+                Ok(value) => Ok((entry.key.clone(), value)),
+                Err(e) => Err(e),
+            })
+            .collect::<RpcResult<BTreeMap<_, _>>>();
+    }
+    Err(anyhow!("Failed to parse move struct"))?
+}
+
+fn parse_template(template: &str, move_struct: &SuiMoveStruct) -> RpcResult<String> {
+    let mut output = template.to_string();
+    let mut var_name = String::new();
+    let mut in_braces = false;
+    let mut escaped = false;
+
+    for ch in template.chars() {
+        match ch {
+            '\\' => {
+                escaped = true;
+                continue;
+            }
+            '{' if !escaped => {
+                in_braces = true;
+                var_name.clear();
+            }
+            '}' if !escaped => {
+                in_braces = false;
+                let value = get_value_from_move_struct(move_struct, &var_name)?;
+                output = output.replace(&format!("{{{}}}", var_name), &value.to_string());
+            }
+            _ if !escaped => {
+                if in_braces {
+                    var_name.push(ch);
+                }
+            }
+            _ => {}
+        }
+        escaped = false;
+    }
+
+    Ok(output.replace('\\', ""))
+}
+
+fn get_value_from_move_struct(move_struct: &SuiMoveStruct, var_name: &str) -> RpcResult<String> {
+    let parts: Vec<&str> = var_name.split('.').collect();
+    if parts.is_empty() {
+        return Err(anyhow!("Display template value cannot be empty"))?;
+    }
+    if parts.len() > MAX_DISPLAY_NESTED_LEVEL {
+        return Err(anyhow!(
+            "Display template value nested depth cannot exist {}",
+            MAX_DISPLAY_NESTED_LEVEL
+        ))?;
+    }
+    let mut current_value = &SuiMoveValue::Struct(move_struct.clone());
+    // iterate over the parts and try to access the corresponding field
+    for part in parts {
+        match current_value {
+            SuiMoveValue::Struct(move_struct) => {
+                if let SuiMoveStruct::WithTypes { type_: _, fields }
+                | SuiMoveStruct::WithFields(fields) = move_struct
+                {
+                    if let Some(value) = fields.get(part) {
+                        current_value = value;
+                    } else {
+                        return Err(anyhow!(
+                            "Field value {} cannot be found in struct",
+                            var_name
+                        ))?;
+                    }
+                } else {
+                    return Err(anyhow!(
+                        "Unexpected move struct type for field {}",
+                        var_name
+                    ))?;
+                }
+            }
+            _ => return Err(anyhow!("Unexpected move value type for field {}", var_name))?,
+        }
+    }
+
+    match current_value {
+        SuiMoveValue::Option(move_option) => match move_option.as_ref() {
+            Some(move_value) => Ok(move_value.to_string()),
+            None => Ok("None".to_string()),
+        },
+        SuiMoveValue::Vector(_) => Err(anyhow!(
+            "Vector is not supported as a Display value {}",
+            var_name
+        ))?,
+
+        _ => Ok(current_value.to_string()),
+    }
 }

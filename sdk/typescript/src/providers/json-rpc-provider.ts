@@ -404,7 +404,7 @@ export class JsonRpcProvider extends Provider {
   // Objects
   async getObjectsOwnedByAddress(
     address: SuiAddress,
-    typefilter?: string,
+    typeFilter?: string,
   ): Promise<SuiObjectInfo[]> {
     try {
       if (!address || !isValidSuiAddress(normalizeSuiAddress(address))) {
@@ -417,10 +417,10 @@ export class JsonRpcProvider extends Provider {
         this.options.skipDataValidation,
       );
       // TODO: remove this once we migrated to the new queryObject API
-      if (typefilter) {
+      if (typeFilter) {
         return objects.filter(
           (obj: SuiObjectInfo) =>
-            obj.type === typefilter || obj.type.startsWith(typefilter + '<'),
+            obj.type === typeFilter || obj.type.startsWith(typeFilter + '<'),
         );
       }
       return objects;
