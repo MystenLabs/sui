@@ -19,6 +19,7 @@ use sui_config::genesis_config::{GenesisConfig, ValidatorConfigInfo};
 use sui_config::NetworkConfig;
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::base_types::AuthorityName;
+use sui_types::object::Object;
 use tempfile::TempDir;
 
 pub struct SwarmBuilder<R = OsRng> {
@@ -27,6 +28,7 @@ pub struct SwarmBuilder<R = OsRng> {
     dir: Option<PathBuf>,
     committee: CommitteeConfig,
     initial_accounts_config: Option<GenesisConfig>,
+    additional_objects: Vec<Object>,
     fullnode_count: usize,
     fullnode_rpc_addr: Option<SocketAddr>,
     with_event_store: bool,
@@ -42,6 +44,7 @@ impl SwarmBuilder {
             dir: None,
             committee: CommitteeConfig::Size(NonZeroUsize::new(1).unwrap()),
             initial_accounts_config: None,
+            additional_objects: vec![],
             fullnode_count: 0,
             fullnode_rpc_addr: None,
             with_event_store: false,
@@ -58,6 +61,7 @@ impl<R> SwarmBuilder<R> {
             dir: self.dir,
             committee: self.committee,
             initial_accounts_config: self.initial_accounts_config,
+            additional_objects: self.additional_objects,
             fullnode_count: self.fullnode_count,
             fullnode_rpc_addr: self.fullnode_rpc_addr,
             with_event_store: false,
@@ -91,6 +95,11 @@ impl<R> SwarmBuilder<R> {
 
     pub fn initial_accounts_config(mut self, initial_accounts_config: GenesisConfig) -> Self {
         self.initial_accounts_config = Some(initial_accounts_config);
+        self
+    }
+
+    pub fn with_objects<I: IntoIterator<Item = Object>>(mut self, objects: I) -> Self {
+        self.additional_objects.extend(objects);
         self
     }
 
@@ -151,6 +160,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             .committee(self.committee)
             .with_swarm()
             .rng(self.rng)
+            .with_objects(self.additional_objects)
             .with_supported_protocol_versions_config(
                 self.supported_protocol_versions_config.clone(),
             )
