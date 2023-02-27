@@ -1,5 +1,5 @@
 [package]
-name = "SuiExtraFinal"
+name = "SuiExtraBase"
 version = "0.0.1"
 
 [dependencies]

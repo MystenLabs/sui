@@ -56,6 +56,7 @@ mod sim_only_tests {
 
     use super::*;
     use move_binary_format::CompiledModule;
+    use sui_types::{object::{Object, OBJECT_START_VERSION}, digests::TransactionDigest};
     use std::path::PathBuf;
     use std::sync::Arc;
     use sui_core::authority::sui_framework_injection;
@@ -142,12 +143,20 @@ mod sim_only_tests {
     }
 
     #[sim_test]
-    async fn test_framework_upgrade() {
+    async fn test_framework_compatible_upgrade() {
+        // Make a number of compatible changes, and expect the upgrade to go through:
+        // - Add a new module, struct, and function
+        // - Add a new ability to an existing struct
+        // - Remove an ability from an existing type constraint
+        // - Change the implementation of an existing function
+        // - Change the signature and implementation of a private function
+
         ProtocolConfig::poison_get_for_min_version();
 
-        sui_framework_injection::set_override(sui_framework("final"));
+        sui_framework_injection::set_override(sui_framework("compatible"));
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(10000)
+            .with_objects([sui_framework_object("base")])
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(1, 2))
             .build()
             .await
@@ -198,5 +207,15 @@ mod sim_only_tests {
         .unwrap();
 
         pkg.get_framework_modules().cloned().collect()
+    }
+
+    /// Like `sui_framework`, but package the modules in an `Object`.
+    fn sui_framework_object(fixture: &str) -> Object {
+        Object::new_package(
+            sui_framework(fixture),
+            OBJECT_START_VERSION,
+            TransactionDigest::genesis(),
+            u64::MAX,
+        ).unwrap()
     }
 }
