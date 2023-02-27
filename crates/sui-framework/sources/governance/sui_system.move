@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::sui_system {
-    use sui::balance::{Self, Balance, Supply};
+    use sui::balance::{Self, Balance};
     use sui::clock::{Self, Clock};
     use sui::coin::{Self, Coin};
     use sui::staking_pool::{Delegation, StakedSui};
@@ -53,8 +53,6 @@ module sui::sui_system {
         protocol_version: u64,
         /// Contains all information about the validators.
         validators: ValidatorSet,
-        /// The SUI treasury capability needed to mint SUI.
-        sui_supply: Supply<SUI>,
         /// The storage fund.
         storage_fund: Balance<SUI>,
         /// A list of system config parameters.
@@ -112,7 +110,7 @@ module sui::sui_system {
     /// This function will be called only once in genesis.
     public(friend) fun create(
         validators: vector<Validator>,
-        sui_supply: Supply<SUI>,
+        stake_subsidy_fund: Balance<SUI>,
         storage_fund: Balance<SUI>,
         max_validator_candidate_count: u64,
         min_validator_stake: u64,
@@ -129,7 +127,6 @@ module sui::sui_system {
             epoch: 0,
             protocol_version,
             validators,
-            sui_supply,
             storage_fund,
             parameters: SystemParameters {
                 min_validator_stake,
@@ -137,7 +134,7 @@ module sui::sui_system {
             },
             reference_gas_price,
             validator_report_records: vec_map::empty(),
-            stake_subsidy: stake_subsidy::create(initial_stake_subsidy_amount),
+            stake_subsidy: stake_subsidy::create(stake_subsidy_fund, initial_stake_subsidy_amount),
             safe_mode: false,
             epoch_start_timestamp_ms,
         };

@@ -50,7 +50,7 @@ module sui::genesis {
         ctx: &mut TxContext,
     ) {
         let sui_supply = sui::new(ctx);
-        let storage_fund = balance::increase_supply(&mut sui_supply, INIT_STORAGE_FUND);
+        let storage_fund = balance::split(&mut sui_supply, INIT_STORAGE_FUND);
         let validators = vector::empty();
         let count = vector::length(&validator_pubkeys);
         assert!(
@@ -100,7 +100,7 @@ module sui::genesis {
                 p2p_address,
                 consensus_address,
                 worker_address,
-                balance::increase_supply(&mut sui_supply, stake),
+                balance::split(&mut sui_supply, stake),
                 option::none(),
                 gas_price,
                 commission_rate,

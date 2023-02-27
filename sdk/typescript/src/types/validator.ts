@@ -193,7 +193,6 @@ export const SuiSystemState = object({
   // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
   protocol_version: optional(number()),
   validators: ValidatorSet,
-  treasury_cap: SuiSupplyFields,
   storage_fund: Balance,
   parameters: SystemParameters,
   reference_gas_price: number(),

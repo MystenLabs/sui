@@ -492,8 +492,6 @@ validators:
   staking_pool_mappings:
     id: "0x628ffd0e51e9a6ea32c13c2739a31a8f344b557d"
     size: 1
-treasury_cap:
-  value: 2
 storage_fund:
   value: 1
 parameters:
@@ -505,7 +503,7 @@ validator_report_records:
 stake_subsidy:
   epoch_counter: 0
   balance:
-    value: 0
+    value: 1000000000000000000
   current_epoch_amount: 1000000
 safe_mode: false
 epoch_start_timestamp_ms: 10

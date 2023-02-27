@@ -56,6 +56,15 @@ Name of the coin
 ## Constants
 
 
+<a name="0x2_sui_EAlreadyMinted"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui.md#0x2_sui_EAlreadyMinted">EAlreadyMinted</a>: u64 = 0;
+</code></pre>
+
+
+
 <a name="0x2_sui_MIST_PER_SUI"></a>
 
 The amount of Mist per Sui token based on the the fact that mist is
@@ -95,7 +104,7 @@ Register the <code><a href="sui.md#0x2_sui_SUI">SUI</a></code> Coin to acquire i
 This should be called only once during genesis creation.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui.md#0x2_sui_new">new</a>(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui.md#0x2_sui_new">new</a>(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
 </code></pre>
 
 
@@ -104,7 +113,9 @@ This should be called only once during genesis creation.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui.md#0x2_sui_new">new</a>(ctx: &<b>mut</b> TxContext): Supply&lt;<a href="sui.md#0x2_sui_SUI">SUI</a>&gt; {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui.md#0x2_sui_new">new</a>(ctx: &<b>mut</b> TxContext): Balance&lt;<a href="sui.md#0x2_sui_SUI">SUI</a>&gt; {
+    <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) == 0, <a href="sui.md#0x2_sui_EAlreadyMinted">EAlreadyMinted</a>);
+
     <b>let</b> (treasury, metadata) = <a href="coin.md#0x2_coin_create_currency">coin::create_currency</a>(
         <a href="sui.md#0x2_sui_SUI">SUI</a> {},
         9,
@@ -116,7 +127,10 @@ This should be called only once during genesis creation.
         ctx
     );
     <a href="transfer.md#0x2_transfer_freeze_object">transfer::freeze_object</a>(metadata);
-    <a href="coin.md#0x2_coin_treasury_into_supply">coin::treasury_into_supply</a>(treasury)
+    <b>let</b> supply = <a href="coin.md#0x2_coin_treasury_into_supply">coin::treasury_into_supply</a>(treasury);
+    <b>let</b> total_sui = <a href="balance.md#0x2_balance_increase_supply">balance::increase_supply</a>(&<b>mut</b> supply, <a href="sui.md#0x2_sui_TOTAL_SUPPLY_MIST">TOTAL_SUPPLY_MIST</a>);
+    <a href="balance.md#0x2_balance_destroy_supply">balance::destroy_supply</a>(supply);
+    total_sui
 }
 </code></pre>
 

@@ -210,7 +210,6 @@ pub struct SuiSystemState {
     pub epoch: u64,
     pub protocol_version: u64,
     pub validators: ValidatorSet,
-    pub treasury_cap: Supply,
     pub storage_fund: Balance,
     pub parameters: SystemParameters,
     pub reference_gas_price: u64,
@@ -345,7 +344,6 @@ impl Default for SuiSystemState {
             epoch: 0,
             protocol_version: ProtocolVersion::MIN.as_u64(),
             validators: validator_set,
-            treasury_cap: Supply { value: 0 },
             storage_fund: Balance::new(0),
             parameters: SystemParameters {
                 min_validator_stake: 1,
