@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useMemo } from 'react';
-
 import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
 import { TxnAddress } from '_components/receipt-card/TxnAddress';
@@ -28,10 +26,7 @@ export function PreviewTransfer({
 }: TransferCoinFormProps) {
     const accountAddress = useAppSelector(({ account }) => account.address);
     const [decimals] = useCoinDecimals(coinType);
-    const amountWithoutDecimals = useMemo(
-        () => parseAmount(amount, decimals),
-        [amount, decimals]
-    );
+    const amountWithoutDecimals = parseAmount(amount, decimals);
 
     const [formattedGas] = useFormatCoin(gasCostEstimation, GAS_TYPE_ARG);
 

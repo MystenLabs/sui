@@ -68,20 +68,18 @@ export function createTokenValidation(
                 return maxSuiSingleCoinBalance >= gasBudget;
             }
         )
-        .test(
-            'gas-balance-check',
-            `Insufficient ${GAS_SYMBOL} balance to cover gas fee (${formatBalance(
-                gasBudget,
-                gasDecimals
-            )} ${GAS_SYMBOL})`,
-            (amount: BigNumber | undefined, ctx) => {
+
+        .test({
+            name: 'gas-balance-check',
+            test: function (amount: BigNumber | undefined, ctx) {
                 // For Pay All SUI and SUI coinType, we don't need to check gas balance.
-                if (ctx.parent.isPayAllSui && coinType === GAS_TYPE_ARG) {
+                if (this.parent.isPayAllSui && coinType === GAS_TYPE_ARG) {
                     return true;
                 }
                 if (!amount) {
                     return false;
                 }
+                // check updated gas balance base on gasInputBudgetEst
                 try {
                     let availableGas = gasBalance;
                     if (coinType === GAS_TYPE_ARG) {
@@ -89,11 +87,23 @@ export function createTokenValidation(
                             amount.shiftedBy(decimals).toString()
                         );
                     }
-                    return availableGas >= gasBudget;
+                    if (
+                        availableGas >=
+                        (this.parent?.gasInputBudgetEst || gasBudget)
+                    ) {
+                        return true;
+                    }
+                    return this.createError({
+                        message: `Insufficient ${GAS_SYMBOL} balance to cover gas fee (${formatBalance(
+                            this.parent?.gasInputBudgetEst || gasBudget,
+                            gasDecimals
+                        )} ${GAS_SYMBOL})`,
+                    });
                 } catch (e) {
                     return false;
                 }
-            }
-        )
+            },
+        })
+
         .label('Amount');
 }
