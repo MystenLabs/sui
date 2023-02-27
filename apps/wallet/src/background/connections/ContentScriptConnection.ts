@@ -1,6 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+    type SignedTransaction,
+    type SuiAddress,
+    type SuiTransactionResponse,
+} from '@mysten/sui.js';
 import Browser from 'webextension-polyfill';
 
 import NetworkEnv from '../NetworkEnv';
@@ -22,11 +27,6 @@ import {
 import Permissions from '_src/background/Permissions';
 import Transactions from '_src/background/Transactions';
 
-import type {
-    SignedTransaction,
-    SuiAddress,
-    SuiTransactionResponse,
-} from '@mysten/sui.js';
 import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';

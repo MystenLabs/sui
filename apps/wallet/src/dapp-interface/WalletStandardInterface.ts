@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type SuiAddress, Transaction } from '@mysten/sui.js';
 import {
     SUI_CHAINS,
     ReadonlyWalletAccount,
@@ -33,7 +34,6 @@ import {
 import { API_ENV } from '_src/shared/api-env';
 import { isWalletStatusChangePayload } from '_src/shared/messaging/messages/payloads/wallet-status-change';
 
-import type { SuiAddress } from '@mysten/sui.js';
 import type { BasePayload, Payload } from '_payloads';
 import type { GetAccount } from '_payloads/account/GetAccount';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
@@ -217,10 +217,17 @@ export class SuiWallet implements Wallet {
     };
 
     #signTransaction: SuiSignTransactionMethod = async (input) => {
+        const transaction = Transaction.is(input.transaction)
+            ? input.transaction.serialize()
+            : input.transaction;
+
         return mapToPromise(
             this.#send<SignTransactionRequest, SignTransactionResponse>({
                 type: 'sign-transaction-request',
-                transaction: input,
+                transaction: {
+                    ...input,
+                    transaction,
+                },
             }),
             (response) => response.result
         );
@@ -229,12 +236,16 @@ export class SuiWallet implements Wallet {
     #signAndExecuteTransaction: SuiSignAndExecuteTransactionMethod = async (
         input
     ) => {
+        const transaction = Transaction.is(input.transaction)
+            ? input.transaction.serialize()
+            : input.transaction;
+
         return mapToPromise(
             this.#send<ExecuteTransactionRequest, ExecuteTransactionResponse>({
                 type: 'execute-transaction-request',
                 transaction: {
                     type: 'v2',
-                    data: input.transaction,
+                    data: transaction,
                     options: input.options,
                 },
             }),
