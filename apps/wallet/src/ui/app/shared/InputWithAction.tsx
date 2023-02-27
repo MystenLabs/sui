@@ -23,6 +23,9 @@ const styles = cva(
                 true: 'rounded-2lg',
                 false: 'rounded-md',
             },
+            darkPill: {
+                true: 'bg-gray-45 text-white',
+            },
         },
         defaultVariants: {
             amount: false,
@@ -43,7 +46,6 @@ export interface InputWithActionProps
     allowNegative?: boolean;
     allowDecimals?: boolean;
     amountInput?: boolean;
-    darkPill?: boolean;
 }
 
 export function InputWithAction({
@@ -58,7 +60,6 @@ export function InputWithAction({
     prefix,
     suffix,
     amountInput,
-    darkPill = false,
     amount,
     ...props
 }: InputWithActionProps) {
@@ -105,7 +106,7 @@ export function InputWithAction({
                         disabled={isActionDisabled}
                         loading={isSubmitting}
                         onClick={onActionClicked}
-                        dark={darkPill}
+                        dark={amount}
                     />
                 </div>
             </div>
