@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SentryRpcClient } from '@mysten/core';
 import {
     JsonRpcProvider,
     Connection,
@@ -8,7 +9,6 @@ import {
     localnetConnection,
 } from '@mysten/sui.js';
 
-import { SentryRPCClient } from './SentryRpcClient';
 
 export enum Network {
     LOCAL = 'LOCAL',
@@ -39,7 +39,7 @@ export const DefaultRpcClient = (network: Network | string) => {
         rpcClient:
             // If the network is a known network, and not localnet, attach the sentry RPC client for instrumentation:
             network in Network && network !== Network.LOCAL
-                ? new SentryRPCClient(connection.fullnode)
+                ? new SentryRpcClient(connection.fullnode)
                 : undefined,
     });
     defaultRpcMap.set(network, provider);
