@@ -384,7 +384,10 @@ impl<C> Testbed<C> {
 
                 tokio::spawn(async move {
                     // Connect to the instance.
-                    let connection = ssh_manager.connect(instance.ssh_address()).await?;
+                    let connection = ssh_manager
+                        .connect(instance.ssh_address())
+                        .await?
+                        .with_timeout(&Some(Duration::from_secs(180)));
 
                     // Upload all configuration files.
                     for source in config_files {

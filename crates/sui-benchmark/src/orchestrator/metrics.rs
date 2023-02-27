@@ -1,6 +1,7 @@
 use std::{collections::HashMap, fs, hash::Hash, io::BufRead, path::PathBuf, time::Duration};
 
 use chrono::{DateTime, Utc};
+use num_integer::Roots;
 use prettytable::{format, row, Table};
 use prometheus_parse::Scrape;
 use serde::Serialize;
@@ -13,8 +14,6 @@ type BucketId = String;
 pub struct DataPoint {
     /// Duration since the beginning of the benchmark.
     timestamp: Duration,
-    /// Duration since the beginning of the benchmark.
-    benchmark_timestamp: Duration,
     /// Latency buckets.
     buckets: HashMap<BucketId, usize>,
     /// Sum of the latencies of all finalized transactions.
@@ -27,7 +26,6 @@ pub struct DataPoint {
 
 impl DataPoint {
     pub fn new(
-        timestamp: Duration,
         benchmark_timestamp: Duration,
         buckets: HashMap<BucketId, usize>,
         sum: Duration,
@@ -35,8 +33,7 @@ impl DataPoint {
         squared_sum: Duration,
     ) -> Self {
         Self {
-            timestamp,
-            benchmark_timestamp,
+            timestamp: benchmark_timestamp,
             buckets,
             sum,
             count,
@@ -52,6 +49,15 @@ impl DataPoint {
     pub fn average_latency(&self) -> Duration {
         let latency_in_millis = self.sum.as_millis().checked_div(self.count as u128);
         Duration::from_millis(latency_in_millis.unwrap_or_default() as u64)
+    }
+
+    pub fn stdev_latency(&self) -> Duration {
+        // stdev = sqrt( squared_sum / count - avg^2 )
+        let first_term = self.squared_sum.as_millis().checked_div(self.count as u128);
+        let squared_avg = self.average_latency().as_millis().pow(2);
+        let variance = first_term.unwrap_or_default().checked_sub(squared_avg);
+        let stdev = variance.unwrap_or_default().sqrt();
+        Duration::from_millis(stdev as u64)
     }
 }
 
@@ -125,22 +131,20 @@ where
             .iter()
             .find(|x| x.metric == "latency_squared_s")
             .map(|x| match x.value {
-                prometheus_parse::Value::Untyped(value) => Duration::from_secs(value as u64),
+                prometheus_parse::Value::Counter(value) => Duration::from_secs(value as u64),
                 _ => panic!("Unexpected scraped value"),
             })
             .unwrap_or_default();
-        // println!("squared sum -> {squared_sum:?}");
 
         let benchmark_duration = parsed
             .samples
             .iter()
             .find(|x| x.metric == "benchmark_duration")
             .map(|x| match x.value {
-                prometheus_parse::Value::Untyped(value) => Duration::from_secs(value as u64),
+                prometheus_parse::Value::Counter(value) => Duration::from_secs(value as u64),
                 _ => panic!("Unexpected scraped value"),
             })
             .unwrap_or_default();
-        // println!("benchmark duration -> {benchmark_duration:?}");
 
         let duration = (timestamp - self.start.clone()).to_std().unwrap();
 
@@ -148,7 +152,6 @@ where
             .entry(scraper_id)
             .or_insert_with(Vec::new)
             .push(DataPoint::new(
-                duration,
                 benchmark_duration,
                 buckets,
                 sum,
@@ -213,27 +216,33 @@ mod test {
     use super::{BenchmarkParameters, MetricsAggregator};
 
     const EXAMPLE: &'static str = r#"
-        # HELP current_requests_in_flight Current number of requests being processed in QuorumDriver
-        # TYPE current_requests_in_flight gauge
-        current_requests_in_flight 0
+        # HELP benchmark_duration Duration of the benchmark
+        # TYPE benchmark_duration counter
+        benchmark_duration 30
         # HELP latency_s Total time in seconds to return a response
         # TYPE latency_s histogram
-        latency_s_bucket{workload=transfer_object,le=0.01} 0
-        latency_s_bucket{workload=transfer_object,le=0.05} 0
         latency_s_bucket{workload=transfer_object,le=0.1} 0
-        latency_s_bucket{workload=transfer_object,le=0.25} 5871
-        latency_s_bucket{workload=transfer_object,le=0.5} 10269
-        latency_s_bucket{workload=transfer_object,le=1} 11968
-        latency_s_bucket{workload=transfer_object,le=2.5} 12000
-        latency_s_bucket{workload=transfer_object,le=5} 12000
-        latency_s_bucket{workload=transfer_object,le=10} 12000
-        latency_s_bucket{workload=transfer_object,le=20} 12000
-        latency_s_bucket{workload=transfer_object,le=30} 12000
-        latency_s_bucket{workload=transfer_object,le=60} 12000
-        latency_s_bucket{workload=transfer_object,le=90} 12000
-        latency_s_bucket{workload=transfer_object,le=+Inf} 12000
-        latency_s_sum{workload=transfer_object} 3633.637998717
-        latency_s_count{workload=transfer_object} 12000
+        latency_s_bucket{workload=transfer_object,le=0.25} 0
+        latency_s_bucket{workload=transfer_object,le=0.5} 506
+        latency_s_bucket{workload=transfer_object,le=0.75} 1282
+        latency_s_bucket{workload=transfer_object,le=1} 1693
+        latency_s_bucket{workload="transfer_object",le="1.25"} 1816
+        latency_s_bucket{workload="transfer_object",le="1.5"} 1860
+        latency_s_bucket{workload="transfer_object",le="1.75"} 1860
+        latency_s_bucket{workload="transfer_object",le="2"} 1860
+        latency_s_bucket{workload=transfer_object,le=2.5} 1860
+        latency_s_bucket{workload=transfer_object,le=5} 1860
+        latency_s_bucket{workload=transfer_object,le=10} 1860
+        latency_s_bucket{workload=transfer_object,le=20} 1860
+        latency_s_bucket{workload=transfer_object,le=30} 1860
+        latency_s_bucket{workload=transfer_object,le=60} 1860
+        latency_s_bucket{workload=transfer_object,le=90} 1860
+        latency_s_bucket{workload=transfer_object,le=+Inf} 1860
+        latency_s_sum{workload=transfer_object} 1265.287933130998
+        latency_s_count{workload=transfer_object} 1860
+        # HELP latency_squared_s Square of total time in seconds to return a response
+        # TYPE latency_squared_s counter
+        latency_squared_s{workload="transfer_object"} 952.8160642745289
     "#;
 
     #[test]
@@ -251,27 +260,32 @@ mod test {
         assert_eq!(
             data.buckets,
             ([
-                ("10".into(), 12000),
-                ("60".into(), 12000),
                 ("0.1".into(), 0),
-                ("0.05".into(), 0),
-                ("0.5".into(), 10269),
-                ("2.5".into(), 12000),
-                ("90".into(), 12000),
-                ("0.01".into(), 0),
-                ("0.25".into(), 5871),
-                ("5".into(), 12000),
-                ("20".into(), 12000),
-                ("30".into(), 12000),
-                ("1".into(), 11968),
-                ("inf".into(), 12000)
+                ("0.25".into(), 0),
+                ("0.5".into(), 506),
+                ("0.75".into(), 1282),
+                ("1".into(), 1693),
+                ("1.25".into(), 1816),
+                ("1.5".into(), 1860),
+                ("1.75".into(), 1860),
+                ("2".into(), 1860),
+                ("2.5".into(), 1860),
+                ("5".into(), 1860),
+                ("10".into(), 1860),
+                ("20".into(), 1860),
+                ("30".into(), 1860),
+                ("60".into(), 1860),
+                ("90".into(), 1860),
+                ("inf".into(), 1860)
             ])
             .iter()
             .cloned()
             .collect()
         );
-        assert_eq!(data.sum, Duration::from_secs(3633));
-        assert_eq!(data.count, 12000);
+        assert_eq!(data.sum, Duration::from_secs(1265));
+        assert_eq!(data.count, 1860);
+        assert_eq!(data.timestamp, Duration::from_secs(30));
+        assert_eq!(data.squared_sum, Duration::from_secs(952));
 
         assert_eq!(data.average_latency(), Duration::from_millis(302));
         assert_eq!(data.tps(), 0);

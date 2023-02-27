@@ -377,7 +377,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                                 }).map(|x| x.0).unwrap();
 
                                                 let latency = start.elapsed();
-                                                let square_latency_ms = latency.as_secs_f64() * latency.as_secs_f64() ;
+                                                let square_latency_ms = latency.as_secs_f64().powf(2.0);
                                                 metrics_cloned.latency_s.with_label_values(&[&b.1.get_workload_type().to_string()]).observe(latency.as_secs_f64());
                                                 metrics_cloned.latency_squared_s.with_label_values(&[&b.1.get_workload_type().to_string()]).inc_by(square_latency_ms);
                                                 metrics_cloned.num_success.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
@@ -432,7 +432,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                             }).map(|x| x.0).unwrap();
 
                                             let latency = start.elapsed();
-                                            let square_latency_ms = latency.as_secs_f64() * latency.as_secs_f64() ;
+                                            let square_latency_ms = latency.as_secs_f64().powf(2.0);
                                             metrics_cloned.latency_s.with_label_values(&[&payload.get_workload_type().to_string()]).observe(latency.as_secs_f64());
                                             metrics_cloned.latency_squared_s.with_label_values(&[&payload.get_workload_type().to_string()]).inc_by(square_latency_ms);
                                             metrics_cloned.num_success.with_label_values(&[&payload.get_workload_type().to_string()]).inc();

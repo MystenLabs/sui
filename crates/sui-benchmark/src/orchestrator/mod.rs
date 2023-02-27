@@ -109,7 +109,7 @@ impl Orchestrator {
             // self.testbed.update().await?;
 
             // Configure all instances.
-            // self.testbed.configure(parameters).await?;
+            self.testbed.configure(parameters).await?;
 
             // Deploy the validators.
             self.testbed.run_nodes(parameters).await?;

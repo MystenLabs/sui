@@ -64,6 +64,7 @@ crossterm = "0.26.0"
 regex = "1.7.1"
 prometheus-parse = { git = "https://github.com/ccakes/prometheus-parse-rs.git", rev = "75334db" }
 chrono = "0.4.23"
+num-integer = "0.1.45"
 
 [target.'cfg(msim)'.dependencies]
 sui-macros = { path = "../sui-macros" }
