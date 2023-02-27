@@ -18,7 +18,7 @@ export const TransactionArgument = union([
   object({
     kind: literal('NestedResult'),
     index: integer(),
-    offset: integer(),
+    resultIndex: integer(),
   }),
 ]);
 export type TransactionArgument = Infer<typeof TransactionArgument>;
