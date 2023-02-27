@@ -5,7 +5,7 @@ use prettytable::{format, row, Table};
 use prometheus_parse::Scrape;
 use serde::Serialize;
 
-use super::testbed::BenchmarkParameters;
+use super::BenchmarkParameters;
 
 type BucketId = String;
 
@@ -13,26 +13,34 @@ type BucketId = String;
 pub struct DataPoint {
     /// Duration since the beginning of the benchmark.
     timestamp: Duration,
+    /// Duration since the beginning of the benchmark.
+    benchmark_timestamp: Duration,
     /// Latency buckets.
     buckets: HashMap<BucketId, usize>,
     /// Sum of the latencies of all finalized transactions.
     sum: Duration,
     /// Total number of finalized transactions
     count: usize,
+    /// Square of the latencies of all finalized transactions.
+    squared_sum: Duration,
 }
 
 impl DataPoint {
     pub fn new(
         timestamp: Duration,
+        benchmark_timestamp: Duration,
         buckets: HashMap<BucketId, usize>,
         sum: Duration,
         count: usize,
+        squared_sum: Duration,
     ) -> Self {
         Self {
             timestamp,
+            benchmark_timestamp,
             buckets,
             sum,
             count,
+            squared_sum,
         }
     }
 
@@ -112,12 +120,41 @@ where
             })
             .unwrap_or_default();
 
+        let squared_sum = parsed
+            .samples
+            .iter()
+            .find(|x| x.metric == "latency_squared_s")
+            .map(|x| match x.value {
+                prometheus_parse::Value::Untyped(value) => Duration::from_secs(value as u64),
+                _ => panic!("Unexpected scraped value"),
+            })
+            .unwrap_or_default();
+        // println!("squared sum -> {squared_sum:?}");
+
+        let benchmark_duration = parsed
+            .samples
+            .iter()
+            .find(|x| x.metric == "benchmark_duration")
+            .map(|x| match x.value {
+                prometheus_parse::Value::Untyped(value) => Duration::from_secs(value as u64),
+                _ => panic!("Unexpected scraped value"),
+            })
+            .unwrap_or_default();
+        // println!("benchmark duration -> {benchmark_duration:?}");
+
         let duration = (timestamp - self.start.clone()).to_std().unwrap();
 
         self.scrapers
             .entry(scraper_id)
             .or_insert_with(Vec::new)
-            .push(DataPoint::new(duration, buckets, sum, count));
+            .push(DataPoint::new(
+                duration,
+                benchmark_duration,
+                buckets,
+                sum,
+                count,
+                squared_sum,
+            ));
     }
 
     pub fn save(&self) {
@@ -173,9 +210,7 @@ where
 mod test {
     use std::time::Duration;
 
-    use crate::orchestrator::testbed::BenchmarkParameters;
-
-    use super::MetricsAggregator;
+    use super::{BenchmarkParameters, MetricsAggregator};
 
     const EXAMPLE: &'static str = r#"
         # HELP current_requests_in_flight Current number of requests being processed in QuorumDriver

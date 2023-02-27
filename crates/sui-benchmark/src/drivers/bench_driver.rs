@@ -101,7 +101,7 @@ impl BenchMetrics {
             )
             .unwrap(),
             latency_squared_s: register_counter_vec_with_registry!(
-                "validators_in_tx_cert",
+                "latency_squared_s",
                 "Square of total time in seconds to return a response",
                 &["workload"],
                 registry,
@@ -382,7 +382,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                                 metrics_cloned.latency_squared_s.with_label_values(&[&b.1.get_workload_type().to_string()]).inc_by(square_latency_ms);
                                                 metrics_cloned.num_success.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
                                                 metrics_cloned.num_in_flight.with_label_values(&[&b.1.get_workload_type().to_string()]).dec();
-                                                metrics_cloned.benchmark_duration.inc_by(latency.as_secs() - metrics_cloned.benchmark_duration.get());
+                                                metrics_cloned.benchmark_duration.inc_by(start_time.elapsed().as_secs() - metrics_cloned.benchmark_duration.get());
 
                                                 if let Some(cert) = cert {
                                                     let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
@@ -437,7 +437,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                             metrics_cloned.latency_squared_s.with_label_values(&[&payload.get_workload_type().to_string()]).inc_by(square_latency_ms);
                                             metrics_cloned.num_success.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
                                             metrics_cloned.num_in_flight.with_label_values(&[&payload.get_workload_type().to_string()]).dec();
-                                            metrics_cloned.benchmark_duration.inc_by(latency.as_secs() - metrics_cloned.benchmark_duration.get());
+                                            metrics_cloned.benchmark_duration.inc_by(start_time.elapsed().as_secs() - metrics_cloned.benchmark_duration.get());
 
                                             if let Some(cert) = cert {
                                                 let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();

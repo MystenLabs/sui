@@ -10,8 +10,7 @@ use crossterm::{
 };
 use futures::future::try_join_all;
 use prettytable::{format, row, Table};
-use serde::{Deserialize, Serialize};
-use tokio::time::{self, sleep};
+use tokio::time::sleep;
 
 use crate::{
     ensure,
@@ -28,30 +27,8 @@ use super::{
     config::Config,
     metrics::MetricsAggregator,
     ssh::{SshCommand, SshConnectionManager},
+    BenchmarkParameters,
 };
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct BenchmarkParameters {
-    /// The committee size.
-    pub nodes: usize,
-    /// The number of (crash-)faults.
-    pub faults: usize,
-    /// The total load (tx/s) to submit to the system.
-    pub load: usize,
-    /// The duration of the benchmark.
-    pub duration: Duration,
-}
-
-impl Default for BenchmarkParameters {
-    fn default() -> Self {
-        Self {
-            nodes: 4,
-            faults: 0,
-            load: 500,
-            duration: Duration::from_secs(60),
-        }
-    }
-}
 
 pub struct Testbed<C> {
     /// The testbed's settings.
@@ -59,7 +36,7 @@ pub struct Testbed<C> {
     /// The client interfacing with the cloud provider.
     client: C,
     /// The state of the testbed (reflecting accurately the state of the machines).
-    instances: Vec<Instance>,
+    pub instances: Vec<Instance>,
     /// Handle ssh connections to instances.
     ssh_manager: SshConnectionManager,
 }
@@ -147,6 +124,14 @@ impl<C: Client> Testbed<C> {
     /// Populate the testbed by creating the specified amount of instances per region. The total
     /// number of instances created is thus the specified amount x the number of regions.
     pub async fn populate(&mut self, quantity: usize) -> TestbedResult<()> {
+        crossterm::execute!(
+            stdout(),
+            Print(format!(
+                "Populating testbed with {quantity} instances per region..."
+            ))
+        )
+        .unwrap();
+
         try_join_all(
             self.settings
                 .regions
@@ -239,7 +224,7 @@ impl<C: Client> Testbed<C> {
             crossterm::execute!(
                 stdout(),
                 MoveToColumn(0),
-                Print(format!("Waiting for connections ({waiting}s)..."))
+                Print(format!("Waiting for machines to boot ({waiting}s)..."))
             )
             .unwrap();
 
@@ -254,6 +239,8 @@ impl<C: Client> Testbed<C> {
                 break;
             }
         }
+
+        println!(" [{}]", "Ok".green());
         Ok(())
     }
 }
@@ -428,7 +415,7 @@ impl<C> Testbed<C> {
         Ok(())
     }
 
-    pub async fn kill(&self, cleanup: bool) -> TestbedResult<()> {
+    pub async fn cleanup(&self, cleanup: bool) -> TestbedResult<()> {
         crossterm::execute!(stdout(), Print("Cleaning up testbed...")).unwrap();
 
         // Kill all tmux servers and delete the nodes dbs. Optionally clear logs.
@@ -578,51 +565,6 @@ impl<C> Testbed<C> {
             .collect::<TestbedResult<_>>()?;
 
         println!(" [{}]", "Ok".green());
-        Ok(())
-    }
-
-    pub async fn run_benchmark(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
-        // Cleanup the testbed.
-        self.kill(true).await?;
-
-        // Update the software on all instances.
-        // self.update().await?;
-
-        // Configure all instances.
-        self.configure(parameters).await?;
-
-        // Deploy the validators.
-        self.run_nodes(parameters).await?;
-
-        // Deploy the load generators.
-        self.run_clients(parameters).await?;
-
-        // Wait for the benchmark to terminate.
-        println!("Waiting for about {}s...", parameters.duration.as_secs());
-
-        let mut aggregator = MetricsAggregator::new(parameters.clone());
-        let mut interval = time::interval(Duration::from_secs(30));
-        interval.tick().await;
-        loop {
-            tokio::select! {
-                result = self.wait_for_command(&self.instances, "client") => {
-                    result?;
-                    break
-                },
-                _ = interval.tick() => {
-                    let _ = self.scrape(&mut aggregator, parameters).await;
-                }
-            }
-        }
-        aggregator.save();
-        aggregator.print_summary(parameters);
-
-        // Kill the nodes and clients (without deleting the log files).
-        self.kill(false).await?;
-
-        // Download the log files.
-        self.logs(parameters).await?;
-
         Ok(())
     }
 }

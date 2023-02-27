@@ -2,9 +2,8 @@ use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
 use sui_benchmark::orchestrator::{
-    client::VultrClient,
-    settings::Settings,
-    testbed::{BenchmarkParameters, Testbed},
+    client::VultrClient, settings::Settings, testbed::Testbed, Benchmark, BenchmarkParameters,
+    Orchestrator,
 };
 
 #[tokio::main]
@@ -27,11 +26,17 @@ async fn main() -> Result<()> {
         duration: Duration::from_secs(120),
     };
 
-    let mut testbed = Testbed::new(settings, client)
+    let testbed = Testbed::new(settings, client)
         .await
         .wrap_err("Failed to crate testbed")?;
 
     testbed.info();
+
+    let orchestrator = Orchestrator::new(testbed);
+    orchestrator
+        .run_benchmarks(vec![Benchmark::new(parameters)])
+        .await
+        .wrap_err("Failed to run benchmark")?;
 
     // testbed
     //     .populate(2)
