@@ -20,14 +20,11 @@ import type { SubmitProps } from './SendTokenForm';
 function TransferCoinPage() {
     const [searchParams] = useSearchParams();
     const [, setShowModal] = useState(true);
-
     const coinType = searchParams.get('type');
     const [showTransactionPreview, setShowTransactionPreview] =
         useState<boolean>(false);
     const [formData, setFormData] = useState<SubmitProps>();
-
     const navigate = useNavigate();
-
     const closeOverlay = useCallback(() => {
         navigate('/');
     }, [navigate]);

@@ -4,7 +4,7 @@
 import { ArrowRight16 } from '@mysten/icons';
 import { SUI_TYPE_ARG, Coin as CoinAPI } from '@mysten/sui.js';
 import { Field, Form, useFormikContext, Formik } from 'formik';
-import { useCallback, useMemo, useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 
 import { createValidationSchemaStepOne } from './validation';
 import { Button } from '_app/shared/ButtonUI';
@@ -178,50 +178,60 @@ export function SendTokenForm({
         ]
     );
 
-    const onHandleSubmit = useCallback(
-        ({ to, amount, isPayAllSui, gasInputBudgetEst }: FormValues) => {
-            if (!gasInputBudgetEst) return;
-            const data = {
-                to,
-                amount,
-                isPayAllSui,
-                coinIds: allCoins.map((coin) => CoinAPI.getID(coin)),
-                gasBudget: gasInputBudgetEst,
-            };
-            onSubmit(data);
-        },
-        [allCoins, onSubmit]
-    );
-
     const [maxToken, symbol, queryResult] = useFormatCoin(
         coinBalance,
         coinType
     );
 
     return (
-        <Formik
-            initialValues={{
-                amount: initialAmount,
-                to: initialTo,
-                isPayAllSui:
-                    initialAmount === maxToken && coinType === SUI_TYPE_ARG,
-                gasInputBudgetEst: gasBudgetEstimation || null,
-            }}
-            validationSchema={validationSchemaStepOne}
-            enableReinitialize
-            validateOnMount
-            validateOnChange
-            onSubmit={onHandleSubmit}
+        <Loading
+            loading={
+                isCoinDecimalsLoading || isLoading || queryResult.isLoading
+            }
         >
-            {({ isValid, isSubmitting, setFieldValue, values, submitForm }) => {
-                const newPaySuiAll =
-                    values.amount === maxToken && coinType === SUI_TYPE_ARG;
-                if (values.isPayAllSui !== newPaySuiAll) {
-                    setFieldValue('isPayAllSui', newPaySuiAll);
-                }
+            <Formik
+                initialValues={{
+                    amount: initialAmount,
+                    to: initialTo,
+                    isPayAllSui:
+                        initialAmount === maxToken && coinType === SUI_TYPE_ARG,
+                    gasInputBudgetEst: gasBudgetEstimation || null,
+                }}
+                validationSchema={validationSchemaStepOne}
+                enableReinitialize
+                validateOnMount
+                validateOnChange
+                onSubmit={({
+                    to,
+                    amount,
+                    isPayAllSui,
+                    gasInputBudgetEst,
+                }: FormValues) => {
+                    if (!gasInputBudgetEst) return;
+                    const data = {
+                        to,
+                        amount,
+                        isPayAllSui,
+                        coinIds: allCoins.map((coin) => CoinAPI.getID(coin)),
+                        gasBudget: gasInputBudgetEst,
+                    };
+                    onSubmit(data);
+                }}
+            >
+                {({
+                    isValid,
+                    isSubmitting,
+                    setFieldValue,
+                    values,
+                    submitForm,
+                }) => {
+                    const newPaySuiAll =
+                        values.amount === maxToken && coinType === SUI_TYPE_ARG;
+                    if (values.isPayAllSui !== newPaySuiAll) {
+                        setFieldValue('isPayAllSui', newPaySuiAll);
+                    }
 
-                return (
-                    <Loading loading={isCoinDecimalsLoading || isLoading}>
+                    return (
                         <BottomMenuLayout>
                             <Content>
                                 <Form autoComplete="off" noValidate>
@@ -312,9 +322,9 @@ export function SendTokenForm({
                                 />
                             </Menu>
                         </BottomMenuLayout>
-                    </Loading>
-                );
-            }}
-        </Formik>
+                    );
+                }}
+            </Formik>
+        </Loading>
     );
 }
