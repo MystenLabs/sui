@@ -11,7 +11,7 @@ import {
   any,
 } from 'superstruct';
 import { Provider } from '../providers/provider';
-import { TransactionArgument, TransactionCommand } from './Commands';
+import { Commands, TransactionArgument, TransactionCommand } from './Commands';
 
 class TransactionResult {
   // TODO: Avoid keeping track of the command index, to allow it to be computed
@@ -36,12 +36,24 @@ class TransactionResult {
   }
 }
 
+// TODO: Does this need to be a class? Can this instead just be a `TransactionArgument` with hidden implementation details?
 class TransactionInput {
   #name?: string;
   #value: unknown;
-  constructor(name?: string, initialValue?: unknown) {
+  #index: number;
+
+  // This allows instances to be used as a `TransactionArgument`
+  kind = 'Input' as const;
+
+  // TODO: better argument order here to avoid weirdness with name.
+  constructor(index: number, initialValue?: unknown, name?: string) {
+    this.#index = index;
     this.#name = name;
     this.#value = initialValue;
+  }
+
+  get index() {
+    return this.#index;
   }
 
   /** The optional debug name for the input. */
@@ -70,6 +82,7 @@ const SerializedTransactionBuilder = object({
 });
 type SerializedTransactionBuilder = Infer<typeof SerializedTransactionBuilder>;
 
+// TODO: Support gas configuration.
 export class Transaction<Inputs extends string = never> {
   static is(obj: unknown): obj is Transaction {
     return obj instanceof Transaction;
@@ -81,10 +94,14 @@ export class Transaction<Inputs extends string = never> {
     assert(parsed, SerializedTransactionBuilder);
     const tx = new Transaction({});
     tx.#inputs = parsed.inputs.map(
-      (value) => new TransactionInput(undefined, value),
+      (value, i) => new TransactionInput(i, value),
     );
     tx.#commands = parsed.commands;
     return tx;
+  }
+
+  static get Commands() {
+    return Commands;
   }
 
   /**
@@ -99,37 +116,35 @@ export class Transaction<Inputs extends string = never> {
   #commands: TransactionCommand[];
 
   constructor({ inputs = [] }: { inputs?: Inputs[] }) {
-    this.#inputs = inputs.map((name) => new TransactionInput(name));
+    this.#inputs = inputs.map(
+      (name, i) => new TransactionInput(i, undefined, name),
+    );
     this.#commands = [];
   }
 
   // Dynamically create a new input, which is separate from the `input`. This is important
   // for generated clients to be able to define unique inputs that are non-overlapping with the
   // defined inputs.
-  createInput() {
-    const input = new TransactionInput();
+  createInput(initialValue?: unknown) {
+    const index = this.#inputs.length;
+    const input = new TransactionInput(index, initialValue);
     this.#inputs.push(input);
     return input;
   }
 
   // Get an input by the name used in the constructor:
-  input(inputName: Inputs): TransactionArgument {
+  input(inputName: Inputs): TransactionInput {
     if (!inputName) {
       throw new Error('Invalid input name');
     }
 
-    const inputIndex = this.#inputs.findIndex(
-      (input) => inputName === input.name,
-    );
+    const input = this.#inputs.find((input) => inputName === input.name);
 
-    if (inputIndex === -1) {
+    if (!input) {
       throw new Error(`Input "${inputName}" not recognized`);
     }
 
-    return {
-      kind: 'Input',
-      index: inputIndex,
-    };
+    return input;
   }
 
   // TODO: Does this belong in the transaction? It's not actually stateful (right now),
@@ -158,7 +173,7 @@ export class Transaction<Inputs extends string = never> {
     });
   }
 
-  async build({ provider }: { provider: Provider }): Promise<Uint8Array> {
+  async build(_: { provider: Provider }): Promise<Uint8Array> {
     throw new Error('Not implemented');
   }
 
