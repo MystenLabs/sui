@@ -19,7 +19,8 @@ import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { NFTDisplayCard } from '_components/nft-display';
-import { useAppSelector, useNFTBasicData, useGetObject } from '_hooks';
+import { useNFTBasicData, useGetObject } from '_hooks';
+import { useActiveAddress } from '../hooks/useActiveAddress';
 import ExternalLink from '_src/ui/app/components/external-link';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
@@ -64,7 +65,7 @@ function NFTDetailsPage() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const nftId = searchParams.get('objectId');
-    const accountAddress = useAppSelector(({ account }) => account.address);
+    const accountAddress = useActiveAddress();
 
     const { data: objectData, isLoading } = useGetObject(nftId!);
     const selectedNft = useMemo(() => {
