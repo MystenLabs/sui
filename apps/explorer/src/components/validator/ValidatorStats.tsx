@@ -10,7 +10,6 @@ import { calculateAPY } from './calculateAPY';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { Stats } from '~/ui/Stats';
-import { getStakedPercent } from '~/utils/getStakedPercent';
 
 type StatsCardProps = {
     validatorData: Validator;
@@ -40,16 +39,6 @@ export function ValidatorStats({
     const commission = +validatorData.commission_rate / 100;
     const rewardsPoolBalance =
         +validatorData.delegation_staking_pool.rewards_pool;
-
-    const delegatedStakePercentage = useMemo(
-        () => getStakedPercent(BigInt(delegatedStake), BigInt(totalStake)),
-        [delegatedStake, totalStake]
-    );
-
-    const selfStakePercentage = useMemo(
-        () => getStakedPercent(BigInt(selfStake), BigInt(totalStake)),
-        [selfStake, totalStake]
-    );
 
     return (
         <div className="flex flex-col items-stretch gap-5 md:flex-row">
@@ -97,21 +86,6 @@ export function ValidatorStats({
                             tooltip="The number of active delegators"
                             unavailable
                         />
-
-                        <Stats
-                            label="Delegated Staked"
-                            tooltip="The total SUI staked by delegators."
-                            unavailable={delegatedStakePercentage <= 0}
-                        >
-                            {delegatedStakePercentage}%
-                        </Stats>
-                        <Stats
-                            label="Self Staked"
-                            tooltip="The total SUI staked by this validator."
-                            unavailable={selfStakePercentage <= 0}
-                        >
-                            {selfStakePercentage}%
-                        </Stats>
                     </div>
                 </div>
             </Card>
