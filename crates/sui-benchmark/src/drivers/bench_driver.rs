@@ -9,13 +9,13 @@ use futures::FutureExt;
 use futures::{stream::FuturesUnordered, StreamExt};
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
-use prometheus::register_gauge_vec_with_registry;
-use prometheus::register_histogram_vec_with_registry;
-use prometheus::register_int_counter_vec_with_registry;
-use prometheus::GaugeVec;
 use prometheus::HistogramVec;
 use prometheus::IntCounterVec;
 use prometheus::Registry;
+use prometheus::{register_counter_vec_with_registry, GaugeVec};
+use prometheus::{register_gauge_vec_with_registry, IntCounter};
+use prometheus::{register_histogram_vec_with_registry, register_int_counter_with_registry};
+use prometheus::{register_int_counter_vec_with_registry, CounterVec};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::OnceCell;
 use tokio_util::sync::CancellationToken;
@@ -39,23 +39,31 @@ use tracing::{debug, error, info};
 use super::Interval;
 use super::{BenchmarkStats, StressStats};
 pub struct BenchMetrics {
+    pub benchmark_duration: IntCounter,
     pub num_success: IntCounterVec,
     pub num_error: IntCounterVec,
     pub num_submitted: IntCounterVec,
     pub num_in_flight: GaugeVec,
     pub latency_s: HistogramVec,
+    pub latency_squared_s: CounterVec,
     pub validators_in_tx_cert: IntCounterVec,
     pub validators_in_effects_cert: IntCounterVec,
     pub cpu_usage: GaugeVec,
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+    0.1, 0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2., 2.5, 5., 10., 20., 30., 60., 90.,
 ];
 
 impl BenchMetrics {
     fn new(registry: &Registry) -> Self {
         BenchMetrics {
+            benchmark_duration: register_int_counter_with_registry!(
+                "benchmark_duration",
+                "Duration of the benchmark",
+                registry,
+            )
+            .unwrap(),
             num_success: register_int_counter_vec_with_registry!(
                 "num_success",
                 "Total number of transaction success",
@@ -89,6 +97,13 @@ impl BenchMetrics {
                 "Total time in seconds to return a response",
                 &["workload"],
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            latency_squared_s: register_counter_vec_with_registry!(
+                "validators_in_tx_cert",
+                "Square of total time in seconds to return a response",
+                &["workload"],
                 registry,
             )
             .unwrap(),
@@ -360,10 +375,15 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                                 let new_version = effects.mutated().iter().find(|(object_ref, _)| {
                                                     object_ref.0 == b.1.get_object_id()
                                                 }).map(|x| x.0).unwrap();
+
                                                 let latency = start.elapsed();
+                                                let square_latency_ms = latency.as_secs_f64() * latency.as_secs_f64() ;
                                                 metrics_cloned.latency_s.with_label_values(&[&b.1.get_workload_type().to_string()]).observe(latency.as_secs_f64());
+                                                metrics_cloned.latency_squared_s.with_label_values(&[&b.1.get_workload_type().to_string()]).inc_by(square_latency_ms);
                                                 metrics_cloned.num_success.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
                                                 metrics_cloned.num_in_flight.with_label_values(&[&b.1.get_workload_type().to_string()]).dec();
+                                                metrics_cloned.benchmark_duration.inc_by(latency.as_secs() - metrics_cloned.benchmark_duration.get());
+
                                                 if let Some(cert) = cert {
                                                     let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
                                                     auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
@@ -410,10 +430,15 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                             let new_version = effects.mutated().iter().find(|(object_ref, _)| {
                                                 object_ref.0 == payload.get_object_id()
                                             }).map(|x| x.0).unwrap();
+
                                             let latency = start.elapsed();
+                                            let square_latency_ms = latency.as_secs_f64() * latency.as_secs_f64() ;
                                             metrics_cloned.latency_s.with_label_values(&[&payload.get_workload_type().to_string()]).observe(latency.as_secs_f64());
+                                            metrics_cloned.latency_squared_s.with_label_values(&[&payload.get_workload_type().to_string()]).inc_by(square_latency_ms);
                                             metrics_cloned.num_success.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
                                             metrics_cloned.num_in_flight.with_label_values(&[&payload.get_workload_type().to_string()]).dec();
+                                            metrics_cloned.benchmark_duration.inc_by(latency.as_secs() - metrics_cloned.benchmark_duration.get());
+
                                             if let Some(cert) = cert {
                                                 let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
                                                 auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
