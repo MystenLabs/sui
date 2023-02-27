@@ -1,19 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    is,
-    SuiObject,
-    type MoveSuiSystemObjectFields,
-    type MoveActiveValidator,
-} from '@mysten/sui.js';
+import { type Validator } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import { StakeColumn } from './StakeColumn';
 
-import { useGetObject } from '~/hooks/useGetObject';
-import { VALIDATORS_OBJECT_ID } from '~/pages/validator/ValidatorDataTypes';
+import { useGetSystemObject } from '~/hooks/useGetObject';
 import { Banner } from '~/ui/Banner';
 import { ImageIcon } from '~/ui/ImageIcon';
 import { ValidatorLink } from '~/ui/InternalLink';
@@ -25,33 +19,32 @@ import { getName } from '~/utils/getName';
 
 const NUMBER_OF_VALIDATORS = 10;
 
-export function processValidators(set: MoveActiveValidator[]) {
+export function processValidators(set: Validator[]) {
     return set.map((av) => {
-        const rawName = av.fields.metadata.fields.name;
-        const delegatedStake =
-            +av.fields.delegation_staking_pool.fields.sui_balance;
-        const selfStake = +av.fields.stake_amount;
+        const rawName = av.metadata.name;
+        const delegatedStake = +av.delegation_staking_pool.sui_balance;
+        const selfStake = +av.stake_amount;
         const totalValidatorStake = selfStake + delegatedStake;
         return {
             name: getName(rawName),
-            address: av.fields.metadata.fields.sui_address,
+            address: av.metadata.sui_address,
             stake: totalValidatorStake,
             logo:
-                typeof av.fields.metadata.fields.image_url === 'string'
-                    ? av.fields.metadata.fields.image_url
+                typeof av.metadata.image_url === 'string'
+                    ? av.metadata.image_url
                     : null,
         };
     });
 }
 
 const validatorsTable = (
-    validatorsData: MoveSuiSystemObjectFields,
+    validatorsData: Validator[],
     limit?: number,
     showIcon?: boolean
 ) => {
-    const validators = processValidators(
-        validatorsData.validators.fields.active_validators
-    ).sort((a, b) => (Math.random() > 0.5 ? -1 : 1));
+    const validators = processValidators(validatorsData).sort((a, b) =>
+        Math.random() > 0.5 ? -1 : 1
+    );
 
     const validatorsItems = limit ? validators.splice(0, limit) : validators;
 
@@ -105,22 +98,18 @@ type TopValidatorsCardProps = {
 };
 
 export function TopValidatorsCard({ limit, showIcon }: TopValidatorsCardProps) {
-    const { data, isLoading, isSuccess, isError } =
-        useGetObject(VALIDATORS_OBJECT_ID);
-
-    const validatorData =
-        data &&
-        is(data.details, SuiObject) &&
-        data.details.data.dataType === 'moveObject'
-            ? (data.details.data.fields as MoveSuiSystemObjectFields)
-            : null;
+    const { data, isLoading, isSuccess, isError } = useGetSystemObject();
 
     const tableData = useMemo(
         () =>
-            validatorData
-                ? validatorsTable(validatorData, limit, showIcon)
+            data
+                ? validatorsTable(
+                      data.validators.active_validators,
+                      limit,
+                      showIcon
+                  )
                 : null,
-        [validatorData, limit, showIcon]
+        [data, limit, showIcon]
     );
 
     if (isError || (!isLoading && !tableData?.data.length)) {

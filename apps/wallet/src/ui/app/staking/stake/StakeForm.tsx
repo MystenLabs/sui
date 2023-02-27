@@ -23,7 +23,7 @@ const HIDE_MAX = true;
 export type StakeFromProps = {
     coinBalance: bigint;
     coinType: string;
-    epoch?: string;
+    epoch?: string | number;
 };
 
 function StakeForm({ coinBalance, coinType, epoch }: StakeFromProps) {

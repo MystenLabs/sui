@@ -5,13 +5,11 @@ import { type SuiAddress } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { calculateAPY } from '../../staking/calculateAPY';
-import { STATE_OBJECT } from '../../staking/usePendingDelegation';
+import { useSystemState } from '../../staking/useSystemState';
 import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
-import { validatorsFields } from '_app/staking/validatorsFields';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { roundFloat } from '_helpers';
-import { useGetObject } from '_hooks';
 
 const APY_DECIMALS = 3;
 
@@ -20,30 +18,24 @@ type DelegatedAPYProps = {
 };
 
 export function DelegatedAPY({ stakedValidators }: DelegatedAPYProps) {
-    const { data, isLoading } = useGetObject(STATE_OBJECT);
-
-    const validatorsData = data && validatorsFields(data);
+    const { data, isLoading } = useSystemState();
 
     const averageNetworkAPY = useMemo(() => {
-        if (!validatorsData) return 0;
-        const validators = validatorsData.validators.fields.active_validators;
+        if (!data) return 0;
+        const validators = data.validators.active_validators;
 
         let stakedAPYs = 0;
 
         validators.forEach((validator) => {
-            if (
-                stakedValidators.includes(
-                    validator.fields.metadata.fields.sui_address
-                )
-            ) {
-                stakedAPYs += calculateAPY(validator, +validatorsData.epoch);
+            if (stakedValidators.includes(validator.metadata.sui_address)) {
+                stakedAPYs += calculateAPY(validator, +data.epoch);
             }
         });
 
         const averageAPY = stakedAPYs / stakedValidators.length;
 
         return roundFloat(averageAPY || 0, APY_DECIMALS);
-    }, [stakedValidators, validatorsData]);
+    }, [stakedValidators, data]);
 
     if (isLoading) {
         return (

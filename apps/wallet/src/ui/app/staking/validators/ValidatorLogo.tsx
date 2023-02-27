@@ -6,7 +6,7 @@ import cl from 'classnames';
 import { useMemo } from 'react';
 
 import { useGetValidatorMetaData } from '../useGetDelegatedStake';
-import { getName } from '../usePendingDelegation';
+import { getName } from '../useSystemState';
 import { Heading } from '_app/shared/heading';
 import { ImageIcon } from '_app/shared/image-icon';
 import { Text } from '_app/shared/text';

@@ -9,7 +9,6 @@ import type {
     SuiObject,
     SuiAddress,
     SuiMoveObject,
-    JsonRpcProvider,
     SuiExecuteTransactionResponse,
     SignerWithProvider,
 } from '@mysten/sui.js';
@@ -148,17 +147,6 @@ export class Coin {
         } finally {
             transaction.finish();
         }
-    }
-
-    public static async getActiveValidators(
-        provider: JsonRpcProvider
-    ): Promise<Array<SuiMoveObject>> {
-        const contents = await provider.getObject(SUI_SYSTEM_STATE_OBJECT_ID);
-        const data = (contents.details as SuiObject).data;
-        const validators = (data as SuiMoveObject).fields.validators;
-        const active_validators = (validators as SuiMoveObject).fields
-            .active_validators;
-        return active_validators as Array<SuiMoveObject>;
     }
 
     private static async coinManageForStake(
