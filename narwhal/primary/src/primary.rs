@@ -29,7 +29,6 @@ use async_trait::async_trait;
 use config::{Committee, Parameters, SharedWorkerCache, WorkerId, WorkerInfo};
 use consensus::dag::Dag;
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey, Signature};
-use dashmap::DashMap;
 use fastcrypto::{
     hash::Hash,
     signature_service::SignatureService,
@@ -428,11 +427,10 @@ impl Primary {
             );
         }
 
-        let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
+        let (connection_monitor_handle, _) = network::connectivity::ConnectionMonitor::spawn(
             network.downgrade(),
             network_connection_metrics,
             peer_types,
-            Arc::new(DashMap::new()),
         );
 
         info!(

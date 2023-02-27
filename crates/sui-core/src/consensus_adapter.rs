@@ -197,7 +197,11 @@ pub struct ConsensusAdapter {
 }
 
 pub trait CheckConnection: Send + Sync {
-    fn check_connection(&self, authority: &AuthorityName) -> Option<ConnectionStatus>;
+    fn check_connection(
+        &self,
+        ourself: &AuthorityName,
+        authority: &AuthorityName,
+    ) -> Option<ConnectionStatus>;
     fn update_mapping_for_epoch(&self, authority_names_to_peer_ids: HashMap<AuthorityName, PeerId>);
 }
 
@@ -344,7 +348,7 @@ impl ConsensusAdapter {
             .into_iter()
             .filter(|authority| {
                 self.connection_monitor_status
-                    .check_connection(authority)
+                    .check_connection(ourselves, authority)
                     .unwrap_or(ConnectionStatus::Disconnected)
                     == ConnectionStatus::Connected
             })
@@ -434,7 +438,7 @@ impl ConsensusAdapter {
             .consensus_message_processed_notify(transaction_key)
             .boxed();
 
-        // later populate this with the narwhal nodes that had lowest reputation scores
+        // TODO later populate this with the narwhal nodes that had lowest reputation scores
         let low_scoring_authorities = vec![];
 
         let (await_submit, position) = self.await_submit_delay(
@@ -559,12 +563,20 @@ impl ConsensusAdapter {
 }
 
 impl CheckConnection for ConnectionMonitorStatus {
-    fn check_connection(&self, authority: &AuthorityName) -> Option<ConnectionStatus> {
+    fn check_connection(
+        &self,
+        ourself: &AuthorityName,
+        authority: &AuthorityName,
+    ) -> Option<ConnectionStatus> {
+        if ourself == authority {
+            return Some(ConnectionStatus::Connected);
+        }
+
         let mapping = self.authority_names_to_peer_ids.load_full();
         let peer_id = match mapping.get(authority) {
             Some(p) => p,
             None => {
-                error!(
+                warn!(
                     "failed to find peer {:?} in connection monitor listener",
                     authority
                 );
@@ -592,7 +604,11 @@ impl CheckConnection for ConnectionMonitorStatus {
 }
 
 impl CheckConnection for ConnectionMonitorStatusForTests {
-    fn check_connection(&self, _authority: &AuthorityName) -> Option<ConnectionStatus> {
+    fn check_connection(
+        &self,
+        _ourself: &AuthorityName,
+        _authority: &AuthorityName,
+    ) -> Option<ConnectionStatus> {
         Some(ConnectionStatus::Connected)
     }
     fn update_mapping_for_epoch(

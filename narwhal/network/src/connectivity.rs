@@ -28,17 +28,21 @@ impl ConnectionMonitor {
         network: anemo::NetworkRef,
         connection_metrics: NetworkConnectionMetrics,
         peer_id_types: HashMap<PeerId, String>,
-        connection_statuses: Arc<DashMap<PeerId, ConnectionStatus>>,
-    ) -> JoinHandle<()> {
-        spawn_logged_monitored_task!(
-            Self {
-                network,
-                connection_metrics,
-                peer_id_types,
-                connection_statuses,
-            }
-            .run(),
-            "ConnectionMonitor"
+    ) -> (JoinHandle<()>, Arc<DashMap<PeerId, ConnectionStatus>>) {
+        let connection_statuses_outer = Arc::new(DashMap::new());
+        let connection_statuses = connection_statuses_outer.clone();
+        (
+            spawn_logged_monitored_task!(
+                Self {
+                    network,
+                    connection_metrics,
+                    peer_id_types,
+                    connection_statuses,
+                }
+                .run(),
+                "ConnectionMonitor"
+            ),
+            connection_statuses_outer,
         )
     }
 
