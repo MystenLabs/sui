@@ -425,7 +425,6 @@ module sui::sui_system {
         storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                          // into storage fund, in basis point.
         reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
-        stake_subsidy_rate: u64, // what percentage of the total stake do we mint as stake subsidy.
         epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
         ctx: &mut TxContext,
     ) {
@@ -451,9 +450,7 @@ module sui::sui_system {
         let computation_reward = balance::create_staking_rewards(computation_charge);
 
         // Include stake subsidy in the rewards given out to validators and delegators.
-        stake_subsidy::mint_stake_subsidy_proportional_to_total_stake_testnet(
-            &mut self.stake_subsidy, &mut self.sui_supply, stake_subsidy_rate, delegation_stake + validator_stake);
-        let stake_subsidy = stake_subsidy::withdraw_all(&mut self.stake_subsidy);
+        let stake_subsidy = stake_subsidy::advance_epoch(&mut self.stake_subsidy);
         let stake_subsidy_amount = balance::value(&stake_subsidy);
         balance::join(&mut computation_reward, stake_subsidy);
 
