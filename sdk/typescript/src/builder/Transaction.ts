@@ -9,6 +9,8 @@ import {
   Infer,
   array,
   any,
+  optional,
+  define,
 } from 'superstruct';
 import { Provider } from '../providers/provider';
 import { Commands, TransactionArgument, TransactionCommand } from './Commands';
@@ -42,14 +44,16 @@ class TransactionInput {
   #value: unknown;
   #index: number;
 
-  // This allows instances to be used as a `TransactionArgument`
-  kind = 'Input' as const;
-
   // TODO: better argument order here to avoid weirdness with name.
   constructor(index: number, initialValue?: unknown, name?: string) {
     this.#index = index;
     this.#name = name;
     this.#value = initialValue;
+  }
+
+  get kind() {
+    // This allows instances to be used as a `TransactionArgument`
+    return 'Input' as const;
   }
 
   get index() {
@@ -68,7 +72,33 @@ class TransactionInput {
   setValue(value: unknown) {
     this.#value = value;
   }
+
+  toJSON() {
+    return {
+      kind: this.kind,
+      index: this.index,
+    };
+  }
 }
+
+const StringEncodedBigint = define<string>('StringEncodedBigint', (val) => {
+  if (typeof val !== 'string') return false;
+
+  try {
+    BigInt(val);
+    return true;
+  } catch {
+    return false;
+  }
+});
+
+const GasConfig = object({
+  gasBudget: optional(StringEncodedBigint),
+  gasPrice: optional(StringEncodedBigint),
+  // TODO: Do we actually need these?
+  // gasPayment?: ObjectId;
+  // gasOwner?: SuiAddress;
+});
 
 /**
  * The serialized representation of a transaction builder, which is used to pass
@@ -79,6 +109,7 @@ const SerializedTransactionBuilder = object({
   // TODO: Need to figure out an over-the-wire input encoding.
   inputs: array(any()),
   commands: array(TransactionCommand),
+  gasConfig: GasConfig,
 });
 type SerializedTransactionBuilder = Infer<typeof SerializedTransactionBuilder>;
 
@@ -97,12 +128,19 @@ export class Transaction<Inputs extends string = never> {
       (value, i) => new TransactionInput(i, value),
     );
     tx.#commands = parsed.commands;
+    tx.#gasConfig = parsed.gasConfig;
     return tx;
   }
 
+  /** A helper to retrieve the Transaction builder `Commands` */
   static get Commands() {
     return Commands;
   }
+
+  /**
+   * The gas configuration for the transaction.
+   */
+  #gasConfig: Infer<typeof GasConfig>;
 
   /**
    * The list of inputs currently assigned to this transaction.
@@ -120,6 +158,15 @@ export class Transaction<Inputs extends string = never> {
       (name, i) => new TransactionInput(i, undefined, name),
     );
     this.#commands = [];
+    this.#gasConfig = {};
+  }
+
+  setGasPrice(price: number | bigint) {
+    this.#gasConfig.gasPrice = String(price);
+  }
+
+  setGasBudget(budget: number | bigint) {
+    this.#gasConfig.gasBudget = String(budget);
   }
 
   // Dynamically create a new input, which is separate from the `input`. This is important
@@ -204,6 +251,7 @@ export class Transaction<Inputs extends string = never> {
       version: 1,
       inputs: this.#inputs.map((input) => input.getValue()),
       commands: this.#commands,
+      gasConfig: this.#gasConfig,
     };
 
     return JSON.stringify(create(data, SerializedTransactionBuilder));
