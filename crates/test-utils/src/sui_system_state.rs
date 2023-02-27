@@ -33,6 +33,7 @@ pub fn test_validatdor_metadata(
         image_url: "".to_string(),
         project_url: "".to_string(),
         net_address,
+        p2p_address: vec![],
         consensus_address: vec![],
         worker_address: vec![],
         next_epoch_stake: 1,

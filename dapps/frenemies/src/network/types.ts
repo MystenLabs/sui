@@ -221,6 +221,8 @@ export type ValidatorMetadata = {
   projectUrl: string;
   /** The network address of the validator (could also contain extra info such as port, DNS and etc.).  */
   netAddress: number[];
+  /** The p2p address of the validator (could also contain extra info such as port, DNS and etc.).  */
+  p2pAddress: number[];
   /** The address of the narwhal primary  */
   consensusAddress: number[];
   /** The address of the narwhal worker  */
