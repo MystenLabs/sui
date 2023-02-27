@@ -11,7 +11,6 @@ use anyhow::anyhow;
 use anyhow::Result;
 use arc_swap::ArcSwap;
 use checkpoint_executor::CheckpointExecutor;
-use dashmap::DashMap;
 use futures::TryFutureExt;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
@@ -63,7 +62,6 @@ mod handle;
 pub mod metrics;
 pub use handle::SuiNodeHandle;
 use narwhal_config::SharedWorkerCache;
-use narwhal_network::connectivity::ConnectionStatus;
 use narwhal_types::TransactionsClient;
 use sui_core::authority::authority_per_epoch_store::{
     AuthorityPerEpochStore, EpochStartConfiguration,
@@ -302,22 +300,14 @@ impl SuiNode {
         let network_connection_metrics =
             NetworkConnectionMetrics::new("sui", &registry_service.default_registry());
 
-        let connection_statuses = DashMap::with_capacity(authority_names_to_peer_ids.len());
-        for (_, authority_name) in authority_names_to_peer_ids.iter() {
-            // initialize all to connected as default,if we don't have a consensus monitor running so
-            // the fallback behavior is we submit to consensus once and not 2f+1 times
-            connection_statuses.insert(*authority_name, ConnectionStatus::Connected);
-        }
-
-        let connection_statuses = Arc::new(connection_statuses);
         let authority_names_to_peer_ids = ArcSwap::from_pointee(authority_names_to_peer_ids);
 
-        let _connection_monitor_handle = narwhal_network::connectivity::ConnectionMonitor::spawn(
-            p2p_network.downgrade(),
-            network_connection_metrics,
-            HashMap::new(),
-            connection_statuses.clone(),
-        );
+        let (_connection_monitor_handle, connection_statuses) =
+            narwhal_network::connectivity::ConnectionMonitor::spawn(
+                p2p_network.downgrade(),
+                network_connection_metrics,
+                HashMap::new(),
+            );
 
         let connection_monitor_status = ConnectionMonitorStatus {
             connection_statuses,
@@ -513,8 +503,7 @@ impl SuiNode {
             state.name,
             connection_monitor_status,
             &registry_service.default_registry(),
-        )
-        .await;
+        );
 
         let validator_server_handle = Self::start_grpc_validator_service(
             config,
@@ -686,7 +675,7 @@ impl SuiNode {
         Ok(NarwhalManager::new(narwhal_config, metrics))
     }
 
-    async fn construct_consensus_adapter(
+    fn construct_consensus_adapter(
         consensus_config: &ConsensusConfig,
         authority: AuthorityName,
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
