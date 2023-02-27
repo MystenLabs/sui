@@ -8,7 +8,7 @@ import { useEffect, useRef, memo } from 'react';
 
 import { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
-import AddressInput from '_components/address-input';
+import { AddressInput } from '_components/address-input';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
