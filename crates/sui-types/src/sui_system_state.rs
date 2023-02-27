@@ -4,11 +4,11 @@
 use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::collection_types::{VecMap, VecSet};
 use crate::committee::{Committee, CommitteeWithNetAddresses, ProtocolVersion, StakeUnit};
-use crate::crypto::{AuthorityPublicKeyBytes, NetworkPublicKey};
+use crate::crypto::AuthorityPublicKeyBytes;
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
 use crate::{balance::Balance, id::UID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
-use fastcrypto::traits::ToFromBytes;
+use fastcrypto::{error::FastCryptoError, traits::ToFromBytes};
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use multiaddr::Multiaddr;
 use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
@@ -77,7 +77,7 @@ impl Validator {
     ) -> (AuthorityName, StakeUnit, Vec<u8>) {
         (
             // TODO: Make sure we are actually verifying this on-chain.
-            AuthorityPublicKeyBytes::from_bytes(self.metadata.pubkey_bytes.as_ref())
+            create_authority_pubkey_bytes(self.metadata.pubkey_bytes.as_ref())
                 .expect("Validity of public key bytes should be verified on-chain"),
             self.voting_power,
             self.metadata.net_address.clone(),
@@ -262,14 +262,13 @@ impl SuiSystemState {
             .active_validators
             .iter()
             .map(|validator| {
-                let name = narwhal_crypto::PublicKey::from_bytes(&validator.metadata.pubkey_bytes)
+                let name = create_narwhal_pubkey(&validator.metadata.pubkey_bytes)
                     .expect("Can't get narwhal public key");
-                let network_key = narwhal_crypto::NetworkPublicKey::from_bytes(
-                    &validator.metadata.network_pubkey_bytes,
-                )
-                .expect("Can't get narwhal network key");
+                let network_key =
+                    create_narwhal_net_pubkey(&validator.metadata.network_pubkey_bytes)
+                        .expect("Can't get narwhal network key");
                 let primary_address =
-                    Multiaddr::try_from(validator.metadata.consensus_address.clone())
+                    create_multiaddr(validator.metadata.consensus_address.clone())
                         .expect("Can't get narwhal primary address");
                 let authority = narwhal_config::Authority {
                     stake: validator.voting_power as narwhal_config::Stake,
@@ -296,14 +295,14 @@ impl SuiSystemState {
             .active_validators
             .iter()
             .map(|validator| {
-                let name = narwhal_crypto::PublicKey::from_bytes(&validator.metadata.pubkey_bytes)
+                let name = create_narwhal_pubkey(&validator.metadata.pubkey_bytes)
                     .expect("Can't get narwhal public key");
-                let worker_address = Multiaddr::try_from(validator.metadata.worker_address.clone())
+                let worker_address = create_multiaddr(validator.metadata.worker_address.clone())
                     .expect("Can't get worker address");
                 let workers = [(
                     0,
                     narwhal_config::WorkerInfo {
-                        name: NetworkPublicKey::from_bytes(&validator.metadata.worker_pubkey_bytes)
+                        name: create_narwhal_net_pubkey(&validator.metadata.worker_pubkey_bytes)
                             .expect("Can't get worker key"),
                         transactions: transactions_address.clone(),
                         worker_address,
@@ -321,6 +320,26 @@ impl SuiSystemState {
             epoch: self.epoch,
         }
     }
+}
+
+pub fn create_narwhal_pubkey(bytes: &[u8]) -> Result<narwhal_crypto::PublicKey, FastCryptoError> {
+    narwhal_crypto::PublicKey::from_bytes(bytes)
+}
+
+pub fn create_narwhal_net_pubkey(
+    bytes: &[u8],
+) -> Result<narwhal_crypto::NetworkPublicKey, FastCryptoError> {
+    narwhal_crypto::NetworkPublicKey::from_bytes(bytes)
+}
+
+pub fn create_multiaddr(bytes: Vec<u8>) -> Result<Multiaddr, multiaddr::Error> {
+    Multiaddr::try_from(bytes)
+}
+
+pub fn create_authority_pubkey_bytes(
+    bytes: &[u8],
+) -> Result<AuthorityPublicKeyBytes, FastCryptoError> {
+    AuthorityPublicKeyBytes::from_bytes(bytes)
 }
 
 // The default implementation for tests

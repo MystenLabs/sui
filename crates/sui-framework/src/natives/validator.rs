@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::legacy_emit_cost;
-use fastcrypto::traits::ToFromBytes;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::native_functions::NativeContext;
@@ -12,11 +11,12 @@ use move_vm_types::{
     pop_arg,
     values::{Struct, StructRef, Value},
 };
-use multiaddr::Multiaddr;
-use narwhal_crypto::{NetworkPublicKey, PublicKey};
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use sui_types::crypto::AuthorityPublicKeyBytes;
+use sui_types::sui_system_state::{
+    create_authority_pubkey_bytes, create_multiaddr, create_narwhal_net_pubkey,
+    create_narwhal_pubkey,
+};
 
 const METADATA_FIELD_NUM: usize = 17;
 
@@ -80,28 +80,28 @@ pub fn validate_metadata(
     get_field_val(&mut fields)?;
 
     let worker_address = field_to_vec_u8(&mut fields)?;
-    if Multiaddr::try_from(worker_address).is_err() {
+    if create_multiaddr(worker_address).is_err() {
         return Ok(NativeResult::err(
             legacy_emit_cost(),
             E_METADATA_INVALID_WORKER_ADDR,
         ));
     }
     let consensus_address = field_to_vec_u8(&mut fields)?;
-    if Multiaddr::try_from(consensus_address).is_err() {
+    if create_multiaddr(consensus_address).is_err() {
         return Ok(NativeResult::err(
             legacy_emit_cost(),
             E_METADATA_INVALID_CONSENSUS_ADDR,
         ));
     }
     let p2p_address = field_to_vec_u8(&mut fields)?;
-    if Multiaddr::try_from(p2p_address).is_err() {
+    if create_multiaddr(p2p_address).is_err() {
         return Ok(NativeResult::err(
             legacy_emit_cost(),
             E_METADATA_INVALID_P2P_ADDR,
         ));
     }
     let net_address = field_to_vec_u8(&mut fields)?;
-    if Multiaddr::try_from(net_address).is_err() {
+    if create_multiaddr(net_address).is_err() {
         return Ok(NativeResult::err(
             legacy_emit_cost(),
             E_METADATA_INVALID_NET_ADDR,
@@ -119,7 +119,7 @@ pub fn validate_metadata(
     get_field_val(&mut fields)?;
 
     let worker_pubkey = field_to_vec_u8(&mut fields)?;
-    if NetworkPublicKey::from_bytes(worker_pubkey.as_ref()).is_err() {
+    if create_narwhal_net_pubkey(worker_pubkey.as_ref()).is_err() {
         return Ok(NativeResult::err(
             legacy_emit_cost(),
             E_METADATA_INVALID_WORKER_PUBKEY,
@@ -127,7 +127,7 @@ pub fn validate_metadata(
     }
 
     let network_pubkey = field_to_vec_u8(&mut fields)?;
-    if NetworkPublicKey::from_bytes(network_pubkey.as_ref()).is_err() {
+    if create_narwhal_net_pubkey(network_pubkey.as_ref()).is_err() {
         return Ok(NativeResult::err(
             legacy_emit_cost(),
             E_METADATA_INVALID_NET_PUBKEY,
@@ -136,13 +136,9 @@ pub fn validate_metadata(
 
     let pubkey = field_to_vec_u8(&mut fields)?;
     // apparently pubkey is used in two different contexts with two different conversion routines
-    if PublicKey::from_bytes(pubkey.as_ref()).is_err() {
-        return Ok(NativeResult::err(
-            legacy_emit_cost(),
-            E_METADATA_INVALID_PUBKEY,
-        ));
-    }
-    if AuthorityPublicKeyBytes::from_bytes(pubkey.as_ref()).is_err() {
+    if create_narwhal_pubkey(pubkey.as_ref()).is_err()
+        || create_authority_pubkey_bytes(pubkey.as_ref()).is_err()
+    {
         return Ok(NativeResult::err(
             legacy_emit_cost(),
             E_METADATA_INVALID_PUBKEY,
