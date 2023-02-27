@@ -55,8 +55,11 @@ fn test_protocol_overrides_2() {
 mod sim_only_tests {
 
     use super::*;
+    use move_binary_format::CompiledModule;
+    use std::path::PathBuf;
     use std::sync::Arc;
-    use sui_core::authority::framework_upgrade_injection;
+    use sui_core::authority::sui_framework_injection;
+    use sui_framework_build::compiled_package::BuildConfig;
     use sui_macros::*;
     use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
     use test_utils::network::{TestCluster, TestClusterBuilder};
@@ -142,8 +145,7 @@ mod sim_only_tests {
     async fn test_framework_upgrade() {
         ProtocolConfig::poison_get_for_min_version();
 
-        framework_upgrade_injection::set_framework_upgrade_callback(Arc::new(|_| Some(1)));
-
+        sui_framework_injection::set_override(sui_framework("final"));
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(10000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(1, 2))
@@ -179,5 +181,22 @@ mod sim_only_tests {
         })
         .await
         .expect("Timed out waiting for cluster to target epoch");
+    }
+
+    /// Get compiled modules for Sui Framework, built from fixture `fixture` in the
+    /// `framework_upgrades` directory.
+    fn sui_framework(fixture: &str) -> Vec<CompiledModule> {
+        let mut package = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        package.extend(["tests", "framework_upgrades", fixture]);
+
+        let pkg = BuildConfig {
+            run_bytecode_verifier: true,
+            print_diags_to_stderr: false,
+            ..Default::default()
+        }
+        .build(package)
+        .unwrap();
+
+        pkg.get_framework_modules().cloned().collect()
     }
 }

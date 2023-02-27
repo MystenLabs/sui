@@ -76,6 +76,7 @@ jsonrpsee = { version = "0.16.2", features = ["jsonrpsee-core"] }
 
 test-utils = { path = "../test-utils" }
 rand = "0.8.5"
+move-binary-format.workspace = true
 move-package.workspace = true
 sui-core = { path = "../sui-core" }
 sui-node = { path = "../sui-node" }

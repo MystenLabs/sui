@@ -8285,6 +8285,7 @@ dependencies = [
  "git-version",
  "jemalloc-ctl",
  "jsonrpsee",
+ "move-binary-format",
  "move-cli",
  "move-core-types",
  "move-package",

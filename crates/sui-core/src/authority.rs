@@ -2694,7 +2694,7 @@ impl AuthorityState {
 
         let Some(sui_framework) = self.compare_system_package(
             SUI_FRAMEWORK_OBJECT_ID,
-            sui_framework::get_sui_framework(),
+            sui_framework_injection::get_modules(),
         ).await else {
             return vec![];
         };
@@ -2743,7 +2743,7 @@ impl AuthorityState {
             // Start at the same version as the current package, and increment if compatibility is
             // successful
             cur_object.version(),
-            self.get_previous_tx_framework_upgrade(cur_object.previous_transaction),
+            cur_object.previous_transaction,
             // System objects are not subject to limits
             u64::MAX,
         ) {
@@ -2790,28 +2790,6 @@ impl AuthorityState {
         Some(new_object.compute_object_reference())
     }
 
-    // We don't know the digest for the transaction that will write the new system package
-    // until the change epoch transaction runs, so borrow the current object's for now, to
-    // simplify comparing digests below.
-    #[cfg(not(msim))]
-    fn get_previous_tx_framework_upgrade(&self, default: TransactionDigest) -> TransactionDigest {
-        default
-    }
-
-    // Allow the tests to force an upgrade without having to actually inject different package
-    // bytes.
-    #[cfg(msim)]
-    fn get_previous_tx_framework_upgrade(&self, default: TransactionDigest) -> TransactionDigest {
-        framework_upgrade_injection::get_framework_upgrade_callback()
-            .map(|cb| cb(self.name))
-            .flatten()
-            .map(|seed| {
-                use rand::SeedableRng;
-                TransactionDigest::generate(rand::rngs::StdRng::seed_from_u64(seed))
-            })
-            .unwrap_or(default)
-    }
-
     /// Return the new versions and module bytes for the packages that have been committed to for a
     /// framework upgrade, in `system_packages`.  Loads the module contents from the binary, and
     /// performs the following checks:
@@ -2846,7 +2824,7 @@ impl AuthorityState {
 
             let bytes = match system_package.0 {
                 MOVE_STDLIB_OBJECT_ID => sui_framework::get_move_stdlib_bytes(),
-                SUI_FRAMEWORK_OBJECT_ID => sui_framework::get_sui_framework_bytes(),
+                SUI_FRAMEWORK_OBJECT_ID => sui_framework_injection::get_bytes(),
                 _ => panic!("Unrecognised framework: {}", system_package.0),
             };
 
@@ -2856,7 +2834,7 @@ impl AuthorityState {
                     .map(|m| CompiledModule::deserialize(m).unwrap())
                     .collect(),
                 system_package.1,
-                self.get_previous_tx_framework_upgrade(cur_object.previous_transaction),
+                cur_object.previous_transaction,
                 // System package is unbounded.
                 u64::MAX,
             )
@@ -3132,22 +3110,47 @@ impl AuthorityState {
 }
 
 #[cfg(msim)]
-pub mod framework_upgrade_injection {
+pub mod sui_framework_injection {
     use super::*;
     use std::cell::RefCell;
 
-    type InjectUpgradeCb = Arc<dyn Fn(AuthorityName) -> Option<u64> + Send + Sync + 'static>;
-
     // Thread local cache because all simtests run in a single unique thread.
     thread_local! {
-        static INJECT_UPGRADE: RefCell<Option<InjectUpgradeCb>> = RefCell::new(None);
+        static OVERRIDE: RefCell<Option<(Vec<Vec<u8>>, Vec<CompiledModule>)>> = RefCell::new(None);
     }
 
-    pub fn set_framework_upgrade_callback(func: InjectUpgradeCb) {
-        INJECT_UPGRADE.with(|i| *i.borrow_mut() = Some(func));
+    pub fn set_override(modules: Vec<CompiledModule>) {
+        let bytes = modules.iter().map(|m| {
+            let mut buf = Vec::new();
+            m.serialize(&mut buf).unwrap();
+            buf
+        }).collect();
+
+        OVERRIDE.with(|bs| *bs.borrow_mut() = Some((bytes, modules)));
     }
 
-    pub(super) fn get_framework_upgrade_callback() -> Option<InjectUpgradeCb> {
-        INJECT_UPGRADE.with(|i| i.borrow().clone())
+    pub fn get_bytes() -> Vec<Vec<u8>> {
+        OVERRIDE
+            .with(|f| f.borrow().as_ref().map(|f| f.0.clone()))
+            .unwrap_or_else(|| sui_framework::get_sui_framework_bytes())
+    }
+
+    pub fn get_modules() -> Vec<CompiledModule> {
+        OVERRIDE
+            .with(|f| f.borrow().as_ref().map(|f| f.1.clone()))
+            .unwrap_or_else(|| sui_framework::get_sui_framework())
+    }
+}
+
+#[cfg(not(msim))]
+pub mod sui_framework_injection {
+    use move_binary_format::CompiledModule;
+
+    pub fn get_bytes() -> Vec<Vec<u8>> {
+        sui_framework::get_sui_framework_bytes()
+    }
+
+    pub fn get_modules() -> Vec<CompiledModule> {
+        sui_framework::get_sui_framework()
     }
 }
