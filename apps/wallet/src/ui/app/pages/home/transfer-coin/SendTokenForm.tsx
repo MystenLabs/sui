@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowRight16 } from '@mysten/icons';
-import { SUI_TYPE_ARG, Coin as CoinAPI } from '@mysten/sui.js';
+import { SUI_TYPE_ARG, Coin as CoinAPI, type CoinStruct } from '@mysten/sui.js';
 import { Field, Form, useFormikContext, Formik } from 'formik';
 import { useMemo, useEffect } from 'react';
 
@@ -55,25 +55,13 @@ export type SendTokenFormProps = {
 };
 
 export function GasBudgetEstimationComp({
-    coinType,
     coinDecimals,
+    coins,
 }: {
-    coinType: string;
     coinDecimals: number;
+    coins: CoinStruct[] | null;
 }) {
     const { values, setFieldValue } = useFormikContext<FormValues>();
-    const accountAddress = useAppSelector(({ account }) => account.address);
-
-    // Get all coins of the type
-    const { data: coinsData, isLoading: coinsIsLoading } = useGetCoins(
-        coinType,
-        accountAddress!
-    );
-
-    // filter out locked lockedUntilEpoch
-    const coins = coinsData?.filter(
-        ({ lockedUntilEpoch }) => !lockedUntilEpoch
-    );
 
     const gasBudgetEstimationUnits = useGasBudgetEstimationUnits(
         coins!,
@@ -94,7 +82,7 @@ export function GasBudgetEstimationComp({
     }, [gasBudgetEstimation, setFieldValue, values.amount]);
 
     return (
-        <Loading loading={isLoading || coinsIsLoading}>
+        <Loading loading={isLoading}>
             <div className="px-2 mt-3 mb-5 flex w-full gap-2 justify-between">
                 <div className="flex gap-1">
                     <Text variant="body" color="gray-80" weight="medium">
@@ -135,9 +123,8 @@ export function SendTokenForm({
     );
 
     // filter out locked lockedUntilEpoch
-    const coins = coinsData?.filter(
-        ({ lockedUntilEpoch }) => !lockedUntilEpoch
-    );
+    const coins =
+        coinsData?.filter(({ lockedUntilEpoch }) => !lockedUntilEpoch) || null;
 
     const suiCoins = suiCoinsData?.filter(
         ({ lockedUntilEpoch }) => !lockedUntilEpoch
@@ -315,8 +302,8 @@ export function SendTokenForm({
                                         />
                                     </div>
                                     <GasBudgetEstimationComp
-                                        coinType={coinType}
                                         coinDecimals={coinDecimals}
+                                        coins={coins}
                                     />
 
                                     <div className="w-full flex gap-2.5 flex-col mt-7.5">
