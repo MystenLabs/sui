@@ -9,12 +9,9 @@ import {
   JsonRpcProvider,
   ObjectId,
   RawSigner,
-  SUI_SYSTEM_STATE_OBJECT_ID,
   fromB64,
   localnetConnection,
   Connection,
-  SuiMoveObject,
-  SuiObject,
 } from '../../../src';
 import { retry } from 'ts-retry-promise';
 import { FaucetRateLimitError } from '../../../src/rpc/faucet-client';
@@ -40,14 +37,8 @@ export class TestToolbox {
     return this.keypair.getPublicKey().toSuiAddress();
   }
 
-  // TODO: clean this up using `provider.getValidators()` method
-  public async getActiveValidators(): Promise<Array<SuiMoveObject>> {
-    const contents = await this.provider.getObject(SUI_SYSTEM_STATE_OBJECT_ID);
-    const data = (contents.details as SuiObject).data;
-    const validators = (data as SuiMoveObject).fields.validators;
-    const active_validators = (validators as SuiMoveObject).fields
-      .active_validators;
-    return active_validators as Array<SuiMoveObject>;
+  public async getActiveValidators() {
+    return this.provider.getValidators();
   }
 }
 
