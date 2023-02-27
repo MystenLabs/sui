@@ -56,13 +56,16 @@ mod sim_only_tests {
 
     use super::*;
     use move_binary_format::CompiledModule;
-    use sui_types::{object::{Object, OBJECT_START_VERSION}, digests::TransactionDigest};
     use std::path::PathBuf;
     use std::sync::Arc;
     use sui_core::authority::sui_framework_injection;
     use sui_framework_build::compiled_package::BuildConfig;
     use sui_macros::*;
     use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
+    use sui_types::{
+        digests::TransactionDigest,
+        object::{Object, OBJECT_START_VERSION},
+    };
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use tokio::time::{timeout, Duration};
     use tracing::info;
@@ -213,6 +216,93 @@ mod sim_only_tests {
         monitor_version_change(&cluster, 2 /* expected proto version */).await;
     }
 
+    #[sim_test]
+    async fn test_framework_compatible_upgrade_no_protocol_version() {
+        ProtocolConfig::poison_get_for_min_version();
+
+        // Even though a new framework is available, the required new protocol version is not.
+        sui_framework_injection::set_override(sui_framework("compatible"));
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(10000)
+            .with_objects([sui_framework_object("base")])
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(1, 1))
+            .build()
+            .await
+            .unwrap();
+
+        monitor_version_change(&test_cluster, 1 /* expected proto version */).await;
+    }
+
+    #[sim_test]
+    async fn test_framework_upgrade_conflicting_versions() {
+        ProtocolConfig::poison_get_for_min_version();
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
+            config
+        });
+
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(10000)
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(1, 2))
+            .build()
+            .await
+            .unwrap();
+
+        let first = test_cluster.swarm.validators().next().unwrap();
+        let first_name = first.name();
+        sui_framework_injection::set_override_cb(Box::new(move |name| {
+            if name == first_name {
+                Some(sui_framework("compatible"))
+            } else {
+                None
+            }
+        }));
+
+        monitor_version_change(&test_cluster, 2 /* expected proto version */).await;
+
+        let node_handle = first.get_node_handle().expect("node should be running");
+        // The dissenting node receives the correct framework via state sync and completes the upgrade
+        assert_eq!(
+            node_handle.with(|node| node
+                .state()
+                .epoch_store_for_testing()
+                .committee()
+                .protocol_version),
+            ProtocolVersion::new(2)
+        );
+    }
+
+    // Test that protocol version upgrade does not complete when there is no quorum on the
+    // framework upgrades.
+    #[sim_test]
+    async fn test_framework_upgrade_conflicting_versions_no_quorum() {
+        ProtocolConfig::poison_get_for_min_version();
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
+            config
+        });
+
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(10000)
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(1, 2))
+            .build()
+            .await
+            .unwrap();
+
+        let mut validators = test_cluster.swarm.validators();
+        let first = validators.next().unwrap().name();
+        let second = validators.next().unwrap().name();
+        sui_framework_injection::set_override_cb(Box::new(move |name| {
+            if name == first || name == second {
+                Some(sui_framework("compatible"))
+            } else {
+                None
+            }
+        }));
+
+        monitor_version_change(&test_cluster, 1 /* expected proto version */).await;
+    }
+
     async fn monitor_version_change(test_cluster: &TestCluster, final_version: u64) {
         let mut epoch_rx = test_cluster
             .fullnode_handle
@@ -260,6 +350,7 @@ mod sim_only_tests {
             OBJECT_START_VERSION,
             TransactionDigest::genesis(),
             u64::MAX,
-        ).unwrap()
+        )
+        .unwrap()
     }
 }

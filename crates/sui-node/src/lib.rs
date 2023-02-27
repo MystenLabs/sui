@@ -18,6 +18,7 @@ use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::Registry;
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{ConsensusConfig, NodeConfig};
@@ -119,6 +120,14 @@ pub struct SuiNode {
 
     #[cfg(msim)]
     sim_node: sui_simulator::runtime::NodeHandle,
+}
+
+impl fmt::Debug for SuiNode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("SuiNode")
+            .field("name", &self.state.name.concise())
+            .finish()
+    }
 }
 
 impl SuiNode {

@@ -2694,7 +2694,7 @@ impl AuthorityState {
 
         let Some(sui_framework) = self.compare_system_package(
             SUI_FRAMEWORK_OBJECT_ID,
-            sui_framework_injection::get_modules(),
+            sui_framework_injection::get_modules(self.name),
         ).await else {
             return vec![];
         };
@@ -2824,7 +2824,7 @@ impl AuthorityState {
 
             let bytes = match system_package.0 {
                 MOVE_STDLIB_OBJECT_ID => sui_framework::get_move_stdlib_bytes(),
-                SUI_FRAMEWORK_OBJECT_ID => sui_framework_injection::get_bytes(),
+                SUI_FRAMEWORK_OBJECT_ID => sui_framework_injection::get_bytes(self.name),
                 _ => panic!("Unrecognised framework: {}", system_package.0),
             };
 
@@ -3116,41 +3116,70 @@ pub mod sui_framework_injection {
 
     // Thread local cache because all simtests run in a single unique thread.
     thread_local! {
-        static OVERRIDE: RefCell<Option<(Vec<Vec<u8>>, Vec<CompiledModule>)>> = RefCell::new(None);
+        static OVERRIDE: RefCell<FrameworkOverrideConfig> = RefCell::new(FrameworkOverrideConfig::Default);
+    }
+
+    type Framework = Vec<CompiledModule>;
+
+    type FrameworkUpradeCallback =
+        Box<dyn Fn(AuthorityName) -> Option<Framework> + Send + Sync + 'static>;
+
+    enum FrameworkOverrideConfig {
+        Default,
+        Global(Framework),
+        PerValidator(FrameworkUpradeCallback),
+    }
+
+    fn compiled_modules_to_bytes(modules: &[CompiledModule]) -> Vec<Vec<u8>> {
+        modules
+            .iter()
+            .map(|m| {
+                let mut buf = Vec::new();
+                m.serialize(&mut buf).unwrap();
+                buf
+            })
+            .collect()
     }
 
     pub fn set_override(modules: Vec<CompiledModule>) {
-        let bytes = modules.iter().map(|m| {
-            let mut buf = Vec::new();
-            m.serialize(&mut buf).unwrap();
-            buf
-        }).collect();
-
-        OVERRIDE.with(|bs| *bs.borrow_mut() = Some((bytes, modules)));
+        OVERRIDE.with(|bs| *bs.borrow_mut() = FrameworkOverrideConfig::Global(modules));
     }
 
-    pub fn get_bytes() -> Vec<Vec<u8>> {
-        OVERRIDE
-            .with(|f| f.borrow().as_ref().map(|f| f.0.clone()))
-            .unwrap_or_else(|| sui_framework::get_sui_framework_bytes())
+    pub fn set_override_cb(func: FrameworkUpradeCallback) {
+        OVERRIDE.with(|bs| *bs.borrow_mut() = FrameworkOverrideConfig::PerValidator(func));
     }
 
-    pub fn get_modules() -> Vec<CompiledModule> {
-        OVERRIDE
-            .with(|f| f.borrow().as_ref().map(|f| f.1.clone()))
-            .unwrap_or_else(|| sui_framework::get_sui_framework())
+    pub fn get_bytes(name: AuthorityName) -> Vec<Vec<u8>> {
+        OVERRIDE.with(|cfg| match &*cfg.borrow() {
+            FrameworkOverrideConfig::Default => sui_framework::get_sui_framework_bytes(),
+            FrameworkOverrideConfig::Global(framework) => compiled_modules_to_bytes(framework),
+            FrameworkOverrideConfig::PerValidator(func) => func(name)
+                .map(|fw| compiled_modules_to_bytes(&fw))
+                .unwrap_or_else(sui_framework::get_sui_framework_bytes),
+        })
+    }
+
+    pub fn get_modules(name: AuthorityName) -> Vec<CompiledModule> {
+        OVERRIDE.with(|cfg| match &*cfg.borrow() {
+            FrameworkOverrideConfig::Default => sui_framework::get_sui_framework(),
+            FrameworkOverrideConfig::Global(framework) => framework.clone(),
+            FrameworkOverrideConfig::PerValidator(func) => {
+                func(name).unwrap_or_else(sui_framework::get_sui_framework)
+            }
+        })
     }
 }
 
 #[cfg(not(msim))]
 pub mod sui_framework_injection {
+    use super::*;
     use move_binary_format::CompiledModule;
 
-    pub fn get_bytes() -> Vec<Vec<u8>> {
+    pub fn get_bytes(_name: AuthorityName) -> Vec<Vec<u8>> {
         sui_framework::get_sui_framework_bytes()
     }
 
-    pub fn get_modules() -> Vec<CompiledModule> {
+    pub fn get_modules(_name: AuthorityName) -> Vec<CompiledModule> {
         sui_framework::get_sui_framework()
     }
 }
