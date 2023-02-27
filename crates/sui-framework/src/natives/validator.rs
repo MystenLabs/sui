@@ -29,12 +29,12 @@ const E_METADATA_INVALID_CONSENSUS_ADDR: u64 = 6;
 const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 
 fn get_field_val(fields: &mut Vec<Value>) -> PartialVMResult<Value> {
-    fields.pop().ok_or(
+    fields.pop().ok_or_else(|| {
         PartialVMError::new(StatusCode::MALFORMED).with_message(format!(
             "unexpectedly low number of fields {} in  fields in ValidatorMetadata",
             fields.len()
-        )),
-    )
+        ))
+    })
 }
 
 fn field_to_vec_u8(fields: &mut Vec<Value>) -> PartialVMResult<Vec<u8>> {
@@ -52,7 +52,7 @@ pub fn validate_metadata(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 0);
+    debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 1);
 
     // unwraps safe because the interface of native function guarantees it.
@@ -80,28 +80,28 @@ pub fn validate_metadata(
     get_field_val(&mut fields)?;
 
     let worker_address = field_to_vec_u8(&mut fields)?;
-    if !Multiaddr::try_from(worker_address).is_ok() {
+    if Multiaddr::try_from(worker_address).is_err() {
         return Ok(NativeResult::err(
             legacy_emit_cost(),
             E_METADATA_INVALID_WORKER_ADDR,
         ));
     }
     let consensus_address = field_to_vec_u8(&mut fields)?;
-    if !Multiaddr::try_from(consensus_address).is_ok() {
+    if Multiaddr::try_from(consensus_address).is_err() {
         return Ok(NativeResult::err(
             legacy_emit_cost(),
             E_METADATA_INVALID_CONSENSUS_ADDR,
         ));
     }
     let p2p_address = field_to_vec_u8(&mut fields)?;
-    if !Multiaddr::try_from(p2p_address).is_ok() {
+    if Multiaddr::try_from(p2p_address).is_err() {
         return Ok(NativeResult::err(
             legacy_emit_cost(),
             E_METADATA_INVALID_P2P_ADDR,
         ));
     }
     let net_address = field_to_vec_u8(&mut fields)?;
-    if !Multiaddr::try_from(net_address).is_ok() {
+    if Multiaddr::try_from(net_address).is_err() {
         return Ok(NativeResult::err(
             legacy_emit_cost(),
             E_METADATA_INVALID_NET_ADDR,
@@ -119,7 +119,7 @@ pub fn validate_metadata(
     get_field_val(&mut fields)?;
 
     let worker_pubkey = field_to_vec_u8(&mut fields)?;
-    if !NetworkPublicKey::from_bytes(worker_pubkey.as_ref()).is_ok() {
+    if NetworkPublicKey::from_bytes(worker_pubkey.as_ref()).is_err() {
         return Ok(NativeResult::err(
             legacy_emit_cost(),
             E_METADATA_INVALID_WORKER_PUBKEY,
@@ -127,7 +127,7 @@ pub fn validate_metadata(
     }
 
     let network_pubkey = field_to_vec_u8(&mut fields)?;
-    if !NetworkPublicKey::from_bytes(network_pubkey.as_ref()).is_ok() {
+    if NetworkPublicKey::from_bytes(network_pubkey.as_ref()).is_err() {
         return Ok(NativeResult::err(
             legacy_emit_cost(),
             E_METADATA_INVALID_NET_PUBKEY,
@@ -136,13 +136,13 @@ pub fn validate_metadata(
 
     let pubkey = field_to_vec_u8(&mut fields)?;
     // apparently pubkey is used in two different contexts with two different conversion routines
-    if !PublicKey::from_bytes(pubkey.as_ref()).is_ok() {
+    if PublicKey::from_bytes(pubkey.as_ref()).is_err() {
         return Ok(NativeResult::err(
             legacy_emit_cost(),
             E_METADATA_INVALID_PUBKEY,
         ));
     }
-    if !AuthorityPublicKeyBytes::from_bytes(pubkey.as_ref()).is_ok() {
+    if AuthorityPublicKeyBytes::from_bytes(pubkey.as_ref()).is_err() {
         return Ok(NativeResult::err(
             legacy_emit_cost(),
             E_METADATA_INVALID_PUBKEY,
@@ -152,7 +152,7 @@ pub fn validate_metadata(
     // an address - nothing to validate
     get_field_val(&mut fields)?;
 
-    if fields.len() != 0 {
+    if !fields.is_empty() {
         return Err(
             PartialVMError::new(StatusCode::MALFORMED).with_message(format!(
                 "unexpectedly high number of fields {} in  fields in ValidatorMetadata",

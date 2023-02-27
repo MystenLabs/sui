@@ -435,6 +435,13 @@ module sui::validator {
     /// Aborts if validator metadata is valid
     public native fun validate_metadata(metadata: &ValidatorMetadata);
 
+    spec validate_metadata {
+        pragma opaque;
+        // TODO: stub to be replaced by actual abort conditions if any
+        aborts_if [abstract] true;
+        // TODO: specify actual function behavior
+     }
+
     // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.
     // Creates a validator - bypassing the proof of possession in check in the process.
     // TODO: Refactor to share code with new().
