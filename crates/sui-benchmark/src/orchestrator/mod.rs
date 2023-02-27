@@ -122,16 +122,12 @@ impl Orchestrator {
 
             let mut aggregator = MetricsCollector::new(parameters.clone());
             let mut interval = time::interval(Duration::from_secs(30));
-            interval.tick().await;
+            interval.tick().await; // The first tick returns immediately.
             loop {
-                tokio::select! {
-                    result = self.testbed.wait_for_command(&self.testbed.instances, "client") => {
-                        result?;
-                        break
-                    },
-                    _ = interval.tick() => {
-                        let _ = self.testbed.scrape(&mut aggregator, parameters).await;
-                    }
+                interval.tick().await;
+                match self.testbed.scrape(&mut aggregator, parameters).await {
+                    Ok(duration) if duration >= parameters.duration => break,
+                    _ => (),
                 }
             }
             aggregator.save();

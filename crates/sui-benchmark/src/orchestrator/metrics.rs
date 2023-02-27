@@ -46,17 +46,32 @@ impl DataPoint {
     }
 
     pub fn average_latency(&self) -> Duration {
-        let latency_in_millis = self.sum.as_millis().checked_div(self.count as u128);
-        Duration::from_millis(latency_in_millis.unwrap_or_default() as u64)
+        self.sum.checked_div(self.count as u32).unwrap_or_default()
     }
 
+    /// Compute the standard deviation from the sum of squared latencies:
+    /// `stdev = sqrt( squared_sum / count - avg^2 )`
     pub fn stdev_latency(&self) -> Duration {
-        // stdev = sqrt( squared_sum / count - avg^2 )
-        let first_term = self.squared_sum.as_millis().checked_div(self.count as u128);
-        let squared_avg = self.average_latency().as_millis().pow(2);
-        let variance = first_term.unwrap_or_default().checked_sub(squared_avg);
-        let stdev = variance.unwrap_or_default().sqrt();
-        Duration::from_millis(stdev as u64)
+        // Compute `squared_sum / count`.
+        let first_term = if self.count == 0 {
+            0.0
+        } else {
+            self.squared_sum.as_secs_f64() / self.count as f64
+        };
+
+        // Compute `avg^2`.
+        let squared_avg = self.average_latency().as_secs_f64().powf(2.0);
+
+        // Compute `squared_sum / count - avg^2`.
+        let variance = if squared_avg > first_term {
+            0.0
+        } else {
+            first_term - squared_avg
+        };
+
+        // Compute `sqrt( squared_sum / count - avg^2 )`.
+        let stdev = variance.sqrt();
+        Duration::from_secs_f64(stdev)
     }
 
     /// Aggregate the benchmark duration of multiple data points by taking the max.
@@ -75,14 +90,12 @@ impl DataPoint {
 
     /// Aggregate the average latency of multiple data points by taking the average.
     pub fn aggregate_average_latency(data_points: &[&Self]) -> Duration {
-        Duration::from_millis(
-            data_points
-                .iter()
-                .map(|x| x.average_latency().as_millis())
-                .sum::<u128>()
-                .checked_div(data_points.len() as u128)
-                .unwrap_or_default() as u64,
-        )
+        data_points
+            .iter()
+            .map(|x| x.average_latency())
+            .sum::<Duration>()
+            .checked_div(data_points.len() as u32)
+            .unwrap_or_default()
     }
 
     /// Aggregate the stdev latency of multiple data points by taking the max.
@@ -138,7 +151,7 @@ where
             .iter()
             .find(|x| x.metric == "latency_s_sum")
             .map(|x| match x.value {
-                prometheus_parse::Value::Untyped(value) => Duration::from_secs(value as u64),
+                prometheus_parse::Value::Untyped(value) => Duration::from_secs_f64(value),
                 _ => panic!("Unexpected scraped value"),
             })
             .unwrap_or_default();
@@ -158,7 +171,7 @@ where
             .iter()
             .find(|x| x.metric == "latency_squared_s")
             .map(|x| match x.value {
-                prometheus_parse::Value::Counter(value) => Duration::from_secs(value as u64),
+                prometheus_parse::Value::Counter(value) => Duration::from_secs_f64(value),
                 _ => panic!("Unexpected scraped value"),
             })
             .unwrap_or_default();
@@ -177,6 +190,11 @@ where
             .entry(scraper_id)
             .or_insert_with(Vec::new)
             .push(DataPoint::new(duration, buckets, sum, count, squared_sum));
+    }
+
+    pub fn benchmark_duration(&self) -> Duration {
+        let last_data_points: Vec<_> = self.scrapers.values().filter_map(|x| x.last()).collect();
+        DataPoint::aggregate_duration(&last_data_points)
     }
 
     pub fn save(&self) {
@@ -243,19 +261,23 @@ mod test {
     #[test]
     fn stdev_latency() {
         let data = DataPoint::new(
-            Duration::from_secs(10),  // benchmark_timestamp
-            HashMap::new(),           // buckets
-            Duration::from_secs(2),   // sum
-            100,                      // count
-            Duration::from_secs(290), // squared_sum
+            Duration::from_secs(10), // benchmark_timestamp
+            HashMap::new(),          // buckets
+            Duration::from_secs(50), // sum
+            100,                     // count
+            Duration::from_secs(75), // squared_sum
         );
 
         // squared_sum / count
-        assert_eq!(data.squared_sum.as_millis() / data.count as u128, 2900);
+        assert_eq!(
+            data.squared_sum.checked_div(data.count as u32),
+            Some(Duration::from_secs_f64(0.75))
+        );
         // avg^2
-        assert_eq!(data.average_latency().as_millis().pow(2), 400);
+        assert_eq!(data.average_latency().as_secs_f64().powf(2.0), 0.25);
         // sqrt( squared_sum / count - avg^2 )
-        assert_eq!(data.stdev_latency(), Duration::from_millis(50));
+        let stdev = data.stdev_latency();
+        assert_eq!((stdev.as_secs_f64() * 10.0).round(), 7.0);
     }
 
     #[test]

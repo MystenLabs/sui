@@ -36,7 +36,7 @@ pub struct Testbed<C> {
     /// The client interfacing with the cloud provider.
     client: C,
     /// The state of the testbed (reflecting accurately the state of the machines).
-    pub instances: Vec<Instance>,
+    instances: Vec<Instance>,
     /// Handle ssh connections to instances.
     ssh_manager: SshConnectionManager,
 }
@@ -476,7 +476,6 @@ impl<C> Testbed<C> {
         // Deploy the load generators.
         let committee_size = instances.len();
         let load_share = parameters.load.clone() / committee_size;
-        let duration = parameters.duration.as_secs();
         let command = move |i: usize| -> String {
             let gas_id = Config::gas_object_id_offsets(committee_size)[i].clone();
             let genesis = "~/.sui/sui_config/genesis.blob";
@@ -484,12 +483,12 @@ impl<C> Testbed<C> {
 
             let run = [
                 "cargo run --release --bin stress --",
-                "--log-path ~/stress.log --local false --num-client-threads 100",
-                &format!("--num-transfer-accounts 2 --primary-gas-id {gas_id}"),
+                "--local false --num-client-threads 100 --num-transfer-accounts 2 ",
                 &format!("--genesis-blob-path {genesis} --keystore-path {keystore}"),
-                &format!("bench --target-qps {load_share} --num-workers 100"),
-                &format!("--shared-counter 0 --run-duration {duration}s"),
-                "--in-flight-ratio 50 --transfer-object 100 --delegation 0",
+                &format!("--primary-gas-id {gas_id}"),
+                "bench",
+                &format!("--num-workers 100 --target-qps {load_share}"),
+                "--shared-counter 0 --in-flight-ratio 50 --transfer-object 100",
                 &format!("--client-metric-port {}", Self::CLIENT_METRIC_PORT),
             ]
             .join(" ");
@@ -511,7 +510,7 @@ impl<C> Testbed<C> {
         &self,
         aggregator: &mut MetricsCollector<usize>,
         parameters: &BenchmarkParameters,
-    ) -> TestbedResult<()> {
+    ) -> TestbedResult<Duration> {
         let instances = self.select_instances(parameters)?;
 
         let command = format!("curl 127.0.0.1:{}/metrics", Self::CLIENT_METRIC_PORT);
@@ -522,7 +521,7 @@ impl<C> Testbed<C> {
             aggregator.collect(i, stdout);
         }
 
-        Ok(())
+        Ok(aggregator.benchmark_duration())
     }
 
     pub async fn logs(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
@@ -550,7 +549,6 @@ impl<C> Testbed<C> {
 
                     // Download the clients log files.
                     let content = connection.download("client.log")?;
-                    println!("{content}");
                     let mut file = File::create(&format!("client-{i}.log"))
                         .expect("Cannot open file to dump log");
                     file.write_all(content.as_bytes())
