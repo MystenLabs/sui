@@ -15,8 +15,6 @@ import BottomMenuLayout, {
 import ActiveCoinsCard from '_components/active-coins-card';
 import { SuiIcons } from '_components/icon';
 import Overlay from '_components/overlay';
-import { parseAmount } from '_helpers';
-import { useCoinDecimals } from '_hooks';
 
 import type { SubmitProps } from './SendTokenForm';
 
@@ -28,20 +26,12 @@ function TransferCoinPage() {
     const [showTransactionPreview, setShowTransactionPreview] =
         useState<boolean>(false);
     const [formData, setFormData] = useState<SubmitProps>();
-    const [coinDecimals] = useCoinDecimals(coinType);
 
     const navigate = useNavigate();
 
-    const closeSendToken = useCallback(() => {
+    const closeOverlay = useCallback(() => {
         navigate('/');
     }, [navigate]);
-
-    const onHandleSubmit = useCallback(() => {
-        if (!formData?.amount || !formData?.to) return;
-        const bigIntAmount = parseAmount(formData?.amount, coinDecimals);
-        // TODO send tokens
-        return bigIntAmount;
-    }, [formData, coinDecimals]);
 
     const handleNextStep = useCallback((formData: SubmitProps) => {
         setShowTransactionPreview(true);
@@ -57,14 +47,11 @@ function TransferCoinPage() {
             showModal={true}
             setShowModal={setShowModal}
             title={showTransactionPreview ? 'Send Coins' : 'Review & Send'}
-            closeOverlay={closeSendToken}
+            closeOverlay={closeOverlay}
             closeIcon={SuiIcons.Close}
         >
             <div className="flex flex-col w-full mt-2.5">
-                {showTransactionPreview &&
-                formData &&
-                formData.amount &&
-                formData.to ? (
+                {showTransactionPreview && formData ? (
                     <BottomMenuLayout>
                         <Content>
                             <PreviewTransfer
@@ -90,7 +77,6 @@ function TransferCoinPage() {
                             <Button
                                 type="button"
                                 variant="primary"
-                                onClick={onHandleSubmit}
                                 size="tall"
                                 text={'Send Now'}
                                 after={<ArrowRight16 />}
