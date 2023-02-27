@@ -70,6 +70,11 @@ pub struct ReputationScores {
     /// Holds the score for every authority. If an authority is not amongst
     /// the records of the map then we assume that its score is zero.
     pub scores_per_authority: HashMap<PublicKey, u64>,
+    /// When true it notifies us that those scores will be the last updated scores of the
+    /// current schedule before they get reset for the next schedule and start
+    /// scoring from the beginning. In practice we can leverage this information to
+    /// use the scores during the next schedule until the next final ones are calculated.
+    pub final_of_schedule: bool,
 }
 
 impl ReputationScores {
@@ -85,11 +90,6 @@ impl ReputationScores {
 
     pub fn total_authorities(&self) -> u64 {
         self.scores_per_authority.len() as u64
-    }
-
-    /// Clear the scores for all authorities
-    pub fn clear(&mut self) {
-        self.scores_per_authority.clear();
     }
 }
 
@@ -191,18 +191,6 @@ impl ConsensusStore {
             .skip_to_last()
             .next()
             .map(|(_, subdag)| subdag)
-    }
-
-    /// Returns the subdag by the specified index. If found Some is returned with the result,
-    /// otherwise None is returned instead.
-    pub fn get_sub_dag_by_index(
-        &self,
-        index: &SequenceNumber,
-    ) -> StoreResult<Option<CommittedSubDagShell>> {
-        match self.committed_sub_dags_by_index.get(index)? {
-            None => Ok(None),
-            Some(sub_dag) => Ok(Some(sub_dag)),
-        }
     }
 
     /// Load all the sub dags committed with sequence number of at least `from`.

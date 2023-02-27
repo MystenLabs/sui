@@ -336,13 +336,13 @@ impl Bullshark {
         &mut self,
         state: &mut ConsensusState,
         committed_sequence: &[Certificate],
-        next_sub_dag_index: u64,
+        sub_dag_index: u64,
     ) -> ReputationScores {
         // we reset the scores for every schedule change window.
         // TODO: when schedule change is implemented we should probably change a little bit
         // this logic here.
-        if next_sub_dag_index % self.change_schedule_every_committed_sub_dags == 0 {
-            state.last_consensus_reputation_score.clear();
+        if sub_dag_index % self.change_schedule_every_committed_sub_dags == 0 {
+            state.last_consensus_reputation_score = ReputationScores::default()
         }
 
         // update the score for the previous leader. If no previous leader exists,
@@ -362,6 +362,12 @@ impl Bullshark {
                 }
             }
         }
+
+        // we check if this is the last subdag of the current schedule. If yes then we mark the
+        // scores as final_of_schedule = true so any downstream user can now that those are the last
+        // ones calculated for the current schedule.
+        state.last_consensus_reputation_score.final_of_schedule =
+            (sub_dag_index + 1) % self.change_schedule_every_committed_sub_dags == 0;
 
         state.last_consensus_reputation_score.clone()
     }
