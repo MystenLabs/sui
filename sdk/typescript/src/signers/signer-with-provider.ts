@@ -183,7 +183,7 @@ export abstract class SignerWithProvider implements Signer {
    * in the Sui System State object
    */
   async devInspectTransaction(
-    tx: UnserializedSignableTransaction | string | Uint8Array,
+    tx: Transaction | UnserializedSignableTransaction | string | Uint8Array,
     gasPrice: number | null = null,
     epoch: number | null = null,
   ): Promise<DevInspectResults> {
@@ -197,11 +197,13 @@ export abstract class SignerWithProvider implements Signer {
    * @returns The transaction effects
    */
   async dryRunTransaction(
-    tx: SignableTransaction | string | Uint8Array,
+    tx: Transaction | SignableTransaction | string | Uint8Array,
   ): Promise<TransactionEffects> {
     const address = await this.getAddress();
     let dryRunTxBytes: Uint8Array;
-    if (typeof tx === 'string') {
+    if (Transaction.is(tx)) {
+      dryRunTxBytes = await tx.build({ provider: this.provider });
+    } else if (typeof tx === 'string') {
       dryRunTxBytes = fromB64(tx);
     } else if (tx instanceof Uint8Array) {
       dryRunTxBytes = tx;
@@ -226,6 +228,8 @@ export abstract class SignerWithProvider implements Signer {
    *
    * Serialize and sign a `TransferObject` transaction and submit to the Fullnode
    * for execution
+   *
+   * @deprecated Use `Transaction` builder API instead.
    */
   async transferObject(
     transaction: TransferObjectTransaction,
@@ -241,6 +245,8 @@ export abstract class SignerWithProvider implements Signer {
    *
    * Serialize and sign a `TransferSui` transaction and submit to the Fullnode
    * for execution
+   *
+   * @deprecated Use `Transaction` builder API instead.
    */
   async transferSui(
     transaction: TransferSuiTransaction,
@@ -255,6 +261,8 @@ export abstract class SignerWithProvider implements Signer {
   /**
    *
    * Serialize and Sign a `Pay` transaction and submit to the fullnode for execution
+   *
+   * @deprecated Use `Transaction` builder API instead.
    */
   async pay(
     transaction: PayTransaction,
@@ -268,6 +276,8 @@ export abstract class SignerWithProvider implements Signer {
 
   /**
    * Serialize and Sign a `PaySui` transaction and submit to the fullnode for execution
+   *
+   * @deprecated Use `Transaction` builder API instead.
    */
   async paySui(
     transaction: PaySuiTransaction,
@@ -281,6 +291,8 @@ export abstract class SignerWithProvider implements Signer {
 
   /**
    * Serialize and Sign a `PayAllSui` transaction and submit to the fullnode for execution
+   *
+   * @deprecated Use `Transaction` builder API instead.
    */
   async payAllSui(
     transaction: PayAllSuiTransaction,
@@ -296,6 +308,8 @@ export abstract class SignerWithProvider implements Signer {
    *
    * Serialize and sign a `MergeCoin` transaction and submit to the Fullnode
    * for execution
+   *
+   * @deprecated Use `Transaction` builder API instead.
    */
   async mergeCoin(
     transaction: MergeCoinTransaction,
@@ -311,6 +325,8 @@ export abstract class SignerWithProvider implements Signer {
    *
    * Serialize and sign a `SplitCoin` transaction and submit to the Fullnode
    * for execution
+   *
+   * @deprecated Use `Transaction` builder API instead.
    */
   async splitCoin(
     transaction: SplitCoinTransaction,
@@ -325,6 +341,8 @@ export abstract class SignerWithProvider implements Signer {
   /**
    * Serialize and sign a `MoveCall` transaction and submit to the Fullnode
    * for execution
+   *
+   * @deprecated Use `Transaction` builder API instead.
    */
   async executeMoveCall(
     transaction: MoveCallTransaction,

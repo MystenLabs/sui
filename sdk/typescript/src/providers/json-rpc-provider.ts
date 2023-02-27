@@ -71,6 +71,7 @@ import { LocalTxnDataSerializer } from '../signers/txn-data-serializers/local-tx
 import { toB64 } from '@mysten/bcs';
 import { SerializedSignature } from '../cryptography/signature';
 import { Connection, devnetConnection } from '../rpc/connection';
+import { Transaction } from '../builder';
 
 export const TARGETED_RPC_VERSION = '0.27.0';
 
@@ -802,13 +803,15 @@ export class JsonRpcProvider extends Provider {
 
   async devInspectTransaction(
     sender: SuiAddress,
-    tx: UnserializedSignableTransaction | string | Uint8Array,
+    tx: Transaction | UnserializedSignableTransaction | string | Uint8Array,
     gasPrice: number | null = null,
     epoch: number | null = null,
   ): Promise<DevInspectResults> {
     try {
       let devInspectTxBytes;
-      if (typeof tx === 'string') {
+      if (Transaction.is(tx)) {
+        devInspectTxBytes = await tx.build({ provider: this });
+      } else if (typeof tx === 'string') {
         devInspectTxBytes = tx;
       } else if (tx instanceof Uint8Array) {
         devInspectTxBytes = toB64(tx);

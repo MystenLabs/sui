@@ -204,7 +204,7 @@ export type MoveCallTx = {
 
 // ========== TransactionData ===========
 
-export type Transaction =
+export type SingleTransactionKind =
   | MoveCallTx
   | PayTx
   | PaySuiTx
@@ -220,8 +220,8 @@ export type Transaction =
  * the passed value (single Transaction or an array).
  */
 export type TransactionKind =
-  | { Single: Transaction }
-  | { Batch: Transaction[] };
+  | { Single: SingleTransactionKind }
+  | { Batch: SingleTransactionKind[] };
 
 /**
  * The GasData to be used in the transaction.
