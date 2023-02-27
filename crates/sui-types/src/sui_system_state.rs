@@ -20,7 +20,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-const SUI_SYSTEM_STATE_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
+const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
 pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
 pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch_safe_mode");
@@ -203,7 +203,8 @@ pub struct ValidatorSet {
     pub staking_pool_mappings: Table,
 }
 
-/// Rust version of the Move sui::sui_system::SuiSystemState type
+/// Rust version of the Move sui::sui_system::SuiSystemStateInner type
+/// We want to keep it named as SuiSystemState in Rust since this is the primary interface type.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct SuiSystemState {
     pub info: UID,
@@ -220,6 +221,25 @@ pub struct SuiSystemState {
     // TODO: Use getters instead of all pub.
 }
 
+/// Rust version of the Move sui::sui_system::SuiSystemState type
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SuiSystemStateWrapper {
+    pub info: UID,
+    pub version: u64,
+    pub system_state: SuiSystemState,
+}
+
+impl SuiSystemStateWrapper {
+    pub fn type_() -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            name: SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME.to_owned(),
+            module: SUI_SYSTEM_MODULE_NAME.to_owned(),
+            type_params: vec![],
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct StakeSubsidy {
     pub epoch_counter: u64,
@@ -228,15 +248,6 @@ pub struct StakeSubsidy {
 }
 
 impl SuiSystemState {
-    pub fn type_() -> StructTag {
-        StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
-            name: SUI_SYSTEM_STATE_STRUCT_NAME.to_owned(),
-            module: SUI_SYSTEM_MODULE_NAME.to_owned(),
-            type_params: vec![],
-        }
-    }
-
     pub fn get_current_epoch_committee(&self) -> CommitteeWithNetAddresses {
         let mut voting_rights = BTreeMap::new();
         let mut net_addresses = BTreeMap::new();
@@ -362,7 +373,7 @@ impl Default for SuiSystemState {
     }
 }
 
-pub fn get_sui_system_state<S>(object_store: S) -> Result<SuiSystemState, SuiError>
+pub fn get_sui_system_state_wrapper<S>(object_store: S) -> Result<SuiSystemStateWrapper, SuiError>
 where
     S: ObjectStore,
 {
@@ -373,7 +384,15 @@ where
         .data
         .try_as_move()
         .ok_or(SuiError::SuiSystemStateNotFound)?;
-    let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
+    let result = bcs::from_bytes::<SuiSystemStateWrapper>(move_object.contents())
         .expect("Sui System State object deserialization cannot fail");
     Ok(result)
+}
+
+pub fn get_sui_system_state<S>(object_store: S) -> Result<SuiSystemState, SuiError>
+where
+    S: ObjectStore,
+{
+    let wrapper = get_sui_system_state_wrapper(object_store)?;
+    Ok(wrapper.system_state)
 }
