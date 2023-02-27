@@ -13,12 +13,14 @@ use move_binary_format::{
 };
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
-use sui_cost_tables::bytecode_tables::GasStatus;
 use sui_framework::natives::object_runtime::{max_event_error, ObjectRuntime, RuntimeResults};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
+    balance::Balance,
     base_types::{ObjectID, SequenceNumber, SuiAddress, TxContext},
+    coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
+    gas::SuiGasStatus,
     messages::{Argument, CallArg, EntryArgumentErrorKind, ObjectArg},
     object::{MoveObject, Object, Owner},
     storage::{ObjectChange, SingleTxContext, Storage, WriteKind},
@@ -40,7 +42,7 @@ pub struct ExecutionContext<'vm, 'state, 'a, 'b, E: fmt::Debug, S: StorageView<E
     /// creation of new object IDs
     pub tx_context: &'a mut TxContext,
     /// The gas status used for metering
-    pub gas_status: &'a mut GasStatus<'b>,
+    pub gas_status: &'a mut SuiGasStatus<'b>,
     /// The session used for interacting with Move types and calls
     pub session: Session<'state, 'vm, S>,
     /// Additional transfers not from the Move runtime
@@ -86,7 +88,7 @@ where
         vm: &'vm MoveVM,
         state_view: &'state S,
         tx_context: &'a mut TxContext,
-        gas_status: &'a mut GasStatus<'b>,
+        gas_status: &'a mut SuiGasStatus<'b>,
         gas_coin: ObjectID,
         inputs: Vec<CallArg>,
     ) -> Result<Self, ExecutionError> {
@@ -95,17 +97,31 @@ where
             .into_iter()
             .map(|call_arg| load_call_arg(state_view, &mut object_owner_map, call_arg))
             .collect::<Result<_, ExecutionError>>()?;
-        let gas = load_object(
+        let mut gas = load_object(
             state_view,
             &mut object_owner_map,
             /* imm override */ false,
             gas_coin,
         )?;
+        // subtract the max gas budget. This amount is off limits in the programmable transaction,
+        // so to mimic this "off limits" behavior, we act as if the coin has less balance than
+        // it really does
+        let Some(Value::Object(ObjectValue {
+            contents: ObjectContents::Coin(coin),
+            ..
+        })) = &mut gas.inner.value else {
+            invariant_violation!("Gas object should be a populated coin")
+        };
+        let max_gas_in_balance = gas_status.max_gax_budget_in_balance();
+        let Some(new_balance) = coin.balance.value().checked_sub(max_gas_in_balance) else {
+            invariant_violation!("Transaction input checker should check that there is enough gas");
+        };
+        coin.balance = Balance::new(new_balance);
         let session = new_session(
             vm,
             state_view,
             object_owner_map,
-            gas_status.is_metered(),
+            !gas_status.is_unmetered(),
             protocol_config,
         );
         Ok(Self {
@@ -400,6 +416,7 @@ where
             input_object_metadata.insert(object_metadata.id, object_metadata);
         };
         // gas can be unused
+        let gas_id = gas.object_metadata.as_ref().unwrap().id;
         add_input_object_write(gas);
         // all other inputs must be used at least once
         for input in inputs {
@@ -440,6 +457,8 @@ where
             let owner = Owner::AddressOwner(recipient);
             add_additional_write(&mut additional_writes, owner, object_value)
         }
+        // Refund unused gas
+        refund_max_gas_budget(&mut additional_writes, gas_status, gas_id)?;
 
         let (change_set, events, mut native_context_extensions) = session
             .finish_with_extensions()
@@ -519,7 +538,7 @@ where
             vm,
             state_view,
             BTreeMap::new(),
-            gas_status.is_metered(),
+            !gas_status.is_unmetered(),
             protocol_config,
         );
         for (id, (write_kind, recipient, ty, tag, value)) in writes {
@@ -743,6 +762,30 @@ fn add_additional_write(
         bytes,
     };
     additional_writes.insert(object_id, additional_write);
+}
+
+/// The max budget was deducted from the gas coin at the beginning of the transaction,
+/// now we return exactly that amount. Gas will be charged by the execution engine
+fn refund_max_gas_budget(
+    additional_writes: &mut BTreeMap<ObjectID, AdditionalWrite>,
+    gas_status: &SuiGasStatus,
+    gas_id: ObjectID,
+) -> Result<(), ExecutionError> {
+    let Some(AdditionalWrite { bytes,.. }) =  additional_writes.get_mut(&gas_id) else {
+        invariant_violation!("Gas object cannot be wrapped or destroyed")
+    };
+    let Ok(mut coin) =  Coin::from_bcs_bytes(bytes) else {
+        invariant_violation!("Gas object must be a coin")
+    };
+    let Some(new_balance) = coin
+        .balance
+        .value()
+        .checked_add(gas_status.max_gax_budget_in_balance()) else {
+            panic!("coin overflow")
+        };
+    coin.balance = Balance::new(new_balance);
+    *bytes = coin.to_bcs_bytes();
+    Ok(())
 }
 
 /// Generate an MoveObject given an updated/written object

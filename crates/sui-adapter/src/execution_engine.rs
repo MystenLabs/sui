@@ -9,7 +9,7 @@ use move_vm_runtime::move_vm::MoveVM;
 use sui_types::base_types::SequenceNumber;
 use tracing::{debug, instrument};
 
-use crate::adapter;
+use crate::{adapter, programmable_transactions};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::coin::{transfer_coin, update_input_coins, Coin};
 use sui_types::epoch_data::EpochData;
@@ -345,8 +345,17 @@ fn execution_loop<
                 gas_status,
                 protocol_config,
             )?,
-            SingleTransactionKind::ProgrammableTransaction(_) => {
-                unreachable!("programmable transactions are not yet supported")
+            SingleTransactionKind::ProgrammableTransaction(pt) => {
+                // TODO use Mode
+                programmable_transactions::execution::execute(
+                    protocol_config,
+                    move_vm,
+                    temporary_store,
+                    tx_ctx,
+                    gas_status,
+                    gas_object_id,
+                    pt,
+                )?
             }
         };
     }
