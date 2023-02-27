@@ -13,7 +13,6 @@ import BottomMenuLayout, {
     Menu,
 } from '_app/shared/bottom-menu-layout';
 import ActiveCoinsCard from '_components/active-coins-card';
-import { SuiIcons } from '_components/icon';
 import Overlay from '_components/overlay';
 
 import type { SubmitProps } from './SendTokenForm';
@@ -46,9 +45,8 @@ function TransferCoinPage() {
         <Overlay
             showModal={true}
             setShowModal={setShowModal}
-            title={showTransactionPreview ? 'Send Coins' : 'Review & Send'}
+            title={showTransactionPreview ? 'Review & Send' : 'Send Coins'}
             closeOverlay={closeOverlay}
-            closeIcon={SuiIcons.Close}
         >
             <div className="flex flex-col w-full mt-2.5">
                 {showTransactionPreview && formData ? (

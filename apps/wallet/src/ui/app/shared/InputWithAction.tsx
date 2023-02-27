@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { cx } from 'class-variance-authority';
+import { cva, type VariantProps } from 'class-variance-authority';
 import { useField, useFormikContext } from 'formik';
 
 import Alert from '../components/alert';
@@ -10,8 +10,29 @@ import NumberInput from '_components/number-input';
 
 import type { ComponentProps } from 'react';
 
+const styles = cva(
+    [
+        'transition flex flex-row items-center p-3 bg-white text-body font-semibold',
+        'placeholder:text-gray-60 w-full pr-[calc(20%_+_24px)] shadow-button',
+        'border-solid border border-gray-45 text-steel-darker hover:border-steel focus:border-steel',
+        'disabled:border-gray-40 disabled:text-gray-55',
+    ],
+    {
+        variants: {
+            amount: {
+                true: 'rounded-2lg',
+                false: 'rounded-md',
+            },
+        },
+        defaultVariants: {
+            amount: false,
+        },
+    }
+);
+
 export interface InputWithActionProps
-    extends Omit<ComponentProps<'input'>, 'className'> {
+    extends VariantProps<typeof styles>,
+        Omit<ComponentProps<'input'>, 'className'> {
     actionText: string;
     onActionClicked?: PillProps['onClick'];
     actionType?: PillProps['type'];
@@ -38,6 +59,7 @@ export function InputWithAction({
     suffix,
     amountInput,
     darkPill = false,
+    amount,
     ...props
 }: InputWithActionProps) {
     const [field, meta] = useField(name);
@@ -50,20 +72,13 @@ export function InputWithAction({
               meta?.initialValue === meta?.value ||
               !!meta?.error
             : actionDisabled;
-    const shareStyle = cx(
-        'transition flex flex-row items-center p-3 bg-white text-body font-semibold',
-        'placeholder:text-gray-60 w-full pr-[calc(20%_+_24px)] shadow-button',
-        'border-solid border border-gray-45 text-steel-darker hover:border-steel focus:border-steel',
-        'disabled:border-gray-40 disabled:text-gray-55',
-        amountInput ? 'rounded-2lg' : 'rounded-md'
-    );
 
     return (
         <>
             <div className="flex flex-row flex-nowrap items-center relative">
                 {type === 'number' ? (
                     <NumberInput
-                        className={shareStyle}
+                        className={styles({ amount })}
                         allowNegative
                         {...props}
                         form={form}
@@ -80,7 +95,7 @@ export function InputWithAction({
                         disabled={isInputDisabled}
                         {...field}
                         {...props}
-                        className={shareStyle}
+                        className={styles({ amount })}
                     />
                 )}
                 <div className="flex items-center justify-end absolute right-0 max-w-[20%] mx-3 overflow-hidden">
