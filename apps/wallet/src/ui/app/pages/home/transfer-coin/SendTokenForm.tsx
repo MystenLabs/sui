@@ -21,13 +21,10 @@ import {
     useCoinDecimals,
     useFormatCoin,
     useAppSelector,
-    useIndividualCoinMaxBalance,
+    useGasBudgetEstimationUnits,
+    useGetCoins,
 } from '_hooks';
-import {
-    accountAggregateBalancesSelector,
-    accountCoinsSelector,
-} from '_redux/slices/account';
-import { GAS_TYPE_ARG, Coin } from '_redux/slices/sui-objects/Coin';
+import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { useGasBudgetInMist } from '_src/ui/app/hooks/useGasBudgetInMist';
 import { InputWithAction } from '_src/ui/app/shared/InputWithAction';
 
@@ -65,20 +62,22 @@ export function GasBudgetEstimationComp({
     coinDecimals: number;
 }) {
     const { values, setFieldValue } = useFormikContext<FormValues>();
+    const accountAddress = useAppSelector(({ account }) => account.address);
 
-    const parsedAmount = useMemo(() => {
-        return parseAmount(values?.amount, coinDecimals);
-    }, [values?.amount, coinDecimals]);
-
-    const allCoins = useAppSelector(accountCoinsSelector);
-    const allCoinsOfTransferType = useMemo(
-        () => allCoins.filter((aCoin) => aCoin.type === coinType),
-        [allCoins, coinType]
+    // Get all coins of the type
+    const { data: coinsData, isLoading: coinsIsLoading } = useGetCoins(
+        coinType,
+        accountAddress!
     );
 
-    const gasBudgetEstimationUnits = Coin.computeGasBudgetForPay(
-        allCoinsOfTransferType,
-        parsedAmount
+    // filter out locked lockedUntilEpoch
+    const coins = coinsData?.filter(
+        ({ lockedUntilEpoch }) => !lockedUntilEpoch
+    );
+
+    const gasBudgetEstimationUnits = useGasBudgetEstimationUnits(
+        coins!,
+        BigInt(parseAmount(values?.amount, coinDecimals))
     );
     const { gasBudget: gasBudgetEstimation, isLoading } = useGasBudgetInMist(
         gasBudgetEstimationUnits
@@ -95,7 +94,7 @@ export function GasBudgetEstimationComp({
     }, [gasBudgetEstimation, setFieldValue, values.amount]);
 
     return (
-        <Loading loading={isLoading}>
+        <Loading loading={isLoading || coinsIsLoading}>
             <div className="px-2 mt-3 mb-5 flex w-full gap-2 justify-between">
                 <div className="flex gap-1">
                     <Text variant="body" color="gray-80" weight="medium">
@@ -122,37 +121,64 @@ export function SendTokenForm({
     initialAmount = '',
     initialTo = '',
 }: SendTokenFormProps) {
-    const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
-    const [coinDecimals, { isLoading: isCoinDecimalsLoading }] =
-        useCoinDecimals(coinType);
+    const accountAddress = useAppSelector(({ account }) => account.address);
+    // Get all coins of the type
+    const { data: coinsData, isLoading: coinsIsLoading } = useGetCoins(
+        coinType,
+        accountAddress!
+    );
+
+    // Get SUI balance
+    const { data: suiCoinsData, isLoading: suiCoinsIsLoading } = useGetCoins(
+        SUI_TYPE_ARG,
+        accountAddress!
+    );
+
+    // filter out locked lockedUntilEpoch
+    const coins = coinsData?.filter(
+        ({ lockedUntilEpoch }) => !lockedUntilEpoch
+    );
+
+    const suiCoins = suiCoinsData?.filter(
+        ({ lockedUntilEpoch }) => !lockedUntilEpoch
+    );
+
+    const coinBalance =
+        coins?.reduce((acc, { balance }) => {
+            return acc + BigInt(balance);
+        }, 0n) || BigInt(0n);
+
+    const gasAggregateBalance =
+        suiCoins?.reduce((acc, { balance }) => {
+            return acc + BigInt(balance);
+        }, 0n) || BigInt(0n);
+
+    const coinSymbol = (coinType && CoinAPI.getCoinSymbol(coinType)) || '';
+
+    const [coinDecimals] = useCoinDecimals(coinType);
     const [gasDecimals] = useCoinDecimals(SUI_TYPE_ARG);
-    const allCoins = useAppSelector(accountCoinsSelector);
-    const allCoinsOfTransferType = allCoins.filter(
-        (aCoin) => aCoin.type === coinType
+
+    const maxSuiSingleCoinBalance = useMemo(() => {
+        const maxCoin = suiCoins?.reduce(
+            (max, { balance }) => (max < balance ? balance : max),
+            0
+        );
+        return BigInt(maxCoin || 0);
+    }, [suiCoins]);
+
+    const gasBudgetEstimationUnits = useGasBudgetEstimationUnits(
+        coins!,
+        BigInt(
+            parseAmount(
+                initialAmount !== '' ? initialAmount : '0',
+                coinDecimals
+            )
+        )
     );
 
-    const coinBalance = (coinType && aggregateBalances[coinType]) || BigInt(0);
-
-    const maxSuiSingleCoinBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
-
-    const gasBudgetEstimationUnits = useMemo(
-        () =>
-            Coin.computeGasBudgetForPay(
-                allCoinsOfTransferType,
-                BigInt(
-                    parseAmount(
-                        initialAmount !== '' ? initialAmount : '0',
-                        coinDecimals
-                    )
-                )
-            ),
-        [allCoinsOfTransferType, coinDecimals, initialAmount]
-    );
     const { gasBudget: gasBudgetEstimation, isLoading } = useGasBudgetInMist(
         gasBudgetEstimationUnits
     );
-    const gasAggregateBalance = aggregateBalances[SUI_TYPE_ARG] || BigInt(0);
-    const coinSymbol = CoinAPI.getCoinSymbol(coinType);
 
     const validationSchemaStepOne = useMemo(
         () =>
@@ -185,7 +211,10 @@ export function SendTokenForm({
     return (
         <Loading
             loading={
-                isCoinDecimalsLoading || isLoading || queryResult.isLoading
+                suiCoinsIsLoading ||
+                coinsIsLoading ||
+                isLoading ||
+                queryResult.isLoading
             }
         >
             <Formik
@@ -206,12 +235,18 @@ export function SendTokenForm({
                     isPayAllSui,
                     gasInputBudgetEst,
                 }: FormValues) => {
-                    if (!gasInputBudgetEst) return;
+                    if (!gasInputBudgetEst || !coins || !suiCoins) return;
+                    const coinsIDs = coins
+                        .sort((a, b) => a.balance - b.balance)
+                        .map(({ coinObjectId }) => coinObjectId);
+                    const suiCoinsIds = suiCoins.map(
+                        ({ coinObjectId }) => coinObjectId
+                    );
                     const data = {
                         to,
                         amount,
                         isPayAllSui,
-                        coinIds: allCoins.map((coin) => CoinAPI.getID(coin)),
+                        coinIds: isPayAllSui ? suiCoinsIds : coinsIDs,
                         gasBudget: gasInputBudgetEst,
                     };
                     onSubmit(data);
