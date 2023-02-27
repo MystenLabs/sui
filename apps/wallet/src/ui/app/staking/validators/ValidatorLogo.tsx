@@ -6,7 +6,6 @@ import cl from 'classnames';
 import { useMemo } from 'react';
 
 import { useGetValidatorMetaData } from '../useGetDelegatedStake';
-import { getName } from '../useSystemState';
 import { Heading } from '_app/shared/heading';
 import { ImageIcon } from '_app/shared/image-icon';
 import { Text } from '_app/shared/text';
@@ -40,15 +39,11 @@ export function ValidatorLogo({
         );
         if (!validator) return null;
 
-        const logo =
-            (validator.image_url && typeof validator.image_url === 'string') ||
-            Array.isArray(validator.image_url)
-                ? validator.image_url
-                : null;
+        const logo = validator.image_url;
 
         return {
-            name: getName(validator.name),
-            logo: logo && getName(logo),
+            name: validator.name,
+            logo: logo,
         };
     }, [validatorAddress, validatorsData]);
 

@@ -11,37 +11,20 @@ import { Heading } from '~/ui/Heading';
 import { ImageIcon } from '~/ui/ImageIcon';
 import { AddressLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
-import { getName } from '~/utils/getName';
 
 type ValidatorMetaProps = {
     validatorData: Validator;
 };
 
 export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
-    const validatorName = getName(validatorData.metadata.name);
-
     const validatorPublicKey = toB64(
         new Uint8Array(validatorData.metadata.pubkey_bytes)
     );
 
-    // NOTE: We only support the string-encoded metadata fields, which will become the only encoding soon:
-    const logo =
-        !validatorData.metadata.image_url ||
-        typeof validatorData.metadata.image_url !== 'string'
-            ? null
-            : validatorData.metadata.image_url;
-
-    const description =
-        !validatorData.metadata.description ||
-        typeof validatorData.metadata.description !== 'string'
-            ? null
-            : validatorData.metadata.description;
-
-    const projectUrl =
-        !validatorData.metadata.project_url ||
-        typeof validatorData.metadata.project_url !== 'string'
-            ? null
-            : validatorData.metadata.project_url;
+    const validatorName = validatorData.metadata.name;
+    const logo = validatorData.metadata.image_url;
+    const description = validatorData.metadata.description;
+    const projectUrl = validatorData.metadata.project_url;
 
     return (
         <>

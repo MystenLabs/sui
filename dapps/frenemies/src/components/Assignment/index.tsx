@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useScorecard } from "../../network/queries/scorecard";
-import { convertToString, useValidators } from "../../network/queries/sui-system";
+import { useValidators } from "../../network/queries/sui-system";
 import { Goal } from "../../network/types";
 import { formatBalance } from "../../utils/format";
 import { Card } from "../Card";
@@ -59,7 +59,7 @@ export function Assignment() {
 
   if (!assignedValidator) return null;
 
-  const name = convertToString(assignedValidator.name);
+  const name = assignedValidator.name;
   const selfStake = BigInt(assignedValidator.next_epoch_stake);
   const delegatedStake = BigInt(assignedValidator.next_epoch_delegation);
   const totalStake = selfStake + delegatedStake;

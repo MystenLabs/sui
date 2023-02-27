@@ -5,7 +5,6 @@ import { ValidatorMetaData } from "@mysten/sui.js";
 import clsx from "clsx";
 import { FormEvent, useState } from "react";
 import { useScorecard } from "../../network/queries/scorecard";
-import { convertToString } from "../../network/queries/sui-system";
 import { ObjectData } from "../../network/rawObject";
 import { Delegation, StakedSui } from "../../network/types";
 import { formatBalance } from "../../utils/format";
@@ -51,15 +50,15 @@ export function ValidatorItem({ index, validator, stake, delegation }: Props) {
         <div>
           <Logo
             size="md"
-            src={convertToString(validator.image_url)}
-            fallback={convertToString(validator.name) || ""}
-            label={convertToString(validator.name) || ""}
+            src={validator.image_url}
+            fallback={validator.name}
+            label={validator.name}
             circle
           />
         </div>
         <div className="space-y-0.5">
           <div className="text-gray-90 text-body font-semibold">
-            {convertToString(validator.name)}
+            {validator.name}
           </div>
           <div>
             <span className="text-gray-90 font-semibold text-body">
