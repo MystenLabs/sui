@@ -62,9 +62,6 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 2
-      objects-pruning-period-secs: 86400
-      objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
       num-epochs-to-retain: 1
@@ -131,9 +128,6 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 2
-      objects-pruning-period-secs: 86400
-      objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
       num-epochs-to-retain: 1
@@ -200,9 +194,6 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 2
-      objects-pruning-period-secs: 86400
-      objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
       num-epochs-to-retain: 1
@@ -269,9 +260,6 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 2
-      objects-pruning-period-secs: 86400
-      objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
       num-epochs-to-retain: 1
@@ -338,9 +326,6 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 2
-      objects-pruning-period-secs: 86400
-      objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
       num-epochs-to-retain: 1
@@ -407,9 +392,6 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 2
-      objects-pruning-period-secs: 86400
-      objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
       num-epochs-to-retain: 1
@@ -476,9 +458,6 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 2
-      objects-pruning-period-secs: 86400
-      objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
       num-epochs-to-retain: 1
