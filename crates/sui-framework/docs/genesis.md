@@ -12,6 +12,7 @@
 <pre><code><b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="clock.md#0x2_clock">0x2::clock</a>;
+<b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
 <b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
 <b>use</b> <a href="sui_system.md#0x2_sui_system">0x2::sui_system</a>;
@@ -53,6 +54,16 @@ Stake subisidy to be given out in the very first epoch. Placeholder value.
 
 
 <pre><code><b>const</b> <a href="genesis.md#0x2_genesis_INIT_STAKE_SUBSIDY_AMOUNT">INIT_STAKE_SUBSIDY_AMOUNT</a>: u64 = 1000000;
+</code></pre>
+
+
+
+<a name="0x2_genesis_INIT_STAKE_SUBSIDY_FUND_BALANCE"></a>
+
+The initial balance of the Subsidy fund in Mist (1 Billion * 10^9)
+
+
+<pre><code><b>const</b> <a href="genesis.md#0x2_genesis_INIT_STAKE_SUBSIDY_FUND_BALANCE">INIT_STAKE_SUBSIDY_FUND_BALANCE</a>: u64 = 1000000000000000000;
 </code></pre>
 
 
@@ -107,6 +118,7 @@ all the information we need in the system.
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> sui_supply = <a href="sui.md#0x2_sui_new">sui::new</a>(ctx);
+    <b>let</b> subsidy_fund = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> sui_supply, <a href="genesis.md#0x2_genesis_INIT_STAKE_SUBSIDY_FUND_BALANCE">INIT_STAKE_SUBSIDY_FUND_BALANCE</a>);
     <b>let</b> storage_fund = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> sui_supply, <a href="genesis.md#0x2_genesis_INIT_STORAGE_FUND">INIT_STORAGE_FUND</a>);
     <b>let</b> validators = <a href="_empty">vector::empty</a>();
     <b>let</b> count = <a href="_length">vector::length</a>(&validator_pubkeys);
@@ -168,7 +180,7 @@ all the information we need in the system.
 
     <a href="sui_system.md#0x2_sui_system_create">sui_system::create</a>(
         validators,
-        sui_supply,
+        subsidy_fund,
         storage_fund,
         <a href="genesis.md#0x2_genesis_INIT_MAX_VALIDATOR_COUNT">INIT_MAX_VALIDATOR_COUNT</a>,
         <a href="genesis.md#0x2_genesis_INIT_MIN_VALIDATOR_STAKE">INIT_MIN_VALIDATOR_STAKE</a>,
@@ -179,6 +191,11 @@ all the information we need in the system.
     );
 
     <a href="clock.md#0x2_clock_create">clock::create</a>();
+
+    // Transfer the remaining <a href="balance.md#0x2_balance">balance</a> of <a href="sui.md#0x2_sui">sui</a>'s supply <b>to</b> the initial account
+    // TODO pass in the account that should recieve the initial
+    // distribution of Sui instead of sending it <b>to</b> <b>address</b> 0x0
+    <a href="sui.md#0x2_sui_transfer">sui::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(sui_supply, ctx), @0x0);
 }
 </code></pre>
 
