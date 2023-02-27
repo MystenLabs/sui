@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64, toB64 } from '@mysten/bcs';
+import { Transaction } from '../builder';
 import { SerializedSignature } from '../cryptography/signature';
 import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import { Provider } from '../providers/provider';
@@ -101,10 +102,16 @@ export abstract class SignerWithProvider implements Signer {
    * Sign a transaction.
    */
   async signTransaction(
-    transaction: Uint8Array | SignableTransaction,
+    transaction: Uint8Array | SignableTransaction | Transaction,
   ): Promise<SignedTransaction> {
     let transactionBytes;
-    if (transaction instanceof Uint8Array || transaction.kind === 'bytes') {
+
+    if (Transaction.is(transaction)) {
+      transactionBytes = await transaction.build({ provider: this.provider });
+    } else if (
+      transaction instanceof Uint8Array ||
+      transaction.kind === 'bytes'
+    ) {
       transactionBytes =
         transaction instanceof Uint8Array ? transaction : transaction.data;
     } else {
@@ -131,7 +138,7 @@ export abstract class SignerWithProvider implements Signer {
    * Sign a transaction and submit to the Fullnode for execution.
    */
   async signAndExecuteTransaction(
-    transaction: Uint8Array | SignableTransaction,
+    transaction: Uint8Array | SignableTransaction | Transaction,
     requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
   ): Promise<SuiExecuteTransactionResponse> {
     const { transactionBytes, signature } = await this.signTransaction(
