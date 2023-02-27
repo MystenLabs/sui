@@ -74,39 +74,6 @@ impl BenchmarkParameters {
     }
 }
 
-pub struct Benchmark {
-    parameters: BenchmarkParameters,
-    skip_update: bool,
-    skip_configure: bool,
-    download_logs: bool,
-}
-
-impl Benchmark {
-    pub fn new(parameters: BenchmarkParameters) -> Self {
-        Self {
-            parameters,
-            skip_update: false,
-            skip_configure: false,
-            download_logs: false,
-        }
-    }
-
-    pub fn skip_update(mut self) -> Self {
-        self.skip_update = true;
-        self
-    }
-
-    pub fn skip_configure(mut self) -> Self {
-        self.skip_configure = true;
-        self
-    }
-
-    pub fn download_logs(mut self) -> Self {
-        self.download_logs = true;
-        self
-    }
-}
-
 pub enum LoadType {
     Fixed(Vec<usize>),
     Search {
@@ -229,8 +196,8 @@ where
 pub struct Orchestrator {
     testbed: Testbed<VultrClient>,
     parameters_generator: BenchmarkParametersGenerator<usize>,
-    skip_update: bool,
-    skip_configure: bool,
+    do_not_update_testbed: bool,
+    do_not_reconfigure_testbed: bool,
     ignore_logs: bool,
 }
 
@@ -242,19 +209,19 @@ impl Orchestrator {
         Self {
             testbed,
             parameters_generator,
-            skip_update: false,
-            skip_configure: false,
+            do_not_update_testbed: false,
+            do_not_reconfigure_testbed: false,
             ignore_logs: false,
         }
     }
 
-    pub fn skip_update(mut self) -> Self {
-        self.skip_update = true;
+    pub fn do_not_update_testbed(mut self) -> Self {
+        self.do_not_update_testbed = true;
         self
     }
 
-    pub fn skip_configure(mut self) -> Self {
-        self.skip_configure = true;
+    pub fn do_not_reconfigure_testbed(mut self) -> Self {
+        self.do_not_reconfigure_testbed = true;
         self
     }
 
@@ -297,16 +264,27 @@ impl Orchestrator {
         self.testbed.info();
     }
 
-    pub async fn run_benchmarks(&self, benchmarks: Vec<BenchmarkParameters>) -> TestbedResult<()> {
+    pub async fn run_benchmarks(&mut self) -> TestbedResult<()> {
         // Cleanup the testbed (in case the previous run was not completed).
         self.testbed.cleanup(true).await?;
 
         // Update the software on all instances.
-        self.testbed.update().await?;
+        if !self.do_not_update_testbed {
+            self.testbed.update().await?;
+        }
+
+        // Check whether to reconfigure the testbed before the first run.
+        let mut latest_comittee_status = if self.do_not_reconfigure_testbed {
+            (
+                self.parameters_generator.nodes,
+                self.parameters_generator.faults,
+            )
+        } else {
+            (0, 0)
+        };
 
         // Run all benchmarks.
-        let mut latest_comittee_status = (0, 0);
-        for parameters in benchmarks {
+        while let Some(parameters) = self.parameters_generator.next_parameters() {
             crossterm::execute!(
                 stdout(),
                 SetForegroundColor(Color::Green),
@@ -335,13 +313,16 @@ impl Orchestrator {
             let aggregator = self.testbed.collect_metrics(&parameters).await?;
             aggregator.save();
             aggregator.print_summary(&parameters);
+            self.parameters_generator.register_result(aggregator);
 
             // Kill the nodes and clients (without deleting the log files).
             self.testbed.cleanup(false).await?;
 
             // Download the log files.
-            let error_counter = self.testbed.download_logs(&parameters).await?;
-            error_counter.print_summary();
+            if !self.ignore_logs {
+                let error_counter = self.testbed.download_logs(&parameters).await?;
+                error_counter.print_summary();
+            }
         }
         Ok(())
     }
