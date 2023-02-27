@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { Transaction, Commands } from './';
 
 const tx = new Transaction({ inputs: ['amount', 'address'] });
@@ -12,6 +15,8 @@ tx.add(
     typeArguments: [],
   }),
 );
+
+tx.setGasPrice(BigInt(10));
 
 tx.provideInputs({
   amount: 100,
