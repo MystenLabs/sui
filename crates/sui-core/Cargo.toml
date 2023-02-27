@@ -35,6 +35,7 @@ once_cell = "1.16"
 tap = "1.0"
 either = "1.8.0"
 rand = "0.8.5"
+expect-test = "1.4.0"
 sui-adapter = { path = "../sui-adapter" }
 sui-framework = { path = "../sui-framework" }
 sui-framework-build = { path = "../sui-framework-build" }

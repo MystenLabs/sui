@@ -8507,6 +8507,7 @@ dependencies = [
  "chrono",
  "clap 3.2.23",
  "either",
+ "expect-test",
  "eyre",
  "fastcrypto",
  "fs_extra",
@@ -8685,6 +8686,7 @@ name = "sui-framework-build"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "expect-test",
  "fastcrypto",
  "move-binary-format",
  "move-bytecode-utils",
