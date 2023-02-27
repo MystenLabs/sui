@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::ObjectDigest;
+use crate::base_types::{ObjectDigest, SuiAddress};
 use crate::error::{SuiError, SuiResult};
+use crate::id::UID;
 use crate::sui_serde::Readable;
 use crate::{ObjectID, SequenceNumber, SUI_FRAMEWORK_ADDRESS};
+use fastcrypto::hash::{HashFunction, Sha3_256};
 use move_core_types::language_storage::{StructTag, TypeTag};
-use move_core_types::value::{MoveStruct, MoveValue};
+use move_core_types::value::{MoveStruct, MoveTypeLayout, MoveValue};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -14,6 +16,15 @@ use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use std::fmt::{Display, Formatter};
+
+/// Rust version of the Move sui::dynamic_field::Field type
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct Field<N, V> {
+    pub id: UID,
+    pub name: N,
+    pub value: V,
+}
+
 #[derive(Clone, Serialize, Deserialize, JsonSchema, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct DynamicFieldInfo {
@@ -184,4 +195,33 @@ pub fn is_dynamic_object(move_struct: &MoveStruct) -> bool {
         }
         _ => false,
     }
+}
+
+pub fn derive_dynamic_field_id<T>(
+    parent: T,
+    key_type_tag: &TypeTag,
+    key_type_layout: &MoveTypeLayout,
+    key: &move_vm_types::values::Value,
+) -> Option<ObjectID>
+where
+    T: Into<SuiAddress>,
+{
+    let Ok(k_tag_bytes) = bcs::to_bytes(key_type_tag) else {
+        return None;
+    };
+    let Some(k_bytes) = key.simple_serialize(key_type_layout) else {
+        return None;
+    };
+
+    // hash(parent || key || key_type_tag)
+    let mut hasher = Sha3_256::default();
+    hasher.update(parent.into());
+    hasher.update(k_bytes.len().to_le_bytes());
+    hasher.update(k_bytes);
+    hasher.update(k_tag_bytes);
+    let hash = hasher.finalize();
+
+    // truncate into an ObjectID and return
+    // OK to access slice because Sha3_256 should never be shorter than ObjectID::LENGTH.
+    Some(ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap())
 }

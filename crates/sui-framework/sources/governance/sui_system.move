@@ -23,6 +23,7 @@ module sui::sui_system {
     use sui::pay;
     use sui::event;
     use sui::table::Table;
+    use sui::dynamic_field;
 
     friend sui::genesis;
 
@@ -44,8 +45,7 @@ module sui::sui_system {
     }
 
     /// The top-level object containing all information of the Sui system.
-    struct SuiSystemStateInner has key, store {
-        id: UID,
+    struct SuiSystemStateInner has store {
         /// The current epoch ID, starting from 0.
         epoch: u64,
         /// The current protocol version, starting from 1.
@@ -80,8 +80,6 @@ module sui::sui_system {
     struct SuiSystemState has key {
         id: UID,
         version: u64,
-        // TODO: Make it a dynamic object field
-        system_state: SuiSystemStateInner,
     }
 
     /// Event containing system-level epoch information, emitted during
@@ -128,7 +126,6 @@ module sui::sui_system {
         let validators = validator_set::new(validators, ctx);
         let reference_gas_price = validator_set::derive_reference_gas_price(&validators);
         let system_state = SuiSystemStateInner {
-            id: object::new(ctx),
             epoch: 0,
             protocol_version,
             validators,
@@ -147,9 +144,8 @@ module sui::sui_system {
             // Use a hardcoded ID.
             id: object::sui_system_state(),
             version: protocol_version,
-            system_state,
         };
-        // dynamic_object_field::add(&mut self.id, self.version, system_state);
+        dynamic_field::add(&mut self.id, protocol_version, system_state);
         transfer::share_object(self);
     }
 
@@ -522,16 +518,6 @@ module sui::sui_system {
         clock::set_timestamp(clock, timestamp_ms);
     }
 
-    public fun load_system_state(self: &SuiSystemState): &SuiSystemStateInner {
-        &self.system_state
-        // dynamic_object_field::borrow(&self.id, self.version)
-    }
-
-    public fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInner {
-        &mut self.system_state
-        // dynamic_object_field::borrow_mut(&mut self.id, self.version)
-    }
-
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
     /// since epochs are ever-increasing and epoch changes are intended to happen every 24 hours.
     public fun epoch(wrapper: &SuiSystemState): u64 {
@@ -573,6 +559,14 @@ module sui::sui_system {
         } else {
             vec_set::empty()
         }
+    }
+
+    fun load_system_state(self: &SuiSystemState): &SuiSystemStateInner {
+        dynamic_field::borrow(&self.id, self.version)
+    }
+
+    fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInner {
+        dynamic_field::borrow_mut(&mut self.id, self.version)
     }
 
     /// Extract required Balance from vector of Coin<SUI>, transfer the remainder back to sender.
