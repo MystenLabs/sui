@@ -89,7 +89,6 @@ pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiS
         epoch,
         protocol_version: ProtocolVersion::MAX.as_u64(),
         validators: validator_set,
-        treasury_cap: Supply { value: 0 },
         storage_fund: Balance::new(0),
         parameters: SystemParameters {
             min_validator_stake: 1,

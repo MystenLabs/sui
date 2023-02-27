@@ -58,7 +58,7 @@ module sui::governance_test_utils {
     ) {
         sui_system::create(
             validators,
-            balance::create_supply_for_testing(sui_supply_amount), // sui_supply
+            balance::create_for_testing<SUI>(sui_supply_amount), // sui_supply
             balance::create_for_testing<SUI>(storage_fund_amount), // storage_fund
             1024, // max_validator_candidate_count
             0, // min_validator_stake

@@ -107,7 +107,7 @@ all the information we need in the system.
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> sui_supply = <a href="sui.md#0x2_sui_new">sui::new</a>(ctx);
-    <b>let</b> storage_fund = <a href="balance.md#0x2_balance_increase_supply">balance::increase_supply</a>(&<b>mut</b> sui_supply, <a href="genesis.md#0x2_genesis_INIT_STORAGE_FUND">INIT_STORAGE_FUND</a>);
+    <b>let</b> storage_fund = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> sui_supply, <a href="genesis.md#0x2_genesis_INIT_STORAGE_FUND">INIT_STORAGE_FUND</a>);
     <b>let</b> validators = <a href="_empty">vector::empty</a>();
     <b>let</b> count = <a href="_length">vector::length</a>(&validator_pubkeys);
     <b>assert</b>!(
@@ -157,7 +157,7 @@ all the information we need in the system.
             p2p_address,
             consensus_address,
             worker_address,
-            <a href="balance.md#0x2_balance_increase_supply">balance::increase_supply</a>(&<b>mut</b> sui_supply, <a href="stake.md#0x2_stake">stake</a>),
+            <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> sui_supply, <a href="stake.md#0x2_stake">stake</a>),
             <a href="_none">option::none</a>(),
             gas_price,
             commission_rate,

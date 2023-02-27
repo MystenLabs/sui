@@ -6055,7 +6055,6 @@
           "safe_mode",
           "stake_subsidy",
           "storage_fund",
-          "treasury_cap",
           "validator_report_records",
           "validators"
         ],
@@ -6094,9 +6093,6 @@
           },
           "storage_fund": {
             "$ref": "#/components/schemas/Balance"
-          },
-          "treasury_cap": {
-            "$ref": "#/components/schemas/Supply"
           },
           "validator_report_records": {
             "$ref": "#/components/schemas/VecMap_for_SuiAddress_and_VecSet_for_SuiAddress"
