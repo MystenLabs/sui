@@ -380,6 +380,7 @@ async fn test_reconfig_with_committee_change_basic() {
             CallArg::Pure(bcs::to_bytes("image_url".as_bytes()).unwrap()),
             CallArg::Pure(bcs::to_bytes("project_url".as_bytes()).unwrap()),
             CallArg::Pure(bcs::to_bytes(&new_validator.network_address().to_vec()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&new_validator.p2p_address().to_vec()).unwrap()),
             CallArg::Pure(
                 bcs::to_bytes(&new_validator.narwhal_primary_address().to_vec()).unwrap(),
             ),

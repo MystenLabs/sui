@@ -6791,6 +6791,7 @@
           "next_epoch_delegation",
           "next_epoch_gas_price",
           "next_epoch_stake",
+          "p2p_address",
           "project_url",
           "proof_of_possession_bytes",
           "pubkey_bytes",
@@ -6851,6 +6852,14 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          },
+          "p2p_address": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
           },
           "project_url": {
             "type": "string"

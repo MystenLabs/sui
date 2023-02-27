@@ -13,12 +13,12 @@
 module sui::display {
     use sui::publisher::{is_package, Publisher};
     use sui::tx_context::{sender, TxContext};
-    use std::string::{String, utf8};
     use sui::vec_map::{Self, VecMap};
     use sui::object::{Self, ID, UID};
-    use sui::transfer;
+    use sui::transfer::transfer;
     use sui::event;
     use std::vector;
+    use std::string::String;
 
     // Collectible is a special case to avoid storing `Publisher`.
     friend sui::collectible;
@@ -51,7 +51,7 @@ module sui::display {
     ///
     /// Uses only String type due to external-facing nature of the object,
     /// the property names have a priority over their types.
-    struct Display<phantom T: key> has key {
+    struct Display<phantom T: key> has key, store {
         id: UID,
         /// Contains fields for display. Currently supported
         /// fields are: name, link, image and description.
@@ -77,34 +77,13 @@ module sui::display {
         fields: VecMap<String, String>,
     }
 
-    // === Initializer Functions ===
-
-    /// Since the only way to own a Display is before it has been published,
-    /// we don't need to perform an authorization check.
-    ///
-    /// Also, the only place it can be used is the function where the Display
-    /// object was created; hence values and names are likely to be hardcoded and
-    /// vector<u8> is the best type for that purpose.
-    public fun add_owned<T: key>(d: Display<T>, name: vector<u8>, value: vector<u8>): Display<T> {
-        add_internal(&mut d, utf8(name), utf8(value));
-        d
-    }
+    // === Initializer Methods ===
 
     /// Create an empty Display object. It can either be shared empty or filled
     /// with data right away via cheaper `set_owned` method.
     public fun new<T: key>(pub: &Publisher, ctx: &mut TxContext): Display<T> {
-        assert!(is_package<T>(pub), ENotOwner);
+        assert!(is_authorized<T>(pub), ENotOwner);
         create_internal(ctx)
-    }
-
-    /// Share an object after the initialization is complete.
-    public fun share<T: key>(d: Display<T>) {
-        transfer::share_object(d)
-    }
-
-    /// Transfer an object to an address to have it single owner.
-    public fun transfer<T: key>(d: Display<T>, receiver: address) {
-        transfer::transfer(d, receiver)
     }
 
     /// Protected method to create an empty Display for the `Collectible<T>`.
@@ -114,22 +93,10 @@ module sui::display {
         create_internal(ctx)
     }
 
-    // === Entry functions: Create ===
-
-    /// Create a new empty Display<T> object and share it.
-    entry public fun create_and_share<T: key>(pub: &Publisher, ctx: &mut TxContext) {
-        share(new<T>(pub, ctx))
-    }
-
-    /// Create a new empty Display<T> object and keep it.
-    entry public fun create_and_keep<T: key>(pub: &Publisher, ctx: &mut TxContext) {
-        transfer(new<T>(pub, ctx), sender(ctx))
-    }
-
     /// Create a new Display<T> object with a set of fields.
-    entry public fun new_with_fields<T: key>(
+    public fun new_with_fields<T: key>(
         pub: &Publisher, fields: vector<String>, values: vector<String>, ctx: &mut TxContext
-    ) {
+    ): Display<T> {
         let len = vector::length(&fields);
         assert!(len == vector::length(&values), EVecLengthMismatch);
 
@@ -140,60 +107,67 @@ module sui::display {
             i = i + 1;
         };
 
-        share(display)
+        display
+    }
+
+    // === Entry functions: Create ===
+
+    /// Create a new empty Display<T> object and keep it.
+    entry public fun create_and_keep<T: key>(pub: &Publisher, ctx: &mut TxContext) {
+        transfer(new<T>(pub, ctx), sender(ctx))
     }
 
     /// Manually bump the version and emit an event with the updated version's contents.
     entry public fun update_version<T: key>(
-        pub: &Publisher, d: &mut Display<T>
+        display: &mut Display<T>
     ) {
-        assert!(is_package<T>(pub), ENotOwner);
-        d.version = d.version + 1;
+        display.version = display.version + 1;
         event::emit(VersionUpdated<T> {
-            version: d.version,
-            fields: *&d.fields,
-            id: object::uid_to_inner(&d.id),
+            version: display.version,
+            fields: *&display.fields,
+            id: object::uid_to_inner(&display.id),
         })
     }
 
     // === Entry functions: Add/Modify fields ===
 
     /// Sets a custom `name` field with the `value`.
-    entry public fun add<T: key>(pub: &Publisher, d: &mut Display<T>, name: String, value: String) {
-        assert!(is_package<T>(pub), ENotOwner);
-        add_internal(d, name, value)
+    entry public fun add<T: key>(self: &mut Display<T>, name: String, value: String) {
+        add_internal(self, name, value)
     }
 
     /// Sets multiple `fields` with `values`.
     entry public fun add_multiple<T: key>(
-        pub: &Publisher, d: &mut Display<T>, fields: vector<String>, values: vector<String>
+        self: &mut Display<T>, fields: vector<String>, values: vector<String>
     ) {
         let len = vector::length(&fields);
-        assert!(is_package<T>(pub), ENotOwner);
         assert!(len == vector::length(&values), EVecLengthMismatch);
 
         let i = 0;
         while (i < len) {
-            add_internal(d, *vector::borrow(&fields, i), *vector::borrow(&values, i));
+            add_internal(self, *vector::borrow(&fields, i), *vector::borrow(&values, i));
             i = i + 1;
         };
     }
 
     /// Change the value of the field.
     /// TODO (long run): version changes;
-    entry public fun edit<T: key>(pub: &Publisher, d: &mut Display<T>, name: String, value: String) {
-        assert!(is_package<T>(pub), ENotOwner);
-        let (_k, _v) = vec_map::remove(&mut d.fields, &name);
-        add_internal(d, name, value)
+    entry public fun edit<T: key>(self: &mut Display<T>, name: String, value: String) {
+        let (_, _) = vec_map::remove(&mut self.fields, &name);
+        add_internal(self, name, value)
     }
 
     /// Remove the key from the Display.
-    entry public fun remove<T: key>(pub: &Publisher, d: &mut Display<T>, name: String) {
-        assert!(is_package<T>(pub), ENotOwner);
-        vec_map::remove(&mut d.fields, &name);
+    entry public fun remove<T: key>(self: &mut Display<T>, name: String) {
+        vec_map::remove(&mut self.fields, &name);
     }
 
     // === Access fields ===
+
+    /// Authorization check; can be performed externally to implement protection rules for Display.
+    public fun is_authorized<T: key>(pub: &Publisher): bool {
+        is_package<T>(pub)
+    }
 
     /// Read the `version` field.
     public fun version<T: key>(d: &Display<T>): u16 {
@@ -223,8 +197,8 @@ module sui::display {
     }
 
     /// Private method for inserting fields without security checks.
-    fun add_internal<T: key>(d: &mut Display<T>, name: String, value: String) {
-        vec_map::insert(&mut d.fields, name, value)
+    fun add_internal<T: key>(display: &mut Display<T>, name: String, value: String) {
+        vec_map::insert(&mut display.fields, name, value)
     }
 }
 
@@ -232,7 +206,8 @@ module sui::display {
 module sui::display_tests {
     use sui::object::UID;
     use sui::test_scenario as test;
-    use std::string::String;
+    use sui::transfer::transfer;
+    use std::string::{utf8, String};
     use sui::publisher;
     use sui::display;
 
@@ -254,13 +229,13 @@ module sui::display_tests {
         // create a new display object
         let display = display::new<Capy>(&pub, test::ctx(&mut test));
 
-        let d = display::add_owned(display, b"name", b"Capy {name}");
-        let d = display::add_owned(d, b"link", b"https://capy.art/capy/{id}");
-        let d = display::add_owned(d, b"image", b"https://api.capy.art/capy/{id}/svg");
-        let d = display::add_owned(d, b"description", b"A Lovely Capy");
+        display::add(&mut display, utf8(b"name"), utf8(b"Capy {name}"));
+        display::add(&mut display, utf8(b"link"), utf8(b"https://capy.art/capy/{id}"));
+        display::add(&mut display, utf8(b"image"), utf8(b"https://api.capy.art/capy/{id}/svg"));
+        display::add(&mut display, utf8(b"description"), utf8(b"A Lovely Capy"));
 
         publisher::burn(pub);
-        display::share(d);
+        transfer(display, @0x2);
         test::end(test);
     }
 }

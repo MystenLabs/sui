@@ -1996,7 +1996,9 @@ pub enum ExecutionFailureStatus {
     VMInvariantViolation,
 
     /// The total amount of coins to be paid is larger than the maximum value of u64.
-    TotalAmountOverflow,
+    TotalPaymentAmountOverflow,
+    /// The total balance of coins is larger than the maximum value of u64.
+    TotalCoinBalanceOverflow,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }
@@ -2093,12 +2095,6 @@ impl Display for ExecutionFailureStatus {
                 write!(
                     f,
                     "Coin exceeds maximum value for a single coin"
-                )
-            },
-            ExecutionFailureStatus::TotalAmountOverflow => {
-                write!(
-                    f,
-                    "The total amount of coins to be paid is larger than the maximum value of u64"
                 )
             },
             ExecutionFailureStatus::EmptyInputCoins => {
@@ -2238,7 +2234,19 @@ impl Display for ExecutionFailureStatus {
             ),
             ExecutionFailureStatus::VMInvariantViolation => {
                 write!(f, "MOVE VM INVARIANT VIOLATION.")
-            }
+            },
+            ExecutionFailureStatus::TotalPaymentAmountOverflow => {
+                write!(
+                    f,
+                    "The total amount of coins to be paid overflows of u64"
+                )
+            },
+            ExecutionFailureStatus::TotalCoinBalanceOverflow => {
+                write!(
+                    f,
+                    "The total balance of coins overflows u64"
+                )
+            },
         }
     }
 }

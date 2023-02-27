@@ -545,16 +545,20 @@ fn check_recipients(recipients: &[SuiAddress], amounts: &[u64]) -> Result<(), Ex
 fn check_total_coins(coins: &[Coin], amounts: &[u64]) -> Result<(u64, u64), ExecutionError> {
     let Some(total_amount) = amounts.iter().fold(Some(0u64), |acc, a| acc?.checked_add(*a)) else {
         return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::TotalAmountOverflow,
+            ExecutionErrorKind::TotalPaymentAmountOverflow,
             "Attempting to pay a total amount that overflows u64".to_string(),
         ));
     };
-    // u64 overflow is impossible because the sum of all coin values is bounded by the total amount
-    let total_coins = coins.iter().fold(0, |acc, c| acc + c.value());
+    let Some(total_coins) = coins.iter().fold(Some(0u64), |acc, c| acc?.checked_add(c.value())) else {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::TotalCoinBalanceOverflow,
+            "Total balance of input coins overflows u64".to_string(),
+        ));
+    };
     if total_amount > total_coins {
         return Err(ExecutionError::new_with_source(
             ExecutionErrorKind::InsufficientBalance,
-            format!("Attempting to pay a total amount {:?} that is greater than the sum of input coin values {:?}", total_amount, total_coins),
+            format!("Attempting to pay a total amount {:?} that is greater than the total balance of input coins {:?}", total_amount, total_coins),
         ));
     }
     Ok((total_coins, total_amount))
@@ -636,8 +640,12 @@ fn pay<S>(
     );
 
     // double check that we didn't create or destroy money
-    // u64 overflow is impossible because the sum of all coin values is bounded by the total amount
-    let left_coins = coins.iter().fold(0, |acc, c| acc + c.value());
+    let Some(left_coins) = coins.iter().fold(Some(0u64), |acc, c| acc?.checked_add(c.value())) else {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::TotalCoinBalanceOverflow,
+            "Total balance of coins left overflows u64".to_string(),
+        ));
+    };
     debug_assert!(left_coins <= total_coins);
     debug_assert_eq!(total_coins - left_coins, total_amount);
 
@@ -706,6 +714,7 @@ fn pay_all_sui<S>(
     recipient: SuiAddress,
 ) -> Result<(), ExecutionError> {
     let (mut coins, _coin_type) = check_coins(coin_objects, Some(GasCoin::type_()))?;
+    // overflow is not possible b/c total SUI supply is 10B SUI or 10^19 MISTs, and 10^19 < u64::MAX
     let total_coins = coins.iter().fold(0, |acc, c| acc + c.value());
 
     let mut merged_coin = coins.swap_remove(0);
@@ -875,7 +884,36 @@ fn test_pay_amount_overflow() {
             .unwrap_err()
             .to_execution_status()
             .0,
-        ExecutionFailureStatus::TotalAmountOverflow
+        ExecutionFailureStatus::TotalPaymentAmountOverflow
+    );
+}
+
+#[test]
+fn test_pay_coin_overflow() {
+    let coin_objects = vec![
+        Object::new_gas_with_balance_and_owner_for_testing(
+            u64::MAX,
+            SuiAddress::random_for_testing_only(),
+        ),
+        Object::new_gas_with_balance_and_owner_for_testing(
+            100u64,
+            SuiAddress::random_for_testing_only(),
+        ),
+    ];
+    let recipients = vec![
+        SuiAddress::random_for_testing_only(),
+        SuiAddress::random_for_testing_only(),
+    ];
+    let amounts = vec![100, 100];
+    let mut store: TemporaryStore<()> = temporary_store::empty_for_testing();
+    let mut ctx = TxContext::random_for_testing_only();
+
+    assert_eq!(
+        pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
+            .unwrap_err()
+            .to_execution_status()
+            .0,
+        ExecutionFailureStatus::TotalCoinBalanceOverflow
     );
 }
 
