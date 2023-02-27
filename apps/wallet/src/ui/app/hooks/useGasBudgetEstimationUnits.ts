@@ -5,6 +5,7 @@ import { type CoinStruct } from '@mysten/sui.js';
 
 import { DEFAULT_GAS_BUDGET_FOR_PAY } from '_redux/slices/sui-objects/Coin';
 
+//TODO: (Jibz) change Coins.selectCoinSetWithCombinedBalanceGreaterThanOrEqual to use CoinStruct instead of ObjectDetails then remove this function
 // This is a helper function to get a set of gas coins that can cover a given amount
 // It is from Coins.selectCoinSetWithCombinedBalanceGreaterThanOrEqual from sui.js
 function getCoinSetWithCombinedBalanceGreaterThanOrEqual(
