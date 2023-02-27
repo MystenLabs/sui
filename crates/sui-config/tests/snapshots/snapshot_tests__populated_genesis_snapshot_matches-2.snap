@@ -229,6 +229,7 @@ validators:
         image_url: ""
         project_url: ""
         net_address: []
+        p2p_address: []
         consensus_address: []
         worker_address: []
         next_epoch_stake: 1
@@ -481,6 +482,7 @@ validators:
       image_url: ""
       project_url: ""
       net_address: []
+      p2p_address: []
       consensus_address: []
       worker_address: []
       next_epoch_stake: 1

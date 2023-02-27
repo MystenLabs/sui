@@ -39,6 +39,7 @@ module sui::genesis {
         validator_image_urls: vector<vector<u8>>,
         validator_project_urls: vector<vector<u8>>,
         validator_net_addresses: vector<vector<u8>>,
+        validator_p2p_addresses: vector<vector<u8>>,
         validator_consensus_addresses: vector<vector<u8>>,
         validator_worker_addresses: vector<vector<u8>>,
         validator_stakes: vector<u64>,
@@ -60,6 +61,7 @@ module sui::genesis {
                 && vector::length(&validator_image_urls) == count
                 && vector::length(&validator_project_urls) == count
                 && vector::length(&validator_net_addresses) == count
+                && vector::length(&validator_p2p_addresses) == count
                 && vector::length(&validator_consensus_addresses) == count
                 && vector::length(&validator_worker_addresses) == count
                 && vector::length(&validator_gas_prices) == count
@@ -78,6 +80,7 @@ module sui::genesis {
             let image_url = *vector::borrow(&validator_image_urls, i);
             let project_url = *vector::borrow(&validator_project_urls, i);
             let net_address = *vector::borrow(&validator_net_addresses, i);
+            let p2p_address = *vector::borrow(&validator_p2p_addresses, i);
             let consensus_address = *vector::borrow(&validator_consensus_addresses, i);
             let worker_address = *vector::borrow(&validator_worker_addresses, i);
             let stake = *vector::borrow(&validator_stakes, i);
@@ -94,6 +97,7 @@ module sui::genesis {
                 image_url,
                 project_url,
                 net_address,
+                p2p_address,
                 consensus_address,
                 worker_address,
                 balance::increase_supply(&mut sui_supply, stake),
