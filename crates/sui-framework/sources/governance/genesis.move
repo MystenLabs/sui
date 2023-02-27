@@ -5,6 +5,7 @@ module sui::genesis {
     use std::vector;
 
     use sui::balance;
+    use sui::coin;
     use sui::clock;
     use sui::sui;
     use sui::sui_system;
@@ -24,6 +25,9 @@ module sui::genesis {
 
     /// Stake subisidy to be given out in the very first epoch. Placeholder value.
     const INIT_STAKE_SUBSIDY_AMOUNT: u64 = 1000000;
+
+    /// The initial balance of the Subsidy fund in Mist (1 Billion * 10^9)
+    const INIT_STAKE_SUBSIDY_FUND_BALANCE: u64 = 1_000_000_000_000_000_000;
 
     /// This function will be explicitly called once at genesis.
     /// It will create a singleton SuiSystemState object, which contains
@@ -50,6 +54,7 @@ module sui::genesis {
         ctx: &mut TxContext,
     ) {
         let sui_supply = sui::new(ctx);
+        let subsidy_fund = balance::split(&mut sui_supply, INIT_STAKE_SUBSIDY_FUND_BALANCE);
         let storage_fund = balance::split(&mut sui_supply, INIT_STORAGE_FUND);
         let validators = vector::empty();
         let count = vector::length(&validator_pubkeys);
@@ -111,7 +116,7 @@ module sui::genesis {
 
         sui_system::create(
             validators,
-            sui_supply,
+            subsidy_fund,
             storage_fund,
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
@@ -122,5 +127,10 @@ module sui::genesis {
         );
 
         clock::create();
+
+        // Transfer the remaining balance of sui's supply to the initial account
+        // TODO pass in the account that should recieve the initial
+        // distribution of Sui instead of sending it to address 0x0
+        sui::transfer(coin::from_balance(sui_supply, ctx), @0x0);
     }
 }
