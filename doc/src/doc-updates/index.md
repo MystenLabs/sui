@@ -4,6 +4,13 @@ title: Sui Documentation Updates
 
 This topic lists the significant updates to the [Sui documentation](https://docs.sui.io) site so that you can easily identify new or updated information.
 
+## Week ending 03/05/23
+
+| Topic | Update | 
+| :------ | :------- |
+| [Sui Exchange Integration Guide](../learn/exchange-integration-guide.md) | New topic that describes how to integrate Sui into a cryptocurrency exchange. |
+
+
 ## Week ending 02/23/23
 
 | Topic | Update | 
