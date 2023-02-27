@@ -27,7 +27,7 @@ module sui::boars {
             otw, option::some(CAP), ctx
         );
 
-        display::add_multiple(&pub, &mut display, vector[
+        display::add_multiple(&mut display, vector[
             utf8(b"name"),
             utf8(b"description"),
             utf8(b"img_url"),
@@ -41,9 +41,9 @@ module sui::boars {
             utf8(b"https://get-a-boar.com/")
         ]);
 
-        display::update_version(&pub, &mut display);
-        display::transfer(display, sender(ctx));
+        display::update_version(&mut display);
         transfer(creator_cap, sender(ctx));
+        transfer(display, sender(ctx));
         transfer(pub, sender(ctx))
     }
 
