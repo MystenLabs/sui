@@ -40,12 +40,7 @@ function TransferCoinPage() {
     const signer = useSigner();
 
     const transferCoin = async () => {
-        if (
-            coinType === null ||
-            !signer ||
-            !formData?.amount ||
-            !formData?.to
-        ) {
+        if (coinType === null || !signer || !formData) {
             throw new Error('Missing data');
         }
 
