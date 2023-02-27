@@ -794,6 +794,26 @@ impl ProgrammableTransaction {
         }
         Ok(())
     }
+
+    fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
+        self.inputs
+            .iter()
+            .filter_map(|arg| match arg {
+                CallArg::Pure(_) | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
+                CallArg::Object(ObjectArg::SharedObject {
+                    id,
+                    initial_shared_version,
+                    mutable,
+                }) => Some(vec![SharedInputObject {
+                    id: *id,
+                    initial_shared_version: *initial_shared_version,
+                    mutable: *mutable,
+                }]),
+                // Not supported in programmable transactions
+                CallArg::ObjVec(_) => None,
+            })
+            .flatten()
+    }
 }
 
 impl Display for Argument {
@@ -900,7 +920,10 @@ impl SingleTransactionKind {
             Self::Call(_) | Self::ChangeEpoch(_) | Self::ConsensusCommitPrologue(_) => {
                 Either::Left(self.all_move_call_shared_input_objects())
             }
-            _ => Either::Right(iter::empty()),
+            Self::ProgrammableTransaction(pt) => {
+                Either::Right(Either::Left(pt.shared_input_objects()))
+            }
+            _ => Either::Right(Either::Right(iter::empty())),
         }
     }
 
@@ -961,7 +984,7 @@ impl SingleTransactionKind {
         }
     }
 
-    pub fn move_call(&self) -> Option<&MoveCall> {
+    pub fn legacy_move_call(&self) -> Option<&MoveCall> {
         match &self {
             Self::Call(call @ MoveCall { .. }) => Some(call),
             _ => None,
@@ -1593,10 +1616,10 @@ impl TransactionData {
         self.kind.shared_input_objects()
     }
 
-    pub fn move_calls(&self) -> Vec<&MoveCall> {
+    pub fn legacy_move_calls(&self) -> Vec<&MoveCall> {
         self.kind
             .single_transactions()
-            .flat_map(|s| s.move_call())
+            .flat_map(|s| s.legacy_move_call())
             .collect()
     }
 

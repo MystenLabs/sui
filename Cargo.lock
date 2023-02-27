@@ -9429,6 +9429,7 @@ dependencies = [
  "enum_dispatch",
  "eyre",
  "fastcrypto",
+ "indexmap",
  "itertools",
  "move-binary-format",
  "move-bytecode-utils",
