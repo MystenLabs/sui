@@ -40,9 +40,9 @@ A user-initiated sponsored transaction involves the following steps:
 
 ### GasLessTransactionData
 
-GasLessTransactionData is basically `TransactionData` less `GasData`. It is not a sui-core data structure, but it is only an interface between user and sponsor.
+`GasLessTransactionData` is basically `TransactionData` without `GasData`. It is not a sui-core data structure, but it is only an interface between user and sponsor.
 
-The following example constructs a GasLessTransactionData  object.
+The following example constructs a `GasLessTransactionData`  object.
 
 ```rust
 pub struct GasLessTransactionData {
@@ -55,16 +55,16 @@ pub struct GasLessTransactionData {
 ## Create a sponsor-initiated sponsored transaction  
 
 A sponsor-initiated sponsored transaction involves the following steps:
- 1. A sponsor constructs a TransactionData object that contains the transaction details and associated gas fee data. The sponsor signs it to generate a Signature  before sending it to a user. 
- You can send the unsigned TransactionData via email, SMS, or an application interface.
- 1. The user checks the transaction and signs it to generate the second signature for the transaction.
+ 1. A sponsor constructs a `TransactionData` object that contains the transaction details and associated gas fee data. The sponsor signs it to generate a `Signature` before sending it to a user. 
+ You can send the unsigned `TransactionData` via email, SMS, or an application interface.
+ 1. The user checks the transaction and signs it to generate the second `Signature` for the transaction.
  1. The user submits the dual-signed transaction to a Sui Full node or sponsor to execute it.
 
- You can use a sponsor-initiated sponsored transaction as an advertiser, or to incentivize specific user actions without requiring the user to pay for gas fees.
+You can use a sponsor-initiated sponsored transaction as an advertiser, or to incentivize specific user actions without requiring the user to pay for gas fees.
 
 ## Create sponsored transactions using a GasData object
 
-To use a GasData object to sponsor the gas fees for a transaction, create a GasData object that covers the fees determined for the transaction. This is similar to providing a blank check to a user that can be used only to cover gas fees. The user doesn’t need to know how much the fee is or approve it.
+To use a `GasData` object to sponsor the gas fees for a transaction, create a `GasData` object that covers the fees determined for the transaction. This is similar to providing a blank check to a user that can be used only to cover gas fees. The user doesn’t need to know how much the fee is or approve it.
 
  A sponsor transaction using a `GasData` object involves the following steps:
  1. The sponsor provides a `GasData` object to a user.
