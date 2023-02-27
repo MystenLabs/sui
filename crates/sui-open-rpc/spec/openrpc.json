@@ -6043,7 +6043,7 @@
         ]
       },
       "SuiSystemState": {
-        "description": "Rust version of the Move sui::sui_system::SuiSystemState type",
+        "description": "Rust version of the Move sui::sui_system::SuiSystemStateInner type We want to keep it named as SuiSystemState in Rust since this is the primary interface type.",
         "type": "object",
         "required": [
           "epoch",
