@@ -228,7 +228,7 @@ Sui supports the following API operations related to transferring SUI between ad
 
 The Sui blockchain uses a delegated Proof-of-Stake mechanism (DPoS). This allows SUI token holders to delegate their tokens to any validator of their choice. When someone delegates their SUI tokens, it means those tokens are locked for the entire epoch. Users can withdraw their stake and stake with a different validator between epochs.
 
-SUI holders who delegate their tokens to validators earn rewards for helping secure the Sui  network. Sui determines rewards for delegation based on stakw rewards on the network, and distributes them at the end of each epoch.
+SUI holders who delegate their tokens to validators earn rewards for helping secure the Sui network. Sui determines rewards for delegation based on stake rewards on the network, and distributes them at the end of each epoch.
 
 The total stake delegated to a validator determines the validator’s voting power.
 
