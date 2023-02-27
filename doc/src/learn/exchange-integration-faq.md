@@ -56,7 +56,7 @@ Questions about transaction in Sui.
 
 ### How can we subscribe to transaction events?
 
-There are "Move events" that are emitted by Move code, and "transaction events" such as object transfers, creations, and deletions. [https://docs.sui.io/build/pubsub#events](https://docs.sui.io/build/pubsub#events) has a list of all the events you can subscribe to via the pub/sub API and their structure.
+There are "Move events" that are emitted by Move code, and "transaction events" such as object transfers, creations, and deletions. [https://docs.sui.io/build/event_api](https://docs.sui.io/build/event_api) has a list of all the events you can subscribe to via the pub/sub API and their structure.
 
 ### Can I get the corresponding transaction serial number through TransactionDigest?
 
