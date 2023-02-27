@@ -41,6 +41,9 @@ impl Build {
         build_config: MoveBuildConfig,
     ) -> anyhow::Result<()> {
         let rerooted_path = base::reroot_path(path)?;
+        let lock_file_path = rerooted_path.join("Move.lock");
+        let mut build_config = build_config;
+        build_config.lock_file = Some(lock_file_path);
         Self::execute_internal(
             &rerooted_path,
             build_config,
