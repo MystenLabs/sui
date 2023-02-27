@@ -10,6 +10,7 @@ import {
   array,
   any,
 } from 'superstruct';
+import { Provider } from '../providers/provider';
 import { TransactionArgument, TransactionCommand } from './Commands';
 
 class TransactionResult {
@@ -69,7 +70,12 @@ const SerializedTransactionBuilder = object({
 });
 type SerializedTransactionBuilder = Infer<typeof SerializedTransactionBuilder>;
 
-export class Transaction<Inputs extends string> {
+export class Transaction<Inputs extends string = never> {
+  static is(obj: unknown): obj is Transaction {
+    return obj instanceof Transaction;
+  }
+
+  // TODO: Support fromBytes.
   static from(serialized: string) {
     const parsed = JSON.parse(serialized);
     assert(parsed, SerializedTransactionBuilder);
@@ -152,7 +158,7 @@ export class Transaction<Inputs extends string> {
     });
   }
 
-  async build() {
+  async build({ provider }: { provider: Provider }): Promise<Uint8Array> {
     throw new Error('Not implemented');
   }
 
