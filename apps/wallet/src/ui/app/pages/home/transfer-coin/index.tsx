@@ -40,17 +40,17 @@ function TransferCoinPage() {
     const signer = useSigner();
 
     const transferCoin = async () => {
-        const transaction = Sentry.startTransaction({ name: 'send-tokens' });
+        if (
+            coinType === null ||
+            !signer ||
+            !formData?.amount ||
+            !formData?.to
+        ) {
+            throw new Error('Missing data');
+        }
 
+        const transaction = Sentry.startTransaction({ name: 'send-tokens' });
         try {
-            if (
-                coinType === null ||
-                !signer ||
-                !formData?.amount ||
-                !formData?.to
-            ) {
-                throw new Error('Missing data');
-            }
             trackEvent('TransferCoins', {
                 props: { coinType },
             });
