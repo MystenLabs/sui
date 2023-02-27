@@ -38,31 +38,5 @@ async fn main() -> Result<()> {
         .await
         .wrap_err("Failed to run benchmark")?;
 
-    // testbed
-    //     .populate(2)
-    //     .await
-    //     .wrap_err("Failed to populate tested")?;
-
-    // testbed
-    //     .install()
-    //     .await
-    //     .wrap_err("Failed to install software on instances")?;
-
-    // testbed.kill(true).await.wrap_err("Failed to kill tested")?;
-
-    // testbed
-    //     .run_benchmark(&parameters)
-    //     .await
-    //     .wrap_err("Failed to deploy instances")?;
-
-    // testbed
-    //     .destroy()
-    //     .await
-    //     .wrap_err("Failed to destroy tested")?;
-
-    // testbed.kill(true).await.wrap_err("Failed to kill tested")?;
-
-    // testbed.stop().await.wrap_err("Failed to stop tested")?;
-
     Ok(())
 }

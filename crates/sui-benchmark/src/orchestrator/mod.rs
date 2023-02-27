@@ -6,9 +6,6 @@ use std::{
 
 use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
 use serde::{Deserialize, Serialize};
-use tokio::time;
-
-use crate::orchestrator::metrics::MetricsCollector;
 
 use self::{client::VultrClient, error::TestbedResult, testbed::Testbed};
 
@@ -110,6 +107,16 @@ impl Orchestrator {
         self.testbed.install().await?;
         self.testbed.update().await?;
         self.testbed.info();
+
+        crossterm::execute!(
+            stdout(),
+            SetForegroundColor(Color::Green),
+            SetAttribute(Attribute::Bold),
+            Print("\nTestbed ready for use\n"),
+            ResetColor
+        )
+        .unwrap();
+
         Ok(())
     }
 
@@ -130,15 +137,6 @@ impl Orchestrator {
     }
 
     pub async fn run_benchmarks(&self, benchmarks: Vec<Benchmark>) -> TestbedResult<()> {
-        crossterm::execute!(
-            stdout(),
-            SetForegroundColor(Color::Green),
-            SetAttribute(Attribute::Bold),
-            Print("\nStarting benchmarks\n"),
-            ResetColor
-        )
-        .unwrap();
-
         // Cleanup the testbed (in case the previous run was not completed).
         self.testbed.cleanup(true).await?;
 
@@ -149,6 +147,14 @@ impl Orchestrator {
         let mut latest_comittee_status = (0, 0);
         for benchmark in benchmarks {
             let parameters = &benchmark.parameters;
+            crossterm::execute!(
+                stdout(),
+                SetForegroundColor(Color::Green),
+                SetAttribute(Attribute::Bold),
+                Print("\nStarting benchmark\n"),
+                ResetColor
+            )
+            .unwrap();
 
             // Cleanup the testbed (in case the previous run was not completed).
             self.testbed.cleanup(true).await?;
@@ -165,19 +171,8 @@ impl Orchestrator {
             // Deploy the load generators.
             self.testbed.run_clients(parameters).await?;
 
-            // Wait for the benchmark to terminate.
-            println!("Waiting for about {}s...", parameters.duration.as_secs());
-
-            let mut aggregator = MetricsCollector::new(parameters.clone());
-            let mut interval = time::interval(Duration::from_secs(30));
-            interval.tick().await; // The first tick returns immediately.
-            loop {
-                interval.tick().await;
-                match self.testbed.scrape(&mut aggregator, parameters).await {
-                    Ok(duration) if duration >= parameters.duration => break,
-                    _ => (),
-                }
-            }
+            // Wait for the benchmark to terminate. Then save the results and print a summary.
+            let aggregator = self.testbed.collect_metrics(parameters).await?;
             aggregator.save();
             aggregator.print_summary(parameters);
 
@@ -185,7 +180,8 @@ impl Orchestrator {
             self.testbed.cleanup(false).await?;
 
             // Download the log files.
-            self.testbed.logs(parameters).await?;
+            let error_counter = self.testbed.download_logs(parameters).await?;
+            error_counter.print_summary();
         }
         Ok(())
     }

@@ -1,4 +1,5 @@
 use std::{
+    cmp::max,
     fs::File,
     io::{stdout, Read, Write},
     time::Duration,
@@ -6,11 +7,11 @@ use std::{
 
 use crossterm::{
     cursor::MoveToColumn,
-    style::{Print, Stylize},
+    style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor, Stylize},
 };
 use futures::future::try_join_all;
 use prettytable::{format, row, Table};
-use tokio::time::sleep;
+use tokio::time::{self, sleep};
 
 use crate::{
     ensure,
@@ -29,6 +30,74 @@ use super::{
     ssh::{SshCommand, SshConnectionManager},
     BenchmarkParameters,
 };
+
+#[derive(Default)]
+pub struct ErrorCounter {
+    pub node_errors: usize,
+    pub node_panic: bool,
+    pub client_errors: usize,
+    pub client_panic: bool,
+}
+
+impl ErrorCounter {
+    pub fn set_node_errors(&mut self, log: &str) {
+        self.node_errors = log.matches(" ERROR").count();
+        self.node_panic = log.contains("panic");
+    }
+
+    pub fn set_client_errors(&mut self, log: &str) {
+        self.client_errors = max(self.client_errors, log.matches(" ERROR").count());
+        self.client_panic = log.contains("panic");
+    }
+
+    pub fn aggregate(counters: Vec<Self>) -> Self {
+        let mut highest = Self::default();
+        for counter in counters {
+            if counter.node_panic {
+                return counter;
+            } else if counter.client_panic {
+                return counter;
+            } else if counter.client_errors > highest.client_errors {
+                highest = counter;
+            } else if counter.node_errors > highest.node_errors {
+                highest = counter;
+            }
+        }
+        highest
+    }
+
+    pub fn print_summary(&self) {
+        if self.node_panic {
+            crossterm::execute!(
+                stdout(),
+                SetForegroundColor(Color::Red),
+                SetAttribute(Attribute::Bold),
+                Print("\nNode(s) panicked!\n"),
+                ResetColor
+            )
+            .unwrap();
+        } else if self.client_panic {
+            crossterm::execute!(
+                stdout(),
+                SetForegroundColor(Color::Red),
+                SetAttribute(Attribute::Bold),
+                Print("\nClient(s) panicked!\n"),
+                ResetColor
+            )
+            .unwrap();
+        } else if self.node_errors != 0 || self.client_errors != 0 {
+            crossterm::execute!(
+                stdout(),
+                SetAttribute(Attribute::Bold),
+                Print(format!(
+                    "\nLogs contain errors (node: {}, client: {})\n",
+                    self.node_errors, self.client_errors
+                )),
+            )
+            .unwrap();
+        }
+    }
+}
 
 pub struct Testbed<C> {
     /// The testbed's settings.
@@ -247,6 +316,7 @@ impl<C: Client> Testbed<C> {
 
 impl<C> Testbed<C> {
     const CLIENT_METRIC_PORT: u16 = 8081;
+    const SCRAPE_INTERVAL: Duration = Duration::from_secs(30);
 
     pub fn select_instances(
         &self,
@@ -522,25 +592,57 @@ impl<C> Testbed<C> {
         Ok(())
     }
 
-    pub async fn scrape(
+    pub async fn collect_metrics(
         &self,
-        aggregator: &mut MetricsCollector<usize>,
         parameters: &BenchmarkParameters,
-    ) -> TestbedResult<Duration> {
+    ) -> TestbedResult<MetricsCollector<usize>> {
+        crossterm::execute!(
+            stdout(),
+            Print(format!(
+                "Scrape metrics for {}s...",
+                parameters.duration.as_secs()
+            ))
+        )
+        .unwrap();
+
+        // Select the instances to run.
         let instances = self.select_instances(parameters)?;
 
+        // Regularly scrape the client metrics.
         let command = format!("curl 127.0.0.1:{}/metrics", Self::CLIENT_METRIC_PORT);
         let ssh_command = SshCommand::new(move |_| command.clone());
-        let stdio = self.ssh_manager.execute(&instances, ssh_command).await?;
 
-        for (i, (stdout, _stderr)) in stdio.iter().enumerate() {
-            aggregator.collect(i, stdout);
+        let mut aggregator = MetricsCollector::new(parameters.clone());
+        let mut interval = time::interval(Self::SCRAPE_INTERVAL);
+        interval.tick().await; // The first tick returns immediately.
+
+        loop {
+            interval.tick().await;
+            match self
+                .ssh_manager
+                .execute(&instances, ssh_command.clone())
+                .await
+            {
+                Ok(stdio) => {
+                    for (i, (stdout, _stderr)) in stdio.iter().enumerate() {
+                        aggregator.collect(i, stdout);
+                    }
+                }
+                Err(_e) => (), // TODO: Print an error message.
+            }
+            if aggregator.benchmark_duration() >= parameters.duration {
+                break;
+            }
         }
 
-        Ok(aggregator.benchmark_duration())
+        println!(" [{}]", "Ok".green());
+        Ok(aggregator)
     }
 
-    pub async fn logs(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
+    pub async fn download_logs(
+        &self,
+        parameters: &BenchmarkParameters,
+    ) -> TestbedResult<ErrorCounter> {
         crossterm::execute!(stdout(), Print("Downloading logs...")).unwrap();
 
         let instances = self.select_instances(parameters)?;
@@ -553,11 +655,15 @@ impl<C> Testbed<C> {
                 let ssh_manager = self.ssh_manager.clone();
 
                 tokio::spawn(async move {
+                    let mut error_counter = ErrorCounter::default();
+
                     // Connect to the instance.
                     let connection = ssh_manager.connect(instance.ssh_address()).await?;
 
                     // Download the node log files.
                     let content = connection.download("node.log")?;
+                    error_counter.set_node_errors(&content);
+
                     let mut file = File::create(&format!("node-{i}.log"))
                         .expect("Cannot open file to dump log");
                     file.write_all(content.as_bytes())
@@ -565,24 +671,26 @@ impl<C> Testbed<C> {
 
                     // Download the clients log files.
                     let content = connection.download("client.log")?;
+                    error_counter.set_client_errors(&content);
+
                     let mut file = File::create(&format!("client-{i}.log"))
                         .expect("Cannot open file to dump log");
                     file.write_all(content.as_bytes())
                         .expect("Cannot write file");
 
-                    Ok(())
+                    Ok(error_counter)
                 })
             })
             .collect::<Vec<_>>();
 
-        try_join_all(handles)
+        let error_counters: Vec<ErrorCounter> = try_join_all(handles)
             .await
             .unwrap()
             .into_iter()
             .collect::<TestbedResult<_>>()?;
 
         println!(" [{}]", "Ok".green());
-        Ok(())
+        Ok(ErrorCounter::aggregate(error_counters))
     }
 }
 
