@@ -32,11 +32,6 @@ function TransferCoinPage() {
         navigate('/');
     }, [navigate]);
 
-    const handleNextStep = useCallback((formData: SubmitProps) => {
-        setShowTransactionPreview(true);
-        setFormData(formData);
-    }, []);
-
     if (!coinType) {
         return <Navigate to="/" replace={true} />;
     }
@@ -88,7 +83,10 @@ function TransferCoinPage() {
                         </div>
 
                         <SendTokenForm
-                            onSubmit={handleNextStep}
+                            onSubmit={(formData) => {
+                                setShowTransactionPreview(true);
+                                setFormData(formData);
+                            }}
                             coinType={coinType}
                             initialAmount={formData?.amount.toString() || ''}
                             initialTo={formData?.to || ''}
