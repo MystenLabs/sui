@@ -300,6 +300,8 @@ pub struct PrimaryMetrics {
     pub certificates_processed: IntCounterVec,
     /// count number of certificates that the node suspended their processing
     pub certificates_suspended: IntCounterVec,
+    /// number of certificates that are currently suspended.
+    pub certificates_currently_suspended: IntGauge,
     /// count number of duplicate certificates that the node processed (others + own)
     pub duplicate_certificates_processed: IntCounter,
     /// Latency to perform a garbage collection in core module
@@ -391,6 +393,12 @@ impl PrimaryMetrics {
                 "certificates_suspended",
                 "Number of certificates that node suspended processing of",
                 &["reason"],
+                registry
+            )
+            .unwrap(),
+            certificates_currently_suspended: register_int_gauge_with_registry!(
+                "certificates_currently_suspended",
+                "Number of certificates that are suspended in memory",
                 registry
             )
             .unwrap(),

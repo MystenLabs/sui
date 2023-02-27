@@ -435,16 +435,14 @@ async fn process_certificates_helper(
     for task in verify_tasks {
         let certificates = task.await.map_err(|_| DagError::Canceled)??;
         for cert in certificates {
-            match synchronizer
-                .try_accept_sanitized_certificate(cert, network)
+            if let Err(e) = synchronizer
+                .try_accept_fetched_certificate(cert, network)
                 .await
             {
-                Ok(()) => continue,
-                // It is possible that subsequent certificates are above GC round,
+                // It is possible that subsequent certificates are useful,
                 // so not stopping early.
-                Err(DagError::TooOld(_, _, _)) => continue,
-                result => return result,
-            };
+                warn!("Failed to accept fetched certificate: {e}");
+            }
         }
     }
 
