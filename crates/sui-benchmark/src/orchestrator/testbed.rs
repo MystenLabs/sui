@@ -12,7 +12,7 @@ use crossterm::{
 };
 use futures::future::try_join_all;
 use prettytable::{format, row, Table};
-use tokio::time::{self, sleep};
+use tokio::time::{self, sleep, Instant};
 
 use crate::{
     ensure,
@@ -586,7 +586,7 @@ impl<C> Testbed<C> {
         crossterm::execute!(
             stdout(),
             Print(format!(
-                "Scrape metrics for {}s...",
+                "Scrape metrics for {}s...\n",
                 parameters.duration.as_secs()
             ))
         )
@@ -603,19 +603,36 @@ impl<C> Testbed<C> {
         let mut interval = time::interval(Self::SCRAPE_INTERVAL);
         interval.tick().await; // The first tick returns immediately.
 
+        let start = Instant::now();
         loop {
-            interval.tick().await;
+            let now = interval.tick().await;
             match self
                 .ssh_manager
                 .execute(&instances, ssh_command.clone())
                 .await
             {
                 Ok(stdio) => {
+                    crossterm::execute!(
+                        stdout(),
+                        MoveToColumn(0),
+                        Print(format!(
+                            "[{:?}] Scraping metrics...",
+                            now.duration_since(start)
+                        ))
+                    )
+                    .unwrap();
                     for (i, (stdout, _stderr)) in stdio.iter().enumerate() {
                         aggregator.collect(i, stdout);
                     }
                 }
-                Err(_e) => (), // TODO: Print an error message.
+                Err(e) => crossterm::execute!(
+                    stdout(),
+                    SetAttribute(Attribute::Bold),
+                    MoveToColumn(0),
+                    Print(format!("Failed to scrape metrics: {e}")),
+                    SetAttribute(Attribute::NormalIntensity),
+                )
+                .unwrap(),
             }
             if aggregator.benchmark_duration() >= parameters.duration {
                 break;
@@ -623,7 +640,7 @@ impl<C> Testbed<C> {
         }
         aggregator.save(&self.settings.results_directory);
 
-        println!(" [{}]", "Ok".green());
+        println!();
         Ok(aggregator)
     }
 
@@ -651,7 +668,7 @@ impl<C> Testbed<C> {
                     let connection = ssh_manager.connect(instance.ssh_address()).await?;
 
                     // Create a log sub-directory for this run.
-                    let path: PathBuf = [&log_directory, &format!("logs-{}", parameters).into()]
+                    let path: PathBuf = [&log_directory, &format!("logs-{parameters:?}").into()]
                         .iter()
                         .collect();
                     fs::create_dir_all(&path).expect("Failed to create log directory");
