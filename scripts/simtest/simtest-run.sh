@@ -1,8 +1,7 @@
 #!/bin/bash
-# Copyright (c) Mysten Labs, Inc.
 
-# NUM_CPUS=$(cat /proc/cpuinfo | grep processor | wc -l) # ubuntu
-NUM_CPUS=$(sysctl -n hw.ncpu)
+NUM_CPUS=$(cat /proc/cpuinfo | grep processor | wc -l) # ubuntu
+# NUM_CPUS=$(sysctl -n hw.ncpu) mac
 
 for SUB_SEED in `seq 1 $NUM_CPUS`; do
   SEED="$SUB_SEED$DATE"
