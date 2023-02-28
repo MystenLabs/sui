@@ -56,6 +56,10 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
     return [this.#account];
   }
 
+  signMessage: WalletAdapter["signMessage"] = async (messageInput) => {
+    return this.#signer.signMessage(messageInput.message);
+  };
+
   signTransaction: WalletAdapter["signTransaction"] = async (
     transactionInput
   ) => {

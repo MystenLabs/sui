@@ -9,6 +9,7 @@ import {
 } from "@mysten/wallet-adapter-base";
 import { localStorageAdapter, StorageAdapter } from "./storage";
 import {
+  SuiSignMessageInput,
   SuiSignTransactionInput,
   WalletAccount,
 } from "@mysten/wallet-standard";
@@ -56,6 +57,9 @@ export interface WalletKitCore {
   subscribe(handler: SubscribeHandler): Unsubscribe;
   connect(walletName: string): Promise<void>;
   disconnect(): Promise<void>;
+  signMessage(
+    messageInput: OptionalProperties<SuiSignMessageInput, "account">
+  ): ReturnType<WalletAdapter["signMessage"]>;
   signTransaction: (
     transactionInput: OptionalProperties<
       SuiSignTransactionInput,
@@ -253,10 +257,23 @@ export function createWalletKitCore({
       disconnected();
     },
 
+    signMessage(messageInput) {
+      if (!internalState.currentWallet || !internalState.currentAccount) {
+        throw new Error(
+          "No wallet is currently connected, cannot call `signMessage`."
+        );
+      }
+
+      return internalState.currentWallet.signMessage({
+        ...messageInput,
+        account: messageInput.account ?? internalState.currentAccount,
+      });
+    },
+
     async signTransaction(transactionInput) {
       if (!internalState.currentWallet || !internalState.currentAccount) {
         throw new Error(
-          "No wallet is currently connected, cannot call `signAndExecuteTransaction`."
+          "No wallet is currently connected, cannot call `signTransaction`."
         );
       }
       const {

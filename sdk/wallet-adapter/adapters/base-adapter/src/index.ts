@@ -1,11 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SignedTransaction, SuiTransactionResponse } from "@mysten/sui.js";
+import {
+  SignedTransaction,
+  SuiTransactionResponse,
+  SignedMessage,
+} from "@mysten/sui.js";
 import {
   SuiSignTransactionInput,
   SuiSignAndExecuteTransactionInput,
   WalletAccount,
+  SuiSignMessageInput,
 } from "@mysten/wallet-standard";
 
 export interface WalletAdapterEvents {
@@ -29,6 +34,7 @@ export interface WalletAdapter {
     event: E,
     callback: WalletAdapterEvents[E]
   ) => () => void;
+  signMessage(messageInput: SuiSignMessageInput): Promise<SignedMessage>;
   signTransaction(
     transactionInput: SuiSignTransactionInput
   ): Promise<SignedTransaction>;
