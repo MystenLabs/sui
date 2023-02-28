@@ -8,7 +8,7 @@ This topic lists the significant updates to the [Sui documentation](https://docs
 
 | Topic | Update | 
 | :------ | :------- |
-| [Sui Exchange Integration Guide](../learn/exchange-integration-guide.md) | New topic that describes how to integrate Sui into a cryptocurrency exchange. |
+| [Sui Exchange Integration Guide](../learn/exchange-integration-guide.md) | New topic that describes how to integrate Sui into a cryptocurrency exchange. Merged the Exchange Integration FAQ topic into the new topic. |
 
 
 ## Week ending 02/23/23

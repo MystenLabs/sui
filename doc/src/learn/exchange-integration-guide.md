@@ -185,9 +185,9 @@ Sui is a DAG-based blockchain and uses checkpoints for node synchronization and 
 ### Checkpoint API operations
 
 Sui Checkpoint API operations include:
- * sui_getCheckpoint - Retrieves the specified checkpoint.
- * sui_getLatestCheckpointSequenceNumber - Retrieves the sequence number of the most recently executed checkpoint.
- * sui_getCheckpoints - Retrieves a paginated list of checkpoints that occurred during the specified interval.
+ * [sui_getCheckpoint](https://docs.sui.io/sui-jsonrpc#sui_getCheckpoint) - Retrieves the specified checkpoint.
+ * [sui_getLatestCheckpointSequenceNumber](https://docs.sui.io/sui-jsonrpc#sui_getLatestCheckpointSequenceNumber) - Retrieves the sequence number of the most recently executed checkpoint.
+ * sui_getCheckpoints - Retrieves a paginated list of checkpoints that occurred during the specified interval. Pending a future release.
 
 ## SUI Balance transfer
 
@@ -472,7 +472,7 @@ Sui is [DAG](https://cointelegraph.com/explained/what-is-a-directed-acyclic-grap
 
 ### How are transactions proposed by validators if they're not included in blocks? Does a validator propose blocks or just individual transactions?
 
-Validators form a certificate (a quorum of signatures) for each transaction, and then propose checkpoints consisting of certificates since the last checkpoint. You can read more in section 4.3 [here](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf).
+Validators form a certificate (a quorum of signatures) for each transaction, and then propose checkpoints consisting of certificates since the last checkpoint. You can read more in section 4.3 of the [Sui Smart Contract Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf).
 
 ### How do I get test Devnet coins?
 
