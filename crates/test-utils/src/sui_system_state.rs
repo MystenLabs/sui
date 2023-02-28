@@ -80,9 +80,8 @@ pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiS
         validator_stake: 1,
         delegation_stake: 1,
         active_validators: validators,
-        pending_validators: vec![],
+        pending_validators: TableVec::default(),
         pending_removals: vec![],
-        next_epoch_validators: vec![],
         staking_pool_mappings: Table::default(),
     };
     SuiSystemState {

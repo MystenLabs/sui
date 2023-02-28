@@ -178,9 +178,13 @@ export const ValidatorSet = object({
   validator_stake: number(),
   delegation_stake: number(),
   active_validators: array(Validator),
-  pending_validators: array(Validator),
+  pending_validators: object({
+    contents: object({
+      id: string(),
+      size: number(),
+    }),
+  }),
   pending_removals: array(number()),
-  next_epoch_validators: array(ValidatorMetaData),
   // TODO: Remove this after 0.28.0 is released
   pending_delegation_switches: optional(
     object({ contents: array(ValidatorPair) }),
