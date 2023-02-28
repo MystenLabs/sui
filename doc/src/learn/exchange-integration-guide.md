@@ -100,6 +100,10 @@ res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
 let sui_address_string = hex::encode(res);
 ```
 
+## Displaying addresses
+
+Sui supports both addresses with without a 0x prefix. Sui recommends that you always include the 0x prefix in API calls and when you display user addresses.
+
 ## Track balance changes for an address
 
 You can track balance changes by calling `sui_getBalance` at predefined intervals. This call returns the total balance for an address. The total includes any coin or token type, but this document focuses on SUI. You can track changes in the total balance for an address between subsequent `sui_getBalance` requests.
