@@ -43,7 +43,6 @@ module sui::genesis {
         validator_p2p_addresses: vector<vector<u8>>,
         validator_consensus_addresses: vector<vector<u8>>,
         validator_worker_addresses: vector<vector<u8>>,
-        validator_stakes: vector<u64>,
         validator_gas_prices: vector<u64>,
         validator_commission_rates: vector<u64>,
         protocol_version: u64,
@@ -57,7 +56,6 @@ module sui::genesis {
         let count = vector::length(&validator_pubkeys);
         assert!(
             vector::length(&validator_sui_addresses) == count
-                && vector::length(&validator_stakes) == count
                 && vector::length(&validator_names) == count
                 && vector::length(&validator_descriptions) == count
                 && vector::length(&validator_image_urls) == count
@@ -85,7 +83,6 @@ module sui::genesis {
             let p2p_address = *vector::borrow(&validator_p2p_addresses, i);
             let consensus_address = *vector::borrow(&validator_consensus_addresses, i);
             let worker_address = *vector::borrow(&validator_worker_addresses, i);
-            let stake = *vector::borrow(&validator_stakes, i);
             let gas_price = *vector::borrow(&validator_gas_prices, i);
             let commission_rate = *vector::borrow(&validator_commission_rates, i);
             vector::push_back(&mut validators, validator::new(
@@ -102,7 +99,9 @@ module sui::genesis {
                 p2p_address,
                 consensus_address,
                 worker_address,
-                balance::split(&mut sui_supply, stake),
+                // TODO Figure out if we want to instead initialize validators with 0 stake.
+                // Initialize all validators with 1 Mist stake.
+                balance::split(&mut sui_supply, 1),
                 option::none(),
                 gas_price,
                 commission_rate,

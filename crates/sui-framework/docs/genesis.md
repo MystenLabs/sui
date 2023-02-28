@@ -77,7 +77,7 @@ It will create a singleton SuiSystemState object, which contains
 all the information we need in the system.
 
 
-<pre><code><b>fun</b> <a href="genesis.md#0x2_genesis_create">create</a>(validator_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_network_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_worker_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_proof_of_possessions: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_sui_addresses: <a href="">vector</a>&lt;<b>address</b>&gt;, validator_names: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_descriptions: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_image_urls: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_project_urls: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_net_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_p2p_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_consensus_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_worker_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_stakes: <a href="">vector</a>&lt;u64&gt;, validator_gas_prices: <a href="">vector</a>&lt;u64&gt;, validator_commission_rates: <a href="">vector</a>&lt;u64&gt;, protocol_version: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="genesis.md#0x2_genesis_create">create</a>(validator_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_network_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_worker_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_proof_of_possessions: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_sui_addresses: <a href="">vector</a>&lt;<b>address</b>&gt;, validator_names: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_descriptions: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_image_urls: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_project_urls: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_net_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_p2p_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_consensus_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_worker_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_gas_prices: <a href="">vector</a>&lt;u64&gt;, validator_commission_rates: <a href="">vector</a>&lt;u64&gt;, protocol_version: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -100,7 +100,6 @@ all the information we need in the system.
     validator_p2p_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
     validator_consensus_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
     validator_worker_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
-    validator_stakes: <a href="">vector</a>&lt;u64&gt;,
     validator_gas_prices: <a href="">vector</a>&lt;u64&gt;,
     validator_commission_rates: <a href="">vector</a>&lt;u64&gt;,
     protocol_version: u64,
@@ -114,7 +113,6 @@ all the information we need in the system.
     <b>let</b> count = <a href="_length">vector::length</a>(&validator_pubkeys);
     <b>assert</b>!(
         <a href="_length">vector::length</a>(&validator_sui_addresses) == count
-            && <a href="_length">vector::length</a>(&validator_stakes) == count
             && <a href="_length">vector::length</a>(&validator_names) == count
             && <a href="_length">vector::length</a>(&validator_descriptions) == count
             && <a href="_length">vector::length</a>(&validator_image_urls) == count
@@ -142,7 +140,6 @@ all the information we need in the system.
         <b>let</b> p2p_address = *<a href="_borrow">vector::borrow</a>(&validator_p2p_addresses, i);
         <b>let</b> consensus_address = *<a href="_borrow">vector::borrow</a>(&validator_consensus_addresses, i);
         <b>let</b> worker_address = *<a href="_borrow">vector::borrow</a>(&validator_worker_addresses, i);
-        <b>let</b> <a href="stake.md#0x2_stake">stake</a> = *<a href="_borrow">vector::borrow</a>(&validator_stakes, i);
         <b>let</b> gas_price = *<a href="_borrow">vector::borrow</a>(&validator_gas_prices, i);
         <b>let</b> commission_rate = *<a href="_borrow">vector::borrow</a>(&validator_commission_rates, i);
         <a href="_push_back">vector::push_back</a>(&<b>mut</b> validators, <a href="validator.md#0x2_validator_new">validator::new</a>(
@@ -159,7 +156,9 @@ all the information we need in the system.
             p2p_address,
             consensus_address,
             worker_address,
-            <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> sui_supply, <a href="stake.md#0x2_stake">stake</a>),
+            // TODO Figure out <b>if</b> we want <b>to</b> instead initialize validators <b>with</b> 0 <a href="stake.md#0x2_stake">stake</a>.
+            // Initialize all validators <b>with</b> 1 Mist <a href="stake.md#0x2_stake">stake</a>.
+            <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> sui_supply, 1),
             <a href="_none">option::none</a>(),
             gas_price,
             commission_rate,
