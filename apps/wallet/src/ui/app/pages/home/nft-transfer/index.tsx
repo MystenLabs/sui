@@ -14,7 +14,6 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom';
 
 import TransferNFTForm from './TransferNFTForm';
 import { createValidationSchema } from './validation';
-import { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { NFTDisplayCard } from '_components/nft-display';
 import Overlay from '_components/overlay';
@@ -34,7 +33,7 @@ export type FormValues = typeof initialValues;
 function NftTransferPage() {
     const { nftId } = useParams();
     const address = useAppSelector(({ account: { address } }) => address);
-    const [showModal, setShowModal] = useState(true);
+    const [, setShowModal] = useState(true);
 
     // verify that the nft is owned by the user and is transferable
     const { data: objectData, isLoading } = useGetObject(nftId!);
@@ -100,11 +99,10 @@ function NftTransferPage() {
 
     return (
         <Overlay
-            showModal={showModal}
+            showModal={true}
             setShowModal={setShowModal}
             title="Send NFT"
             closeOverlay={closeSendToken}
-            closeIcon={SuiIcons.Close}
         >
             <div className="flex w-full flex-col">
                 <Loading loading={isLoading}>

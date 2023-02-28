@@ -48,9 +48,9 @@ function TransferNFTForm({
     const { gasBudget: gasBudgetInMist } = useGasBudgetInMist(gasBudget);
     const isInsufficientGas = maxGasCoinBalance < BigInt(gasBudgetInMist || 0);
     return (
-        <BottomMenuLayout>
-            <Content>
-                <Form autoComplete="off" noValidate={true}>
+        <Form autoComplete="off" noValidate={true}>
+            <BottomMenuLayout>
+                <Content>
                     <div className="flex gap-2.5 flex-col">
                         <div className="px-2 tracking-wider">
                             <Text
@@ -90,30 +90,30 @@ function TransferNFTForm({
                             <Alert>{submitError}</Alert>
                         </div>
                     ) : null}
-                </Form>
-            </Content>
-            <Menu
-                stuckClass="sendCoin-cta"
-                className="w-full px-0 pb-0 mx-0 gap-2.5"
-            >
-                <Button
-                    type="submit"
-                    variant="primary"
-                    loading={isSubmitting}
-                    onClick={submitForm}
-                    disabled={
-                        !isValid ||
-                        isSubmitting ||
-                        isInsufficientGas ||
-                        !gasBudget ||
-                        !gasBudgetInMist
-                    }
-                    size="tall"
-                    text="Send NFT Now"
-                    after={<ArrowRight16 />}
-                />
-            </Menu>
-        </BottomMenuLayout>
+                </Content>
+                <Menu
+                    stuckClass="sendCoin-cta"
+                    className="w-full px-0 pb-0 mx-0 gap-2.5"
+                >
+                    <Button
+                        type="submit"
+                        variant="primary"
+                        loading={isSubmitting}
+                        onClick={submitForm}
+                        disabled={
+                            !isValid ||
+                            isSubmitting ||
+                            isInsufficientGas ||
+                            !gasBudget ||
+                            !gasBudgetInMist
+                        }
+                        size="tall"
+                        text="Send NFT Now"
+                        after={<ArrowRight16 />}
+                    />
+                </Menu>
+            </BottomMenuLayout>
+        </Form>
     );
 }
 
