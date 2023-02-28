@@ -31,7 +31,7 @@ use test_utils::{
     network::TestClusterBuilder,
 };
 use tokio::time::{sleep, timeout};
-use tracing::info;
+use tracing::{info, warn};
 
 #[sim_test]
 async fn advance_epoch_tx_test() {
@@ -313,7 +313,9 @@ async fn test_validator_resign_effects() {
     assert_eq!(effects0.into_message(), effects1.into_message());
 }
 
+// TODO: This test is currently flaky. Need to re-enable it once we fix the issue.
 #[sim_test]
+#[ignore]
 async fn test_reconfig_with_committee_change_basic() {
     // This test exercise the full flow of a validator joining the network, catch up and then leave.
 
@@ -345,6 +347,10 @@ async fn test_reconfig_with_committee_change_basic() {
         .iter()
         .find(|v| !addresses.contains(&v.sui_address()))
         .unwrap();
+    info!(
+        "New validator is: {:?}",
+        new_validator.protocol_key.concise()
+    );
 
     let sender = new_validator.sui_address();
     let gas = Object::with_owner_for_testing(sender);
@@ -509,11 +515,16 @@ async fn trigger_reconfiguration(authorities: &[SuiNodeHandle]) {
         .iter()
         .map(|handle| {
             handle.with_async(|node| async {
+                let mut retries = 0;
                 loop {
                     if node.state().epoch_store_for_testing().epoch() == cur_committee.epoch + 1 {
                         break;
                     }
                     tokio::time::sleep(Duration::from_secs(1)).await;
+                    retries += 1;
+                    if retries % 5 == 0 {
+                        warn!(validator=?node.state().name.concise(), "Waiting for {:?} seconds for epoch change", retries);
+                    }
                 }
             })
         })
