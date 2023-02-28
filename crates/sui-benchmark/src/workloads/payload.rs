@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_types::base_types::{ObjectID, ObjectRef};
-
 use sui_types::messages::VerifiedTransaction;
 
 use crate::ExecutionEffects;
@@ -11,24 +9,10 @@ use rand_distr::WeightedAliasIndex;
 
 use crate::workloads::workload::WorkloadType;
 
-pub trait Payload: Send + Sync {
-    fn make_new_payload(
-        self: Box<Self>,
-        new_object: ObjectRef,
-        new_gas: ObjectRef,
-        effects: &ExecutionEffects,
-    ) -> Box<dyn Payload>;
+pub trait Payload: Send + Sync + std::fmt::Debug {
+    fn make_new_payload(self: Box<Self>, effects: &ExecutionEffects) -> Box<dyn Payload>;
     fn make_transaction(&self) -> VerifiedTransaction;
-    fn get_object_id(&self) -> ObjectID;
     fn get_workload_type(&self) -> WorkloadType;
-
-    fn debug(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result;
-}
-
-impl std::fmt::Debug for dyn Payload {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.debug(f)
-    }
 }
 
 #[derive(Debug)]
@@ -40,16 +24,11 @@ pub struct CombinationPayload {
 }
 
 impl Payload for CombinationPayload {
-    fn make_new_payload(
-        self: Box<Self>,
-        new_object: ObjectRef,
-        new_gas: ObjectRef,
-        effects: &ExecutionEffects,
-    ) -> Box<dyn Payload> {
+    fn make_new_payload(self: Box<Self>, effects: &ExecutionEffects) -> Box<dyn Payload> {
         let mut new_payloads = vec![];
         for (pos, e) in self.payloads.into_iter().enumerate() {
             if pos == self.curr_index {
-                let updated = e.make_new_payload(new_object, new_gas, effects);
+                let updated = e.make_new_payload(effects);
                 new_payloads.push(updated);
             } else {
                 new_payloads.push(e);
@@ -68,18 +47,10 @@ impl Payload for CombinationPayload {
         let curr = self.payloads.get(self.curr_index).unwrap();
         curr.make_transaction()
     }
-    fn get_object_id(&self) -> ObjectID {
-        let curr = self.payloads.get(self.curr_index).unwrap();
-        curr.get_object_id()
-    }
     fn get_workload_type(&self) -> WorkloadType {
         self.payloads
             .get(self.curr_index)
             .unwrap()
             .get_workload_type()
-    }
-
-    fn debug(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", self as &CombinationPayload)
     }
 }
