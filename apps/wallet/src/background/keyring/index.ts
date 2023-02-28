@@ -108,18 +108,18 @@ export class Keyring {
 
     public async deriveNextAccount() {
         if (this.isLocked) {
-            return false;
+            return null;
         }
         const mnemonic = VaultStorage.getMnemonic();
         if (!mnemonic) {
-            return false;
+            return null;
         }
         const nextIndex = (await this.getLastDerivedIndex()) + 1;
         await this.storeLastDerivedIndex(nextIndex);
         const account = this.deriveAccount(nextIndex, mnemonic);
         this.#accountsMap.set(account.address, account);
         this.notifyAccountsChanged();
-        return true;
+        return account;
     }
 
     public getAccounts() {
@@ -280,10 +280,20 @@ export class Keyring {
                 }
                 uiConnection.send(createMessage({ type: 'done' }, id));
             } else if (isKeyringPayload(payload, 'deriveNextAccount')) {
-                if (!(await this.deriveNextAccount())) {
+                const nextAccount = await this.deriveNextAccount();
+                if (!nextAccount) {
                     throw new Error('Failed to derive next account');
                 }
-                uiConnection.send(createMessage({ type: 'done' }, id));
+                uiConnection.send(
+                    createMessage<KeyringPayload<'deriveNextAccount'>>(
+                        {
+                            type: 'keyring',
+                            method: 'deriveNextAccount',
+                            return: { accountAddress: nextAccount.address },
+                        },
+                        id
+                    )
+                );
             } else if (
                 isKeyringPayload(payload, 'verifyPassword') &&
                 payload.args

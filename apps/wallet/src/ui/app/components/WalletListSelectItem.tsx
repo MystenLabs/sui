@@ -4,6 +4,7 @@
 import { CheckFill16, XFill16 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js';
 import { cva, cx, type VariantProps } from 'class-variance-authority';
+import { useEffect, useRef } from 'react';
 
 import { Text } from '../shared/text';
 
@@ -51,6 +52,7 @@ export interface WalletListSelectItemProps
     selected: NonNullable<StyleProps['selected']>;
     mode: NonNullable<StyleProps['mode']>;
     address: string;
+    isNew?: boolean;
 }
 
 export function WalletListSelectItem({
@@ -58,9 +60,24 @@ export function WalletListSelectItem({
     selected,
     mode,
     disabled = false,
+    isNew = false,
 }: WalletListSelectItemProps) {
+    const elementRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            if (elementRef.current && isNew) {
+                elementRef.current.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                });
+            }
+        }, 80);
+        return () => {
+            clearTimeout(timeout);
+        };
+    }, [isNew]);
     return (
-        <div className={styles({ selected, mode, disabled })}>
+        <div ref={elementRef} className={styles({ selected, mode, disabled })}>
             {mode === 'select' ? (
                 <CheckFill16
                     className={cx(
@@ -79,6 +96,13 @@ export function WalletListSelectItem({
                 <div className="flex flex-1 justify-end text-issue-dark">
                     <Text variant="subtitle" weight="normal">
                         Disconnect
+                    </Text>
+                </div>
+            ) : null}
+            {mode === 'select' && isNew ? (
+                <div className="flex-1 flex justify-end">
+                    <Text variant="subtitleSmall" color="steel">
+                        NEW
                     </Text>
                 </div>
             ) : null}

@@ -59,7 +59,7 @@ type MethodToPayloads = {
     };
     deriveNextAccount: {
         args: void;
-        return: void;
+        return: { accountAddress: SuiAddress };
     };
     verifyPassword: {
         args: { password: string };
