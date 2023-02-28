@@ -35,11 +35,7 @@ function MyTokens() {
         <Loading loading={loadingBalances}>
             {balance?.length ? (
                 <div className="flex flex-1 justify-start flex-col w-full mt-6">
-                    <Text
-                        variant="caption"
-                        color="steel-darker"
-                        weight="semibold"
-                    >
+                    <Text variant="caption" color="steel" weight="semibold">
                         MY COINS
                     </Text>
                     <div className="flex flex-col w-full justify-center divide-y divide-solid divide-steel/20 divide-x-0">
@@ -116,14 +112,10 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                     />
                     <IconLink
                         icon={SuiIcons.ArrowLeft}
-                        to={`/send${
-                            coinBalance?.coinType
-                                ? `?${new URLSearchParams({
-                                      type: coinBalance.coinType,
-                                  }).toString()}`
-                                : ''
-                        }`}
-                        disabled={!tokenBalance}
+                        to={`/send${new URLSearchParams({
+                            type: coinBalance?.coinType || '',
+                        }).toString()}`}
+                        disabled={!tokenBalance || !coinBalance}
                         text="Send"
                     />
                     <IconLink
@@ -151,11 +143,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                     <MyTokens />
                 ) : (
                     <div className="mt-6 flex-1 justify-start gap-2 flex-col w-full">
-                        <Text
-                            variant="caption"
-                            color="steel-darker"
-                            weight="semibold"
-                        >
+                        <Text variant="caption" color="steel" weight="semibold">
                             {coinSymbol} activity
                         </Text>
                         <div className="flex flex-col flex-nowrap flex-1">
