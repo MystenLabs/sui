@@ -395,7 +395,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     },
                 };
 
-                let p2p_config = P2pConfig {
+                let mut p2p_config = P2pConfig {
                     listen_address: utils::udp_multiaddr_to_listen_address(
                         &validator.genesis_info.p2p_address,
                     )
@@ -403,6 +403,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     external_address: Some(validator.genesis_info.p2p_address),
                     ..Default::default()
                 };
+                p2p_config.listen_address.set_ip("0.0.0.0".parse().unwrap());
 
                 let supported_protocol_versions = match &self.supported_protocol_versions_config {
                     ProtocolVersionsConfig::Default => SupportedProtocolVersions::SYSTEM_DEFAULT,
