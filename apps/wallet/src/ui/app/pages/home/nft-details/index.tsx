@@ -12,6 +12,7 @@ import cl from 'classnames';
 import { useMemo } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import Button from '_app/shared/button';
 import { Collapse } from '_app/shared/collapse';
 import ExplorerLink from '_components/explorer-link';
@@ -20,7 +21,6 @@ import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { NFTDisplayCard } from '_components/nft-display';
 import { useNFTBasicData, useGetObject } from '_hooks';
-import { useActiveAddress } from '../hooks/useActiveAddress';
 import ExternalLink from '_src/ui/app/components/external-link';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
@@ -80,6 +80,9 @@ function NFTDetailsPage() {
     const { nftFields, fileExtensionType, filePath } =
         useNFTBasicData(selectedNft);
 
+    if (!nftId) {
+        return <Navigate to="/" replace={true} />;
+    }
     // Extract either the attributes, or use the top-level NFT fields:
     const metaFields =
         nftFields?.metadata?.fields?.attributes?.fields ||

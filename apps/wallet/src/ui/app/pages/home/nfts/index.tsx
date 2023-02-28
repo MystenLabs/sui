@@ -14,7 +14,8 @@ import PageTitle from '_src/ui/app/shared/PageTitle';
 
 function NftsPage() {
     const accountAddress = useAppSelector(({ account }) => account.address);
-    const { data, isLoading, error } = useObjectsOwnedByAddress(accountAddress);
+    const { data, isLoading, error, isError } =
+        useObjectsOwnedByAddress(accountAddress);
     const nfts = useMemo(
         () => data?.filter((obj) => !Coin.isCoin(obj)),
         [data]
@@ -24,12 +25,12 @@ function NftsPage() {
         <div className="flex flex-col flex-nowrap items-center gap-4 flex-1">
             <PageTitle title="NFTs" />
             <Loading loading={isLoading}>
-                {error instanceof Error ? (
+                {isError ? (
                     <Alert>
                         <div>
                             <strong>Sync error (data might be outdated)</strong>
                         </div>
-                        <small>{error.message}</small>
+                        <small>{(error as Error).message}</small>
                     </Alert>
                 ) : null}
 
