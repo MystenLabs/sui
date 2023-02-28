@@ -2,18 +2,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+  any,
   array,
   Infer,
   integer,
   literal,
   object,
+  optional,
   string,
   union,
 } from 'superstruct';
 
+export const TransactionInput = object({
+  kind: literal('Input'),
+  index: integer(),
+  name: optional(string()),
+  value: optional(any()),
+});
+export type TransactionInput = Infer<typeof TransactionInput>;
+
 export const TransactionArgument = union([
+  TransactionInput,
   object({ kind: literal('GasCoin') }),
-  object({ kind: literal('Input'), index: integer() }),
   object({ kind: literal('Result'), index: integer() }),
   object({
     kind: literal('NestedResult'),
