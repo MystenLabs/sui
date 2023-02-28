@@ -117,7 +117,12 @@ export function createTokenValidation(
                         )} ${GAS_SYMBOL})`,
                     });
                 } catch (e) {
-                    return false;
+                    return ctx.createError({
+                        message: `Insufficient ${GAS_SYMBOL} balance to cover gas fee (${formatBalance(
+                            ctx.parent?.gasInputBudgetEst || gasBudget,
+                            gasDecimals
+                        )} ${GAS_SYMBOL})`,
+                    });
                 }
             },
         })
