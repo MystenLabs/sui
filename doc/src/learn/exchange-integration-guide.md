@@ -102,7 +102,7 @@ let sui_address_string = hex::encode(res);
 
 ## Displaying addresses
 
-Sui supports both addresses with without a 0x prefix. Sui recommends that you always include the 0x prefix in API calls and when you display user addresses.
+Sui supports both addresses with and without a 0x prefix. Sui recommends that you always include the 0x prefix in API calls and when you display user addresses.
 
 ## Track balance changes for an address
 
