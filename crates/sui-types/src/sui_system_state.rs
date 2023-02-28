@@ -8,7 +8,7 @@ use crate::crypto::AuthorityPublicKeyBytes;
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
 use crate::{balance::Balance, id::UID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
-use fastcrypto::{error::FastCryptoError, traits::ToFromBytes};
+use fastcrypto::traits::ToFromBytes;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use multiaddr::Multiaddr;
 use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
@@ -82,19 +82,21 @@ pub struct VerifiedValidatorMetadata {
 impl ValidatorMetadata {
     /// Verify validator metadata and return a verified version (on success) or error code (on failure)
     pub fn verify(&self) -> Result<VerifiedValidatorMetadata, u64> {
-        let pubkey = create_narwhal_pubkey(self.pubkey_bytes.as_ref())
+        let pubkey = narwhal_crypto::PublicKey::from_bytes(self.pubkey_bytes.as_ref())
             .map_err(|_| E_METADATA_INVALID_PUBKEY)?;
-        let network_pubkey = create_narwhal_net_pubkey(self.network_pubkey_bytes.as_ref())
-            .map_err(|_| E_METADATA_INVALID_NET_PUBKEY)?;
-        let worker_pubkey = create_narwhal_net_pubkey(self.worker_pubkey_bytes.as_ref())
-            .map_err(|_| E_METADATA_INVALID_WORKER_PUBKEY)?;
-        let net_address =
-            create_multiaddr(self.net_address.clone()).map_err(|_| E_METADATA_INVALID_NET_ADDR)?;
-        let p2p_address =
-            create_multiaddr(self.p2p_address.clone()).map_err(|_| E_METADATA_INVALID_P2P_ADDR)?;
-        let consensus_address = create_multiaddr(self.consensus_address.clone())
+        let network_pubkey =
+            narwhal_crypto::NetworkPublicKey::from_bytes(self.network_pubkey_bytes.as_ref())
+                .map_err(|_| E_METADATA_INVALID_NET_PUBKEY)?;
+        let worker_pubkey =
+            narwhal_crypto::NetworkPublicKey::from_bytes(self.worker_pubkey_bytes.as_ref())
+                .map_err(|_| E_METADATA_INVALID_WORKER_PUBKEY)?;
+        let net_address = Multiaddr::try_from(self.net_address.clone())
+            .map_err(|_| E_METADATA_INVALID_NET_ADDR)?;
+        let p2p_address = Multiaddr::try_from(self.p2p_address.clone())
+            .map_err(|_| E_METADATA_INVALID_P2P_ADDR)?;
+        let consensus_address = Multiaddr::try_from(self.consensus_address.clone())
             .map_err(|_| E_METADATA_INVALID_CONSENSUS_ADDR)?;
-        let worker_address = create_multiaddr(self.worker_address.clone())
+        let worker_address = Multiaddr::try_from(self.worker_address.clone())
             .map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?;
         Ok(VerifiedValidatorMetadata {
             sui_address: self.sui_address,
@@ -112,20 +114,6 @@ impl ValidatorMetadata {
             worker_address,
         })
     }
-}
-
-fn create_narwhal_pubkey(bytes: &[u8]) -> Result<narwhal_crypto::PublicKey, FastCryptoError> {
-    narwhal_crypto::PublicKey::from_bytes(bytes)
-}
-
-fn create_narwhal_net_pubkey(
-    bytes: &[u8],
-) -> Result<narwhal_crypto::NetworkPublicKey, FastCryptoError> {
-    narwhal_crypto::NetworkPublicKey::from_bytes(bytes)
-}
-
-fn create_multiaddr(bytes: Vec<u8>) -> Result<Multiaddr, multiaddr::Error> {
-    Multiaddr::try_from(bytes)
 }
 
 /// Rust version of the Move sui::validator::Validator type
@@ -151,18 +139,12 @@ impl Validator {
     ) -> (AuthorityName, StakeUnit, Vec<u8>) {
         (
             // TODO: Make sure we are actually verifying this on-chain.
-            create_authority_pubkey_bytes(self.metadata.pubkey_bytes.as_ref())
+            AuthorityPublicKeyBytes::from_bytes(self.metadata.pubkey_bytes.as_ref())
                 .expect("Validity of public key bytes should be verified on-chain"),
             self.voting_power,
             self.metadata.net_address.clone(),
         )
     }
-}
-
-pub fn create_authority_pubkey_bytes(
-    bytes: &[u8],
-) -> Result<AuthorityPublicKeyBytes, FastCryptoError> {
-    AuthorityPublicKeyBytes::from_bytes(bytes)
 }
 
 /// Rust version of the Move sui::staking_pool::PendingDelegationEntry type.
