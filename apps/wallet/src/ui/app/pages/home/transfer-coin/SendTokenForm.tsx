@@ -56,15 +56,15 @@ export type SendTokenFormProps = {
 
 export function GasBudgetEstimationComp({
     coinDecimals,
-    coins,
+    suiCoins,
 }: {
     coinDecimals: number;
-    coins: CoinStruct[] | null;
+    suiCoins: CoinStruct[] | null;
 }) {
     const { values, setFieldValue } = useFormikContext<FormValues>();
 
     const gasBudgetEstimationUnits = useGasBudgetEstimationUnits(
-        coins!,
+        suiCoins!,
         BigInt(parseAmount(values?.amount, coinDecimals))
     );
     const { gasBudget: gasBudgetEstimation, isLoading } = useGasBudgetInMist(
@@ -126,9 +126,9 @@ export function SendTokenForm({
     const coins =
         coinsData?.filter(({ lockedUntilEpoch }) => !lockedUntilEpoch) || null;
 
-    const suiCoins = suiCoinsData?.filter(
-        ({ lockedUntilEpoch }) => !lockedUntilEpoch
-    );
+    const suiCoins =
+        suiCoinsData?.filter(({ lockedUntilEpoch }) => !lockedUntilEpoch) ||
+        null;
 
     const coinBalance =
         coins?.reduce((acc, { balance }) => {
@@ -153,20 +153,6 @@ export function SendTokenForm({
         return BigInt(maxCoin || 0);
     }, [suiCoins]);
 
-    const gasBudgetEstimationUnits = useGasBudgetEstimationUnits(
-        coins!,
-        BigInt(
-            parseAmount(
-                initialAmount !== '' ? initialAmount : '0',
-                coinDecimals
-            )
-        )
-    );
-
-    const { gasBudget: gasBudgetEstimation, isLoading } = useGasBudgetInMist(
-        gasBudgetEstimationUnits
-    );
-
     const validationSchemaStepOne = useMemo(
         () =>
             createValidationSchemaStepOne(
@@ -176,7 +162,7 @@ export function SendTokenForm({
                 gasAggregateBalance,
                 coinDecimals,
                 gasDecimals,
-                null,
+                0,
                 maxSuiSingleCoinBalance
             ),
         [
@@ -198,10 +184,7 @@ export function SendTokenForm({
     return (
         <Loading
             loading={
-                suiCoinsIsLoading ||
-                coinsIsLoading ||
-                isLoading ||
-                queryResult.isLoading
+                suiCoinsIsLoading || coinsIsLoading || queryResult.isLoading
             }
         >
             <Formik
@@ -210,7 +193,7 @@ export function SendTokenForm({
                     to: initialTo,
                     isPayAllSui:
                         initialAmount === maxToken && coinType === SUI_TYPE_ARG,
-                    gasInputBudgetEst: gasBudgetEstimation || null,
+                    gasInputBudgetEst: 0,
                 }}
                 validationSchema={validationSchemaStepOne}
                 enableReinitialize
@@ -248,6 +231,7 @@ export function SendTokenForm({
                 }) => {
                     const newPaySuiAll =
                         values.amount === maxToken && coinType === SUI_TYPE_ARG;
+
                     if (values.isPayAllSui !== newPaySuiAll) {
                         setFieldValue('isPayAllSui', newPaySuiAll);
                     }
@@ -303,7 +287,7 @@ export function SendTokenForm({
                                     </div>
                                     <GasBudgetEstimationComp
                                         coinDecimals={coinDecimals}
-                                        coins={coins}
+                                        suiCoins={suiCoins}
                                     />
 
                                     <div className="w-full flex gap-2.5 flex-col mt-7.5">

@@ -5,7 +5,7 @@ import { ArrowRight16, ArrowLeft16 } from '@mysten/icons';
 import { getTransactionDigest, SUI_TYPE_ARG } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
 import { useMutation } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -32,9 +32,7 @@ function TransferCoinPage() {
         useState<boolean>(false);
     const [formData, setFormData] = useState<SubmitProps>();
     const navigate = useNavigate();
-    const closeOverlay = useCallback(() => {
-        navigate('/');
-    }, [navigate]);
+
     const [coinDecimals] = useCoinDecimals(coinType);
 
     const signer = useSigner();

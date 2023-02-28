@@ -112,7 +112,9 @@ export function InputWithAction({
                     />
                 </div>
             </div>
-            {meta?.touched && meta?.error ? (
+
+            {(meta?.touched && meta?.error) ||
+            (meta.value !== '' && meta.error) ? (
                 <div className="mt-3">
                     <Alert>{meta?.error}</Alert>
                 </div>
