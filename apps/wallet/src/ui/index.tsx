@@ -4,6 +4,7 @@
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
 import { RpcClientContext } from '@mysten/core';
 import { QueryClientProvider } from '@tanstack/react-query';
+import { Fragment } from 'react';
 import { createRoot } from 'react-dom/client';
 import { IntlProvider } from 'react-intl';
 import { Provider } from 'react-redux';
@@ -12,6 +13,7 @@ import { HashRouter } from 'react-router-dom';
 import App from './app';
 import { growthbook } from './app/experimentation/feature-gating';
 import { queryClient } from './app/helpers/queryClient';
+import { useAppSelector } from './app/hooks';
 import { ErrorBoundary } from '_components/error-boundary';
 import { initAppType } from '_redux/slices/app';
 import { getFromLocationSearch } from '_redux/slices/app/AppType';
@@ -43,9 +45,24 @@ function renderApp() {
     }
     const root = createRoot(rootDom);
     root.render(
-        <GrowthBookProvider growthbook={growthbook}>
-            <HashRouter>
-                <Provider store={store}>
+        <Provider store={store}>
+            <AppWrapper />
+        </Provider>
+    );
+}
+
+function AppWrapper() {
+    const network = useAppSelector(
+        ({ app: { apiEnv, customRPC } }) => `${apiEnv}_${customRPC}`
+    );
+
+    // NOTE: We set a top-level key here to force the entire react tree to be re-created when the network changes
+    // so that the RPC client instance (api.instance.fullNode) is updated correctly. In the future, we should look
+    // into making the API provider instance a reactive value and moving it out of the redux-thunk middleware
+    return (
+        <Fragment key={network}>
+            <GrowthBookProvider growthbook={growthbook}>
+                <HashRouter>
                     <IntlProvider locale={navigator.language}>
                         <QueryClientProvider client={queryClient}>
                             <RpcClientContext.Provider
@@ -57,9 +74,9 @@ function renderApp() {
                             </RpcClientContext.Provider>
                         </QueryClientProvider>
                     </IntlProvider>
-                </Provider>
-            </HashRouter>
-        </GrowthBookProvider>
+                </HashRouter>
+            </GrowthBookProvider>
+        </Fragment>
     );
 }
 
