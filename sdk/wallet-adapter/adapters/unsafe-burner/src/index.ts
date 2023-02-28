@@ -10,7 +10,6 @@ import {
   RawSigner,
   Connection,
   devnetConnection,
-  SignedMessage,
 } from "@mysten/sui.js";
 import {
   WalletAdapter,
@@ -57,8 +56,8 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
     return [this.#account];
   }
 
-  signMessage: WalletAdapter["signMessage"] = async (message: Uint8Array) => {
-    return this.#signer.signMessage(message);
+  signMessage: WalletAdapter["signMessage"] = async (messageInput) => {
+    return this.#signer.signMessage(messageInput.message);
   };
 
   signTransaction: WalletAdapter["signTransaction"] = async (

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SignedMessage } from "@mysten/sui.js";
+import type { WalletAccount } from "@wallet-standard/core";
 
 /** The latest API version of the signMessage API. */
 export type SuiSignMessageVersion = "1.0.0";
@@ -27,6 +28,7 @@ export type SuiSignMessageMethod = (
 export interface SuiSignMessageInput {
   message: Uint8Array;
   options?: SuiSignMessageOptions;
+  account: WalletAccount;
 }
 
 /** Output of signing messages. */

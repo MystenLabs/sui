@@ -10,6 +10,7 @@ import {
   SuiSignTransactionInput,
   SuiSignAndExecuteTransactionInput,
   WalletAccount,
+  SuiSignMessageInput,
 } from "@mysten/wallet-standard";
 
 export interface WalletAdapterEvents {
@@ -33,7 +34,7 @@ export interface WalletAdapter {
     event: E,
     callback: WalletAdapterEvents[E]
   ) => () => void;
-  signMessage(message: Uint8Array): Promise<SignedMessage>;
+  signMessage(messageInput: SuiSignMessageInput): Promise<SignedMessage>;
   signTransaction(
     transactionInput: SuiSignTransactionInput
   ): Promise<SignedTransaction>;

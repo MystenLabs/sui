@@ -9,6 +9,7 @@ import {
 } from "@mysten/wallet-adapter-base";
 import { localStorageAdapter, StorageAdapter } from "./storage";
 import {
+  SuiSignMessageInput,
   SuiSignTransactionInput,
   WalletAccount,
 } from "@mysten/wallet-standard";
@@ -56,7 +57,9 @@ export interface WalletKitCore {
   subscribe(handler: SubscribeHandler): Unsubscribe;
   connect(walletName: string): Promise<void>;
   disconnect(): Promise<void>;
-  signMessage(message: Uint8Array): ReturnType<WalletAdapter["signMessage"]>;
+  signMessage(
+    messageInput: OptionalProperties<SuiSignMessageInput, "account">
+  ): ReturnType<WalletAdapter["signMessage"]>;
   signTransaction: (
     transactionInput: OptionalProperties<
       SuiSignTransactionInput,
