@@ -302,9 +302,7 @@ async fn test_successful_payload_synchronization() {
     {
         assert!(result.is_ok(), "Error returned");
 
-        for ((_primary_messages, sync_messages), worker) in
-            result.unwrap().into_iter().zip(workers.into_iter())
-        {
+        for (sync_messages, worker) in result.unwrap().into_iter().zip(workers.into_iter()) {
             for m in sync_messages {
                 // Assume that the request is the correct one and just immediately
                 // store the batch to the payload store.
