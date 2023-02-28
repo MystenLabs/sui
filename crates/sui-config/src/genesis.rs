@@ -286,6 +286,9 @@ pub struct GenesisChainParameters {
     /// protocol version that the chain starts at.
     #[serde(default = "ProtocolVersion::max")]
     pub protocol_version: ProtocolVersion,
+
+    #[serde(default = "GenesisChainParameters::default_allow_insertion_of_extra_objects")]
+    pub allow_insertion_of_extra_objects: bool,
     // Most other parameters (e.g. initial gas schedule) should be derived from protocol_version.
 }
 
@@ -294,6 +297,7 @@ impl GenesisChainParameters {
         Self {
             timestamp_ms: Self::default_timestamp_ms(),
             protocol_version: ProtocolVersion::MAX,
+            allow_insertion_of_extra_objects: true,
         }
     }
 
@@ -302,6 +306,10 @@ impl GenesisChainParameters {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as u64
+    }
+
+    fn default_allow_insertion_of_extra_objects() -> bool {
+        true
     }
 }
 
@@ -672,6 +680,10 @@ fn build_unsigned_genesis_data(
     validators: &[GenesisValidatorInfo],
     objects: &[Object],
 ) -> GenesisTuple {
+    if !parameters.allow_insertion_of_extra_objects && !objects.is_empty() {
+        panic!("insertion of extra objects at genesis time is prohibited due to 'allow_insertion_of_extra_objects' parameter");
+    }
+
     let protocol_config = ProtocolConfig::get_for_version(parameters.protocol_version);
     let epoch_data = EpochData::new_genesis(parameters.timestamp_ms);
 

@@ -86,6 +86,7 @@ fn populated_genesis_snapshot_matches() {
         .with_parameters(GenesisChainParameters {
             timestamp_ms: 10,
             protocol_version: ProtocolVersion::MAX,
+            allow_insertion_of_extra_objects: true,
         })
         .add_validator_signature(&key)
         .build();
