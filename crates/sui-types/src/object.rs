@@ -29,6 +29,7 @@ use crate::{
     },
     gas_coin::GasCoin,
 };
+use crate::{MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID};
 use sui_protocol_config::ProtocolConfig;
 
 pub const GAS_VALUE_FOR_TESTING: u64 = 1_000_000_u64;
@@ -491,6 +492,30 @@ impl Object {
             previous_transaction,
             storage_rebate: 0,
         }
+    }
+
+    /// Returns true if the object is a system package.
+    pub fn is_system_package(&self) -> bool {
+        let id = self.id();
+        self.is_package() && (id == SUI_FRAMEWORK_OBJECT_ID || id == MOVE_STDLIB_OBJECT_ID)
+    }
+
+    /// Create a system package which is not subject to size limits. Panics if the object ID is not
+    /// a known system package.
+    pub fn new_system_package(
+        modules: Vec<CompiledModule>,
+        version: SequenceNumber,
+        previous_transaction: TransactionDigest,
+    ) -> Result<Self, ExecutionError> {
+        let ret = Self::new_package(
+            modules,
+            version,
+            previous_transaction,
+            // System objects are not subject to limits
+            u64::MAX,
+        )?;
+        assert!(ret.is_system_package());
+        Ok(ret)
     }
 
     // Note: this will panic if `modules` is empty

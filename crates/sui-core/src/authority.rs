@@ -2658,32 +2658,8 @@ impl AuthorityState {
         self.database.get_latest_parent_entry(object_id)
     }
 
-    fn has_support(
-        msg: String,
-        stake_aggregator: &StakeAggregator<(), true>,
-        committee: &Committee,
-        protocol_config: &ProtocolConfig,
-    ) -> bool {
-        let total_votes = stake_aggregator.total_votes();
-        let quorum_threshold = committee.quorum_threshold();
-        let f = committee.total_votes - committee.quorum_threshold();
-        let buffer_bps = protocol_config.buffer_stake_for_protocol_upgrade_bps();
-        // multiple by buffer_bps / 10000, rounded up.
-        let buffer_stake = (f * buffer_bps + 9999) / 10000;
-        let effective_threshold = quorum_threshold + buffer_stake;
-
-        info!(
-            ?total_votes,
-            ?quorum_threshold,
-            ?buffer_bps,
-            ?effective_threshold,
-            "support for {}",
-            msg
-        );
-
-        total_votes >= effective_threshold
-    }
-
+    /// Get the set of system packages that are compiled in to this build, if those packages are
+    /// compatible with the current versions of those packages on-chain.
     pub async fn get_available_system_packages(&self) -> Vec<ObjectRef> {
         let Some(move_stdlib) = self.compare_system_package(
             MOVE_STDLIB_OBJECT_ID,
@@ -2738,14 +2714,12 @@ impl AuthorityState {
             .try_as_package()
             .expect("Framework not package");
 
-        let mut new_object = match Object::new_package(
+        let mut new_object = match Object::new_system_package(
             modules,
             // Start at the same version as the current package, and increment if compatibility is
             // successful
             cur_object.version(),
             cur_object.previous_transaction,
-            // System objects are not subject to limits
-            u64::MAX,
         ) {
             Ok(object) => object,
             Err(e) => {
@@ -2828,15 +2802,13 @@ impl AuthorityState {
                 _ => panic!("Unrecognised framework: {}", system_package.0),
             };
 
-            let new_object = Object::new_package(
+            let new_object = Object::new_system_package(
                 bytes
                     .iter()
                     .map(|m| CompiledModule::deserialize(m).unwrap())
                     .collect(),
                 system_package.1,
                 cur_object.previous_transaction,
-                // System package is unbounded.
-                u64::MAX,
             )
             .unwrap();
 
@@ -2903,13 +2875,26 @@ impl AuthorityState {
                     stake_aggregator.insert_generic(authority, ());
                 }
 
-                Self::has_support(
-                    format!("system packages: {:?}", packages),
-                    &stake_aggregator,
-                    committee,
-                    protocol_config,
-                )
-                .then_some((next_protocol_version, packages))
+                let total_votes = stake_aggregator.total_votes();
+                let quorum_threshold = committee.quorum_threshold();
+                let f = committee.total_votes - committee.quorum_threshold();
+                let buffer_bps = protocol_config.buffer_stake_for_protocol_upgrade_bps();
+                // multiple by buffer_bps / 10000, rounded up.
+                let buffer_stake = (f * buffer_bps + 9999) / 10000;
+                let effective_threshold = quorum_threshold + buffer_stake;
+
+                info!(
+                    ?total_votes,
+                    ?quorum_threshold,
+                    ?buffer_bps,
+                    ?effective_threshold,
+                    ?next_protocol_version,
+                    ?packages,
+                    "support for upgrade"
+                );
+
+                let has_support = total_votes >= effective_threshold;
+                has_support.then_some((next_protocol_version, packages))
             })
             // if there was no majority, there is no upgrade
             .unwrap_or((current_protocol_version, vec![]))

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::Registry;
-use std::fmt;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Weak};
 use sui_config::NodeConfig;
@@ -12,19 +11,11 @@ use tracing::{info, trace};
 
 use super::node::RuntimeType;
 
+#[derive(Debug)]
 pub(crate) struct Container {
     handle: Option<ContainerHandle>,
     cancel_sender: Option<tokio::sync::watch::Sender<bool>>,
     node_watch: watch::Receiver<Weak<SuiNode>>,
-}
-
-impl fmt::Debug for Container {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("Container")
-            .field("handle", &self.handle)
-            .field("cancel_sender", &self.cancel_sender)
-            .finish()
-    }
 }
 
 #[derive(Debug)]
