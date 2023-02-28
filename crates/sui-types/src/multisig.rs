@@ -133,7 +133,7 @@ impl AuthenticatorTrait for MultiSig {
                             error: "Invalid public key".to_string(),
                         }
                     })?;
-                    pk.verify(&message, s)
+                    pk.verify(&message, &s.try_into()?)
                 }
                 CompressedSignature::Secp256k1(s) => {
                     let pk = Secp256k1PublicKey::from_bytes(pk_map.0.as_ref()).map_err(|_| {
@@ -141,7 +141,7 @@ impl AuthenticatorTrait for MultiSig {
                             error: "Invalid public key".to_string(),
                         }
                     })?;
-                    pk.verify(&message, s)
+                    pk.verify(&message, &s.try_into()?)
                 }
                 CompressedSignature::Secp256r1(s) => {
                     let pk = Secp256r1PublicKey::from_bytes(pk_map.0.as_ref()).map_err(|_| {
@@ -149,7 +149,7 @@ impl AuthenticatorTrait for MultiSig {
                             error: "Invalid public key".to_string(),
                         }
                     })?;
-                    pk.verify(&message, s)
+                    pk.verify(&message, &s.try_into()?)
                 }
             };
             if res.is_ok() {

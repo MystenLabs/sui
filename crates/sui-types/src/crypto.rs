@@ -7,9 +7,15 @@ use fastcrypto::bls12381::min_sig::{
     BLS12381AggregateSignature, BLS12381AggregateSignatureAsBytes, BLS12381KeyPair,
     BLS12381PrivateKey, BLS12381PublicKey, BLS12381Signature,
 };
-use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature};
-use fastcrypto::secp256k1::{Secp256k1KeyPair, Secp256k1PublicKey, Secp256k1Signature};
-use fastcrypto::secp256r1::{Secp256r1KeyPair, Secp256r1PublicKey, Secp256r1Signature};
+use fastcrypto::ed25519::{
+    Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature, Ed25519SignatureAsBytes,
+};
+use fastcrypto::secp256k1::{
+    Secp256k1KeyPair, Secp256k1PublicKey, Secp256k1Signature, Secp256k1SignatureAsBytes,
+};
+use fastcrypto::secp256r1::{
+    Secp256r1KeyPair, Secp256r1PublicKey, Secp256r1Signature, Secp256r1SignatureAsBytes,
+};
 pub use fastcrypto::traits::KeyPair as KeypairTraits;
 pub use fastcrypto::traits::{
     AggregateAuthenticator, Authenticator, EncodeDecodeBase64, SigningKey, ToFromBytes,
@@ -33,13 +39,12 @@ use crate::committee::{Committee, EpochId, StakeUnit};
 use crate::error::{SuiError, SuiResult};
 use crate::intent::{Intent, IntentMessage};
 use crate::sui_serde::{Readable, SuiBitmap};
-use fastcrypto::encoding::{Base64, Encoding, Hex};
-use fastcrypto::hash::{HashFunction, Sha3_256};
-use std::fmt::Debug;
-
 pub use enum_dispatch::enum_dispatch;
+use fastcrypto::encoding::{Base64, Encoding, Hex};
 use fastcrypto::error::FastCryptoError;
+use fastcrypto::hash::{HashFunction, Sha3_256};
 pub use fastcrypto::traits::Signer;
+use std::fmt::Debug;
 
 #[cfg(test)]
 #[path = "unit_tests/crypto_tests.rs"]
@@ -411,15 +416,6 @@ where {
     }
 }
 
-// this is probably derivable, but we'd rather have it explicitly laid out for instructional purposes,
-// see [#34](https://github.com/MystenLabs/narwhal/issues/34)
-impl Default for AuthorityPublicKeyBytes {
-    #[allow(dead_code)]
-    fn default() -> Self {
-        Self([0u8; AuthorityPublicKey::LENGTH])
-    }
-}
-
 impl FromStr for AuthorityPublicKeyBytes {
     type Err = Error;
 
@@ -593,7 +589,7 @@ where
 
 // Enums for signature scheme signatures
 #[enum_dispatch]
-#[derive(Clone, JsonSchema, PartialEq, Eq, Hash)]
+#[derive(Clone, JsonSchema, Debug, PartialEq, Eq, Hash)]
 pub enum Signature {
     Ed25519SuiSignature,
     Secp256k1SuiSignature,
@@ -662,19 +658,26 @@ impl Signature {
         let bytes = self.signature_bytes();
         match self.scheme() {
             SignatureScheme::ED25519 => Ok(CompressedSignature::Ed25519(
-                Ed25519Signature::from_bytes(bytes).map_err(|_| SuiError::InvalidSignature {
+                (&Ed25519Signature::from_bytes(bytes).map_err(|_| SuiError::InvalidSignature {
                     error: "Cannot parse sig".to_string(),
-                })?,
+                })?)
+                    .into(),
             )),
             SignatureScheme::Secp256k1 => Ok(CompressedSignature::Secp256k1(
-                Secp256k1Signature::from_bytes(bytes).map_err(|_| SuiError::InvalidSignature {
-                    error: "Cannot parse sig".to_string(),
-                })?,
+                (&Secp256k1Signature::from_bytes(bytes).map_err(|_| {
+                    SuiError::InvalidSignature {
+                        error: "Cannot parse sig".to_string(),
+                    }
+                })?)
+                    .into(),
             )),
             SignatureScheme::Secp256r1 => Ok(CompressedSignature::Secp256r1(
-                Secp256r1Signature::from_bytes(bytes).map_err(|_| SuiError::InvalidSignature {
-                    error: "Cannot parse sig".to_string(),
-                })?,
+                (&Secp256r1Signature::from_bytes(bytes).map_err(|_| {
+                    SuiError::InvalidSignature {
+                        error: "Cannot parse sig".to_string(),
+                    }
+                })?)
+                    .into(),
             )),
             _ => Err(SuiError::UnsupportedFeatureError {
                 error: "Unsupported signature scheme in MultiSig".to_string(),
@@ -747,16 +750,6 @@ impl ToFromBytes for Signature {
             }
             _ => Err(FastCryptoError::InvalidInput),
         }
-    }
-}
-
-impl Debug for Signature {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let flag = Base64::encode([self.scheme().flag()]);
-        let s = Base64::encode(self.signature_bytes());
-        let p = Base64::encode(self.public_key_bytes());
-        write!(f, "{flag}@{s}@{p}")?;
-        Ok(())
     }
 }
 
@@ -1670,15 +1663,13 @@ pub fn construct_tbls_randomness_object_message(epoch: EpochId, obj_id: &ObjectI
     msg.extend_from_slice(obj_id.as_ref());
     msg
 }
-/// Unlike `enum Signature`, `enum CompressedSignature` does not contain public key.
-#[derive(Debug, From, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+
+/// Unlike [enum Signature], [enum CompressedSignature] does not contain public key.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 pub enum CompressedSignature {
-    #[schemars(with = "Base64")]
-    Ed25519(Ed25519Signature),
-    #[schemars(with = "Base64")]
-    Secp256k1(Secp256k1Signature),
-    #[schemars(with = "Base64")]
-    Secp256r1(Secp256r1Signature),
+    Ed25519(Ed25519SignatureAsBytes),
+    Secp256k1(Secp256k1SignatureAsBytes),
+    Secp256r1(Secp256r1SignatureAsBytes),
 }
 
 impl FromStr for Signature {
