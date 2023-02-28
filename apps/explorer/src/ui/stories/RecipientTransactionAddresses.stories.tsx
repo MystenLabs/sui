@@ -3,17 +3,14 @@
 
 import { type Meta, type StoryObj } from '@storybook/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { type ComponentProps } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 
-import { SenderRecipient, type SenderRecipientProps } from '../SenderRecipient';
+import { RecipientTransactionAddresses } from '../TransactionAddressSection';
 
-const data = {
-    transferCoin: false,
-    sender: '0x813f1adee5abb1e00dfa653bb827856106e56764',
-    recipients: [
+const recipientsData = [
         {
             address: '0x955d8ddc4a17670bda6b949cbdbc8f5aac820cc7',
-
             amount: 1000,
             coinType: '0x2::sui::SUI',
         },
@@ -25,23 +22,20 @@ const data = {
         },
         {
             address: '0xc4173a804406a365e69dfb297d4eaaf002546ebd',
-
             amount: 10_050_504,
             coinType: 'MIST',
         },
         {
             address: '0xca1e11744de126dd1b116c6a16df4715caea56a3',
-
             amount: 1000002,
         },
         {
             address: '0x49e095bc33fda565c07937478f201f4344941f03',
         },
-    ],
-};
+    ]
 
 export default {
-    component: SenderRecipient,
+    component: RecipientTransactionAddresses,
     decorators: [
         (Story) => (
             <QueryClientProvider client={new QueryClient()}>
@@ -53,24 +47,14 @@ export default {
     ],
 } as Meta;
 
-export const singleTransfer: StoryObj<SenderRecipientProps> = {
+export const Default: StoryObj<ComponentProps<typeof RecipientTransactionAddresses>> = {
     args: {
-        ...data,
-        transferCoin: true,
-        recipients: data.recipients.slice(0, 1),
+        recipients: recipientsData,
     },
 };
 
-export const noRecipient: StoryObj<SenderRecipientProps> = {
+export const singleRecipient: StoryObj<ComponentProps<typeof RecipientTransactionAddresses>> = {
     args: {
-        ...data,
-        transferCoin: false,
-        recipients: [],
-    },
-};
-
-export const multipleRecipients: StoryObj<SenderRecipientProps> = {
-    args: {
-        ...data,
+        recipients: recipientsData.slice(0, 1),
     },
 };

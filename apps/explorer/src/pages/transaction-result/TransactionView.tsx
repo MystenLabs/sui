@@ -20,7 +20,6 @@ import {
 } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
-
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import {
     eventToDisplay,
@@ -49,12 +48,16 @@ import { DateCard } from '~/ui/DateCard';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { ObjectLink } from '~/ui/InternalLink';
 import { PageHeader } from '~/ui/PageHeader';
-import { SenderRecipient } from '~/ui/SenderRecipient';
 import { StatAmount } from '~/ui/StatAmount';
 import { TableHeader } from '~/ui/TableHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
 import { Tooltip } from '~/ui/Tooltip';
+import {
+    RecipientTransactionAddresses,
+    SenderTransactionAddress,
+    SponsorTransactionAddress,
+} from '~/ui/TransactionAddressSection';
 import { ReactComponent as ChevronDownIcon } from '~/ui/icons/chevron_down.svg';
 import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
@@ -421,6 +424,8 @@ function TransactionView({
     const gasPrice = gasData.price || 1;
     const gasPayment = gasData.payment;
     const gasBudget = gasData.budget;
+    const gasOwner = gasData.owner;
+    const isSponsoredTransaction = gasOwner !== sender;
 
     const timestamp = transaction.timestamp_ms || transaction.timestampMs;
 
@@ -487,12 +492,23 @@ function TransactionView({
                                         </div>
                                     )
                                 )}
-
-                                <SenderRecipient
-                                    sender={sender}
-                                    transferCoin={!!coinTransfer}
-                                    recipients={recipients}
-                                />
+                                {isSponsoredTransaction && (
+                                    <div className="mt-10">
+                                        <SponsorTransactionAddress
+                                            sponsor={gasOwner}
+                                        />
+                                    </div>
+                                )}
+                                <div className="mt-10">
+                                    <SenderTransactionAddress sender={sender} />
+                                </div>
+                                {recipients.length > 0 && (
+                                    <div className="mt-10">
+                                        <RecipientTransactionAddresses
+                                            recipients={recipients}
+                                        />
+                                    </div>
+                                )}
                                 <div className="mt-5 flex w-full max-w-lg">
                                     {totalRecipientsCount >
                                         MAX_RECIPIENTS_PER_PAGE && (
