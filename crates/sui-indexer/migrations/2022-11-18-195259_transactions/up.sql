@@ -26,6 +26,8 @@ CREATE TABLE transactions (
     gas_price BIGINT NOT NULL,
     -- serialized transaction
     transaction_content TEXT NOT NULL,
+    transaction_effects_content TEXT NOT NULL,
+    confirmed_local_execution BOOLEAN,
     UNIQUE(transaction_digest) 
 );
 

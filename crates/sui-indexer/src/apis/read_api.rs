@@ -3,6 +3,7 @@
 
 use crate::errors::IndexerError;
 use crate::models::checkpoints::{get_latest_checkpoint_sequence_number, get_rpc_checkpoint};
+use crate::models::transactions::{get_total_transaction_number, get_transaction_by_digest};
 use crate::{get_pg_pool_connection, PgConnectionPool};
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
@@ -42,6 +43,22 @@ impl ReadApi {
             // TODO: read from config or env file
             method_to_be_forwarded: vec![],
         }
+    }
+
+    async fn get_total_transaction_number(&self) -> RpcResult<u64> {
+        let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
+        let total_tx_number = get_total_transaction_number(&mut pg_pool_conn)?;
+        Ok(total_tx_number as u64)
+    }
+
+    async fn get_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> RpcResult<SuiTransactionResponse> {
+        let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
+        let txn_resp: SuiTransactionResponse =
+            get_transaction_by_digest(&mut pg_pool_conn, digest.to_string())?.try_into()?;
+        Ok(txn_resp)
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
@@ -91,7 +108,13 @@ impl ReadApiServer for ReadApi {
     }
 
     async fn get_total_transaction_number(&self) -> RpcResult<u64> {
-        self.fullnode.get_total_transaction_number().await
+        if self
+            .method_to_be_forwarded
+            .contains(&"get_total_transaction_number".to_string())
+        {
+            return self.fullnode.get_total_transaction_number().await;
+        }
+        self.get_total_transaction_number().await
     }
 
     async fn get_transactions(
@@ -118,7 +141,13 @@ impl ReadApiServer for ReadApi {
         &self,
         digest: TransactionDigest,
     ) -> RpcResult<SuiTransactionResponse> {
-        self.fullnode.get_transaction(digest).await
+        if self
+            .method_to_be_forwarded
+            .contains(&"get_transaction".to_string())
+        {
+            return self.fullnode.get_transaction(digest).await;
+        }
+        self.get_transaction(digest).await
     }
 
     async fn get_normalized_move_modules_by_package(
