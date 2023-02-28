@@ -30,6 +30,7 @@ module sui::genesis {
     /// It will create a singleton SuiSystemState object, which contains
     /// all the information we need in the system.
     fun create(
+        initial_sui_custody_account_address: address,
         validator_pubkeys: vector<vector<u8>>,
         validator_network_pubkeys: vector<vector<u8>>,
         validator_worker_pubkeys: vector<vector<u8>>,
@@ -126,8 +127,6 @@ module sui::genesis {
         clock::create();
 
         // Transfer the remaining balance of sui's supply to the initial account
-        // TODO pass in the account that should recieve the initial
-        // distribution of Sui instead of sending it to address 0x0
-        sui::transfer(coin::from_balance(sui_supply, ctx), @0x0);
+        sui::transfer(coin::from_balance(sui_supply, ctx), initial_sui_custody_account_address);
     }
 }

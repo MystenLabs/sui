@@ -289,6 +289,11 @@ pub struct GenesisChainParameters {
 
     #[serde(default = "GenesisChainParameters::default_allow_insertion_of_extra_objects")]
     pub allow_insertion_of_extra_objects: bool,
+
+    /// The initial account address that will own the initial 9 Billion Sui that is minted at
+    /// genesis.
+    #[serde(default)]
+    pub initial_sui_custody_account_address: SuiAddress,
     // Most other parameters (e.g. initial gas schedule) should be derived from protocol_version.
 }
 
@@ -298,6 +303,7 @@ impl GenesisChainParameters {
             timestamp_ms: Self::default_timestamp_ms(),
             protocol_version: ProtocolVersion::MAX,
             allow_insertion_of_extra_objects: true,
+            initial_sui_custody_account_address: SuiAddress::default(),
         }
     }
 
@@ -702,6 +708,7 @@ fn build_unsigned_genesis_data(
         validators,
         parameters.timestamp_ms,
         parameters.protocol_version,
+        parameters.initial_sui_custody_account_address,
     );
 
     let (genesis_transaction, genesis_effects, objects) =
@@ -838,6 +845,7 @@ fn create_genesis_objects(
     validators: &[GenesisValidatorInfo],
     epoch_start_timestamp_ms: u64,
     protocol_version: ProtocolVersion,
+    initial_sui_custody_account_address: SuiAddress,
 ) -> Vec<Object> {
     let mut store = InMemoryStorage::new(Vec::new());
     let protocol_config = ProtocolConfig::get_for_version(protocol_version);
@@ -869,6 +877,7 @@ fn create_genesis_objects(
         genesis_ctx,
         epoch_start_timestamp_ms,
         protocol_version,
+        initial_sui_custody_account_address,
     )
     .unwrap();
 
@@ -956,6 +965,7 @@ pub fn generate_genesis_system_object(
     genesis_ctx: &mut TxContext,
     epoch_start_timestamp_ms: u64,
     protocol_version: ProtocolVersion,
+    initial_sui_custody_account_address: SuiAddress,
 ) -> Result<()> {
     let genesis_digest = genesis_ctx.digest();
     let protocol_config = ProtocolConfig::get_for_version(protocol_version);
@@ -1011,6 +1021,7 @@ pub fn generate_genesis_system_object(
         &ident_str!("create").to_owned(),
         vec![],
         vec![
+            CallArg::Pure(bcs::to_bytes(&initial_sui_custody_account_address).unwrap()),
             CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
             CallArg::Pure(bcs::to_bytes(&network_pubkeys).unwrap()),
             CallArg::Pure(bcs::to_bytes(&worker_pubkeys).unwrap()),
