@@ -6,9 +6,9 @@ Sui *(swē)* is the water element in Japanese philosophy. The power of the sui e
 
 The Sui platform is built on Sui Move, which is derived from the core [Move](https://github.com/MystenLabs/awesome-move) programming language. This documentation assumes that you have a basic working knowledge of Move. To learn more about the differences between core Move and Sui Move, see [How Sui Move differs from core Move](../learn/sui-move-diffs.md).
 
-For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper. Find answers to common questions about our [roadmap](https://github.com/MystenLabs/sui/blob/main/DEVX_ROADMAP.md) and more in our [FAQ](../contribute/faq.md).
+For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper.
 
-## Versions of the documentation
+## Documentation versions
 
 This site is available in two versions. You can choose which version to view using the drop-down menu at top left.
  * [Devnet](https://docs.sui.io/devnet/learn) reflects the stable `devnet` branch of the repo. Use the **Devnet** version of the docs if you build or test with the `devnet` branch of the repo. 
