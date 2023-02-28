@@ -2845,8 +2845,10 @@ impl AuthorityState {
                 cap.available_system_packages.sort();
 
                 info!(
-                    "validator {:?} would supports {:?} with system packages: {:?}",
-                    cap.authority, cap.supported_protocol_versions, cap.available_system_packages,
+                    "validator {:?} supports {:?} with system packages: {:?}",
+                    cap.authority.concise(),
+                    cap.supported_protocol_versions,
+                    cap.available_system_packages,
                 );
 
                 // A validator that only supports the current protocol version is also voting
@@ -2966,6 +2968,7 @@ impl AuthorityState {
         info!(
             ?next_epoch,
             ?next_epoch_protocol_version,
+            ?next_epoch_system_packages,
             computation_cost=?gas_cost_summary.computation_cost,
             storage_cost=?gas_cost_summary.storage_cost,
             storage_rebase=?gas_cost_summary.storage_rebate,

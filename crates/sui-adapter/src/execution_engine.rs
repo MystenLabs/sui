@@ -8,7 +8,7 @@ use move_binary_format::CompiledModule;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_vm_runtime::move_vm::MoveVM;
 use sui_types::base_types::SequenceNumber;
-use tracing::{debug, instrument};
+use tracing::{debug, info, instrument};
 
 use crate::{adapter, programmable_transactions};
 use sui_protocol_config::ProtocolConfig;
@@ -443,6 +443,10 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         assert!(
             is_system_package(new_package.id()),
             "Can only set system packages this way."
+        );
+        info!(
+            "upgraded system object {:?}",
+            new_package.compute_object_reference()
         );
         temporary_store.write_object(
             &SingleTxContext::sui_system(),
