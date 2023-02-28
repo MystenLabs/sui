@@ -93,11 +93,13 @@ module sui::sui_system_tests {
         assert_eq(*table::borrow(pool_mappings, pool_id_3), @0x3);
         test_scenario::return_shared(system_state);
 
-        let new_validator_addr = @0x8feebb589ffa14667ff721b7cfb186cfad6530fc;
+        let new_validator_addr = @0x1a4623343cd42be47d67314fce0ad042f3c82685544bc91d8c11d24e74ba7357;
         test_scenario::next_tx(scenario, new_validator_addr);
-
+        // This is generated using https://github.com/MystenLabs/sui/blob/375dfb8c56bb422aca8f1592da09a246999bdf4c/crates/sui-types/src/unit_tests/crypto_tests.rs#L38
+        let pop = x"8080980b89554e7f03b625ba4104d05d19b523a737e2d09a69d4498a1bcac154fcb29f6334b7e8b99b8f3aa95153232d";
+        
         // Add a validator
-        add_validator(new_validator_addr, 100, scenario);
+        add_validator(new_validator_addr, 100, pop, scenario);
         advance_epoch(scenario);
 
         test_scenario::next_tx(scenario, @0x1);

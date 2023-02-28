@@ -110,8 +110,7 @@ module sui::test_publisher {
 
         assert!(publisher::is_package<CustomType>(&pub), 0);
         assert!(publisher::is_package<Scenario>(&pub), 0);
-
-        assert!(&ascii::string(b"0000000000000000000000000000000000000002") == publisher::package(&pub), 0);
+        assert!(&ascii::string(b"0000000000000000000000000000000000000000000000000000000000000002") == publisher::package(&pub), 0);
 
         publisher::burn(pub);
         test::end(test);

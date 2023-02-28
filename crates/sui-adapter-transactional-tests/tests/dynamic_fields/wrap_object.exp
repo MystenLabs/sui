@@ -28,11 +28,11 @@ written: object(112)
 task 6 'view-object'. lines 52-52:
 Owner: Object ID: ( fake(115) )
 Version: 2
-Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(113)}}}
+Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(114)}}}
 
 task 7 'run'. lines 54-54:
-written: object(114), object(116)
-deleted: object(113), object(115)
+written: object(113), object(116)
+deleted: object(114), object(115)
 
 task 8 'run'. lines 57-57:
 created: object(118), object(119), object(120)

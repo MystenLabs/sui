@@ -7,6 +7,6 @@ module std::address {
     /// Should be converted to a native function.
     /// Current implementation only works for Sui.
     public fun length(): u64 {
-        20
+        32
     }
 }

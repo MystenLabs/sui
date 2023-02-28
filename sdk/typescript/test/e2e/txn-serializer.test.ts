@@ -94,7 +94,8 @@ describe('Transaction Serialization and deserialization', () => {
       toolbox.address(),
     );
     const moveCall = {
-      packageObjectId: '0000000000000000000000000000000000000002',
+      packageObjectId:
+        '0000000000000000000000000000000000000000000000000000000000000002',
       module: 'devnet_nft',
       function: 'mint',
       typeArguments: [],
@@ -136,7 +137,8 @@ describe('Transaction Serialization and deserialization', () => {
       await toolbox.getActiveValidators();
 
     const moveCall = {
-      packageObjectId: '0000000000000000000000000000000000000002',
+      packageObjectId:
+        '0000000000000000000000000000000000000000000000000000000000000002',
       module: 'sui_system',
       function: 'request_add_delegation',
       typeArguments: [],

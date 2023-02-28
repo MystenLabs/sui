@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SuiAddress } from '@mysten/sui.js';
+import { type SuiAddress, SUI_ADDRESS_LENGTH } from '@mysten/sui.js';
 
 const IPFS_START_STRING = 'https://ipfs.io/ipfs/';
-const SUI_ADDRESS_LENGTH = 20;
 
 export function hexToAscii(hex: string) {
     if (!hex || typeof hex != 'string') return;

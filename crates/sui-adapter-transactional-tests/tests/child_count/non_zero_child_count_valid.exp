@@ -33,9 +33,9 @@ created: object(117), object(118), object(119)
 written: object(116)
 
 task 8 'transfer-object'. lines 68-68:
-written: object(118), object(120)
+written: object(119), object(120)
 
 task 9 'view-object'. lines 70-70:
 Owner: Account Address ( B )
 Version: 3
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(118)}}}
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(119)}}}

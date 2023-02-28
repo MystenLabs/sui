@@ -255,7 +255,7 @@ mod tests {
     }
 
     fn o(i: u8) -> ObjectID {
-        let mut bytes: [u8; 20] = Default::default();
+        let mut bytes: [u8; ObjectID::LENGTH] = Default::default();
         bytes[0] = i;
         ObjectID::new(bytes)
     }

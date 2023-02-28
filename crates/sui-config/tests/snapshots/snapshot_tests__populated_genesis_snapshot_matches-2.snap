@@ -3,11 +3,11 @@ source: crates/sui-config/tests/snapshot_tests.rs
 expression: genesis.sui_system_wrapper_object()
 ---
 info:
-  id: "0x0000000000000000000000000000000000000005"
+  id: "0x0000000000000000000000000000000000000000000000000000000000000005"
 version: 1
 system_state:
   info:
-    id: "0x9dc97c4be6f1d0e61fbdf2cc9d78f9df04cdff7a"
+    id: "0x9dc97c4be6f1d0e61fbdf2cc9d78f9df04cdff7a473e2ec3a65853766dca1177"
   epoch: 0
   protocol_version: 1
   validators:
@@ -15,7 +15,7 @@ system_state:
     delegation_stake: 0
     active_validators:
       - metadata:
-          sui_address: "0x21b60aa9a8cb189ccbe20461dbfad2202fdef55b"
+          sui_address: "0x21b60aa9a8cb189ccbe20461dbfad2202fdef55b9418f30ac2c5fe632f6e1cb7"
           pubkey_bytes:
             - 153
             - 242
@@ -180,54 +180,54 @@ system_state:
             - 215
             - 117
           proof_of_possession_bytes:
-            - 153
-            - 27
-            - 35
-            - 60
-            - 191
-            - 127
-            - 114
-            - 42
-            - 232
-            - 130
-            - 78
-            - 8
-            - 171
-            - 176
-            - 156
-            - 1
-            - 218
-            - 41
+            - 142
             - 15
-            - 12
-            - 200
-            - 251
-            - 161
-            - 118
-            - 204
-            - 12
-            - 207
-            - 20
-            - 169
-            - 155
-            - 183
-            - 78
-            - 162
-            - 200
-            - 239
+            - 172
+            - 17
+            - 244
+            - 140
+            - 83
+            - 140
+            - 9
+            - 21
+            - 215
             - 217
-            - 147
-            - 103
-            - 123
-            - 109
+            - 82
+            - 233
+            - 52
+            - 153
+            - 34
+            - 39
+            - 105
+            - 154
+            - 217
+            - 2
+            - 47
+            - 75
+            - 129
+            - 116
+            - 137
+            - 208
+            - 46
+            - 252
+            - 36
+            - 74
+            - 180
+            - 241
+            - 90
+            - 96
             - 224
-            - 32
-            - 216
-            - 58
-            - 188
-            - 101
+            - 13
+            - 186
+            - 53
+            - 120
+            - 162
+            - 88
+            - 168
             - 131
             - 137
+            - 136
+            - 233
           name: "0"
           description: ""
           image_url: ""
@@ -242,19 +242,19 @@ system_state:
         pending_withdraw: 0
         gas_price: 1
         delegation_staking_pool:
-          id: "0xab8235dace3d68c7fb48110d63cbf4d6fd81ce10"
+          id: "0xab8235dace3d68c7fb48110d63cbf4d6fd81ce101610b747b049f97dec31140c"
           starting_epoch: 0
           sui_balance: 0
           rewards_pool:
             value: 0
           pool_token_balance: 0
           exchange_rates:
-            id: "0xd5d9aa879b78dc1f516d71ab979189086eff752f"
+            id: "0xd5d9aa879b78dc1f516d71ab979189086eff752f65e4b0dea15829e3157962e1"
             size: 1
           pending_delegation: 0
           pending_withdraws:
             contents:
-              id: "0x18b8140c8a6ea340142f128061016fc4bd8220ec"
+              id: "0x18b8140c8a6ea340142f128061016fc4bd8220ec88875a8e573a5f72a85a15c1"
               size: 0
         commission_rate: 0
         next_epoch_stake: 1
@@ -263,11 +263,11 @@ system_state:
         next_epoch_commission_rate: 0
     pending_validators:
       contents:
-        id: "0x1ace65f54d65a96251b3f46bfa720ab65a7ebe01"
+        id: "0x1ace65f54d65a96251b3f46bfa720ab65a7ebe0174caa9fa1dc0d65a56ae7872"
         size: 0
     pending_removals: []
     staking_pool_mappings:
-      id: "0x628ffd0e51e9a6ea32c13c2739a31a8f344b557d"
+      id: "0x628ffd0e51e9a6ea32c13c2739a31a8f344b557d3429e057b377a9c499b9bb13"
       size: 1
   storage_fund:
     value: 1

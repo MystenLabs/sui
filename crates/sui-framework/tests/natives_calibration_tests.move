@@ -190,7 +190,7 @@ module sui::natives_calibration_tests {
     public entry fun test_calibrate_id_address_from_bytes() {
         let trials: u64 = NUM_TRIALS;
         while (trials > 0) {
-            let bytes = x"3a985da74fe225b2045c172d6bd390bd855f086e";
+            let bytes = x"32866f0109fa1ba911392dcd2d4260f1d824313316f5467abf64187b3eefa555";
             object::calibrate_address_from_bytes(bytes);
             trials = trials - 1;
         }
@@ -200,7 +200,7 @@ module sui::natives_calibration_tests {
     public entry fun test_calibrate_id_address_from_bytes__baseline() {
         let trials: u64 = NUM_TRIALS;
         while (trials > 0) {
-            let bytes = x"3a985da74fe225b2045c172d6bd390bd855f086e";
+            let bytes = x"32866f0109fa1ba911392dcd2d4260f1d824313316f5467abf64187b3eefa555";
             object::calibrate_address_from_bytes_nop(bytes);
             trials = trials - 1;
         }

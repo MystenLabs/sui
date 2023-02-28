@@ -110,7 +110,7 @@ move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "29
 move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "299784312ca360f970c0e75f7a08116d7731ad1d" }
 move-cli = { git = "https://github.com/move-language/move", rev = "299784312ca360f970c0e75f7a08116d7731ad1d" }
 move-compiler = { git = "https://github.com/move-language/move", rev = "299784312ca360f970c0e75f7a08116d7731ad1d" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "299784312ca360f970c0e75f7a08116d7731ad1d", features = ["address20"] }
+move-core-types = { git = "https://github.com/move-language/move", rev = "299784312ca360f970c0e75f7a08116d7731ad1d", features = ["address32"] }
 move-disassembler = { git = "https://github.com/move-language/move", rev = "299784312ca360f970c0e75f7a08116d7731ad1d" }
 move-package = { git = "https://github.com/move-language/move", rev = "299784312ca360f970c0e75f7a08116d7731ad1d" }
 move-stdlib = { git = "https://github.com/move-language/move", rev = "299784312ca360f970c0e75f7a08116d7731ad1d" }

@@ -347,7 +347,7 @@ async fn dependency_is_an_object() -> anyhow::Result<()> {
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
-    let expected = expect!["Dependency ID contains a Sui object, not a Move package: 0x0000000000000000000000000000000000000005"];
+    let expected = expect!["Dependency ID contains a Sui object, not a Move package: 0x0000000000000000000000000000000000000000000000000000000000000005"];
     expected.assert_eq(
         &verifier
             .verify_package_deps(&a_pkg.package)

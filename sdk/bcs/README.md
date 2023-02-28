@@ -29,7 +29,12 @@ bcs.registerStructType("Coin", {
 });
 
 // deserialization: BCS bytes into Coin
-let bcsBytes = "2b3962603a5a0a5915349523120e441a5d20be92001100A1001100A1";
+let bytes = bcs
+  .ser("Coin", {
+    id: "0000000000000000000000000000000000000000000000000000000000000001",
+    value: 1000000n,
+  })
+  .toBytes();
 let coin = bcs.de("Coin", bcsBytes, "hex");
 
 // serialization: Object into bytes - an Option with <T = Coin>
@@ -59,9 +64,10 @@ BCS constructor is configurable for the target. The following parameters are ava
 // Example: All options used
 import { BCS } from "@mysten/bcs";
 
+const SUI_ADDRESS_LENGTH = 32;
 const bcs = new BCS({
   vectorType: "vector<T>",
-  addressLength: 20,
+  addressLength: SUI_ADDRESS_LENGTH,
   addressEncoding: "hex",
   genericSeparators: ["<", ">"],
   types: {
@@ -250,7 +256,7 @@ bcs.registerStructType("Coin", {
 // structure as the definition
 let _bytes = bcs
   .ser("Coin", {
-    id: "0x0000000000000000000000000000000000000005",
+    id: "0x0000000000000000000000000000000000000000000000000000000000000005",
     balance: {
       value: 100000000n,
     },
@@ -313,7 +319,7 @@ const bcs = new BCS(getSuiMoveConfig());
 
 // Some value we want to serialize
 const coin = {
-  id: "0000000000000000000000000000000000000005",
+  id: "0000000000000000000000000000000000000000000000000000000000000005",
   value: 1111333333222n,
 };
 
