@@ -15,6 +15,8 @@ import { toB64, fromB64 } from "./b64";
 import { toHEX, fromHEX } from "./hex";
 import bs58 from "bs58";
 
+const SUI_ADDRESS_LENGTH = 32;
+
 function toLittleEndian(bigint: bigint, size: number) {
   let result = new Uint8Array(size);
   let i = 0;
@@ -731,8 +733,8 @@ export class BCS {
   /**
    * Register an address type which is a sequence of U8s of specified length.
    * @example
-   * bcs.registerAddressType('address', 20);
-   * let addr = bcs.de('address', 'ca27601ec5d915dd40d42e36c395d4a156b24026');
+   * bcs.registerAddressType('address', SUI_ADDRESS_LENGTH);
+   * let addr = bcs.de('address', 'c3aca510c785c7094ac99aeaa1e69d493122444df50bb8a99dfa790c654a79af');
    *
    * @param name Name of the address type.
    * @param length Byte length of the address.
@@ -1253,7 +1255,7 @@ export function getRustConfig(): BcsConfig {
   return {
     genericSeparators: ["<", ">"],
     vectorType: "Vec",
-    addressLength: 20,
+    addressLength: SUI_ADDRESS_LENGTH,
     addressEncoding: "hex",
   };
 }
@@ -1262,7 +1264,7 @@ export function getSuiMoveConfig(): BcsConfig {
   return {
     genericSeparators: ["<", ">"],
     vectorType: "vector",
-    addressLength: 20,
+    addressLength: SUI_ADDRESS_LENGTH,
     addressEncoding: "hex",
   };
 }

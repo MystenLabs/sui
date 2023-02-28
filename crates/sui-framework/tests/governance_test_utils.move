@@ -145,19 +145,20 @@ module sui::governance_test_utils {
         sui_system::request_withdraw_delegation(&mut system_state, staked_sui, ctx);
         test_scenario::return_shared(system_state);
     }
-
-    public fun add_validator(validator: address, init_stake_amount: u64, scenario: &mut Scenario) {
+    
+    public fun add_validator(validator: address, init_stake_amount: u64, pop: vector<u8>, scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, validator);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
 
         let ctx = test_scenario::ctx(scenario);
 
         sui_system::request_add_validator(
             &mut system_state,
-            vector[131, 117, 151, 65, 106, 116, 161, 1, 125, 44, 138, 143, 162, 193, 244, 241, 19, 159, 175, 120, 76, 35, 83, 213, 49, 79, 36, 21, 121, 79, 86, 242, 16, 1, 185, 176, 31, 191, 121, 156, 221, 167, 20, 33, 126, 19, 4, 105, 15, 229, 33, 187, 35, 99, 208, 103, 214, 176, 193, 196, 168, 154, 172, 78, 102, 5, 52, 113, 233, 213, 195, 23, 172, 220, 90, 232, 23, 17, 97, 66, 153, 105, 253, 219, 145, 125, 216, 254, 125, 49, 227, 8, 6, 206, 88, 13],
+            pubkey,
             vector[171, 2, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38],
             vector[],
-            vector[150, 32, 70, 34, 231, 29, 255, 62, 248, 219, 245, 72, 85, 77, 190, 195, 251, 255, 166, 250, 229, 133, 29, 117, 17, 182, 0, 164, 162, 59, 36, 250, 78, 129, 8, 46, 106, 112, 197, 152, 219, 114, 241, 121, 242, 189, 75, 204],
+            pop,
             b"name",
             b"description",
             b"image_url",

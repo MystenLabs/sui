@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Coin as CoinAPI, getTransactionEffects } from '@mysten/sui.js';
+import {
+    Coin as CoinAPI,
+    getTransactionEffects,
+    SUI_SYSTEM_STATE_OBJECT_ID,
+} from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
 
 import type {
@@ -21,8 +25,6 @@ export const DEFAULT_GAS_BUDGET_FOR_STAKE = 15000;
 export const GAS_TYPE_ARG = '0x2::sui::SUI';
 export const GAS_SYMBOL = 'SUI';
 export const DEFAULT_NFT_TRANSFER_GAS_FEE = 450;
-export const SUI_SYSTEM_STATE_OBJECT_ID =
-    '0x0000000000000000000000000000000000000005';
 
 // TODO use sdk
 export class Coin {

@@ -62,7 +62,7 @@ module games::drand_based_scratch_card_tests {
             };
             i = i + 1;
         };
-        assert!(i == 3, 1);
+        assert!(i == 2, 1);
 
         // Claim the reward.
         let winner = test_scenario::take_from_sender<drand_based_scratch_card::Winner>(scenario);

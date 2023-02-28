@@ -33,6 +33,25 @@ export const INVALID_SECP256K1_PUBLIC_KEY = Uint8Array.from(
   Array(PRIVATE_KEY_SIZE).fill(1),
 );
 
+// Test case generated against rust keytool cli. See https://github.com/MystenLabs/sui/blob/edd2cd31e0b05d336b1b03b6e79a67d8dd00d06b/crates/sui/src/unit_tests/keytool_tests.rs#L165
+const TEST_CASES = [
+  [
+    'film crazy soon outside stand loop subway crumble thrive popular green nuclear struggle pistol arm wife phrase warfare march wheat nephew ask sunny firm',
+    'AQA9EYZoLXirIahsXHQMDfdi5DPQ72wLA79zke4EY6CP',
+    '88ea264013bd399f3cc69037aca2d6a0ce6adebb1accd679ab1cad80191894ca',
+  ],
+  [
+    'require decline left thought grid priority false tiny gasp angle royal system attack beef setup reward aunt skill wasp tray vital bounce inflict level',
+    'Ae+TTptXI6WaJfzplSrphnrbTD5qgftfMX5kTyca7unQ',
+    'fce7538e74e5df59529107d29f24991266e7165961932c205d85e04b00bc8a79',
+  ],
+  [
+    'organ crash swim stick traffic remember army arctic mesh slice swear summer police vast chaos cradle squirrel hood useless evidence pet hub soap lake',
+    'AY2iJpGSDMhvGILPjjpyeM1bV4Jky979nUenB5kvQeSj',
+    'd6929233d383bc8fa8df95b69feb04d7c7b4fd154d9d59a2564e4d50d14a569d',
+  ],
+];
+
 const TEST_MNEMONIC =
   'result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss';
 
@@ -108,34 +127,40 @@ describe('secp256k1-keypair', () => {
 
   it('invalid mnemonics to derive secp256k1 keypair', () => {
     expect(() => {
-      Secp256k1Keypair.deriveKeypair(DEFAULT_SECP256K1_DERIVATION_PATH, 'aaa');
+      Secp256k1Keypair.deriveKeypair('aaa', DEFAULT_SECP256K1_DERIVATION_PATH);
     }).toThrow('Invalid mnemonic');
   });
 
-  it('derive secp256k1 keypair from path and mnemonics', () => {
-    // Test case generated against rust: /sui/crates/sui/src/unit_tests/keytool_tests.rs#L149
-    const keypair = Secp256k1Keypair.deriveKeypair(
-      DEFAULT_SECP256K1_DERIVATION_PATH,
-      TEST_MNEMONIC,
-    );
+  it('create keypair from secret key and mnemonics matches keytool', () => {
+    for (const t of TEST_CASES) {
+      // Keypair derived from mnemonic
+      const keypair = Secp256k1Keypair.deriveKeypair(t[0]);
+      expect(keypair.getPublicKey().toSuiAddress()).toEqual(t[2]);
 
-    expect(keypair.getPublicKey().toBase64()).toEqual(
-      'A+NxdDVYKrM9LjFdIem8ThlQCh/EyM3HOhU2WJF3SxMf',
-    );
-    expect(keypair.getPublicKey().toSuiAddress()).toEqual(
-      'ed17b3f435c03ff69c2cdc6d394932e68375f20f',
-    );
+      // Keypair derived from 32-byte secret key
+      const raw = fromB64(t[1]);
+      // The secp256k1 flag is 0x01. See more at [enum SignatureScheme].
+      if (raw[0] !== 1 || raw.length !== PRIVATE_KEY_SIZE + 1) {
+        throw new Error('invalid key');
+      }
+      const imported = Secp256k1Keypair.fromSecretKey(raw.slice(1));
+      expect(imported.getPublicKey().toSuiAddress()).toEqual(t[2]);
+
+      // Exported secret key matches the 32-byte secret key.
+      const exported = imported.export();
+      expect(exported.privateKey).toEqual(toB64(raw.slice(1)));
+    }
   });
 
   it('incorrect purpose node for secp256k1 derivation path', () => {
     expect(() => {
-      Secp256k1Keypair.deriveKeypair(`m/44'/784'/0'/0'/0'`, TEST_MNEMONIC);
+      Secp256k1Keypair.deriveKeypair(TEST_MNEMONIC, `m/44'/784'/0'/0'/0'`);
     }).toThrow('Invalid derivation path');
   });
 
   it('incorrect hardened path for secp256k1 key derivation', () => {
     expect(() => {
-      Secp256k1Keypair.deriveKeypair(`m/54'/784'/0'/0'/0'`, TEST_MNEMONIC);
+      Secp256k1Keypair.deriveKeypair(TEST_MNEMONIC, `m/54'/784'/0'/0'/0'`);
     }).toThrow('Invalid derivation path');
   });
 });

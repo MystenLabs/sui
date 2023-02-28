@@ -26,11 +26,11 @@ module Test::M1 {
 
     // create an object whose Move BCS representation is `n` bytes
     public fun create_object_with_size(n: u64, ctx: &mut TxContext): S {
-        // minimum object size for S is 20 bytes for UID + 1 byte for vector length
-        assert!(n > 21, 0);
+        // minimum object size for S is 32 bytes for UID + 1 byte for vector length
+        assert!(n > std::address::length() + 1, 0);
         let contents = vector[];
         let i = 0;
-        let bytes_to_add = n - 21;
+        let bytes_to_add = n - (std::address::length() + 1);
         while (i < bytes_to_add) {
             vector::push_back(&mut contents, 9);
             i = i + 1;
@@ -89,11 +89,8 @@ module Test::M1 {
 //# run Test::M1::add_byte --args object(109)
 
 // create at size limit, wrap, increase to over size limit while wrapped, then unwrap. should fail
-//# run Test::M1::transfer_object_with_size --args 255980
+//# run Test::M1::transfer_object_with_size --args 255968
 
 //# run Test::M1::wrap --args object(112)
 
-//# run Test::M1::add_bytes_then_unwrap --args object(114) 21
-
-
-
+//# run Test::M1::add_bytes_then_unwrap --args object(114) 33

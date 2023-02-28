@@ -670,13 +670,14 @@ fn test_basic_args_linter_top_level() {
 #[test]
 fn test_convert_address_from_bcs() {
     let bcs_bytes = [
-        108u8, 214, 91, 255, 14, 227, 197, 199, 210, 104, 209, 187, 210, 219, 24, 72, 248, 243,
-        180, 6,
+        50, 134, 111, 1, 9, 250, 27, 169, 17, 57, 45, 205, 45, 66, 96, 241, 216, 36, 49, 51, 22,
+        245, 70, 122, 191, 100, 24, 123, 62, 239, 165, 85,
     ];
 
     let value = SuiJsonValue::from_bcs_bytes(&bcs_bytes).unwrap();
+
     assert_eq!(
-        "0x6cd65bff0ee3c5c7d268d1bbd2db1848f8f3b406",
+        "0x32866f0109fa1ba911392dcd2d4260f1d824313316f5467abf64187b3eefa555",
         value.0.as_str().unwrap()
     );
 }
@@ -691,12 +692,15 @@ fn test_convert_number_from_bcs() {
 #[test]
 fn test_no_address_zero_trimming() {
     let bcs_bytes = bcs::to_bytes(
-        &AccountAddress::from_str("0x0000011111111111111111111111111111111111").unwrap(),
+        &AccountAddress::from_str(
+            "0x0000000000000000000000000000011111111111111111111111111111111111",
+        )
+        .unwrap(),
     )
     .unwrap();
     let value = SuiJsonValue::from_bcs_bytes(&bcs_bytes).unwrap();
     assert_eq!(
-        "0x0000011111111111111111111111111111111111",
+        "0x0000000000000000000000000000011111111111111111111111111111111111",
         value.0.as_str().unwrap()
     );
 }

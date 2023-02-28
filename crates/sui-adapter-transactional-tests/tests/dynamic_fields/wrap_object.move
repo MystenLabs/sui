@@ -49,9 +49,9 @@ entry fun take_and_take(obj: &mut Obj, ctx: &mut TxContext) {
 
 //# run a::m::mint --sender A
 
-//# view-object 113
+//# view-object 114
 
-//# run a::m::take_and_destroy --sender A --args object(114)
+//# run a::m::take_and_destroy --sender A --args object(113)
 
 
 //# run a::m::mint --sender A
