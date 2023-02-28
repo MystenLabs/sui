@@ -430,31 +430,31 @@ module sui::test_scenarioTests {
         let sender = @0x0;
         let scenario = ts::begin(sender);
 
-        let ts0 = tx_context::epoch_timestamp(ts::ctx(&mut scenario));
+        let ts0 = tx_context::epoch_timestamp_ms(ts::ctx(&mut scenario));
 
         // epoch timestamp doesn't change between transactions
         ts::next_tx(&mut scenario, sender);
-        let ts1 = tx_context::epoch_timestamp(ts::ctx(&mut scenario));
+        let ts1 = tx_context::epoch_timestamp_ms(ts::ctx(&mut scenario));
         assert!(ts1 == ts0, 0);
 
         // ...or between epochs when `next_epoch` is used
         ts::next_epoch(&mut scenario, sender);
-        let ts2 = tx_context::epoch_timestamp(ts::ctx(&mut scenario));
+        let ts2 = tx_context::epoch_timestamp_ms(ts::ctx(&mut scenario));
         assert!(ts2 == ts1, 1);
 
         // ...but does change when `later_epoch` is used
         ts::later_epoch(&mut scenario, 42, sender);
-        let ts3 = tx_context::epoch_timestamp(ts::ctx(&mut scenario));
+        let ts3 = tx_context::epoch_timestamp_ms(ts::ctx(&mut scenario));
         assert!(ts3 == ts2 + 42, 2);
 
         // ...and persists across further transactions
         ts::next_tx(&mut scenario, sender);
-        let ts4 = tx_context::epoch_timestamp(ts::ctx(&mut scenario));
+        let ts4 = tx_context::epoch_timestamp_ms(ts::ctx(&mut scenario));
         assert!(ts4 == ts3, 3);
 
         // ...and epochs
         ts::next_epoch(&mut scenario, sender);
-        let ts5 = tx_context::epoch_timestamp(ts::ctx(&mut scenario));
+        let ts5 = tx_context::epoch_timestamp_ms(ts::ctx(&mut scenario));
         assert!(ts5 == ts4, 4);
 
         ts::end(scenario);
