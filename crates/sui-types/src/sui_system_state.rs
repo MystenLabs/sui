@@ -114,6 +114,20 @@ impl ValidatorMetadata {
     }
 }
 
+fn create_narwhal_pubkey(bytes: &[u8]) -> Result<narwhal_crypto::PublicKey, FastCryptoError> {
+    narwhal_crypto::PublicKey::from_bytes(bytes)
+}
+
+fn create_narwhal_net_pubkey(
+    bytes: &[u8],
+) -> Result<narwhal_crypto::NetworkPublicKey, FastCryptoError> {
+    narwhal_crypto::NetworkPublicKey::from_bytes(bytes)
+}
+
+fn create_multiaddr(bytes: Vec<u8>) -> Result<Multiaddr, multiaddr::Error> {
+    Multiaddr::try_from(bytes)
+}
+
 /// Rust version of the Move sui::validator::Validator type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct Validator {
@@ -143,6 +157,12 @@ impl Validator {
             self.metadata.net_address.clone(),
         )
     }
+}
+
+pub fn create_authority_pubkey_bytes(
+    bytes: &[u8],
+) -> Result<AuthorityPublicKeyBytes, FastCryptoError> {
+    AuthorityPublicKeyBytes::from_bytes(bytes)
 }
 
 /// Rust version of the Move sui::staking_pool::PendingDelegationEntry type.
@@ -375,26 +395,6 @@ impl SuiSystemState {
             epoch: self.epoch,
         }
     }
-}
-
-fn create_narwhal_pubkey(bytes: &[u8]) -> Result<narwhal_crypto::PublicKey, FastCryptoError> {
-    narwhal_crypto::PublicKey::from_bytes(bytes)
-}
-
-fn create_narwhal_net_pubkey(
-    bytes: &[u8],
-) -> Result<narwhal_crypto::NetworkPublicKey, FastCryptoError> {
-    narwhal_crypto::NetworkPublicKey::from_bytes(bytes)
-}
-
-fn create_multiaddr(bytes: Vec<u8>) -> Result<Multiaddr, multiaddr::Error> {
-    Multiaddr::try_from(bytes)
-}
-
-pub fn create_authority_pubkey_bytes(
-    bytes: &[u8],
-) -> Result<AuthorityPublicKeyBytes, FastCryptoError> {
-    AuthorityPublicKeyBytes::from_bytes(bytes)
 }
 
 // The default implementation for tests
