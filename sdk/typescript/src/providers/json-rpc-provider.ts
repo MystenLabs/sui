@@ -404,17 +404,26 @@ export class JsonRpcProvider extends Provider {
   // Objects
   async getObjectsOwnedByAddress(
     address: SuiAddress,
+    typeFilter?: string,
   ): Promise<SuiObjectInfo[]> {
     try {
       if (!address || !isValidSuiAddress(normalizeSuiAddress(address))) {
         throw new Error('Invalid Sui address');
       }
-      return await this.client.requestWithType(
+      const objects = await this.client.requestWithType(
         'sui_getObjectsOwnedByAddress',
         [address],
         GetOwnedObjectsResponse,
         this.options.skipDataValidation,
       );
+      // TODO: remove this once we migrated to the new queryObject API
+      if (typeFilter) {
+        return objects.filter(
+          (obj: SuiObjectInfo) =>
+            obj.type === typeFilter || obj.type.startsWith(typeFilter + '<'),
+        );
+      }
+      return objects;
     } catch (err) {
       throw new Error(
         `Error fetching owned object: ${err} for address ${address}`,

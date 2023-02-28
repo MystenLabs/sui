@@ -126,7 +126,10 @@ export class VoidProvider extends Provider {
   }
 
   // Objects
-  async getObjectsOwnedByAddress(_address: string): Promise<SuiObjectInfo[]> {
+  async getObjectsOwnedByAddress(
+    _address: string,
+    _typefilter?: string,
+  ): Promise<SuiObjectInfo[]> {
     throw this.newError('getObjectsOwnedByAddress');
   }
 

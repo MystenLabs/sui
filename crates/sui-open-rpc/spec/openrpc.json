@@ -824,6 +824,35 @@
       }
     },
     {
+      "name": "sui_getDisplayDeprecated",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return the Display string of a object",
+      "params": [
+        {
+          "name": "object_id",
+          "description": "the id of the object",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
+      ],
+      "result": {
+        "name": "BTreeMap<String,String>",
+        "required": true,
+        "schema": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
       "name": "sui_getDynamicFieldObject",
       "tags": [
         {
