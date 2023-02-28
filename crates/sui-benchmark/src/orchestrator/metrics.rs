@@ -4,7 +4,7 @@ use prettytable::{format, row, Table};
 use prometheus_parse::Scrape;
 use serde::Serialize;
 
-use super::BenchmarkParameters;
+use super::parameters::BenchmarkParameters;
 
 type BucketId = String;
 

@@ -2,8 +2,11 @@ use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
 use sui_benchmark::orchestrator::{
-    client::VultrClient, settings::Settings, testbed::Testbed, BenchmarkParametersGenerator,
-    LoadType, Orchestrator,
+    client::VultrClient,
+    parameters::{BenchmarkParametersGenerator, LoadType},
+    settings::Settings,
+    testbed::Testbed,
+    Orchestrator,
 };
 
 #[tokio::main]
@@ -25,15 +28,20 @@ async fn main() -> Result<()> {
 
     testbed.info();
 
-    let nodes = 4;
-    let load = 600;
-    let parameters_generator =
-        BenchmarkParametersGenerator::new(nodes, LoadType::Fixed(vec![load]))
-            .with_custom_duration(Duration::from_secs(120));
+    let nodes = 10;
+    let parameters_generator = BenchmarkParametersGenerator::new(
+        nodes,
+        LoadType::Search {
+            starting_load: 600,
+            latency_increase_tolerance: 2,
+            max_iterations: 5,
+        },
+    )
+    .with_custom_duration(Duration::from_secs(120));
 
     Orchestrator::new(testbed, parameters_generator)
         .do_not_update_testbed()
-        .do_not_reconfigure_testbed()
+        // .do_not_reconfigure_testbed()
         .run_benchmarks()
         .await
         .wrap_err("Failed to run benchmark")?;

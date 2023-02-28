@@ -97,10 +97,12 @@ impl SshConnectionManager {
         }
     }
 
+    /// Create a new ssh connection with the provided host.
     pub async fn connect(&self, address: SocketAddr) -> SshResult<SshConnection> {
         SshConnection::new(address, &self.username, self.private_key_file.clone()).await
     }
 
+    /// Execute the specified ssh command on all provided instances.
     pub async fn execute<C>(
         &self,
         instances: &[Instance],
@@ -152,8 +154,10 @@ pub struct SshConnection {
 }
 
 impl SshConnection {
+    /// Default duration before timing out the ssh connection.
     const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
+    /// Create a new ssh connection with a specific host.
     pub async fn new<P: AsRef<Path>>(
         address: SocketAddr,
         username: &str,
@@ -170,6 +174,8 @@ impl SshConnection {
         Ok(Self { session })
     }
 
+    /// Set a new timeout for the ssh connection. If no timeouts are specified, reset it to the
+    /// default value.
     pub fn with_timeout(self, timeout: &Option<Duration>) -> Self {
         let duration = match timeout {
             Some(value) => value,
@@ -179,11 +185,14 @@ impl SshConnection {
         self
     }
 
+    /// Execute a ssh command on the remote machine.
     pub fn execute(&self, command: String) -> SshResult<(String, String)> {
         let channel = self.session.channel_session()?;
         Self::execute_impl(channel, command)
     }
 
+    /// Execute a ssh command from a given path.
+    /// TODO: Eventually remove this function and use [`execute`] through the ssh manager instead.
     pub fn execute_from_path<P: AsRef<Path>>(
         &self,
         command: String,
@@ -194,17 +203,15 @@ impl SshConnection {
         Self::execute_impl(channel, command)
     }
 
+    /// Execute an ssh command on the remote machine and return both stdout and stderr.
     fn execute_impl(mut channel: Channel, command: String) -> SshResult<(String, String)> {
         channel.exec(&command)?;
-        // println!("{command}");
 
         let mut stdout = String::new();
         channel.read_to_string(&mut stdout)?;
-        // println!("{stdout}");
 
         let mut stderr = String::new();
         channel.stderr().read_to_string(&mut stderr)?;
-        // println!("{stderr}");
 
         channel.close()?;
         channel.wait_close()?;
@@ -218,6 +225,7 @@ impl SshConnection {
         Ok((stdout, stderr))
     }
 
+    /// Upload a file to the remote machines through scp.
     pub fn upload<P: AsRef<Path>>(&self, path: P, content: &[u8]) -> SshResult<()> {
         let size = content.len() as u64;
         let mut channel = self.session.scp_send(path.as_ref(), 0o644, size, None)?;
@@ -225,11 +233,10 @@ impl SshConnection {
         Ok(())
     }
 
+    /// Download a file from the remote machines through scp.
     pub fn download<P: AsRef<Path>>(&self, path: P) -> SshResult<String> {
         let (mut channel, _stats) = self.session.scp_recv(path.as_ref())?;
-        // println!("2: {}", path.as_ref().display());
         let mut content = String::new();
-        // println!("{content}");
         channel.read_to_string(&mut content).unwrap();
         Ok(content)
     }

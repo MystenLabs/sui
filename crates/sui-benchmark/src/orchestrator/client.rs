@@ -13,7 +13,7 @@ use crate::orchestrator::{
 #[async_trait::async_trait]
 pub trait Client: Display {
     /// The username used to connect to the instances.
-    fn username(&self) -> &str;
+    const USERNAME: &'static str;
 
     /// List all existing instances (regardless of their status).
     async fn list_instances(&self) -> CloudProviderResult<Vec<Instance>>;
@@ -85,9 +85,7 @@ impl VultrClient {
 
 #[async_trait::async_trait]
 impl Client for VultrClient {
-    fn username(&self) -> &str {
-        "root"
-    }
+    const USERNAME: &'static str = "root";
 
     async fn list_instances(&self) -> CloudProviderResult<Vec<Instance>> {
         let url = self.base_url.join("instances").unwrap();

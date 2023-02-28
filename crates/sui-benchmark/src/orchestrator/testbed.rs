@@ -27,8 +27,8 @@ use crate::{
 use super::{
     config::Config,
     metrics::MetricsCollector,
+    parameters::BenchmarkParameters,
     ssh::{SshCommand, SshConnectionManager},
-    BenchmarkParameters,
 };
 
 #[derive(Default)]
@@ -115,7 +115,7 @@ impl<C: Client> Testbed<C> {
     pub async fn new(settings: Settings, client: C) -> TestbedResult<Self> {
         let instances = client.list_instances().await?;
         let private_key_file = settings.ssh_private_key_file.clone().into();
-        let ssh_manager = SshConnectionManager::new(client.username().into(), private_key_file);
+        let ssh_manager = SshConnectionManager::new(C::USERNAME.into(), private_key_file);
         Ok(Self {
             settings,
             client,
@@ -173,7 +173,7 @@ impl<C: Client> Testbed<C> {
                     table.add_row(row![]);
                 }
                 let private_key_file = self.settings.ssh_private_key_file.display();
-                let username = self.client.username();
+                let username = C::USERNAME;
                 let ip = instance.main_ip;
                 let connect = format!("ssh -i {private_key_file} {username}@{ip}");
                 if instance.is_active() {
@@ -516,14 +516,7 @@ impl<C> Testbed<C> {
     }
 
     pub async fn run_nodes(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
-        crossterm::execute!(
-            stdout(),
-            Print(format!(
-                "Deploying {} nodes ({} faulty)...",
-                parameters.nodes, parameters.faults
-            ))
-        )
-        .unwrap();
+        crossterm::execute!(stdout(), Print("Deploying validators...")).unwrap();
 
         // Select the instances to run.
         let instances = self.select_instances(parameters)?;
@@ -547,14 +540,7 @@ impl<C> Testbed<C> {
     }
 
     pub async fn run_clients(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
-        crossterm::execute!(
-            stdout(),
-            Print(format!(
-                "Setting up load generators ({} tx/s)...",
-                parameters.load
-            ))
-        )
-        .unwrap();
+        crossterm::execute!(stdout(), Print("Setting up load generators...")).unwrap();
 
         // Select the instances to run.
         let instances = self.select_instances(parameters)?;
@@ -739,9 +725,7 @@ mod test {
 
     #[async_trait::async_trait]
     impl Client for TestClient {
-        fn username(&self) -> &str {
-            "root"
-        }
+        const USERNAME: &'static str = "root";
 
         async fn list_instances(&self) -> CloudProviderResult<Vec<Instance>> {
             let guard = self.instances.lock().unwrap();
