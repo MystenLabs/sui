@@ -3136,7 +3136,7 @@ pub struct CommitteeInfo {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct SystemStateRequest {
+pub struct CurrentEpochStaticInfoRequest {
     // This is needed to make gRPC happy.
     pub _unused: bool,
 }
