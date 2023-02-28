@@ -6730,6 +6730,10 @@
           "delegation_staking_pool",
           "gas_price",
           "metadata",
+          "next_epoch_commission_rate",
+          "next_epoch_delegation",
+          "next_epoch_gas_price",
+          "next_epoch_stake",
           "pending_stake",
           "pending_withdraw",
           "stake_amount",
@@ -6751,6 +6755,26 @@
           },
           "metadata": {
             "$ref": "#/components/schemas/ValidatorMetadata"
+          },
+          "next_epoch_commission_rate": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "next_epoch_delegation": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "next_epoch_gas_price": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "next_epoch_stake": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           },
           "pending_stake": {
             "type": "integer",
@@ -6783,10 +6807,6 @@
           "name",
           "net_address",
           "network_pubkey_bytes",
-          "next_epoch_commission_rate",
-          "next_epoch_delegation",
-          "next_epoch_gas_price",
-          "next_epoch_stake",
           "p2p_address",
           "project_url",
           "proof_of_possession_bytes",
@@ -6828,26 +6848,6 @@
               "format": "uint8",
               "minimum": 0.0
             }
-          },
-          "next_epoch_commission_rate": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "next_epoch_delegation": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "next_epoch_gas_price": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "next_epoch_stake": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
           },
           "p2p_address": {
             "type": "array",

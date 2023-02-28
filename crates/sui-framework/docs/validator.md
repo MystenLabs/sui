@@ -154,30 +154,6 @@
 <dd>
  The address of the narwhal worker
 </dd>
-<dt>
-<code>next_epoch_stake: u64</code>
-</dt>
-<dd>
- Total amount of validator stake that would be active in the next epoch.
-</dd>
-<dt>
-<code>next_epoch_delegation: u64</code>
-</dt>
-<dd>
- Total amount of delegated stake that would be active in the next epoch.
-</dd>
-<dt>
-<code>next_epoch_gas_price: u64</code>
-</dt>
-<dd>
- This validator's gas price quote for the next epoch.
-</dd>
-<dt>
-<code>next_epoch_commission_rate: u64</code>
-</dt>
-<dd>
- The commission rate of the validator starting the next epoch, in basis point.
-</dd>
 </dl>
 
 
@@ -248,6 +224,30 @@
 </dt>
 <dd>
  Commission rate of the validator, in basis point.
+</dd>
+<dt>
+<code>next_epoch_stake: u64</code>
+</dt>
+<dd>
+ Total amount of validator stake that would be active in the next epoch.
+</dd>
+<dt>
+<code>next_epoch_delegation: u64</code>
+</dt>
+<dd>
+ Total amount of delegated stake that would be active in the next epoch.
+</dd>
+<dt>
+<code>next_epoch_gas_price: u64</code>
+</dt>
+<dd>
+ This validator's gas price quote for the next epoch.
+</dd>
+<dt>
+<code>next_epoch_commission_rate: u64</code>
+</dt>
+<dd>
+ The commission rate of the validator starting the next epoch, in basis point.
 </dd>
 </dl>
 
@@ -371,10 +371,6 @@
             p2p_address,
             consensus_address,
             worker_address,
-            next_epoch_stake: stake_amount,
-            next_epoch_delegation: 0,
-            next_epoch_gas_price: gas_price,
-            next_epoch_commission_rate: commission_rate,
         },
         // Initialize the voting power <b>to</b> be the same <b>as</b> the <a href="stake.md#0x2_stake">stake</a> amount.
         // At the epoch change <b>where</b> this <a href="validator.md#0x2_validator">validator</a> is actually added <b>to</b> the
@@ -386,6 +382,10 @@
         gas_price,
         delegation_staking_pool: <a href="staking_pool.md#0x2_staking_pool_new">staking_pool::new</a>(ctx),
         commission_rate,
+        next_epoch_stake: stake_amount,
+        next_epoch_delegation: 0,
+        next_epoch_gas_price: gas_price,
+        next_epoch_commission_rate: commission_rate,
     }
 }
 </code></pre>
@@ -419,6 +419,10 @@
         gas_price: _,
         delegation_staking_pool,
         commission_rate: _,
+        next_epoch_stake: _,
+        next_epoch_delegation: _,
+        next_epoch_gas_price: _,
+        next_epoch_commission_rate: _,
     } = self;
     <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">staking_pool::deactivate_staking_pool</a>(delegation_staking_pool, ctx);
 }
@@ -453,7 +457,7 @@ which will be processed at the end of epoch.
 ) {
     <b>let</b> new_stake_value = <a href="balance.md#0x2_balance_value">balance::value</a>(&new_stake);
     self.pending_stake = self.pending_stake + new_stake_value;
-    self.metadata.next_epoch_stake = self.metadata.next_epoch_stake + new_stake_value;
+    self.next_epoch_stake = self.next_epoch_stake + new_stake_value;
     <a href="stake.md#0x2_stake_create">stake::create</a>(new_stake, self.metadata.sui_address, coin_locked_until_epoch, ctx);
 }
 </code></pre>
@@ -488,9 +492,9 @@ stake still satisfy the minimum requirement.
     min_validator_stake: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>assert</b>!(self.metadata.next_epoch_stake &gt;= withdraw_amount + min_validator_stake, 0);
+    <b>assert</b>!(self.next_epoch_stake &gt;= withdraw_amount + min_validator_stake, 0);
     self.pending_withdraw = self.pending_withdraw + withdraw_amount;
-    self.metadata.next_epoch_stake = self.metadata.next_epoch_stake - withdraw_amount;
+    self.next_epoch_stake = self.next_epoch_stake - withdraw_amount;
     <a href="stake.md#0x2_stake_withdraw_stake">stake::withdraw_stake</a>(<a href="stake.md#0x2_stake">stake</a>, withdraw_amount, ctx);
 }
 </code></pre>
@@ -519,9 +523,9 @@ Process pending stake and pending withdraws, and update the gas price.
     self.stake_amount = self.stake_amount + self.pending_stake - self.pending_withdraw;
     self.pending_stake = 0;
     self.pending_withdraw = 0;
-    self.gas_price = self.metadata.next_epoch_gas_price;
-    self.commission_rate = self.metadata.next_epoch_commission_rate;
-    <b>assert</b>!(self.stake_amount == self.metadata.next_epoch_stake, 0);
+    self.gas_price = self.next_epoch_gas_price;
+    self.commission_rate = self.next_epoch_commission_rate;
+    <b>assert</b>!(self.stake_amount == self.next_epoch_stake, 0);
 }
 </code></pre>
 
@@ -557,7 +561,7 @@ Request to add delegation to the validator's staking pool, processed at the end 
     <a href="staking_pool.md#0x2_staking_pool_request_add_delegation">staking_pool::request_add_delegation</a>(
         &<b>mut</b> self.delegation_staking_pool, delegated_stake, locking_period, self.metadata.sui_address, delegator, ctx
     );
-    self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation + delegate_amount;
+    self.next_epoch_delegation = self.next_epoch_delegation + delegate_amount;
 }
 </code></pre>
 
@@ -614,7 +618,7 @@ Decrement the delegation amount for next epoch. Also called by <code><a href="va
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_decrease_next_epoch_delegation">decrease_next_epoch_delegation</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, amount: u64) {
-    self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation - amount;
+    self.next_epoch_delegation = self.next_epoch_delegation - amount;
 }
 </code></pre>
 
@@ -639,7 +643,7 @@ Request to set new gas price for the next epoch.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_request_set_gas_price">request_set_gas_price</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, new_price: u64) {
-    self.metadata.next_epoch_gas_price = new_price;
+    self.next_epoch_gas_price = new_price;
 }
 </code></pre>
 
@@ -663,7 +667,7 @@ Request to set new gas price for the next epoch.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_request_set_commission_rate">request_set_commission_rate</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, new_commission_rate: u64) {
-    self.metadata.next_epoch_commission_rate = new_commission_rate;
+    self.next_epoch_commission_rate = new_commission_rate;
 }
 </code></pre>
 
@@ -688,7 +692,7 @@ Deposit delegations rewards into the validator's staking pool, called at the end
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_deposit_delegation_rewards">deposit_delegation_rewards</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, reward: Balance&lt;SUI&gt;) {
-    self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation + <a href="balance.md#0x2_balance_value">balance::value</a>(&reward);
+    self.next_epoch_delegation = self.next_epoch_delegation + <a href="balance.md#0x2_balance_value">balance::value</a>(&reward);
     <a href="staking_pool.md#0x2_staking_pool_deposit_rewards">staking_pool::deposit_rewards</a>(&<b>mut</b> self.delegation_staking_pool, reward);
 }
 </code></pre>
@@ -716,7 +720,7 @@ Process pending delegations and withdraws, called at the end of the epoch.
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_process_pending_delegations_and_withdraws">process_pending_delegations_and_withdraws</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, ctx: &<b>mut</b> TxContext) {
     <b>let</b> reward_withdraw_amount = <a href="staking_pool.md#0x2_staking_pool_process_pending_delegation_withdraws">staking_pool::process_pending_delegation_withdraws</a>(
         &<b>mut</b> self.delegation_staking_pool, ctx);
-    self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation - reward_withdraw_amount;
+    self.next_epoch_delegation = self.next_epoch_delegation - reward_withdraw_amount;
     <a href="staking_pool.md#0x2_staking_pool_process_pending_delegations">staking_pool::process_pending_delegations</a>(&<b>mut</b> self.delegation_staking_pool, ctx);
     // TODO: consider bringing this <b>assert</b> back when we are more confident.
     // <b>assert</b>!(<a href="validator.md#0x2_validator_delegate_amount">delegate_amount</a>(self) == self.metadata.next_epoch_delegation, 0);
