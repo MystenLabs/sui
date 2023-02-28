@@ -26,29 +26,8 @@ module sui::kiosk {
     const EIncorrectAmount: u64 = 2;
     /// For when incorrect arguments passed into `switch_mode` function.
     const EIncorrectArgument: u64 = 3;
-
-    /// A Hot Potato making sure the buyer gets an authorization
-    /// from the owner of the T to perform a transfer after a purchase.
-    ///
-    /// Contains the amount paid for the `T` so the commission could be
-    /// calculated; `from` field contains the seller of the `T`.
-    struct TransferRequest<T: key + store> {
-        inner: T,
-        paid: u64,
-        from: Option<address>
-    }
-
-    /// Another Hot Potato returned by the `allow` method. Makes sure
-    /// that the object goes into a Safe.
-    struct ApprovedTransfer<T: key + store> {
-        inner: T
-    }
-
-    /// A unique capability that allows owner of the `T` to authorize
-    /// transfers. Can only be created with the `Publisher` object.
-    struct AllowTransferCap<phantom T: key + store> has key, store {
-        id: UID
-    }
+    /// For when Transfer is accepted by a wrong Kiosk.
+    const EWrongTarget: u64 = 4;
 
     /// An object that stores collectibles of all sorts.
     /// For sale, for collecting reasons, for fun.
@@ -63,6 +42,24 @@ module sui::kiosk {
     struct KioskOwnerCap has key, store {
         id: UID,
         for: ID
+    }
+
+    /// A "Hot Potato" forcing the buyer to get a transfer permission
+    /// from the item type (`T`) owner on purchase attempt.
+    struct TransferRequest<phantom T: key + store> {
+        /// Amount of SUI paid for the item. Can be used to
+        /// calculate the fee / transfer policy enforcement.
+        paid: u64,
+        /// The ID of the Kiosk the object is being sold from.
+        /// Can be used by the TransferPolicy implementors to ban
+        /// some Kiosks or the opposite - relax some rules.
+        from: ID,
+    }
+
+    /// A unique capability that allows owner of the `T` to authorize
+    /// transfers. Can only be created with the `Publisher` object.
+    struct AllowTransferCap<phantom T: key + store> has key, store {
+        id: UID
     }
 
     // === Dynamic Field keys ===
@@ -154,6 +151,7 @@ module sui::kiosk {
         self: &mut Kiosk, id: ID, cap: &Option<KioskOwnerCap>, ctx: &TxContext
     ): T {
         try_access(self, cap, ctx);
+        df::remove_if_exists<Offer, u64>(&mut self.id, Offer { id });
         dof::remove(&mut self.id, Key { id })
     }
 
@@ -170,7 +168,8 @@ module sui::kiosk {
         df::add(&mut self.id, Offer { id }, price)
     }
 
-    /// Make a trade: pay the owner of the item.
+    /// Make a trade: pay the owner of the item and request a Transfer to the `target`
+    /// kiosk (to prevent item being taken by the approving party).
     ///
     /// Received `TransferRequest` needs to be handled by the publisher of the T,
     /// if they have a method implemented that allows a trade, it is possible to
@@ -181,44 +180,30 @@ module sui::kiosk {
     /// a destination safe.
     public fun purchase<T: key + store>(
         self: &mut Kiosk, id: ID, payment: Coin<SUI>
-    ): TransferRequest<T> {
+    ): (T, TransferRequest<T>) {
         let price = df::remove<Offer, u64>(&mut self.id, Offer { id });
         let inner = dof::remove<Key, T>(&mut self.id, Key { id });
 
         assert!(price == coin::value(&payment), EIncorrectAmount);
         balance::join(&mut self.profits, coin::into_balance(payment));
 
-        TransferRequest {
-            inner,
+        (inner, TransferRequest<T> {
             paid: price,
-            from: self.owner
-        }
+            from: object::id(self),
+        })
     }
 
-    /// Allow a `TransferRequest` to happen.
+    /// Allow a `TransferRequest` for the type `T`. The call is protected
+    /// by the type constraint, as only the publisher of the `T` can get
+    /// `AllowTransferCap<T>`.
     ///
-    /// Can only be performed by an `AcceptTransferCap` making the approval logic a resposibility
-    /// of the owner of the T.
-    /// It also means that unless there's a policy for T to allow transfers, Kiosk trades will not be possible.
+    /// Note: unless there's a policy for `T` to allow transfers,
+    /// Kiosk trades will not be possible.
     public fun allow<T: key + store>(
         _cap: &AllowTransferCap<T>, req: TransferRequest<T>
-    ): (ApprovedTransfer<T>, u64, Option<address>) {
-        let TransferRequest { inner, paid, from } = req;
-        (ApprovedTransfer { inner }, paid, from)
-    }
-
-    /// Finalize the trade by placing the purchased item into the destination Kiosk.
-    /// The operation can only be performed by the owner of the Kiosk be it an explicit
-    /// setting or an issued Capability.
-    public fun store_purchased<T: key + store>(
-        self: &mut Kiosk,
-        transfer: ApprovedTransfer<T>,
-        cap: &Option<KioskOwnerCap>,
-        ctx: &mut TxContext
-    ) {
-        try_access(self, cap, ctx);
-        let ApprovedTransfer { inner: item } = transfer;
-        place(self, item)
+    ): (u64, ID) {
+        let TransferRequest { paid, from } = req;
+        (paid, from)
     }
 
     /// Withdraw profits from the Kiosk.

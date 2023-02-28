@@ -10,11 +10,10 @@ Ownership modes:
 
 
 
--  [Struct `TransferRequest`](#0x2_kiosk_TransferRequest)
--  [Struct `ApprovedTransfer`](#0x2_kiosk_ApprovedTransfer)
--  [Resource `AllowTransferCap`](#0x2_kiosk_AllowTransferCap)
 -  [Resource `Kiosk`](#0x2_kiosk_Kiosk)
 -  [Resource `KioskOwnerCap`](#0x2_kiosk_KioskOwnerCap)
+-  [Struct `TransferRequest`](#0x2_kiosk_TransferRequest)
+-  [Resource `AllowTransferCap`](#0x2_kiosk_AllowTransferCap)
 -  [Struct `Key`](#0x2_kiosk_Key)
 -  [Struct `Offer`](#0x2_kiosk_Offer)
 -  [Constants](#@Constants_0)
@@ -27,7 +26,6 @@ Ownership modes:
 -  [Function `make_offer`](#0x2_kiosk_make_offer)
 -  [Function `purchase`](#0x2_kiosk_purchase)
 -  [Function `allow`](#0x2_kiosk_allow)
--  [Function `store_purchased`](#0x2_kiosk_store_purchased)
 -  [Function `withdraw`](#0x2_kiosk_withdraw)
 -  [Function `try_access`](#0x2_kiosk_try_access)
 
@@ -44,108 +42,6 @@ Ownership modes:
 </code></pre>
 
 
-
-<a name="0x2_kiosk_TransferRequest"></a>
-
-## Struct `TransferRequest`
-
-A Hot Potato making sure the buyer gets an authorization
-from the owner of the T to perform a transfer after a purchase.
-
-Contains the amount paid for the <code>T</code> so the commission could be
-calculated; <code>from</code> field contains the seller of the <code>T</code>.
-
-
-<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_TransferRequest">TransferRequest</a>&lt;T: store, key&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>inner: T</code>
-</dt>
-<dd>
-
-</dd>
-<dt>
-<code>paid: u64</code>
-</dt>
-<dd>
-
-</dd>
-<dt>
-<code>from: <a href="_Option">option::Option</a>&lt;<b>address</b>&gt;</code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
-
-<a name="0x2_kiosk_ApprovedTransfer"></a>
-
-## Struct `ApprovedTransfer`
-
-Another Hot Potato returned by the <code>allow</code> method. Makes sure
-that the object goes into a Safe.
-
-
-<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_ApprovedTransfer">ApprovedTransfer</a>&lt;T: store, key&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>inner: T</code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
-
-<a name="0x2_kiosk_AllowTransferCap"></a>
-
-## Resource `AllowTransferCap`
-
-A unique capability that allows owner of the <code>T</code> to authorize
-transfers. Can only be created with the <code>Publisher</code> object.
-
-
-<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_AllowTransferCap">AllowTransferCap</a>&lt;T: store, key&gt; <b>has</b> store, key
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
 
 <a name="0x2_kiosk_Kiosk"></a>
 
@@ -214,6 +110,73 @@ specified.
 </dd>
 <dt>
 <code>for: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_kiosk_TransferRequest"></a>
+
+## Struct `TransferRequest`
+
+A "Hot Potato" forcing the buyer to get a transfer permission
+from the item type (<code>T</code>) owner on purchase attempt.
+
+
+<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_TransferRequest">TransferRequest</a>&lt;T: store, key&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>paid: u64</code>
+</dt>
+<dd>
+ Amount of SUI paid for the item. Can be used to
+ calculate the fee / transfer policy enforcement.
+</dd>
+<dt>
+<code>from: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+ The ID of the Kiosk the object is being sold from.
+ Can be used by the TransferPolicy implementors to ban
+ some Kiosks or the opposite - relax some rules.
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_kiosk_AllowTransferCap"></a>
+
+## Resource `AllowTransferCap`
+
+A unique capability that allows owner of the <code>T</code> to authorize
+transfers. Can only be created with the <code>Publisher</code> object.
+
+
+<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_AllowTransferCap">AllowTransferCap</a>&lt;T: store, key&gt; <b>has</b> store, key
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
 </dt>
 <dd>
 
@@ -320,6 +283,16 @@ For when trying to withdraw profits as owner and owner is not set.
 
 
 <pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EOwnerNotSet">EOwnerNotSet</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="0x2_kiosk_EWrongTarget"></a>
+
+For when Transfer is accepted by a wrong Kiosk.
+
+
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EWrongTarget">EWrongTarget</a>: u64 = 4;
 </code></pre>
 
 
@@ -468,9 +441,11 @@ TODO: better naming
 
 ## Function `place`
 
+Place any object into a Safe.
+Performs an authorization check to make sure only owner can do that.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place">place</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, item: T)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place">place</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="_Option">option::Option</a>&lt;<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>&gt;, item: T, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -479,7 +454,10 @@ TODO: better naming
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place">place</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, item: T) {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place">place</a>&lt;T: key + store&gt;(
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &Option&lt;<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>&gt;, item: T, ctx: &TxContext
+) {
+    <a href="kiosk.md#0x2_kiosk_try_access">try_access</a>(self, cap, ctx);
     dof::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Key">Key</a> { id: <a href="object.md#0x2_object_id">object::id</a>(&item) }, item)
 }
 </code></pre>
@@ -492,9 +470,11 @@ TODO: better naming
 
 ## Function `take`
 
+Take any object from the Safe.
+Performs an authorization check to make sure only owner can do that.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_take">take</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>): T
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_take">take</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>, cap: &<a href="_Option">option::Option</a>&lt;<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): T
 </code></pre>
 
 
@@ -503,7 +483,11 @@ TODO: better naming
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_take">take</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, id: ID): T {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_take">take</a>&lt;T: key + store&gt;(
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, id: ID, cap: &Option&lt;<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>&gt;, ctx: &TxContext
+): T {
+    <a href="kiosk.md#0x2_kiosk_try_access">try_access</a>(self, cap, ctx);
+    df::remove_if_exists&lt;<a href="kiosk.md#0x2_kiosk_Offer">Offer</a>, u64&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Offer">Offer</a> { id });
     dof::remove(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Key">Key</a> { id })
 }
 </code></pre>
@@ -516,9 +500,13 @@ TODO: better naming
 
 ## Function `make_offer`
 
+Make an offer by setting a price for the item and making it publicly
+purchasable by anyone on the network.
+
+Performs an authorization check to make sure only owner can sell.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_make_offer">make_offer</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>, price: u64)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_make_offer">make_offer</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>, price: u64, cap: &<a href="_Option">option::Option</a>&lt;<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -527,7 +515,10 @@ TODO: better naming
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_make_offer">make_offer</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, id: ID, price: u64) {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_make_offer">make_offer</a>&lt;T: key + store&gt;(
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, id: ID, price: u64, cap: &Option&lt;<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>&gt;, ctx: &TxContext
+) {
+    <a href="kiosk.md#0x2_kiosk_try_access">try_access</a>(self, cap, ctx);
     df::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Offer">Offer</a> { id }, price)
 }
 </code></pre>
@@ -540,10 +531,19 @@ TODO: better naming
 
 ## Function `purchase`
 
-Make a trade - pay the owner of the item
+Make a trade: pay the owner of the item and request a Transfer to the <code>target</code>
+kiosk (to prevent item being taken by the approving party).
+
+Received <code><a href="kiosk.md#0x2_kiosk_TransferRequest">TransferRequest</a></code> needs to be handled by the publisher of the T,
+if they have a method implemented that allows a trade, it is possible to
+request their approval (by calling some function) so that the trade can be
+finalized.
+
+After a confirmation is received from the creator, an item can be placed to
+a destination safe.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_purchase">purchase</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>, payment: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;): <a href="kiosk.md#0x2_kiosk_TransferRequest">kiosk::TransferRequest</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_purchase">purchase</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>, payment: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;): (T, <a href="kiosk.md#0x2_kiosk_TransferRequest">kiosk::TransferRequest</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -554,18 +554,17 @@ Make a trade - pay the owner of the item
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_purchase">purchase</a>&lt;T: key + store&gt;(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, id: ID, payment: Coin&lt;SUI&gt;
-): <a href="kiosk.md#0x2_kiosk_TransferRequest">TransferRequest</a>&lt;T&gt; {
+): (T, <a href="kiosk.md#0x2_kiosk_TransferRequest">TransferRequest</a>&lt;T&gt;) {
     <b>let</b> price = df::remove&lt;<a href="kiosk.md#0x2_kiosk_Offer">Offer</a>, u64&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Offer">Offer</a> { id });
     <b>let</b> inner = dof::remove&lt;<a href="kiosk.md#0x2_kiosk_Key">Key</a>, T&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Key">Key</a> { id });
 
     <b>assert</b>!(price == <a href="coin.md#0x2_coin_value">coin::value</a>(&payment), <a href="kiosk.md#0x2_kiosk_EIncorrectAmount">EIncorrectAmount</a>);
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.profits, <a href="coin.md#0x2_coin_into_balance">coin::into_balance</a>(payment));
 
-    <a href="kiosk.md#0x2_kiosk_TransferRequest">TransferRequest</a> {
-        inner,
+    (inner, <a href="kiosk.md#0x2_kiosk_TransferRequest">TransferRequest</a>&lt;T&gt; {
         paid: price,
-        from: self.owner
-    }
+        from: <a href="object.md#0x2_object_id">object::id</a>(self),
+    })
 }
 </code></pre>
 
@@ -577,14 +576,15 @@ Make a trade - pay the owner of the item
 
 ## Function `allow`
 
-Allow a <code><a href="kiosk.md#0x2_kiosk_TransferRequest">TransferRequest</a></code> to happen.
+Allow a <code><a href="kiosk.md#0x2_kiosk_TransferRequest">TransferRequest</a></code> for the type <code>T</code>. The call is protected
+by the type constraint, as only the publisher of the <code>T</code> can get
+<code><a href="kiosk.md#0x2_kiosk_AllowTransferCap">AllowTransferCap</a>&lt;T&gt;</code>.
 
-Can only be performed by an <code>AcceptTransferCap</code> making the approval logic a resposibility
-of the owner of the T.
-It also means that unless there's a policy for T to allow transfers, Kiosk trades will not be possible.
+Note: unless there's a policy for <code>T</code> to allow transfers,
+Kiosk trades will not be possible.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_allow">allow</a>&lt;T: store, key&gt;(_cap: &<a href="kiosk.md#0x2_kiosk_AllowTransferCap">kiosk::AllowTransferCap</a>&lt;T&gt;, req: <a href="kiosk.md#0x2_kiosk_TransferRequest">kiosk::TransferRequest</a>&lt;T&gt;): (<a href="kiosk.md#0x2_kiosk_ApprovedTransfer">kiosk::ApprovedTransfer</a>&lt;T&gt;, u64, <a href="_Option">option::Option</a>&lt;<b>address</b>&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_allow">allow</a>&lt;T: store, key&gt;(_cap: &<a href="kiosk.md#0x2_kiosk_AllowTransferCap">kiosk::AllowTransferCap</a>&lt;T&gt;, req: <a href="kiosk.md#0x2_kiosk_TransferRequest">kiosk::TransferRequest</a>&lt;T&gt;): (u64, <a href="object.md#0x2_object_ID">object::ID</a>)
 </code></pre>
 
 
@@ -595,43 +595,9 @@ It also means that unless there's a policy for T to allow transfers, Kiosk trade
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_allow">allow</a>&lt;T: key + store&gt;(
     _cap: &<a href="kiosk.md#0x2_kiosk_AllowTransferCap">AllowTransferCap</a>&lt;T&gt;, req: <a href="kiosk.md#0x2_kiosk_TransferRequest">TransferRequest</a>&lt;T&gt;
-): (<a href="kiosk.md#0x2_kiosk_ApprovedTransfer">ApprovedTransfer</a>&lt;T&gt;, u64, Option&lt;<b>address</b>&gt;) {
-    <b>let</b> <a href="kiosk.md#0x2_kiosk_TransferRequest">TransferRequest</a> { inner, paid, from } = req;
-    (<a href="kiosk.md#0x2_kiosk_ApprovedTransfer">ApprovedTransfer</a> { inner }, paid, from)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_kiosk_store_purchased"></a>
-
-## Function `store_purchased`
-
-Finalize the trade by placing the purchased item into the destination Kiosk.
-The operation can only be performed by the owner of the Kiosk be it an explicit
-setting or an issued Capability.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_store_purchased">store_purchased</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, <a href="transfer.md#0x2_transfer">transfer</a>: <a href="kiosk.md#0x2_kiosk_ApprovedTransfer">kiosk::ApprovedTransfer</a>&lt;T&gt;, cap: &<a href="_Option">option::Option</a>&lt;<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_store_purchased">store_purchased</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>,
-    <a href="transfer.md#0x2_transfer">transfer</a>: <a href="kiosk.md#0x2_kiosk_ApprovedTransfer">ApprovedTransfer</a>&lt;T&gt;,
-    cap: &Option&lt;<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>&gt;,
-    ctx: &<b>mut</b> TxContext
-) {
-    <a href="kiosk.md#0x2_kiosk_try_access">try_access</a>(self, cap, ctx);
-    <b>let</b> <a href="kiosk.md#0x2_kiosk_ApprovedTransfer">ApprovedTransfer</a> { inner: item } = <a href="transfer.md#0x2_transfer">transfer</a>;
-    <a href="kiosk.md#0x2_kiosk_place">place</a>(self, item)
+): (u64, ID) {
+    <b>let</b> <a href="kiosk.md#0x2_kiosk_TransferRequest">TransferRequest</a> { paid, from } = req;
+    (paid, from)
 }
 </code></pre>
 
