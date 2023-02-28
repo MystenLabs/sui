@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display},
+};
 
 use aws_config::profile::profile_file::{ProfileFileKind, ProfileFiles};
 use aws_sdk_ec2::{
@@ -16,9 +19,12 @@ use crate::orchestrator::{
 
 use super::Client;
 
-impl<T> From<SdkError<T>> for CloudProviderError {
+impl<T> From<SdkError<T>> for CloudProviderError
+where
+    T: Debug + std::error::Error + Send + Sync + 'static,
+{
     fn from(e: SdkError<T>) -> Self {
-        Self::RequestError(e.to_string())
+        Self::RequestError(format!("{:?}", e.into_source()))
     }
 }
 
@@ -68,7 +74,11 @@ impl AwsClient {
         Instance {
             id: aws_instance.instance_id().unwrap().into(),
             region: region.to_string(),
-            main_ip: aws_instance.public_ip_address().unwrap().parse().unwrap(),
+            main_ip: aws_instance
+                .public_ip_address()
+                .unwrap_or_else(|| "0.0.0.0") // Stopped instances do not have an ip address.
+                .parse()
+                .unwrap(),
             tags: vec![self.settings.testbed.clone()],
             plan: format!("{:?}", aws_instance.instance_type().unwrap()),
             power_status: format!("{:?}", aws_instance.state().unwrap().name().unwrap()),
@@ -140,10 +150,13 @@ impl Client for AwsClient {
     }
 
     async fn start_instances(&self, instance_ids: Vec<String>) -> CloudProviderResult<()> {
+        // TODO: need to change the interface to provide the entire instance rather than ids
+        // (because we need to know the region).
         for client in self.clients.values() {
             client
                 .start_instances()
                 .set_instance_ids(Some(instance_ids.clone()))
+                .dry_run(true) // TODO
                 .send()
                 .await?;
         }
@@ -155,6 +168,7 @@ impl Client for AwsClient {
             client
                 .stop_instances()
                 .set_instance_ids(Some(instance_ids.clone()))
+                .dry_run(true) // TODO
                 .send()
                 .await?;
         }
