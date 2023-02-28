@@ -29,7 +29,8 @@
 -  [Function `staking_pool_mappings`](#0x2_validator_set_staking_pool_mappings)
 -  [Function `next_epoch_validator_count`](#0x2_validator_set_next_epoch_validator_count)
 -  [Function `is_active_validator`](#0x2_validator_set_is_active_validator)
--  [Function `contains_duplicate_validator`](#0x2_validator_set_contains_duplicate_validator)
+-  [Function `is_currently_active_validator`](#0x2_validator_set_is_currently_active_validator)
+-  [Function `is_currently_pending_validator`](#0x2_validator_set_is_currently_pending_validator)
 -  [Function `find_validator`](#0x2_validator_set_find_validator)
 -  [Function `get_validator_indices`](#0x2_validator_set_get_validator_indices)
 -  [Function `get_validator_mut`](#0x2_validator_set_get_validator_mut)
@@ -45,7 +46,6 @@
 -  [Function `compute_unadjusted_reward_distribution`](#0x2_validator_set_compute_unadjusted_reward_distribution)
 -  [Function `compute_adjusted_reward_distribution`](#0x2_validator_set_compute_adjusted_reward_distribution)
 -  [Function `distribute_reward`](#0x2_validator_set_distribute_reward)
--  [Function `derive_next_epoch_validators`](#0x2_validator_set_derive_next_epoch_validators)
 -  [Function `emit_validator_epoch_events`](#0x2_validator_set_emit_validator_epoch_events)
 -  [Function `sum_voting_power_by_addresses`](#0x2_validator_set_sum_voting_power_by_addresses)
 -  [Function `active_validators`](#0x2_validator_set_active_validators)
@@ -62,6 +62,7 @@
 <b>use</b> <a href="staking_pool.md#0x2_staking_pool">0x2::staking_pool</a>;
 <b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
 <b>use</b> <a href="table.md#0x2_table">0x2::table</a>;
+<b>use</b> <a href="table_vec.md#0x2_table_vec">0x2::table_vec</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="validator.md#0x2_validator">0x2::validator</a>;
 <b>use</b> <a href="vec_map.md#0x2_vec_map">0x2::vec_map</a>;
@@ -107,7 +108,7 @@
  The current list of active validators.
 </dd>
 <dt>
-<code>pending_validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;</code>
+<code>pending_validators: <a href="table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;</code>
 </dt>
 <dd>
  List of new validator candidates added during the current epoch.
@@ -119,14 +120,6 @@
 <dd>
  Removal requests from the validators. Each element is an index
  pointing to <code>active_validators</code>.
-</dd>
-<dt>
-<code>next_epoch_validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_ValidatorMetadata">validator::ValidatorMetadata</a>&gt;</code>
-</dt>
-<dd>
- The metadata of the validator set for the next epoch. This is kept up-to-dated.
- Every time a change request is received, this set is updated.
- TODO: This is currently not used. We may use it latter for enforcing min/max stake.
 </dd>
 <dt>
 <code>staking_pool_mappings: <a href="table.md#0x2_table_Table">table::Table</a>&lt;<a href="object.md#0x2_object_ID">object::ID</a>, <b>address</b>&gt;</code>
@@ -339,12 +332,10 @@ each validator, emitted during epoch advancement.
         total_validator_stake,
         total_delegation_stake,
         active_validators: init_active_validators,
-        pending_validators: <a href="_empty">vector::empty</a>(),
+        pending_validators: <a href="table_vec.md#0x2_table_vec_empty">table_vec::empty</a>(ctx),
         pending_removals: <a href="_empty">vector::empty</a>(),
-        next_epoch_validators: <a href="_empty">vector::empty</a>(),
         staking_pool_mappings,
     };
-    validators.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(&validators);
     <a href="voting_power.md#0x2_voting_power_set_voting_power">voting_power::set_voting_power</a>(&<b>mut</b> validators.active_validators);
     validators
 }
@@ -373,12 +364,11 @@ processed at the end of epoch.
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, <a href="validator.md#0x2_validator">validator</a>: Validator) {
     <b>assert</b>!(
-        !<a href="validator_set.md#0x2_validator_set_contains_duplicate_validator">contains_duplicate_validator</a>(&self.active_validators, &<a href="validator.md#0x2_validator">validator</a>)
-            && !<a href="validator_set.md#0x2_validator_set_contains_duplicate_validator">contains_duplicate_validator</a>(&self.pending_validators, &<a href="validator.md#0x2_validator">validator</a>),
+        !<a href="validator_set.md#0x2_validator_set_is_currently_active_validator">is_currently_active_validator</a>(self, &<a href="validator.md#0x2_validator">validator</a>)
+            && !<a href="validator_set.md#0x2_validator_set_is_currently_pending_validator">is_currently_pending_validator</a>(self, &<a href="validator.md#0x2_validator">validator</a>),
         <a href="validator_set.md#0x2_validator_set_EDuplicateValidator">EDuplicateValidator</a>
     );
-    <a href="_push_back">vector::push_back</a>(&<b>mut</b> self.pending_validators, <a href="validator.md#0x2_validator">validator</a>);
-    self.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(self);
+    <a href="table_vec.md#0x2_table_vec_push_back">table_vec::push_back</a>(&<b>mut</b> self.pending_validators, <a href="validator.md#0x2_validator">validator</a>);
 }
 </code></pre>
 
@@ -396,7 +386,7 @@ will be processed at the end of epoch.
 Only an active validator can request to be removed.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_remove_validator">request_remove_validator</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_remove_validator">request_remove_validator</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -407,7 +397,7 @@ Only an active validator can request to be removed.
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_remove_validator">request_remove_validator</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
-    ctx: &TxContext,
+    ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> validator_address = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
     <b>let</b> validator_index_opt = <a href="validator_set.md#0x2_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address);
@@ -418,7 +408,6 @@ Only an active validator can request to be removed.
         0
     );
     <a href="_push_back">vector::push_back</a>(&<b>mut</b> self.pending_removals, validator_index);
-    self.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(self);
 }
 </code></pre>
 
@@ -454,7 +443,6 @@ TODO: impl max stake requirement.
     <b>let</b> validator_address = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
     <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(&<b>mut</b> self.active_validators, validator_address);
     <a href="validator.md#0x2_validator_request_add_stake">validator::request_add_stake</a>(<a href="validator.md#0x2_validator">validator</a>, new_stake, coin_locked_until_epoch, ctx);
-    self.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(self);
 }
 </code></pre>
 
@@ -490,7 +478,6 @@ The remaining stake of the validator cannot be lower than <code>min_validator_st
     <b>let</b> validator_address = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
     <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(&<b>mut</b> self.active_validators, validator_address);
     <a href="validator.md#0x2_validator_request_withdraw_stake">validator::request_withdraw_stake</a>(<a href="validator.md#0x2_validator">validator</a>, <a href="stake.md#0x2_stake">stake</a>, withdraw_amount, min_validator_stake, ctx);
-    self.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(self);
 }
 </code></pre>
 
@@ -527,7 +514,6 @@ of the epoch.
     <b>let</b> delegator_address = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
     <b>let</b> amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&delegated_stake);
     <a href="validator.md#0x2_validator_request_add_delegation">validator::request_add_delegation</a>(<a href="validator.md#0x2_validator">validator</a>, delegated_stake, locking_period, <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx), ctx);
-    self.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(self);
     <a href="event.md#0x2_event_emit">event::emit</a>(
         <a href="validator_set.md#0x2_validator_set_DelegationRequestEvent">DelegationRequestEvent</a> {
             validator_address,
@@ -575,7 +561,6 @@ of the epoch.
     <b>let</b> validator_index = <a href="_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
     <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_borrow_mut">vector::borrow_mut</a>(&<b>mut</b> self.active_validators, validator_index);
     <a href="validator.md#0x2_validator_request_withdraw_delegation">validator::request_withdraw_delegation</a>(<a href="validator.md#0x2_validator">validator</a>, staked_sui, ctx);
-    self.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(self);
 }
 </code></pre>
 
@@ -742,8 +727,6 @@ It does the following things:
     <a href="validator_set.md#0x2_validator_set_process_pending_validators">process_pending_validators</a>(self);
 
     <a href="validator_set.md#0x2_validator_set_process_pending_removals">process_pending_removals</a>(self, ctx);
-
-    self.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(self);
 
     <b>let</b> (validator_stake, delegation_stake) = <a href="validator_set.md#0x2_validator_set_calculate_total_stakes">calculate_total_stakes</a>(&self.active_validators);
     self.total_validator_stake = validator_stake;
@@ -996,7 +979,7 @@ Get the total number of validators in the next epoch.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_next_epoch_validator_count">next_epoch_validator_count</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>): u64 {
-    <a href="_length">vector::length</a>(&self.next_epoch_validators)
+    <a href="_length">vector::length</a>(&self.active_validators) - <a href="_length">vector::length</a>(&self.pending_removals) + <a href="table_vec.md#0x2_table_vec_length">table_vec::length</a>(&self.pending_validators)
 }
 </code></pre>
 
@@ -1032,15 +1015,15 @@ Returns true iff <code>validator_address</code> is a member of the active valida
 
 </details>
 
-<a name="0x2_validator_set_contains_duplicate_validator"></a>
+<a name="0x2_validator_set_is_currently_active_validator"></a>
 
-## Function `contains_duplicate_validator`
+## Function `is_currently_active_validator`
 
-Checks whether a duplicate of <code>new_validator</code> is already in <code>validators</code>.
-Two validators duplicate if they share the same sui_address or same IP or same name.
+Checks whether <code>new_validator</code> is already in currently active validator list.
+Two validators are identical if they share the same sui_address or same IP or same name.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_contains_duplicate_validator">contains_duplicate_validator</a>(validators: &<a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, new_validator: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): bool
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_is_currently_active_validator">is_currently_active_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, new_validator: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): bool
 </code></pre>
 
 
@@ -1049,11 +1032,46 @@ Two validators duplicate if they share the same sui_address or same IP or same n
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_contains_duplicate_validator">contains_duplicate_validator</a>(validators: &<a href="">vector</a>&lt;Validator&gt;, new_validator: &Validator): bool {
-    <b>let</b> len = <a href="_length">vector::length</a>(validators);
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_is_currently_active_validator">is_currently_active_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, new_validator: &Validator): bool {
+    <b>let</b> len = <a href="_length">vector::length</a>(&self.active_validators);
     <b>let</b> i = 0;
     <b>while</b> (i &lt; len) {
-        <b>let</b> v = <a href="_borrow">vector::borrow</a>(validators, i);
+        <b>let</b> v = <a href="_borrow">vector::borrow</a>(&self.active_validators, i);
+        <b>if</b> (<a href="validator.md#0x2_validator_is_duplicate">validator::is_duplicate</a>(v, new_validator)) {
+            <b>return</b> <b>true</b>
+        };
+        i = i + 1;
+    };
+    <b>false</b>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_is_currently_pending_validator"></a>
+
+## Function `is_currently_pending_validator`
+
+Checks whether <code>new_validator</code> is already in currently pending validator list.
+Two validators are identical if they share the same sui_address or same IP or same name.
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_is_currently_pending_validator">is_currently_pending_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, new_validator: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_is_currently_pending_validator">is_currently_pending_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, new_validator: &Validator): bool {
+    <b>let</b> len = <a href="table_vec.md#0x2_table_vec_length">table_vec::length</a>(&self.pending_validators);
+    <b>let</b> i = 0;
+    <b>while</b> (i &lt; len) {
+        <b>let</b> v = <a href="table_vec.md#0x2_table_vec_borrow">table_vec::borrow</a>(&self.pending_validators, i);
         <b>if</b> (<a href="validator.md#0x2_validator_is_duplicate">validator::is_duplicate</a>(v, new_validator)) {
             <b>return</b> <b>true</b>
         };
@@ -1254,8 +1272,8 @@ Process the pending new validators. They are simply inserted into <code>validato
 <pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_pending_validators">process_pending_validators</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
 ) {
-    <b>while</b> (!<a href="_is_empty">vector::is_empty</a>(&self.pending_validators)) {
-        <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> self.pending_validators);
+    <b>while</b> (!<a href="table_vec.md#0x2_table_vec_is_empty">table_vec::is_empty</a>(&self.pending_validators)) {
+        <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="table_vec.md#0x2_table_vec_pop_back">table_vec::pop_back</a>(&<b>mut</b> self.pending_validators);
         <a href="table.md#0x2_table_add">table::add</a>(&<b>mut</b> self.staking_pool_mappings, staking_pool_id(&<a href="validator.md#0x2_validator">validator</a>), sui_address(&<a href="validator.md#0x2_validator">validator</a>));
         <a href="_push_back">vector::push_back</a>(&<b>mut</b> self.active_validators, <a href="validator.md#0x2_validator">validator</a>);
     }
@@ -1701,60 +1719,6 @@ The staking rewards are shared with the delegators while the storage fund ones a
         <a href="validator.md#0x2_validator_deposit_delegation_rewards">validator::deposit_delegation_rewards</a>(<a href="validator.md#0x2_validator">validator</a>, delegator_reward, new_epoch);
         i = i + 1;
     }
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_validator_set_derive_next_epoch_validators"></a>
-
-## Function `derive_next_epoch_validators`
-
-Upon any change to the validator set, derive and update the metadata of the validators for the new epoch.
-TODO: If we want to enforce a % on stake threshold, this is the function to do it.
-
-
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>): <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_ValidatorMetadata">validator::ValidatorMetadata</a>&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>): <a href="">vector</a>&lt;ValidatorMetadata&gt; {
-    <b>let</b> active_count = <a href="_length">vector::length</a>(&self.active_validators);
-    <b>let</b> removal_count = <a href="_length">vector::length</a>(&self.pending_removals);
-    <b>let</b> result = <a href="_empty">vector::empty</a>();
-    <b>while</b> (active_count &gt; 0) {
-        <b>if</b> (removal_count &gt; 0) {
-            <b>let</b> removal_index = *<a href="_borrow">vector::borrow</a>(&self.pending_removals, removal_count - 1);
-            <b>if</b> (removal_index == active_count - 1) {
-                // This <a href="validator.md#0x2_validator">validator</a> will be removed, and hence we won't add it <b>to</b> the new <a href="validator.md#0x2_validator">validator</a> set.
-                removal_count = removal_count - 1;
-                active_count = active_count - 1;
-                <b>continue</b>
-            };
-        };
-        <b>let</b> metadata = <a href="validator.md#0x2_validator_metadata">validator::metadata</a>(
-            <a href="_borrow">vector::borrow</a>(&self.active_validators, active_count - 1),
-        );
-        <a href="_push_back">vector::push_back</a>(&<b>mut</b> result, *metadata);
-        active_count = active_count - 1;
-    };
-    <b>let</b> i = 0;
-    <b>let</b> pending_count = <a href="_length">vector::length</a>(&self.pending_validators);
-    <b>while</b> (i &lt; pending_count) {
-        <b>let</b> metadata = <a href="validator.md#0x2_validator_metadata">validator::metadata</a>(
-            <a href="_borrow">vector::borrow</a>(&self.pending_validators, i),
-        );
-        <a href="_push_back">vector::push_back</a>(&<b>mut</b> result, *metadata);
-        i = i + 1;
-    };
-    result
 }
 </code></pre>
 

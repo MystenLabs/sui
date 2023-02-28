@@ -183,9 +183,8 @@ pub struct ValidatorSet {
     pub validator_stake: u64,
     pub delegation_stake: u64,
     pub active_validators: Vec<Validator>,
-    pub pending_validators: Vec<Validator>,
+    pub pending_validators: TableVec,
     pub pending_removals: Vec<u64>,
-    pub next_epoch_validators: Vec<ValidatorMetadata>,
     pub staking_pool_mappings: Table,
 }
 
@@ -331,9 +330,8 @@ impl Default for SuiSystemState {
             validator_stake: 1,
             delegation_stake: 1,
             active_validators: vec![],
-            pending_validators: vec![],
+            pending_validators: TableVec::default(),
             pending_removals: vec![],
-            next_epoch_validators: vec![],
             staking_pool_mappings: Table::default(),
         };
         SuiSystemState {
