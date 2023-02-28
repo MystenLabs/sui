@@ -45,10 +45,11 @@ import {
   CheckpointDigest,
   CheckPointContentsDigest,
   CommitteeInfo,
+  Checkpoint,
 } from '../types';
 import { Provider } from './provider';
 
-import { DynamicFieldPage } from '../types/dynamic_fields';
+import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import { SerializedSignature } from '../cryptography/signature';
 
 export class VoidProvider extends Provider {
@@ -209,7 +210,7 @@ export class VoidProvider extends Provider {
 
   getDynamicFieldObject(
     _parent_object_id: ObjectId,
-    _name: string,
+    _name: string | DynamicFieldName,
   ): Promise<GetObjectDataResponse> {
     throw this.newError('getDynamicFieldObject');
   }
@@ -314,6 +315,10 @@ export class VoidProvider extends Provider {
     _digest: CheckpointDigest,
   ): Promise<CheckpointSummary> {
     throw this.newError('getCheckpointSummaryByDigest');
+  }
+
+  async getCheckpoint(_id: CheckpointDigest | number): Promise<Checkpoint> {
+    throw this.newError('getCheckpoint');
   }
 
   async getCheckpointContents(

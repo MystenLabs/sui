@@ -6,6 +6,7 @@ use futures::future;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
 use std::{collections::HashMap, fmt::Debug};
+use sui_types::error::UserInputError;
 use thiserror::Error;
 
 use move_compiler::compiled_unit::{CompiledUnitEnum, NamedCompiledModule};
@@ -16,7 +17,7 @@ use sui_sdk::apis::ReadApi;
 use sui_sdk::error::Error;
 
 use sui_sdk::rpc_types::{SuiRawData, SuiRawMoveObject, SuiRawMovePackage};
-use sui_types::{base_types::ObjectID, error::SuiError};
+use sui_types::base_types::ObjectID;
 
 #[cfg(test)]
 mod tests;
@@ -27,7 +28,7 @@ pub enum SourceVerificationError {
     DependencyObjectReadFailure(Error),
 
     #[error("Dependency object does not exist or was deleted: {0:?}")]
-    SuiObjectRefFailure(SuiError),
+    SuiObjectRefFailure(UserInputError),
 
     #[error("Dependency ID contains a Sui object, not a Move package: {0}")]
     ObjectFoundWhenPackageExpected(ObjectID, SuiRawMoveObject),

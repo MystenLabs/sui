@@ -5,6 +5,7 @@ module sui::genesis {
     use std::vector;
 
     use sui::balance;
+    use sui::coin;
     use sui::clock;
     use sui::sui;
     use sui::sui_system;
@@ -25,6 +26,9 @@ module sui::genesis {
     /// Stake subisidy to be given out in the very first epoch. Placeholder value.
     const INIT_STAKE_SUBSIDY_AMOUNT: u64 = 1000000;
 
+    /// The initial balance of the Subsidy fund in Mist (1 Billion * 10^9)
+    const INIT_STAKE_SUBSIDY_FUND_BALANCE: u64 = 1_000_000_000_000_000_000;
+
     /// This function will be explicitly called once at genesis.
     /// It will create a singleton SuiSystemState object, which contains
     /// all the information we need in the system.
@@ -39,6 +43,7 @@ module sui::genesis {
         validator_image_urls: vector<vector<u8>>,
         validator_project_urls: vector<vector<u8>>,
         validator_net_addresses: vector<vector<u8>>,
+        validator_p2p_addresses: vector<vector<u8>>,
         validator_consensus_addresses: vector<vector<u8>>,
         validator_worker_addresses: vector<vector<u8>>,
         validator_stakes: vector<u64>,
@@ -49,7 +54,8 @@ module sui::genesis {
         ctx: &mut TxContext,
     ) {
         let sui_supply = sui::new(ctx);
-        let storage_fund = balance::increase_supply(&mut sui_supply, INIT_STORAGE_FUND);
+        let subsidy_fund = balance::split(&mut sui_supply, INIT_STAKE_SUBSIDY_FUND_BALANCE);
+        let storage_fund = balance::split(&mut sui_supply, INIT_STORAGE_FUND);
         let validators = vector::empty();
         let count = vector::length(&validator_pubkeys);
         assert!(
@@ -60,6 +66,7 @@ module sui::genesis {
                 && vector::length(&validator_image_urls) == count
                 && vector::length(&validator_project_urls) == count
                 && vector::length(&validator_net_addresses) == count
+                && vector::length(&validator_p2p_addresses) == count
                 && vector::length(&validator_consensus_addresses) == count
                 && vector::length(&validator_worker_addresses) == count
                 && vector::length(&validator_gas_prices) == count
@@ -78,6 +85,7 @@ module sui::genesis {
             let image_url = *vector::borrow(&validator_image_urls, i);
             let project_url = *vector::borrow(&validator_project_urls, i);
             let net_address = *vector::borrow(&validator_net_addresses, i);
+            let p2p_address = *vector::borrow(&validator_p2p_addresses, i);
             let consensus_address = *vector::borrow(&validator_consensus_addresses, i);
             let worker_address = *vector::borrow(&validator_worker_addresses, i);
             let stake = *vector::borrow(&validator_stakes, i);
@@ -94,9 +102,10 @@ module sui::genesis {
                 image_url,
                 project_url,
                 net_address,
+                p2p_address,
                 consensus_address,
                 worker_address,
-                balance::increase_supply(&mut sui_supply, stake),
+                balance::split(&mut sui_supply, stake),
                 option::none(),
                 gas_price,
                 commission_rate,
@@ -107,15 +116,21 @@ module sui::genesis {
 
         sui_system::create(
             validators,
-            sui_supply,
+            subsidy_fund,
             storage_fund,
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
             INIT_STAKE_SUBSIDY_AMOUNT,
             protocol_version,
             epoch_start_timestamp_ms,
+            ctx,
         );
 
         clock::create();
+
+        // Transfer the remaining balance of sui's supply to the initial account
+        // TODO pass in the account that should recieve the initial
+        // distribution of Sui instead of sending it to address 0x0
+        sui::transfer(coin::from_balance(sui_supply, ctx), @0x0);
     }
 }

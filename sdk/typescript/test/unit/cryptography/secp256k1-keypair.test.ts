@@ -3,6 +3,7 @@
 
 import {
   DEFAULT_SECP256K1_DERIVATION_PATH,
+  PRIVATE_KEY_SIZE,
   Secp256k1Keypair,
 } from '../../../src';
 import { describe, it, expect } from 'vitest';
@@ -23,10 +24,14 @@ export const VALID_SECP256K1_PUBLIC_KEY = [
 ];
 
 // Invalid private key with incorrect length
-export const INVALID_SECP256K1_SECRET_KEY = Uint8Array.from(Array(31).fill(1));
+export const INVALID_SECP256K1_SECRET_KEY = Uint8Array.from(
+  Array(PRIVATE_KEY_SIZE - 1).fill(1),
+);
 
 // Invalid public key with incorrect length
-export const INVALID_SECP256K1_PUBLIC_KEY = Uint8Array.from(Array(32).fill(1));
+export const INVALID_SECP256K1_PUBLIC_KEY = Uint8Array.from(
+  Array(PRIVATE_KEY_SIZE).fill(1),
+);
 
 const TEST_MNEMONIC =
   'result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss';
@@ -58,7 +63,7 @@ describe('secp256k1-keypair', () => {
 
   it('generate keypair from random seed', () => {
     const keypair = Secp256k1Keypair.fromSeed(
-      Uint8Array.from(Array(32).fill(8)),
+      Uint8Array.from(Array(PRIVATE_KEY_SIZE).fill(8)),
     );
     expect(keypair.getPublicKey().toBase64()).toEqual(
       'A/mR+UTR4ZVKf8i5v2Lg148BX0wHdi1QXiDmxFJgo2Yb',

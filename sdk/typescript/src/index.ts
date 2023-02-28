@@ -11,7 +11,11 @@ export * from './cryptography/signature';
 
 export * from './providers/provider';
 export * from './providers/json-rpc-provider';
-export * from './providers/json-rpc-provider-with-cache';
+
+export * from './rpc/client';
+export * from './rpc/faucet-client';
+export * from './rpc/websocket-client';
+export * from './rpc/connection';
 
 export * from './signers/txn-data-serializers/rpc-txn-data-serializer';
 export * from './signers/txn-data-serializers/txn-data-serializer';
@@ -23,7 +27,6 @@ export * from './signers/raw-signer';
 export * from './signers/signer-with-provider';
 
 export * from './types';
-export * from './utils/api-endpoints';
 export * from './utils/format';
 export * from './utils/intent';
 export * from './utils/verify';

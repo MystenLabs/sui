@@ -135,29 +135,43 @@ pub struct Parameters {
     pub min_header_delay: Duration,
 
     /// The depth of the garbage collection (Denominated in number of rounds).
+    #[serde(default = "Parameters::default_gc_depth")]
     pub gc_depth: u64,
     /// The delay after which the synchronizer retries to send sync requests. Denominated in ms.
-    #[serde(with = "duration_format")]
+    #[serde(
+        with = "duration_format",
+        default = "Parameters::default_sync_retry_delay"
+    )]
     pub sync_retry_delay: Duration,
     /// Determine with how many nodes to sync when re-trying to send sync-request. These nodes
     /// are picked at random from the committee.
+    #[serde(default = "Parameters::default_sync_retry_nodes")]
     pub sync_retry_nodes: usize,
     /// The preferred batch size. The workers seal a batch of transactions when it reaches this size.
     /// Denominated in bytes.
+    #[serde(default = "Parameters::default_batch_size")]
     pub batch_size: usize,
     /// The delay after which the workers seal a batch of transactions, even if `max_batch_size`
     /// is not reached.
-    #[serde(with = "duration_format")]
+    #[serde(
+        with = "duration_format",
+        default = "Parameters::default_max_batch_delay"
+    )]
     pub max_batch_delay: Duration,
     /// The parameters for the block synchronizer
+    #[serde(default = "BlockSynchronizerParameters::default")]
     pub block_synchronizer: BlockSynchronizerParameters,
     /// The parameters for the Consensus API gRPC server
+    #[serde(default = "ConsensusAPIGrpcParameters::default")]
     pub consensus_api_grpc: ConsensusAPIGrpcParameters,
     /// The maximum number of concurrent requests for messages accepted from an un-trusted entity
+    #[serde(default = "Parameters::default_max_concurrent_requests")]
     pub max_concurrent_requests: usize,
     /// Properties for the prometheus metrics
+    #[serde(default = "PrometheusMetricsParameters::default")]
     pub prometheus_metrics: PrometheusMetricsParameters,
     /// Network admin server ports for primary & worker.
+    #[serde(default = "NetworkAdminServerParameters::default")]
     pub network_admin_server: NetworkAdminServerParameters,
     /// Anemo network settings.
     #[serde(default = "AnemoParameters::default")]
@@ -178,7 +192,31 @@ impl Parameters {
     }
 
     fn default_min_header_delay() -> Duration {
-        Duration::from_secs_f64(1.8)
+        Duration::from_secs_f64(0.5)
+    }
+
+    fn default_gc_depth() -> u64 {
+        50
+    }
+
+    fn default_sync_retry_delay() -> Duration {
+        Duration::from_millis(5_000)
+    }
+
+    fn default_sync_retry_nodes() -> usize {
+        3
+    }
+
+    fn default_batch_size() -> usize {
+        500_000
+    }
+
+    fn default_max_batch_delay() -> Duration {
+        Duration::from_millis(100)
+    }
+
+    fn default_max_concurrent_requests() -> usize {
+        500_000
     }
 }
 
@@ -214,7 +252,7 @@ impl NetworkAdminServerParameters {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct AnemoParameters {
     /// Per-peer rate-limits (in requests/sec) for the PrimaryToPrimary service.
-    pub send_message_rate_limit: Option<NonZeroU32>,
+    pub send_certificate_rate_limit: Option<NonZeroU32>,
     pub get_payload_availability_rate_limit: Option<NonZeroU32>,
     pub get_certificates_rate_limit: Option<NonZeroU32>,
 
@@ -379,18 +417,18 @@ impl Default for BlockSynchronizerParameters {
 impl Default for Parameters {
     fn default() -> Self {
         Self {
-            header_num_of_batches_threshold: 32,
-            max_header_num_of_batches: 1000,
-            max_header_delay: Duration::from_millis(100),
-            min_header_delay: Duration::from_millis(100),
-            gc_depth: 50,
-            sync_retry_delay: Duration::from_millis(5_000),
-            sync_retry_nodes: 3,
-            batch_size: 500_000,
-            max_batch_delay: Duration::from_millis(100),
+            header_num_of_batches_threshold: Parameters::default_header_num_of_batches_threshold(),
+            max_header_num_of_batches: Parameters::default_max_header_num_of_batches(),
+            max_header_delay: Parameters::default_max_header_delay(),
+            min_header_delay: Parameters::default_min_header_delay(),
+            gc_depth: Parameters::default_gc_depth(),
+            sync_retry_delay: Parameters::default_sync_retry_delay(),
+            sync_retry_nodes: Parameters::default_sync_retry_nodes(),
+            batch_size: Parameters::default_batch_size(),
+            max_batch_delay: Parameters::default_max_batch_delay(),
             block_synchronizer: BlockSynchronizerParameters::default(),
             consensus_api_grpc: ConsensusAPIGrpcParameters::default(),
-            max_concurrent_requests: 500_000,
+            max_concurrent_requests: Parameters::default_max_concurrent_requests(),
             prometheus_metrics: PrometheusMetricsParameters::default(),
             network_admin_server: NetworkAdminServerParameters::default(),
             anemo: AnemoParameters::default(),

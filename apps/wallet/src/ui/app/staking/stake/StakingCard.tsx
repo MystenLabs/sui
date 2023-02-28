@@ -4,7 +4,6 @@
 import {
     getTransactionDigest,
     SUI_TYPE_ARG,
-    normalizeSuiAddress,
     type SuiAddress,
 } from '@mysten/sui.js';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
@@ -17,8 +16,7 @@ import Alert from '../../components/alert';
 import { useReferenceGasPrice } from '../../hooks/useReferenceGasPrice';
 import { getStakingRewards } from '../getStakingRewards';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { STATE_OBJECT } from '../usePendingDelegation';
-import { validatorsFields } from '../validatorsFields';
+import { useSystemState } from '../useSystemState';
 import { DelegationState, STATE_TO_COPY } from './../home/DelegationCard';
 import StakeForm from './StakeForm';
 import { UnStakeForm } from './UnstakeForm';
@@ -34,12 +32,7 @@ import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { parseAmount } from '_helpers';
-import {
-    useSigner,
-    useAppSelector,
-    useCoinDecimals,
-    useGetObject,
-} from '_hooks';
+import { useSigner, useAppSelector, useCoinDecimals } from '_hooks';
 import {
     accountAggregateBalancesSelector,
     createCoinsForTypeSelector,
@@ -69,11 +62,7 @@ function StakingCard() {
         accountAddress || ''
     );
 
-    //TODO: since we only require epoch number, probably we can use a different query
-    const { data: validators, isLoading: validatorsIsloading } =
-        useGetObject(STATE_OBJECT);
-
-    const validatorsData = validators && validatorsFields(validators);
+    const { data: system, isLoading: validatorsIsloading } = useSystemState();
 
     const totalTokenBalance = useMemo(() => {
         if (!allDelegation) return 0n;
@@ -106,12 +95,12 @@ function StakingCard() {
     );
 
     const suiEarned = useMemo(() => {
-        if (!validatorsData || !delegationData) return 0;
+        if (!system || !delegationData) return 0;
         return getStakingRewards(
-            validatorsData.validators.fields.active_validators,
+            system.validators.active_validators,
             delegationData
         );
-    }, [delegationData, validatorsData]);
+    }, [delegationData, system]);
 
     const [coinDecimals] = useCoinDecimals(coinType);
 
@@ -229,10 +218,10 @@ function StakingCard() {
                     txDigest = getTransactionDigest(response);
                 }
 
-                // Invalidate the react query for 0x5 and validator
+                // Invalidate the react query for system state and validator
                 Promise.all([
                     queryClient.invalidateQueries({
-                        queryKey: ['object', normalizeSuiAddress(STATE_OBJECT)],
+                        queryKey: ['system', 'state'],
                     }),
                     queryClient.invalidateQueries({
                         queryKey: ['validator'],
@@ -276,11 +265,7 @@ function StakingCard() {
     const loadingBalance = useAppSelector(
         ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
     );
-    if (
-        !coinType ||
-        !validatorAddress ||
-        (!validatorsIsloading && !validatorsData)
-    ) {
+    if (!coinType || !validatorAddress || (!validatorsIsloading && !system)) {
         return <Navigate to="/" replace={true} />;
     }
     return (
@@ -306,7 +291,6 @@ function StakingCard() {
                                     <ValidatorFormDetail
                                         validatorAddress={validatorAddress}
                                         unstake={unstake}
-                                        stakedId={stakeIdParams}
                                     />
                                 </div>
 
@@ -320,7 +304,7 @@ function StakingCard() {
                                     <StakeForm
                                         coinBalance={coinBalance}
                                         coinType={coinType}
-                                        epoch={validatorsData?.epoch}
+                                        epoch={system?.epoch}
                                     />
                                 )}
 

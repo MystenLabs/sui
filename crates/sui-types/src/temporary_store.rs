@@ -5,6 +5,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::ops::Neg;
 
+use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
@@ -16,7 +17,8 @@ use tracing::trace;
 use crate::coin::Coin;
 use crate::committee::EpochId;
 use crate::event::BalanceChangeType;
-use crate::storage::SingleTxContext;
+use crate::storage::{ObjectStore, SingleTxContext};
+use crate::sui_system_state::{get_sui_system_state, SuiSystemState};
 use crate::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -78,6 +80,10 @@ impl InnerTemporaryStore {
             })
             .collect()
     }
+
+    pub fn get_sui_system_state_object(&self) -> Option<SuiSystemState> {
+        get_sui_system_state(&self.written).ok()
+    }
 }
 
 pub struct TemporaryStore<S> {
@@ -133,6 +139,33 @@ impl<S> TemporaryStore<S> {
     // Helpers to access private fields
     pub fn objects(&self) -> &BTreeMap<ObjectID, Object> {
         &self.input_objects
+    }
+
+    /// Return the dynamic field objects that are written or deleted by this transaction
+    pub fn dynamic_fields_touched(&self) -> Vec<ObjectID> {
+        let mut dynamic_fields = Vec::new();
+        for (id, v) in &self.written {
+            match v.2 {
+                WriteKind::Mutate => {
+                    if !self.input_objects.contains_key(id) {
+                        dynamic_fields.push(*id)
+                    }
+                }
+                WriteKind::Create | WriteKind::Unwrap => (),
+            }
+        }
+        for (id, v) in &self.deleted {
+            match v.2 {
+                DeleteKind::Normal => {
+                    // TODO: is this how a deleted dynamic field will show up?
+                    if !self.input_objects.contains_key(id) {
+                        dynamic_fields.push(*id)
+                    }
+                }
+                DeleteKind::UnwrapThenDelete | DeleteKind::Wrap => (),
+            }
+        }
+        dynamic_fields
     }
 
     /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
@@ -687,16 +720,15 @@ impl<S> TemporaryStore<S> {
         }
         let cost_summary = gas_status.summary(result.is_ok());
         let gas_used = cost_summary.gas_used();
-        // we round storage rebate such that `>= x.5` goes to x+1 (rounds up) and
-        // `< x.5` goes to x (truncates). We replicate `f32/64::round()`
-        const BASIS_POINTS: u128 = 10000;
-        let gas_rebate = (((cost_summary.storage_rebate as u128 * self.storage_rebate_rate as u128)
-            + (BASIS_POINTS / 2)) // integer rounding adds half of the BASIS_POINTS (denominator)
-            / BASIS_POINTS) as u64;
+
         // We must re-fetch the gas object from the temporary store, as it may have been reset
         // previously in the case of error.
         let mut gas_object = self.read_object(&gas_object_id).unwrap().clone();
-        gas::deduct_gas(&mut gas_object, gas_used, gas_rebate);
+        gas::deduct_gas(
+            &mut gas_object,
+            gas_used,
+            cost_summary.sender_rebate(self.storage_rebate_rate),
+        );
         trace!(gas_used, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
 
         // Do not overwrite inner transaction context for gas charge
@@ -764,6 +796,60 @@ impl<S> TemporaryStore<S> {
                 }
             }
         }
+    }
+}
+
+impl<S: GetModule + ObjectStore> TemporaryStore<S> {
+    /// Check that this transaction neither creates nor destroys SUI. This should hold for all txes except
+    /// the epoch change tx, which mints staking rewards equal to the gas fees burned in the previous epoch.
+    /// This intended to be called *after* we have charged for gas + applied the storage rebate to the gas object,
+    /// but *before* we have updated object versions
+    pub fn check_sui_conserved(&self) {
+        let gas_summary = &self.gas_charged.as_ref().unwrap().2;
+        let storage_fund_rebate_inflow =
+            gas_summary.storage_fund_rebate_inflow(self.storage_rebate_rate);
+
+        // total SUI in input objects
+        let input_sui = self.mutable_input_refs.iter().fold(0, |acc, o| {
+            acc + self
+                .input_objects
+                .get(&o.0)
+                .unwrap()
+                .get_total_sui(&self.store)
+                .unwrap()
+        });
+        // if a dynamic field object O is written by this tx, count get_total_sui(pre_tx_value(O)) as part of input_sui
+        let dynamic_field_input_sui = self.dynamic_fields_touched().iter().fold(0, |acc, id| {
+            acc + self
+                .store
+                .get_object(id)
+                .unwrap()
+                .unwrap()
+                .get_total_sui(&self.store)
+                .unwrap()
+        });
+        // sum of the storage rebate fields of all objects written by this tx
+        let mut output_rebate_amount = 0;
+        // total SUI in output objects
+        let output_sui = self.written.values().fold(0, |acc, v| {
+            output_rebate_amount += v.1.storage_rebate;
+            acc + v.1.get_total_sui(&self.store).unwrap()
+        });
+
+        // storage gas cost should be equal to total rebates of mutated objects + storage fund rebate inflow (see below)
+        assert_eq!(
+            gas_summary.storage_cost,
+            output_rebate_amount + storage_fund_rebate_inflow
+        );
+
+        // note: storage_cost flows into the storage_rebate field of the output objects, which is why it is not accounted for here.
+        // similarly, storage_rebate flows into the gas coin
+        // we do account for the "storage rebate inflow" (portion of the storage rebate which flows back into the storage fund). like
+        // computation gas fees, this quantity is burned, then re-minted at epoch boundaries.
+        assert_eq!(
+            input_sui + dynamic_field_input_sui,
+            output_sui + gas_summary.computation_cost + storage_fund_rebate_inflow
+        )
     }
 }
 
@@ -878,7 +964,7 @@ pub fn empty_for_testing() -> TemporaryStore<()> {
         (),
         InputObjects::new(Vec::new()),
         TransactionDigest::genesis(),
-        ProtocolConfig::get_for_min_version(),
+        &ProtocolConfig::get_for_min_version(),
     )
 }
 
@@ -889,6 +975,6 @@ pub fn with_input_objects_for_testing(input_objects: InputObjects) -> TemporaryS
         (),
         input_objects,
         TransactionDigest::genesis(),
-        ProtocolConfig::get_for_min_version(),
+        &ProtocolConfig::get_for_min_version(),
     )
 }

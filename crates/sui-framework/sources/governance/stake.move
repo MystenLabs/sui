@@ -33,7 +33,7 @@ module sui::stake {
     const BONDING_PERIOD: u64 = 1;
 
     /// Error number for when a Stake with nonzero balance is burnt.
-    const ENONZERO_BALANCE: u64 = 0;
+    const ENonzeroBalance: u64 = 0;
 
     /// Create a stake object from a SUI balance. If the balance comes from a
     /// `LockedCoin`, an EpochTimeLock is passed in to keep track of locking period.

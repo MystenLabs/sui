@@ -16,18 +16,20 @@ use tap::TapFallible;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
 
+use crate::error::Error;
 use sui_open_rpc::{Module, Project};
 
-use crate::metrics::MetricsLayer;
+use crate::metrics::MetricsLogger;
+use crate::routing_layer::RoutingLayer;
 
 pub mod api;
-pub mod bcs_api;
 pub mod coin_api;
 pub mod error;
 pub mod event_api;
 pub mod governance_api;
 mod metrics;
 pub mod read_api;
+mod routing_layer;
 pub mod threshold_bls_api;
 pub mod transaction_builder_api;
 pub mod transaction_execution_api;
@@ -39,6 +41,8 @@ pub const CLIENT_SDK_VERSION_HEADER: &str = "client-sdk-version";
 /// API version.
 pub const CLIENT_TARGET_API_VERSION_HEADER: &str = "client-target-api-version";
 pub const APP_NAME_HEADER: &str = "app-name";
+
+pub const MAX_REQUEST_SIZE: u32 = 2 << 30;
 
 #[cfg(test)]
 #[path = "unit_tests/rpc_server_tests.rs"]
@@ -64,23 +68,20 @@ pub fn sui_rpc_doc(version: &str) -> Project {
 }
 
 impl JsonRpcServerBuilder {
-    pub fn new(version: &str, prometheus_registry: &Registry) -> anyhow::Result<Self> {
-        Ok(Self {
+    pub fn new(version: &str, prometheus_registry: &Registry) -> Self {
+        Self {
             module: RpcModule::new(()),
             rpc_doc: sui_rpc_doc(version),
             registry: prometheus_registry.clone(),
-        })
+        }
     }
 
-    pub fn register_module<T: SuiRpcModule>(&mut self, module: T) -> Result<(), anyhow::Error> {
+    pub fn register_module<T: SuiRpcModule>(&mut self, module: T) -> Result<(), Error> {
         self.rpc_doc.add_module(T::rpc_doc_module());
         Ok(self.module.merge(module.rpc())?)
     }
 
-    pub async fn start(
-        mut self,
-        listen_address: SocketAddr,
-    ) -> Result<ServerHandle, anyhow::Error> {
+    pub async fn start(mut self, listen_address: SocketAddr) -> Result<ServerHandle, Error> {
         let acl = match env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
             Ok(value) => {
                 let allow_hosts = value
@@ -107,6 +108,8 @@ impl JsonRpcServerBuilder {
                 HeaderName::from_static(APP_NAME_HEADER),
             ]);
 
+        let routing = self.rpc_doc.method_routing.clone();
+
         self.module
             .register_method("rpc.discover", move |_, _| Ok(self.rpc_doc.clone()))?;
         let methods_names = self.module.method_names().collect::<Vec<_>>();
@@ -120,16 +123,33 @@ impl JsonRpcServerBuilder {
             })
             .unwrap_or(u32::MAX);
 
-        let metrics_layer = MetricsLayer::new(&self.registry, &methods_names);
+        let metrics_logger = MetricsLogger::new(&self.registry, &methods_names);
+
+        let disable_routing = env::var("DISABLE_BACKWARD_COMPATIBILITY")
+            .ok()
+            .and_then(|v| bool::from_str(&v).ok())
+            .unwrap_or_default();
+        info!(
+            "Compatibility method routing {}.",
+            if disable_routing {
+                "disabled"
+            } else {
+                "enabled"
+            }
+        );
+        // We need to use the routing layer to block access to the old methods when routing is disabled.
+        let routing_layer = RoutingLayer::new(routing, disable_routing);
+
         let middleware = tower::ServiceBuilder::new()
             .layer(cors)
-            .layer(metrics_layer);
+            .layer(routing_layer);
 
         let server = ServerBuilder::default()
-            .max_response_body_size(2 << 30)
+            .max_response_body_size(MAX_REQUEST_SIZE)
             .max_connections(max_connection)
             .set_host_filtering(AllowHosts::Any)
             .set_middleware(middleware)
+            .set_logger(metrics_logger)
             .build(listen_address)
             .await?;
         let addr = server.local_addr()?;

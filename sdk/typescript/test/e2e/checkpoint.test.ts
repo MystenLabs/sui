@@ -1,19 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { lt } from '@suchipi/femver';
 import { describe, it, expect, beforeAll } from 'vitest';
+import { versionToString } from '../../src';
 import { setup, TestToolbox } from './utils/setup';
 
 describe('Checkpoints Reading API', () => {
   let toolbox: TestToolbox;
-  let shouldSkip: boolean;
 
   beforeAll(async () => {
     toolbox = await setup();
-    // TODO(cleanup): remove this after TestNet Wave 2(0.22.0) or backward compatibility
-    // is supported
-    const version = await toolbox.provider.getRpcApiVersion()!;
-    shouldSkip = version?.major === 0 && version?.minor < 23;
   });
 
   it('Get latest checkpoint sequence number', async () => {
@@ -33,9 +30,6 @@ describe('Checkpoints Reading API', () => {
   });
 
   it('get checkpoint summary by digest', async () => {
-    if (shouldSkip) {
-      return;
-    }
     const checkpoint_resp = await toolbox.provider.getCheckpointSummary(1);
     const digest = checkpoint_resp.previous_digest;
     expect(digest).not.toBeNull();
@@ -49,24 +43,19 @@ describe('Checkpoints Reading API', () => {
   });
 
   it('get checkpoint contents', async () => {
-    if (shouldSkip) {
-      // Test for previous versions
-      const checkpoint_resp = await toolbox.provider.getCheckpointSummary(0);
-      const digest = checkpoint_resp.content_digest;
-      expect(digest).not.toBeNull();
-      const resp = await toolbox.provider.getCheckpointContents(digest!);
-      expect(resp.transactions.length).greaterThan(0);
-      return;
-    }
-
     const resp = await toolbox.provider.getCheckpointContents(0);
     expect(resp.transactions.length).greaterThan(0);
   });
 
+  it('gets checkpoint by id', async () => {
+    const version = await toolbox.provider.getRpcApiVersion();
+    // todo: remove this once 0.28.0 is released
+    if (version && lt(versionToString(version), '0.28.0')) return;
+    const resp = await toolbox.provider.getCheckpoint(0);
+    expect(resp.digest.length).greaterThan(0);
+  });
+
   it('get checkpoint contents by digest', async () => {
-    if (shouldSkip) {
-      return;
-    }
     const checkpoint_resp = await toolbox.provider.getCheckpointSummary(0);
     const digest = checkpoint_resp.content_digest;
     const resp = await toolbox.provider.getCheckpointContentsByDigest(digest);

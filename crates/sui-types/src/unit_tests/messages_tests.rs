@@ -18,6 +18,7 @@ use crate::crypto::Secp256k1SuiSignature;
 use crate::crypto::SuiKeyPair;
 use crate::crypto::SuiSignature;
 use crate::crypto::SuiSignatureInner;
+use crate::crypto::VerificationObligation;
 use crate::crypto::{
     get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
     AuthoritySignInfoTrait, SuiAuthoritySignature,
@@ -180,7 +181,13 @@ fn test_new_with_signatures() {
     for _ in 0..5 {
         let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
         let name = AuthorityPublicKeyBytes::from(sec.public());
-        signatures.push(AuthoritySignInfo::new(0, &message, name, &sec));
+        signatures.push(AuthoritySignInfo::new(
+            0,
+            &message,
+            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            name,
+            &sec,
+        ));
         authorities.insert(name, 1);
     }
     let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
@@ -226,6 +233,7 @@ fn test_handle_reject_malicious_signature() {
             signatures.push(AuthoritySignInfo::new(
                 0,
                 &Foo("some data".to_string()),
+                Intent::default().with_scope(IntentScope::SenderSignedTransaction),
                 name,
                 &sec,
             ))
@@ -237,7 +245,11 @@ fn test_handle_reject_malicious_signature() {
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(signatures, &committee).unwrap();
     {
         let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let sig = AuthoritySignature::new(&message, committee.epoch, &sec);
+        let sig = AuthoritySignature::new_secure(
+            &IntentMessage::new(Intent::default(), message.clone()),
+            &committee.epoch,
+            &sec,
+        );
         quorum.signature.add_signature(sig).unwrap();
     }
     let (mut obligation, idx) = get_obligation_input(&message);
@@ -250,40 +262,45 @@ fn test_handle_reject_malicious_signature() {
 #[test]
 fn test_auth_sig_commit_to_wrong_epoch_id_fail() {
     let message: Foo = Foo("some data".to_string());
-    let mut signatures: Vec<AuthoritySignInfo> = Vec::new();
-    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
-
-    for _ in 0..5 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let name = AuthorityPublicKeyBytes::from(sec.public());
-        authorities.insert(name, 1);
-        signatures.push(AuthoritySignInfo::new(
-            1,
-            &Foo("some data".to_string()),
-            name,
-            &sec,
-        ));
-    }
-    // committee set up with epoch 1
-    let committee = Committee::new(1, ProtocolVersion::MIN, authorities.clone()).unwrap();
-    let mut quorum =
-        AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(signatures, &committee).unwrap();
-    {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        // signature commits to epoch 0
-        let sig = AuthoritySignature::new(&message, 1, &sec);
-        quorum.signature.add_signature(sig).unwrap();
-    }
-    let (mut obligation, idx) = get_obligation_input(&message);
-    assert!(quorum
-        .add_to_verification_obligation(&committee, &mut obligation, idx)
-        .is_ok());
-    assert_eq!(
-        obligation.verify_all(),
-        Err(SuiError::InvalidSignature {
-            error: "General cryptographic error".to_string()
-        })
+    let mut obligation = VerificationObligation::default();
+    let idx = obligation.add_message(
+        &message,
+        0, // Obligation added with correct epoch id.
+        Intent::default().with_scope(IntentScope::SenderSignedTransaction),
     );
+    let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+
+    // Auth signtaure commits to epoch 0 verifies ok.
+    let sig = AuthoritySignature::new_secure(
+        &IntentMessage::new(
+            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            message.clone(),
+        ),
+        &0,
+        &sec,
+    );
+    let res = obligation.add_signature_and_public_key(&sig, sec.public(), idx);
+    assert!(res.is_ok());
+    assert!(obligation.verify_all().is_ok());
+
+    // Auth signtaure commits to epoch 1 fails to verify.
+    let mut obligation = VerificationObligation::default();
+    let idx1 = obligation.add_message(
+        &message,
+        0, // Obligation added with correct epoch id.
+        Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+    );
+    let sig1 = AuthoritySignature::new_secure(
+        &IntentMessage::new(
+            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            message.clone(),
+        ),
+        &1,
+        &sec,
+    );
+    let res = obligation.add_signature_and_public_key(&sig1, sec.public(), idx1);
+    assert!(res.is_ok());
+    assert!(obligation.verify_all().is_err());
 }
 
 #[test]
@@ -298,6 +315,7 @@ fn test_bitmap_out_of_range() {
         signatures.push(AuthoritySignInfo::new(
             0,
             &Foo("some data".to_string()),
+            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
             name,
             &sec,
         ));
@@ -329,6 +347,7 @@ fn test_reject_extra_public_key() {
         signatures.push(AuthoritySignInfo::new(
             0,
             &Foo("some data".to_string()),
+            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
             name,
             &sec,
         ));
@@ -368,6 +387,7 @@ fn test_reject_reuse_signatures() {
         signatures.push(AuthoritySignInfo::new(
             0,
             &Foo("some data".to_string()),
+            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
             name,
             &sec,
         ));
@@ -403,6 +423,7 @@ fn test_empty_bitmap() {
         signatures.push(AuthoritySignInfo::new(
             0,
             &Foo("some data".to_string()),
+            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
             name,
             &sec,
         ));
@@ -603,11 +624,19 @@ fn test_user_signature_committed_in_signed_transactions() {
     let committee = Committee::new(0, ProtocolVersion::MIN, authorities.clone()).unwrap();
     assert!(signed_tx_a
         .auth_sig()
-        .verify(transaction_a.data(), &committee)
+        .verify_secure(
+            transaction_a.data(),
+            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            &committee
+        )
         .is_ok());
     assert!(signed_tx_a
         .auth_sig()
-        .verify(transaction_b.data(), &committee)
+        .verify_secure(
+            transaction_b.data(),
+            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            &committee
+        )
         .is_err());
 
     // Test hash non-equality
@@ -811,7 +840,7 @@ fn test_sponsored_transaction_validity_check() {
         )
         .validity_check()
         .unwrap_err(),
-        SuiError::UnsupportedSponsoredTransactionKind
+        UserInputError::UnsupportedSponsoredTransactionKind
     );
 
     // PaySui cannot be sponsored
@@ -827,7 +856,7 @@ fn test_sponsored_transaction_validity_check() {
         )
         .validity_check()
         .unwrap_err(),
-        SuiError::UnsupportedSponsoredTransactionKind
+        UserInputError::UnsupportedSponsoredTransactionKind
     );
 
     // PayAllSui cannot be sponsored
@@ -842,7 +871,7 @@ fn test_sponsored_transaction_validity_check() {
         )
         .validity_check()
         .unwrap_err(),
-        SuiError::UnsupportedSponsoredTransactionKind
+        UserInputError::UnsupportedSponsoredTransactionKind
     );
 
     // Batch is non-sponsorable
@@ -858,7 +887,7 @@ fn test_sponsored_transaction_validity_check() {
         )
         .validity_check()
         .unwrap_err(),
-        SuiError::UnsupportedSponsoredTransactionKind
+        UserInputError::UnsupportedSponsoredTransactionKind
     );
 }
 
@@ -922,7 +951,11 @@ fn verify_sender_signature_correctly_with_flag() {
     // authority accepts signs tx after verification
     assert!(signed_tx
         .auth_sig()
-        .verify(transaction.data(), &committee)
+        .verify_secure(
+            transaction.data(),
+            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            &committee
+        )
         .is_ok());
 
     let transaction_1 =
@@ -947,12 +980,20 @@ fn verify_sender_signature_correctly_with_flag() {
     // signature verified
     assert!(signed_tx_1
         .auth_sig()
-        .verify(transaction_1.data(), &committee)
+        .verify_secure(
+            transaction_1.data(),
+            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            &committee
+        )
         .is_ok());
 
     assert!(signed_tx_1
         .auth_sig()
-        .verify(transaction.data(), &committee)
+        .verify_secure(
+            transaction.data(),
+            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            &committee
+        )
         .is_err());
 
     // create transaction with r1 signer
@@ -972,7 +1013,11 @@ fn verify_sender_signature_correctly_with_flag() {
     );
     assert!(signed_tx_3
         .auth_sig()
-        .verify(tx_32.data(), &committee)
+        .verify_secure(
+            tx_32.data(),
+            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            &committee
+        )
         .is_ok());
 }
 
@@ -1002,7 +1047,7 @@ fn test_change_epoch_transaction() {
 
 #[test]
 fn test_consensus_commit_prologue_transaction() {
-    let tx = VerifiedTransaction::new_consensus_commit_prologue(42);
+    let tx = VerifiedTransaction::new_consensus_commit_prologue(0, 0, 42);
     assert!(tx.contains_shared_object());
     assert_eq!(
         tx.shared_input_objects().next().unwrap(),

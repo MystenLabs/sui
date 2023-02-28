@@ -12,7 +12,10 @@ import {
   optional,
   string,
   Struct,
+  validate,
 } from 'superstruct';
+import { pkgVersion } from '../pkg-version';
+import { TARGETED_RPC_VERSION } from '../providers/json-rpc-provider';
 
 /**
  * An object defining headers to be passed to the RPC server
@@ -52,11 +55,7 @@ export class JsonRpcClient {
   private rpcClient: RpcClient;
 
   constructor(url: string, httpHeaders?: HttpHeaders) {
-    this.rpcClient = this.createRpcClient(url, httpHeaders);
-  }
-
-  private createRpcClient(url: string, httpHeaders?: HttpHeaders): RpcClient {
-    const client = new RpcClient(
+    this.rpcClient = new RpcClient(
       async (
         request: any,
         callback: (arg0: Error | null, arg1?: string | undefined) => void,
@@ -64,12 +63,13 @@ export class JsonRpcClient {
         const options = {
           method: 'POST',
           body: request,
-          headers: Object.assign(
-            {
-              'Content-Type': 'application/json',
-            },
-            httpHeaders || {},
-          ),
+          headers: {
+            'Content-Type': 'application/json',
+            'Client-Sdk-Type': 'typescript',
+            'Client-Sdk-Version': pkgVersion,
+            'Client-Target-Api-Version': TARGETED_RPC_VERSION,
+            ...httpHeaders,
+          },
         };
 
         try {
@@ -91,8 +91,6 @@ export class JsonRpcClient {
       },
       {},
     );
-
-    return client;
   }
 
   async requestWithType<T>(
@@ -105,16 +103,17 @@ export class JsonRpcClient {
     if (is(response, ErrorResponse)) {
       throw new Error(`RPC Error: ${response.error.message}`);
     } else if (is(response, ValidResponse)) {
-      // TODO: Improve error messaging here using superstruct asserts
-      const expectedSchema = is(response.result, struct);
+      const err = validate(response.result, struct)[0];
       const errMsg =
         TYPE_MISMATCH_ERROR +
-        `Result received was: ${JSON.stringify(response.result)}`;
+        `Result received was: ${JSON.stringify(
+          response.result,
+        )}. Debug info: ${err}`;
 
-      if (skipDataValidation && !expectedSchema) {
+      if (skipDataValidation && err) {
         console.warn(errMsg);
         return response.result;
-      } else if (!expectedSchema) {
+      } else if (err) {
         throw new Error(`RPC Error: ${errMsg}`);
       }
       return response.result;

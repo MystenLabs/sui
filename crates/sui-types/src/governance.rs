@@ -24,7 +24,6 @@ pub const ADD_DELEGATION_FUN_NAME: &IdentStr = ident_str!("request_add_delegatio
 pub const ADD_DELEGATION_LOCKED_COIN_FUN_NAME: &IdentStr =
     ident_str!("request_add_delegation_mul_locked_coin");
 pub const WITHDRAW_DELEGATION_FUN_NAME: &IdentStr = ident_str!("request_withdraw_delegation");
-pub const SWITCH_DELEGATION_FUN_NAME: &IdentStr = ident_str!("request_switch_delegation");
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 pub struct Delegation {
@@ -48,8 +47,8 @@ impl Delegation {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct StakedSui {
     id: UID,
+    pool_id: ID,
     validator_address: SuiAddress,
-    pool_starting_epoch: u64,
     delegation_request_epoch: u64,
     principal: Balance,
     sui_token_lock: Option<EpochId>,

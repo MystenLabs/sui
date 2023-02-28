@@ -16,7 +16,7 @@ import { Goal } from "../network/types";
 import { Assignment } from "../components/Assignment";
 import { Logo } from "../components/Validators/Logo";
 import { Refresh } from "../components/your-score/Refresh";
-import { convertToString, useValidators } from "../network/queries/sui-system";
+import { useValidators } from "../network/queries/sui-system";
 import { TimeRemaining } from "../components/TimeRemaining";
 import { GameEnding, useGameOverRedirect } from "../components/GameEnding";
 
@@ -89,12 +89,12 @@ export function Home() {
                 }}
               >
                 <Logo
-                  src={convertToString(assignedValidator.image_url)}
+                  src={assignedValidator.image_url}
                   size="md"
-                  label={convertToString(assignedValidator.name) || ""}
+                  label={assignedValidator.name || ""}
                   circle
                 />
-                <div>{convertToString(assignedValidator.name)}</div>
+                <div>{assignedValidator.name}</div>
               </div>
             ) : (
               "--"

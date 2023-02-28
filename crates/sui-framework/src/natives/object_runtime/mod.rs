@@ -188,6 +188,10 @@ impl<'a> ObjectRuntime<'a> {
         Ok(())
     }
 
+    pub fn new_ids(&self) -> &Set<ObjectID> {
+        &self.state.new_ids
+    }
+
     pub fn transfer(
         &mut self,
         owner: Owner,
@@ -237,17 +241,14 @@ impl<'a> ObjectRuntime<'a> {
 
     pub fn emit_event(&mut self, tag: StructTag, event: Value) -> PartialVMResult<()> {
         if self.state.events.len() >= (self.constants.max_num_event_emit as usize) {
-            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
-                .with_message(format!(
-                    "Emitting more than {} events is not allowed",
-                    self.constants.max_num_event_emit
-                ))
-                .with_sub_status(
-                    VMMemoryLimitExceededSubStatusCode::EVENT_COUNT_LIMIT_EXCEEDED as u64,
-                ));
+            return Err(max_event_error(self.constants.max_num_event_emit));
         }
         self.state.events.push((tag, event));
         Ok(())
+    }
+
+    pub fn take_user_events(&mut self) -> Vec<(StructTag, Value)> {
+        std::mem::take(&mut self.state.events)
     }
 
     pub(crate) fn child_object_exists(
@@ -309,9 +310,11 @@ impl<'a> ObjectRuntime<'a> {
     pub fn finish(
         mut self,
         by_value_inputs: BTreeSet<ObjectID>,
+        external_transfers: BTreeSet<ObjectID>,
     ) -> Result<RuntimeResults, ExecutionError> {
         let child_effects = self.object_store.take_effects();
-        self.state.finish(by_value_inputs, child_effects)
+        self.state
+            .finish(by_value_inputs, external_transfers, child_effects)
     }
 
     pub(crate) fn all_active_child_objects(
@@ -319,6 +322,15 @@ impl<'a> ObjectRuntime<'a> {
     ) -> impl Iterator<Item = (&ObjectID, &Type, Value)> {
         self.object_store.all_active_objects()
     }
+}
+
+pub fn max_event_error(max_events: u64) -> PartialVMError {
+    PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+        .with_message(format!(
+            "Emitting more than {} events is not allowed",
+            max_events
+        ))
+        .with_sub_status(VMMemoryLimitExceededSubStatusCode::EVENT_COUNT_LIMIT_EXCEEDED as u64)
 }
 
 impl ObjectRuntimeState {
@@ -333,6 +345,7 @@ impl ObjectRuntimeState {
     pub(crate) fn finish(
         mut self,
         by_value_inputs: BTreeSet<ObjectID>,
+        external_transfers: BTreeSet<ObjectID>,
         child_object_effects: BTreeMap<ObjectID, ChildObjectEffect>,
     ) -> Result<RuntimeResults, ExecutionError> {
         let mut wrapped_children = BTreeSet::new();
@@ -377,6 +390,8 @@ impl ObjectRuntimeState {
                 }
                 // was new so the object is transient and does not need to be marked as deleted
                 Op::Delete if self.new_ids.contains_key(&child) => {}
+                // child was transferred externally to the runtime
+                Op::Delete if external_transfers.contains(&child) => {}
                 // otherwise it must have been wrapped
                 Op::Delete => {
                     wrapped_children.insert(child);
@@ -439,7 +454,11 @@ impl ObjectRuntimeState {
         // remaining by value objects must be wrapped
         let remaining_by_value_objects = by_value_inputs
             .into_iter()
-            .filter(|id| !writes.contains_key(id) && !deletions.contains_key(id))
+            .filter(|id| {
+                !writes.contains_key(id)
+                    && !deletions.contains_key(id)
+                    && !external_transfers.contains(id)
+            })
             .collect::<Vec<_>>();
         for id in remaining_by_value_objects {
             deletions.insert(id, DeleteKind::Wrap);

@@ -9,6 +9,7 @@
 -  [Constants](#@Constants_0)
 -  [Function `sender`](#0x2_tx_context_sender)
 -  [Function `epoch`](#0x2_tx_context_epoch)
+-  [Function `epoch_timestamp`](#0x2_tx_context_epoch_timestamp)
 -  [Function `new_object`](#0x2_tx_context_new_object)
 -  [Function `ids_created`](#0x2_tx_context_ids_created)
 -  [Function `derive_id`](#0x2_tx_context_derive_id)
@@ -53,7 +54,13 @@ the VM and passed in to the entrypoint of the transaction as <code>&<b>mut</b> <
 <code>epoch: u64</code>
 </dt>
 <dd>
- The current epoch number.
+ The current epoch number
+</dd>
+<dt>
+<code>epoch_timestamp_ms: u64</code>
+</dt>
+<dd>
+ Timestamp that the epoch started at
 </dd>
 <dt>
 <code>ids_created: u64</code>
@@ -136,6 +143,31 @@ Return the current epoch
 
 <pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_epoch">epoch</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a>): u64 {
     self.epoch
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_tx_context_epoch_timestamp"></a>
+
+## Function `epoch_timestamp`
+
+Return the epoch start time as a unix timestamp in milliseconds.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_epoch_timestamp">epoch_timestamp</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_epoch_timestamp">epoch_timestamp</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a>): u64 {
+   self.epoch_timestamp_ms
 }
 </code></pre>
 

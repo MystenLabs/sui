@@ -79,13 +79,13 @@ fn new_testing_object_runtime(ext: &mut NativeContextExtensions) {
         store,
         InputObjects::new(vec![]),
         TransactionDigest::random(),
-        ProtocolConfig::get_for_min_version(),
+        &ProtocolConfig::get_for_min_version(),
     );
     ext.add(ObjectRuntime::new(
         Box::new(state_view),
         BTreeMap::new(),
         false,
-        ProtocolConfig::get_for_min_version(),
+        &ProtocolConfig::get_for_min_version(),
     ))
 }
 

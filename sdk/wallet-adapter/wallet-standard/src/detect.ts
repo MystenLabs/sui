@@ -27,6 +27,8 @@ export function isStandardWalletAdapterCompatibleWallet(
     "standard:events" in wallet.features &&
     // TODO: Enable once ecosystem wallets adopt this:
     // "sui:signTransaction" in wallet.features &&
+    // TODO: Enable once ecosystem wallets adopt this
+    // "sui:signMessage" in wallet.features &&
     "sui:signAndExecuteTransaction" in wallet.features
   );
 }

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::RpcTransactionBuilderServer;
+use crate::api::TransactionBuilderServer;
 use crate::SuiRpcModule;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
@@ -25,12 +25,12 @@ use sui_adapter::execution_mode::{DevInspect, Normal};
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::RPCTransactionRequestParams;
 
-pub struct FullNodeTransactionBuilderApi {
+pub struct TransactionBuilderApi {
     builder: TransactionBuilder<Normal>,
     dev_inspect_builder: TransactionBuilder<DevInspect>,
 }
 
-impl FullNodeTransactionBuilderApi {
+impl TransactionBuilderApi {
     pub fn new(state: Arc<AuthorityState>) -> Self {
         let reader = Arc::new(AuthorityStateDataReader::new(state));
         Self {
@@ -72,12 +72,13 @@ impl DataReader for AuthorityStateDataReader {
     }
 
     async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error> {
-        Ok(self.0.get_sui_system_state_object()?.reference_gas_price)
+        let epoch_store = self.0.load_epoch_store_one_call_per_task();
+        Ok(epoch_store.reference_gas_price())
     }
 }
 
 #[async_trait]
-impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
+impl TransactionBuilderServer for TransactionBuilderApi {
     async fn transfer_object(
         &self,
         signer: SuiAddress,
@@ -316,37 +317,14 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
                 .await?,
         )?)
     }
-
-    async fn request_switch_delegation(
-        &self,
-        signer: SuiAddress,
-        delegation: ObjectID,
-        staked_sui: ObjectID,
-        new_validator_address: SuiAddress,
-        gas: Option<ObjectID>,
-        gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
-        Ok(TransactionBytes::from_data(
-            self.builder
-                .request_switch_delegation(
-                    signer,
-                    delegation,
-                    staked_sui,
-                    new_validator_address,
-                    gas,
-                    gas_budget,
-                )
-                .await?,
-        )?)
-    }
 }
 
-impl SuiRpcModule for FullNodeTransactionBuilderApi {
+impl SuiRpcModule for TransactionBuilderApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::RpcTransactionBuilderOpenRpc::module_doc()
+        crate::api::TransactionBuilderOpenRpc::module_doc()
     }
 }

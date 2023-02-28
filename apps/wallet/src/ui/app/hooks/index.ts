@@ -5,7 +5,6 @@ export { default as useAppDispatch } from './useAppDispatch';
 export { default as useAppSelector } from './useAppSelector';
 export { default as useInitializedGuard } from './useInitializedGuard';
 export { default as useFullscreenGuard } from './useFullscreenGuard';
-export { default as useMiddleEllipsis } from './useMiddleEllipsis';
 export { default as useMediaUrl, parseIpfsUrl } from './useMediaUrl';
 export { default as useSuiObjectFields } from './useSuiObjectFields';
 export { default as useOnClickOutside } from './useOnClickOutside';

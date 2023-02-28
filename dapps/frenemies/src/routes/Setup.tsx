@@ -71,7 +71,7 @@ export function Setup() {
           { pkg: config.VITE_PKG, registry: config.VITE_REGISTRY },
         ].map(({ pkg, registry }) =>
           provider.devInspectTransaction(
-            currentAccount,
+            currentAccount.address,
             {
               kind: "moveCall",
               data: {
@@ -114,21 +114,23 @@ export function Setup() {
       });
 
       await signAndExecuteTransaction({
-        kind: "moveCall",
-        data: {
-          packageObjectId: config.VITE_PKG,
-          module: "frenemies",
-          function: "register",
-          arguments: [
-            username,
-            config.VITE_REGISTRY,
-            config.VITE_OLD_REGISTRY,
-            SUI_SYSTEM_ID,
-          ],
-          typeArguments: [],
+        transaction: {
+          kind: "moveCall",
+          data: {
+            packageObjectId: config.VITE_PKG,
+            module: "frenemies",
+            function: "register",
+            arguments: [
+              username,
+              config.VITE_REGISTRY,
+              config.VITE_OLD_REGISTRY,
+              SUI_SYSTEM_ID,
+            ],
+            typeArguments: [],
 
-          // TODO: Fix in sui.js - add option to use bigint...
-          gasBudget: Number(GAS_BUDGET),
+            // TODO: Fix in sui.js - add option to use bigint...
+            gasBudget: Number(GAS_BUDGET),
+          },
         },
       });
     },

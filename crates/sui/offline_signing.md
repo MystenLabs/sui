@@ -14,8 +14,7 @@ Here an example is provided to serialize a transfer data in CLI. This outputs a 
 ```shell
 target/debug/sui client serialize-transfer-sui --to 0xfdf3a56d8ac390499c611fd338036e3139a0e9a5 --sui-coin-object-id 0x14808dbfbb3efd6fa09624fd18d7f40958679fa1 --gas-budget 1000
 
-Intent message to sign: $DATA_TO_SIGN
-Raw transaction to execute: $TX_BYTES
+Raw tx_bytes to execute: $TX_BYTES
 ```
 
 ## Step 2: Sign the data
@@ -34,10 +33,12 @@ An accepted pure Ed25519 signature follows:
 Here we use the keytool command to sign as an example, using the Ed25519 key corresponding to the provided address stored in `sui.keystore`. This commands outputs the signature, the public key and the flag encoded in Base64. This command is backed by [fastcrypto](https://crates.io/crates/fastcrypto).
  
 ```shell
-target/debug/sui keytool sign --address 0xb59ce11ef3ad15b6c247dda9890dce1b781f99df --data $DATA_TO_SIGN
+target/debug/sui keytool sign --address 0xb59ce11ef3ad15b6c247dda9890dce1b781f99df --data $TX_BYTES
 
-Intent message to sign: AAAAAAP986VtisOQSZxhH9M4A24xOaDppQDue7TlY/36sS2HyepBJa2PjB3RkxSAjb+7Pv1voJYk/RjX9AlYZ5+hAgAAAAAAAAAgghpx3ucYetjUIHnaFCho6iaUXnt4hczdAeLlgIw0GqsBAAAAAAAAAOgDAAAAAAAA
-Signer address: 0xb59ce11ef3ad15b6c247dda9890dce1b781f99df
+Signer address: 0xa5f022cce499749a54ba59bf377cdaea369e7457
+Raw tx_bytes to execute: $TX_BYTES
+Intent: Intent { scope: TransactionData, version: V0, app_id: Sui }
+Intent message to sign: "AAAAAAMYPuVHP/7PyVnQxUemGYuU48LJcQBnglR8A4kz7KFUQOOUum3/eljiCBUxwn6yBVIxn5CDBNkN0CJf0fI/AgAAAAAAAAAgytK3HSb0y/qcT5VC23nt187atosf3Te8NEJ2tNGQ11sBAAAAAAAAABAnAAAAAAAA"
 Serialized signature (`flag || sig || pk` in Base64): $SERIALIZED_SIG
 ```
 

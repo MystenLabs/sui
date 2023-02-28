@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use arc_swap::ArcSwap;
 use bytes::Bytes;
 use config::{Epoch, Parameters};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
@@ -102,7 +101,7 @@ async fn test_rounds_errors() {
         name.clone(),
         keypair.copy(),
         network_keypair,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache,
         parameters.clone(),
         store_primary.header_store,
@@ -203,7 +202,7 @@ async fn test_rounds_return_successful_response() {
         name.clone(),
         keypair.copy(),
         author.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache,
         parameters.clone(),
         store_primary.header_store,
@@ -364,7 +363,7 @@ async fn test_node_read_causal_signed_certificates() {
         name_1.clone(),
         keypair_1.copy(),
         authority_1.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache.clone(),
         primary_1_parameters.clone(),
         primary_store_1.header_store.clone(),
@@ -403,7 +402,7 @@ async fn test_node_read_causal_signed_certificates() {
         name_2.clone(),
         keypair_2.copy(),
         authority_2.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache.clone(),
         primary_2_parameters.clone(),
         primary_store_2.header_store,

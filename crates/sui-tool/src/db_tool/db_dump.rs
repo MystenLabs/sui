@@ -38,7 +38,7 @@ impl std::fmt::Display for StoreName {
 pub fn list_tables(path: PathBuf) -> anyhow::Result<Vec<String>> {
     rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(
         &default_db_options(None, None).0.options,
-        &path,
+        path,
     )
     .map_err(|e| e.into())
     .map(|q| {

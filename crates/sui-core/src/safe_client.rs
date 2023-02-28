@@ -12,6 +12,7 @@ use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 use sui_types::{
     error::{SuiError, SuiResult},
@@ -482,5 +483,11 @@ where
                 error!(?err, authority=?self.address, "Client error in handle_checkpoint");
             })?;
         Ok(resp)
+    }
+
+    pub async fn handle_system_state_object(&self) -> Result<SuiSystemState, SuiError> {
+        self.authority_client
+            .handle_system_state_object(SystemStateRequest { _unused: false })
+            .await
     }
 }

@@ -21,6 +21,7 @@ use sui_types::crypto::{
     NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::crypto::{AuthorityKeyPair, Signer};
+use sui_types::intent::{Intent, IntentScope};
 use sui_types::messages::{TransactionData, VerifiedTransaction, DUMMY_GAS_PRICE};
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
@@ -38,7 +39,7 @@ use sui_types::{
 use tokio::time::timeout;
 use tracing::{info, warn};
 
-const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(10);
+const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 2_000;
 
@@ -105,7 +106,13 @@ pub fn create_fake_cert_and_effect_digest<'a>(
         transaction.data().clone(),
         signers
             .map(|(name, signer)| {
-                AuthoritySignInfo::new(committee.epoch, transaction.data(), *name, signer)
+                AuthoritySignInfo::new(
+                    committee.epoch,
+                    transaction.data(),
+                    Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+                    *name,
+                    signer,
+                )
             })
             .collect(),
         committee,

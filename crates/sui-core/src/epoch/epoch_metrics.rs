@@ -55,12 +55,6 @@ pub struct EpochMetrics {
     /// This is the duration of (1) through (4) above.
     pub epoch_last_checkpoint_created_time_since_epoch_close_ms: IntGauge,
 
-    /// The total time takes to create the certificate of the last transaction of the epoch. Since
-    /// we currently this cert by querying a quorum of validators, it may take some time and we
-    /// should track how long this process is.
-    /// This should be the primary time contributor of (4) above.
-    pub epoch_last_transaction_cert_creation_time_ms: IntGauge,
-
     /// The interval from when the epoch is closed to when we finished executing the last transaction
     /// of the checkpoint (and hence triggering reconfiguration process).
     /// This is the duration of (1) through (5) above.
@@ -138,11 +132,6 @@ impl EpochMetrics {
             epoch_last_checkpoint_created_time_since_epoch_close_ms: register_int_gauge_with_registry!(
                 "epoch_last_checkpoint_created_time_since_epoch_close_ms",
                 "Time interval from when epoch was closed to when the last checkpoint of the epoch is created",
-                registry
-            ).unwrap(),
-            epoch_last_transaction_cert_creation_time_ms: register_int_gauge_with_registry!(
-                "epoch_last_transaction_cert_creation_time_ms",
-                "Time takes to create the last transaction certificate of the epoch",
                 registry
             ).unwrap(),
             epoch_reconfig_start_time_since_epoch_close_ms: register_int_gauge_with_registry!(

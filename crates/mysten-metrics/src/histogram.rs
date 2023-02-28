@@ -16,7 +16,7 @@ use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::time::Instant;
-use tracing::error;
+use tracing::{debug, error};
 
 type Point = u64;
 type HistogramMessage = (HistogramLabels, Point);
@@ -184,7 +184,7 @@ impl Histogram {
             Err(TrySendError::Closed(_)) => {
                 // can happen during runtime shutdown
             }
-            Err(TrySendError::Full(_)) => error!("Histogram channel is full, dropping data"),
+            Err(TrySendError::Full(_)) => debug!("Histogram channel is full, dropping data"),
         }
     }
 

@@ -18,7 +18,7 @@ Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(108
 
 task 4 'transfer-object'. lines 35-35:
 Error: Transaction Effects Status: Invalid Transfer Object Transaction. Possibly not address-owned or possibly does not have public transfer.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidTransferObject, source: None } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidTransferObject, source: None, command: None } }
 
 task 5 'view-object'. lines 37-40:
 Owner: Account Address ( A )
@@ -36,7 +36,7 @@ Contents: test::m::Cup<test::m::S> {id: sui::object::UID {id: sui::object::ID {b
 
 task 8 'transfer-object'. lines 46-46:
 Error: Transaction Effects Status: Invalid Transfer Object Transaction. Possibly not address-owned or possibly does not have public transfer.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidTransferObject, source: None } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidTransferObject, source: None, command: None } }
 
 task 9 'view-object'. lines 48-48:
 Owner: Account Address ( A )

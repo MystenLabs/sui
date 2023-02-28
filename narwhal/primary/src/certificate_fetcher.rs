@@ -1,8 +1,9 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::metrics::PrimaryMetrics;
-use config::{Committee, SharedWorkerCache};
+use crate::{metrics::PrimaryMetrics, synchronizer::Synchronizer};
+use anemo::Network;
+use config::Committee;
 use crypto::{NetworkPublicKey, PublicKey};
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
@@ -17,14 +18,14 @@ use std::{
 use storage::CertificateStore;
 use tokio::task::{spawn_blocking, JoinSet};
 use tokio::{
-    sync::{oneshot, watch},
+    sync::watch,
     task::JoinHandle,
     time::{sleep, timeout, Instant},
 };
 use tracing::{debug, error, instrument, trace, warn};
 use types::{
     error::{DagError, DagResult},
-    metered_channel::{Receiver, Sender},
+    metered_channel::Receiver,
     Certificate, ConditionalBroadcastReceiver, FetchCertificatesRequest, FetchCertificatesResponse,
     Round,
 };
@@ -45,15 +46,6 @@ const PARALLEL_FETCH_REQUEST_ADDITIONAL_TIMEOUT: Duration = Duration::from_secs(
 // time (verifying a batch of 200 certificates should take > 100ms).
 const VERIFY_CERTIFICATES_BATCH_SIZE: usize = 200;
 
-/// Message format from CertificateFetcher to core on the loopback channel.
-pub struct CertificateLoopbackMessage {
-    /// Certificates to be processed by the core.
-    /// In normal case processing the certificates in order should not encounter any missing parent.
-    pub certificates: Vec<Certificate>,
-    /// Used by core to signal back that it is done with the certificates.
-    pub done: oneshot::Sender<()>,
-}
-
 /// The CertificateFetcher is responsible for fetching certificates that this node is missing
 /// from other primaries. It operates two loops:
 /// Loop 1: listens for certificates missing parents from the core, tracks the highest missing
@@ -65,8 +57,6 @@ pub(crate) struct CertificateFetcher {
     state: Arc<CertificateFetcherState>,
     /// The committee information.
     committee: Committee,
-    /// The worker information.
-    worker_cache: SharedWorkerCache,
     /// Persistent storage for certificates. Read-only usage.
     certificate_store: CertificateStore,
     /// Receiver for signal of round changes. Used for calculating gc_round.
@@ -94,8 +84,8 @@ struct CertificateFetcherState {
     name: PublicKey,
     /// Network client to fetch certificates from other primaries.
     network: anemo::Network,
-    /// Loops fetched certificates back to the core. Certificates are ensured to have all parents.
-    tx_certificates_loopback: Sender<CertificateLoopbackMessage>,
+    /// Accepts Certificates into local storage.
+    synchronizer: Arc<Synchronizer>,
     /// The metrics handler
     metrics: Arc<PrimaryMetrics>,
 }
@@ -105,20 +95,19 @@ impl CertificateFetcher {
     pub fn spawn(
         name: PublicKey,
         committee: Committee,
-        worker_cache: SharedWorkerCache,
         network: anemo::Network,
         certificate_store: CertificateStore,
         rx_consensus_round_updates: watch::Receiver<u64>,
         gc_depth: Round,
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_certificate_fetcher: Receiver<Certificate>,
-        tx_certificates_loopback: Sender<CertificateLoopbackMessage>,
+        synchronizer: Arc<Synchronizer>,
         metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
         let state = Arc::new(CertificateFetcherState {
             name,
             network,
-            tx_certificates_loopback,
+            synchronizer,
             metrics,
         });
 
@@ -127,7 +116,6 @@ impl CertificateFetcher {
                 Self {
                     state,
                     committee,
-                    worker_cache,
                     certificate_store,
                     rx_consensus_round_updates,
                     gc_depth,
@@ -265,7 +253,6 @@ impl CertificateFetcher {
 
         let state = self.state.clone();
         let committee = self.committee.clone();
-        let worker_cache = self.worker_cache.clone();
 
         debug!(
             "Starting task to fetch missing certificates: max target {}, gc round {:?}",
@@ -278,15 +265,7 @@ impl CertificateFetcher {
                 state.metrics.certificate_fetcher_inflight_fetch.inc();
 
                 let now = Instant::now();
-                match run_fetch_task(
-                    state.clone(),
-                    committee,
-                    worker_cache,
-                    gc_round,
-                    written_rounds,
-                )
-                .await
-                {
+                match run_fetch_task(state.clone(), committee, gc_round, written_rounds).await {
                     Ok(_) => {
                         debug!(
                             "Finished task to fetch certificates successfully, elapsed = {}s",
@@ -315,7 +294,6 @@ impl CertificateFetcher {
 async fn run_fetch_task(
     state: Arc<CertificateFetcherState>,
     committee: Committee,
-    worker_cahce: SharedWorkerCache,
     gc_round: Round,
     written_rounds: BTreeMap<PublicKey, BTreeSet<Round>>,
 ) -> DagResult<()> {
@@ -330,13 +308,7 @@ async fn run_fetch_task(
 
     // Process and store fetched certificates.
     let num_certs_fetched = response.certificates.len();
-    process_certificates_helper(
-        response,
-        &state.tx_certificates_loopback,
-        &committee,
-        &worker_cahce,
-    )
-    .await?;
+    process_certificates_helper(response, &state.synchronizer, &state.network).await?;
     state
         .metrics
         .certificate_fetcher_num_certificates_processed
@@ -429,9 +401,8 @@ async fn fetch_certificates_helper(
 #[instrument(level = "debug", skip_all)]
 async fn process_certificates_helper(
     response: FetchCertificatesResponse,
-    tx_certificates_loopback: &Sender<CertificateLoopbackMessage>,
-    committee: &Committee,
-    worker_cache: &SharedWorkerCache,
+    synchronizer: &Synchronizer,
+    network: &Network,
 ) -> DagResult<()> {
     trace!("Start sending fetched certificates to processing");
     if response.certificates.len() > MAX_CERTIFICATES_TO_FETCH {
@@ -444,55 +415,37 @@ async fn process_certificates_helper(
     // In PrimaryReceiverHandler, certificates already in storage are ignored.
     // The check is unnecessary here, because there is no concurrent processing of older
     // certificates. For byzantine failures, the check will not be effective anyway.
-    let verify_scope = monitored_scope("VerifyingFetchedCertificates");
+    let _verify_scope = monitored_scope("VerifyingFetchedCertificates");
     let all_certificates = response.certificates;
     let verify_tasks = all_certificates
         .chunks(VERIFY_CERTIFICATES_BATCH_SIZE)
         .map(|certs| {
             let certs = certs.to_vec();
-            let committee = committee.clone();
-            let worker_cache = worker_cache.clone();
+            let sync = synchronizer.clone();
             // Use threads dedicated to computation heavy work.
             spawn_blocking(move || {
                 for c in &certs {
-                    let worker_cache = worker_cache.clone();
-                    c.verify(&committee, worker_cache)?;
+                    sync.sanitize_certificate(c)?;
                 }
                 Ok::<Vec<Certificate>, DagError>(certs)
             })
         })
         .collect_vec();
-    // Send verified certificates to core for processing, in the same order as received.
-    let mut processing_tasks = JoinSet::new();
+    // Process verified certificates in the same order as received.
     for task in verify_tasks {
         let certificates = task.await.map_err(|_| DagError::Canceled)??;
-        let (tx_done, rx_done) = oneshot::channel();
-        if let Err(e) = tx_certificates_loopback
-            .send(CertificateLoopbackMessage {
-                certificates,
-                done: tx_done,
-            })
-            .await
-        {
-            return Err(DagError::ClosedChannel(format!(
-                "Failed to send fetched certificate to processing. tx_certificates_loopback error: {}",
-                e
-            )));
+        for cert in certificates {
+            if let Err(e) = synchronizer
+                .try_accept_fetched_certificate(cert, network)
+                .await
+            {
+                // It is possible that subsequent certificates are useful,
+                // so not stopping early.
+                warn!("Failed to accept fetched certificate: {e}");
+            }
         }
-        processing_tasks.spawn(rx_done);
     }
-    drop(verify_scope);
 
-    // Wait for Core to finish processing the certificates.
-    let _process_scope = monitored_scope("ProcessingFetchedCertificates");
-    while let Some(result) = processing_tasks.join_next().await {
-        if let Err(e) = result {
-            return Err(DagError::ClosedChannel(format!(
-                "Failed to wait for core to process loopback certificates: {}",
-                e
-            )));
-        }
-    }
     trace!("Fetched certificates have been processed");
 
     Ok(())

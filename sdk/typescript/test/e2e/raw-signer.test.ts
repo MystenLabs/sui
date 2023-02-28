@@ -9,13 +9,10 @@ import {
   RawSigner,
   Secp256k1Keypair,
   verifyMessage,
-  versionToString,
 } from '../../src';
 import * as secp from '@noble/secp256k1';
 import { Signature } from '@noble/secp256k1';
 import { setup, TestToolbox } from './utils/setup';
-import { gt } from '@suchipi/femver';
-import { toB64 } from '@mysten/bcs';
 
 describe('RawSigner', () => {
   let toolbox: TestToolbox;
@@ -42,7 +39,7 @@ describe('RawSigner', () => {
     const keypair = new Ed25519Keypair();
     const signData = new TextEncoder().encode('hello world');
     const signer = new RawSigner(keypair, toolbox.provider);
-    const signature = await signer.signMessage(signData);
+    const { signature } = await signer.signMessage(signData);
     const isValid = await verifyMessage(signData, signature);
     expect(isValid).toBe(true);
   });
@@ -51,7 +48,7 @@ describe('RawSigner', () => {
     const keypair = new Ed25519Keypair();
     const signData = new TextEncoder().encode('hello world');
     const signer = new RawSigner(keypair, toolbox.provider);
-    const signature = await signer.signMessage(signData);
+    const { signature } = await signer.signMessage(signData);
     const isValid = await verifyMessage(
       new TextEncoder().encode('hello worlds'),
       signature,
@@ -67,36 +64,16 @@ describe('RawSigner', () => {
     const serializedSignature = await signer.signData(signData);
     const { signature, pubKey } = fromSerializedSignature(serializedSignature);
 
-    const version = await toolbox.provider.getRpcApiVersion();
-    // TODO(joyqvq): Remove recoverable signature test once 0.25.0 is released.
-    let useRecoverable =
-      version && gt(versionToString(version), '0.24.0') ? false : true;
-    if (useRecoverable) {
-      const recovered_pubkey = secp.recoverPublicKey(
-        msgHash,
-        Signature.fromCompact(signature.slice(0, 64)),
-        signature[64],
-        true,
-      );
-      const expected = keypair.getPublicKey().toBase64();
-      expect(pubKey).toEqual(expected);
-      expect(toB64(recovered_pubkey)).toEqual(expected);
-    } else {
-      expect(
-        secp.verify(
-          Signature.fromCompact(signature),
-          msgHash,
-          pubKey.toBytes(),
-        ),
-      ).toBeTruthy();
-    }
+    expect(
+      secp.verify(Signature.fromCompact(signature), msgHash, pubKey.toBytes()),
+    ).toBeTruthy();
   });
 
   it('Secp256k1 keypair signMessage', async () => {
     const keypair = new Secp256k1Keypair();
     const signData = new TextEncoder().encode('hello world');
     const signer = new RawSigner(keypair, toolbox.provider);
-    const signature = await signer.signMessage(signData);
+    const { signature } = await signer.signMessage(signData);
 
     const isValid = await verifyMessage(signData, signature);
     expect(isValid).toBe(true);

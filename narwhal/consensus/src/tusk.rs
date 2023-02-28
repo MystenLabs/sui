@@ -3,13 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     consensus::{ConsensusProtocol, ConsensusState, Dag},
-    utils,
+    utils, ConsensusError, Outcome,
 };
 use config::{Committee, Stake};
 use fastcrypto::{hash::Hash, traits::EncodeDecodeBase64};
 use std::{collections::HashMap, sync::Arc};
 use tracing::debug;
-use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round, StoreResult};
+use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round};
 
 #[cfg(any(test))]
 #[path = "tests/tusk_tests.rs"]
@@ -29,7 +29,7 @@ impl ConsensusProtocol for Tusk {
         &mut self,
         state: &mut ConsensusState,
         certificate: Certificate,
-    ) -> StoreResult<Vec<CommittedSubDag>> {
+    ) -> Result<(Outcome, Vec<CommittedSubDag>), ConsensusError> {
         debug!("Processing {:?}", certificate);
         let round = certificate.round();
 
@@ -46,19 +46,19 @@ impl ConsensusProtocol for Tusk {
 
         // We only elect leaders for even round numbers.
         if r % 2 != 0 || r < 4 {
-            return Ok(Vec::new());
+            return Ok((Outcome::NoLeaderElectedForOddRound, Vec::new()));
         }
 
         // Get the certificate's digest of the leader of round r-2. If we already ordered this leader,
         // there is nothing to do.
         let leader_round = r - 2;
         if leader_round <= state.last_committed_round {
-            return Ok(Vec::new());
+            return Ok((Outcome::LeaderBelowCommitRound, Vec::new()));
         }
         let (leader_digest, leader) = match Self::leader(&self.committee, leader_round, &state.dag)
         {
             Some(x) => x,
-            None => return Ok(Vec::new()),
+            None => return Ok((Outcome::LeaderNotFound, Vec::new())),
         };
 
         // Check if the leader has f+1 support from its children (ie. round r-1).
@@ -76,7 +76,7 @@ impl ConsensusProtocol for Tusk {
         // a leader block means committing all its dependencies.
         if stake < self.committee.validity_threshold() {
             debug!("Leader {:?} does not have enough support", leader);
-            return Ok(Vec::new());
+            return Ok((Outcome::NotEnoughSupportForLeader, Vec::new()));
         }
 
         // Get an ordered list of past leaders that are linked to the current leader.
@@ -122,7 +122,7 @@ impl ConsensusProtocol for Tusk {
             debug!("Latest commit of {}: Round {}", name.encode_base64(), round);
         }
 
-        Ok(committed_sub_dags)
+        Ok((Outcome::Commit, committed_sub_dags))
     }
 }
 

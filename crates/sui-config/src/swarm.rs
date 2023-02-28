@@ -7,7 +7,10 @@ use crate::node::{
     AuthorityKeyPairWithPath, KeyPairWithPath,
 };
 use crate::p2p::{P2pConfig, SeedPeer};
-use crate::{builder, genesis, utils, Config, NodeConfig, ValidatorInfo};
+use crate::{
+    builder::{self, ProtocolVersionsConfig, SupportedProtocolVersionsCallback},
+    genesis, utils, Config, NodeConfig, ValidatorInfo,
+};
 use fastcrypto::traits::KeyPair;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -84,6 +87,7 @@ pub struct FullnodeConfigBuilder<'a> {
     rpc_port: Option<u16>,
     // port for admin interface
     admin_port: Option<u16>,
+    supported_protocol_versions_config: ProtocolVersionsConfig,
 }
 
 impl<'a> FullnodeConfigBuilder<'a> {
@@ -97,6 +101,7 @@ impl<'a> FullnodeConfigBuilder<'a> {
             p2p_port: None,
             rpc_port: None,
             admin_port: None,
+            supported_protocol_versions_config: ProtocolVersionsConfig::Default,
         }
     }
 
@@ -152,6 +157,24 @@ impl<'a> FullnodeConfigBuilder<'a> {
 
     pub fn with_random_dir(mut self) -> Self {
         self.dir = None;
+        self
+    }
+
+    pub fn with_supported_protocol_versions(mut self, c: SupportedProtocolVersions) -> Self {
+        self.supported_protocol_versions_config = ProtocolVersionsConfig::Global(c);
+        self
+    }
+
+    pub fn with_supported_protocol_version_callback(
+        mut self,
+        func: SupportedProtocolVersionsCallback,
+    ) -> Self {
+        self.supported_protocol_versions_config = ProtocolVersionsConfig::PerValidator(func);
+        self
+    }
+
+    pub fn with_supported_protocol_versions_config(mut self, c: ProtocolVersionsConfig) -> Self {
+        self.supported_protocol_versions_config = c;
         self
     }
 
@@ -216,6 +239,12 @@ impl<'a> FullnodeConfigBuilder<'a> {
         let jsonrpc_server_url = format!("{}:{}", listen_ip, rpc_port);
         let json_rpc_address: SocketAddr = jsonrpc_server_url.parse().unwrap();
 
+        let supported_protocol_versions = match &self.supported_protocol_versions_config {
+            ProtocolVersionsConfig::Default => SupportedProtocolVersions::SYSTEM_DEFAULT,
+            ProtocolVersionsConfig::Global(v) => *v,
+            ProtocolVersionsConfig::PerValidator(func) => func(0, None),
+        };
+
         Ok(NodeConfig {
             protocol_key_pair: AuthorityKeyPairWithPath::new(protocol_key_pair),
             account_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(account_key_pair)),
@@ -240,7 +269,8 @@ impl<'a> FullnodeConfigBuilder<'a> {
             end_of_epoch_broadcast_channel_capacity:
                 default_end_of_epoch_broadcast_channel_capacity(),
             checkpoint_executor_config: Default::default(),
-            supported_protocol_versions: Some(SupportedProtocolVersions::SYSTEM_DEFAULT),
+            metrics: None,
+            supported_protocol_versions: Some(supported_protocol_versions),
         })
     }
 }

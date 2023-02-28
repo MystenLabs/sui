@@ -11,11 +11,16 @@ import {
     useNavigationType,
 } from 'react-router-dom';
 
-import { featuresPromise, growthbook } from './growthbook';
+const SENTRY_ENABLED = import.meta.env.PROD;
+const SENTRY_SAMPLE_RATE = import.meta.env.VITE_SENTRY_SAMPLE_RATE
+    ? parseFloat(import.meta.env.VITE_SENTRY_SAMPLE_RATE)
+    : 1;
 
 Sentry.init({
-    enabled: import.meta.env.PROD,
-    dsn: 'https://e4251274d1b141d7ba272103fa0f8d83@o1314142.ingest.sentry.io/6564988',
+    enabled: SENTRY_ENABLED,
+    dsn: import.meta.env.PROD
+        ? 'https://e4251274d1b141d7ba272103fa0f8d83@o1314142.ingest.sentry.io/6564988'
+        : 'https://5455656fe14848c0944fb4216dd5c483@o1314142.ingest.sentry.io/4504362510188544',
     environment: import.meta.env.VITE_VERCEL_ENV,
     integrations: [
         new BrowserTracing({
@@ -28,22 +33,7 @@ Sentry.init({
             ),
         }),
     ],
-    // NOTE: Even though this is set to 1, we actually will properly sample the event in `beforeSendTransaction`.
-    // We don't do sampling here or in `tracesSampler` because those can't be async, so we can't wait for
-    // the features from growthbook to load before applying sampling.
-    tracesSampleRate: 1,
-    async beforeSendTransaction(event) {
-        await featuresPromise;
-        const sampleRate = growthbook.getFeatureValue(
-            'explorer-sentry-tracing',
-            0
-        );
-        if (sampleRate > Math.random()) {
-            return event;
-        } else {
-            return null;
-        }
-    },
+    tracesSampleRate: SENTRY_SAMPLE_RATE,
     beforeSend(event) {
         try {
             // Filter out any code from unknown sources:

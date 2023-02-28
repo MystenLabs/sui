@@ -19,6 +19,7 @@ pub struct CheckpointMetrics {
     pub checkpoint_participation: IntCounterVec,
     pub last_received_checkpoint_signatures: IntGaugeVec,
     pub last_sent_checkpoint_signature: IntGauge,
+    pub highest_accumulated_epoch: IntGauge,
 }
 
 impl CheckpointMetrics {
@@ -83,6 +84,12 @@ impl CheckpointMetrics {
             last_sent_checkpoint_signature: register_int_gauge_with_registry!(
                 "last_sent_checkpoint_signature",
                 "Last checkpoint signature sent by myself",
+                registry
+            )
+            .unwrap(),
+            highest_accumulated_epoch: register_int_gauge_with_registry!(
+                "highest_accumulated_epoch",
+                "Highest accumulated epoch",
                 registry
             )
             .unwrap(),

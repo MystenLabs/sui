@@ -31,12 +31,8 @@ async fn test_tx_less_than_minimum_gas_budget() {
     let result = execute_transfer(*MAX_GAS_BUDGET, budget, false).await;
 
     assert_eq!(
-        result
-            .response
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        &SuiError::GasBudgetTooLow {
+        UserInputError::try_from(result.response.unwrap_err()).unwrap(),
+        UserInputError::GasBudgetTooLow {
             gas_budget: budget,
             min_budget: *MIN_GAS_BUDGET
         }
@@ -52,12 +48,8 @@ async fn test_tx_more_than_maximum_gas_budget() {
     let result = execute_transfer(*MAX_GAS_BUDGET, budget, false).await;
 
     assert_eq!(
-        result
-            .response
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        &SuiError::GasBudgetTooHigh {
+        UserInputError::try_from(result.response.unwrap_err()).unwrap(),
+        UserInputError::GasBudgetTooHigh {
             gas_budget: budget,
             max_budget: *MAX_GAS_BUDGET
         }
@@ -74,12 +66,8 @@ async fn test_tx_gas_balance_less_than_budget() {
     let gas_price = 1;
     let result = execute_transfer_with_price(gas_balance, budget, gas_price, false).await;
     assert_eq!(
-        result
-            .response
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        &SuiError::GasBalanceTooLowToCoverGasBudget {
+        UserInputError::try_from(result.response.unwrap_err()).unwrap(),
+        UserInputError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: gas_balance as u128,
             gas_budget: (gas_price * budget) as u128,
             gas_price
@@ -171,12 +159,8 @@ async fn test_native_transfer_gas_price_is_used() {
     let gas_price = u64::MAX;
     let result = execute_transfer_with_price(gas_balance, gas_budget, gas_price, true).await;
     assert_eq!(
-        result
-            .response
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        &SuiError::GasBalanceTooLowToCoverGasBudget {
+        UserInputError::try_from(result.response.unwrap_err()).unwrap(),
+        UserInputError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: (gas_balance as u128),
             gas_budget: (gas_budget as u128) * (gas_price as u128),
             gas_price
@@ -209,7 +193,7 @@ async fn test_transfer_sui_insufficient_gas() {
     // We expect this to fail due to insufficient gas.
     assert_eq!(
         effects.status,
-        ExecutionStatus::new_failure(ExecutionFailureStatus::InsufficientGas)
+        ExecutionStatus::new_failure(ExecutionFailureStatus::InsufficientGas, None)
     );
     // Ensure that the owner of the object did not change if the transfer failed.
     assert_eq!(effects.mutated[0].1, sender);
@@ -229,7 +213,7 @@ async fn test_native_transfer_insufficient_gas_reading_objects() {
         .into_effects_for_testing()
         .into_data();
     assert_eq!(
-        effects.status.unwrap_err(),
+        effects.status.unwrap_err().0,
         ExecutionFailureStatus::InsufficientGas
     );
 }
@@ -272,7 +256,7 @@ async fn test_native_transfer_insufficient_gas_execution() {
     assert_eq!(owner, &gas_object.owner);
 
     assert_eq!(
-        effects.status.unwrap_err(),
+        effects.status.unwrap_err().0,
         ExecutionFailureStatus::InsufficientGas,
     );
 }
@@ -375,7 +359,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     .await;
     let effects = response.1.into_data();
     let gas_cost = effects.gas_used;
-    let err = effects.status.unwrap_err();
+    let err = effects.status.unwrap_err().0;
 
     assert_eq!(err, ExecutionFailureStatus::InsufficientGas);
 
@@ -407,7 +391,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     .await;
     let effects = response.1.into_data();
     let gas_cost = effects.gas_used;
-    let err = effects.status.unwrap_err();
+    let err = effects.status.unwrap_err().0;
     assert_eq!(err, ExecutionFailureStatus::InsufficientGas);
     assert_eq!(gas_cost.storage_cost, 0);
     assert_eq!(gas_cost.storage_rebate, 0);
@@ -537,7 +521,7 @@ async fn test_move_call_gas() -> SuiResult {
     let response = send_and_confirm_transaction(&authority_state, transaction).await?;
     let effects = response.1.into_data();
     let gas_cost = effects.gas_used;
-    let err = effects.status.unwrap_err();
+    let err = effects.status.unwrap_err().0;
     // We will run out of gas during VM execution.
     assert!(matches!(err, ExecutionFailureStatus::InsufficientGas));
     let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
@@ -583,12 +567,8 @@ async fn test_tx_gas_price_less_than_reference_gas_price() {
     let gas_price = 0;
     let result = execute_transfer_with_price(gas_balance, budget, gas_price, false).await;
     assert_eq!(
-        result
-            .response
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        &SuiError::GasPriceUnderRGP {
+        UserInputError::try_from(result.response.unwrap_err()).unwrap(),
+        UserInputError::GasPriceUnderRGP {
             gas_price: 0,
             reference_gas_price: 1
         }

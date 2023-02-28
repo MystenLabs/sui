@@ -87,7 +87,9 @@ Command:
             SEQ: U8
 ConsensusCommitPrologue:
   STRUCT:
-    - checkpoint_start_timestamp_ms: U64
+    - epoch: U64
+    - round: U64
+    - commit_timestamp_ms: U64
 Data:
   ENUM:
     0:
@@ -246,6 +248,10 @@ ExecutionFailureStatus:
       VMVerificationOrDeserializationError: UNIT
     34:
       VMInvariantViolation: UNIT
+    35:
+      TotalPaymentAmountOverflow: UNIT
+    36:
+      TotalCoinBalanceOverflow: UNIT
 ExecutionStatus:
   ENUM:
     0:
@@ -255,6 +261,8 @@ ExecutionStatus:
         STRUCT:
           - error:
               TYPENAME: ExecutionFailureStatus
+          - command:
+              OPTION: U64
 GenesisObject:
   ENUM:
     0:
@@ -331,6 +339,8 @@ MovePackage:
   STRUCT:
     - id:
         TYPENAME: ObjectID
+    - version:
+        TYPENAME: SequenceNumber
     - module_map:
         MAP:
           KEY: STR
@@ -401,7 +411,8 @@ ObjectArg:
               TYPENAME: SequenceNumber
           - mutable: BOOL
 ObjectDigest:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT:
+    TYPENAME: Sha3Digest
 ObjectID:
   NEWTYPESTRUCT:
     TYPENAME: AccountAddress

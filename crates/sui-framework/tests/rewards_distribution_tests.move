@@ -11,7 +11,6 @@ module sui::rewards_distribution_tests {
         Self,
         advance_epoch,
         advance_epoch_with_reward_amounts,
-        advance_epoch_with_reward_amounts_and_subsidy_rate,
         advance_epoch_with_reward_amounts_and_slashing_rates,
         assert_validator_delegate_amounts,
         assert_validator_stake_amounts,
@@ -68,8 +67,8 @@ module sui::rewards_distribution_tests {
         // need to advance epoch so validator's staking starts counting
         governance_test_utils::advance_epoch(scenario);
 
-        advance_epoch_with_reward_amounts_and_subsidy_rate(0, 100, 1, scenario);
-        assert_validator_stake_amounts(validator_addrs(), vector[100_010_010, 200_020_020, 300_030_030, 400_040_040], scenario);
+        advance_epoch_with_reward_amounts(0, 100, scenario);
+        assert_validator_stake_amounts(validator_addrs(), vector[100_000_010, 200_000_020, 300_000_030, 400_000_040], scenario);
         test_scenario::end(scenario_val);
     }
 
@@ -95,7 +94,7 @@ module sui::rewards_distribution_tests {
         assert!(total_sui_balance(DELEGATOR_ADDR_1, scenario) == 240, 0); // 40 SUI of rewards received
         assert_validator_stake_amounts(validator_addrs(), vector[120, 240, 360, 480], scenario);
         undelegate(DELEGATOR_ADDR_2, 0, 0, scenario);
-        governance_test_utils::advance_epoch(scenario); 
+        governance_test_utils::advance_epoch(scenario);
         assert!(total_sui_balance(DELEGATOR_ADDR_2, scenario) == 120, 0); // 20 SUI of rewards received
 
         // 10 SUI rewards for each 120 SUI of stake
@@ -115,15 +114,15 @@ module sui::rewards_distribution_tests {
 
         // delegate a large amount
         delegate_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_1, 200000000, scenario);
-        
+
         governance_test_utils::advance_epoch(scenario);
 
         advance_epoch_with_reward_amounts(0, 150000, scenario);
 
         // delegate a small amount
         delegate_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_1, 10, scenario);
-        advance_epoch_with_reward_amounts(0, 130, scenario); 
-        
+        advance_epoch_with_reward_amounts(0, 130, scenario);
+
         // undelegate the delegations
         undelegate(DELEGATOR_ADDR_1, 1, 1, scenario);
 
@@ -272,19 +271,19 @@ module sui::rewards_distribution_tests {
             create_validator_for_testing(VALIDATOR_ADDR_3, 300, ctx),
             create_validator_for_testing(VALIDATOR_ADDR_4, 400, ctx),
         ];
-        create_sui_system_state_for_testing(validators, 1000, 0);
+        create_sui_system_state_for_testing(validators, 1000, 0, ctx);
     }
 
     fun set_up_sui_system_state_with_big_amounts(scenario: &mut Scenario) {
         let ctx = test_scenario::ctx(scenario);
 
         let validators = vector[
-            create_validator_for_testing(VALIDATOR_ADDR_1, 100000000, ctx), 
+            create_validator_for_testing(VALIDATOR_ADDR_1, 100000000, ctx),
             create_validator_for_testing(VALIDATOR_ADDR_2, 200000000, ctx),
             create_validator_for_testing(VALIDATOR_ADDR_3, 300000000, ctx),
             create_validator_for_testing(VALIDATOR_ADDR_4, 400000000, ctx),
         ];
-        create_sui_system_state_for_testing(validators, 1000000000, 0);
+        create_sui_system_state_for_testing(validators, 1000000000, 0, ctx);
     }
 
     fun validator_addrs() : vector<address> {

@@ -5,11 +5,11 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use crate::execution_mode::{self, ExecutionMode};
 use move_core_types::language_storage::{ModuleId, StructTag};
-use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
+use move_vm_runtime::move_vm::MoveVM;
 use sui_types::base_types::SequenceNumber;
 use tracing::{debug, instrument};
 
-use crate::adapter;
+use crate::{adapter, programmable_transactions};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::coin::{transfer_coin, update_input_coins, Coin};
 use sui_types::epoch_data::EpochData;
@@ -65,7 +65,6 @@ pub fn execute_transaction_to_effects<
     transaction_digest: TransactionDigest,
     mut transaction_dependencies: BTreeSet<TransactionDigest>,
     move_vm: &Arc<MoveVM>,
-    native_functions: &NativeFunctionTable,
     gas_status: SuiGasStatus,
     epoch_data: &EpochData,
     protocol_config: &ProtocolConfig,
@@ -82,17 +81,16 @@ pub fn execute_transaction_to_effects<
         gas_object_ref.0,
         &mut tx_ctx,
         move_vm,
-        native_functions,
         gas_status,
         protocol_config,
     );
 
     let (status, execution_result) = match execution_result {
         Ok(results) => (ExecutionStatus::Success, Ok(results)),
-        Err(error) => (
-            ExecutionStatus::new_failure(error.to_execution_status()),
-            Err(error),
-        ),
+        Err(error) => {
+            let (status, command) = error.to_execution_status();
+            (ExecutionStatus::new_failure(status, command), Err(error))
+        }
     };
     debug!(
         computation_gas_cost = gas_cost_summary.computation_cost,
@@ -144,7 +142,6 @@ fn execute_transaction<
     gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
-    native_functions: &NativeFunctionTable,
     mut gas_status: SuiGasStatus,
     protocol_config: &ProtocolConfig,
 ) -> (
@@ -161,7 +158,6 @@ fn execute_transaction<
             gas_object_id,
             tx_ctx,
             move_vm,
-            native_functions,
             &mut gas_status,
             protocol_config,
         );
@@ -194,7 +190,6 @@ fn execution_loop<
     gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
-    native_functions: &NativeFunctionTable,
     gas_status: &mut SuiGasStatus,
     protocol_config: &ProtocolConfig,
 ) -> Result<Mode::ExecutionResults, ExecutionError> {
@@ -291,7 +286,6 @@ fn execution_loop<
                 adapter::publish(
                     temporary_store,
                     move_vm,
-                    native_functions.clone(),
                     modules,
                     tx_ctx,
                     gas_status.create_move_gas_status(),
@@ -351,8 +345,17 @@ fn execution_loop<
                 gas_status,
                 protocol_config,
             )?,
-            SingleTransactionKind::ProgrammableTransaction(_) => {
-                unreachable!("programmable transactions are not yet supported")
+            SingleTransactionKind::ProgrammableTransaction(pt) => {
+                // TODO use Mode
+                programmable_transactions::execution::execute(
+                    protocol_config,
+                    move_vm,
+                    temporary_store,
+                    tx_ctx,
+                    gas_status,
+                    gas_object_id,
+                    pt,
+                )?
             }
         };
     }
@@ -389,7 +392,6 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             CallArg::Pure(bcs::to_bytes(&change_epoch.storage_rebate).unwrap()),
             CallArg::Pure(bcs::to_bytes(&protocol_config.storage_fund_reinvest_rate()).unwrap()),
             CallArg::Pure(bcs::to_bytes(&protocol_config.reward_slashing_rate()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&protocol_config.stake_subsidy_rate()).unwrap()),
             CallArg::Pure(bcs::to_bytes(&change_epoch.epoch_start_timestamp_ms).unwrap()),
         ],
         gas_status.create_move_gas_status(),
@@ -448,7 +450,7 @@ fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResol
                 initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
                 mutable: true,
             }),
-            CallArg::Pure(bcs::to_bytes(&prologue.checkpoint_start_timestamp_ms).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&prologue.commit_timestamp_ms).unwrap()),
         ],
         gas_status.create_move_gas_status(),
         tx_ctx,
@@ -540,12 +542,22 @@ fn check_recipients(recipients: &[SuiAddress], amounts: &[u64]) -> Result<(), Ex
 }
 
 fn check_total_coins(coins: &[Coin], amounts: &[u64]) -> Result<(u64, u64), ExecutionError> {
-    let total_amount: u64 = amounts.iter().sum();
-    let total_coins = coins.iter().fold(0, |acc, c| acc + c.value());
+    let Some(total_amount) = amounts.iter().fold(Some(0u64), |acc, a| acc?.checked_add(*a)) else {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::TotalPaymentAmountOverflow,
+            "Attempting to pay a total amount that overflows u64".to_string(),
+        ));
+    };
+    let Some(total_coins) = coins.iter().fold(Some(0u64), |acc, c| acc?.checked_add(c.value())) else {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::TotalCoinBalanceOverflow,
+            "Total balance of input coins overflows u64".to_string(),
+        ));
+    };
     if total_amount > total_coins {
         return Err(ExecutionError::new_with_source(
             ExecutionErrorKind::InsufficientBalance,
-            format!("Attempting to pay a total amount {:?} that is greater than the sum of input coin values {:?}", total_amount, total_coins),
+            format!("Attempting to pay a total amount {:?} that is greater than the total balance of input coins {:?}", total_amount, total_coins),
         ));
     }
     Ok((total_coins, total_amount))
@@ -627,10 +639,14 @@ fn pay<S>(
     );
 
     // double check that we didn't create or destroy money
-    debug_assert_eq!(
-        total_coins - coins.iter().fold(0, |acc, c| acc + c.value()),
-        total_amount
-    );
+    let Some(left_coins) = coins.iter().fold(Some(0u64), |acc, c| acc?.checked_add(c.value())) else {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::TotalCoinBalanceOverflow,
+            "Total balance of coins left overflows u64".to_string(),
+        ));
+    };
+    debug_assert!(left_coins <= total_coins);
+    debug_assert_eq!(total_coins - left_coins, total_amount);
 
     // update the input coins to reflect the decrease in value.
     // if the input coin has value 0, delete it
@@ -697,6 +713,7 @@ fn pay_all_sui<S>(
     recipient: SuiAddress,
 ) -> Result<(), ExecutionError> {
     let (mut coins, _coin_type) = check_coins(coin_objects, Some(GasCoin::type_()))?;
+    // overflow is not possible b/c total SUI supply is 10B SUI or 10^19 MISTs, and 10^19 < u64::MAX
     let total_coins = coins.iter().fold(0, |acc, c| acc + c.value());
 
     let mut merged_coin = coins.swap_remove(0);
@@ -777,7 +794,8 @@ fn test_pay_empty_coins() {
     assert_eq!(
         pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
             .unwrap_err()
-            .to_execution_status(),
+            .to_execution_status()
+            .0,
         ExecutionFailureStatus::EmptyInputCoins
     );
 }
@@ -796,7 +814,8 @@ fn test_pay_empty_recipients() {
     assert_eq!(
         pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
             .unwrap_err()
-            .to_execution_status(),
+            .to_execution_status()
+            .0,
         ExecutionFailureStatus::EmptyRecipients
     );
 }
@@ -815,7 +834,8 @@ fn test_pay_empty_amounts() {
     assert_eq!(
         pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
             .unwrap_err()
-            .to_execution_status(),
+            .to_execution_status()
+            .0,
         ExecutionFailureStatus::RecipientsAmountsArityMismatch
     );
 }
@@ -838,8 +858,61 @@ fn test_pay_arity_mismatch() {
     assert_eq!(
         pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
             .unwrap_err()
-            .to_execution_status(),
+            .to_execution_status()
+            .0,
         ExecutionFailureStatus::RecipientsAmountsArityMismatch
+    );
+}
+
+#[test]
+fn test_pay_amount_overflow() {
+    let coin_objects = vec![Object::new_gas_with_balance_and_owner_for_testing(
+        10,
+        SuiAddress::random_for_testing_only(),
+    )];
+    let recipients = vec![
+        SuiAddress::random_for_testing_only(),
+        SuiAddress::random_for_testing_only(),
+    ];
+    let amounts = vec![u64::MAX, 100u64];
+    let mut store: TemporaryStore<()> = temporary_store::empty_for_testing();
+    let mut ctx = TxContext::random_for_testing_only();
+
+    assert_eq!(
+        pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
+            .unwrap_err()
+            .to_execution_status()
+            .0,
+        ExecutionFailureStatus::TotalPaymentAmountOverflow
+    );
+}
+
+#[test]
+fn test_pay_coin_overflow() {
+    let coin_objects = vec![
+        Object::new_gas_with_balance_and_owner_for_testing(
+            u64::MAX,
+            SuiAddress::random_for_testing_only(),
+        ),
+        Object::new_gas_with_balance_and_owner_for_testing(
+            100u64,
+            SuiAddress::random_for_testing_only(),
+        ),
+    ];
+    let recipients = vec![
+        SuiAddress::random_for_testing_only(),
+        SuiAddress::random_for_testing_only(),
+    ];
+    let amounts = vec![100, 100];
+    let mut store: TemporaryStore<()> = temporary_store::empty_for_testing();
+    let mut ctx = TxContext::random_for_testing_only();
+
+    assert_eq!(
+        pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
+            .unwrap_err()
+            .to_execution_status()
+            .0,
+        ExecutionFailureStatus::TotalCoinBalanceOverflow
     );
 }
 
@@ -866,7 +939,8 @@ fn test_pay_insufficient_balance() {
     assert_eq!(
         pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
             .unwrap_err()
-            .to_execution_status(),
+            .to_execution_status()
+            .0,
         ExecutionFailureStatus::InsufficientBalance
     );
 }

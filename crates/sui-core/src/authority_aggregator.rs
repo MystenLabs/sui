@@ -7,9 +7,7 @@ use crate::authority_client::{
     make_network_authority_client_sets_from_system_state, AuthorityAPI, NetworkAuthorityClient,
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
-use crate::test_authority_clients::LocalAuthorityClient;
 use crate::validator_info::make_committee;
-use async_trait::async_trait;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use mysten_metrics::monitored_future;
 use mysten_network::config::Config;
@@ -20,6 +18,8 @@ use sui_network::{
     default_mysten_network_config, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC,
 };
 use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignInfo};
+use sui_types::error::UserInputError;
+use sui_types::fp_ensure;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemState;
@@ -29,7 +29,6 @@ use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
 };
-use sui_types::{fp_ensure, SUI_SYSTEM_STATE_OBJECT_ID};
 use thiserror::Error;
 use tracing::{debug, error, info, trace, warn, Instrument};
 
@@ -44,7 +43,7 @@ use std::time::Duration;
 use sui_types::committee::{CommitteeWithNetAddresses, StakeUnit};
 use tokio::time::{sleep, timeout};
 
-use crate::authority::{AuthorityState, AuthorityStore};
+use crate::authority::AuthorityStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregator};
 
@@ -224,10 +223,7 @@ struct ProcessCertificateState {
 #[derive(Debug)]
 pub enum ProcessTransactionResult {
     Certified(VerifiedCertificate),
-    Executed(
-        Option<VerifiedCertificate>,
-        VerifiedCertifiedTransactionEffects,
-    ),
+    Executed(VerifiedCertifiedTransactionEffects),
 }
 
 impl ProcessTransactionResult {
@@ -464,93 +460,6 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
             safe_client_metrics_base,
             auth_agg_metrics,
         ))
-    }
-}
-
-/// This trait provides a method for an authority to get a certificate from the network
-/// for a specific transaction. In order to create a certificate, we need to create the network
-/// authority aggregator based on the Sui system state committee/network information. This is
-/// needed to create a certificate for the advance epoch transaction during reconfiguration.
-/// However to make testing easier, we sometimes want to use local authority clients that do not
-/// involve full-fledged network Sui nodes (e.g. when we want to abstract out Narwhal). In order
-/// to support both network clients and local clients, this trait is defined to hide the difference.
-#[async_trait]
-pub trait TransactionCertifier: Sync + Send + 'static {
-    /// This function first loads the Sui system state object from `self_state`, get the committee
-    /// information, creates an AuthorityAggregator, and use the aggregator to create a certificate
-    /// for the specified transaction.
-    async fn create_certificate(
-        &self,
-        transaction: &VerifiedTransaction,
-        self_store: &Arc<AuthorityStore>,
-        committee_store: &Arc<CommitteeStore>,
-        timeout: Duration,
-    ) -> anyhow::Result<VerifiedCertificate>;
-}
-
-#[derive(Default)]
-pub struct NetworkTransactionCertifier {}
-
-pub struct LocalTransactionCertifier {
-    /// Contains all the local authority states that we are aware of.
-    /// This can be utilized to also test validator set changes. We simply need to provide all
-    /// potential validators (both current and future) in this map for latter lookup.
-    state_map: BTreeMap<AuthorityName, Arc<AuthorityState>>,
-}
-
-impl LocalTransactionCertifier {
-    pub fn new(state_map: BTreeMap<AuthorityName, Arc<AuthorityState>>) -> Self {
-        Self { state_map }
-    }
-}
-
-#[async_trait]
-impl TransactionCertifier for NetworkTransactionCertifier {
-    async fn create_certificate(
-        &self,
-        transaction: &VerifiedTransaction,
-        self_store: &Arc<AuthorityStore>,
-        committee_store: &Arc<CommitteeStore>,
-        timeout: Duration,
-    ) -> anyhow::Result<VerifiedCertificate> {
-        let registry = Registry::new();
-        let sui_system_state = self_store.get_sui_system_state_object()?;
-        let net = AuthorityAggregator::new_from_system_state(
-            &sui_system_state,
-            committee_store,
-            SafeClientMetricsBase::new(&registry),
-            AuthAggMetrics::new(&registry),
-        )?;
-
-        net.authority_ask_for_cert_with_retry_and_timeout(transaction, self_store, timeout)
-            .await
-    }
-}
-
-#[async_trait]
-impl TransactionCertifier for LocalTransactionCertifier {
-    async fn create_certificate(
-        &self,
-        transaction: &VerifiedTransaction,
-        self_store: &Arc<AuthorityStore>,
-        committee_store: &Arc<CommitteeStore>,
-        timeout: Duration,
-    ) -> anyhow::Result<VerifiedCertificate> {
-        let sui_system_state = self_store.get_sui_system_state_object()?;
-        let committee = sui_system_state.get_current_epoch_committee().committee;
-        let clients: BTreeMap<_, _> = committee.names().map(|name|
-            // unwrap is fine because LocalAuthorityClient is only used for testing.
-           (*name, LocalAuthorityClient::new_from_authority(self.state_map.get(name).unwrap().clone()))
-        ).collect();
-        let net = AuthorityAggregator::new(
-            committee,
-            committee_store.clone(),
-            clients,
-            &Registry::new(),
-        );
-
-        net.authority_ask_for_cert_with_retry_and_timeout(transaction, self_store, timeout)
-            .await
     }
 }
 
@@ -896,7 +805,7 @@ where
                                 if state.latest_object_version.as_ref().map_or(true, |latest| {
                                     object_info.object.version() > latest.version()
                                 }) {
-                                    return ReduceOutput::Success(object_info.object);
+                                    state.latest_object_version = Some(object_info.object);
                                 }
                             }
                             Err(err) => {
@@ -904,7 +813,11 @@ where
                             }
                         };
                         if state.total_weight >= self.committee.quorum_threshold() {
-                            return ReduceOutput::Failed(state);
+                            if let Some(object) = state.latest_object_version {
+                                return ReduceOutput::Success(object);
+                            } else {
+                                return ReduceOutput::Failed(state);
+                            }
                         }
                         ReduceOutput::Continue(state)
                     })
@@ -912,10 +825,10 @@ where
                 // A long timeout before we hear back from a quorum
                 self.timeouts.pre_quorum_timeout,
             )
-            .await.map_err(|_state| SuiError::ObjectNotFound {
+            .await.map_err(|_state| UserInputError::ObjectNotFound {
                 object_id,
                 version: None,
-            })
+            }.into())
     }
 
     /// Get the latest system state object from the authorities.
@@ -924,19 +837,56 @@ where
     pub async fn get_latest_system_state_object_for_testing(
         &self,
     ) -> anyhow::Result<SuiSystemState> {
-        let object = self
-            .get_latest_object_version_for_testing(SUI_SYSTEM_STATE_OBJECT_ID)
-            .await?;
-        let system_state_object = bcs::from_bytes::<SuiSystemState>(
-            object
-                .data
-                .try_as_move()
-                .ok_or(SuiError::MovePackageAsObject {
-                    object_id: object.id(),
-                })?
-                .contents(),
-        )?;
-        Ok(system_state_object)
+        #[derive(Debug, Default)]
+        struct State {
+            latest_system_state: Option<SuiSystemState>,
+            total_weight: StakeUnit,
+        }
+        let initial_state = State::default();
+        self.quorum_map_then_reduce_with_timeout(
+            initial_state,
+            |_name, client| Box::pin(async move { client.handle_system_state_object().await }),
+            |mut state, name, weight, result| {
+                Box::pin(async move {
+                    state.total_weight += weight;
+                    match result {
+                        Ok(system_state) => {
+                            debug!(
+                                "Received system state object from validator {:?} with epoch: {:?}",
+                                name.concise(),
+                                system_state.epoch
+                            );
+                            if state
+                                .latest_system_state
+                                .as_ref()
+                                .map_or(true, |latest| system_state.epoch > latest.epoch)
+                            {
+                                state.latest_system_state = Some(system_state);
+                            }
+                        }
+                        Err(err) => {
+                            debug!(
+                                "Received error from validator {:?}: {:?}",
+                                name.concise(),
+                                err
+                            );
+                        }
+                    };
+                    if state.total_weight >= self.committee.quorum_threshold() {
+                        if let Some(system_state) = state.latest_system_state {
+                            return ReduceOutput::Success(system_state);
+                        } else {
+                            return ReduceOutput::Failed(state);
+                        }
+                    }
+                    ReduceOutput::Continue(state)
+                })
+            },
+            // A long timeout before we hear back from a quorum
+            self.timeouts.pre_quorum_timeout,
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("Failed to get latest system state from the authorities"))
     }
 
     /// Submits the transaction to a quorum of validators to make a certificate.
@@ -1140,7 +1090,6 @@ where
                         let ct =
                             CertifiedTransactionEffects::new_from_data_and_sig(effects, cert_sig);
                         Ok(Some(ProcessTransactionResult::Executed(
-                            certificate,
                             ct.verify(&self.committee)?,
                         )))
                     }
@@ -1303,21 +1252,15 @@ where
     pub async fn execute_transaction(
         &self,
         transaction: &VerifiedTransaction,
-    ) -> Result<
-        (
-            Option<VerifiedCertificate>,
-            VerifiedCertifiedTransactionEffects,
-        ),
-        anyhow::Error,
-    > {
+    ) -> Result<VerifiedCertifiedTransactionEffects, anyhow::Error> {
         let result = self
             .process_transaction(transaction.clone())
             .instrument(tracing::debug_span!("process_tx"))
             .await?;
         let cert = match result {
             ProcessTransactionResult::Certified(cert) => cert,
-            ProcessTransactionResult::Executed(cert, effects) => {
-                return Ok((cert, effects));
+            ProcessTransactionResult::Executed(effects) => {
+                return Ok(effects);
             }
         };
         self.metrics.total_tx_certificates_created.inc();
@@ -1326,7 +1269,7 @@ where
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
 
-        Ok((Some(cert), response))
+        Ok(response)
     }
 
     /// This function tries to get SignedTransaction OR CertifiedTransaction from
@@ -1355,54 +1298,6 @@ where
             "handle_transaction_info_request_from_some_validators".to_string(),
         )
         .await
-    }
-
-    pub async fn authority_ask_for_cert_with_retry_and_timeout(
-        &self,
-        transaction: &VerifiedTransaction,
-        self_store: &Arc<AuthorityStore>,
-        timeout: Duration,
-    ) -> anyhow::Result<VerifiedCertificate> {
-        let result = tokio::time::timeout(timeout, async {
-            loop {
-                // We may have already executed this transaction somewhere else.
-                // If so, no need to try to get it from the network.
-                if let Ok(Some(cert)) = self_store.get_certified_transaction(transaction.digest()) {
-                    return cert;
-                }
-                match self.process_transaction(transaction.clone()).await {
-                    Ok(ProcessTransactionResult::Certified(cert))
-                    | Ok(ProcessTransactionResult::Executed(Some(cert), _)) => {
-                        return cert;
-                    }
-                    Ok(ProcessTransactionResult::Executed(None, _)) => {
-                        // Note: This will go away as soon as finalized transaction work finishes,
-                        // since we will no longer need a cert.
-                        debug!(
-                            "The network has executed this transaction, but no cert is available"
-                        );
-                    }
-                    Err(err) => {
-                        debug!("Did not create advance epoch transaction cert: {:?}", err);
-                    }
-                }
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }
-        })
-        .await;
-        match result {
-            Ok(cert) => {
-                debug!(
-                    "Successfully created advance epoch transaction cert: {:?}",
-                    cert
-                );
-                Ok(cert)
-            }
-            Err(err) => {
-                error!("Failed to create advance epoch transaction cert. Giving up");
-                Err(err.into())
-            }
-        }
     }
 }
 pub struct AuthorityAggregatorBuilder<'a> {

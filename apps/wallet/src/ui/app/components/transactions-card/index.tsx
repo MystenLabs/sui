@@ -8,6 +8,9 @@ import {
     getExecutionStatusError,
     getTransferObjectTransaction,
     SUI_TYPE_ARG,
+    getTransactions,
+    getTransactionSender,
+    getTransactionDigest,
 } from '@mysten/sui.js';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
@@ -51,18 +54,17 @@ export function TransactionCard({
     txn: SuiTransactionResponse;
     address: SuiAddress;
 }) {
-    const { certificate } = txn;
+    const [transaction] = getTransactions(txn);
     const executionStatus = getExecutionStatusType(txn);
-    const txnKind = getTransactionKindName(certificate.data.transactions[0]);
+    const txnKind = getTransactionKindName(transaction);
 
     const objectId = useMemo(() => {
-        const transferId = getTransferObjectTransaction(
-            certificate.data.transactions[0]
-        )?.objectRef?.objectId;
+        const transferId =
+            getTransferObjectTransaction(transaction)?.objectRef?.objectId;
         return transferId
             ? transferId
             : getTxnEffectsEventID(txn.effects, address)[0];
-    }, [address, certificate.data.transactions, txn.effects]);
+    }, [address, transaction, txn.effects]);
 
     const transfer = useGetTransferAmount({
         txn,
@@ -95,11 +97,9 @@ export function TransactionCard({
 
     const recipientAddress = useGetTxnRecipientAddress({ txn, address });
 
-    const isSender = address === certificate.data.sender;
+    const isSender = address === getTransactionSender(txn);
 
-    const moveCallTxn = getMoveCallTransaction(
-        certificate.data.transactions[0]
-    );
+    const moveCallTxn = getMoveCallTransaction(transaction);
 
     const error = useMemo(() => getExecutionStatusError(txn), [txn]);
 
@@ -150,10 +150,12 @@ export function TransactionCard({
             />
         );
 
+    const timestamp = txn.timestamp_ms || txn.timestampMs;
+
     return (
         <Link
             to={`/receipt?${new URLSearchParams({
-                txdigest: txn.certificate.transactionDigest,
+                txdigest: getTransactionDigest(txn),
             }).toString()}`}
             className="flex items-center w-full flex-col gap-2 py-4 no-underline"
         >
@@ -216,9 +218,7 @@ export function TransactionCard({
                         </div>
                     )}
 
-                    {txn.timestamp_ms && (
-                        <DateCard timestamp={txn.timestamp_ms} size="sm" />
-                    )}
+                    {timestamp && <DateCard timestamp={timestamp} size="sm" />}
                 </div>
             </div>
         </Link>

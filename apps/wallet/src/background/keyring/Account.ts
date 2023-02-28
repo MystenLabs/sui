@@ -45,7 +45,6 @@ export class Account {
         // This is fine to hardcode useRecoverable = false because wallet does not support Secp256k1. Ed25519 does not use this parameter.
         const signature = this.#keypair.signData(data, false);
         const signatureScheme = this.#keypair.getKeyScheme();
-
         return toSerializedSignature({
             signature,
             signatureScheme,
@@ -59,5 +58,9 @@ export class Account {
             address: this.address,
             derivationPath: this.derivationPath,
         };
+    }
+
+    get publicKey() {
+        return this.#keypair.getPublicKey();
     }
 }

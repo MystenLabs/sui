@@ -157,6 +157,13 @@ Use the following command to install `libpq-dev`:
 sudo apt-get install libpq-dev
 ```
 
+### build-essential
+Use the following command to install `build-essential`"
+
+```shell
+sudo apt-get install build-essential
+```
+
 Proceed to [Install Sui binaries](#install-sui-binaries) to continue installing Sui.
 
 ## macOS prerequisites

@@ -119,7 +119,7 @@ fn serialize_modules_to_file<'a>(
 
     let binary = bcs::to_bytes(&serialized_modules)?;
 
-    fs::write(file, &binary)?;
+    fs::write(file, binary)?;
 
     Ok(())
 }

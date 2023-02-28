@@ -4,11 +4,10 @@
 use std::fmt;
 
 use crate::sui_serde::Readable;
-use fastcrypto::encoding::{Base58, Base64, Encoding};
+use fastcrypto::encoding::{Base58, Encoding};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
-
 /// A representation of a SHA3-256 Digest
 #[serde_as]
 #[derive(
@@ -460,14 +459,8 @@ impl fmt::UpperHex for TransactionEffectsDigest {
 }
 
 // Each object has a unique digest
-#[serde_as]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
-pub struct ObjectDigest(
-    #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, Bytes>")]
-    [u8; 32],
-    // Sha3Digest,
-);
+pub struct ObjectDigest(Sha3Digest);
 
 impl ObjectDigest {
     pub const MIN: ObjectDigest = Self::new([u8::MIN; 32]);
@@ -484,31 +477,27 @@ impl ObjectDigest {
         Self::new([Self::OBJECT_DIGEST_WRAPPED_BYTE_VAL; 32]);
 
     pub const fn new(digest: [u8; 32]) -> Self {
-        Self(Sha3Digest::new(digest).into_inner())
+        Self(Sha3Digest::new(digest))
     }
 
     pub fn generate<R: rand::RngCore + rand::CryptoRng>(rng: R) -> Self {
-        Self(Sha3Digest::generate(rng).into())
+        Self(Sha3Digest::generate(rng))
     }
 
     pub fn random() -> Self {
-        Self(Sha3Digest::random().into())
+        Self(Sha3Digest::random())
     }
 
     pub const fn inner(&self) -> &[u8; 32] {
-        &self.0
+        self.0.inner()
     }
 
     pub const fn into_inner(self) -> [u8; 32] {
-        self.0
+        self.0.into_inner()
     }
 
     pub fn is_alive(&self) -> bool {
         *self != Self::OBJECT_DIGEST_DELETED && *self != Self::OBJECT_DIGEST_WRAPPED
-    }
-
-    pub fn base64_encode(&self) -> String {
-        Base64::encode(self.0)
     }
 
     pub fn base58_encode(&self) -> String {
@@ -524,7 +513,7 @@ impl AsRef<[u8]> for ObjectDigest {
 
 impl AsRef<[u8; 32]> for ObjectDigest {
     fn as_ref(&self) -> &[u8; 32] {
-        &self.0
+        self.0.as_ref()
     }
 }
 
@@ -542,25 +531,25 @@ impl From<[u8; 32]> for ObjectDigest {
 
 impl fmt::Display for ObjectDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self, f)
+        fmt::Display::fmt(&self.0, f)
     }
 }
 
 impl fmt::Debug for ObjectDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "o#{}", self.base64_encode())
+        write!(f, "o#{}", self.0)
     }
 }
 
 impl fmt::LowerHex for ObjectDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::LowerHex::fmt(&Sha3Digest::new(self.0), f)
+        fmt::LowerHex::fmt(&self.0, f)
     }
 }
 
 impl fmt::UpperHex for ObjectDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::UpperHex::fmt(&Sha3Digest::new(self.0), f)
+        fmt::UpperHex::fmt(&self.0, f)
     }
 }
 

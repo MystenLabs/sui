@@ -604,91 +604,91 @@ impl ReadPerfContextMetrics {
             let perf_context = perf_context_cell.borrow();
             self.user_key_comparison_count
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::UserKeyComparisonCount) as u64);
+                .inc_by(perf_context.metric(PerfMetric::UserKeyComparisonCount));
             self.block_cache_hit_count
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::BlockCacheHitCount) as u64);
+                .inc_by(perf_context.metric(PerfMetric::BlockCacheHitCount));
             self.block_read_count
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::BlockReadCount) as u64);
+                .inc_by(perf_context.metric(PerfMetric::BlockReadCount));
             self.block_read_byte
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::BlockReadByte) as u64);
+                .inc_by(perf_context.metric(PerfMetric::BlockReadByte));
             self.block_read_nanos
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::BlockReadTime) as u64);
+                .inc_by(perf_context.metric(PerfMetric::BlockReadTime));
             self.block_read_count
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::BlockReadCount) as u64);
+                .inc_by(perf_context.metric(PerfMetric::BlockReadCount));
             self.block_checksum_nanos
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::BlockChecksumTime) as u64);
+                .inc_by(perf_context.metric(PerfMetric::BlockChecksumTime));
             self.block_decompress_nanos
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::BlockDecompressTime) as u64);
+                .inc_by(perf_context.metric(PerfMetric::BlockDecompressTime));
             self.get_read_bytes
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::GetReadBytes) as u64);
+                .inc_by(perf_context.metric(PerfMetric::GetReadBytes));
             self.multiget_read_bytes
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::MultigetReadBytes) as u64);
+                .inc_by(perf_context.metric(PerfMetric::MultigetReadBytes));
             self.get_snapshot_nanos
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::GetSnapshotTime) as u64);
+                .inc_by(perf_context.metric(PerfMetric::GetSnapshotTime));
             self.get_from_memtable_nanos
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::GetFromMemtableTime) as u64);
+                .inc_by(perf_context.metric(PerfMetric::GetFromMemtableTime));
             self.get_from_memtable_count
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::GetFromMemtableCount) as u64);
+                .inc_by(perf_context.metric(PerfMetric::GetFromMemtableCount));
             self.get_post_process_nanos
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::GetPostProcessTime) as u64);
+                .inc_by(perf_context.metric(PerfMetric::GetPostProcessTime));
             self.get_from_output_files_nanos
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::GetFromOutputFilesTime) as u64);
+                .inc_by(perf_context.metric(PerfMetric::GetFromOutputFilesTime));
             self.db_mutex_lock_nanos
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::DbMutexLockNanos) as u64);
+                .inc_by(perf_context.metric(PerfMetric::DbMutexLockNanos));
             self.db_condition_wait_nanos
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::DbConditionWaitNanos) as u64);
+                .inc_by(perf_context.metric(PerfMetric::DbConditionWaitNanos));
             self.merge_operator_nanos
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::MergeOperatorTimeNanos) as u64);
+                .inc_by(perf_context.metric(PerfMetric::MergeOperatorTimeNanos));
             self.read_index_block_nanos
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::ReadIndexBlockNanos) as u64);
+                .inc_by(perf_context.metric(PerfMetric::ReadIndexBlockNanos));
             self.read_filter_block_nanos
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::ReadFilterBlockNanos) as u64);
+                .inc_by(perf_context.metric(PerfMetric::ReadFilterBlockNanos));
             self.new_table_block_iter_nanos
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::NewTableBlockIterNanos) as u64);
+                .inc_by(perf_context.metric(PerfMetric::NewTableBlockIterNanos));
             self.block_seek_nanos
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::BlockSeekNanos) as u64);
+                .inc_by(perf_context.metric(PerfMetric::BlockSeekNanos));
             self.find_table_nanos
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::FindTableNanos) as u64);
+                .inc_by(perf_context.metric(PerfMetric::FindTableNanos));
             self.bloom_memtable_hit_count
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::BloomMemtableHitCount) as u64);
+                .inc_by(perf_context.metric(PerfMetric::BloomMemtableHitCount));
             self.bloom_memtable_miss_count
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::BloomMemtableMissCount) as u64);
+                .inc_by(perf_context.metric(PerfMetric::BloomMemtableMissCount));
             self.bloom_sst_hit_count
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::BloomSstHitCount) as u64);
+                .inc_by(perf_context.metric(PerfMetric::BloomSstHitCount));
             self.bloom_sst_miss_count
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::BloomSstMissCount) as u64);
+                .inc_by(perf_context.metric(PerfMetric::BloomSstMissCount));
             self.key_lock_wait_time
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::KeyLockWaitTime) as u64);
+                .inc_by(perf_context.metric(PerfMetric::KeyLockWaitTime));
             self.key_lock_wait_count
                 .with_label_values(&[cf_name])
-                .inc_by(perf_context.metric(PerfMetric::KeyLockWaitCount) as u64);
+                .inc_by(perf_context.metric(PerfMetric::KeyLockWaitCount));
         });
     }
 }
@@ -772,28 +772,28 @@ impl WritePerfContextMetrics {
             let perf_context = perf_context_cell.borrow();
             self.write_wal_nanos
                 .with_label_values(&[db_name])
-                .inc_by(perf_context.metric(PerfMetric::WriteWalTime) as u64);
+                .inc_by(perf_context.metric(PerfMetric::WriteWalTime));
             self.write_memtable_nanos
                 .with_label_values(&[db_name])
-                .inc_by(perf_context.metric(PerfMetric::WriteMemtableTime) as u64);
+                .inc_by(perf_context.metric(PerfMetric::WriteMemtableTime));
             self.write_delay_nanos
                 .with_label_values(&[db_name])
-                .inc_by(perf_context.metric(PerfMetric::WriteDelayTime) as u64);
+                .inc_by(perf_context.metric(PerfMetric::WriteDelayTime));
             self.write_pre_and_post_process_nanos
                 .with_label_values(&[db_name])
-                .inc_by(perf_context.metric(PerfMetric::WritePreAndPostProcessTime) as u64);
+                .inc_by(perf_context.metric(PerfMetric::WritePreAndPostProcessTime));
             self.write_db_mutex_lock_nanos
                 .with_label_values(&[db_name])
-                .inc_by(perf_context.metric(PerfMetric::DbMutexLockNanos) as u64);
+                .inc_by(perf_context.metric(PerfMetric::DbMutexLockNanos));
             self.write_db_condition_wait_nanos
                 .with_label_values(&[db_name])
-                .inc_by(perf_context.metric(PerfMetric::DbConditionWaitNanos) as u64);
+                .inc_by(perf_context.metric(PerfMetric::DbConditionWaitNanos));
             self.write_key_lock_wait_nanos
                 .with_label_values(&[db_name])
-                .inc_by(perf_context.metric(PerfMetric::KeyLockWaitTime) as u64);
+                .inc_by(perf_context.metric(PerfMetric::KeyLockWaitTime));
             self.write_key_lock_wait_count
                 .with_label_values(&[db_name])
-                .inc_by(perf_context.metric(PerfMetric::KeyLockWaitCount) as u64);
+                .inc_by(perf_context.metric(PerfMetric::KeyLockWaitCount));
         });
     }
 }

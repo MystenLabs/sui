@@ -5,6 +5,8 @@ use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::collection_types::{VecMap, VecSet};
 use crate::committee::{Committee, CommitteeWithNetAddresses, ProtocolVersion, StakeUnit};
 use crate::crypto::{AuthorityPublicKeyBytes, NetworkPublicKey};
+use crate::error::SuiError;
+use crate::storage::ObjectStore;
 use crate::{
     balance::{Balance, Supply},
     id::UID,
@@ -18,7 +20,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-const SUI_SYSTEM_STATE_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
+const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
 pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
 pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch_safe_mode");
@@ -51,6 +53,7 @@ pub struct ValidatorMetadata {
     pub image_url: String,
     pub project_url: String,
     pub net_address: Vec<u8>,
+    pub p2p_address: Vec<u8>,
     pub consensus_address: Vec<u8>,
     pub worker_address: Vec<u8>,
     pub next_epoch_stake: u64,
@@ -139,6 +142,15 @@ pub struct Table {
     pub size: u64,
 }
 
+impl Default for Table {
+    fn default() -> Self {
+        Table {
+            id: ObjectID::from(SuiAddress::ZERO),
+            size: 0,
+        }
+    }
+}
+
 /// Rust version of the Move sui::linked_table::LinkedTable type. Putting it here since
 /// we only use it in sui_system in the framework.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
@@ -163,7 +175,7 @@ impl<K> Default for LinkedTable<K> {
 /// Rust version of the Move sui::staking_pool::StakingPool type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct StakingPool {
-    pub validator_address: SuiAddress,
+    pub id: ObjectID,
     pub starting_epoch: u64,
     pub sui_balance: u64,
     pub rewards_pool: Balance,
@@ -188,17 +200,17 @@ pub struct ValidatorSet {
     pub pending_validators: Vec<Validator>,
     pub pending_removals: Vec<u64>,
     pub next_epoch_validators: Vec<ValidatorMetadata>,
-    pub pending_delegation_switches: VecMap<ValidatorPair, TableVec>,
+    pub staking_pool_mappings: Table,
 }
 
-/// Rust version of the Move sui::sui_system::SuiSystemState type
+/// Rust version of the Move sui::sui_system::SuiSystemStateInner type
+/// We want to keep it named as SuiSystemState in Rust since this is the primary interface type.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct SuiSystemState {
     pub info: UID,
     pub epoch: u64,
     pub protocol_version: u64,
     pub validators: ValidatorSet,
-    pub treasury_cap: Supply,
     pub storage_fund: Balance,
     pub parameters: SystemParameters,
     pub reference_gas_price: u64,
@@ -209,6 +221,25 @@ pub struct SuiSystemState {
     // TODO: Use getters instead of all pub.
 }
 
+/// Rust version of the Move sui::sui_system::SuiSystemState type
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SuiSystemStateWrapper {
+    pub info: UID,
+    pub version: u64,
+    pub system_state: SuiSystemState,
+}
+
+impl SuiSystemStateWrapper {
+    pub fn type_() -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            name: SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME.to_owned(),
+            module: SUI_SYSTEM_MODULE_NAME.to_owned(),
+            type_params: vec![],
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct StakeSubsidy {
     pub epoch_counter: u64,
@@ -217,15 +248,6 @@ pub struct StakeSubsidy {
 }
 
 impl SuiSystemState {
-    pub fn type_() -> StructTag {
-        StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
-            name: SUI_SYSTEM_STATE_STRUCT_NAME.to_owned(),
-            module: SUI_SYSTEM_MODULE_NAME.to_owned(),
-            type_params: vec![],
-        }
-    }
-
     pub fn get_current_epoch_committee(&self) -> CommitteeWithNetAddresses {
         let mut voting_rights = BTreeMap::new();
         let mut net_addresses = BTreeMap::new();
@@ -326,14 +348,13 @@ impl Default for SuiSystemState {
             pending_validators: vec![],
             pending_removals: vec![],
             next_epoch_validators: vec![],
-            pending_delegation_switches: VecMap { contents: vec![] },
+            staking_pool_mappings: Table::default(),
         };
         SuiSystemState {
             info: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),
             epoch: 0,
             protocol_version: ProtocolVersion::MIN.as_u64(),
             validators: validator_set,
-            treasury_cap: Supply { value: 0 },
             storage_fund: Balance::new(0),
             parameters: SystemParameters {
                 min_validator_stake: 1,
@@ -350,4 +371,28 @@ impl Default for SuiSystemState {
             epoch_start_timestamp_ms: 0,
         }
     }
+}
+
+pub fn get_sui_system_state_wrapper<S>(object_store: S) -> Result<SuiSystemStateWrapper, SuiError>
+where
+    S: ObjectStore,
+{
+    let sui_system_object = object_store
+        .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)?
+        .ok_or(SuiError::SuiSystemStateNotFound)?;
+    let move_object = sui_system_object
+        .data
+        .try_as_move()
+        .ok_or(SuiError::SuiSystemStateNotFound)?;
+    let result = bcs::from_bytes::<SuiSystemStateWrapper>(move_object.contents())
+        .expect("Sui System State object deserialization cannot fail");
+    Ok(result)
+}
+
+pub fn get_sui_system_state<S>(object_store: S) -> Result<SuiSystemState, SuiError>
+where
+    S: ObjectStore,
+{
+    let wrapper = get_sui_system_state_wrapper(object_store)?;
+    Ok(wrapper.system_state)
 }

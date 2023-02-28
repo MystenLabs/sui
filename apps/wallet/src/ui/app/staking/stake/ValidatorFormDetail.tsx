@@ -7,36 +7,33 @@ import { useSearchParams } from 'react-router-dom';
 import { calculateAPY } from '../calculateAPY';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { STATE_OBJECT } from '../usePendingDelegation';
+import { useSystemState } from '../useSystemState';
 import { ValidatorLogo } from '../validators/ValidatorLogo';
-import { validatorsFields } from '../validatorsFields';
 import { Card } from '_app/shared/card';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useGetObject, useAppSelector } from '_hooks';
+import { useAppSelector } from '_hooks';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
 
 type ValidatorFormDetailProps = {
     validatorAddress: string;
     unstake?: boolean;
-    stakedId?: string | null;
 };
 
 export function ValidatorFormDetail({
     validatorAddress,
     unstake,
-    stakedId,
 }: ValidatorFormDetailProps) {
     const accountAddress = useAppSelector(({ account }) => account.address);
 
     const [searchParams] = useSearchParams();
     const stakeIdParams = searchParams.get('staked');
     const {
-        data: validators,
+        data: system,
         isLoading: loadingValidators,
         isError: errorValidators,
-    } = useGetObject(STATE_OBJECT);
+    } = useSystemState();
 
     const {
         data: allDelegation,
@@ -45,17 +42,15 @@ export function ValidatorFormDetail({
         error,
     } = useGetDelegatedStake(accountAddress || '');
 
-    const validatorsData = validatorsFields(validators);
-
     const validatorData = useMemo(() => {
-        if (!validatorsData) return null;
-        return validatorsData.validators.fields.active_validators.find(
-            (av) => av.fields.metadata.fields.sui_address === validatorAddress
+        if (!system) return null;
+        return system.validators.active_validators.find(
+            (av) => av.metadata.sui_address === validatorAddress
         );
-    }, [validatorAddress, validatorsData]);
+    }, [validatorAddress, system]);
 
     const totalValidatorStake =
-        validatorData?.fields.delegation_staking_pool.fields.sui_balance || 0;
+        validatorData?.delegation_staking_pool.sui_balance || 0;
 
     const totalStake = useMemo(() => {
         if (!allDelegation) return 0n;
@@ -78,9 +73,9 @@ export function ValidatorFormDetail({
     }, [allDelegation, validatorAddress, stakeIdParams]);
 
     const apy = useMemo(() => {
-        if (!validatorData || !validatorsData) return 0;
-        return calculateAPY(validatorData, +validatorsData.epoch);
-    }, [validatorData, validatorsData]);
+        if (!validatorData || !system) return 0;
+        return calculateAPY(validatorData, +system.epoch);
+    }, [validatorData, system]);
 
     if (isLoading || loadingValidators) {
         return (

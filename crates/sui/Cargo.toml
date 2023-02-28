@@ -35,6 +35,7 @@ sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-sdk = { path = "../sui-sdk" }
 sui-keys = { path = "../sui-keys" }
 sui-source-validation = { path = "../sui-source-validation" }
+sui-move = { path = "../sui-move", features = ["all"] }
 sui-protocol-config = { path = "../sui-protocol-config" }
 
 fastcrypto.workspace = true
