@@ -26,6 +26,7 @@ import type { SubmitProps } from './SendTokenForm';
 
 function TransferCoinPage() {
     const [searchParams] = useSearchParams();
+    const [, setShowModal] = useState(true);
     const coinType = searchParams.get('type');
     const [showTransactionPreview, setShowTransactionPreview] =
         useState<boolean>(false);
@@ -104,6 +105,7 @@ function TransferCoinPage() {
     return (
         <Overlay
             showModal={true}
+            setShowModal={setShowModal}
             title={showTransactionPreview ? 'Review & Send' : 'Send Coins'}
             closeOverlay={() => navigate('/')}
         >
