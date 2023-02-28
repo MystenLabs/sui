@@ -31,21 +31,27 @@ jobs:
   simtest:
     timeout-minutes: 90
     runs-on: [ubuntu-ghcloud]
+
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-      - uses: taiki-e/install-action@nextest
+    - name: Checkout sui repo main branch
+      uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
 
-      - name: simtest build
-        run: |
-          ./scripts/simtest/cargo-simtest simtest build
-          DATE=$(date +%s)
-          export RUST_LOG=off
-          echo "Using MSIM_TEST_SEED=$MSIM_TEST_SEED"
+    - name: Install rust toolchain
+      uses: actions-rs/toolchain@v1
 
-      - name: simtest run
-        run: |
-          ./scripts/simtest/simtest-run.sh
+    - name: Install nexttest
+      uses: taiki-e/install-action@nextest
+
+    - name: Build simtest
+      run: |
+        ./scripts/simtest/cargo-simtest simtest build
+        DATE=$(date +%s)
+        export RUST_LOG=off
+        echo "Using MSIM_TEST_SEED=$MSIM_TEST_SEED"
+
+    - name: Run simtest
+      run: |
+        ./scripts/simtest/simtest-run.sh
 
   report-status:
     name: Report Status
