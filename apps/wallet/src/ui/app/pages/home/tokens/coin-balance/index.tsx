@@ -13,7 +13,7 @@ import st from './CoinBalance.module.scss';
 
 export type CoinProps = {
     type: string;
-    balance: bigint;
+    balance: bigint | number;
     hideStake?: boolean;
     mode?: 'row-item' | 'standalone';
 };

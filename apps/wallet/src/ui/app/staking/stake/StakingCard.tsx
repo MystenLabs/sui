@@ -32,12 +32,14 @@ import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { parseAmount } from '_helpers';
-import { useSigner, useAppSelector, useCoinDecimals } from '_hooks';
 import {
-    accountAggregateBalancesSelector,
-    createCoinsForTypeSelector,
-} from '_redux/slices/account';
-import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+    useSigner,
+    useAppSelector,
+    useCoinDecimals,
+    useGetCoinBalance,
+} from '_hooks';
+import { createCoinsForTypeSelector } from '_redux/slices/account';
+import { Coin } from '_redux/slices/sui-objects/Coin';
 import { trackEvent } from '_src/shared/plausible';
 import { Text } from '_src/ui/app/shared/text';
 
@@ -51,9 +53,11 @@ const initialValues = {
 export type FormValues = typeof initialValues;
 
 function StakingCard() {
-    const coinType = GAS_TYPE_ARG;
+    const coinType = SUI_TYPE_ARG;
     const accountAddress = useAppSelector(({ account }) => account.address);
-    const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
+    const { data: suiBalance, isLoading: loadingSuiBalances } =
+        useGetCoinBalance(coinType, accountAddress);
+    const coinBalance = BigInt(suiBalance?.totalBalance || 0);
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
     const stakeIdParams = searchParams.get('staked');
@@ -80,7 +84,7 @@ function StakingCard() {
             0n
         );
     }, [allDelegation, stakeIdParams]);
-    const coinBalance = (coinType && aggregateBalances[coinType]) || 0n;
+
     const delegationData = useMemo(() => {
         if (!allDelegation) return null;
 
@@ -271,7 +275,12 @@ function StakingCard() {
     return (
         <div className="flex flex-col flex-nowrap flex-grow w-full">
             <Loading
-                loading={loadingBalance || isLoading || validatorsIsloading}
+                loading={
+                    loadingBalance ||
+                    isLoading ||
+                    validatorsIsloading ||
+                    loadingSuiBalances
+                }
             >
                 <Formik
                     initialValues={initialValues}

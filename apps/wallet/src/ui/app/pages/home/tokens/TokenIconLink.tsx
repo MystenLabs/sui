@@ -54,7 +54,7 @@ export function TokenIconLink({
             }}
             className={cl(
                 !stakingEnabled && '!bg-gray-40',
-                'flex mb-5 rounded-2xl w-full p-3.75 justify-between no-underline bg-sui/10 '
+                'flex rounded-2xl w-full p-3.75 justify-between no-underline bg-sui/10'
             )}
             tabIndex={!stakingEnabled ? -1 : undefined}
         >
