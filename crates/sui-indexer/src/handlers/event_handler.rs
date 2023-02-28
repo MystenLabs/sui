@@ -47,7 +47,7 @@ impl EventHandler {
         if let Some(last_event) = last_event_opt {
             if let Some(next_cursor_tx_dig) = last_event.next_cursor_transaction_digest {
                 let next_cursor_tx_digest = next_cursor_tx_dig.parse().map_err(|e| {
-                    IndexerError::TransactionDigestParsingError(format!(
+                    IndexerError::JsonSerdeError(format!(
                         "Failed parsing transaction digest {:?} with error: {:?}",
                         next_cursor_tx_dig, e
                     ))
