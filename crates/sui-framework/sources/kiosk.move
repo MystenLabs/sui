@@ -8,6 +8,7 @@
 ///
 ///
 module sui::kiosk {
+    use std::option::{Self, Option};
     use sui::object::{Self, UID, ID};
     use sui::dynamic_object_field as dof;
     use sui::dynamic_field as df;
@@ -16,7 +17,7 @@ module sui::kiosk {
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
-    use std::option::{Self, Option};
+    use sui::event;
 
     /// For when trying to withdraw profits as owner and owner is not set.
     const EOwnerNotSet: u64 = 0;
@@ -28,13 +29,18 @@ module sui::kiosk {
     const EIncorrectArgument: u64 = 3;
     /// For when Transfer is accepted by a wrong Kiosk.
     const EWrongTarget: u64 = 4;
+    /// For when trying to withdraw higher amount than stored.
+    const ENotEnough: u64 = 5;
 
     /// An object that stores collectibles of all sorts.
     /// For sale, for collecting reasons, for fun.
     struct Kiosk has key, store {
         id: UID,
+        /// Balance of the Kiosk - all profits from sales go here.
         profits: Balance<SUI>,
-        owner: Option<address>
+        /// Always point to `sender` of the transaction.
+        /// Can be changed by calling `set_owner` with Cap.
+        owner: address
     }
 
     /// A capability that is issued for Kiosks that don't have owner
@@ -70,23 +76,23 @@ module sui::kiosk {
     /// Dynamic field key for an active offer to purchase the T.
     struct Offer has store, copy, drop { id: ID }
 
-    // === New Kiosk + ownership modes ===
+    // === Events ===
 
-    /// Creates a new Kiosk with the owner set.
-    public fun new_for_sender(ctx: &mut TxContext): Kiosk {
-        Kiosk {
-            id: object::new(ctx),
-            profits: balance::zero(),
-            owner: option::some(sender(ctx))
-        }
+    /// Emitted when an item was listed by the safe owner.
+    struct NewOfferEvent<phantom T: key + store> has copy, drop {
+        kiosk: ID,
+        id: ID,
+        price: u64
     }
 
+    // === New Kiosk + ownership modes ===
+
     /// Creates a new Kiosk without owner but with a Capability.
-    public fun new_with_capability(ctx: &mut TxContext): (Kiosk, KioskOwnerCap) {
+    public fun new(ctx: &mut TxContext): (Kiosk, KioskOwnerCap) {
         let kiosk = Kiosk {
             id: object::new(ctx),
             profits: balance::zero(),
-            owner: option::none()
+            owner: sender(ctx)
         };
 
         let cap = KioskOwnerCap {
@@ -97,30 +103,14 @@ module sui::kiosk {
         (kiosk, cap)
     }
 
-    /// Switch the ownership mode.
-    /// 1. If `kiosk.owner` is set, unset it and issue a `KioskOwnerCap`
-    /// 2. If `kiosk.owner` is not set, exchange `KioskOwnerCap` for this setting.
-    public fun switch_mode(kiosk: &mut Kiosk, cap: Option<KioskOwnerCap>, ctx: &mut TxContext): Option<KioskOwnerCap> {
-        assert!(
-            (option::is_some(&cap) && option::is_none(&kiosk.owner)) ||
-            (option::is_none(&cap) && option::is_some(&kiosk.owner))
-        , EIncorrectArgument);
-
-        if (option::is_some(&cap)) {
-            let KioskOwnerCap { id, for } = option::destroy_some(cap);
-            assert!(for == object::id(kiosk), ENotOwner);
-            kiosk.owner = option::some(sender(ctx));
-            object::delete(id);
-            option::none()
-        } else {
-            assert!(sender(ctx) == *option::borrow(&kiosk.owner), ENotOwner);
-            kiosk.owner = option::none();
-            option::destroy_none(cap);
-            option::some(KioskOwnerCap {
-                id: object::new(ctx),
-                for: object::id(kiosk)
-            })
-        }
+    /// Change the owner to the transaction sender.
+    /// The change is purely cosmetical and does not affect any of the
+    /// Kiosk functions.
+    public fun set_owner(
+        self: &mut Kiosk, cap: &KioskOwnerCap, ctx: &TxContext
+    ) {
+        assert!(object::id(self) == cap.for, ENotOwner);
+        self.owner = sender(ctx);
     }
 
     // === Publisher functions ===
@@ -139,18 +129,18 @@ module sui::kiosk {
     /// Place any object into a Safe.
     /// Performs an authorization check to make sure only owner can do that.
     public fun place<T: key + store>(
-        self: &mut Kiosk, cap: &Option<KioskOwnerCap>, item: T, ctx: &TxContext
+        self: &mut Kiosk, cap: &KioskOwnerCap, item: T
     ) {
-        try_access(self, cap, ctx);
+        assert!(object::id(self) == cap.for, ENotOwner);
         dof::add(&mut self.id, Key { id: object::id(&item) }, item)
     }
 
     /// Take any object from the Safe.
     /// Performs an authorization check to make sure only owner can do that.
     public fun take<T: key + store>(
-        self: &mut Kiosk, id: ID, cap: &Option<KioskOwnerCap>, ctx: &TxContext
+        self: &mut Kiosk, cap: &KioskOwnerCap, id: ID
     ): T {
-        try_access(self, cap, ctx);
+        assert!(object::id(self) == cap.for, ENotOwner);
         df::remove_if_exists<Offer, u64>(&mut self.id, Offer { id });
         dof::remove(&mut self.id, Key { id })
     }
@@ -162,10 +152,22 @@ module sui::kiosk {
     ///
     /// Performs an authorization check to make sure only owner can sell.
     public fun make_offer<T: key + store>(
-        self: &mut Kiosk, id: ID, price: u64, cap: &Option<KioskOwnerCap>, ctx: &TxContext
+        self: &mut Kiosk, cap: &KioskOwnerCap, id: ID, price: u64
     ) {
-        try_access(self, cap, ctx);
-        df::add(&mut self.id, Offer { id }, price)
+        assert!(object::id(self) == cap.for, ENotOwner);
+        df::add(&mut self.id, Offer { id }, price);
+        event::emit(NewOfferEvent<T> {
+            kiosk: object::id(self), id, price
+        })
+    }
+
+    /// Place an item into the Kiosk and make an offer - simplifies the flow.
+    public fun place_and_offer<T: key + store>(
+        self: &mut Kiosk, cap: &KioskOwnerCap, item: T, price: u64
+    ) {
+        let id = object::id(&item);
+        place(self, cap, item);
+        make_offer<T>(self, cap, id, price)
     }
 
     /// Make a trade: pay the owner of the item and request a Transfer to the `target`
@@ -207,28 +209,162 @@ module sui::kiosk {
     }
 
     /// Withdraw profits from the Kiosk.
-    /// If `kiosk.owner` is set -> check for transaction sender.
-    /// If `kiosk.owner` is none -> require capability.
-    public fun withdraw<T: key + store>(
-        self: &mut Kiosk, cap: &Option<KioskOwnerCap>, ctx: &mut TxContext
+    public fun withdraw(
+        self: &mut Kiosk, cap: &KioskOwnerCap, amount: Option<u64>, ctx: &mut TxContext
     ): Coin<SUI> {
-        try_access(self, cap, ctx);
+        assert!(object::id(self) == cap.for, ENotOwner);
 
-        let amount = balance::value(&self.profits);
+        let amount = if (option::is_some(&amount)) {
+            let amt = option::destroy_some(amount);
+            assert!(amt <= balance::value(&self.profits), ENotEnough);
+            amt
+        } else {
+            balance::value(&self.profits)
+        };
+
         coin::take(&mut self.profits, amount, ctx)
     }
+}
 
-    /// Abort if credentials are incorrect and the party attempts to access the Kiosk.
-    public fun try_access(self: &Kiosk, cap: &Option<KioskOwnerCap>, ctx: &TxContext) {
-        assert!(
-            (option::is_some(cap) && option::is_none(&self.owner)) ||
-            (option::is_none(cap) && option::is_some(&self.owner))
-        , EIncorrectArgument);
+#[test_only]
+module sui::kiosk_creature {
+    use sui::tx_context::{TxContext, sender};
+    use sui::object::{Self, UID};
+    use sui::transfer::transfer;
+    use sui::publisher;
 
-        if (option::is_some(&self.owner)) {
-            assert!(*option::borrow(&self.owner) == sender(ctx), ENotOwner);
-        } else {
-            assert!(option::borrow(cap).for == object::id(self), ENotOwner);
+    struct Creature has key, store { id: UID }
+    struct KIOSK_CREATURE has drop {}
+
+    // Create a publisher + 2 `Creature`s -> to sender
+    fun init(otw: KIOSK_CREATURE, ctx: &mut TxContext) {
+        transfer(publisher::claim(otw, ctx), sender(ctx))
+    }
+
+    #[test_only]
+    public fun new_creature(ctx: &mut TxContext): Creature {
+        Creature { id: object::new(ctx) }
+    }
+
+    #[test_only]
+    public fun init_collection(ctx: &mut TxContext) {
+        init(KIOSK_CREATURE {}, ctx)
+    }
+}
+
+#[test_only]
+module sui::kiosk_tests {
+    use sui::kiosk_creature::{Creature, new_creature, init_collection};
+    use sui::test_scenario::{Self as ts};
+    use sui::kiosk::{Self, Kiosk, KioskOwnerCap, AllowTransferCap};
+    use sui::publisher::Publisher;
+    use sui::transfer::{freeze_object, share_object, transfer};
+    use sui::sui::SUI;
+    use sui::object;
+    use sui::coin;
+    use std::option;
+    use std::vector;
+
+    /// The price for a Creature.
+    const PRICE: u64 = 1000;
+
+    /// Addresses for the current testing suite.
+    fun folks(): (address, address) { (@0xBA3, @0xC3EA403) }
+
+    #[test]
+    fun test_placing() {
+        let (user, creator) = folks();
+        let test = ts::begin(creator);
+
+        // Creator creates a collection and gets a Publisher object.
+        ts::next_tx(&mut test, creator); {
+           init_collection(ts::ctx(&mut test));
         };
+
+        // Creator creates a Kiosk and registers a type.
+        // No transfer policy set, AllowTransferCap is frozen.
+        ts::next_tx(&mut test, creator); {
+            let pub = ts::take_from_address<Publisher>(&test, creator);
+            let (kiosk, kiosk_cap) = kiosk::new(ts::ctx(&mut test));
+            let allow_cap = kiosk::create_allow_transfer_cap<Creature>(&pub, ts::ctx(&mut test));
+
+            share_object(kiosk);
+            transfer(pub, creator);
+            freeze_object(allow_cap);
+            transfer(kiosk_cap, creator);
+        };
+
+
+        // Get the AllowTransferCap from the effects + Kiosk
+        let effects = ts::next_tx(&mut test, creator);
+        let cap_id = *vector::borrow(&ts::frozen(&effects), 0);
+        let kiosk_id = *vector::borrow(&ts::shared(&effects), 0);
+        let creature = new_creature(ts::ctx(&mut test));
+        let creature_id = object::id(&creature);
+
+        // Place an offer to sell a `creature` for a `PRICE`.
+        ts::next_tx(&mut test, creator); {
+            let kiosk = ts::take_shared_by_id<Kiosk>(&test, kiosk_id);
+            let kiosk_cap = ts::take_from_address<KioskOwnerCap>(&test, creator);
+
+            kiosk::place_and_offer(
+                &mut kiosk,
+                &kiosk_cap,
+                creature,
+                PRICE
+            );
+
+            ts::return_shared(kiosk);
+            transfer(kiosk_cap, creator);
+        };
+
+        let effects = ts::next_tx(&mut test, creator);
+        assert!(ts::num_user_events(&effects) == 1, 0);
+
+        //
+        ts::next_tx(&mut test, user); {
+            let kiosk = ts::take_shared_by_id<Kiosk>(&test, kiosk_id);
+            let cap = ts::take_immutable_by_id<AllowTransferCap<Creature>>(&test, cap_id);
+            let coin = coin::mint_for_testing<SUI>(PRICE, ts::ctx(&mut test));
+
+            // Is there a change the system can be tricked?
+            // Say, someone makes a purchase of 2 Creatures at the same time.
+            let (creature, request) = kiosk::purchase(&mut kiosk, creature_id, coin);
+            let (paid, from) = kiosk::allow(&cap, request);
+
+            assert!(paid == PRICE, 0);
+            assert!(from == object::id(&kiosk), 0);
+
+            transfer(creature, user);
+            ts::return_shared(kiosk);
+            ts::return_immutable(cap);
+        };
+
+        ts::next_tx(&mut test, creator); {
+            let kiosk = ts::take_shared_by_id<Kiosk>(&test, kiosk_id);
+            let kiosk_cap = ts::take_from_address<KioskOwnerCap>(&test, creator);
+
+            let profits_1 = kiosk::withdraw(
+                &mut kiosk,
+                &kiosk_cap,
+                option::some(PRICE / 2),
+                ts::ctx(&mut test)
+            );
+
+            let profits_2 = kiosk::withdraw(
+                &mut kiosk,
+                &kiosk_cap,
+                option::none(),
+                ts::ctx(&mut test)
+            );
+
+            assert!(coin::value(&profits_1) == coin::value(&profits_2), 0);
+            transfer(profits_1, creator);
+            transfer(profits_2, creator);
+            transfer(kiosk_cap, creator);
+            ts::return_shared(kiosk);
+        };
+
+        ts::end(test);
     }
 }
