@@ -42,7 +42,7 @@ impl NetworkConfig {
         &self.validator_configs
     }
 
-    pub fn validator_set(&self) -> &[ValidatorInfo] {
+    pub fn validator_set(&self) -> Vec<ValidatorInfo> {
         self.genesis.validator_set()
     }
 
