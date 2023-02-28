@@ -661,7 +661,7 @@ impl AuthorityState {
     ///
     /// Should only be called within sui-core.
     #[instrument(level = "trace", skip_all)]
-    pub(crate) async fn try_execute_immediately(
+    pub async fn try_execute_immediately(
         &self,
         certificate: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,

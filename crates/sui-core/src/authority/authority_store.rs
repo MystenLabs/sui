@@ -116,19 +116,12 @@ impl AuthorityStore {
                 .expect("Cannot bulk insert genesis objects");
 
             // insert txn and effects of genesis
-            let transaction = genesis
-                .transaction()
-                .clone()
-                .verify(&genesis.committee().unwrap())
-                .unwrap();
+            let transaction = VerifiedTransaction::new_unchecked(genesis.transaction().clone());
 
             store
                 .perpetual_tables
                 .transactions
-                .insert(
-                    transaction.digest(),
-                    transaction.clone().into_unsigned().serializable_ref(),
-                )
+                .insert(transaction.digest(), transaction.serializable_ref())
                 .unwrap();
 
             store
