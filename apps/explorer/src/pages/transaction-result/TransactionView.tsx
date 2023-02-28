@@ -557,7 +557,15 @@ function TransactionView({
                             )}
                         </div>
                         <div data-testid="gas-breakdown" className="mt-8">
-                            <TableHeader>Gas & Storage Fees</TableHeader>
+                            <TableHeader
+                                subText={
+                                    isSponsoredTransaction
+                                        ? '(Paid by Sponsor)'
+                                        : undefined
+                                }
+                            >
+                                Gas & Storage Fees
+                            </TableHeader>
 
                             <DescriptionList>
                                 <DescriptionItem title="Gas Payment">

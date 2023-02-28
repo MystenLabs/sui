@@ -17,7 +17,7 @@ export function SponsorTransactionAddress({
     sponsor,
 }: SponsorTransactionAddressProps) {
     return (
-        <TransactionAddressSection title="Sponsored By">
+        <TransactionAddressSection title="Sponsor">
             <TransactionAddress
                 icon={<CheckFill16 className="text-hero" />}
                 address={sponsor}
