@@ -227,8 +227,8 @@ pub fn all_natives(
         ),
         (
             "validator",
-            "validate_metadata",
-            make_native!(validator::validate_metadata),
+            "validate_metadata_bcs",
+            make_native!(validator::validate_metadata_bcs),
         ),
     ];
     sui_natives

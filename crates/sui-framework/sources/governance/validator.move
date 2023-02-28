@@ -7,6 +7,7 @@ module sui::validator {
     use std::bcs;
 
     use sui::balance::{Self, Balance};
+    use sui::bcs::to_bytes;
     use sui::sui::SUI;
     use sui::tx_context::{Self, TxContext};
     use sui::stake;
@@ -122,7 +123,7 @@ module sui::validator {
         // This proves that the account address is owned by the holder of ValidatorPK, and ensures
         // that PK exists.
         let signed_bytes = pubkey_bytes;
-        let address_bytes = bcs::to_bytes(&sui_address);
+        let address_bytes = to_bytes(&sui_address);
         vector::append(&mut signed_bytes, address_bytes);
         assert!(
             bls12381_min_sig_verify_with_domain(&proof_of_possession, &pubkey_bytes, signed_bytes, PROOF_OF_POSSESSION_DOMAIN) == true,
@@ -433,7 +434,11 @@ module sui::validator {
     }
 
     /// Aborts if validator metadata is valid
-    public native fun validate_metadata(metadata: &ValidatorMetadata);
+    public fun validate_metadata(metadata: &ValidatorMetadata) {
+        validate_metadata_bcs(bcs::to_bytes(metadata));
+    }
+
+    public native fun validate_metadata_bcs(metadata: vector<u8>);
 
     spec validate_metadata {
         pragma opaque;

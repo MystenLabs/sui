@@ -39,6 +39,7 @@
 -  [Function `staking_pool_id`](#0x2_validator_staking_pool_id)
 -  [Function `is_duplicate`](#0x2_validator_is_duplicate)
 -  [Function `validate_metadata`](#0x2_validator_validate_metadata)
+-  [Function `validate_metadata_bcs`](#0x2_validator_validate_metadata_bcs)
 
 
 <pre><code><b>use</b> <a href="">0x1::ascii</a>;
@@ -47,6 +48,7 @@
 <b>use</b> <a href="">0x1::string</a>;
 <b>use</b> <a href="">0x1::vector</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
+<b>use</b> <a href="bcs.md#0x2_bcs">0x2::bcs</a>;
 <b>use</b> <a href="bls12381.md#0x2_bls12381">0x2::bls12381</a>;
 <b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
@@ -364,7 +366,7 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
     // This proves that the account <b>address</b> is owned by the holder of ValidatorPK, and <b>ensures</b>
     // that PK <b>exists</b>.
     <b>let</b> signed_bytes = pubkey_bytes;
-    <b>let</b> address_bytes = <a href="_to_bytes">bcs::to_bytes</a>(&sui_address);
+    <b>let</b> address_bytes = to_bytes(&sui_address);
     <a href="_append">vector::append</a>(&<b>mut</b> signed_bytes, address_bytes);
     <b>assert</b>!(
         bls12381_min_sig_verify_with_domain(&proof_of_possession, &pubkey_bytes, signed_bytes, <a href="validator.md#0x2_validator_PROOF_OF_POSSESSION_DOMAIN">PROOF_OF_POSSESSION_DOMAIN</a>) == <b>true</b>,
@@ -1284,7 +1286,9 @@ Aborts if validator metadata is valid
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(metadata: &<a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(metadata: &<a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a>) {
+    <a href="validator.md#0x2_validator_validate_metadata_bcs">validate_metadata_bcs</a>(<a href="_to_bytes">bcs::to_bytes</a>(metadata));
+}
 </code></pre>
 
 
@@ -1298,6 +1302,28 @@ Aborts if validator metadata is valid
 
 <pre><code><b>pragma</b> opaque;
 <b>aborts_if</b> [abstract] <b>true</b>;
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_validate_metadata_bcs"></a>
+
+## Function `validate_metadata_bcs`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_validate_metadata_bcs">validate_metadata_bcs</a>(metadata: <a href="">vector</a>&lt;u8&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="validator.md#0x2_validator_validate_metadata_bcs">validate_metadata_bcs</a>(metadata: <a href="">vector</a>&lt;u8&gt;);
 </code></pre>
 
 

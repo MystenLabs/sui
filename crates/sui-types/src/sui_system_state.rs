@@ -23,6 +23,14 @@ pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance
 pub const CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME: &IdentStr =
     ident_str!("consensus_commit_prologue");
 
+const E_METADATA_INVALID_PUBKEY: u64 = 1;
+const E_METADATA_INVALID_NET_PUBKEY: u64 = 2;
+const E_METADATA_INVALID_WORKER_PUBKEY: u64 = 3;
+const E_METADATA_INVALID_NET_ADDR: u64 = 4;
+const E_METADATA_INVALID_P2P_ADDR: u64 = 5;
+const E_METADATA_INVALID_CONSENSUS_ADDR: u64 = 6;
+const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
+
 /// Rust version of the Move sui::sui_system::SystemParameters type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct SystemParameters {
@@ -52,6 +60,58 @@ pub struct ValidatorMetadata {
     pub p2p_address: Vec<u8>,
     pub consensus_address: Vec<u8>,
     pub worker_address: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+pub struct VerifiedValidatorMetadata {
+    pub sui_address: SuiAddress,
+    pub pubkey: narwhal_crypto::PublicKey,
+    pub network_pubkey: narwhal_crypto::NetworkPublicKey,
+    pub worker_pubkey: narwhal_crypto::NetworkPublicKey,
+    pub proof_of_possession_bytes: Vec<u8>,
+    pub name: String,
+    pub description: String,
+    pub image_url: String,
+    pub project_url: String,
+    pub net_address: Multiaddr,
+    pub p2p_address: Multiaddr,
+    pub consensus_address: Multiaddr,
+    pub worker_address: Multiaddr,
+}
+
+impl ValidatorMetadata {
+    /// Verify validator metadata and return a verified version (on success) or error code (on failure)
+    pub fn verify(&self) -> Result<VerifiedValidatorMetadata, u64> {
+        let pubkey = create_narwhal_pubkey(self.pubkey_bytes.as_ref())
+            .map_err(|_| E_METADATA_INVALID_PUBKEY)?;
+        let network_pubkey = create_narwhal_net_pubkey(self.network_pubkey_bytes.as_ref())
+            .map_err(|_| E_METADATA_INVALID_NET_PUBKEY)?;
+        let worker_pubkey = create_narwhal_net_pubkey(self.worker_pubkey_bytes.as_ref())
+            .map_err(|_| E_METADATA_INVALID_WORKER_PUBKEY)?;
+        let net_address =
+            create_multiaddr(self.net_address.clone()).map_err(|_| E_METADATA_INVALID_NET_ADDR)?;
+        let p2p_address =
+            create_multiaddr(self.p2p_address.clone()).map_err(|_| E_METADATA_INVALID_P2P_ADDR)?;
+        let consensus_address = create_multiaddr(self.consensus_address.clone())
+            .map_err(|_| E_METADATA_INVALID_CONSENSUS_ADDR)?;
+        let worker_address = create_multiaddr(self.worker_address.clone())
+            .map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?;
+        Ok(VerifiedValidatorMetadata {
+            sui_address: self.sui_address,
+            pubkey,
+            network_pubkey,
+            worker_pubkey,
+            proof_of_possession_bytes: self.proof_of_possession_bytes.clone(),
+            name: self.name.clone(),
+            description: self.description.clone(),
+            image_url: self.image_url.clone(),
+            project_url: self.project_url.clone(),
+            net_address,
+            p2p_address,
+            consensus_address,
+            worker_address,
+        })
+    }
 }
 
 /// Rust version of the Move sui::validator::Validator type
