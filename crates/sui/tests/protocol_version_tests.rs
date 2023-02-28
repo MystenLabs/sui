@@ -252,6 +252,7 @@ mod sim_only_tests {
         let first_name = first.name();
         sui_framework_injection::set_override_cb(Box::new(move |name| {
             if name == first_name {
+                info!("node {:?} using compatible packages", name.concise());
                 Some(sui_framework("compatible"))
             } else {
                 None
