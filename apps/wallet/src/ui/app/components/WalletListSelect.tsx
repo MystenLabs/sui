@@ -86,19 +86,21 @@ export function WalletListSelect({
                 mode === 'select' ? (
                     <div className="flex flex-row flex-nowrap self-stretch justify-between">
                         <div>
-                            <Link
-                                color="heroDark"
-                                weight="medium"
-                                text="Select all"
-                                disabled={disabled}
-                                onClick={() =>
-                                    onChange(
-                                        filteredAccounts.map(
-                                            ({ address }) => address
+                            {filteredAccounts.length > 1 ? (
+                                <Link
+                                    color="heroDark"
+                                    weight="medium"
+                                    text="Select all"
+                                    disabled={disabled}
+                                    onClick={() =>
+                                        onChange(
+                                            filteredAccounts.map(
+                                                ({ address }) => address
+                                            )
                                         )
-                                    )
-                                }
-                            />
+                                    }
+                                />
+                            ) : null}
                         </div>
                         <div>
                             <Link
