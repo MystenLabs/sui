@@ -56,6 +56,7 @@ async fn main() -> Result<()> {
         "supported_protocol_versions cannot be read from the config file"
     );
     config.supported_protocol_versions = Some(SupportedProtocolVersions::SYSTEM_DEFAULT);
+    config.zero_ip_address();
 
     let registry_service = metrics::start_prometheus_server(config.metrics_address);
     let prometheus_registry = registry_service.default_registry();
