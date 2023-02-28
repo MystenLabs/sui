@@ -2542,32 +2542,6 @@ impl TransactionEffects {
     }
 }
 
-impl Message for TransactionEffectsDigest {
-    type DigestType = TransactionEffectsDigest;
-    const SCOPE: IntentScope = IntentScope::TransactionEffectsDigest;
-
-    fn digest(&self) -> Self::DigestType {
-        *self
-    }
-
-    fn verify(&self) -> SuiResult {
-        Ok(())
-    }
-}
-
-impl Message for ExecutionDigests {
-    type DigestType = TransactionDigest;
-    const SCOPE: IntentScope = IntentScope::ExecutionDigests;
-
-    fn digest(&self) -> Self::DigestType {
-        self.transaction
-    }
-
-    fn verify(&self) -> SuiResult {
-        Ok(())
-    }
-}
-
 impl Message for TransactionEffects {
     type DigestType = TransactionEffectsDigest;
     const SCOPE: IntentScope = IntentScope::TransactionEffects;
