@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
 
 NUM_CPUS=$(cat /proc/cpuinfo | grep processor | wc -l) # ubuntu
 # NUM_CPUS=$(sysctl -n hw.ncpu) mac
