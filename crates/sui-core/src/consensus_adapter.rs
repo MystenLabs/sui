@@ -260,17 +260,11 @@ impl ConsensusAdapter {
         committee: &Committee,
         ourselves: &AuthorityName,
         transaction: &ConsensusTransaction,
-        low_scoring_authorities: Vec<&AuthorityName>,
     ) -> (impl Future<Output = ()>, usize) {
         let (duration, position) = match &transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
                 let tx_digest = certificate.digest();
-                let position = self.submission_position(
-                    committee,
-                    ourselves,
-                    tx_digest,
-                    low_scoring_authorities,
-                );
+                let position = self.submission_position(committee, ourselves, tx_digest);
                 // DELAY_STEP is chosen as 1.5 * mean consensus delay
                 const DELAY_STEP: Duration = Duration::from_secs(7);
                 const MAX_DELAY_MUL: usize = 10;
@@ -296,11 +290,10 @@ impl ConsensusAdapter {
         committee: &Committee,
         ourselves: &AuthorityName,
         tx_digest: &TransactionDigest,
-        low_scoring_authorities: Vec<&AuthorityName>,
     ) -> usize {
         let positions = order_validators_for_submission(committee, tx_digest);
 
-        self.check_submission_wrt_connectivity(ourselves, positions, low_scoring_authorities)
+        self.check_submission_wrt_connectivity(ourselves, positions)
     }
 
     /// This function runs the following algorithm to decide whether or not to submit a transaction
@@ -326,24 +319,13 @@ impl ConsensusAdapter {
         &self,
         ourselves: &AuthorityName,
         positions: Vec<AuthorityName>,
-        low_scoring_authorities: Vec<&AuthorityName>,
     ) -> usize {
-        let filtered_positions = positions
-            .into_iter()
-            .filter(|authority| {
-                self.connection_monitor_status
-                    .check_connection(ourselves, authority)
-                    .unwrap_or(ConnectionStatus::Disconnected)
-                    == ConnectionStatus::Connected
-            })
-            .filter(|authority| {
-                // if we are a low scoring authority, we do not filter out ourselves from the list,
-                // nor do we move forward in line
-                // if we are a high scoring authority, we will co-submit with any low scoring authorities
-                // in front of us
-                !low_scoring_authorities.contains(&authority)
-                    || low_scoring_authorities.contains(&ourselves)
-            });
+        let filtered_positions = positions.into_iter().filter(|authority| {
+            self.connection_monitor_status
+                .check_connection(ourselves, authority)
+                .unwrap_or(ConnectionStatus::Disconnected)
+                == ConnectionStatus::Connected
+        });
 
         filtered_positions
             .into_iter()
@@ -421,15 +403,8 @@ impl ConsensusAdapter {
             .consensus_message_processed_notify(transaction_key)
             .boxed();
 
-        // TODO later populate this with the narwhal nodes that had lowest reputation scores
-        let low_scoring_authorities = vec![];
-
-        let (await_submit, position) = self.await_submit_delay(
-            epoch_store.committee(),
-            &self.authority,
-            &transaction,
-            low_scoring_authorities,
-        );
+        let (await_submit, position) =
+            self.await_submit_delay(epoch_store.committee(), &self.authority, &transaction);
         let mut guard = InflightDropGuard::acquire(&self);
 
         // We need to wait for some delay until we submit transaction to the consensus
