@@ -8,11 +8,7 @@ use crate::crypto::AuthorityPublicKeyBytes;
 use crate::dynamic_field::{derive_dynamic_field_id, Field};
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
-use crate::{
-    balance::{Balance, Supply},
-    id::UID,
-    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
-};
+use crate::{balance::Balance, id::UID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
 use anemo::PeerId;
 use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;

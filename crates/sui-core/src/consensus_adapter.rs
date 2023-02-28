@@ -258,7 +258,6 @@ impl ConsensusAdapter {
     fn await_submit_delay(
         &self,
         committee: &Committee,
-        ourselves: &AuthorityName,
         transaction: &ConsensusTransaction,
     ) -> (impl Future<Output = ()>, usize) {
         let (duration, position) = match &transaction.kind {
@@ -281,7 +280,7 @@ impl ConsensusAdapter {
     /// Check when this authority should submit the certificate to consensus.
     /// This sorts all authorities based on pseudo-random distribution derived from transaction hash.
     ///
-    /// The function targets having 1 or 2 consensus transaction submitted per user transaction
+    /// The function targets having 1 consensus transaction submitted per user transaction
     /// when system operates normally.
     ///
     /// The function returns the position of this authority when it is their turn to submit the transaction to consensus.
@@ -311,20 +310,19 @@ impl ConsensusAdapter {
     /// move our positions up one, and submit at the same time. This allows low performing
     /// node a chance to participate in consensus and redeem their scores while maintaining performance.
     fn check_submission_wrt_connectivity(&self, positions: Vec<AuthorityName>) -> usize {
-        let filtered_positions = positions.into_iter().filter(|authority| {
-            self.authority == *authority
-                || self
-                    .connection_monitor_status
-                    .check_connection(&self.authority, authority)
-                    .unwrap_or(ConnectionStatus::Disconnected)
-                    == ConnectionStatus::Connected
-        });
-
-        filtered_positions
+        let filtered_positions = positions
             .into_iter()
-            .find_position(|authority| *authority == self.authority)
-            .expect("Couldn't find ourselves in shuffled committee")
-            .0
+            .filter(|authority| {
+                self.authority == *authority
+                    || self
+                        .connection_monitor_status
+                        .check_connection(&self.authority, authority)
+                        .unwrap_or(ConnectionStatus::Disconnected)
+                        == ConnectionStatus::Connected
+            })
+            .collect();
+
+        get_position_in_list(self.authority, filtered_positions)
     }
 
     /// This method blocks until transaction is persisted in local database
@@ -397,7 +395,7 @@ impl ConsensusAdapter {
             .boxed();
 
         let (await_submit, position) =
-            self.await_submit_delay(epoch_store.committee(), &self.authority, &transaction);
+            self.await_submit_delay(epoch_store.committee(), &transaction);
         let mut guard = InflightDropGuard::acquire(&self);
 
         // We need to wait for some delay until we submit transaction to the consensus
@@ -569,6 +567,17 @@ impl CheckConnection for ConnectionMonitorStatusForTests {
     }
 }
 
+pub fn get_position_in_list(
+    search_authority: AuthorityName,
+    positions: Vec<AuthorityName>,
+) -> usize {
+    positions
+        .into_iter()
+        .find_position(|authority| *authority == search_authority)
+        .expect("Couldn't find ourselves in shuffled committee")
+        .0
+}
+
 pub fn order_validators_for_submission(
     committee: &Committee,
     tx_digest: &TransactionDigest,
@@ -691,18 +700,13 @@ impl SubmitToConsensus for Arc<ConsensusAdapter> {
     }
 }
 
-#[cfg(test)]
 pub fn position_submit_certificate(
     committee: &Committee,
     ourselves: &AuthorityName,
     tx_digest: &TransactionDigest,
 ) -> usize {
     let validators = order_validators_for_submission(committee, tx_digest);
-    let (position, _) = validators
-        .into_iter()
-        .find_position(|a| a == ourselves)
-        .expect("Could not find ourselves in shuffled committee");
-    position
+    get_position_in_list(*ourselves, validators)
 }
 
 #[cfg(test)]
