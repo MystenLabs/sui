@@ -15,7 +15,7 @@ export function createTokenValidation(
     decimals: number,
     // TODO: We can move this to a constant when MIST is fully rolled out.
     gasDecimals: number,
-    gasBudget: number,
+    gasBudget: number | null,
     maxSuiSingleCoinBalance: bigint
 ) {
     return Yup.mixed()
@@ -58,26 +58,43 @@ export function createTokenValidation(
                 return amount ? amount.shiftedBy(decimals).isInteger() : false;
             }
         )
-        .test(
-            'gas-balance-check-enough-single-coin',
-            `Insufficient ${GAS_SYMBOL}, there is no individual coin with enough balance to cover for the gas fee (${formatBalance(
-                gasBudget,
-                gasDecimals
-            )} ${GAS_SYMBOL})`,
-            () => {
-                return maxSuiSingleCoinBalance >= gasBudget;
-            }
-        )
+        .test({
+            name: 'gas-balance-check-enough-single-coin',
+            test: function (_, ctx) {
+                // ignore gas budget check if gasBudget is null or gasInputBudgetEst is not null
+                if (!ctx.parent?.gasInputBudgetEst && !gasBudget) {
+                    return true;
+                }
+                const gasBudgetInput = (ctx.parent?.gasInputBudgetEst ??
+                    gasBudget) as number;
+
+                if (maxSuiSingleCoinBalance >= gasBudgetInput) {
+                    return true;
+                }
+
+                return ctx.createError({
+                    message: `Insufficient ${GAS_SYMBOL}, there is no individual coin with enough balance to cover for the gas fee (${formatBalance(
+                        gasBudgetInput,
+                        gasDecimals
+                    )} ${GAS_SYMBOL})`,
+                });
+            },
+        })
 
         .test({
             name: 'gas-balance-check',
             test: function (amount: BigNumber | undefined, ctx) {
                 // For Pay All SUI and SUI coinType, we don't need to check gas balance.
-                if (this.parent.isPayAllSui && coinType === GAS_TYPE_ARG) {
+                if (ctx.parent?.isPayAllSui && coinType === GAS_TYPE_ARG) {
                     return true;
                 }
                 if (!amount) {
-                    return false;
+                    return ctx.createError({
+                        message: `Insufficient ${GAS_SYMBOL} balance to cover gas fee (${formatBalance(
+                            ctx.parent?.gasInputBudgetEst || gasBudget,
+                            gasDecimals
+                        )} ${GAS_SYMBOL})`,
+                    });
                 }
                 // check updated gas balance base on gasInputBudgetEst
                 try {
@@ -89,13 +106,13 @@ export function createTokenValidation(
                     }
                     if (
                         availableGas >=
-                        (this.parent?.gasInputBudgetEst || gasBudget)
+                        (ctx.parent?.gasInputBudgetEst || gasBudget)
                     ) {
                         return true;
                     }
-                    return this.createError({
+                    return ctx.createError({
                         message: `Insufficient ${GAS_SYMBOL} balance to cover gas fee (${formatBalance(
-                            this.parent?.gasInputBudgetEst || gasBudget,
+                            ctx.parent?.gasInputBudgetEst || gasBudget,
                             gasDecimals
                         )} ${GAS_SYMBOL})`,
                     });

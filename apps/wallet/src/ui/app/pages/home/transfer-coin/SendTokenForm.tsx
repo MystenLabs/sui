@@ -163,7 +163,7 @@ export function SendTokenForm({
                 gasAggregateBalance,
                 coinDecimals,
                 gasDecimals,
-                gasBudgetEstimation || 0,
+                null,
                 maxSuiSingleCoinBalance
             ),
         [
@@ -173,7 +173,6 @@ export function SendTokenForm({
             coinDecimals,
             gasDecimals,
             gasAggregateBalance,
-            gasBudgetEstimation,
             maxSuiSingleCoinBalance,
         ]
     );
@@ -258,8 +257,8 @@ export function SendTokenForm({
                                             actionType="button"
                                             allowNegative={false}
                                             allowDecimals
-                                            amountInput
-                                            amount
+                                            rounded="lg"
+                                            dark
                                             onActionClicked={() =>
                                                 setFieldValue(
                                                     'amount',

@@ -19,13 +19,19 @@ const styles = cva(
     ],
     {
         variants: {
-            amount: {
-                true: 'rounded-2lg',
-                false: 'rounded-md',
+            rounded: {
+                lg: 'rounded-2lg',
+                md: 'rounded-md',
+            },
+            // TODO: handle dark outline Pill
+            dark: {
+                true: '',
+                false: '',
             },
         },
         defaultVariants: {
-            amount: false,
+            rounded: 'lg',
+            dark: false,
         },
     }
 );
@@ -42,7 +48,6 @@ export interface InputWithActionProps
     actionDisabled?: boolean | 'auto';
     allowNegative?: boolean;
     allowDecimals?: boolean;
-    amountInput?: boolean;
 }
 
 export function InputWithAction({
@@ -56,8 +61,8 @@ export function InputWithAction({
     name,
     prefix,
     suffix,
-    amountInput,
-    amount,
+    dark,
+    rounded,
     ...props
 }: InputWithActionProps) {
     const [field, meta] = useField(name);
@@ -76,7 +81,7 @@ export function InputWithAction({
             <div className="flex flex-row flex-nowrap items-center relative">
                 {type === 'number' ? (
                     <NumberInput
-                        className={styles({ amount })}
+                        className={styles({ rounded })}
                         allowNegative
                         {...props}
                         form={form}
@@ -93,7 +98,7 @@ export function InputWithAction({
                         disabled={isInputDisabled}
                         {...field}
                         {...props}
-                        className={styles({ amount })}
+                        className={styles({ rounded })}
                     />
                 )}
                 <div className="flex items-center justify-end absolute right-0 max-w-[20%] mx-3 overflow-hidden">
@@ -103,7 +108,7 @@ export function InputWithAction({
                         disabled={isActionDisabled}
                         loading={isSubmitting}
                         onClick={onActionClicked}
-                        dark={amount}
+                        dark={dark}
                     />
                 </div>
             </div>

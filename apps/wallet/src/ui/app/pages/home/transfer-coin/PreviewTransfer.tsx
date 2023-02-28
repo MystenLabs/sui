@@ -9,12 +9,12 @@ import { parseAmount } from '_helpers';
 import { useAppSelector, useFormatCoin, useCoinDecimals } from '_hooks';
 import { GAS_SYMBOL, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
-export type TransferCoinFormProps = {
+export type PreviewTransferProps = {
     coinType: string;
     gasCostEstimation: number;
     to: string;
     amount: string;
-    approx: boolean;
+    approximation?: boolean;
 };
 
 export function PreviewTransfer({
@@ -22,8 +22,8 @@ export function PreviewTransfer({
     gasCostEstimation,
     to,
     amount,
-    approx,
-}: TransferCoinFormProps) {
+    approximation,
+}: PreviewTransferProps) {
     const accountAddress = useAppSelector(({ account }) => account.address);
     const [decimals] = useCoinDecimals(coinType);
     const amountWithoutDecimals = parseAmount(amount, decimals);
@@ -36,7 +36,7 @@ export function PreviewTransfer({
                 amount={amountWithoutDecimals.toString()}
                 label="Sending"
                 coinType={coinType}
-                approx={approx}
+                approximation={approximation}
             />
             <TxnAddress address={accountAddress || ''} label="From" />
             <TxnAddress address={to} label="To" />

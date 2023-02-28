@@ -9,12 +9,17 @@ type TxnAmountProps = {
     amount: string | number;
     coinType: string;
     label: string;
-    approx?: boolean | null;
+    approximation?: boolean;
 };
 
 // dont show amount if it is 0
 // This happens when a user sends a transaction to self;
-export function TxnAmount({ amount, coinType, label, approx }: TxnAmountProps) {
+export function TxnAmount({
+    amount,
+    coinType,
+    label,
+    approximation,
+}: TxnAmountProps) {
     const [formatAmount, symbol] = useFormatCoin(Math.abs(+amount), coinType);
     return +amount !== 0 ? (
         <div className="flex justify-between w-full items-center py-3.5 first:pt-0">
@@ -23,7 +28,7 @@ export function TxnAmount({ amount, coinType, label, approx }: TxnAmountProps) {
             </Text>
             <div className="flex gap-1 items-center">
                 <Heading variant="heading2" weight="semibold" color="gray-90">
-                    {approx ? '~' : ''}
+                    {approximation ? '~' : ''}
                     {formatAmount}
                 </Heading>
                 <Text variant="body" weight="medium" color="steel-darker">

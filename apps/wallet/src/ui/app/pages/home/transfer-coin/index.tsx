@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowRight16, ArrowLeft16 } from '@mysten/icons';
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { PreviewTransfer } from './PreviewTransfer';
@@ -25,9 +25,6 @@ function TransferCoinPage() {
         useState<boolean>(false);
     const [formData, setFormData] = useState<SubmitProps>();
     const navigate = useNavigate();
-    const closeOverlay = useCallback(() => {
-        navigate('/');
-    }, [navigate]);
 
     if (!coinType) {
         return <Navigate to="/" replace={true} />;
@@ -38,7 +35,7 @@ function TransferCoinPage() {
             showModal={true}
             setShowModal={setShowModal}
             title={showTransactionPreview ? 'Review & Send' : 'Send Coins'}
-            closeOverlay={closeOverlay}
+            closeOverlay={() => navigate('/')}
         >
             <div className="flex flex-col w-full mt-2.5">
                 {showTransactionPreview && formData ? (
@@ -49,7 +46,7 @@ function TransferCoinPage() {
                                 amount={formData.amount}
                                 to={formData.to}
                                 gasCostEstimation={formData.gasBudget}
-                                approx={formData.isPayAllSui}
+                                approximation={formData.isPayAllSui}
                             />
                         </Content>
                         <Menu
