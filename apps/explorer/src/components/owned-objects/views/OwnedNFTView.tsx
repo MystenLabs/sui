@@ -1,15 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { transformURL } from '../../../utils/stringUtils';
 import { type Data, type DataType } from '../OwnedObjectConstants';
 
-import { useImageMod } from '~/hooks/useImageMod';
+import useMedia from '~/hooks/useMedia';
 import { ObjectDetails } from '~/ui/ObjectDetails';
 
 function OwnedNFT(entryObj: Data) {
-    const url = transformURL(entryObj.display ?? '');
-    const { data: allowed } = useImageMod({ url });
+    const { url, nsfw } = useMedia(entryObj.display ?? '');
 
     return (
         <ObjectDetails
@@ -18,7 +16,7 @@ function OwnedNFT(entryObj: Data) {
             type={entryObj.name ?? entryObj.Type}
             image={url}
             variant="small"
-            nsfw={!allowed}
+            nsfw={nsfw}
         />
     );
 }
