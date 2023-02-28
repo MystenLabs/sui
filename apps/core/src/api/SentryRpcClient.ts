@@ -5,7 +5,7 @@ import { JsonRpcClient, type RpcParams } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
 import { type SpanStatusType } from '@sentry/tracing';
 
-export class SentryRPCClient extends JsonRpcClient {
+export class SentryRpcClient extends JsonRpcClient {
     #url: string;
     constructor(url: string) {
         super(url);
