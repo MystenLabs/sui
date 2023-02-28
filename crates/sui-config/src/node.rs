@@ -101,6 +101,34 @@ pub struct NodeConfig {
     pub supported_protocol_versions: Option<SupportedProtocolVersions>,
 }
 
+impl NodeConfig {
+    /// Zero the ip address to ensure we bind to `0.0.0.0`.
+    pub fn zero_ip_address(&mut self) {
+        // Set the p2p2 listen address to `0.0.0.0`.
+        self.p2p_config
+            .listen_address
+            .set_ip("0.0.0.0".parse().unwrap());
+
+        // Set the ip network address to `0.0.0.0`.
+        self.network_address = Self::zero_ip_multi_address(&self.network_address);
+    }
+
+    /// Set the ip address to `0.0.0.0`. For instance, it converts the following address
+    /// `/ip4/155.138.174.208/tcp/1500/http` into `/ip4/0.0.0.0/tcp/1500/http`.
+    fn zero_ip_multi_address(address: &Multiaddr) -> Multiaddr {
+        let mut new_address = Multiaddr::empty();
+        for component in address {
+            match component {
+                multiaddr::Protocol::Ip4(_) => new_address.push(multiaddr::Protocol::Ip4(
+                    std::net::Ipv4Addr::new(0, 0, 0, 0),
+                )),
+                c => new_address.push(c),
+            }
+        }
+        new_address
+    }
+}
+
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
     AuthorityStorePruningConfig::default()
 }
