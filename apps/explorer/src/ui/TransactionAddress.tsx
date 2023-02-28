@@ -8,15 +8,10 @@ export type TransactionAddressProps = {
     icon: React.ReactNode;
 };
 
-export function TransactionAddress({
-    icon,
-    address,
-}: TransactionAddressProps) {
+export function TransactionAddress({ icon, address }: TransactionAddressProps) {
     return (
         <div className="flex items-center gap-2 break-all">
-            <div className="w-4">
-                {icon}
-            </div>
+            <div className="w-4">{icon}</div>
             <Link
                 variant="mono"
                 size="md"

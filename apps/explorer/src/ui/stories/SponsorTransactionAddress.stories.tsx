@@ -21,7 +21,9 @@ export default {
     ],
 } as Meta;
 
-export const Default: StoryObj<ComponentProps<typeof SponsorTransactionAddress>> = {
+export const Default: StoryObj<
+    ComponentProps<typeof SponsorTransactionAddress>
+> = {
     args: {
         sponsor: '0x813f1adee5abb1e00dfa653bb827856106e56764',
     },

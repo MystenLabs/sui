@@ -30,6 +30,6 @@ export const Default: StoryObj<TransactionAddressProps> = {
 export const WithIcon: StoryObj<TransactionAddressProps> = {
     args: {
         address: '0x813f1adee5abb1e00dfa653bb827856106e56764',
-        icon: <CheckFill16 />
+        icon: <CheckFill16 />,
     },
 };

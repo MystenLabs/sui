@@ -20,6 +20,7 @@ import {
 } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
+
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import {
     eventToDisplay,
