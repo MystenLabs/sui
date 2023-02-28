@@ -270,7 +270,7 @@ system_state:
       id: "0x628ffd0e51e9a6ea32c13c2739a31a8f344b557d3429e057b377a9c499b9bb13"
       size: 1
   storage_fund:
-    value: 1
+    value: 0
   parameters:
     min_validator_stake: 1
     max_validator_candidate_count: 100
