@@ -61,6 +61,14 @@ module sui::voting_power_tests {
         test_scenario::end(scenario);
     }
 
+    #[test]
+    fun test_zero_stake() {
+        let scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        check(vector[0,0,0,0], vector[2500, 2500, 2500, 2500], ctx);
+        test_scenario::end(scenario);
+    }
+
     fun get_voting_power(validators: &vector<Validator>): vector<u64> {
         let result = vector[];
         let i = 0;

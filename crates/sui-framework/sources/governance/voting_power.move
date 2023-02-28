@@ -57,7 +57,8 @@ module sui::voting_power {
         validators: &vector<Validator>,
         threshold: u64,
     ): (vector<VotingPowerInfo>, u64) {
-        let total_stake = total_stake(validators);
+        // avoid divide by zero below in the case where total stake is 0
+        let total_stake = math::max(total_stake(validators), 1);
         let i = 0;
         let len = vector::length(validators);
         let total_power = 0;

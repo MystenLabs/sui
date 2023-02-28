@@ -12,7 +12,7 @@ module sui::validator {
     use sui::tx_context::{Self, TxContext};
     use sui::epoch_time_lock::EpochTimeLock;
     use sui::object::{Self, ID};
-    use std::option::Option;
+    use std::option::{Self, Option};
     use sui::bls12381::bls12381_min_sig_verify_with_domain;
     use sui::staking_pool::{Self, PoolTokenExchangeRate, StakedSui, StakingPool};
     use std::string::{Self, String};
@@ -208,10 +208,17 @@ module sui::validator {
 
         validate_metadata(&metadata);
         let staking_pool = staking_pool::new(starting_epoch, ctx);
-        // Add the validator's starting stake to the staking pool.
-        staking_pool::request_add_delegation(&mut staking_pool, stake, coin_locked_until_epoch, sui_address, sui_address, starting_epoch, ctx);
-        // We immediately process this delegation as they are at validator setup time and this is the validator staking with itself.
-        staking_pool::process_pending_delegation(&mut staking_pool, starting_epoch);
+
+        if (stake_amount > 0) {
+            // Add the validator's starting stake to the staking pool.
+            staking_pool::request_add_delegation(&mut staking_pool, stake, coin_locked_until_epoch, sui_address, sui_address, starting_epoch, ctx);
+            // We immediately process this delegation as they are at validator setup time and this is the validator staking with itself.
+            staking_pool::process_pending_delegation(&mut staking_pool, starting_epoch);
+        } else {
+            balance::destroy_zero(stake);
+            option::destroy_none(coin_locked_until_epoch);
+        };
+
         Validator {
             metadata,
             // Initialize the voting power to be the same as the stake amount.
@@ -439,10 +446,17 @@ module sui::validator {
         );
         let stake_amount = balance::value(&stake);
         let staking_pool = staking_pool::new(starting_epoch, ctx);
-        // Add the validator's starting stake to the staking pool.
-        staking_pool::request_add_delegation(&mut staking_pool, stake, coin_locked_until_epoch, sui_address, sui_address, starting_epoch, ctx);
-        // We immediately process this delegation as they are at validator setup time and this is the validator staking with itself.
-        staking_pool::process_pending_delegation(&mut staking_pool, starting_epoch);
+
+        if (stake_amount > 0) {
+            // Add the validator's starting stake to the staking pool.
+            staking_pool::request_add_delegation(&mut staking_pool, stake, coin_locked_until_epoch, sui_address, sui_address, starting_epoch, ctx);
+            // We immediately process this delegation as they are at validator setup time and this is the validator staking with itself.
+            staking_pool::process_pending_delegation(&mut staking_pool, starting_epoch);
+        } else {
+            balance::destroy_zero(stake);
+            option::destroy_none(coin_locked_until_epoch);
+        };
+
         Validator {
             metadata: new_metadata(
                 sui_address,

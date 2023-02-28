@@ -184,7 +184,8 @@ Anything beyond the threshold is added to the remaining_power, which is also ret
     validators: &<a href="">vector</a>&lt;Validator&gt;,
     threshold: u64,
 ): (<a href="">vector</a>&lt;<a href="voting_power.md#0x2_voting_power_VotingPowerInfo">VotingPowerInfo</a>&gt;, u64) {
-    <b>let</b> total_stake = <a href="voting_power.md#0x2_voting_power_total_stake">total_stake</a>(validators);
+    // avoid divide by zero below in the case <b>where</b> total stake is 0
+    <b>let</b> total_stake = <a href="math.md#0x2_math_max">math::max</a>(<a href="voting_power.md#0x2_voting_power_total_stake">total_stake</a>(validators), 1);
     <b>let</b> i = 0;
     <b>let</b> len = <a href="_length">vector::length</a>(validators);
     <b>let</b> total_power = 0;
