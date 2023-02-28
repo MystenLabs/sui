@@ -78,7 +78,7 @@ function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
                 setResults(
                     results
                         .filter((data) => {
-                            // show only objects or nfts owned by address
+                            // show only objects owned by address
                             if (
                                 byAddress &&
                                 getObjectType(data) === 'moveObject'
