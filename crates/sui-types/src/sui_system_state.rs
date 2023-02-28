@@ -322,20 +322,16 @@ impl SuiSystemState {
             .active_validators
             .iter()
             .map(|validator| {
-                let name = create_narwhal_pubkey(&validator.metadata.pubkey_bytes)
-                    .expect("Can't get narwhal public key");
-                let network_key =
-                    create_narwhal_net_pubkey(&validator.metadata.network_pubkey_bytes)
-                        .expect("Can't get narwhal network key");
-                let primary_address =
-                    create_multiaddr(validator.metadata.consensus_address.clone())
-                        .expect("Can't get narwhal primary address");
+                let verified_metadata = validator
+                    .metadata
+                    .verify()
+                    .expect("Metadata should have been verified upon request");
                 let authority = narwhal_config::Authority {
                     stake: validator.voting_power as narwhal_config::Stake,
-                    primary_address,
-                    network_key,
+                    primary_address: verified_metadata.consensus_address,
+                    network_key: verified_metadata.network_pubkey,
                 };
-                (name, authority)
+                (verified_metadata.pubkey, authority)
             })
             .collect();
 
@@ -355,24 +351,23 @@ impl SuiSystemState {
             .active_validators
             .iter()
             .map(|validator| {
-                let name = create_narwhal_pubkey(&validator.metadata.pubkey_bytes)
-                    .expect("Can't get narwhal public key");
-                let worker_address = create_multiaddr(validator.metadata.worker_address.clone())
-                    .expect("Can't get worker address");
+                let verified_metadata = validator
+                    .metadata
+                    .verify()
+                    .expect("Metadata should have been verified upon request");
                 let workers = [(
                     0,
                     narwhal_config::WorkerInfo {
-                        name: create_narwhal_net_pubkey(&validator.metadata.worker_pubkey_bytes)
-                            .expect("Can't get worker key"),
+                        name: verified_metadata.worker_pubkey,
                         transactions: transactions_address.clone(),
-                        worker_address,
+                        worker_address: verified_metadata.worker_address,
                     },
                 )]
                 .into_iter()
                 .collect();
                 let worker_index = WorkerIndex(workers);
 
-                (name, worker_index)
+                (verified_metadata.pubkey, worker_index)
             })
             .collect();
         WorkerCache {
@@ -382,17 +377,17 @@ impl SuiSystemState {
     }
 }
 
-pub fn create_narwhal_pubkey(bytes: &[u8]) -> Result<narwhal_crypto::PublicKey, FastCryptoError> {
+fn create_narwhal_pubkey(bytes: &[u8]) -> Result<narwhal_crypto::PublicKey, FastCryptoError> {
     narwhal_crypto::PublicKey::from_bytes(bytes)
 }
 
-pub fn create_narwhal_net_pubkey(
+fn create_narwhal_net_pubkey(
     bytes: &[u8],
 ) -> Result<narwhal_crypto::NetworkPublicKey, FastCryptoError> {
     narwhal_crypto::NetworkPublicKey::from_bytes(bytes)
 }
 
-pub fn create_multiaddr(bytes: Vec<u8>) -> Result<Multiaddr, multiaddr::Error> {
+fn create_multiaddr(bytes: Vec<u8>) -> Result<Multiaddr, multiaddr::Error> {
     Multiaddr::try_from(bytes)
 }
 
