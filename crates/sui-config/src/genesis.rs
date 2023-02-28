@@ -21,6 +21,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ExecutionDigests, TransactionDigest};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::clock::Clock;
+use sui_types::crypto::PublicKey as AccountsPublicKey;
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignature,
     AuthorityStrongQuorumSignInfo, SuiAuthoritySignature, ToFromBytes,
@@ -58,7 +59,6 @@ pub struct Genesis {
     transaction: CertifiedTransaction,
     effects: TransactionEffects,
     objects: Vec<Object>,
-    validator_set: Vec<ValidatorInfo>,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
@@ -84,7 +84,6 @@ impl PartialEq for Genesis {
             }
             && self.effects == other.effects
             && self.objects == other.objects
-            && self.validator_set == other.validator_set
     }
 }
 
@@ -119,12 +118,30 @@ impl Genesis {
         0
     }
 
-    pub fn validator_set(&self) -> &[ValidatorInfo] {
-        &self.validator_set
-    }
+    pub fn validator_set(&self) -> Vec<ValidatorInfo> {
+        let mut infos = Vec::new();
+        for validator in &self.sui_system_object().validators.active_validators {
+            let info = ValidatorInfo {
+                name: validator.metadata.name.clone(),
+                account_key: AccountsPublicKey::Ed25519(validator.metadata.network_key()), //TODO this is wrong and we shouldn't have this here
+                protocol_key: validator.metadata.protocol_key(),
+                worker_key: validator.metadata.worker_key(),
+                network_key: validator.metadata.network_key(),
+                gas_price: validator.gas_price,
+                commission_rate: validator.commission_rate,
+                network_address: validator.metadata.network_address().unwrap(),
+                p2p_address: validator.metadata.p2p_address().unwrap(),
+                narwhal_primary_address: validator.metadata.narwhal_primary_address().unwrap(),
+                narwhal_worker_address: validator.metadata.narwhal_worker_address().unwrap(),
+                description: validator.metadata.description.clone(),
+                image_url: validator.metadata.image_url.clone(),
+                project_url: validator.metadata.project_url.clone(),
+            };
 
-    pub fn into_validator_set(self) -> Vec<ValidatorInfo> {
-        self.validator_set
+            infos.push(info);
+        }
+
+        infos
     }
 
     pub fn committee(&self) -> SuiResult<Committee> {
@@ -202,7 +219,6 @@ impl Serialize for Genesis {
             transaction: &'a CertifiedTransaction,
             effects: &'a TransactionEffects,
             objects: &'a [Object],
-            validator_set: &'a [ValidatorInfo],
         }
 
         let raw_genesis = RawGeneis {
@@ -211,7 +227,6 @@ impl Serialize for Genesis {
             transaction: &self.transaction,
             effects: &self.effects,
             objects: &self.objects,
-            validator_set: &self.validator_set,
         };
 
         let bytes = bcs::to_bytes(&raw_genesis).map_err(|e| Error::custom(e.to_string()))?;
@@ -239,7 +254,6 @@ impl<'de> Deserialize<'de> for Genesis {
             transaction: CertifiedTransaction,
             effects: TransactionEffects,
             objects: Vec<Object>,
-            validator_set: Vec<ValidatorInfo>,
         }
 
         let bytes = if deserializer.is_human_readable() {
@@ -256,7 +270,6 @@ impl<'de> Deserialize<'de> for Genesis {
             transaction,
             effects,
             objects,
-            validator_set,
         } = bcs::from_bytes(&bytes).map_err(|e| Error::custom(e.to_string()))?;
 
         Ok(Genesis {
@@ -265,7 +278,6 @@ impl<'de> Deserialize<'de> for Genesis {
             transaction,
             effects,
             objects,
-            validator_set,
         })
     }
 }
@@ -498,19 +510,15 @@ impl Builder {
             transaction,
             effects,
             objects,
-            validator_set: validators
-                .into_iter()
-                .map(|genesis_info| genesis_info.info)
-                .collect::<Vec<_>>(),
         };
 
         // Verify that all the validators were properly created onchain
         let system_object = genesis.sui_system_object();
         assert_eq!(system_object.epoch, 0);
 
-        for (validator, onchain_validator) in genesis
-            .validator_set()
+        for (validator, onchain_validator) in validators
             .iter()
+            .map(|genesis_info| &genesis_info.info)
             .zip(system_object.validators.active_validators.iter())
         {
             assert_eq!(

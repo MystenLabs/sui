@@ -152,9 +152,9 @@ impl LocalValidatorAggregatorProxy {
             .unwrap();
 
         let validator_info = genesis.validator_set();
-        let committee = make_committee(0, ProtocolVersion::MIN, validator_info).unwrap();
+        let committee = make_committee(0, ProtocolVersion::MIN, &validator_info).unwrap();
         let clients = make_authority_clients(
-            validator_info,
+            &validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
             DEFAULT_REQUEST_TIMEOUT_SEC,
         );
@@ -180,9 +180,9 @@ impl LocalValidatorAggregatorProxy {
             .unwrap();
 
         let validator_info = configs.validator_set();
-        let committee = make_committee(0, ProtocolVersion::MIN, validator_info).unwrap();
+        let committee = make_committee(0, ProtocolVersion::MIN, &validator_info).unwrap();
         let clients = make_authority_clients(
-            validator_info,
+            &validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
             DEFAULT_REQUEST_TIMEOUT_SEC,
         );
