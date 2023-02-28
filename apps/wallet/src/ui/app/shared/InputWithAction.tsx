@@ -23,9 +23,6 @@ const styles = cva(
                 true: 'rounded-2lg',
                 false: 'rounded-md',
             },
-            darkPill: {
-                true: 'bg-gray-45 text-white',
-            },
         },
         defaultVariants: {
             amount: false,

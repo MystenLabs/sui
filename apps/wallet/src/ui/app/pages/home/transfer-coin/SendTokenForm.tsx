@@ -259,7 +259,6 @@ export function SendTokenForm({
                                             allowNegative={false}
                                             allowDecimals
                                             amountInput
-                                            darkPill
                                             amount
                                             onActionClicked={() =>
                                                 setFieldValue(
