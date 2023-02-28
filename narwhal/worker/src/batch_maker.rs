@@ -9,14 +9,14 @@ use futures::stream::FuturesOrdered;
 use store::Store;
 
 use config::WorkerId;
-use tracing::error;
+use tracing::{error, info};
 
 #[cfg(feature = "benchmark")]
 use std::convert::TryInto;
 
 use futures::{Future, StreamExt};
 
-use mysten_metrics::spawn_logged_monitored_task;
+use mysten_metrics::{monitored_scope, spawn_logged_monitored_task, MonitoredFutureExt};
 use std::sync::Arc;
 use tokio::{
     task::JoinHandle,
@@ -97,6 +97,10 @@ impl BatchMaker {
 
     /// Main loop receiving incoming transactions and creating batches.
     async fn run(&mut self) {
+        info!(
+            "Starting batch maker with batch_size {} and max_batch_delay {:?}",
+            self.batch_size, self.max_batch_delay
+        );
         let timer = sleep(self.max_batch_delay);
         tokio::pin!(timer);
 
@@ -113,13 +117,17 @@ impl BatchMaker {
                 // 'in-flight' are below a certain number (MAX_PARALLEL_BATCH). This
                 // condition will be met eventually if the store and network are functioning.
                 Some((transaction, response_sender)) = self.rx_batch_maker.recv(), if batch_pipeline.len() < MAX_PARALLEL_BATCH => {
+                    let _scope = monitored_scope("BatchMaker::transaction");
                     current_batch_size += transaction.len();
                     current_batch.transactions.push(transaction);
                     current_responses.push(response_sender);
                     if current_batch_size >= self.batch_size {
-                        if let Some(seal) = self.seal(false, current_batch, current_batch_size, current_responses).await{
-                            batch_pipeline.push_back(seal);
-                        }
+                        {
+                            let _scope = monitored_scope("BatchMaker::transaction::seal");
+                            if let Some(seal) = self.seal(false, current_batch, current_batch_size, current_responses).await{
+                                batch_pipeline.push_back(seal);
+                            }
+                            }
                         self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
 
                         current_batch = Batch::default();
@@ -133,7 +141,9 @@ impl BatchMaker {
 
                 // If the timer triggers, seal the batch even if it contains few transactions.
                 () = &mut timer => {
+                    let _scope = monitored_scope("BatchMaker::timer");
                     if !current_batch.transactions.is_empty() {
+                        let _scope = monitored_scope("BatchMaker::timer::seal");
                         if let Some(seal) = self.seal(true, current_batch, current_batch_size, current_responses).await {
                             batch_pipeline.push_back(seal);
                         }
@@ -269,10 +279,15 @@ impl BatchMaker {
         let metadata = batch.metadata.clone();
 
         Some(async move {
+            let _guard = monitored_scope("BatchMaker::seal::inner");
             // Now save it to disk
             let digest = batch.digest();
 
-            if let Err(e) = store.sync_write(digest, batch).await {
+            if let Err(e) = store
+                .sync_write(digest, batch)
+                .in_monitored_scope("BatchMaker::seal::inner::sync_write")
+                .await
+            {
                 error!("Store failed with error: {:?}", e);
                 return;
             }
@@ -283,7 +298,9 @@ impl BatchMaker {
             //       to a quorum. However, if that happens we can still proceed on the basis
             //       that an other authority will request the batch from us, and we will deliver
             //       it since it is now stored. So ignore the error for the moment.
-            let _ = done_sending.await;
+            let _ = done_sending
+                .in_monitored_scope("BatchMaker::seal::inner::done_sending")
+                .await;
 
             // Finally send to primary
             let (primary_response, batch_done) = tokio::sync::oneshot::channel();
