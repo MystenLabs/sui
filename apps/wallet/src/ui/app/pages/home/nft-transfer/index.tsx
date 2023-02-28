@@ -90,18 +90,14 @@ function NftTransferPage() {
         [dispatch, navigate, objectId]
     );
 
-    const closeOverlay = useCallback(() => {
-        navigate('/');
-    }, [navigate]);
-
     return (
         <Overlay
             showModal={true}
             setShowModal={setShowModal}
             title="Send NFT"
-            closeOverlay={closeOverlay}
+            closeOverlay={() => navigate('/')}
         >
-            <div className="flex w-full flex-col">
+            <div className="flex w-full flex-col h-full">
                 <Loading loading={isLoading}>
                     {objectId && nftId ? (
                         <>
