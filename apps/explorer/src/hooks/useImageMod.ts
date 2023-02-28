@@ -20,6 +20,6 @@ export function useImageMod({ url }: { url?: string }) {
                 return false;
             }
         },
-        { enabled: !!url, staleTime: Infinity }
+        { enabled: !!url, staleTime: Infinity, cacheTime: Infinity }
     );
 }

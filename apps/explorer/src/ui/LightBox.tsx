@@ -7,7 +7,7 @@ import { Fragment, type ReactNode } from 'react';
 
 import { IconButton } from './IconButton';
 
-interface LightBoxProps {
+export interface LightBoxProps {
     open: boolean;
     onClose: () => void;
     children: ReactNode;
