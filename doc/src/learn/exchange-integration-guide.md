@@ -356,7 +356,7 @@ Yes, contracts are also stored in objects. You can use the sui_getObject to fetc
 
 ### Can I get the information in the contract, such as the total amount of the currency issued and the number of decimal places?
     
-There's no contract-level storage in Sui. In general, this contract-level information is usually stored in an object or event. For example, we store decimals in this object [https://github.com/MystenLabs/sui/blob/1aca0465275496e40f02a674938def962126412b/crates/sui-framework/sources/coin.move#L36](https://github.com/MystenLabs/sui/blob/1aca0465275496e40f02a674938def962126412b/crates/sui-framework/sources/coin.move#L36). And in this case we provide a convenient [RPC endpoint](https://github.com/MystenLabs/sui/blob/main/crates/sui-json-rpc/src/api.rs#L91-L97).
+There's no contract-level storage in Sui. In general, this contract-level information is usually stored in an object or event. For example, we store decimals in this object [https://github.com/MystenLabs/sui/blob/1aca0465275496e40f02a674938def962126412b/crates/sui-framework/sources/coin.move#L36](https://github.com/MystenLabs/sui/blob/1aca0465275496e40f02a674938def962126412b/crates/sui-framework/sources/coin.move#L36). And in this case we provide an [RPC endpoint](https://github.com/MystenLabs/sui/blob/main/crates/sui-json-rpc/src/api/).
 
 ### Is the gas price dynamic? Is it available through JSON-RPC?
 
