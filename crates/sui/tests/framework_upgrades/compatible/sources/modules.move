@@ -1,12 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/**
- * Test modules to be added to the sui framework in msim builds, to
- * test framework upgrades.  The module contents below represents the
- * framework *after* it a compatible upgrade
- */
-
 module sui::msim_extra_1 {
     struct Type has drop, store {
         x: u64
@@ -20,9 +14,18 @@ module sui::msim_extra_1 {
         private_function(20, 21)
     }
 
-    fun private_function(x: u64, y: u64): u64 {
+    public entry fun entry_fun() {}
+
+    /// Bit of a confusing function name, but we're testing that a
+    /// once private function can be made public.
+    public fun private_function(x: u64, y: u64): u64 {
         x + y + 2
     }
+
+    // Removing this function
+    // fun private_function_2(x: u64): u64 { x }
+
+    entry fun private_function_3(_x: u64) {}
 
     public fun generic<T: drop>(_t: T) {}
 }

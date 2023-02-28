@@ -150,19 +150,67 @@ mod sim_only_tests {
         // - Remove an ability from an existing type constraint
         // - Change the implementation of an existing function
         // - Change the signature and implementation of a private function
+        // - Remove a private function.
+        // - Promote a non-public function to public.
+        // - Promote a non-entry function to entry.
+        let cluster = run_framework_upgrade("base", "compatible").await;
+        expect_upgrade_succeeded(&cluster).await;
+    }
 
+    #[sim_test]
+    async fn test_framework_incompatible_struct_layout() {
+        // Upgrade attempts to change an existing struct layout
+        let cluster = run_framework_upgrade("base", "change_struct_layout").await;
+        expect_upgrade_failed(&cluster).await;
+    }
+
+    #[sim_test]
+    async fn test_framework_incompatible_struct_ability() {
+        // Upgrade attempts to remove an ability from a struct
+        let cluster = run_framework_upgrade("base", "change_struct_ability").await;
+        expect_upgrade_failed(&cluster).await;
+    }
+
+    #[sim_test]
+    async fn test_framework_incompatible_type_constraint() {
+        // Upgrade attempts to add a new type constraint to a generic type parameter
+        let cluster = run_framework_upgrade("base", "change_type_constraint").await;
+        expect_upgrade_failed(&cluster).await;
+    }
+
+    #[sim_test]
+    async fn test_framework_incompatible_public_function_signature() {
+        // Upgrade attempts to change the signature of a public function
+        let cluster = run_framework_upgrade("base", "change_public_function_signature").await;
+        expect_upgrade_failed(&cluster).await;
+    }
+
+    #[sim_test]
+    async fn test_framework_incompatible_entry_function_signature() {
+        // Upgrade attempts to change the signature of an entry function
+        let cluster = run_framework_upgrade("base", "change_entry_function_signature").await;
+        expect_upgrade_failed(&cluster).await;
+    }
+
+    async fn run_framework_upgrade(from: &str, to: &str) -> TestCluster {
         ProtocolConfig::poison_get_for_min_version();
 
-        sui_framework_injection::set_override(sui_framework("compatible"));
-        let test_cluster = TestClusterBuilder::new()
+        sui_framework_injection::set_override(sui_framework(to));
+        TestClusterBuilder::new()
             .with_epoch_duration_ms(10000)
-            .with_objects([sui_framework_object("base")])
+            .with_objects([sui_framework_object(from)])
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(1, 2))
             .build()
             .await
-            .unwrap();
+            .unwrap()
+    }
 
-        monitor_version_change(&test_cluster, 2 /* expected proto version */).await;
+    async fn expect_upgrade_failed(cluster: &TestCluster) {
+        monitor_version_change(&cluster, 1 /* expected proto version */).await;
+    }
+
+    async fn expect_upgrade_succeeded(cluster: &TestCluster) {
+        monitor_version_change(&cluster, 2 /* expected proto version */).await;
     }
 
     async fn monitor_version_change(test_cluster: &TestCluster, final_version: u64) {
@@ -198,14 +246,10 @@ mod sim_only_tests {
         let mut package = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         package.extend(["tests", "framework_upgrades", fixture]);
 
-        let pkg = BuildConfig {
-            run_bytecode_verifier: true,
-            print_diags_to_stderr: false,
-            ..Default::default()
-        }
-        .build(package)
-        .unwrap();
+        let mut config = BuildConfig::new_for_testing();
+        config.run_bytecode_verifier = true;
 
+        let pkg = config.build(package).unwrap();
         pkg.get_framework_modules().cloned().collect()
     }
 

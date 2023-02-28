@@ -7,10 +7,10 @@ module sui::msim_extra_1 {
     }
 
     public fun canary(): u64 {
-        private_function(41)
+        private_function(47)
     }
 
-    entry fun entry_fun() {}
+    entry fun entry_fun(_x: u64) {}
 
     fun private_function(x: u64): u64 {
         private_function_2(x) + 1

@@ -2,18 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::msim_extra_1 {
-    struct Type has drop {
+    struct Type {
         x: u64,
     }
 
     public fun canary(): u64 {
-        private_function(41)
+        private_function(44)
     }
 
     entry fun entry_fun() {}
 
     fun private_function(x: u64): u64 {
-        private_function_2(x) + 1
+        x + 1
     }
 
     fun private_function_2(x: u64): u64 { x }
