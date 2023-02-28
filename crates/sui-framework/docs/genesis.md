@@ -68,16 +68,6 @@ The initial balance of the Subsidy fund in Mist (1 Billion * 10^9)
 
 
 
-<a name="0x2_genesis_INIT_STORAGE_FUND"></a>
-
-The initial amount of SUI locked in the storage fund.
-
-
-<pre><code><b>const</b> <a href="genesis.md#0x2_genesis_INIT_STORAGE_FUND">INIT_STORAGE_FUND</a>: u64 = 1;
-</code></pre>
-
-
-
 <a name="0x2_genesis_create"></a>
 
 ## Function `create`
@@ -119,7 +109,7 @@ all the information we need in the system.
 ) {
     <b>let</b> sui_supply = <a href="sui.md#0x2_sui_new">sui::new</a>(ctx);
     <b>let</b> subsidy_fund = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> sui_supply, <a href="genesis.md#0x2_genesis_INIT_STAKE_SUBSIDY_FUND_BALANCE">INIT_STAKE_SUBSIDY_FUND_BALANCE</a>);
-    <b>let</b> storage_fund = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> sui_supply, <a href="genesis.md#0x2_genesis_INIT_STORAGE_FUND">INIT_STORAGE_FUND</a>);
+    <b>let</b> storage_fund = <a href="balance.md#0x2_balance_zero">balance::zero</a>();
     <b>let</b> validators = <a href="_empty">vector::empty</a>();
     <b>let</b> count = <a href="_length">vector::length</a>(&validator_pubkeys);
     <b>assert</b>!(
