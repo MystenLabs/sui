@@ -229,7 +229,7 @@ impl SshConnection {
     pub fn upload<P: AsRef<Path>>(&self, path: P, content: &[u8]) -> SshResult<()> {
         let size = content.len() as u64;
         let mut channel = self.session.scp_send(path.as_ref(), 0o644, size, None)?;
-        channel.write_all(content).unwrap();
+        channel.write_all(content)?;
         Ok(())
     }
 
@@ -237,7 +237,7 @@ impl SshConnection {
     pub fn download<P: AsRef<Path>>(&self, path: P) -> SshResult<String> {
         let (mut channel, _stats) = self.session.scp_recv(path.as_ref())?;
         let mut content = String::new();
-        channel.read_to_string(&mut content).unwrap();
+        channel.read_to_string(&mut content)?;
         Ok(content)
     }
 }

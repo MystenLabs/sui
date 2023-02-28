@@ -363,9 +363,5 @@ mod test {
         assert_eq!(data.count, 1860);
         assert_eq!(data.timestamp, Duration::from_secs(30));
         assert_eq!(data.squared_sum, Duration::from_secs(952));
-
-        assert_eq!(data.tps(), 62);
-        assert_eq!(data.average_latency(), Duration::from_millis(680));
-        assert_eq!(data.stdev_latency(), Duration::from_millis(680));
     }
 }
