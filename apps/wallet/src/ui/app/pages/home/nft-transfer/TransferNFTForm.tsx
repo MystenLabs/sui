@@ -48,11 +48,11 @@ function TransferNFTForm({
     const { gasBudget: gasBudgetInMist } = useGasBudgetInMist(gasBudget);
     const isInsufficientGas = maxGasCoinBalance < BigInt(gasBudgetInMist || 0);
     return (
-        <Form autoComplete="off" noValidate={true}>
-            <BottomMenuLayout>
+        <Form autoComplete="off" noValidate={true} className="h-full">
+            <BottomMenuLayout className="h-full">
                 <Content>
                     <div className="flex gap-2.5 flex-col">
-                        <div className="px-2 tracking-wider">
+                        <div className="px-2.5 tracking-wider">
                             <Text
                                 variant="caption"
                                 color="steel-dark"

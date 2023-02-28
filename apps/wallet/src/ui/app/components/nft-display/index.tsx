@@ -4,7 +4,7 @@
 import { cva } from 'class-variance-authority';
 import cl from 'classnames';
 
-import { Text } from '_app/shared/text';
+import { Heading } from '_app/shared/heading';
 import Loading from '_components/loading';
 import { NftImage, type NftImageProps } from '_components/nft-display/NftImage';
 import { useGetNFTMeta, useFileExtensionType, useOriginbyteNft } from '_hooks';
@@ -69,15 +69,10 @@ export function NFTDisplayCard({
                 />
 
                 {wideView ? (
-                    <div className="flex flex-col gap-1 flex-1 min-w-0">
-                        <Text
-                            variant="subtitleSmall"
-                            color="steel-dark"
-                            weight="medium"
-                            truncate
-                        >
+                    <div className="flex flex-col gap-1 flex-1 min-w-0 ml-1">
+                        <Heading variant="heading6" color="gray-90" truncate>
                             {displayTitle}
-                        </Text>
+                        </Heading>
 
                         <div className="text-gray-75 text-body font-medium">
                             {nftMeta?.url ? (
