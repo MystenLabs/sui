@@ -996,7 +996,7 @@ impl SingleTransactionKind {
                 .iter()
                 .map(|o| InputObjectKind::ImmOrOwnedMoveObject(*o))
                 .collect(),
-            Self::ChangeEpoch(ChangeEpoch { .. }) => {
+            Self::ChangeEpoch(_) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
