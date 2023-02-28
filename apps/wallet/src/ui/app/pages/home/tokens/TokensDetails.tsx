@@ -112,10 +112,14 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                     />
                     <IconLink
                         icon={SuiIcons.ArrowLeft}
-                        to={`/send${new URLSearchParams({
-                            type: coinBalance?.coinType || '',
-                        }).toString()}`}
-                        disabled={!tokenBalance || !coinBalance}
+                        to={`/send${
+                            coinBalance?.coinType
+                                ? `?${new URLSearchParams({
+                                      type: coinBalance.coinType,
+                                  }).toString()}`
+                                : ''
+                        }`}
+                        disabled={!tokenBalance}
                         text="Send"
                     />
                     <IconLink
