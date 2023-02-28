@@ -53,40 +53,40 @@ jobs:
       run: |
         ./scripts/simtest/simtest-run.sh
 
-  report-status:
-    name: Report Status
-    runs-on: ubuntu-latest
-    if: always()
-    needs: [release]
-    steps:
-      - uses: technote-space/workflow-conclusion-action@v3
-      - name: Post to slack
-        uses: slackapi/slack-github-action@v1.23.0
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-        if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
-        with:
-          channel-id: 'simtest-nightly'
-          payload: |
-            {
-              "text": "Workflow *${{ github.workflow }}* failed",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "Workflow *${{ github.workflow }}* failed"
-                  }
-                },
-                {
-                  "type": "divider"
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "Logs are here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  }
-                }
-              ]
-            }
+  # report-status:
+  #   name: Report Status
+  #   runs-on: ubuntu-latest
+  #   if: always()
+  #   needs: [release]
+  #   steps:
+  #     - uses: technote-space/workflow-conclusion-action@v3
+  #     - name: Post to slack
+  #       uses: slackapi/slack-github-action@v1.23.0
+  #       env:
+  #         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+  #       if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
+  #       with:
+  #         channel-id: 'simtest-nightly'
+  #         payload: |
+  #           {
+  #             "text": "Workflow *${{ github.workflow }}* failed",
+  #             "blocks": [
+  #               {
+  #                 "type": "section",
+  #                 "text": {
+  #                   "type": "mrkdwn",
+  #                   "text": "Workflow *${{ github.workflow }}* failed"
+  #                 }
+  #               },
+  #               {
+  #                 "type": "divider"
+  #               },
+  #               {
+  #                 "type": "section",
+  #                 "text": {
+  #                   "type": "mrkdwn",
+  #                   "text": "Logs are here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+  #                 }
+  #               }
+  #             ]
+  #           }
