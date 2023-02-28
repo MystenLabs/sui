@@ -121,10 +121,14 @@ export const PendingWithdawFields = object({
 });
 
 export const DelegationStakingPoolFields = object({
+  exchange_rates: object({
+    id: string(),
+    size: number(),
+  }),
   id: string(),
-  delegation_token_supply: SuiSupplyFields,
-  pending_delegations: ContentsFields,
+  pending_delegation: number(),
   pending_withdraws: PendingWithdawFields,
+  pool_token_balance: number(),
   rewards_pool: object({ value: number() }),
   starting_epoch: number(),
   sui_balance: number(),

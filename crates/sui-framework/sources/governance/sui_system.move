@@ -5,8 +5,8 @@ module sui::sui_system {
     use sui::balance::{Self, Balance};
     use sui::clock::{Self, Clock};
     use sui::coin::{Self, Coin};
-    use sui::staking_pool::{Delegation, StakedSui};
     use sui::object::{Self, ID, UID};
+    use sui::staking_pool::StakedSui;
     use sui::locked_coin::{Self, LockedCoin};
     use sui::sui::SUI;
     use sui::transfer;
@@ -208,6 +208,7 @@ module sui::sui_system {
             option::none(),
             gas_price,
             commission_rate,
+            tx_context::epoch(ctx) + 1, // starting next epoch
             ctx
         );
 
@@ -378,16 +379,12 @@ module sui::sui_system {
     /// Withdraw some portion of a delegation from a validator's staking pool.
     public entry fun request_withdraw_delegation(
         wrapper: &mut SuiSystemState,
-        delegation: Delegation,
         staked_sui: StakedSui,
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
         validator_set::request_withdraw_delegation(
-            &mut self.validators,
-            delegation,
-            staked_sui,
-            ctx,
+            &mut self.validators, staked_sui, ctx,
         );
     }
 
@@ -501,7 +498,6 @@ module sui::sui_system {
             balance::value(&computation_reward)+ balance::value(&storage_fund_reward);
 
         validator_set::advance_epoch(
-            new_epoch,
             &mut self.validators,
             &mut computation_reward,
             &mut storage_fund_reward,

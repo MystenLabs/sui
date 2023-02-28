@@ -19,6 +19,7 @@ module sui::rewards_distribution_tests {
         delegate_to,
         total_sui_balance, undelegate
     };
+    use sui::test_utils::assert_eq;
 
     const VALIDATOR_ADDR_1: address = @0x1;
     const VALIDATOR_ADDR_2: address = @0x2;
@@ -27,6 +28,8 @@ module sui::rewards_distribution_tests {
 
     const DELEGATOR_ADDR_1: address = @0x42;
     const DELEGATOR_ADDR_2: address = @0x43;
+    const DELEGATOR_ADDR_3: address = @0x44;
+    const DELEGATOR_ADDR_4: address = @0x45;
 
     #[test]
     fun test_validator_rewards() {
@@ -78,8 +81,6 @@ module sui::rewards_distribution_tests {
         let scenario = &mut scenario_val;
         set_up_sui_system_state(scenario);
 
-        // need to advance epoch so validator's staking starts counting
-
         delegate_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_1, 200, scenario);
         delegate_to(DELEGATOR_ADDR_2, VALIDATOR_ADDR_2, 100, scenario);
         governance_test_utils::advance_epoch(scenario);
@@ -87,19 +88,19 @@ module sui::rewards_distribution_tests {
         // 10 SUI rewards for each 100 SUI of stake
         advance_epoch_with_reward_amounts(0, 130, scenario);
         assert_validator_stake_amounts(validator_addrs(), vector[110, 220, 330, 440], scenario);
-        undelegate(DELEGATOR_ADDR_1, 0, 0, scenario);
+        undelegate(DELEGATOR_ADDR_1, 0, scenario);
         delegate_to(DELEGATOR_ADDR_2, VALIDATOR_ADDR_1, 600, scenario);
         // 10 SUI rewards for each 110 SUI of stake
         advance_epoch_with_reward_amounts(0, 130, scenario);
         assert!(total_sui_balance(DELEGATOR_ADDR_1, scenario) == 240, 0); // 40 SUI of rewards received
         assert_validator_stake_amounts(validator_addrs(), vector[120, 240, 360, 480], scenario);
-        undelegate(DELEGATOR_ADDR_2, 0, 0, scenario);
+        undelegate(DELEGATOR_ADDR_2, 0, scenario);
         governance_test_utils::advance_epoch(scenario);
         assert!(total_sui_balance(DELEGATOR_ADDR_2, scenario) == 120, 0); // 20 SUI of rewards received
 
         // 10 SUI rewards for each 120 SUI of stake
         advance_epoch_with_reward_amounts(0, 150, scenario);
-        undelegate(DELEGATOR_ADDR_2, 0, 0, scenario); // unstake 600 principal SUI
+        undelegate(DELEGATOR_ADDR_2, 0, scenario); // unstake 600 principal SUI
         governance_test_utils::advance_epoch(scenario);
         // additional 600 SUI of principal and 50 SUI of rewards withdrawn to Coin<SUI>
         assert!(total_sui_balance(DELEGATOR_ADDR_2, scenario) == 770, 0);
@@ -124,7 +125,7 @@ module sui::rewards_distribution_tests {
         advance_epoch_with_reward_amounts(0, 130, scenario);
 
         // undelegate the delegations
-        undelegate(DELEGATOR_ADDR_1, 1, 1, scenario);
+        undelegate(DELEGATOR_ADDR_1, 1, scenario);
 
         // and advance epoch should succeed
         advance_epoch_with_reward_amounts(0, 150, scenario);
@@ -206,8 +207,8 @@ module sui::rewards_distribution_tests {
         assert_validator_stake_amounts(validator_addrs(), vector[203, 380, 610, 813], scenario);
 
         // Undelegate so we can check the delegation rewards as well.
-        undelegate(DELEGATOR_ADDR_1, 0, 0, scenario);
-        undelegate(DELEGATOR_ADDR_2, 0, 0, scenario);
+        undelegate(DELEGATOR_ADDR_1, 0, scenario);
+        undelegate(DELEGATOR_ADDR_2, 0, scenario);
 
         advance_epoch(scenario);
 
@@ -251,14 +252,76 @@ module sui::rewards_distribution_tests {
         assert_validator_stake_amounts(validator_addrs(), vector[294, 508, 722, 780], scenario);
 
         // Undelegate so we can check the delegation rewards as well.
-        undelegate(DELEGATOR_ADDR_1, 0, 0, scenario);
-        undelegate(DELEGATOR_ADDR_2, 0, 0, scenario);
+        undelegate(DELEGATOR_ADDR_1, 0, scenario);
+        undelegate(DELEGATOR_ADDR_2, 0, scenario);
 
         advance_epoch(scenario);
 
         assert!(total_sui_balance(DELEGATOR_ADDR_1, scenario) == 215, 0);
         assert!(total_sui_balance(DELEGATOR_ADDR_2, scenario) == 180, 0);
 
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_mul_rewards_withdraws_at_same_epoch() {
+        let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(scenario);
+
+        delegate_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_1, 220, scenario);
+
+        // 10 SUI rewards for each 100 SUI of stake
+        advance_epoch_with_reward_amounts(0, 100, scenario);
+
+        delegate_to(DELEGATOR_ADDR_2, VALIDATOR_ADDR_1, 480, scenario);
+
+        // 10 SUI rewards for each 110 SUI of stake
+        advance_epoch_with_reward_amounts(0, 120, scenario);
+
+        delegate_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_1, 130, scenario);
+        delegate_to(DELEGATOR_ADDR_3, VALIDATOR_ADDR_1, 390, scenario);
+
+        // 10 SUI rewards for each 120 SUI of stake
+        advance_epoch_with_reward_amounts(0, 160, scenario);
+        delegate_to(DELEGATOR_ADDR_3, VALIDATOR_ADDR_1, 280, scenario);
+        delegate_to(DELEGATOR_ADDR_4, VALIDATOR_ADDR_1, 1400, scenario);
+
+        // 10 SUI rewards for each 130 SUI of stake
+        advance_epoch_with_reward_amounts(0, 200, scenario);
+
+        test_scenario::next_tx(scenario, @0x0);
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        // Check that we have the right amount of SUI in the staking pool.
+        assert_eq(sui_system::validator_delegate_amount(&system_state, VALIDATOR_ADDR_1), 140 * 22);
+        test_scenario::return_shared(system_state);
+
+        // Withdraw all delegations at once.
+        undelegate(DELEGATOR_ADDR_1, 0, scenario);
+        undelegate(DELEGATOR_ADDR_1, 0, scenario);
+        undelegate(DELEGATOR_ADDR_2, 0, scenario);
+        undelegate(DELEGATOR_ADDR_3, 0, scenario);
+        undelegate(DELEGATOR_ADDR_3, 0, scenario);
+        undelegate(DELEGATOR_ADDR_4, 0, scenario);
+
+        advance_epoch_with_reward_amounts(0, 0, scenario);
+
+        // delegator 1's first delegation was active for 3 epochs so got 20 * 3 = 60 SUI of rewards
+        // and her second delegation was active for only one epoch and got 10 SUI of rewards.
+        assert_eq(total_sui_balance(DELEGATOR_ADDR_1, scenario), 220 + 130 + 20 * 3 + 10);
+        // delegator 2's delegation was active for 2 epochs so got 40 * 2 = 80 SUI of rewards
+        assert_eq(total_sui_balance(DELEGATOR_ADDR_2, scenario), 480 + 40 * 2);
+        // delegator 3's first delegation was active for 1 epoch and got 30 SUI of rewards
+        // and her second delegation didn't get any rewards.
+        assert_eq(total_sui_balance(DELEGATOR_ADDR_3, scenario), 390 + 280 + 30);
+        // delegator 4 joined and left in an epoch where no rewards were earned so she got no rewards.
+        assert_eq(total_sui_balance(DELEGATOR_ADDR_4, scenario), 1400);
+
+        test_scenario::next_tx(scenario, @0x0);
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        // Since all the delegations are gone the pool is empty.
+        assert_eq(sui_system::validator_delegate_amount(&system_state, VALIDATOR_ADDR_1), 0);
+        test_scenario::return_shared(system_state);
         test_scenario::end(scenario_val);
     }
 

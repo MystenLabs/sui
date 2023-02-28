@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_types::balance::{Balance, Supply};
+use sui_types::balance::Balance;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::collection_types::VecMap;
 use sui_types::committee::{EpochId, ProtocolVersion};
@@ -11,8 +11,8 @@ use sui_types::crypto::{
 use sui_types::id::UID;
 use sui_types::sui_system_state::SystemParameters;
 use sui_types::sui_system_state::{
-    LinkedTable, StakeSubsidy, StakingPool, SuiSystemState, Table, TableVec, Validator,
-    ValidatorMetadata, ValidatorSet,
+    StakeSubsidy, StakingPool, SuiSystemState, Table, TableVec, Validator, ValidatorMetadata,
+    ValidatorSet,
 };
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 
@@ -45,8 +45,9 @@ pub fn test_staking_pool(sui_balance: u64) -> StakingPool {
         starting_epoch: 0,
         sui_balance,
         rewards_pool: Balance::new(0),
-        delegation_token_supply: Supply { value: 0 },
-        pending_delegations: LinkedTable::default(),
+        pool_token_balance: 0,
+        exchange_rates: Table::default(),
+        pending_delegation: 0,
         pending_withdraws: TableVec::default(),
     }
 }

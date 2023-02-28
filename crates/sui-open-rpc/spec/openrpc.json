@@ -4576,32 +4576,6 @@
           }
         ]
       },
-      "LinkedTable_for_ObjectID": {
-        "description": "Rust version of the Move sui::linked_table::LinkedTable type. Putting it here since we only use it in sui_system in the framework.",
-        "type": "object",
-        "required": [
-          "head",
-          "id",
-          "size",
-          "tail"
-        ],
-        "properties": {
-          "head": {
-            "$ref": "#/components/schemas/MoveOption_for_ObjectID"
-          },
-          "id": {
-            "$ref": "#/components/schemas/ObjectID"
-          },
-          "size": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "tail": {
-            "$ref": "#/components/schemas/MoveOption_for_ObjectID"
-          }
-        }
-      },
       "MoveCall": {
         "type": "object",
         "required": [
@@ -4687,21 +4661,6 @@
             "additionalProperties": false
           }
         ]
-      },
-      "MoveOption_for_ObjectID": {
-        "description": "Rust version of the Move std::option::Option type. Putting it in this file because it's only used here.",
-        "type": "object",
-        "required": [
-          "vec"
-        ],
-        "properties": {
-          "vec": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ObjectID"
-            }
-          }
-        }
       },
       "MovePackage": {
         "type": "object",
@@ -5551,26 +5510,34 @@
         "description": "Rust version of the Move sui::staking_pool::StakingPool type",
         "type": "object",
         "required": [
-          "delegation_token_supply",
+          "exchange_rates",
           "id",
-          "pending_delegations",
+          "pending_delegation",
           "pending_withdraws",
+          "pool_token_balance",
           "rewards_pool",
           "starting_epoch",
           "sui_balance"
         ],
         "properties": {
-          "delegation_token_supply": {
-            "$ref": "#/components/schemas/Supply"
+          "exchange_rates": {
+            "$ref": "#/components/schemas/Table"
           },
           "id": {
             "$ref": "#/components/schemas/ObjectID"
           },
-          "pending_delegations": {
-            "$ref": "#/components/schemas/LinkedTable_for_ObjectID"
+          "pending_delegation": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           },
           "pending_withdraws": {
             "$ref": "#/components/schemas/TableVec"
+          },
+          "pool_token_balance": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           },
           "rewards_pool": {
             "$ref": "#/components/schemas/Balance"

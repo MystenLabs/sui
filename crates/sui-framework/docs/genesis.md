@@ -173,6 +173,7 @@ all the information we need in the system.
             <a href="_none">option::none</a>(),
             gas_price,
             commission_rate,
+            0, // start operating right away at epoch 0
             ctx
         ));
         i = i + 1;

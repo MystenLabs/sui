@@ -7,11 +7,7 @@ use crate::committee::{Committee, CommitteeWithNetAddresses, ProtocolVersion, St
 use crate::crypto::{AuthorityPublicKeyBytes, NetworkPublicKey};
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
-use crate::{
-    balance::{Balance, Supply},
-    id::UID,
-    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
-};
+use crate::{balance::Balance, id::UID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
 use fastcrypto::traits::ToFromBytes;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use multiaddr::Multiaddr;
@@ -168,8 +164,9 @@ pub struct StakingPool {
     pub starting_epoch: u64,
     pub sui_balance: u64,
     pub rewards_pool: Balance,
-    pub delegation_token_supply: Supply,
-    pub pending_delegations: LinkedTable<ObjectID>,
+    pub pool_token_balance: u64,
+    pub exchange_rates: Table,
+    pub pending_delegation: u64,
     pub pending_withdraws: TableVec,
 }
 
