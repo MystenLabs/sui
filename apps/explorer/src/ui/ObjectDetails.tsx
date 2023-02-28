@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { EyeClose16 } from '@mysten/icons';
+import { EyeClose16, NftTypeImage24 } from '@mysten/icons';
 import { cva, type VariantProps } from 'class-variance-authority';
 import clsx from 'clsx';
 import { type ReactNode, useState } from 'react';
@@ -21,7 +21,7 @@ interface ImageProps {
 const styles = cva(['object-cover'], {
     variants: {
         size: {
-            small: 'h-16 w-16',
+            small: 'h-14 w-14',
             large: 'h-32 w-32',
         },
     },
@@ -51,41 +51,30 @@ export function ObjectDetails({
     const [open, setOpen] = useState(false);
     const close = () => setOpen(false);
     const openPreview = () => setOpen(true);
-
     return (
         <div className="flex items-center gap-3.75">
-            {image && (
-                <>
-                    <ObjectPreview open={open} onClose={close}>
-                        <div className="flex flex-col gap-5">
-                            <Image
-                                alt={name}
-                                src={image}
-                                className="rounded-none"
-                            />
-                            <Heading
-                                variant="heading2/semibold"
-                                color="sui-light"
-                            >
-                                {name}
-                            </Heading>
-                            <Text color="gray-60" variant="body/medium">
-                                {type}
-                            </Text>
-                        </div>
-                    </ObjectPreview>
-                    <div className="relative">
-                        <Image
-                            onClick={openPreview}
-                            alt={name}
-                            src={image}
-                            blur={nsfw}
-                            className={styles({ size: variant })}
-                        />
-                    </div>
-                </>
-            )}
-            <div className="flex flex-col gap-1.25">
+            <ObjectPreview open={open} onClose={close}>
+                <div className="flex flex-col gap-5">
+                    <Image alt={name} src={image} className="rounded-none" />
+                    <Heading variant="heading2/semibold" color="sui-light">
+                        {name}
+                    </Heading>
+                    <Text color="gray-60" variant="body/medium">
+                        {type}
+                    </Text>
+                </div>
+            </ObjectPreview>
+            <div className="relative">
+                <Image
+                    onClick={openPreview}
+                    alt={name}
+                    src={image}
+                    blur={nsfw}
+                    className={styles({ size: variant })}
+                />
+            </div>
+
+            <div className="flex min-w-0 flex-col flex-nowrap gap-1.25">
                 <Text variant="bodySmall/medium" color="gray-90">
                     {name}
                 </Text>
@@ -98,7 +87,22 @@ export function ObjectDetails({
     );
 }
 
+function FallbackImage({ className }: { className: string }) {
+    return (
+        <div
+            className={clsx(
+                className,
+                'flex items-center justify-center rounded-md bg-gray-45 text-gray-65'
+            )}
+        >
+            <NftTypeImage24 />
+        </div>
+    );
+}
+
 function Image({ className, alt, src, blur = false, ...rest }: ImageProps) {
+    const [error, setError] = useState(false);
+    if (error) return <FallbackImage className={className} />;
     return (
         <>
             {blur ? (
@@ -106,12 +110,17 @@ function Image({ className, alt, src, blur = false, ...rest }: ImageProps) {
                     <EyeClose16 className="h-1/3 w-1/3 text-white" />
                 </div>
             ) : null}
-            <img
-                alt={alt}
-                src={src}
-                className={clsx('z-0 cursor-pointer rounded-md', className)}
-                {...rest}
-            />
+            {error ? (
+                <FallbackImage className={className} />
+            ) : (
+                <img
+                    onError={() => setError(true)}
+                    alt={alt}
+                    src={src ?? ''}
+                    className={clsx('z-0 cursor-pointer rounded-md', className)}
+                    {...rest}
+                />
+            )}
         </>
     );
 }
@@ -124,10 +133,8 @@ interface ObjectPreviewProps {
 
 function ObjectPreview({ children, open, onClose }: ObjectPreviewProps) {
     return (
-        <div className="relative">
-            <LightBox open={open} onClose={onClose}>
-                {children}
-            </LightBox>
-        </div>
+        <LightBox open={open} onClose={onClose}>
+            {children}
+        </LightBox>
     );
 }

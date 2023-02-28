@@ -13,4 +13,4 @@ export type Data = {
 };
 export type DataType = Data[];
 
-export const ITEMS_PER_PAGE: number = 6;
+export const ITEMS_PER_PAGE: number = 8;

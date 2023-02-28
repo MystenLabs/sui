@@ -4,8 +4,6 @@
 import { transformURL } from '../../../utils/stringUtils';
 import { type Data, type DataType } from '../OwnedObjectConstants';
 
-import styles from '../styles/OwnedObjects.module.css';
-
 import { useImageMod } from '~/hooks/useImageMod';
 import { ObjectDetails } from '~/ui/ObjectDetails';
 
@@ -15,8 +13,9 @@ function OwnedNFT(entryObj: Data) {
 
     return (
         <ObjectDetails
+            id={entryObj.id}
             name={entryObj.name}
-            type={entryObj.name || ''}
+            type={entryObj.name ?? entryObj.Type}
             image={url}
             variant="small"
             nsfw={!allowed}
@@ -26,9 +25,9 @@ function OwnedNFT(entryObj: Data) {
 
 export default function OwnedNFTView({ results }: { results: DataType }) {
     return (
-        <div id="ownedObjects" className={styles.ownedobjects}>
-            {results.map((entryObj, index1) => (
-                <OwnedNFT key={`object-${index1}`} {...entryObj} />
+        <div className="mb-10 grid grid-cols-2 gap-4">
+            {results.map((entryObj) => (
+                <OwnedNFT key={`object-${entryObj.id}`} {...entryObj} />
             ))}
         </div>
     );
