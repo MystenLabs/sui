@@ -63,8 +63,8 @@ export class VoidProvider extends Provider {
     throw this.newError('getReferenceGasPrice');
   }
 
-  async getSuiSystemState(): Promise<SuiSystemState> {
-    throw this.newError('getSuiSystemState');
+  async getCurrentEpochStaticInfo(): Promise<SuiSystemState> {
+    throw this.newError('getCurrentEpochStaticInfo');
   }
 
   async getDelegatedStakes(_address: SuiAddress): Promise<DelegatedStake[]> {

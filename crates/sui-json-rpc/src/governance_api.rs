@@ -69,9 +69,8 @@ impl GovernanceReadApiServer for GovernanceReadApi {
     }
 
     async fn get_validators(&self) -> RpcResult<Vec<ValidatorMetadata>> {
-        // TODO: include pending validators as well when the necessary changes are made in move.
         Ok(self
-            .get_sui_system_state()
+            .get_current_epoch_static_info()
             .await?
             .validators
             .active_validators
@@ -87,13 +86,16 @@ impl GovernanceReadApiServer for GovernanceReadApi {
             .map_err(Error::from)?)
     }
 
-    async fn get_sui_system_state(&self) -> RpcResult<SuiSystemState> {
+    async fn get_current_epoch_static_info(&self) -> RpcResult<SuiSystemState> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         Ok(epoch_store.system_state_object().clone())
     }
 
     async fn get_reference_gas_price(&self) -> RpcResult<u64> {
-        Ok(self.get_sui_system_state().await?.reference_gas_price)
+        Ok(self
+            .get_current_epoch_static_info()
+            .await?
+            .reference_gas_price)
     }
 }
 

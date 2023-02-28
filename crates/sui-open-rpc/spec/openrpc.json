@@ -796,6 +796,23 @@
       }
     },
     {
+      "name": "sui_getCurrentEpochStaticInfo",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return [SuiSystemState]",
+      "params": [],
+      "result": {
+        "name": "SuiSystemState",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/SuiSystemState"
+        }
+      }
+    },
+    {
       "name": "sui_getDelegatedStakes",
       "tags": [
         {
@@ -1465,23 +1482,6 @@
           "type": "integer",
           "format": "uint64",
           "minimum": 0.0
-        }
-      }
-    },
-    {
-      "name": "sui_getSuiSystemState",
-      "tags": [
-        {
-          "name": "Governance Read API"
-        }
-      ],
-      "description": "Return [SuiSystemState]",
-      "params": [],
-      "result": {
-        "name": "SuiSystemState",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/SuiSystemState"
         }
       }
     },

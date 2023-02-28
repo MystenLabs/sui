@@ -494,7 +494,11 @@ impl ValidatorProxy for FullNodeProxy {
     }
 
     async fn get_latest_system_state_object(&self) -> Result<SuiSystemState, anyhow::Error> {
-        Ok(self.sui_client.read_api().get_sui_system_state().await?)
+        Ok(self
+            .sui_client
+            .read_api()
+            .get_current_epoch_static_info()
+            .await?)
     }
 
     async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {

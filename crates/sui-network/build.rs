@@ -78,9 +78,9 @@ fn main() -> Result<()> {
         )
         .method(
             Method::builder()
-                .name("get_system_state_object")
-                .route_name("GetSystemStateObject")
-                .input_type("sui_types::messages::SystemStateRequest")
+                .name("current_epoch_static_info")
+                .route_name("CurrentEpochStaticInfo")
+                .input_type("sui_types::messages::CurrentEpochStaticInfoRequest")
                 .output_type("sui_types::sui_system_state::SuiSystemState")
                 .codec_path(codec_path)
                 .build(),

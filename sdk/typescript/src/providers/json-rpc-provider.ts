@@ -763,17 +763,17 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getSuiSystemState(): Promise<SuiSystemState> {
+  async getCurrentEpochStaticInfo(): Promise<SuiSystemState> {
     try {
       const resp = await this.client.requestWithType(
-        'sui_getSuiSystemState',
+        'sui_getCurrentEpochStaticInfo',
         [],
         SuiSystemState,
         this.options.skipDataValidation,
       );
       return resp;
     } catch (err) {
-      throw new Error(`Error in getSuiSystemState: ${err}`);
+      throw new Error(`Error in getCurrentEpochStaticInfo: ${err}`);
     }
   }
 
