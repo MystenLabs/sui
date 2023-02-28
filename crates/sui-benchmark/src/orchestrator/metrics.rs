@@ -1,4 +1,11 @@
-use std::{collections::HashMap, fs, hash::Hash, io::BufRead, path::PathBuf, time::Duration};
+use std::{
+    collections::HashMap,
+    fs,
+    hash::Hash,
+    io::BufRead,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use prettytable::{format, row, Table};
 use prometheus_parse::Scrape;
@@ -202,10 +209,11 @@ where
             .unwrap_or_default()
     }
 
-    pub fn save(&self) {
+    pub fn save<P: AsRef<Path>>(&self, path: P) {
         let json = serde_json::to_string(self).expect("Cannot serialize metrics");
-        let path = PathBuf::from(format!("results-{:?}.json", self.parameters));
-        fs::write(path, json).unwrap();
+        let mut file = PathBuf::from(path.as_ref());
+        file.push(format!("results-{:?}.json", self.parameters));
+        fs::write(file, json).unwrap();
     }
 
     pub fn print_summary(&self, parameters: &BenchmarkParameters) {

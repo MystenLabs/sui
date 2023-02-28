@@ -1,7 +1,8 @@
 use std::{
     cmp::max,
-    fs::File,
-    io::{stdout, Read, Write},
+    fs::{self, File},
+    io::{stdout, Read},
+    path::PathBuf,
     time::Duration,
 };
 
@@ -620,6 +621,7 @@ impl<C> Testbed<C> {
                 break;
             }
         }
+        aggregator.save(&self.settings.results_directory);
 
         println!(" [{}]", "Ok".green());
         Ok(aggregator)
@@ -639,6 +641,8 @@ impl<C> Testbed<C> {
             .enumerate()
             .map(|(i, instance)| {
                 let ssh_manager = self.ssh_manager.clone();
+                let log_directory = self.settings.logs_directory.clone();
+                let parameters = parameters.clone();
 
                 tokio::spawn(async move {
                     let mut error_counter = ErrorCounter::default();
@@ -646,23 +650,31 @@ impl<C> Testbed<C> {
                     // Connect to the instance.
                     let connection = ssh_manager.connect(instance.ssh_address()).await?;
 
-                    // Download the node log files.
-                    let content = connection.download("node.log")?;
-                    error_counter.set_node_errors(&content);
+                    // Create a log sub-directory for this run.
+                    let path: PathBuf = [&log_directory, &format!("logs-{}", parameters).into()]
+                        .iter()
+                        .collect();
+                    fs::create_dir_all(&path).expect("Failed to create log directory");
 
-                    let mut file = File::create(&format!("node-{i}.log"))
-                        .expect("Cannot open file to dump log");
-                    file.write_all(content.as_bytes())
-                        .expect("Cannot write file");
+                    // Download the node log files.
+                    let node_log_content = connection.download("node.log")?;
+                    error_counter.set_node_errors(&node_log_content);
+
+                    let node_log_file = [path.clone(), format!("node-{i}.log").into()]
+                        .iter()
+                        .collect::<PathBuf>();
+                    fs::write(&node_log_file, node_log_content.as_bytes())
+                        .expect("Cannot write log file");
 
                     // Download the clients log files.
-                    let content = connection.download("client.log")?;
-                    error_counter.set_client_errors(&content);
+                    let client_log_content = connection.download("client.log")?;
+                    error_counter.set_client_errors(&client_log_content);
 
-                    let mut file = File::create(&format!("client-{i}.log"))
-                        .expect("Cannot open file to dump log");
-                    file.write_all(content.as_bytes())
-                        .expect("Cannot write file");
+                    let client_log_file = [path, format!("client-{i}.log").into()]
+                        .iter()
+                        .collect::<PathBuf>();
+                    fs::write(&client_log_file, client_log_content.as_bytes())
+                        .expect("Cannot write log file");
 
                     Ok(error_counter)
                 })
@@ -709,6 +721,8 @@ mod test {
                 url: Url::parse("https://example.net").unwrap(),
                 branch: "main".into(),
             },
+            results_directory: "results".into(),
+            logs_directory: "logs".into(),
         }
     }
 

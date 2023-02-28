@@ -8,5 +8,7 @@
         "name": "sui",
         "url": "http://github.com/mystenlabs/sui",
         "branch": "orchestrator"
-    }
+    },
+    "results_directory": "./results",
+    "logs_directory": "./logs"
 }

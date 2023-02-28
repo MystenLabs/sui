@@ -139,7 +139,6 @@ impl Orchestrator {
 
             // Wait for the benchmark to terminate. Then save the results and print a summary.
             let aggregator = self.testbed.collect_metrics(&parameters).await?;
-            aggregator.save();
             aggregator.print_summary(&parameters);
             generator.register_result(aggregator);
 

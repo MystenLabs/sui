@@ -34,6 +34,8 @@ pub struct Settings {
     pub regions: Vec<String>,
     pub specs: String,
     pub repository: Repository,
+    pub results_directory: PathBuf,
+    pub logs_directory: PathBuf,
 }
 
 impl Settings {
@@ -43,7 +45,12 @@ impl Settings {
     {
         let reader = || -> Result<Self, std::io::Error> {
             let data = fs::read(path.clone())?;
-            Ok(serde_json::from_slice(data.as_slice())?)
+            let settings: Settings = serde_json::from_slice(data.as_slice())?;
+
+            fs::create_dir_all(&settings.results_directory)?;
+            fs::create_dir_all(&settings.logs_directory)?;
+
+            Ok(settings)
         };
         reader().map_err(|e| SettingsError::InvalidSettings {
             file: path.to_string(),
