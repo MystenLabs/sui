@@ -7,11 +7,7 @@ use crate::committee::{Committee, CommitteeWithNetAddresses, ProtocolVersion, St
 use crate::crypto::{AuthorityPublicKeyBytes, NetworkPublicKey};
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
-use crate::{
-    balance::{Balance, Supply},
-    id::UID,
-    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
-};
+use crate::{balance::Balance, id::UID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
 use fastcrypto::traits::ToFromBytes;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use multiaddr::Multiaddr;

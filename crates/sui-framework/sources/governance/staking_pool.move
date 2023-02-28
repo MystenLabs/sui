@@ -27,6 +27,7 @@ module sui::staking_pool {
     const ETokenTimeLockIsSome: u64 = 6;
     const EWrongDelegation: u64 = 7;
     const EPendingDelegationDoesNotExist: u64 = 8;
+    const ETokenBalancesDoNotMatchExchangeRate: u64 = 9;
 
     /// A staking pool embedded in each validator struct in the system state object.
     struct StakingPool has key, store {
@@ -41,6 +42,8 @@ module sui::staking_pool {
         /// Total number of pool tokens issued by the pool.
         pool_token_balance: u64,
         /// Exchange rate history of previous epochs. Key is the epoch number.
+        /// The entries start from the `starting_epoch` of this pool and contain exchange rates at the beginning of each epoch,
+        /// i.e., right after the rewards for the previous epoch have been deposited into the pool.
         exchange_rates: Table<u64, PoolTokenExchangeRate>,
         /// Pending delegation amount for this epoch.
         pending_delegation: u64,
@@ -88,16 +91,16 @@ module sui::staking_pool {
     // ==== initializer ====
 
     /// Create a new, empty staking pool.
-    public(friend) fun new(ctx: &mut TxContext) : StakingPool {
+    public(friend) fun new(starting_epoch: u64, ctx: &mut TxContext) : StakingPool {
         let exchange_rates = table::new(ctx);
         table::add(
             &mut exchange_rates,
-            tx_context::epoch(ctx),
+            starting_epoch,
             PoolTokenExchangeRate { sui_amount: 0, pool_token_amount: 0 }
         );
         StakingPool {
             id: object::new(ctx),
-            starting_epoch: tx_context::epoch(ctx) + 1, // active beginning next epoch
+            starting_epoch,
             sui_balance: 0,
             rewards_pool: balance::zero(),
             pool_token_balance: 0,
@@ -110,8 +113,7 @@ module sui::staking_pool {
 
     // ==== delegation requests ====
 
-    /// Request to delegate to a staking pool. The delegation gets counted at the beginning of the next epoch,
-    /// when the delegation object containing the pool tokens is distributed to the delegator.
+    /// Request to delegate to a staking pool. The delegation starts counting at the beginning of the next epoch,
     public(friend) fun request_add_delegation(
         pool: &mut StakingPool,
         stake: Balance<SUI>,
@@ -162,12 +164,9 @@ module sui::staking_pool {
         principal_withdraw_amount
     }
 
-    /// Withdraw the requested amount of the principal SUI stored in the StakedSui object, as
-    /// well as a proportional amount of pool tokens from the delegation object.
-    /// For example, suppose the delegation object contains 15 pool tokens and the principal SUI
-    /// amount is 21. Then if `principal_withdraw_amount` is 7, 5 pool tokens and 7 SUI tokens will
-    /// be withdrawn.
-    /// Returns values are withdrawn pool tokens, withdrawn principal portion of SUI, and its
+    /// Withdraw the principal SUI stored in the StakedSui object, and calculate the corresponding amount of pool
+    /// tokens using exchange rate at delegation epoch.
+    /// Returns values are amount of pool tokens withdrawn, withdrawn principal portion of SUI, and its
     /// time lock if applicable.
     public(friend) fun withdraw_from_principal(
         pool: &mut StakingPool,
@@ -217,8 +216,9 @@ module sui::staking_pool {
     /// Called at epoch boundaries to process pending delegation withdraws requested during the epoch.
     /// For each pending withdraw entry, we withdraw the rewards from the pool at the new exchange rate and burn the pool
     /// tokens.
-    public(friend) fun process_pending_delegation_withdraws(pool: &mut StakingPool, new_epoch: u64, ctx: &mut TxContext) : u64 {
+    public(friend) fun process_pending_delegation_withdraws(pool: &mut StakingPool, ctx: &mut TxContext) : u64 {
         let total_reward_withdraw = 0;
+        let new_epoch = tx_context::epoch(ctx) + 1;
 
         while (!table_vec::is_empty(&pool.pending_withdraws)) {
             let PendingWithdrawEntry {
@@ -236,8 +236,9 @@ module sui::staking_pool {
     public(friend) fun process_pending_delegation(pool: &mut StakingPool, new_epoch: u64) {
         let new_epoch_exchange_rate = pool_token_exchange_rate_at_epoch(pool, new_epoch);
         pool.sui_balance = pool.sui_balance + pool.pending_delegation;
-        pool.pool_token_balance = pool.pool_token_balance + get_token_amount(&new_epoch_exchange_rate, pool.pending_delegation);
+        pool.pool_token_balance = get_token_amount(&new_epoch_exchange_rate, pool.sui_balance);
         pool.pending_delegation = 0;
+        check_balance_invariants(pool, new_epoch);
     }
 
     /// This function does the following:
@@ -322,5 +323,14 @@ module sui::staking_pool {
                 * (sui_amount as u128)
                 / (exchange_rate.sui_amount as u128);
         (res as u64)
+    }
+
+
+    fun check_balance_invariants(pool: &StakingPool, epoch: u64) {
+        let exchange_rate = pool_token_exchange_rate_at_epoch(pool, epoch);
+        // check that the pool token balance and sui balance ratio matches the exchange rate stored.
+        let expected = get_token_amount(&exchange_rate, pool.sui_balance);
+        let actual = pool.pool_token_balance;
+        assert!(expected == actual, ETokenBalancesDoNotMatchExchangeRate)
     }
 }

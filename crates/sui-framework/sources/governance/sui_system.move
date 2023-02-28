@@ -208,6 +208,7 @@ module sui::sui_system {
             option::none(),
             gas_price,
             commission_rate,
+            tx_context::epoch(ctx) + 1, // starting next epoch
             ctx
         );
 
@@ -497,7 +498,6 @@ module sui::sui_system {
             balance::value(&computation_reward)+ balance::value(&storage_fund_reward);
 
         validator_set::advance_epoch(
-            new_epoch,
             &mut self.validators,
             &mut computation_reward,
             &mut storage_fund_reward,

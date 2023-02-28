@@ -522,6 +522,7 @@ The amount of stake in the <code><a href="validator.md#0x2_validator">validator<
         <a href="_none">option::none</a>(),
         gas_price,
         commission_rate,
+        <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) + 1, // starting next epoch
         ctx
     );
 
@@ -1091,7 +1092,6 @@ gas coins.
         <a href="balance.md#0x2_balance_value">balance::value</a>(&computation_reward)+ <a href="balance.md#0x2_balance_value">balance::value</a>(&storage_fund_reward);
 
     <a href="validator_set.md#0x2_validator_set_advance_epoch">validator_set::advance_epoch</a>(
-        new_epoch,
         &<b>mut</b> self.validators,
         &<b>mut</b> computation_reward,
         &<b>mut</b> storage_fund_reward,

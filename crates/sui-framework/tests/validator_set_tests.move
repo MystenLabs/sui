@@ -178,6 +178,7 @@ module sui::validator_set_tests {
             option::none(),
             1,
             0,
+            0,
             ctx
         )
     }
@@ -205,6 +206,7 @@ module sui::validator_set_tests {
             option::none(),
             gas_price,
             0,
+            0,
             ctx
         )
     }
@@ -221,7 +223,6 @@ module sui::validator_set_tests {
         tx_context::increment_epoch_number(ctx);
 
         validator_set::advance_epoch(
-            tx_context::epoch(ctx), // dummy new epoch number
             validator_set,
             &mut dummy_computation_reward,
             &mut dummy_storage_fund_reward,

@@ -243,7 +243,7 @@ system_state:
         gas_price: 1
         delegation_staking_pool:
           id: "0xab8235dace3d68c7fb48110d63cbf4d6fd81ce10"
-          starting_epoch: 1
+          starting_epoch: 0
           sui_balance: 0
           rewards_pool:
             value: 0

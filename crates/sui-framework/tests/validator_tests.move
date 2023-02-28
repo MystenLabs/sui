@@ -40,6 +40,7 @@ module sui::validator_tests {
                 option::none(),
                 1,
                 0,
+                0,
                 ctx
             );
             assert!(validator::stake_amount(&validator) == 10, 0);
@@ -83,6 +84,7 @@ module sui::validator_tests {
             init_stake,
             option::none(),
             1,
+            0,
             0,
             ctx
         );

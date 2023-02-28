@@ -8,7 +8,7 @@ module sui::validator {
 
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
-    use sui::tx_context::TxContext;
+    use sui::tx_context::{Self, TxContext};
     use sui::stake;
     use sui::stake::Stake;
     use sui::epoch_time_lock::EpochTimeLock;
@@ -126,6 +126,7 @@ module sui::validator {
         coin_locked_until_epoch: Option<EpochTimeLock>,
         gas_price: u64,
         commission_rate: u64,
+        starting_epoch: u64,
         ctx: &mut TxContext
     ): Validator {
         assert!(
@@ -168,7 +169,7 @@ module sui::validator {
             pending_stake: 0,
             pending_withdraw: 0,
             gas_price,
-            delegation_staking_pool: staking_pool::new(ctx),
+            delegation_staking_pool: staking_pool::new(starting_epoch, ctx),
             commission_rate,
             next_epoch_stake: stake_amount,
             next_epoch_delegation: 0,
@@ -284,9 +285,10 @@ module sui::validator {
     }
 
     /// Process pending delegations and withdraws, called at the end of the epoch.
-    public(friend) fun process_pending_delegations_and_withdraws(self: &mut Validator, new_epoch: u64, ctx: &mut TxContext) {
+    public(friend) fun process_pending_delegations_and_withdraws(self: &mut Validator, ctx: &mut TxContext) {
+        let new_epoch = tx_context::epoch(ctx) + 1;
         let reward_withdraw_amount = staking_pool::process_pending_delegation_withdraws(
-            &mut self.delegation_staking_pool, new_epoch, ctx);
+            &mut self.delegation_staking_pool, ctx);
         self.next_epoch_delegation = self.next_epoch_delegation - reward_withdraw_amount;
         staking_pool::process_pending_delegation(&mut self.delegation_staking_pool, new_epoch);
         // TODO: consider bringing this assert back when we are more confident.
@@ -395,6 +397,7 @@ module sui::validator {
         coin_locked_until_epoch: Option<EpochTimeLock>,
         gas_price: u64,
         commission_rate: u64,
+        starting_epoch: u64,
         ctx: &mut TxContext
     ): Validator {
         assert!(
@@ -429,7 +432,7 @@ module sui::validator {
             pending_stake: 0,
             pending_withdraw: 0,
             gas_price,
-            delegation_staking_pool: staking_pool::new(ctx),
+            delegation_staking_pool: staking_pool::new(starting_epoch, ctx),
             commission_rate,
             next_epoch_stake: stake_amount,
             next_epoch_delegation: 0,

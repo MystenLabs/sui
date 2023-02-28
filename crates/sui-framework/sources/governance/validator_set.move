@@ -260,7 +260,6 @@ module sui::validator_set {
     ///   4. Process pending validator application and withdraws.
     ///   5. At the end, we calculate the total stake for the new epoch.
     public(friend) fun advance_epoch(
-        new_epoch: u64,
         self: &mut ValidatorSet,
         computation_reward: &mut Balance<SUI>,
         storage_fund_reward: &mut Balance<SUI>,
@@ -268,6 +267,7 @@ module sui::validator_set {
         reward_slashing_rate: u64,
         ctx: &mut TxContext,
     ) {
+        let new_epoch = tx_context::epoch(ctx) + 1;
         let total_stake = self.total_validator_stake + self.total_delegation_stake;
 
         // Compute the reward distribution without taking into account the tallying rule slashing.
@@ -322,13 +322,12 @@ module sui::validator_set {
             &adjusted_storage_fund_reward_amounts,
             computation_reward,
             storage_fund_reward,
-            new_epoch,
             ctx
         );
 
         adjust_stake_and_gas_price(&mut self.active_validators);
 
-        process_pending_delegations_and_withdraws(&mut self.active_validators, new_epoch, ctx);
+        process_pending_delegations_and_withdraws(&mut self.active_validators, ctx);
 
         // Emit events after we have processed all the rewards distribution and pending delegations.
         emit_validator_epoch_events(new_epoch, &self.active_validators, &adjusted_staking_reward_amounts,
@@ -542,13 +541,13 @@ module sui::validator_set {
 
     /// Process all active validators' pending delegation deposits and withdraws.
     fun process_pending_delegations_and_withdraws(
-        validators: &mut vector<Validator>, new_epoch: u64, ctx: &mut TxContext
+        validators: &mut vector<Validator>, ctx: &mut TxContext
     ) {
         let length = vector::length(validators);
         let i = 0;
         while (i < length) {
             let validator = vector::borrow_mut(validators, i);
-            validator::process_pending_delegations_and_withdraws(validator, new_epoch, ctx);
+            validator::process_pending_delegations_and_withdraws(validator, ctx);
             i = i + 1;
         }
     }
@@ -751,9 +750,9 @@ module sui::validator_set {
         adjusted_storage_fund_reward_amounts: &vector<u64>,
         staking_rewards: &mut Balance<SUI>,
         storage_fund_reward: &mut Balance<SUI>,
-        new_epoch: u64,
         ctx: &mut TxContext
     ) {
+        let new_epoch = tx_context::epoch(ctx) + 1;
         let length = vector::length(validators);
         assert!(length > 0, 0);
         let i = 0;

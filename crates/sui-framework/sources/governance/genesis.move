@@ -109,6 +109,7 @@ module sui::genesis {
                 option::none(),
                 gas_price,
                 commission_rate,
+                0, // start operating right away at epoch 0
                 ctx
             ));
             i = i + 1;
