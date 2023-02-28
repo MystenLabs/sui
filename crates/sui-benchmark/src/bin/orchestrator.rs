@@ -29,6 +29,18 @@ async fn execute<C: Client>(settings: Settings, client: C, opts: Opts) -> Result
             .await
             .wrap_err("Failed to deploy testbed")?,
 
+        // Start the specified number of instances on an existing testbed.
+        Operation::Start { instances } => orchestrator
+            .start_testbed(instances)
+            .await
+            .wrap_err("Failed to start testbed")?,
+
+        // Stop an existing testbed.
+        Operation::Stop => orchestrator
+            .stop_testbed()
+            .await
+            .wrap_err("Failed to stop testbed")?,
+
         // Run benchmarks.
         Operation::Benchmark {
             nodes,
@@ -118,6 +130,16 @@ pub enum Operation {
         #[clap(long)]
         instances: usize,
     },
+
+    // Start the specified number of instances on an existing testbed.
+    Start {
+        /// Number of instances to deploy.
+        #[clap(long)]
+        instances: usize,
+    },
+
+    /// Stop an existing testbed.
+    Stop,
 
     /// Run a benchmark on the specified testbed.
     Benchmark {

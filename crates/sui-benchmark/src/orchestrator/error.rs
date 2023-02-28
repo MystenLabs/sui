@@ -49,10 +49,10 @@ pub type SshResult<T> = Result<T, SshError>;
 
 #[derive(thiserror::Error, Debug)]
 pub enum SshError {
-    #[error("Failed to create ssh session: {0:?}")]
+    #[error("Failed to create ssh session: {0}")]
     SessionError(#[from] ssh2::Error),
 
-    #[error("Failed to connect to instance: {0:?}")]
+    #[error("Failed to connect to instance: {0}")]
     ConnectionError(#[from] std::io::Error),
 
     #[error("Remote execution returned exit code ({0}): {1}")]
