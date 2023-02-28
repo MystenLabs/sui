@@ -499,7 +499,6 @@ impl Builder {
             .iter()
             .zip(system_object.validators.active_validators.iter())
         {
-            assert_eq!(validator.stake(), onchain_validator.stake_amount);
             assert_eq!(
                 validator.sui_address().to_vec(),
                 onchain_validator.metadata.sui_address.to_vec(),
@@ -968,7 +967,6 @@ pub fn generate_genesis_system_object(
     let mut descriptions = Vec::new();
     let mut image_url = Vec::new();
     let mut project_url = Vec::new();
-    let mut stakes = Vec::new();
     let mut gas_prices = Vec::new();
     let mut commission_rates = Vec::new();
 
@@ -990,7 +988,6 @@ pub fn generate_genesis_system_object(
         descriptions.push(validator.description.clone().into_bytes());
         image_url.push(validator.image_url.clone().into_bytes());
         project_url.push(validator.project_url.clone().into_bytes());
-        stakes.push(validator.stake());
         gas_prices.push(validator.gas_price());
         commission_rates.push(validator.commission_rate());
     }
@@ -1015,7 +1012,6 @@ pub fn generate_genesis_system_object(
             CallArg::Pure(bcs::to_bytes(&p2p_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&consensus_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&worker_addresses).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&stakes).unwrap()),
             CallArg::Pure(bcs::to_bytes(&gas_prices).unwrap()),
             CallArg::Pure(bcs::to_bytes(&commission_rates).unwrap()),
             CallArg::Pure(bcs::to_bytes(&protocol_version.as_u64()).unwrap()),
@@ -1083,8 +1079,6 @@ mod test {
             worker_key: worker_key.public().clone(),
             account_key: account_key.public().clone().into(),
             network_key: network_key.public().clone(),
-            stake: 1,
-            delegation: 0,
             gas_price: 1,
             commission_rate: 0,
             network_address: utils::new_tcp_network_address(),

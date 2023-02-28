@@ -182,8 +182,6 @@ async fn init_genesis(
             worker_key: worker_name,
             account_key: account_key_pair.public(),
             network_key: network_key_pair.public().clone(),
-            stake: 1,
-            delegation: 0,
             gas_price: 1,
             commission_rate: 0,
             network_address: sui_config::utils::new_tcp_network_address(),

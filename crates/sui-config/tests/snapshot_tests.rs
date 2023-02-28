@@ -68,8 +68,6 @@ fn populated_genesis_snapshot_matches() {
         worker_key: worker_key.public().clone(),
         account_key: account_key.public().clone().into(),
         network_key: network_key.public().clone(),
-        stake: 1,
-        delegation: 0,
         gas_price: 1,
         commission_rate: 0,
         network_address: Multiaddr::empty(),
