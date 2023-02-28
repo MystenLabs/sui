@@ -54,13 +54,13 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       expect(validators.length).greaterThan(0);
     });
 
-    it('test getCommiteeInfo', async () => {
-      const commiteeInfo = await toolbox.provider.getCommitteeInfo(0);
-      expect(commiteeInfo.committee_info?.length).greaterThan(0);
+    it('test getCommitteeInfo', async () => {
+      const committeeInfo = await toolbox.provider.getCommitteeInfo(0);
+      expect(committeeInfo.committee_info?.length).greaterThan(0);
     });
 
-    it('test getSuiSystemState', async () => {
-      await toolbox.provider.getSuiSystemState();
+    it('test getCurrentEpochStaticInfo', async () => {
+      await toolbox.provider.getCurrentEpochStaticInfo();
     });
   },
 );
