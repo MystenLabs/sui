@@ -264,7 +264,7 @@ impl ConsensusAdapter {
         let (duration, position) = match &transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
                 let tx_digest = certificate.digest();
-                let position = self.submission_position(committee, ourselves, tx_digest);
+                let position = self.submission_position(committee, tx_digest);
                 // DELAY_STEP is chosen as 1.5 * mean consensus delay
                 const DELAY_STEP: Duration = Duration::from_secs(7);
                 const MAX_DELAY_MUL: usize = 10;
@@ -285,15 +285,10 @@ impl ConsensusAdapter {
     /// when system operates normally.
     ///
     /// The function returns the position of this authority when it is their turn to submit the transaction to consensus.
-    fn submission_position(
-        &self,
-        committee: &Committee,
-        ourselves: &AuthorityName,
-        tx_digest: &TransactionDigest,
-    ) -> usize {
+    fn submission_position(&self, committee: &Committee, tx_digest: &TransactionDigest) -> usize {
         let positions = order_validators_for_submission(committee, tx_digest);
 
-        self.check_submission_wrt_connectivity(ourselves, positions)
+        self.check_submission_wrt_connectivity(positions)
     }
 
     /// This function runs the following algorithm to decide whether or not to submit a transaction
@@ -315,21 +310,19 @@ impl ConsensusAdapter {
     /// Recursively, if the authority further ahead of us in the positions is a low performing authority, we will
     /// move our positions up one, and submit at the same time. This allows low performing
     /// node a chance to participate in consensus and redeem their scores while maintaining performance.
-    fn check_submission_wrt_connectivity(
-        &self,
-        ourselves: &AuthorityName,
-        positions: Vec<AuthorityName>,
-    ) -> usize {
+    fn check_submission_wrt_connectivity(&self, positions: Vec<AuthorityName>) -> usize {
         let filtered_positions = positions.into_iter().filter(|authority| {
-            self.connection_monitor_status
-                .check_connection(ourselves, authority)
-                .unwrap_or(ConnectionStatus::Disconnected)
-                == ConnectionStatus::Connected
+            self.authority == *authority
+                || self
+                    .connection_monitor_status
+                    .check_connection(&self.authority, authority)
+                    .unwrap_or(ConnectionStatus::Disconnected)
+                    == ConnectionStatus::Connected
         });
 
         filtered_positions
             .into_iter()
-            .find_position(|authority| authority == ourselves)
+            .find_position(|authority| *authority == self.authority)
             .expect("Couldn't find ourselves in shuffled committee")
             .0
     }
@@ -588,20 +581,6 @@ pub fn order_validators_for_submission(
     committee.shuffle_by_stake_with_rng(None, None, &mut rng)
 }
 
-/// Returns a position of the current validator in ordered list of validator to submit transaction
-pub fn position_submit_certificate(
-    committee: &Committee,
-    ourselves: &AuthorityName,
-    tx_digest: &TransactionDigest,
-) -> usize {
-    let validators = order_validators_for_submission(committee, tx_digest);
-    let (position, _) = validators
-        .into_iter()
-        .find_position(|a| a == ourselves)
-        .expect("Could not find ourselves in shuffled committee");
-    position
-}
-
 impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
     /// This method is called externally to begin reconfiguration
     /// It transition reconfig state to reject new certificates from user
@@ -710,6 +689,20 @@ impl SubmitToConsensus for Arc<ConsensusAdapter> {
         self.submit(transaction.clone(), None, epoch_store)
             .map(|_| ())
     }
+}
+
+#[cfg(test)]
+pub fn position_submit_certificate(
+    committee: &Committee,
+    ourselves: &AuthorityName,
+    tx_digest: &TransactionDigest,
+) -> usize {
+    let validators = order_validators_for_submission(committee, tx_digest);
+    let (position, _) = validators
+        .into_iter()
+        .find_position(|a| a == ourselves)
+        .expect("Could not find ourselves in shuffled committee");
+    position
 }
 
 #[cfg(test)]
