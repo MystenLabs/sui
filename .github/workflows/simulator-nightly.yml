@@ -35,11 +35,17 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
       - uses: taiki-e/install-action@nextest
-      - name: cargo simtest
+
+      - name: simtest build
         run: |
-          export MSIM_TEST_SEED=$(date +%s)
+          ./scripts/simtest/cargo-simtest simtest build
+          DATE=$(date +%s)
+          export RUST_LOG=off
           echo "Using MSIM_TEST_SEED=$MSIM_TEST_SEED"
-          MSIM_TEST_NUM=20 MSIM_WATCHDOG_TIMEOUT_MS=60000 scripts/simtest/cargo-simtest simtest
+
+      - name: simtest run
+        run: |
+          ./scripts/simtest/simtest-run.sh
 
   report-status:
     name: Report Status
