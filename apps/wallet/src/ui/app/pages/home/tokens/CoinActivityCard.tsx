@@ -17,6 +17,7 @@ export function CoinActivitiesCard({ coinType }: { coinType: string }) {
         data: txns,
         isLoading,
         error,
+        isError,
     } = useGetTransactionsByAddress(activeAddress);
 
     // filter txns by coinType
@@ -31,12 +32,12 @@ export function CoinActivitiesCard({ coinType }: { coinType: string }) {
         });
     }, [txns, activeAddress, coinType]);
 
-    if (error instanceof Error) {
+    if (isError) {
         return (
             <div className="p-2">
                 <Alert mode="warning">
                     <div className="font-semibold">
-                        {error?.message || 'Something went wrong'}
+                        {(error as Error).message}
                     </div>
                 </Alert>
             </div>
