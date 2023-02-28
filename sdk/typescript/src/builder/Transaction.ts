@@ -3,17 +3,21 @@
 
 import {
   assert,
-  create,
   literal,
   object,
   Infer,
   array,
-  any,
   optional,
   define,
 } from 'superstruct';
 import { Provider } from '../providers/provider';
-import { Commands, TransactionArgument, TransactionCommand } from './Commands';
+import {
+  Commands,
+  TransactionArgument,
+  TransactionCommand,
+  TransactionInput,
+} from './Commands';
+import { create } from './utils';
 
 type TransactionResult = TransactionArgument & TransactionArgument[];
 
@@ -62,49 +66,6 @@ function createTransactionResult(index: number): TransactionResult {
   }) as TransactionResult;
 }
 
-// TODO: Does this need to be a class? Can this instead just be a `TransactionArgument` with hidden implementation details?
-class TransactionInput {
-  #name?: string;
-  #value: unknown;
-  #index: number;
-
-  // TODO: better argument order here to avoid weirdness with name.
-  constructor(index: number, initialValue?: unknown, name?: string) {
-    this.#index = index;
-    this.#name = name;
-    this.#value = initialValue;
-  }
-
-  get kind() {
-    // This allows instances to be used as a `TransactionArgument`
-    return 'Input' as const;
-  }
-
-  get index() {
-    return this.#index;
-  }
-
-  /** The optional debug name for the input. */
-  get name() {
-    return this.#name;
-  }
-
-  getValue() {
-    return this.#value;
-  }
-
-  setValue(value: unknown) {
-    this.#value = value;
-  }
-
-  toJSON() {
-    return {
-      kind: this.kind,
-      index: this.index,
-    };
-  }
-}
-
 const StringEncodedBigint = define<string>('StringEncodedBigint', (val) => {
   if (typeof val !== 'string') return false;
 
@@ -130,8 +91,7 @@ const GasConfig = object({
  */
 const SerializedTransactionBuilder = object({
   version: literal(1),
-  // TODO: Need to figure out an over-the-wire input encoding.
-  inputs: array(any()),
+  inputs: array(TransactionInput),
   commands: array(TransactionCommand),
   gasConfig: GasConfig,
 });
@@ -144,13 +104,16 @@ export class Transaction<Inputs extends string = never> {
   }
 
   // TODO: Support fromBytes.
-  static from(serialized: string) {
+  static from(serialized: string | Uint8Array) {
+    // Check for bytes:
+    if (typeof serialized !== 'string' || !serialized.startsWith('{')) {
+      throw new Error('from() does not yet support bytes');
+    }
+
     const parsed = JSON.parse(serialized);
     assert(parsed, SerializedTransactionBuilder);
-    const tx = new Transaction({});
-    tx.#inputs = parsed.inputs.map(
-      (value, i) => new TransactionInput(i, value),
-    );
+    const tx = new Transaction();
+    tx.#inputs = parsed.inputs;
     tx.#commands = parsed.commands;
     tx.#gasConfig = parsed.gasConfig;
     return tx;
@@ -165,7 +128,6 @@ export class Transaction<Inputs extends string = never> {
    * The gas configuration for the transaction.
    */
   #gasConfig: Infer<typeof GasConfig>;
-
   /**
    * The list of inputs currently assigned to this transaction.
    * This list should be append-only, so that indexes for arguments never change.
@@ -177,9 +139,9 @@ export class Transaction<Inputs extends string = never> {
    */
   #commands: TransactionCommand[];
 
-  constructor({ inputs = [] }: { inputs?: Inputs[] }) {
-    this.#inputs = inputs.map(
-      (name, i) => new TransactionInput(i, undefined, name),
+  constructor({ inputs = [] }: { inputs?: Inputs[] } = {}) {
+    this.#inputs = inputs.map((name, index) =>
+      create({ kind: 'Input', index, name }, TransactionInput),
     );
     this.#commands = [];
     this.#gasConfig = {};
@@ -196,9 +158,9 @@ export class Transaction<Inputs extends string = never> {
   // Dynamically create a new input, which is separate from the `input`. This is important
   // for generated clients to be able to define unique inputs that are non-overlapping with the
   // defined inputs.
-  createInput(initialValue?: unknown) {
+  createInput(value?: unknown) {
     const index = this.#inputs.length;
-    const input = new TransactionInput(index, initialValue);
+    const input = create({ kind: 'Input', value, index }, TransactionInput);
     this.#inputs.push(input);
     return input;
   }
@@ -239,12 +201,16 @@ export class Transaction<Inputs extends string = never> {
       if (!input.name) return;
       const inputValue = inputs[input.name as Inputs];
       if (inputValue) {
-        input.setValue(inputValue);
+        input.value = inputValue;
       }
     });
   }
 
-  async build(_: { provider: Provider }): Promise<Uint8Array> {
+  async build({ provider }: { provider: Provider }): Promise<Uint8Array> {
+    if (!this.#gasConfig.gasPrice) {
+      this.#gasConfig.gasPrice = String(await provider.getReferenceGasPrice());
+    }
+
     throw new Error('Not implemented');
   }
 
@@ -265,7 +231,7 @@ export class Transaction<Inputs extends string = never> {
     // but the added benefit of the traversal is that if we update the logic, there's
     // less likelihood of state sync issues due to incompatible serializations of the
     // transaction.
-    const allInputsProvided = this.#inputs.every((input) => !!input.getValue());
+    const allInputsProvided = this.#inputs.every((input) => !!input.value);
 
     if (!allInputsProvided) {
       throw new Error('All input values must be provided before serializing.');
@@ -273,7 +239,7 @@ export class Transaction<Inputs extends string = never> {
 
     const data: SerializedTransactionBuilder = {
       version: 1,
-      inputs: this.#inputs.map((input) => input.getValue()),
+      inputs: this.#inputs,
       commands: this.#commands,
       gasConfig: this.#gasConfig,
     };
