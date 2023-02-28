@@ -90,17 +90,10 @@ export function createTokenValidation(
                 if (ctx.parent?.isPayAllSui && coinType === GAS_TYPE_ARG) {
                     return true;
                 }
+
+                // this should not happen since we have a required validation
                 if (!amount) {
-                    const gasBudgetEst =
-                        ctx.parent?.gasInputBudgetEst ?? gasBudget
-                            ? `${formatBalance(
-                                  ctx.parent?.gasInputBudgetEst || gasBudget,
-                                  gasDecimals
-                              )} ${GAS_SYMBOL}`
-                            : '';
-                    return ctx.createError({
-                        message: `Insufficient ${GAS_SYMBOL} balance to cover gas fee (${gasBudgetEst})`,
-                    });
+                    return false;
                 }
                 // check updated gas balance base on gasInputBudgetEst
                 try {

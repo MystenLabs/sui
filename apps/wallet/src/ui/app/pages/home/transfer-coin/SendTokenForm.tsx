@@ -54,7 +54,7 @@ export type SendTokenFormProps = {
     initialTo: string;
 };
 
-export function GasBudgetEstimationComp({
+function GasBudgetEstimation({
     coinDecimals,
     suiCoins,
 }: {
@@ -76,7 +76,7 @@ export function GasBudgetEstimationComp({
         GAS_TYPE_ARG
     );
 
-    // update the gasInputBudgetEst value when the amount changes
+    // gasBudgetEstimation should change when the amount above changes
     useEffect(() => {
         setFieldValue('gasInputBudgetEst', gasBudgetEstimation);
     }, [gasBudgetEstimation, setFieldValue, values.amount]);
@@ -285,7 +285,7 @@ export function SendTokenForm({
                                             }
                                         />
                                     </div>
-                                    <GasBudgetEstimationComp
+                                    <GasBudgetEstimation
                                         coinDecimals={coinDecimals}
                                         suiCoins={suiCoins}
                                     />
