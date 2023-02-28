@@ -1225,12 +1225,29 @@ impl ModuleResolver for AuthorityStore {
 }
 
 /// A wrapper to make Orphan Rule happy
-pub struct ResolverWrapper<T: ModuleResolver>(pub Arc<T>);
+pub struct ResolverWrapper<T: ModuleResolver> {
+    pub resolver: Arc<T>,
+    pub metrics: Arc<ResolverMetrics>,
+}
+
+impl<T: ModuleResolver> ResolverWrapper<T> {
+    pub fn new(resolver: Arc<T>, metrics: Arc<ResolverMetrics>) -> Self {
+        metrics.module_cache_size.set(0);
+        ResolverWrapper { resolver, metrics }
+    }
+
+    fn inc_cache_size_gauge(&self) {
+        // reset the gauge after a restart of the cache
+        let current = self.metrics.module_cache_size.get();
+        self.metrics.module_cache_size.set(current + 1);
+    }
+}
 
 impl<T: ModuleResolver> ModuleResolver for ResolverWrapper<T> {
     type Error = T::Error;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.0.get_module(module_id)
+        self.inc_cache_size_gauge();
+        self.resolver.get_module(module_id)
     }
 }
 

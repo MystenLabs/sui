@@ -662,8 +662,12 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
 
     let type_ = sui_framework_address_concat_string("::devnet_nft::MintNFTEvent");
     let type_tag = parse_struct_tag(&type_).unwrap();
-    let expected_parsed_event =
-        Event::move_event_to_move_struct(&type_tag, &bcs, &*node.state().module_cache).unwrap();
+    let expected_parsed_event = Event::move_event_to_move_struct(
+        &type_tag,
+        &bcs,
+        &**node.state().epoch_store_for_testing().module_cache(),
+    )
+    .unwrap();
     let (_, expected_parsed_event) =
         type_and_fields_from_move_struct(&type_tag, expected_parsed_event);
     let expected_event = SuiEvent::MoveEvent {
