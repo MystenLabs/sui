@@ -67,7 +67,7 @@ mod sim_only_tests {
         object::{Object, OBJECT_START_VERSION},
     };
     use test_utils::network::{TestCluster, TestClusterBuilder};
-    use tokio::time::{timeout, Duration};
+    use tokio::time::{sleep, timeout, Duration};
     use tracing::info;
 
     #[sim_test]
@@ -253,24 +253,25 @@ mod sim_only_tests {
         sui_framework_injection::set_override_cb(Box::new(move |name| {
             if name == first_name {
                 info!("node {:?} using compatible packages", name.concise());
-                Some(sui_framework("compatible"))
+                Some(sui_framework("base"))
             } else {
-                None
+                Some(sui_framework("compatible"))
             }
         }));
 
         monitor_version_change(&test_cluster, 2 /* expected proto version */).await;
 
+        // monitor_version_change only waits for fullnode to reconfigure - validator can actually be
+        // slower than fullnode if it wasn't one of the signers of the final checkpoint.
+        sleep(Duration::from_secs(3)).await;
+
         let node_handle = first.get_node_handle().expect("node should be running");
         // The dissenting node receives the correct framework via state sync and completes the upgrade
-        assert_eq!(
-            node_handle.with(|node| node
-                .state()
-                .epoch_store_for_testing()
-                .committee()
-                .protocol_version),
-            ProtocolVersion::new(2)
-        );
+        node_handle.with(|node| {
+            let committee = node.state().epoch_store_for_testing().committee().clone();
+            assert_eq!(committee.protocol_version, ProtocolVersion::new(2));
+            assert_eq!(committee.epoch, 2);
+        });
     }
 
     // Test that protocol version upgrade does not complete when there is no quorum on the
