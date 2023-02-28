@@ -440,7 +440,7 @@ module sui::validator {
 
     public native fun validate_metadata_bcs(metadata: vector<u8>);
 
-    spec validate_metadata {
+    spec validate_metadata_bcs {
         pragma opaque;
         // TODO: stub to be replaced by actual abort conditions if any
         aborts_if [abstract] true;

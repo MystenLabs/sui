@@ -1295,19 +1295,6 @@ Aborts if validator metadata is valid
 
 </details>
 
-<details>
-<summary>Specification</summary>
-
-
-
-<pre><code><b>pragma</b> opaque;
-<b>aborts_if</b> [abstract] <b>true</b>;
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_validator_validate_metadata_bcs"></a>
 
 ## Function `validate_metadata_bcs`
@@ -1324,6 +1311,19 @@ Aborts if validator metadata is valid
 
 
 <pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="validator.md#0x2_validator_validate_metadata_bcs">validate_metadata_bcs</a>(metadata: <a href="">vector</a>&lt;u8&gt;);
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
 
 
