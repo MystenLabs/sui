@@ -66,8 +66,6 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_acknowledge_latency: HistogramVec,
     pub sequencing_certificate_latency: HistogramVec,
     pub sequencing_certificate_authority_position: Histogram,
-    pub sequencing_certificate_timeouts: IntCounter,
-    pub sequencing_certificate_skipped_disconnected: IntCounter,
 }
 
 pub type OptArcConsensusAdapterMetrics = Option<Arc<ConsensusAdapterMetrics>>;
@@ -127,20 +125,6 @@ impl ConsensusAdapterMetrics {
                 authority_position_buckets.to_vec(),
                 registry,
             ).unwrap(),
-            sequencing_certificate_timeouts: register_int_counter_with_registry!(
-                "sequencing_certificate_timeouts",
-                "The number of timeouts observed when waiting another validator to submit a \
-                transaction to consensus.",
-                registry,
-            )
-                .unwrap(),
-            sequencing_certificate_skipped_disconnected: register_int_counter_with_registry!(
-                "sequencing_certificate_skipped_disconnected",
-                "The number of times another validator responsible to submit a \
-                transaction to consensus was observed to be disconnected.",
-                registry,
-            )
-                .unwrap(),
         }))
     }
 
@@ -344,7 +328,7 @@ impl ConsensusAdapter {
         positions: Vec<AuthorityName>,
         low_scoring_authorities: Vec<&AuthorityName>,
     ) -> usize {
-        let filtered_positions: Vec<AuthorityName> = positions
+        let filtered_positions = positions
             .into_iter()
             .filter(|authority| {
                 self.connection_monitor_status
@@ -359,8 +343,7 @@ impl ConsensusAdapter {
                 // in front of us
                 !low_scoring_authorities.contains(&authority)
                     || low_scoring_authorities.contains(&ourselves)
-            })
-            .collect();
+            });
 
         filtered_positions
             .into_iter()
