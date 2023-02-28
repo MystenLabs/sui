@@ -366,7 +366,8 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     .config_directory
                     .join(AUTHORITIES_DB_NAME)
                     .join(key_path.clone());
-                let network_address = validator.genesis_info.network_address;
+                let network_address =
+                    Self::zero_ip_address(&validator.genesis_info.network_address);
                 let consensus_address = validator.consensus_address;
                 let consensus_db_path =
                     self.config_directory.join(CONSENSUS_DB_NAME).join(key_path);
@@ -453,5 +454,18 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             genesis,
             account_keys,
         }
+    }
+
+    fn zero_ip_address(address: &Multiaddr) -> Multiaddr {
+        let mut new_address = Multiaddr::empty();
+        for component in address {
+            match component {
+                multiaddr::Protocol::Ip4(_) => new_address.push(multiaddr::Protocol::Ip4(
+                    std::net::Ipv4Addr::new(0, 0, 0, 0),
+                )),
+                c => new_address.push(c),
+            }
+        }
+        new_address
     }
 }
