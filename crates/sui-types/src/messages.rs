@@ -3301,6 +3301,7 @@ impl Debug for AuthorityCapabilities {
                 "supported_protocol_versions",
                 &self.supported_protocol_versions,
             )
+            .field("available_system_packages", &self.available_system_packages)
             .finish()
     }
 }
