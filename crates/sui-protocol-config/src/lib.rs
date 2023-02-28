@@ -105,6 +105,9 @@ impl SupportedProtocolVersions {
 #[derive(Clone)]
 pub struct ProtocolConfig {
     // ==== Transaction input limits ====
+    /// Maximum serialized size of a transaction (in bytes).
+    max_tx_size: Option<usize>,
+
     /// Maximum number of individual transactions in a Batch transaction.
     max_tx_in_batch: Option<u32>,
 
@@ -136,9 +139,6 @@ pub struct ProtocolConfig {
 
     /// Maximum number of Commands in a ProgrammableTransaction.
     max_programmable_tx_commands: Option<u32>,
-
-    /// Maximum number of Publish Commands in a ProgrammableTransaction.
-    max_programmable_tx_publish_commands: Option<u32>,
 
     // ==== Move VM, Move bytecode verifier, and execution limits ===
     /// Maximum Move bytecode version the VM understands. All older versions are accepted.
@@ -283,6 +283,9 @@ const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protoco
 
 // getters
 impl ProtocolConfig {
+    pub fn max_tx_size(&self) -> usize {
+        self.max_tx_size.expect(CONSTANT_ERR_MSG)
+    }
     pub fn max_tx_in_batch(&self) -> u32 {
         self.max_tx_in_batch.expect(CONSTANT_ERR_MSG)
     }
@@ -312,10 +315,6 @@ impl ProtocolConfig {
     }
     pub fn max_programmable_tx_commands(&self) -> u32 {
         self.max_programmable_tx_commands.expect(CONSTANT_ERR_MSG)
-    }
-    pub fn max_programmable_tx_publish_commands(&self) -> u32 {
-        self.max_programmable_tx_publish_commands
-            .expect(CONSTANT_ERR_MSG)
     }
     pub fn move_binary_format_version(&self) -> u32 {
         self.move_binary_format_version.expect(CONSTANT_ERR_MSG)
@@ -527,17 +526,17 @@ impl ProtocolConfig {
         // To change the values here you must create a new protocol version with the new values!
         match version.0 {
             1 => Self {
+                max_tx_size: Some(64 * 1024),
                 max_tx_in_batch: Some(10),
-                max_modules_in_publish: Some(8),
-                max_arguments: Some(16),
+                max_modules_in_publish: Some(128),
+                max_arguments: Some(128),
                 max_type_arguments: Some(16),
                 max_type_argument_depth: Some(16),
-                max_pure_argument_size: Some(10 * 1024),
+                max_pure_argument_size: Some(16 * 1024),
                 max_object_vec_argument_size: Some(128),
                 max_coins: Some(1024),
                 max_pay_recipients: Some(1024),
-                max_programmable_tx_commands: Some(16),
-                max_programmable_tx_publish_commands: Some(1),
+                max_programmable_tx_commands: Some(128),
                 move_binary_format_version: Some(6),
                 max_move_object_size: Some(250 * 1024),
                 max_move_package_size: Some(100 * 1024),

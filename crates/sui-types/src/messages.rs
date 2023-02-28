@@ -92,10 +92,10 @@ fn type_tag_validity_check(
     config: &ProtocolConfig,
     depth: u32,
     starting_count: usize,
-) -> SuiResult<usize> {
+) -> UserInputResult<usize> {
     fp_ensure!(
         depth < config.max_type_argument_depth(),
-        SuiError::SizeLimitExceeded {
+        UserInputError::SizeLimitExceeded {
             limit: "maximum type argument depth in a call transaction".to_string(),
             value: config.max_type_argument_depth().to_string()
         }
@@ -117,7 +117,7 @@ fn type_tag_validity_check(
             let count = accum + type_tag_validity_check(t, config, depth + 1, starting_count + 1)?;
             fp_ensure!(
                 count + starting_count < config.max_type_arguments() as usize,
-                SuiError::SizeLimitExceeded {
+                UserInputError::SizeLimitExceeded {
                     limit: "maximum type arguments in a call transaction".to_string(),
                     value: config.max_type_arguments().to_string()
                 }
@@ -138,19 +138,19 @@ pub struct MoveCall {
 }
 
 impl MoveCall {
-    pub fn validity_check(&self, config: &ProtocolConfig) -> SuiResult {
+    pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         let is_blocked = BLOCKED_MOVE_FUNCTIONS.contains(&(
             self.package,
             self.module.as_str(),
             self.function.as_str(),
         ));
-        fp_ensure!(!is_blocked, SuiError::BlockedMoveFunction);
+        fp_ensure!(!is_blocked, UserInputError::BlockedMoveFunction);
         let mut type_arguments_count = 0;
         for tag in self.type_arguments.iter() {
             type_arguments_count += type_tag_validity_check(tag, config, 1, type_arguments_count)?;
             fp_ensure!(
                 type_arguments_count < config.max_type_arguments() as usize,
-                SuiError::SizeLimitExceeded {
+                UserInputError::SizeLimitExceeded {
                     limit: "maximum type arguments in a call transaction".to_string(),
                     value: config.max_type_arguments().to_string()
                 }
@@ -158,7 +158,7 @@ impl MoveCall {
         }
         fp_ensure!(
             self.arguments.len() < config.max_arguments() as usize,
-            SuiError::SizeLimitExceeded {
+            UserInputError::SizeLimitExceeded {
                 limit: "maximum arguments in a move call".to_string(),
                 value: config.max_arguments().to_string()
             }
@@ -178,10 +178,10 @@ pub struct MoveModulePublish {
 }
 
 impl MoveModulePublish {
-    pub fn validity_check(&self, config: &ProtocolConfig) -> SuiResult {
+    pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         fp_ensure!(
             self.modules.len() < config.max_modules_in_publish() as usize,
-            SuiError::SizeLimitExceeded {
+            UserInputError::SizeLimitExceeded {
                 limit: "maximum modules in a publish transaction".to_string(),
                 value: config.max_modules_in_publish().to_string()
             }
@@ -215,16 +215,20 @@ pub struct PayAllSui {
 }
 
 impl PayAllSui {
-    pub fn validity_check(&self, config: &ProtocolConfig, gas_payment: &ObjectRef) -> SuiResult {
-        fp_ensure!(!self.coins.is_empty(), SuiError::EmptyInputCoins);
+    pub fn validity_check(
+        &self,
+        config: &ProtocolConfig,
+        gas_payment: &ObjectRef,
+    ) -> UserInputResult {
+        fp_ensure!(!self.coins.is_empty(), UserInputError::EmptyInputCoins);
         fp_ensure!(
             // unwrap() is safe because coins are not empty.
             self.coins.first().unwrap() == gas_payment,
-            SuiError::UnexpectedGasPaymentObject
+            UserInputError::UnexpectedGasPaymentObject
         );
         fp_ensure!(
             self.coins.len() < config.max_coins() as usize,
-            SuiError::SizeLimitExceeded {
+            UserInputError::SizeLimitExceeded {
                 limit: "maximum coins in a payment transaction".to_string(),
                 value: config.max_coins().to_string()
             }
@@ -254,23 +258,27 @@ pub struct PaySui {
 }
 
 impl PaySui {
-    pub fn validity_check(&self, config: &ProtocolConfig, gas_payment: &ObjectRef) -> SuiResult {
-        fp_ensure!(!self.coins.is_empty(), SuiError::EmptyInputCoins);
+    pub fn validity_check(
+        &self,
+        config: &ProtocolConfig,
+        gas_payment: &ObjectRef,
+    ) -> UserInputResult {
+        fp_ensure!(!self.coins.is_empty(), UserInputError::EmptyInputCoins);
         fp_ensure!(
             // unwrap() is safe because coins are not empty.
             self.coins.first().unwrap() == gas_payment,
-            SuiError::UnexpectedGasPaymentObject
+            UserInputError::UnexpectedGasPaymentObject
         );
         fp_ensure!(
             self.coins.len() < config.max_coins() as usize,
-            SuiError::SizeLimitExceeded {
+            UserInputError::SizeLimitExceeded {
                 limit: "maximum coins in a payment transaction".to_string(),
                 value: config.max_coins().to_string()
             }
         );
         fp_ensure!(
             self.recipients.len() <= config.max_pay_recipients() as usize,
-            SuiError::SizeLimitExceeded {
+            UserInputError::SizeLimitExceeded {
                 limit: "maximum recipients in a payment transaction".to_string(),
                 value: config.max_pay_recipients().to_string()
             }
@@ -295,17 +303,17 @@ pub struct Pay {
 }
 
 impl Pay {
-    pub fn validity_check(&self, config: &ProtocolConfig) -> SuiResult {
+    pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         fp_ensure!(
             self.coins.len() < config.max_coins() as usize,
-            SuiError::SizeLimitExceeded {
+            UserInputError::SizeLimitExceeded {
                 limit: "maximum coins in a payment transaction".to_string(),
                 value: config.max_coins().to_string()
             }
         );
         fp_ensure!(
             self.recipients.len() <= config.max_pay_recipients() as usize,
-            SuiError::SizeLimitExceeded {
+            UserInputError::SizeLimitExceeded {
                 limit: "maximum recipients in a payment transaction".to_string(),
                 value: config.max_pay_recipients().to_string()
             }
@@ -446,12 +454,12 @@ impl CallArg {
         }
     }
 
-    pub fn validity_check(&self, config: &ProtocolConfig) -> SuiResult {
+    pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         match self {
             CallArg::Pure(p) => {
                 fp_ensure!(
                     p.len() < config.max_pure_argument_size() as usize,
-                    SuiError::SizeLimitExceeded {
+                    UserInputError::SizeLimitExceeded {
                         limit: "maximum pure argument size".to_string(),
                         value: config.max_pure_argument_size().to_string()
                     }
@@ -461,7 +469,7 @@ impl CallArg {
             CallArg::ObjVec(v) => {
                 fp_ensure!(
                     v.len() < config.max_object_vec_argument_size() as usize,
-                    SuiError::SizeLimitExceeded {
+                    UserInputError::SizeLimitExceeded {
                         limit: "maximum object vector argument size".to_string(),
                         value: config.max_object_vec_argument_size().to_string()
                     }
@@ -731,24 +739,11 @@ impl ProgrammableTransaction {
         }
         fp_ensure!(
             self.commands.len() < config.max_programmable_tx_commands() as usize,
-            SuiError::SizeLimitExceeded {
+            UserInputError::SizeLimitExceeded {
                 limit: "maximum commands in a progammable transaction".to_string(),
                 value: config.max_programmable_tx_commands().to_string()
             }
         );
-        let num_publish_commands = self
-            .commands
-            .iter()
-            .filter(|c| matches!(c, Command::Publish(_)))
-            .count();
-        fp_ensure!(
-            num_publish_commands < config.max_programmable_tx_publish_commands() as usize,
-            UserInputError::SizeLimitExceeded {
-                limit: "maximum publish commands in a programmable transaction".to_string(),
-                value: config.max_programmable_tx_publish_commands().to_string()
-            }
-        );
-
         for c in &self.commands {
             c.validity_check(config)?
         }
@@ -978,12 +973,16 @@ impl SingleTransactionKind {
         Ok(input_objects)
     }
 
-    pub fn validity_check(&self, config: &ProtocolConfig, gas_payment: &ObjectRef) -> UserInputResult {
+    pub fn validity_check(
+        &self,
+        config: &ProtocolConfig,
+        gas_payment: &ObjectRef,
+    ) -> UserInputResult {
         match self {
             SingleTransactionKind::Publish(publish) => publish.validity_check(config)?,
             SingleTransactionKind::Call(call) => call.validity_check(config)?,
             SingleTransactionKind::Pay(p) => p.validity_check(config)?,
-            SingleTransactionKind::PayUserInput(p) => p.validity_check(config, gas_payment)?,
+            SingleTransactionKind::PaySui(p) => p.validity_check(config, gas_payment)?,
             SingleTransactionKind::PayAllSui(pa) => pa.validity_check(config, gas_payment)?,
             SingleTransactionKind::ProgrammableTransaction(p) => p.validity_check(config)?,
             SingleTransactionKind::TransferObject(_)
@@ -991,23 +990,6 @@ impl SingleTransactionKind {
             | SingleTransactionKind::ChangeEpoch(_)
             | SingleTransactionKind::Genesis(_)
             | SingleTransactionKind::ConsensusCommitPrologue(_) => (),
-            SingleTransactionKind::PaySui(p) => {
-                fp_ensure!(!p.coins.is_empty(), UserInputError::EmptyInputCoins);
-                fp_ensure!(
-                    // unwrap() is safe because coins are not empty.
-                    p.coins.first().unwrap() == gas_payment,
-                    UserInputError::UnexpectedGasPaymentObject
-                );
-            }
-            SingleTransactionKind::PayAllSui(pa) => {
-                fp_ensure!(!pa.coins.is_empty(), UserInputError::EmptyInputCoins);
-                fp_ensure!(
-                    // unwrap() is safe because coins are not empty.
-                    pa.coins.first().unwrap() == gas_payment,
-                    UserInputError::UnexpectedGasPaymentObject
-                );
-            }
-            SingleTransactionKind::ProgrammableTransaction(p) => p.validity_check()?,
         };
         Ok(())
     }
@@ -1623,7 +1605,7 @@ impl TransactionData {
                 );
                 fp_ensure!(
                     b.len() <= config.max_tx_in_batch() as usize,
-                    SuiError::SizeLimitExceeded {
+                    UserInputError::SizeLimitExceeded {
                         limit: "maximum transactions in a batch".to_string(),
                         value: config.max_tx_in_batch().to_string()
                     }

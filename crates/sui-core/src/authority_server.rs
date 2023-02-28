@@ -18,6 +18,7 @@ use sui_network::{
 };
 use sui_types::{error::*, messages::*};
 use sui_types::{
+    fp_ensure,
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
     sui_system_state::SuiSystemState,
 };
@@ -245,6 +246,18 @@ impl ValidatorService {
         metrics: Arc<ValidatorServiceMetrics>,
     ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
         let transaction = request.into_inner();
+        let epoch_store = state.load_epoch_store_one_call_per_task();
+
+        // Enforce overall transaction size limit.
+        let tx_size = bcs::serialized_size(&transaction)
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+        let max_tx_size = epoch_store.protocol_config().max_tx_size();
+        fp_ensure!(
+            tx_size <= max_tx_size,
+            tonic::Status::resource_exhausted(format!(
+                "serialized transaction size ({tx_size}) exceeded maximum of {max_tx_size}"
+            ))
+        );
 
         let _metrics_guard = metrics.handle_transaction_latency.start_timer();
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
@@ -260,7 +273,7 @@ impl ValidatorService {
         let span = error_span!("validator_state_process_tx", ?tx_digest);
 
         let info = state
-            .handle_transaction(transaction)
+            .handle_transaction(&epoch_store, transaction)
             .instrument(span)
             .await
             .tap_err(|e| {
