@@ -36,6 +36,7 @@ describe('Transaction Serialization and deserialization', () => {
   let localSerializer: LocalTxnDataSerializer;
   let rpcSerializer: RpcTxnDataSerializer;
   let packageId: string;
+  let signer: RawSigner;
 
   beforeAll(async () => {
     toolbox = await setup();
@@ -43,7 +44,7 @@ describe('Transaction Serialization and deserialization', () => {
     rpcSerializer = new RpcTxnDataSerializer(
       toolbox.provider.connection.fullnode,
     );
-    const signer = new RawSigner(toolbox.keypair, toolbox.provider);
+    signer = new RawSigner(toolbox.keypair, toolbox.provider);
     const packagePath = __dirname + '/./data/serializer';
     packageId = await publishPackage(signer, false, packagePath);
   });
@@ -295,5 +296,107 @@ describe('Transaction Serialization and deserialization', () => {
       } as PayAllSuiTransaction,
     } as UnserializedSignableTransaction;
     expect(expectedTx).toEqual(deserialized);
+  });
+
+  it('Check mutable reference is true', async () => {
+    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
+      toolbox.address(),
+    );
+    const validators = await toolbox.getActiveValidators();
+    const validator_metadata = (validators[0] as SuiMoveObject).fields.metadata;
+    const validator_address = (validator_metadata as SuiMoveObject).fields
+      .sui_address;
+    const moveCall = {
+      packageObjectId: '0x2',
+      module: 'sui_system',
+      function: 'request_add_delegation_mul_coin',
+      typeArguments: [],
+      arguments: [
+        SUI_SYSTEM_STATE_OBJECT_ID,
+        [coins[2].objectId],
+        [String(100)],
+        validator_address,
+      ],
+      gasBudget: DEFAULT_GAS_BUDGET,
+      gasPayment: coins[1].objectId,
+    } as MoveCallTransaction;
+
+    const localTxnBytes = await localSerializer.serializeToBytes(
+      toolbox.address(),
+      { kind: 'moveCall', data: moveCall },
+    );
+
+    const deserializedTxnData: any =
+      deserializeTransactionBytesToTransactionData(
+        bcsForVersion(await toolbox.provider.getRpcApiVersion()),
+        localTxnBytes,
+      );
+
+    expect(
+      deserializedTxnData.kind.Single?.Call.arguments[0].Object.Shared.mutable,
+    ).toBeTruthy();
+
+    const rpcTxnByes = await rpcSerializer.serializeToBytes(toolbox.address(), {
+      kind: 'moveCall',
+      data: moveCall,
+    });
+
+    const deserializedRpcTxnData: any =
+      deserializeTransactionBytesToTransactionData(
+        bcsForVersion(await toolbox.provider.getRpcApiVersion()),
+        rpcTxnByes,
+      );
+
+    expect(
+      deserializedRpcTxnData.kind.Single?.Call.arguments[0].Object.Shared
+        .mutable,
+    ).toBeTruthy();
+  });
+
+  it('Check mutable reference false', async () => {
+    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
+      toolbox.address(),
+    );
+
+    const moveCall = {
+      packageObjectId: packageId,
+      module: 'serializer_tests',
+      function: 'timestamp_ms',
+      typeArguments: [],
+      arguments: ['0x0000000000000000000000000000000000000006'],
+      gasBudget: DEFAULT_GAS_BUDGET,
+      gasPayment: coins[1].objectId,
+    } as MoveCallTransaction;
+
+    const localTxnBytes = await localSerializer.serializeToBytes(
+      toolbox.address(),
+      { kind: 'moveCall', data: moveCall },
+    );
+
+    const deserializedTxnData: any =
+      deserializeTransactionBytesToTransactionData(
+        bcsForVersion(await toolbox.provider.getRpcApiVersion()),
+        localTxnBytes,
+      );
+
+    expect(
+      deserializedTxnData.kind.Single?.Call.arguments[0].Object.Shared.mutable,
+    ).toBeFalsy();
+
+    const rpcTxnByes = await rpcSerializer.serializeToBytes(toolbox.address(), {
+      kind: 'moveCall',
+      data: moveCall,
+    });
+
+    const deserializedRpcTxnData: any =
+      deserializeTransactionBytesToTransactionData(
+        bcsForVersion(await toolbox.provider.getRpcApiVersion()),
+        rpcTxnByes,
+      );
+
+    expect(
+      deserializedRpcTxnData.kind.Single?.Call.arguments[0].Object.Shared
+        .mutable,
+    ).toBeFalsy();
   });
 });

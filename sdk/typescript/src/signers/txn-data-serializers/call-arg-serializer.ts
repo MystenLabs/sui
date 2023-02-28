@@ -154,12 +154,17 @@ export class CallArgSerializer {
     return hasTxContext ? params.slice(0, params.length - 1) : params;
   }
 
-  async newObjectArg(objectId: string): Promise<ObjectArg> {
+  async newObjectArg(
+    objectId: string,
+    expectedType: SuiMoveNormalizedType,
+  ): Promise<ObjectArg> {
     const object = await this.provider.getObject(objectId);
     const initialSharedVersion = getSharedObjectInitialVersion(object);
 
-    const mutable = true; // Defaulted to True to match current behavior.
     if (initialSharedVersion) {
+      const mutable =
+        typeof expectedType === 'object' && 'MutableReference' in expectedType;
+
       return { Shared: { objectId, initialSharedVersion, mutable } };
     }
     return { ImmOrOwned: getObjectReference(object)! };
@@ -194,7 +199,7 @@ export class CallArgSerializer {
           )}`,
         );
       }
-      return { Object: await this.newObjectArg(argVal) };
+      return { Object: await this.newObjectArg(argVal, expectedType) };
     }
 
     if (
@@ -210,7 +215,7 @@ export class CallArgSerializer {
       }
       return {
         ObjVec: await Promise.all(
-          argVal.map((arg) => this.newObjectArg(arg as string)),
+          argVal.map((arg) => this.newObjectArg(arg as string, expectedType)),
         ),
       };
     }
