@@ -56,21 +56,6 @@ pub struct ValidatorMetadata {
     pub p2p_address: Vec<u8>,
     pub consensus_address: Vec<u8>,
     pub worker_address: Vec<u8>,
-    pub next_epoch_stake: u64,
-    pub next_epoch_delegation: u64,
-    pub next_epoch_gas_price: u64,
-    pub next_epoch_commission_rate: u64,
-}
-
-impl ValidatorMetadata {
-    pub fn to_next_epoch_validator_and_stake_pair(&self) -> (AuthorityName, StakeUnit) {
-        (
-            // TODO: Make sure we are actually verifying this on-chain.
-            AuthorityPublicKeyBytes::from_bytes(self.pubkey_bytes.as_ref())
-                .expect("Validity of public key bytes should be verified on-chain"),
-            self.next_epoch_stake + self.next_epoch_delegation,
-        )
-    }
 }
 
 /// Rust version of the Move sui::validator::Validator type
@@ -84,6 +69,10 @@ pub struct Validator {
     pub gas_price: u64,
     pub delegation_staking_pool: StakingPool,
     pub commission_rate: u64,
+    pub next_epoch_stake: u64,
+    pub next_epoch_delegation: u64,
+    pub next_epoch_gas_price: u64,
+    pub next_epoch_commission_rate: u64,
 }
 
 impl Validator {

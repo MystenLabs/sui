@@ -32,10 +32,6 @@ export const ValidatorMetaData = object({
   net_address: array(number()),
   consensus_address: array(number()),
   worker_address: array(number()),
-  next_epoch_stake: number(),
-  next_epoch_delegation: number(),
-  next_epoch_gas_price: number(),
-  next_epoch_commission_rate: number(),
 });
 
 export type DelegatedStake = Infer<typeof DelegatedStake>;
@@ -162,6 +158,10 @@ export const Validator = object({
   gas_price: number(),
   delegation_staking_pool: DelegationStakingPoolFields,
   commission_rate: number(),
+  next_epoch_stake: number(),
+  next_epoch_delegation: number(),
+  next_epoch_gas_price: number(),
+  next_epoch_commission_rate: number(),
 });
 export type Validator = Infer<typeof Validator>;
 

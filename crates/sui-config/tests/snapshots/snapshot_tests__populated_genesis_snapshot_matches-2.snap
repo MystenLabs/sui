@@ -236,10 +236,6 @@ system_state:
           p2p_address: []
           consensus_address: []
           worker_address: []
-          next_epoch_stake: 1
-          next_epoch_delegation: 0
-          next_epoch_gas_price: 1
-          next_epoch_commission_rate: 0
         voting_power: 10000
         stake_amount: 1
         pending_stake: 0
@@ -265,6 +261,10 @@ system_state:
               id: "0x18b8140c8a6ea340142f128061016fc4bd8220ec"
               size: 0
         commission_rate: 0
+        next_epoch_stake: 1
+        next_epoch_delegation: 0
+        next_epoch_gas_price: 1
+        next_epoch_commission_rate: 0
     pending_validators: []
     pending_removals: []
     next_epoch_validators:
@@ -489,10 +489,6 @@ system_state:
         p2p_address: []
         consensus_address: []
         worker_address: []
-        next_epoch_stake: 1
-        next_epoch_delegation: 0
-        next_epoch_gas_price: 1
-        next_epoch_commission_rate: 0
     staking_pool_mappings:
       id: "0x628ffd0e51e9a6ea32c13c2739a31a8f344b557d"
       size: 1
