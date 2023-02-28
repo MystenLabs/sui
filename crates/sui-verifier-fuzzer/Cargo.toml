@@ -1,0 +1,19 @@
+[package]
+name = "sui-verifier-fuzzer"
+version = "0.0.0"
+edition = "2021"
+authors = ["Mysten Labs <eng@mystenlabs.com>"]
+description = "AFL fuzz setup for Move and Sui verifiers"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+afl = "0.12.14"
+arbitrary = { version = "1", optional = false, features = ["derive"] }
+# quinn-proto = { version= "0.9.2" , features = ["arbitrary"] }
+
+move-binary-format = { git = "https://github.com/move-language/move", rev = "7343821f67c070d28dcdb5bf7d2e07ced046b52f", features = ["fuzzing"] }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "7343821f67c070d28dcdb5bf7d2e07ced046b52f" }
+
+sui-framework-build = { path = "../sui-framework-build" }
+sui-verifier = { path = "../../crates/sui-verifier" }

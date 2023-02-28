@@ -31,6 +31,7 @@ anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "d4017b6c
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
+arbitrary = { version = "1", default-features = false, features = ["derive"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
 ark-bls12-377 = { version = "0.3", features = ["std"] }
 ark-bls12-381 = { version = "0.3" }
@@ -673,6 +674,7 @@ anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "d4017b6c
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
+arbitrary = { version = "1", default-features = false, features = ["derive"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
 ark-bls12-377 = { version = "0.3", features = ["std"] }
 ark-bls12-381 = { version = "0.3" }
@@ -830,6 +832,7 @@ der = { version = "0.6", default-features = false, features = ["oid", "std", "ze
 der-parser = { version = "8", features = ["bigint"] }
 derivative = { version = "2", default-features = false, features = ["use_core"] }
 derive-syn-parse = { version = "0.1", default-features = false }
+derive_arbitrary = { version = "1", default-features = false }
 derive_builder = { version = "0.12" }
 derive_builder_core = { version = "0.12", default-features = false }
 derive_builder_macro = { version = "0.12", default-features = false }

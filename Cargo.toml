@@ -45,6 +45,7 @@ members = [
     "crates/sui-transactional-test-runner",
     "crates/sui-types",
     "crates/sui-verifier",
+    "crates/sui-verifier-fuzzer",
     "crates/sui-verifier-transactional-tests",
     "crates/telemetry-subscribers",
     "crates/test-utils",
