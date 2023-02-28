@@ -178,6 +178,8 @@ diesel::table! {
         storage_rebate -> Int8,
         gas_price -> Int8,
         transaction_content -> Text,
+        transaction_effects_content -> Text,
+        confirmed_local_execution -> Nullable<Bool>,
     }
 }
 
