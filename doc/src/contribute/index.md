@@ -6,10 +6,6 @@ This page describes how to contribute to Sui, and provides additional informatio
 
 You can find answers to common questions in our [FAQ](../contribute/faq.md).
 
-## See our roadmap
-
-Sui is evolving quickly. See our [Developer Experience Roadmap](https://github.com/MystenLabs/sui/blob/main/DEVX_ROADMAP.md) for the planned updates over the next 30 days.
-
 ## Join the community
 
 To connect with the Sui community, join our [Discord](https://discord.gg/sui).
