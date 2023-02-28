@@ -12,6 +12,7 @@ import {
   string,
   union,
 } from 'superstruct';
+import { WithTupleTag } from './utils';
 
 export const TransactionInput = object({
   kind: literal('Input'),
@@ -49,21 +50,24 @@ export const TransferObjectsCommand = object({
   objects: array(TransactionArgument),
   address: TransactionArgument,
 });
-export type TransferObjectsCommand = Infer<typeof TransferObjectsCommand>;
+export type TransferObjectsCommand = WithTupleTag<
+  Infer<typeof TransferObjectsCommand>,
+  0
+>;
 
 export const SplitCommand = object({
   kind: literal('Split'),
   coin: TransactionArgument,
   amount: TransactionArgument,
 });
-export type SplitCommand = Infer<typeof SplitCommand>;
+export type SplitCommand = WithTupleTag<Infer<typeof SplitCommand>, 1>;
 
 export const MergeCommand = object({
   kind: literal('Merge'),
   coin: TransactionArgument,
   coins: array(TransactionArgument),
 });
-export type MergeCommand = Infer<typeof MergeCommand>;
+export type MergeCommand = WithTupleTag<Infer<typeof MergeCommand>, 0>;
 
 export const TransactionCommand = union([
   MoveCallCommand,
@@ -71,6 +75,7 @@ export const TransactionCommand = union([
   SplitCommand,
   MergeCommand,
 ]);
+
 export type TransactionCommand = Infer<typeof TransactionCommand>;
 
 /**

@@ -7,7 +7,7 @@ const tx = new Transaction({ inputs: ['amount', 'address'] });
 const coin = tx.add(Commands.Split(tx.gas(), tx.input('amount')));
 console.log(coin);
 tx.add(Commands.TransferObjects([coin], tx.input('address')));
-tx.add(
+const foo = tx.add(
   Commands.MoveCall({
     package: '0x2',
     function: 'game',

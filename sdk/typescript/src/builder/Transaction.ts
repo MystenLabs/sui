@@ -17,9 +17,11 @@ import {
   TransactionCommand,
   TransactionInput,
 } from './Commands';
-import { create } from './utils';
+import { create, Tuple, WithTupleTag } from './utils';
 
-type TransactionResult = TransactionArgument & TransactionArgument[];
+type TransactionResult<N extends number = number> = N extends 1
+  ? TransactionArgument
+  : Tuple<TransactionArgument, N>;
 
 function createTransactionResult(index: number): TransactionResult {
   const baseResult: TransactionArgument = { kind: 'Result', index };
@@ -63,7 +65,7 @@ function createTransactionResult(index: number): TransactionResult {
 
       return { kind: 'NestedResult', index, resultIndex };
     },
-  }) as TransactionResult;
+  }) as any;
 }
 
 const StringEncodedBigint = define<string>('StringEncodedBigint', (val) => {
@@ -197,10 +199,14 @@ export class Transaction<Inputs extends string = never> {
   }
 
   /** Add a command to the transaction. */
-  add(command: TransactionCommand) {
+  add<T extends TransactionCommand>(
+    command: T,
+  ): T extends WithTupleTag<T, infer U>
+    ? TransactionResult<U>
+    : TransactionResult {
     // TODO: This should also look at the command arguments and add any referenced commands that are not present in this transaction.
     const index = this.#commands.push(command);
-    return createTransactionResult(index - 1);
+    return createTransactionResult(index - 1) as any;
   }
 
   /** Define the input values for the named inputs in the transaction. */
