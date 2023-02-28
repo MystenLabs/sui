@@ -713,35 +713,12 @@ impl<C> Testbed<C> {
 mod test {
     use std::{fmt::Display, sync::Mutex};
 
-    use reqwest::Url;
     use serde::Serialize;
 
     use crate::orchestrator::{
-        client::Client,
-        error::CloudProviderResult,
-        settings::{Repository, Settings},
-        state::Instance,
+        client::Client, error::CloudProviderResult, settings::Settings, state::Instance,
         testbed::Testbed,
     };
-
-    /// Test settings for unit tests.
-    fn test_settings() -> Settings {
-        Settings {
-            testbed: "testbed".into(),
-            token_file: "/path/to/token/file".into(),
-            ssh_private_key_file: "/path/to/private/key/file".into(),
-            ssh_public_key_file: None,
-            regions: vec!["London".into(), "New York".into()],
-            specs: "small".into(),
-            repository: Repository {
-                name: "my_repo".into(),
-                url: Url::parse("https://example.net").unwrap(),
-                branch: "main".into(),
-            },
-            results_directory: "results".into(),
-            logs_directory: "logs".into(),
-        }
-    }
 
     #[derive(Default)]
     pub struct TestClient {
@@ -806,7 +783,7 @@ mod test {
 
     #[tokio::test]
     async fn populate() {
-        let settings = test_settings();
+        let settings = Settings::new_for_test();
         let client = TestClient::default();
         let mut testbed = Testbed::new(settings, client).await.unwrap();
 
@@ -823,7 +800,7 @@ mod test {
 
     #[tokio::test]
     async fn destroy() {
-        let settings = test_settings();
+        let settings = Settings::new_for_test();
         let client = TestClient::default();
         let mut testbed = Testbed::new(settings, client).await.unwrap();
 
@@ -834,7 +811,7 @@ mod test {
 
     #[tokio::test]
     async fn start() {
-        let settings = test_settings();
+        let settings = Settings::new_for_test();
         let client = TestClient::default();
         let mut testbed = Testbed::new(settings, client).await.unwrap();
         testbed.populate(5).await.unwrap();
@@ -861,7 +838,7 @@ mod test {
 
     #[tokio::test]
     async fn start_insufficient_capacity() {
-        let settings = test_settings();
+        let settings = Settings::new_for_test();
         let client = TestClient::default();
         let mut testbed = Testbed::new(settings, client).await.unwrap();
         testbed.populate(1).await.unwrap();
@@ -872,7 +849,7 @@ mod test {
 
     #[tokio::test]
     async fn stop() {
-        let settings = test_settings();
+        let settings = Settings::new_for_test();
         let client = TestClient::default();
         let mut testbed = Testbed::new(settings, client).await.unwrap();
         testbed.populate(5).await.unwrap();

@@ -16,7 +16,7 @@ pub struct Instance {
 
 impl Instance {
     pub fn is_active(&self) -> bool {
-        self.power_status == "running"
+        self.power_status.to_lowercase() == "running"
     }
 
     pub fn is_inactive(&self) -> bool {

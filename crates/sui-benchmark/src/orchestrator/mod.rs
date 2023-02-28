@@ -5,7 +5,7 @@ use crossterm::style::{
 };
 
 use self::{
-    client::VultrClient, error::TestbedResult, parameters::BenchmarkParametersGenerator,
+    client::Client, error::TestbedResult, parameters::BenchmarkParametersGenerator,
     testbed::Testbed,
 };
 
@@ -19,15 +19,15 @@ pub mod ssh;
 pub mod state;
 pub mod testbed;
 
-pub struct Orchestrator {
-    testbed: Testbed<VultrClient>,
+pub struct Orchestrator<C: Client> {
+    testbed: Testbed<C>,
     skip_testbed_update: bool,
     skip_testbed_reconfiguration: bool,
     ignore_logs: bool,
 }
 
-impl Orchestrator {
-    pub fn new(testbed: Testbed<VultrClient>) -> Self {
+impl<C: Client> Orchestrator<C> {
+    pub fn new(testbed: Testbed<C>) -> Self {
         Self {
             testbed,
             skip_testbed_update: false,
@@ -52,7 +52,7 @@ impl Orchestrator {
     }
 
     pub async fn deploy_testbed(&mut self, instances: usize) -> TestbedResult<()> {
-        self.testbed.populate(instances).await?;
+        // self.testbed.populate(instances).await?;
         self.testbed.install().await?;
         self.testbed.update().await?;
         self.testbed.info();

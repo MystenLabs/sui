@@ -63,6 +63,8 @@ serde_yaml = "0.9.17"
 crossterm = "0.26.0"
 regex = "1.7.1"
 prometheus-parse = { git = "https://github.com/ccakes/prometheus-parse-rs.git", rev = "75334db" }
+aws-config = "0.54.1"
+aws-sdk-ec2 = "0.24.0"
 
 [target.'cfg(msim)'.dependencies]
 sui-macros = { path = "../sui-macros" }

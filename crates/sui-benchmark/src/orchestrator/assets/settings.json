@@ -1,9 +1,10 @@
 {
-    "testbed": "alberto",
-    "token_file": "/Users/alberto/.vultr",
-    "ssh_private_key_file": "/Users/alberto/.ssh/vultr",
-    "regions": ["lax", "atl", "lhr", "mel", "nrt"],
-    "specs": "vhp-8c-16gb-intel",
+    "testbed": "alberto-sui",
+    "cloud_provider": "aws",
+    "token_file": "/Users/alberto/.aws/credentials",
+    "ssh_private_key_file": "/Users/alberto/.ssh/aws",
+    "regions": ["us-east-1","us-west-2"],
+    "specs": "g5.8xlarge",
     "repository": {
         "name": "sui",
         "url": "http://github.com/mystenlabs/sui",

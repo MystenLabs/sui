@@ -26,8 +26,17 @@ where
 }
 
 #[derive(Deserialize, Clone)]
+pub enum CloudProvider {
+    #[serde(alias = "aws")]
+    Aws,
+    #[serde(alias = "vultr")]
+    Vultr,
+}
+
+#[derive(Deserialize, Clone)]
 pub struct Settings {
     pub testbed: String,
+    pub cloud_provider: CloudProvider,
     pub token_file: PathBuf,
     pub ssh_private_key_file: PathBuf,
     pub ssh_public_key_file: Option<PathBuf>,
@@ -86,5 +95,26 @@ impl Settings {
     #[cfg(test)]
     pub fn number_of_regions(&self) -> usize {
         self.regions.len()
+    }
+
+    /// Test settings for unit tests.
+    #[cfg(test)]
+    pub fn new_for_test() -> Self {
+        Self {
+            testbed: "testbed".into(),
+            cloud_provider: CloudProvider::Aws,
+            token_file: "/path/to/token/file".into(),
+            ssh_private_key_file: "/path/to/private/key/file".into(),
+            ssh_public_key_file: None,
+            regions: vec!["London".into(), "New York".into()],
+            specs: "small".into(),
+            repository: Repository {
+                name: "my_repo".into(),
+                url: Url::parse("https://example.net").unwrap(),
+                branch: "main".into(),
+            },
+            results_directory: "results".into(),
+            logs_directory: "logs".into(),
+        }
     }
 }

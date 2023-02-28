@@ -33,7 +33,7 @@ pub type CloudProviderResult<T> = Result<T, CloudProviderError>;
 #[derive(thiserror::Error, Debug)]
 pub enum CloudProviderError {
     #[error("Failed to send server request: {0}")]
-    RequestError(#[from] reqwest::Error),
+    RequestError(String),
 
     #[error("Unexpected response: {0}")]
     UnexpectedResponse(#[from] serde_json::Error),

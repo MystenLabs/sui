@@ -3,34 +3,14 @@ use std::time::Duration;
 use clap::Parser;
 use color_eyre::eyre::{Context, Result};
 use sui_benchmark::orchestrator::{
-    client::VultrClient,
+    client::{aws::AwsClient, vultr::VultrClient, Client},
     parameters::{BenchmarkParametersGenerator, LoadType},
-    settings::Settings,
+    settings::{CloudProvider, Settings},
     testbed::Testbed,
     Orchestrator,
 };
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    color_eyre::install()?;
-    let opts: Opts = Opts::parse();
-
-    // Load the settings files.
-    let settings = Settings::load(opts.settings_path).wrap_err("Failed to load settings")?;
-
-    // Create the client for the cloud provider.
-    let token = settings
-        .load_token()
-        .wrap_err("Failed to load cloud provider's token")?;
-    let client = VultrClient::new(token, settings.clone());
-
-    // Try to register our ssh public with the cloud provider.
-    let public_key = settings.load_ssh_public_key()?;
-    client
-        .upload_key(public_key)
-        .await
-        .wrap_err("Failed to upload ssh key to cloud provider")?;
-
+async fn execute<C: Client>(settings: Settings, client: C, opts: Opts) -> Result<()> {
     // Create a new testbed.
     let testbed = Testbed::new(settings, client)
         .await
@@ -73,6 +53,42 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+#[tokio::main]
+async fn main() -> Result<()> {
+    color_eyre::install()?;
+    let opts: Opts = Opts::parse();
+
+    // Load the settings files.
+    let settings = Settings::load(&opts.settings_path).wrap_err("Failed to load settings")?;
+
+    match &settings.cloud_provider {
+        CloudProvider::Aws => {
+            // Create the client for the cloud provider.
+            let client = AwsClient::new(settings.clone()).await;
+
+            // Execute the command.
+            execute(settings, client, opts).await
+        }
+        CloudProvider::Vultr => {
+            // Create the client for the cloud provider.
+            let token = settings
+                .load_token()
+                .wrap_err("Failed to load cloud provider's token")?;
+            let client = VultrClient::new(token, settings.clone());
+
+            // Try to register our ssh public with the cloud provider.
+            let public_key = settings.load_ssh_public_key()?;
+            client
+                .upload_key(public_key)
+                .await
+                .wrap_err("Failed to upload ssh key to cloud provider")?;
+
+            // Execute the command.
+            execute(settings, client, opts).await
+        }
+    }
+}
+
 #[derive(Parser)]
 #[clap(name = "Testbed orchestrator")]
 pub struct Opts {
@@ -81,14 +97,13 @@ pub struct Opts {
         long,
         value_name = "FILE",
         default_value = "crates/sui-benchmark/src/orchestrator/assets/settings.json",
-        // required = true,
         global = true
     )]
-    pub settings_path: String,
+    settings_path: String,
 
     /// The type of operation to run.
     #[clap(subcommand)]
-    pub operation: Operation,
+    operation: Operation,
 }
 
 #[derive(Parser)]
