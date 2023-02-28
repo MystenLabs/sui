@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::errors::IndexerError;
-use crate::models::checkpoints::get_latest_checkpoint_sequence_number;
+use crate::models::checkpoints::{get_latest_checkpoint_sequence_number, get_rpc_checkpoint};
 use crate::{get_pg_pool_connection, PgConnectionPool};
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
@@ -31,6 +31,7 @@ use sui_types::query::TransactionQuery;
 pub(crate) struct ReadApi {
     fullnode: HttpClient,
     pg_connection_pool: Arc<PgConnectionPool>,
+    method_to_be_forwarded: Vec<String>,
 }
 
 impl ReadApi {
@@ -38,12 +39,20 @@ impl ReadApi {
         Self {
             pg_connection_pool,
             fullnode: fullnode_client,
+            // TODO: read from config or env file
+            method_to_be_forwarded: vec![],
         }
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
         let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
         get_latest_checkpoint_sequence_number(&mut pg_pool_conn)
+    }
+
+    async fn get_checkpoint(&self, id: CheckpointId) -> Result<Checkpoint, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
+        let checkpoint = get_rpc_checkpoint(&mut pg_pool_conn, id)?;
+        Ok(checkpoint)
     }
 }
 
@@ -83,6 +92,18 @@ impl ReadApiServer for ReadApi {
 
     async fn get_total_transaction_number(&self) -> RpcResult<u64> {
         self.fullnode.get_total_transaction_number().await
+    }
+
+    async fn get_transactions(
+        &self,
+        query: TransactionQuery,
+        cursor: Option<TransactionDigest>,
+        limit: Option<usize>,
+        descending_order: Option<bool>,
+    ) -> RpcResult<TransactionsPage> {
+        self.fullnode
+            .get_transactions(query, cursor, limit, descending_order)
+            .await
     }
 
     async fn get_transactions_in_range(
@@ -152,18 +173,6 @@ impl ReadApiServer for ReadApi {
             .await
     }
 
-    async fn get_transactions(
-        &self,
-        query: TransactionQuery,
-        cursor: Option<TransactionDigest>,
-        limit: Option<usize>,
-        descending_order: Option<bool>,
-    ) -> RpcResult<TransactionsPage> {
-        self.fullnode
-            .get_transactions(query, cursor, limit, descending_order)
-            .await
-    }
-
     async fn try_get_past_object(
         &self,
         object_id: ObjectID,
@@ -173,13 +182,27 @@ impl ReadApiServer for ReadApi {
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber> {
+        if self
+            .method_to_be_forwarded
+            .contains(&"get_latest_checkpoint_sequence_number".to_string())
+        {
+            return self.fullnode.get_latest_checkpoint_sequence_number().await;
+        }
         Ok(self.get_latest_checkpoint_sequence_number().await? as u64)
     }
 
     async fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
-        self.fullnode.get_checkpoint(id).await
+        if self
+            .method_to_be_forwarded
+            .contains(&"get_checkpoint".to_string())
+        {
+            return self.fullnode.get_checkpoint(id).await;
+        }
+        Ok(self.get_checkpoint(id).await?)
     }
 
+    // NOTE: checkpoint APIs below will be deprecated,
+    // thus skipping them regarding indexer native implementations.
     async fn get_checkpoint_summary_by_digest(
         &self,
         digest: CheckpointDigest,
