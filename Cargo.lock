@@ -2590,7 +2590,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.4"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=285e3f238112703cdfb7eb21e0ea3100e2882e14#285e3f238112703cdfb7eb21e0ea3100e2882e14"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=9cae043d0821662c075fd054c5c5523dcb20b5fb#9cae043d0821662c075fd054c5c5523dcb20b5fb"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -2638,7 +2638,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=285e3f238112703cdfb7eb21e0ea3100e2882e14#285e3f238112703cdfb7eb21e0ea3100e2882e14"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=9cae043d0821662c075fd054c5c5523dcb20b5fb#9cae043d0821662c075fd054c5c5523dcb20b5fb"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2 1.0.51",
@@ -2649,7 +2649,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=285e3f238112703cdfb7eb21e0ea3100e2882e14#285e3f238112703cdfb7eb21e0ea3100e2882e14"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=9cae043d0821662c075fd054c5c5523dcb20b5fb#9cae043d0821662c075fd054c5c5523dcb20b5fb"
 dependencies = [
  "bincode",
  "digest 0.10.6",
@@ -2665,7 +2665,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=285e3f238112703cdfb7eb21e0ea3100e2882e14#285e3f238112703cdfb7eb21e0ea3100e2882e14"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=9cae043d0821662c075fd054c5c5523dcb20b5fb#9cae043d0821662c075fd054c5c5523dcb20b5fb"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -2676,7 +2676,6 @@ dependencies = [
  "blst",
  "byte-slice-cast",
  "fastcrypto",
- "untrusted 0.9.0",
 ]
 
 [[package]]
@@ -7189,7 +7188,7 @@ dependencies = [
  "libc",
  "once_cell",
  "spin 0.5.2",
- "untrusted 0.7.1",
+ "untrusted",
  "web-sys",
  "winapi",
 ]
@@ -7499,7 +7498,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d53dcdb7c9f8158937a7981b48accfd39a43af418591a5d008c7b22b5e1b7ca4"
 dependencies = [
  "ring",
- "untrusted 0.7.1",
+ "untrusted",
 ]
 
 [[package]]
@@ -10539,12 +10538,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a156c684c91ea7d62626509bce3cb4e1d9ed5c4d978f7b4352658f96a4c26b4a"
 
 [[package]]
-name = "untrusted"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
-
-[[package]]
 name = "unzip-n"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10784,7 +10777,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f095d78192e208183081cc07bc5515ef55216397af48b873e5edcd72637fa1bd"
 dependencies = [
  "ring",
- "untrusted 0.7.1",
+ "untrusted",
 ]
 
 [[package]]
@@ -11690,8 +11683,7 @@ dependencies = [
  "unicode_categories",
  "universal-hash",
  "unsigned-varint",
- "untrusted 0.7.1",
- "untrusted 0.9.0",
+ "untrusted",
  "unzip-n",
  "url",
  "utf8parse",

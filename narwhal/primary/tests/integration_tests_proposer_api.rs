@@ -4,15 +4,16 @@
 use bytes::Bytes;
 use config::{Epoch, Parameters};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use crypto::PublicKey;
+use crypto::{KeyPair, PublicKey};
 use fastcrypto::{
     hash::Hash,
-    traits::{InsecureDefault, KeyPair as _, ToFromBytes},
+    traits::{KeyPair as _, ToFromBytes},
 };
 use narwhal_primary as primary;
 use narwhal_primary::NUM_SHUTDOWN_RECEIVERS;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
+use rand::thread_rng;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -41,6 +42,8 @@ async fn test_rounds_errors() {
     let network_keypair = author.network_keypair().copy();
     let name = keypair.public().clone();
 
+    let other_keypair = KeyPair::generate(&mut thread_rng());
+
     struct TestCase {
         public_key: Bytes,
         test_case_name: String,
@@ -56,7 +59,7 @@ async fn test_rounds_errors() {
                     .to_string(),
         },
         TestCase {
-            public_key: Bytes::from(PublicKey::insecure_default().as_bytes().to_vec()),
+            public_key: Bytes::from(other_keypair.public().as_bytes().to_vec()),
             test_case_name: "Valid public key, but authority not found in committee".to_string(),
             expected_error: "Invalid public key: unknown authority".to_string(),
         },
