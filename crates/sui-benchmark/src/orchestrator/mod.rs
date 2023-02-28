@@ -52,7 +52,7 @@ impl<C: Client> Orchestrator<C> {
     }
 
     pub async fn deploy_testbed(&mut self, instances: usize) -> TestbedResult<()> {
-        // self.testbed.populate(instances).await?;
+        self.testbed.populate(instances).await?;
         self.testbed.install().await?;
         self.testbed.update().await?;
         self.testbed.info();
