@@ -6,6 +6,23 @@ use proptest::collection;
 use proptest::prelude::*;
 
 #[test]
+fn temp_test() {
+    let info = AuthorityQuorumSignInfo::<true> {
+        epoch: 0,
+        signature: Default::default(),
+        signers_map: RoaringBitmap::new(),
+    };
+    let ser = serde_json::to_string(&info).unwrap();
+    println!("{}", ser);
+    let schema = schemars::schema_for!(AuthorityQuorumSignInfo<true>);
+    println!("{}", serde_json::to_string_pretty(&schema).unwrap());
+
+    let bytes = bcs::to_bytes(&info).unwrap();
+    let info2: AuthorityQuorumSignInfo<true> = bcs::from_bytes(&bytes).unwrap();
+    assert_eq!(info.signature.sig, info2.signature.sig);
+}
+
+#[test]
 fn public_key_equality() {
     let ed_kp1: SuiKeyPair = SuiKeyPair::Ed25519(get_key_pair().1);
     let ed_kp2: SuiKeyPair = SuiKeyPair::Ed25519(get_key_pair().1);
