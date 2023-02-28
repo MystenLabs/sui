@@ -257,20 +257,23 @@ export function createWalletKitCore({
       disconnected();
     },
 
-    signMessage(message) {
-      if (!internalState.currentWallet) {
+    signMessage(messageInput) {
+      if (!internalState.currentWallet || !internalState.currentAccount) {
         throw new Error(
           "No wallet is currently connected, cannot call `signMessage`."
         );
       }
 
-      return internalState.currentWallet.signMessage(message);
+      return internalState.currentWallet.signMessage({
+        ...messageInput,
+        account: messageInput.account ?? internalState.currentAccount,
+      });
     },
 
     async signTransaction(transactionInput) {
       if (!internalState.currentWallet || !internalState.currentAccount) {
         throw new Error(
-          "No wallet is currently connected, cannot call `signAndExecuteTransaction`."
+          "No wallet is currently connected, cannot call `signTransaction`."
         );
       }
       const {
