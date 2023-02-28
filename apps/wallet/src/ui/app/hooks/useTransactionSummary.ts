@@ -14,7 +14,7 @@ import type { TxnMetaResponse } from '../helpers/getEventsSummary';
 
 type ExecuteDryRunTransactionRequestProps = {
     txData: TransactionDryRun;
-    activeAddress: string;
+    addressForTransaction: string;
 };
 
 type ExecuteDryRunTransactionReqResponse = [
@@ -24,13 +24,13 @@ type ExecuteDryRunTransactionReqResponse = [
 
 export function useTransactionSummary({
     txData,
-    activeAddress,
+    addressForTransaction,
 }: ExecuteDryRunTransactionRequestProps): ExecuteDryRunTransactionReqResponse {
-    const { data } = useTransactionDryRun(txData);
+    const { data } = useTransactionDryRun(txData, addressForTransaction);
 
     const eventsSummary = useMemo(
-        () => (data ? getEventsSummary(data, activeAddress) : null),
-        [data, activeAddress]
+        () => (data ? getEventsSummary(data, addressForTransaction) : null),
+        [data, addressForTransaction]
     );
     const txGasEstimation = data && getTotalGasUsed(data);
 

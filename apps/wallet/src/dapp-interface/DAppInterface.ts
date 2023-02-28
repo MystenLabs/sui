@@ -77,20 +77,21 @@ export class DAppInterface {
         );
     }
 
-    public signAndExecuteTransaction(transaction: SignableTransaction) {
+    public async signAndExecuteTransaction(transaction: SignableTransaction) {
         return mapToPromise(
             this.send<ExecuteTransactionRequest, ExecuteTransactionResponse>({
                 type: 'execute-transaction-request',
                 transaction: {
                     type: 'v2',
                     data: transaction,
+                    account: (await this.getAccounts())[0],
                 },
             }),
             (response) => response.result
         );
     }
 
-    public executeMoveCall(transaction: MoveCallTransaction) {
+    public async executeMoveCall(transaction: MoveCallTransaction) {
         // eslint-disable-next-line no-console
         console.warn(
             'You are using the deprecated `executeMoveCall` method on the `suiWallet` interface. This method will be removed in a future release of the Sui Wallet. Please migrate to the new `signAndExecuteTransaction` method.'
@@ -102,13 +103,14 @@ export class DAppInterface {
                 transaction: {
                     type: 'move-call',
                     data: transaction,
+                    account: (await this.getAccounts())[0],
                 },
             }),
             (response) => response.result
         );
     }
 
-    public executeSerializedMoveCall(tx: string | Uint8Array) {
+    public async executeSerializedMoveCall(tx: string | Uint8Array) {
         // eslint-disable-next-line no-console
         console.warn(
             'You are using the deprecated `executeSerializedMoveCall` method on the `suiWallet` interface. This method will be removed in a future release of the Sui Wallet. Please migrate to the new `signAndExecuteTransaction` method.'
@@ -122,6 +124,7 @@ export class DAppInterface {
                 transaction: {
                     type: 'serialized-move-call',
                     data,
+                    account: (await this.getAccounts())[0],
                 },
             }),
             (response) => response.result
