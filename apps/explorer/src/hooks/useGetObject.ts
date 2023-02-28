@@ -13,7 +13,6 @@ export function useGetValidators() {
     return useQuery(['system', 'validators'], () => rpc.getValidators());
 }
 
-
 export function useGetSystemObject() {
     const rpc = useRpcClient();
     return useQuery(['system', 'state'], () => rpc.getSuiSystemState());
