@@ -8,6 +8,7 @@
 /// This gives Sui programmers the flexibility to extend objects on-the-fly, and it also serves as a
 /// building block for core collection types
 module sui::dynamic_field {
+    use std::option::{Self, Option};
     use sui::object::{Self, ID, UID};
     use sui::prover;
 
@@ -147,6 +148,18 @@ module sui::dynamic_field {
         let object_addr = object::uid_to_address(object);
         let hash = hash_type_and_key(object_addr, name);
         has_child_object(object_addr, hash)
+    }
+
+    /// Removes the dynamic field if it exists. Returns the `some(Value)` if it exists or none otherwise.
+    public fun remove_if_exists<Name: copy + drop + store, Value: store>(
+        object: &mut UID,
+        name: Name
+    ): Option<Value> {
+        if (exists_<Name>(object, name)) {
+            option::some(remove(object, name))
+        } else {
+            option::none()
+        }
     }
 
     /// Returns true if and only if the `object` has a dynamic field with the name specified by
