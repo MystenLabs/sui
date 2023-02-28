@@ -11,7 +11,7 @@ import { SummaryCard } from '../../components/SummaryCard';
 import { WalletListSelect } from '../../components/WalletListSelect';
 import { Text } from '../../shared/text';
 import Loading from '_components/loading';
-import UserApproveContainer from '_components/user-approve-container';
+import { UserApproveContainer } from '_components/user-approve-container';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import {
     permissionsSelectors,
