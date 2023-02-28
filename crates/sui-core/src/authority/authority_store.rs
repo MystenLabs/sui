@@ -1182,11 +1182,24 @@ impl AuthorityStore {
         &self,
         tx_digests: &[TransactionDigest],
     ) -> Result<Vec<Option<VerifiedTransaction>>, SuiError> {
-        Ok(self
+        let transactions: Vec<Option<VerifiedTransaction>> = self
             .perpetual_tables
             .transactions
             .multi_get(tx_digests)
-            .map(|v| v.into_iter().map(|v| v.map(|v| v.into())).collect())?)
+            .map(|v| v.into_iter().map(|v| v.map(|v| v.into())).collect())?;
+
+        // let txns = transactions.iter().map(|v| v.into_iter().map(|v| v.map(|v| v.into())).collect());
+
+        let mut tx_map = transactions
+            .iter()
+            .flatten()
+            .map(|transactions| (*transactions.digest(), transactions.clone()))
+            .collect::<HashMap<_, _>>();
+
+        Ok(tx_digests
+            .iter()
+            .map(|digest| tx_map.remove(digest))
+            .collect())
     }
 
     pub fn get_transaction(

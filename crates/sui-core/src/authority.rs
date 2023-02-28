@@ -8,6 +8,8 @@ use chrono::prelude::*;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::KeyPair;
+use itertools::izip;
+use move_bytecode_utils::module_cache::SyncModuleCache;
 use itertools::Itertools;
 use move_binary_format::compatibility::Compatibility;
 use move_binary_format::CompiledModule;
@@ -155,6 +157,11 @@ pub type ReconfigConsensusMessage = (
     Vec<(ConsensusWorkerId, NetworkKeyPair)>,
     ConsensusWorkerCache,
 );
+
+pub type VerifiedTransactionBatch = Vec<(
+    (VerifiedTransaction, TransactionEffects),
+    Option<(EpochId, CheckpointSequenceNumber)>,
+)>;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 pub struct AuthorityMetrics {
@@ -2144,33 +2151,18 @@ impl AuthorityState {
         let transactions = self.database.multi_get_transactions(digests)?;
         let effects = self.database.multi_get_executed_effects(digests)?;
         let checkpoints = self.database.multi_get_transaction_checkpoint(digests)?;
-        let mut response: VerifiedTransactionBatch = Vec::new();
 
-        if transactions.len() == effects.len() && checkpoints.len() == transactions.len() {
-            for ((transaction, effect), checkpoint) in transactions
-                .iter()
-                .zip(effects.iter())
-                .zip(checkpoints.iter())
-            {
-                match ((transaction.clone(), effect.clone()), &checkpoint.clone()) {
-                    ((Some(transaction), Some(effect)), check) => {
-                        response.push(((transaction, effect), *check))
-                    }
-                    ((_, _), _) => continue,
-                }
+        let mut missed_digests = vec![];
+        let mut response: VerifiedTransactionBatch = vec![];
+
+        for data in izip!(digests, transactions, effects, checkpoints) {
+            match data {
+                (_, Some(tx), Some(effect), cp) => response.push(((tx, effect), cp)),
+                (digest, _, _, _) => missed_digests.push(*digest),
             }
         }
 
-        if response.len() != digests.len() {
-            let mut missed_digests: Vec<TransactionDigest> = Vec::new();
-            for digest in digests.iter() {
-                if effects
-                    .iter()
-                    .any(|effect| effect.clone().unwrap().transaction_digest != *digest)
-                {
-                    missed_digests.push(*digest);
-                }
-            }
+        if !missed_digests.is_empty() {
             Err(anyhow!(SuiError::TransactionsNotFound {
                 digests: missed_digests
             }))

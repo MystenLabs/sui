@@ -45,6 +45,8 @@ use crate::api::cap_page_limit;
 use crate::error::Error;
 use crate::SuiRpcModule;
 
+pub const QUERY_MAX_RESULT_LIMIT: usize = 1000;
+
 const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
 
 // An implementation of the read portion of the JSON-RPC interface intended for use in
@@ -200,22 +202,29 @@ impl ReadApiServer for ReadApi {
         &self,
         digests: Vec<TransactionDigest>,
     ) -> RpcResult<Vec<SuiTransactionResponse>> {
+        let mut tx_digests: Vec<TransactionDigest> = digests
+            .iter()
+            .take(QUERY_MAX_RESULT_LIMIT)
+            .map(|t| *t)
+            .collect();
+        tx_digests.dedup();
+
         let txn_batch = self
             .state
-            .multi_get_transactions(&digests)
+            .multi_get_transactions(&tx_digests)
             .await
-            .tap_err(|err| debug!(txs_digests=?digests, "Failed to get batch: {:?}", err))?;
+            .tap_err(|err| debug!(txs_digests=?tx_digests, "Failed to get batch: {:?}", err))?;
         let mut responses: Vec<SuiTransactionResponse> = Vec::new();
-        for i in 0..txn_batch.len() {
+        for (txn, digest) in txn_batch.iter().zip(tx_digests.iter()) {
             responses.push(SuiTransactionResponse {
-                transaction: txn_batch[i].clone().0 .0.into_message().try_into()?,
+                transaction: txn.clone().0 .0.into_message().try_into()?,
                 effects: SuiTransactionEffects::try_from(
-                    txn_batch[i].0.clone().1,
+                    txn.0.clone().1,
                     self.state.module_cache.as_ref(),
                 )?,
-                timestamp_ms: self.state.get_timestamp_ms(&digests[i]).await?,
+                timestamp_ms: self.state.get_timestamp_ms(digest).await?,
                 confirmed_local_execution: None,
-                checkpoint: txn_batch[i].1.map(|(_epoch, checkpoint)| checkpoint),
+                checkpoint: txn.1.map(|(_epoch, checkpoint)| checkpoint),
             })
         }
         Ok(responses)
