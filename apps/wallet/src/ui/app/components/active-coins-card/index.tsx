@@ -1,171 +1,108 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
-import { useMemo, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { SUI_TYPE_ARG } from '@mysten/sui.js';
+import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 
-import Icon, { SuiIcons } from '_components/icon';
-import { useAppSelector, useFormatCoin } from '_hooks';
-import { accountAggregateBalancesSelector } from '_redux/slices/account';
-import { GAS_TYPE_ARG, Coin } from '_redux/slices/sui-objects/Coin';
-
-import st from './ActiveCoinsCard.module.scss';
-
-interface CoinObject {
-    coinName: string;
-    coinSymbol: string;
-    coinType: string;
-    coinIconName: string;
-    balance: bigint;
-}
-
-function CoinItem({
-    coin,
-    iconClassName,
-    onClick,
-}: {
-    coin: CoinObject;
-    iconClassName: string;
-    onClick(event: React.MouseEvent<HTMLDivElement>): void;
-}) {
-    const [formatted, symbol] = useFormatCoin(coin.balance, coin.coinType);
-
-    return (
-        <div
-            className={st.coinDetail}
-            onClick={onClick}
-            data-cointype={coin.coinType}
-        >
-            <div className={cl(st.coinIcon, iconClassName)}>
-                <Icon icon={coin.coinIconName} />
-            </div>
-            <div className={st.coinLabel}>
-                {coin.coinName} <span>{coin.coinSymbol}</span>
-            </div>
-            <div className={st.coinAmount}>
-                {formatted} <span>{symbol}</span>
-            </div>
-        </div>
-    );
-}
+import { CoinItem } from './CoinItem';
+import { Text } from '_app/shared/text';
+import { CoinIcon } from '_components/coin-icon';
+import Loading from '_components/loading';
+import { useAppSelector, useFormatCoin, useRpc } from '_hooks';
 
 function SelectedCoinCard({
-    coin,
-    iconClassName,
+    balance,
+    coinType,
 }: {
-    coin: CoinObject;
-    iconClassName: string;
+    balance: bigint | number;
+    coinType: string;
 }) {
-    const [formatted, symbol] = useFormatCoin(coin.balance, coin.coinType);
-    const IconName = coin.coinIconName || SuiIcons.SuiLogoIcon;
+    const [formatted, symbol] = useFormatCoin(balance, coinType);
 
     return (
-        <div className={st.selectCoin}>
-            <Link
-                to={`/send/select?${new URLSearchParams({
-                    type: coin.coinType,
-                }).toString()}`}
-                className={st.coin}
-            >
-                <div className={cl(st.suiIcon, iconClassName)}>
-                    <Icon icon={IconName} />
-                </div>
-                <div className={st.coinLabel}>
-                    {coin.coinName}{' '}
-                    <span className={st.coinSymbol}>{coin.coinSymbol}</span>
-                </div>
-                <div className={st.chevron}>
-                    <Icon icon={SuiIcons.SuiChevronRight} />
-                </div>
-            </Link>
-            <div className={st.coinBalance}>
-                <div className={st.coinBalanceLabel}>Total Available</div>
-                <div className={st.coinBalanceValue}>
-                    {formatted} {symbol}
-                </div>
+        <Link
+            to={`/send/select?${new URLSearchParams({
+                type: coinType,
+            }).toString()}`}
+            className="bg-gray-40 rounded-2lg py-2.5 px-3 no-underline flex gap-2 items-center w-full"
+        >
+            <CoinIcon coinType={coinType} size="sm" />
+
+            <div className="flex flex-1 w-full justify-between">
+                <Text variant="body" color="steel-darker" weight="semibold">
+                    {symbol} available
+                </Text>
+                <Text variant="body" color="steel-darker" weight="medium">
+                    {formatted}
+                </Text>
             </div>
-        </div>
+        </Link>
     );
 }
 
-// Get all the coins that are available in the account.
-// default coin type is GAS_TYPE_ARG unless specified in props
-// create a list of coins that are available in the account
-function ActiveCoinsCard({
-    activeCoinType = GAS_TYPE_ARG,
+export function ActiveCoinsCard({
+    activeCoinType = SUI_TYPE_ARG,
     showActiveCoin = true,
 }: {
     activeCoinType: string;
     showActiveCoin?: boolean;
 }) {
-    const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
+    const primaryAddress = useAppSelector(({ account }) => account.address);
 
-    const coins = useMemo(
-        () =>
-            Object.entries(aggregateBalances).map((aType) => {
-                const name = Coin.getCoinSymbol(aType[0]);
-                return {
-                    coinName: name,
-                    coinSymbol: name,
-                    coinType: aType[0],
-                    //TODO: default coin icon switch to on chain metadata
-                    coinIconName:
-                        GAS_TYPE_ARG === aType[0]
-                            ? SuiIcons.SuiLogoIcon
-                            : SuiIcons.Tokens,
-                    balance: aType[1],
-                } as CoinObject;
-            }),
-        [aggregateBalances]
+    // TODO: remove and use useGetAllBalances hook, once it's merged
+    const rpc = useRpc();
+
+    const { data: coins, isLoading } = useQuery(
+        ['coin-balance', primaryAddress],
+        () => rpc.getAllBalances(primaryAddress!),
+        {
+            enabled: !!primaryAddress,
+        }
     );
 
     const activeCoin = useMemo(() => {
-        return coins.filter((coin) => coin.coinType === activeCoinType)[0];
+        if (!coins) return null;
+        return coins.find(({ coinType }) => coinType === activeCoinType);
     }, [activeCoinType, coins]);
 
-    const defaultIconClass =
-        GAS_TYPE_ARG !== activeCoin?.coinSymbol ? st.defaultCoin : '';
-
-    const navigate = useNavigate();
-
-    const changeCoinType = useCallback(
-        (event: React.MouseEvent<HTMLDivElement>) => {
-            const cointype = event.currentTarget.dataset.cointype as string;
-            navigate(
-                `/send?${new URLSearchParams({
-                    type: cointype,
-                }).toString()}`
-            );
-        },
-        [navigate]
-    );
-
     const CoinListCard = (
-        <div className={st.coinList}>
-            {coins.map((coin, index) => (
-                <CoinItem
-                    key={index}
-                    onClick={changeCoinType}
-                    coin={coin}
-                    iconClassName={defaultIconClass}
-                />
-            ))}
+        <div className="flex flex-col w-full">
+            <Text variant="caption" color="steel-darker" weight="semibold">
+                My Coins
+            </Text>
+            <div className="flex flex-col justify-between items-center mt-2">
+                {coins?.map(({ coinType, totalBalance }) => (
+                    <Link
+                        to={`/send?${new URLSearchParams({
+                            type: coinType,
+                        }).toString()}`}
+                        key={coinType}
+                        className="py-3.75 px-1.5 no-underline flex gap-2 items-center w-full hover:bg-sui/10 group border-t border-solid border-transparent border-t-gray-45"
+                    >
+                        <CoinItem
+                            coinType={coinType}
+                            balance={BigInt(totalBalance)}
+                        />
+                    </Link>
+                ))}
+            </div>
         </div>
     );
 
     return (
-        <div className={st.content}>
-            {showActiveCoin
-                ? activeCoin && (
-                      <SelectedCoinCard
-                          coin={activeCoin}
-                          iconClassName={defaultIconClass}
-                      />
-                  )
-                : CoinListCard}
-        </div>
+        <Loading loading={isLoading}>
+            <div className="flex w-full">
+                {showActiveCoin
+                    ? activeCoin && (
+                          <SelectedCoinCard
+                              coinType={activeCoin.coinType}
+                              balance={activeCoin.totalBalance}
+                          />
+                      )
+                    : CoinListCard}
+            </div>
+        </Loading>
     );
 }
-
-export default ActiveCoinsCard;

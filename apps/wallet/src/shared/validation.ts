@@ -63,7 +63,9 @@ export function createTokenValidation(
             test: function (_, ctx) {
                 // ignore gas budget check if gasBudget is null or gasInputBudgetEst is not null
                 if (!ctx.parent?.gasInputBudgetEst && !gasBudget) {
-                    return true;
+                    return ctx.createError({
+                        message: `Insufficient ${GAS_SYMBOL}, there is no individual coin with enough balance to cover for the gas Fee`,
+                    });
                 }
                 const gasBudgetInput = (ctx.parent?.gasInputBudgetEst ??
                     gasBudget) as number;
@@ -88,13 +90,10 @@ export function createTokenValidation(
                 if (ctx.parent?.isPayAllSui && coinType === GAS_TYPE_ARG) {
                     return true;
                 }
+
+                // this should not happen since we have a required validation
                 if (!amount) {
-                    return ctx.createError({
-                        message: `Insufficient ${GAS_SYMBOL} balance to cover gas fee (${formatBalance(
-                            ctx.parent?.gasInputBudgetEst || gasBudget,
-                            gasDecimals
-                        )} ${GAS_SYMBOL})`,
-                    });
+                    return false;
                 }
                 // check updated gas balance base on gasInputBudgetEst
                 try {
