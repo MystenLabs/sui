@@ -33,8 +33,8 @@ pub trait GovernanceReadApi {
     ) -> RpcResult<CommitteeInfoResponse>;
 
     /// Return [SuiSystemState]
-    #[method(name = "getSuiSystemState")]
-    async fn get_sui_system_state(&self) -> RpcResult<SuiSystemState>;
+    #[method(name = "getCurrentEpochStaticInfo")]
+    async fn get_current_epoch_static_info(&self) -> RpcResult<SuiSystemState>;
 
     /// Return the reference gas price for the network
     #[method(name = "getReferenceGasPrice")]
