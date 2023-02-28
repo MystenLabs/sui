@@ -620,7 +620,7 @@ fn get_value_from_move_struct(move_struct: &SuiMoveStruct, var_name: &str) -> Rp
     match current_value {
         SuiMoveValue::Option(move_option) => match move_option.as_ref() {
             Some(move_value) => Ok(move_value.to_string()),
-            None => Ok("None".to_string()),
+            None => Ok("".to_string()),
         },
         SuiMoveValue::Vector(_) => Err(anyhow!(
             "Vector is not supported as a Display value {}",
