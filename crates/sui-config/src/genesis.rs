@@ -31,9 +31,9 @@ use sui_types::gas::SuiGasStatus;
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::intent::{Intent, IntentMessage, IntentScope};
 use sui_types::message_envelope::Message;
+use sui_types::messages::InputObjects;
+use sui_types::messages::Transaction;
 use sui_types::messages::{CallArg, TransactionEffects};
-use sui_types::messages::{CertifiedTransaction, Transaction};
-use sui_types::messages::{InputObjects, SignedTransaction};
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
 };
@@ -56,7 +56,7 @@ use tracing::trace;
 pub struct Genesis {
     checkpoint: CertifiedCheckpointSummary,
     checkpoint_contents: CheckpointContents,
-    transaction: CertifiedTransaction,
+    transaction: Transaction,
     effects: TransactionEffects,
     objects: Vec<Object>,
 }
@@ -73,15 +73,17 @@ pub struct GenesisTuple(
 // Hand implement PartialEq in order to get around the fact that AuthSigs don't impl Eq
 impl PartialEq for Genesis {
     fn eq(&self, other: &Self) -> bool {
-        self.transaction.data() == other.transaction.data()
+        self.checkpoint.summary() == other.checkpoint.summary()
             && {
-                let this = self.transaction.auth_sig();
-                let other = other.transaction.auth_sig();
+                let this = &self.checkpoint.auth_signature;
+                let other = &other.checkpoint.auth_signature;
 
                 this.epoch == other.epoch
                     && this.signature.as_ref() == other.signature.as_ref()
                     && this.signers_map == other.signers_map
             }
+            && self.checkpoint_contents == other.checkpoint_contents
+            && self.transaction == other.transaction
             && self.effects == other.effects
             && self.objects == other.objects
     }
@@ -98,7 +100,7 @@ impl Genesis {
         self.objects.iter().find(|o| o.id() == id).cloned()
     }
 
-    pub fn transaction(&self) -> &CertifiedTransaction {
+    pub fn transaction(&self) -> &Transaction {
         &self.transaction
     }
 
@@ -216,7 +218,7 @@ impl Serialize for Genesis {
         struct RawGeneis<'a> {
             checkpoint: &'a CertifiedCheckpointSummary,
             checkpoint_contents: &'a CheckpointContents,
-            transaction: &'a CertifiedTransaction,
+            transaction: &'a Transaction,
             effects: &'a TransactionEffects,
             objects: &'a [Object],
         }
@@ -251,7 +253,7 @@ impl<'de> Deserialize<'de> for Genesis {
         struct RawGeneis {
             checkpoint: CertifiedCheckpointSummary,
             checkpoint_contents: CheckpointContents,
-            transaction: CertifiedTransaction,
+            transaction: Transaction,
             effects: TransactionEffects,
             objects: Vec<Object>,
         }
@@ -343,7 +345,7 @@ pub struct Builder {
     validators: BTreeMap<AuthorityPublicKeyBytes, GenesisValidatorInfo>,
     // Validator signatures over 0: checkpoint 1: genesis transaction
     // TODO remove the need to have a sig on the transaction
-    signatures: BTreeMap<AuthorityPublicKeyBytes, (AuthoritySignInfo, AuthoritySignInfo)>,
+    signatures: BTreeMap<AuthorityPublicKeyBytes, AuthoritySignInfo>,
     built_genesis: Option<GenesisTuple>,
 }
 
@@ -402,7 +404,7 @@ impl Builder {
     }
 
     pub fn add_validator_signature(mut self, keypair: &AuthorityKeyPair) -> Self {
-        let GenesisTuple(checkpoint, _checkpoint_contents, transaction, _effects, _objects) =
+        let GenesisTuple(checkpoint, _checkpoint_contents, _transaction, _effects, _objects) =
             self.build_unsigned_genesis_checkpoint();
 
         let name = keypair.public().into();
@@ -423,13 +425,7 @@ impl Builder {
             }
         };
 
-        let transaction_signature =
-            SignedTransaction::new(checkpoint.epoch, transaction.into_data(), keypair, name)
-                .auth_sig()
-                .clone();
-
-        self.signatures
-            .insert(name, (checkpoint_signature, transaction_signature));
+        self.signatures.insert(name, checkpoint_signature);
 
         self
     }
@@ -471,23 +467,12 @@ impl Builder {
 
         let committee = Self::committee(&objects);
 
-        let transaction = {
-            let signatures = self
-                .signatures
-                .clone()
-                .into_iter()
-                .map(|(_, (_, s))| s)
-                .collect();
-
-            CertifiedTransaction::new(transaction.into_data(), signatures, &committee).unwrap()
-        };
-
         let checkpoint = {
             let signatures = self
                 .signatures
                 .clone()
                 .into_iter()
-                .map(|(_, (s, _))| s)
+                .map(|(_, s)| s)
                 .collect();
 
             CertifiedCheckpointSummary {
@@ -579,8 +564,8 @@ impl Builder {
 
             let path = entry.path();
             let signature_bytes = fs::read(path)?;
-            let sigs: (AuthoritySignInfo, AuthoritySignInfo) = bcs::from_bytes(&signature_bytes)?;
-            signatures.insert(sigs.0.authority, sigs);
+            let sigs: AuthoritySignInfo = bcs::from_bytes(&signature_bytes)?;
+            signatures.insert(sigs.authority, sigs);
         }
 
         // Load validator infos
