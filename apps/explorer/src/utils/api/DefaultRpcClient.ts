@@ -5,7 +5,6 @@ import { SentryRpcClient } from '@mysten/core';
 import {
     JsonRpcProvider,
     Connection,
-    devnetConnection,
     localnetConnection,
 } from '@mysten/sui.js';
 
@@ -17,7 +16,9 @@ export enum Network {
 
 const CONNECTIONS: Record<Network, Connection> = {
     [Network.LOCAL]: localnetConnection,
-    [Network.DEVNET]: devnetConnection,
+    [Network.DEVNET]: new Connection({
+        fullnode: 'https://explorer-rpc.devnet.sui.io:443',
+    }),
     [Network.TESTNET]: new Connection({
         fullnode: 'https://fullnode-explorer.testnet.sui.io:443',
     }),
