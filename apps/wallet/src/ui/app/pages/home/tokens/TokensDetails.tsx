@@ -8,6 +8,7 @@ import { CoinActivitiesCard } from './CoinActivityCard';
 import { TokenIconLink } from './TokenIconLink';
 import CoinBalance from './coin-balance';
 import IconLink from './icon-link';
+import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
@@ -22,13 +23,13 @@ type TokenDetailsProps = {
 };
 
 function MyTokens() {
-    const accountAddress = useAppSelector(({ account }) => account.address);
+    const accountAddress = useActiveAddress();
     const { data: balance, isLoading: loadingBalances } =
         useGetAllBalances(accountAddress);
 
-    const noSuiToken = useMemo(() => {
-        return !balance?.find(({ coinType }) => coinType === SUI_TYPE_ARG);
-    }, [balance]);
+    const noSuiToken = !balance?.find(
+        ({ coinType }) => coinType === SUI_TYPE_ARG
+    );
 
     return (
         <Loading loading={loadingBalances}>
