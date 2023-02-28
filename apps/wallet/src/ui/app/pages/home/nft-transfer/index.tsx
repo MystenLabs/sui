@@ -89,11 +89,8 @@ function NftTransferPage() {
         },
         [dispatch, navigate, objectId]
     );
-    const handleOnClearSubmitError = useCallback(() => {
-        setSendError(null);
-    }, []);
 
-    const closeSendToken = useCallback(() => {
+    const closeOverlay = useCallback(() => {
         navigate('/');
     }, [navigate]);
 
@@ -102,7 +99,7 @@ function NftTransferPage() {
             showModal={true}
             setShowModal={setShowModal}
             title="Send NFT"
-            closeOverlay={closeSendToken}
+            closeOverlay={closeOverlay}
         >
             <div className="flex w-full flex-col">
                 <Loading loading={isLoading}>
@@ -124,8 +121,8 @@ function NftTransferPage() {
                                 <TransferNFTForm
                                     submitError={sendError}
                                     gasBudget={DEFAULT_NFT_TRANSFER_GAS_FEE}
-                                    onClearSubmitError={
-                                        handleOnClearSubmitError
+                                    onClearSubmitError={() =>
+                                        setSendError(null)
                                     }
                                 />
                             </Formik>
