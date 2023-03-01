@@ -25,7 +25,9 @@
   "scripts": {
     "clean": "rm -rf tsconfig.tsbuildinfo ./dist",
     "codegen:version": "node genversion.mjs",
-    "build": "node genversion.mjs && pnpm build:types && tsup ./src/index.ts --format esm,cjs --sourcemap",
+    "dev": "pnpm build:tsup --watch",
+    "build": "node genversion.mjs && pnpm build:types && pnpm build:tsup",
+    "build:tsup": "tsup ./src/index.ts --format esm,cjs --sourcemap",
     "build:types": "tsc --build",
     "doc": "typedoc",
     "test": "pnpm test:typecheck && pnpm test:unit",

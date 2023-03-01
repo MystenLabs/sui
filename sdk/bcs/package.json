@@ -21,7 +21,9 @@
   ],
   "scripts": {
     "clean": "rm -rf tsconfig.tsbuildinfo ./dist",
-    "build": "pnpm build:types && tsup ./src/index.ts --format esm,cjs --sourcemap",
+    "dev": "pnpm build --watch",
+    "build": "pnpm build:types && pnpm build:tsup",
+    "build:tsup": "tsup ./src/index.ts --format esm,cjs --sourcemap",
     "build:types": "tsc --build",
     "prepublishOnly": "pnpm build",
     "test": "vitest run",

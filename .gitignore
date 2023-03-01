@@ -39,6 +39,7 @@ node_modules
 dist/
 storybook-static/
 web-ext-artifacts/
+.next/
 
 # App test artifacts
 coverage/

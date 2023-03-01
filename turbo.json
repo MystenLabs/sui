@@ -7,6 +7,10 @@
     "test": {
       "outputs": ["coverage/**"]
     },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["build/**", "dist/**", "storybook-static/**"]
