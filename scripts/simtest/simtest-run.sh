@@ -5,6 +5,7 @@
 NUM_CPUS=$(cat /proc/cpuinfo | grep processor | wc -l) # ubuntu
 # NUM_CPUS=$(sysctl -n hw.ncpu) mac
 
+DATE=$(date +%s)
 SEED="$DATE"
 LOG_FILE="log-$SEED"
 # This command runs many different tests, so it already uses all CPUs fairly efficiently, and

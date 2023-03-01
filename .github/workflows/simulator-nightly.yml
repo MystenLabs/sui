@@ -44,13 +44,12 @@ jobs:
 
     - name: Build simtest
       run: |
-        ./scripts/simtest/cargo-simtest simtest build
-        DATE=$(date +%s)
         export RUST_LOG=off
-        echo "Using MSIM_TEST_SEED=$MSIM_TEST_SEED"
+        ./scripts/simtest/cargo-simtest simtest build
 
     - name: Run simtest
       run: |
+        export RUST_LOG=off
         ./scripts/simtest/simtest-run.sh
 
   # report-status:
