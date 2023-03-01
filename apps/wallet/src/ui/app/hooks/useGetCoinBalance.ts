@@ -4,6 +4,7 @@
 import { useRpcClient } from '@mysten/core';
 import { type SuiAddress } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
+import { toast } from 'react-hot-toast';
 
 export function useGetCoinBalance(
     coinType: string,
@@ -16,6 +17,9 @@ export function useGetCoinBalance(
         {
             enabled: !!address && !!coinType,
             refetchInterval: 4000,
+            onError: (error) => {
+                toast.error((error as Error).message);
+            },
         }
     );
 }
