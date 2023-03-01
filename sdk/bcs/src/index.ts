@@ -1006,7 +1006,7 @@ export class BCS {
 
           // Before deserializing, read the canonical field type.
           const { name: fieldType, params: fieldParams } = this.parseTypeName(
-            struct[key]
+            struct[key] as TypeName
           );
 
           // Check whether this type is a generic defined in this struct.
@@ -1065,7 +1065,7 @@ export class BCS {
         let result: { [key: string]: any } = {};
         for (let key of canonicalOrder) {
           const { name: fieldName, params: fieldParams } = this.parseTypeName(
-            struct[key]
+            struct[key] as TypeName
           );
 
           // if it's not a generic
@@ -1184,7 +1184,7 @@ export class BCS {
           );
         }
         let invariant = canonicalOrder[orderByte];
-        let invariantType = struct[invariant];
+        let invariantType = struct[invariant] as TypeName | null;
 
         // write order byte
         writer.write8(orderByte);
@@ -1211,7 +1211,7 @@ export class BCS {
       (reader: BcsReader, typeParams, typeMap) => {
         let orderByte = reader.readULEB();
         let invariant = canonicalOrder[orderByte];
-        let invariantType = struct[invariant];
+        let invariantType = struct[invariant] as TypeName | null;
 
         if (orderByte === -1) {
           throw new Error(
