@@ -505,18 +505,18 @@ impl AuthorityState {
     /// Initiate a new transaction.
     pub async fn handle_transaction(
         &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
     ) -> Result<HandleTransactionResponse, SuiError> {
-        let epoch_store = self.load_epoch_store_one_call_per_task();
-
         let tx_digest = *transaction.digest();
         debug!(
             "handle_transaction with transaction data: {:?}",
             &transaction.data().intent_message.value
         );
+
         // Ensure an idempotent answer. This is checked before the system_tx check so that
         // a validator is able to return the signed system tx if it was already signed locally.
-        if let Some((_, status)) = self.get_transaction_status(&tx_digest, &epoch_store)? {
+        if let Some((_, status)) = self.get_transaction_status(&tx_digest, epoch_store)? {
             return Ok(HandleTransactionResponse { status });
         }
         // CRITICAL! Validators should never sign an external system transaction.
@@ -547,9 +547,7 @@ impl AuthorityState {
             return Err(SuiError::TransactionExpired);
         }
 
-        let signed = self
-            .handle_transaction_impl(transaction, &epoch_store)
-            .await;
+        let signed = self.handle_transaction_impl(transaction, epoch_store).await;
         match signed {
             Ok(s) => Ok(HandleTransactionResponse {
                 status: TransactionStatus::Signed(s.into_inner().into_sig()),
@@ -559,7 +557,7 @@ impl AuthorityState {
             // In that case, we could still return Ok to avoid showing confusing errors.
             Err(err) => Ok(HandleTransactionResponse {
                 status: self
-                    .get_transaction_status(&tx_digest, &epoch_store)?
+                    .get_transaction_status(&tx_digest, epoch_store)?
                     .ok_or(err)?
                     .1,
             }),
@@ -1043,6 +1041,7 @@ impl AuthorityState {
         );
         let (gas_object_ref, input_objects) = transaction_input_checker::check_dev_inspect_input(
             &self.database,
+            protocol_config,
             &transaction_kind,
             gas_object,
         )

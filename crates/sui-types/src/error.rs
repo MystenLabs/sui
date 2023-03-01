@@ -85,6 +85,8 @@ pub enum UserInputError {
     DependentPackageNotFound { package_id: ObjectID },
     #[error("Mutable parameter provided, immutable parameter expected.")]
     ImmutableParameterExpectedError { object_id: ObjectID },
+    #[error("Size limit exceeded: {limit} is {value}")]
+    SizeLimitExceeded { limit: String, value: String },
     #[error(
         "Object {child_id:?} is owned by object {parent_id:?}. \
         Objects owned by other objects cannot be used as input arguments."
