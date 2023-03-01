@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { BCS, EnumTypeDefinition, getSuiMoveConfig, StructTypeDefinition } from '@mysten/bcs';
+import {
+  BCS,
+  EnumTypeDefinition,
+  getSuiMoveConfig,
+  StructTypeDefinition,
+} from '@mysten/bcs';
 import { SuiObjectRef } from './objects';
 import { RpcApiVersion } from './version';
 
@@ -271,10 +276,10 @@ const VECTOR = 'vector';
 
 // Imported to explicitly tell typescript that types match
 type TypeSchema = {
-  structs?: { [key: string]: StructTypeDefinition; };
-  enums?: { [key: string]: EnumTypeDefinition; };
-  aliases?: { [key: string]: string; };
-}
+  structs?: { [key: string]: StructTypeDefinition };
+  enums?: { [key: string]: EnumTypeDefinition };
+  aliases?: { [key: string]: string };
+};
 
 const BCS_SPEC: TypeSchema = {
   enums: {
