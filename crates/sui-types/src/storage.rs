@@ -676,7 +676,7 @@ impl ObjectStore for &[Object] {
     }
 }
 
-impl ObjectStore for &BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)> {
+impl ObjectStore for BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)> {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         Ok(self.get(object_id).map(|(_, obj, _)| obj).cloned())
     }

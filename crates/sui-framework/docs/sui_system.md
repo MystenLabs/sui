@@ -1285,6 +1285,7 @@ gas coins.
     <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
     <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, 0);
+    <b>let</b> old_protocol_version = self.protocol_version;
 
     self.epoch_start_timestamp_ms = epoch_start_timestamp_ms;
 
@@ -1375,6 +1376,9 @@ gas coins.
     self.safe_mode = <b>false</b>;
 
     <b>if</b> (new_system_state_version != wrapper.version) {
+        // If we are upgrading the system state, we need <b>to</b> make sure that the protocol version
+        // is also upgraded.
+        <b>assert</b>!(old_protocol_version != next_protocol_version, 0);
         <b>let</b> cur_state: <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> = <a href="dynamic_field.md#0x2_dynamic_field_remove">dynamic_field::remove</a>(&<b>mut</b> wrapper.id, wrapper.version);
         <b>let</b> new_state = <a href="sui_system.md#0x2_sui_system_upgrade_system_state">upgrade_system_state</a>(cur_state);
         wrapper.version = new_system_state_version;

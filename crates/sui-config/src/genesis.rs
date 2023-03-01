@@ -165,7 +165,7 @@ impl Genesis {
     }
 
     pub fn sui_system_object(&self) -> SuiSystemState {
-        get_sui_system_state(self.objects()).expect("Sui System State object must always exist")
+        get_sui_system_state(&self.objects()).expect("Sui System State object must always exist")
     }
 
     pub fn clock(&self) -> Clock {
@@ -470,7 +470,7 @@ impl Builder {
 
     fn committee(objects: &[Object]) -> Committee {
         let sui_system_object =
-            get_sui_system_state(objects).expect("Sui System State object must always exist");
+            get_sui_system_state(&objects).expect("Sui System State object must always exist");
         sui_system_object.get_current_epoch_committee().committee
     }
 

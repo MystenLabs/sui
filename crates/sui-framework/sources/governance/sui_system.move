@@ -532,6 +532,7 @@ module sui::sui_system {
         let self = load_system_state_mut(wrapper);
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, 0);
+        let old_protocol_version = self.protocol_version;
 
         self.epoch_start_timestamp_ms = epoch_start_timestamp_ms;
 
@@ -622,6 +623,9 @@ module sui::sui_system {
         self.safe_mode = false;
 
         if (new_system_state_version != wrapper.version) {
+            // If we are upgrading the system state, we need to make sure that the protocol version
+            // is also upgraded.
+            assert!(old_protocol_version != next_protocol_version, 0);
             let cur_state: SuiSystemStateInner = dynamic_field::remove(&mut wrapper.id, wrapper.version);
             let new_state = upgrade_system_state(cur_state);
             wrapper.version = new_system_state_version;

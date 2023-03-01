@@ -567,11 +567,11 @@ where
     Ok(result)
 }
 
-pub fn get_sui_system_state<S>(object_store: S) -> Result<SuiSystemState, SuiError>
+pub fn get_sui_system_state<S>(object_store: &S) -> Result<SuiSystemState, SuiError>
 where
     S: ObjectStore,
 {
-    let wrapper = get_sui_system_state_wrapper(&object_store)?;
+    let wrapper = get_sui_system_state_wrapper(object_store)?;
     let inner_id = derive_dynamic_field_id(
         wrapper.id.id.bytes,
         &TypeTag::U64,

@@ -38,7 +38,10 @@ use sui_types::utils::{
     make_committee_key, mock_certified_checkpoint, to_sender_signed_transaction,
     to_sender_signed_transaction_with_multi_signers,
 };
-use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_OBJECT_ID};
+use sui_types::{
+    MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+};
 
 use crate::epoch::epoch_metrics::EpochMetrics;
 use move_core_types::parser::parse_type_tag;
@@ -48,7 +51,7 @@ use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::epoch_data::EpochData;
 use sui_types::object::Data;
-use sui_types::sui_system_state::SuiSystemStateWrapper;
+use sui_types::sui_system_state::{SuiSystemStateWrapper, INIT_SYSTEM_STATE_VERSION};
 use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, Signature},
@@ -2996,6 +2999,76 @@ async fn test_genesis_sui_system_state_object() {
         &sui_system_state.get_current_epoch_committee().committee,
         authority_state.epoch_store_for_testing().committee()
     );
+}
+
+#[tokio::test]
+async fn test_sui_system_state_nop_upgrade() {
+    let authority_state = init_state().await;
+
+    let protocol_config = ProtocolConfig::get_for_version(ProtocolVersion::MIN);
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let move_vm = adapter::new_move_vm(native_functions.clone(), &protocol_config)
+        .expect("We defined natives to not fail here");
+    let mut temporary_store = TemporaryStore::new(
+        authority_state.database.clone(),
+        InputObjects::new(vec![(
+            InputObjectKind::SharedMoveObject {
+                id: SUI_SYSTEM_STATE_OBJECT_ID,
+                initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                mutable: true,
+            },
+            authority_state
+                .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)
+                .await
+                .unwrap()
+                .unwrap(),
+        )]),
+        TransactionDigest::genesis(),
+        &protocol_config,
+    );
+    let system_object_arg = CallArg::Object(ObjectArg::SharedObject {
+        id: SUI_SYSTEM_STATE_OBJECT_ID,
+        initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+        mutable: true,
+    });
+    let new_protocol_version = ProtocolVersion::MIN.as_u64() + 1;
+    let new_system_state_version = INIT_SYSTEM_STATE_VERSION + 1;
+
+    adapter::execute::<execution_mode::Normal, _, _>(
+        &move_vm,
+        &mut temporary_store,
+        ModuleId::new(SUI_FRAMEWORK_ADDRESS, ident_str!("sui_system").to_owned()),
+        &ident_str!("advance_epoch").to_owned(),
+        vec![],
+        vec![
+            system_object_arg,
+            CallArg::Pure(bcs::to_bytes(&1u64).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&new_protocol_version).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&0u64).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&0u64).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&0u64).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&0u64).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&0u64).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&0u64).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&new_system_state_version).unwrap()), // Upgrade sui system state, set new version to 1.
+        ],
+        SuiGasStatus::new_unmetered().create_move_gas_status(),
+        &mut TxContext::new(
+            &SuiAddress::default(),
+            &TransactionDigest::genesis(),
+            &EpochData::new(0, 0, CheckpointDigest::default()),
+        ),
+        &protocol_config,
+    )
+    .unwrap();
+    let inner = temporary_store.into_inner();
+    // Make sure that the new version is set, and that we can still read the inner object.
+    assert_eq!(
+        inner.get_sui_system_state_wrapper_object().unwrap().version,
+        new_system_state_version
+    );
+    inner.get_sui_system_state_object().unwrap();
 }
 
 #[tokio::test]
