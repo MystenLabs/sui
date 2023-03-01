@@ -5,7 +5,7 @@ use derive_more::From;
 use eyre::eyre;
 use fastcrypto::bls12381::min_sig::{
     BLS12381AggregateSignature, BLS12381AggregateSignatureAsBytes, BLS12381KeyPair,
-    BLS12381PrivateKey, BLS12381PublicKey, BLS12381Signature,
+    BLS12381PrivateKey, BLS12381PublicKey, BLS12381PublicKeyAsBytes, BLS12381Signature,
 };
 use fastcrypto::ed25519::{
     Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature, Ed25519SignatureAsBytes,
@@ -57,6 +57,7 @@ pub type AuthorityPrivateKey = BLS12381PrivateKey;
 pub type AuthoritySignature = BLS12381Signature;
 pub type AggregateAuthoritySignature = BLS12381AggregateSignature;
 pub type AggregateAuthoritySignatureAsBytes = BLS12381AggregateSignatureAsBytes;
+pub type AuthorityPublicKeyBytes = BLS12381PublicKeyAsBytes;
 
 // TODO(joyqvq): prefix these types with Default, DefaultAccountKeyPair etc
 pub type AccountKeyPair = Ed25519KeyPair;
@@ -320,33 +321,33 @@ impl PublicKey {
     }
 }
 
-/// Defines the compressed version of the public key that we pass around
-/// in Sui
-#[serde_as]
-#[derive(
-    Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, schemars::JsonSchema,
-)]
-pub struct AuthorityPublicKeyBytes(
-    #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, Bytes>")]
-    [u8; AuthorityPublicKey::LENGTH],
-);
+// /// Defines the compressed version of the public key that we pass around
+// /// in Sui
+// #[serde_as]
+// #[derive(
+//     Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, schemars::JsonSchema,
+// )]
+// pub struct AuthorityPublicKeyBytes(
+//     #[schemars(with = "Base64")]
+//     #[serde_as(as = "Readable<Base64, Bytes>")]
+//     [u8; AuthorityPublicKey::LENGTH],
+// );
 
-impl AuthorityPublicKeyBytes {
-    fn fmt_impl(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let s = Hex::encode(self.0);
-        write!(f, "k#{}", s)?;
-        Ok(())
-    }
+// impl AuthorityPublicKeyBytes {
+//     fn fmt_impl(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+//         let s = Hex::encode(self.0);
+//         write!(f, "k#{}", s)?;
+//         Ok(())
+//     }
 
-    /// Get a ConciseAuthorityPublicKeyBytes. Usage:
-    ///
-    ///   debug!(name = ?authority.concise());
-    ///   format!("{:?}", authority.concise());
-    pub fn concise(&self) -> ConciseAuthorityPublicKeyBytes<'_> {
-        ConciseAuthorityPublicKeyBytes(self)
-    }
-}
+//     /// Get a ConciseAuthorityPublicKeyBytes. Usage:
+//     ///
+//     ///   debug!(name = ?authority.concise());
+//     ///   format!("{:?}", authority.concise());
+//     pub fn concise(&self) -> ConciseAuthorityPublicKeyBytes<'_> {
+//         ConciseAuthorityPublicKeyBytes(self)
+//     }
+// }
 
 /// A wrapper around AuthorityPublicKeyBytes that provides a concise Debug impl.
 pub struct ConciseAuthorityPublicKeyBytes<'a>(&'a AuthorityPublicKeyBytes);
@@ -365,65 +366,65 @@ impl std::fmt::Display for ConciseAuthorityPublicKeyBytes<'_> {
     }
 }
 
-impl TryFrom<AuthorityPublicKeyBytes> for AuthorityPublicKey {
-    type Error = FastCryptoError;
+// impl TryFrom<AuthorityPublicKeyBytes> for AuthorityPublicKey {
+//     type Error = FastCryptoError;
 
-    fn try_from(bytes: AuthorityPublicKeyBytes) -> Result<AuthorityPublicKey, Self::Error> {
-        AuthorityPublicKey::from_bytes(bytes.as_ref())
-    }
-}
+//     fn try_from(bytes: AuthorityPublicKeyBytes) -> Result<AuthorityPublicKey, Self::Error> {
+//         AuthorityPublicKey::from_bytes(bytes.as_ref())
+//     }
+// }
 
-impl From<&AuthorityPublicKey> for AuthorityPublicKeyBytes {
-    fn from(pk: &AuthorityPublicKey) -> AuthorityPublicKeyBytes {
-        AuthorityPublicKeyBytes::from_bytes(pk.as_ref()).unwrap()
-    }
-}
+// impl From<&AuthorityPublicKey> for AuthorityPublicKeyBytes {
+//     fn from(pk: &AuthorityPublicKey) -> AuthorityPublicKeyBytes {
+//         AuthorityPublicKeyBytes::from_bytes(pk.as_ref()).unwrap()
+//     }
+// }
 
-impl AsRef<[u8]> for AuthorityPublicKeyBytes {
-    fn as_ref(&self) -> &[u8] {
-        &self.0[..]
-    }
-}
+// impl AsRef<[u8]> for AuthorityPublicKeyBytes {
+//     fn as_ref(&self) -> &[u8] {
+//         &self.0[..]
+//     }
+// }
 
-impl Debug for AuthorityPublicKeyBytes {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        self.fmt_impl(f)
-    }
-}
+// impl Debug for AuthorityPublicKeyBytes {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+//         self.fmt_impl(f)
+//     }
+// }
 
-impl Display for AuthorityPublicKeyBytes {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        self.fmt_impl(f)
-    }
-}
+// impl Display for AuthorityPublicKeyBytes {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+//         self.fmt_impl(f)
+//     }
+// }
 
-impl ToFromBytes for AuthorityPublicKeyBytes {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, fastcrypto::error::FastCryptoError> {
-        let bytes: [u8; AuthorityPublicKey::LENGTH] = bytes
-            .try_into()
-            .map_err(|_| fastcrypto::error::FastCryptoError::InvalidInput)?;
-        Ok(AuthorityPublicKeyBytes(bytes))
-    }
-}
+// impl ToFromBytes for AuthorityPublicKeyBytes {
+//     fn from_bytes(bytes: &[u8]) -> Result<Self, fastcrypto::error::FastCryptoError> {
+//         let bytes: [u8; AuthorityPublicKey::LENGTH] = bytes
+//             .try_into()
+//             .map_err(|_| fastcrypto::error::FastCryptoError::InvalidInput)?;
+//         Ok(AuthorityPublicKeyBytes(bytes))
+//     }
+// }
 
-impl AuthorityPublicKeyBytes {
-    pub const ZERO: Self = Self::new([0u8; AuthorityPublicKey::LENGTH]);
+// impl AuthorityPublicKeyBytes {
+//     pub const ZERO: Self = Self::new([0u8; AuthorityPublicKey::LENGTH]);
 
-    /// This ensures it's impossible to construct an instance with other than registered lengths
-    pub const fn new(bytes: [u8; AuthorityPublicKey::LENGTH]) -> AuthorityPublicKeyBytes
-where {
-        AuthorityPublicKeyBytes(bytes)
-    }
-}
+//     /// This ensures it's impossible to construct an instance with other than registered lengths
+//     pub const fn new(bytes: [u8; AuthorityPublicKey::LENGTH]) -> AuthorityPublicKeyBytes
+// where {
+//         AuthorityPublicKeyBytes(bytes)
+//     }
+// }
 
-impl FromStr for AuthorityPublicKeyBytes {
-    type Err = Error;
+// impl FromStr for AuthorityPublicKeyBytes {
+//     type Err = Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let value = Hex::decode(s).map_err(|e| anyhow!(e))?;
-        Self::from_bytes(&value[..]).map_err(|e| anyhow!(e))
-    }
-}
+//     fn from_str(s: &str) -> Result<Self, Self::Err> {
+//         let value = Hex::decode(s).map_err(|e| anyhow!(e))?;
+//         Self::from_bytes(&value[..]).map_err(|e| anyhow!(e))
+//     }
+// }
 
 //
 // Add helper calls for Authority Signature

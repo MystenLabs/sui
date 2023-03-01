@@ -3088,7 +3088,7 @@ pub struct ConsensusTransaction {
     pub kind: ConsensusTransactionKind,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
 pub enum ConsensusTransactionKey {
     Certificate(TransactionDigest),
     CheckpointSignature(AuthorityName, CheckpointSequenceNumber),
@@ -3198,7 +3198,7 @@ impl ConsensusTransaction {
 
     pub fn new_end_of_publish(authority: AuthorityName) -> Self {
         let mut hasher = DefaultHasher::new();
-        authority.hash(&mut hasher);
+        authority.0.hash(&mut hasher);
         let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
