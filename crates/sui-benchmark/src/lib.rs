@@ -264,6 +264,9 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     }
 
     async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
+        if std::env::var("BENCH_MODE").is_ok() {
+            return self.execute_bench_transaction(tx).await;
+        }
         let tx_digest = *tx.digest();
         let tx = tx.verify()?;
         let mut retry_cnt = 0;
