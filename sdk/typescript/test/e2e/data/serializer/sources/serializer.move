@@ -4,7 +4,6 @@
 module serializer::serializer_tests {
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
-    use sui::clock::{Self, Clock};
 
     public entry fun list<T: key + store, C>(
         item: T,
@@ -17,10 +16,6 @@ module serializer::serializer_tests {
         item: T,
     ): T {
         item
-    }
-
-    public entry fun timestamp_ms(clock: &Clock) {
-        clock::timestamp_ms(clock);
     }
 
     public fun test_abort() {
