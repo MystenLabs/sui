@@ -27,7 +27,7 @@ use serde::ser::Error;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
-use serde_with::serde_as;
+use serde_with::{serde_as, DisplayFromStr};
 use sui_json::SuiJsonValue;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{
@@ -70,6 +70,27 @@ pub type TransactionsPage = Page<TransactionDigest, TransactionDigest>;
 pub type EventPage = Page<SuiEventEnvelope, EventID>;
 pub type CoinPage = Page<Coin, ObjectID>;
 pub type DynamicFieldPage = Page<DynamicFieldInfo, ObjectID>;
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, PartialEq, Eq, Copy)]
+/// Type for de/serializing number to string
+pub struct BigInt(
+    #[serde_as(as = "DisplayFromStr")]
+    #[schemars(with = "String")]
+    u64,
+);
+
+impl From<BigInt> for u64 {
+    fn from(x: BigInt) -> u64 {
+        x.0
+    }
+}
+
+impl From<u64> for BigInt {
+    fn from(v: u64) -> BigInt {
+        BigInt(v)
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -1434,7 +1455,7 @@ pub struct SuiPay {
     pub recipients: Vec<SuiAddress>,
     /// The amounts each recipient will receive.
     /// Must be the same length as amounts
-    pub amounts: Vec<String>,
+    pub amounts: Vec<BigInt>,
 }
 
 impl From<Pay> for SuiPay {
@@ -1443,7 +1464,7 @@ impl From<Pay> for SuiPay {
         SuiPay {
             coins,
             recipients: p.recipients,
-            amounts: p.amounts.iter().map(|x| x.to_string()).collect(),
+            amounts: p.amounts.into_iter().map(|x| x.into()).collect(),
         }
     }
 }
@@ -1466,7 +1487,7 @@ pub struct SuiPaySui {
     pub recipients: Vec<SuiAddress>,
     /// The amounts each recipient will receive.
     /// Must be the same length as amounts
-    pub amounts: Vec<String>,
+    pub amounts: Vec<BigInt>,
 }
 
 impl From<PaySui> for SuiPaySui {
@@ -1475,7 +1496,7 @@ impl From<PaySui> for SuiPaySui {
         SuiPaySui {
             coins,
             recipients: p.recipients,
-            amounts: p.amounts.iter().map(|x| x.to_string()).collect(),
+            amounts: p.amounts.into_iter().map(|x| x.into()).collect(),
         }
     }
 }
@@ -1673,7 +1694,7 @@ impl Display for SuiTransactionKind {
                 }
                 writeln!(writer, "Amounts:")?;
                 for amount in &p.amounts {
-                    writeln!(writer, "{}", amount)?
+                    writeln!(writer, "{:?}", amount)?
                 }
             }
             Self::PaySui(p) => {
@@ -1688,7 +1709,7 @@ impl Display for SuiTransactionKind {
                 }
                 writeln!(writer, "Amounts:")?;
                 for amount in &p.amounts {
-                    writeln!(writer, "{}", amount)?
+                    writeln!(writer, "{:?}", amount)?
                 }
             }
             Self::PayAllSui(p) => {

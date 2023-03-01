@@ -8,7 +8,7 @@ use jsonrpsee::core::RpcResult;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    GetRawObjectDataResponse, SuiObjectInfo, SuiTransactionBuilderMode, SuiTypeTag,
+    BigInt, GetRawObjectDataResponse, SuiObjectInfo, SuiTransactionBuilderMode, SuiTypeTag,
     TransactionBytes,
 };
 use sui_open_rpc::Module;
@@ -113,7 +113,7 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
         signer: SuiAddress,
         input_coins: Vec<ObjectID>,
         recipients: Vec<SuiAddress>,
-        amounts: Vec<String>,
+        amounts: Vec<BigInt>,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
@@ -123,10 +123,7 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
                 signer,
                 input_coins,
                 recipients,
-                amounts
-                    .iter()
-                    .map(|a| a.parse::<u64>().map_err(|err| anyhow::anyhow!(err)))
-                    .collect::<Result<_, _>>()?,
+                amounts.into_iter().map(|a| a.into()).collect(),
                 gas,
                 gas_budget,
             )
@@ -139,7 +136,7 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
         signer: SuiAddress,
         input_coins: Vec<ObjectID>,
         recipients: Vec<SuiAddress>,
-        amounts: Vec<String>,
+        amounts: Vec<BigInt>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
         let data = self
@@ -148,10 +145,7 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
                 signer,
                 input_coins,
                 recipients,
-                amounts
-                    .iter()
-                    .map(|a| a.parse::<u64>().map_err(|err| anyhow::anyhow!(err)))
-                    .collect::<Result<Vec<u64>, _>>()?,
+                amounts.into_iter().map(|a| a.into()).collect(),
                 gas_budget,
             )
             .await?;

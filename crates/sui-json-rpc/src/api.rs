@@ -9,8 +9,8 @@ use jsonrpsee_proc_macros::rpc;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    Balance, Checkpoint, CheckpointId, CoinPage, DevInspectResults, DynamicFieldPage, EventPage,
-    GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
+    Balance, BigInt, Checkpoint, CheckpointId, CoinPage, DevInspectResults, DynamicFieldPage,
+    EventPage, GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
     MoveFunctionArgType, RPCTransactionRequestParams, SuiCoinMetadata, SuiEventEnvelope,
     SuiEventFilter, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
     SuiObjectInfo, SuiTBlsSignObjectCommitmentType, SuiTBlsSignRandomnessObjectResponse,
@@ -380,7 +380,7 @@ pub trait RpcTransactionBuilder {
         /// the recipients' addresses, the length of this vector must be the same as amounts.
         recipients: Vec<SuiAddress>,
         /// the amounts to be transferred to recipients, following the same order
-        amounts: Vec<String>,
+        amounts: Vec<BigInt>,
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
@@ -406,7 +406,7 @@ pub trait RpcTransactionBuilder {
         /// the recipients' addresses, the length of this vector must be the same as amounts.
         recipients: Vec<SuiAddress>,
         /// the amounts to be transferred to recipients, following the same order
-        amounts: Vec<String>,
+        amounts: Vec<BigInt>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
