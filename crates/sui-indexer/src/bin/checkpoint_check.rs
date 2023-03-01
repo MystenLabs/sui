@@ -54,23 +54,20 @@ async fn main() -> Result<()> {
             target_checkpoint
         );
 
-        match (fn_txn_digest, idx_txn_digest) {
-            (Some(fn_txn_digest), Some(idx_txn_digest)) => {
-                let fn_sui_txn_response = fn_rpc_client
-                    .read_api()
-                    .get_transaction(fn_txn_digest)
-                    .await?;
-                let indexer_sui_txn_response = indexer_rpc_client
-                    .read_api()
-                    .get_transaction(idx_txn_digest)
-                    .await?;
-                assert_eq!(
-                    fn_sui_txn_response, indexer_sui_txn_response,
-                    "Checkpoint transactions mismatch found in {}",
-                    target_checkpoint
-                );
-            }
-            _ => (),
+        if let (Some(fn_txn_digest), Some(idx_txn_digest)) = (fn_txn_digest, idx_txn_digest) {
+            let fn_sui_txn_response = fn_rpc_client
+                .read_api()
+                .get_transaction(fn_txn_digest)
+                .await?;
+            let indexer_sui_txn_response = indexer_rpc_client
+                .read_api()
+                .get_transaction(idx_txn_digest)
+                .await?;
+            assert_eq!(
+                fn_sui_txn_response, indexer_sui_txn_response,
+                "Checkpoint transactions mismatch found in {}",
+                target_checkpoint
+            );
         }
     }
 
