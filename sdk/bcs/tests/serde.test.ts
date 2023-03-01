@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { SUI_ADDRESS_LENGTH } from "../../typescript/src";
 import { BCS, getSuiMoveConfig } from "./../src/index";
 
-describe("serde", () => {
+describe("BCS: Serde", () => {
   it("should serialize primitives in both directions", () => {
     const bcs = new BCS(getSuiMoveConfig());
 

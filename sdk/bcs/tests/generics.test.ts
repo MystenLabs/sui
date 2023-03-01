@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import { BCS, fromB64, getSuiMoveConfig } from "./../src/index";
 
-describe("Generics BCS", () => {
+describe("BCS: Generics", () => {
   it("should handle generics", () => {
     const bcs = new BCS(getSuiMoveConfig());
 
