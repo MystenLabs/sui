@@ -12,7 +12,7 @@ describe("BCS: Array type", () => {
     expect(serde(bcs, ["vector", BCS.STRING], values)).toEqual(values);
   });
 
-  it.skip("should support destructured type name in struct", () => {
+  it("should support destructured type name in struct", () => {
     const bcs = new BCS(getSuiMoveConfig());
     const value = {
         name: 'Bob',
@@ -37,7 +37,7 @@ describe("BCS: Array type", () => {
     expect(serde(bcs, ["User", "Metadata"], value)).toEqual(value);
   });
 
-  it.skip("should support destructured type name in enum", () => {
+  it("should support destructured type name in enum", () => {
     const bcs = new BCS(getSuiMoveConfig());
     const values = { some: ["this is a string"] };
 

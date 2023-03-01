@@ -421,7 +421,9 @@ export interface TypeInterface {
  * Struct type definition. Used as input format in BcsConfig.types
  * as well as an argument type for `bcs.registerStructType`.
  */
-export type StructTypeDefinition = { [key: string]: TypeName };
+export type StructTypeDefinition = {
+  [key: string]: TypeName | StructTypeDefinition;
+};
 
 /**
  * Enum type definition. Used as input format in BcsConfig.types
@@ -436,7 +438,9 @@ export type StructTypeDefinition = { [key: string]: TypeName };
  *   none: null
  * });
  */
-export type EnumTypeDefinition = { [key: string]: TypeName | null };
+export type EnumTypeDefinition = {
+  [key: string]: TypeName | StructTypeDefinition | null;
+};
 
 /**
  * Configuration that is passed into BCS constructor.
@@ -513,17 +517,17 @@ export class BCS {
   protected schema: BcsConfig;
 
   /**
+   * Count temp keys to generate a new one when requested.
+   */
+  protected counter: number = 0;
+
+  /**
    * Name of the key to use for temporary struct definitions.
    * Returns a temp key + index (for a case when multiple temp
    * structs are processed).
    */
   private tempKey() {
-    const key = (i: any) => "temp-struct-" + i;
-    let i = 0;
-    while (this.hasType(key(i))) {
-      i++;
-    }
-    return key(i);
+    return `bcs-struct-${++this.counter}`;
   }
 
   /**
@@ -946,6 +950,19 @@ export class BCS {
     typeName: TypeName,
     fields: StructTypeDefinition
   ): BCS {
+    // When an Object is passed, we register it under a new key and store it
+    // in the registered type system. This way we allow nested inline definitions.
+    for (let key in fields) {
+      let internalName = this.tempKey();
+      let value = fields[key];
+
+      // TODO: add a type guard here?
+      if (value instanceof Array == false && typeof value !== "string") {
+        fields[key] = internalName;
+        this.registerStructType(internalName, value as StructTypeDefinition);
+      }
+    }
+
     let struct = Object.freeze(fields); // Make sure the order doesn't get changed
 
     // IMPORTANT: we need to store canonical order of fields for each registered
@@ -1120,6 +1137,22 @@ export class BCS {
     typeName: TypeName,
     variants: EnumTypeDefinition
   ): BCS {
+    // When an Object is passed, we register it under a new key and store it
+    // in the registered type system. This way we allow nested inline definitions.
+    for (let key in variants) {
+      let internalName = this.tempKey();
+      let value = variants[key];
+
+      if (
+        value !== null &&
+        value instanceof Array == false &&
+        typeof value !== "string"
+      ) {
+        variants[key] = internalName;
+        this.registerStructType(internalName, value as StructTypeDefinition);
+      }
+    }
+
     let struct = Object.freeze(variants); // Make sure the order doesn't get changed
 
     // IMPORTANT: enum is an ordered type and we have to preserve ordering in BCS
