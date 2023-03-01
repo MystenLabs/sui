@@ -4,6 +4,7 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
 use std::collections::HashSet;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ObjectRef;
 use sui_types::error::{SuiError, UserInputError, UserInputResult};
 use sui_types::gas::SuiCostTable;
@@ -51,7 +52,7 @@ pub async fn check_transaction_input(
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
-    transaction.validity_check()?;
+    transaction.validity_check(epoch_store.protocol_config())?;
     let gas_status = get_gas_status(store, epoch_store, transaction).await?;
     let input_objects = transaction.input_objects()?;
     let objects = store.check_input_objects(&input_objects)?;
@@ -63,11 +64,12 @@ pub async fn check_transaction_input(
 /// bypasses many of the normal object checks
 pub(crate) async fn check_dev_inspect_input(
     store: &AuthorityStore,
+    config: &ProtocolConfig,
     kind: &TransactionKind,
     gas_object: Object,
 ) -> Result<(ObjectRef, InputObjects), anyhow::Error> {
     let gas_object_ref = gas_object.compute_object_reference();
-    TransactionData::validity_check_impl(kind, &gas_object_ref)?;
+    TransactionData::validity_check_impl(config, kind, &gas_object_ref)?;
     for k in kind.single_transactions() {
         match k {
             SingleTransactionKind::TransferObject(_)

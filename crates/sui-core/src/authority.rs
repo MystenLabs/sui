@@ -191,6 +191,7 @@ pub struct AuthorityMetrics {
     /// Consensus handler metrics
     pub consensus_handler_processed_batches: IntCounter,
     pub consensus_handler_processed_bytes: IntCounter,
+    pub consensus_handler_processed: IntCounterVec,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -383,6 +384,8 @@ impl AuthorityMetrics {
                 "Number of bytes processed by consensus_handler",
                 registry
             ).unwrap(),
+            consensus_handler_processed: register_int_counter_vec_with_registry!("consensus_handler_processed", "Number of transactions processed by consensus handler", &["class"], registry)
+                .unwrap()
         }
     }
 }
@@ -502,18 +505,18 @@ impl AuthorityState {
     /// Initiate a new transaction.
     pub async fn handle_transaction(
         &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
     ) -> Result<HandleTransactionResponse, SuiError> {
-        let epoch_store = self.load_epoch_store_one_call_per_task();
-
         let tx_digest = *transaction.digest();
         debug!(
             "handle_transaction with transaction data: {:?}",
             &transaction.data().intent_message.value
         );
+
         // Ensure an idempotent answer. This is checked before the system_tx check so that
         // a validator is able to return the signed system tx if it was already signed locally.
-        if let Some((_, status)) = self.get_transaction_status(&tx_digest, &epoch_store)? {
+        if let Some((_, status)) = self.get_transaction_status(&tx_digest, epoch_store)? {
             return Ok(HandleTransactionResponse { status });
         }
         // CRITICAL! Validators should never sign an external system transaction.
@@ -544,9 +547,7 @@ impl AuthorityState {
             return Err(SuiError::TransactionExpired);
         }
 
-        let signed = self
-            .handle_transaction_impl(transaction, &epoch_store)
-            .await;
+        let signed = self.handle_transaction_impl(transaction, epoch_store).await;
         match signed {
             Ok(s) => Ok(HandleTransactionResponse {
                 status: TransactionStatus::Signed(s.into_inner().into_sig()),
@@ -556,7 +557,7 @@ impl AuthorityState {
             // In that case, we could still return Ok to avoid showing confusing errors.
             Err(err) => Ok(HandleTransactionResponse {
                 status: self
-                    .get_transaction_status(&tx_digest, &epoch_store)?
+                    .get_transaction_status(&tx_digest, epoch_store)?
                     .ok_or(err)?
                     .1,
             }),
@@ -1040,6 +1041,7 @@ impl AuthorityState {
         );
         let (gas_object_ref, input_objects) = transaction_input_checker::check_dev_inspect_input(
             &self.database,
+            protocol_config,
             &transaction_kind,
             gas_object,
         )
@@ -1842,6 +1844,8 @@ impl AuthorityState {
     }
 
     /// This function should be called once and exactly once during reconfiguration.
+    /// Instead of this function use AuthorityEpochStore::epoch_start_configuration() to access this object everywhere
+    /// besides when we are reading fields for the current epoch
     pub fn get_sui_system_state_object_during_reconfig(&self) -> SuiResult<SuiSystemState> {
         self.database.get_sui_system_state_object()
     }

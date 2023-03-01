@@ -7,10 +7,9 @@ use crate::committee::{Committee, CommitteeWithNetAddresses, ProtocolVersion, St
 use crate::crypto::AuthorityPublicKeyBytes;
 use crate::dynamic_field::{derive_dynamic_field_id, Field};
 use crate::error::SuiError;
-use crate::id::UID;
 use crate::storage::ObjectStore;
-use crate::{balance::Balance, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
-
+use crate::{balance::Balance, id::UID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
+use anemo::PeerId;
 use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;
 use move_core_types::language_storage::TypeTag;
@@ -21,7 +20,7 @@ use multiaddr::Multiaddr;
 use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
@@ -181,6 +180,11 @@ impl Validator {
             self.voting_power,
             self.metadata.net_address.clone(),
         )
+    }
+
+    pub fn authority_name(&self) -> AuthorityName {
+        AuthorityPublicKeyBytes::from_bytes(self.metadata.pubkey_bytes.as_ref())
+            .expect("Validity of public key bytes should be verified on-chain")
     }
 }
 
@@ -375,6 +379,29 @@ impl SuiSystemState {
             authorities: narwhal_committee,
             epoch: self.epoch as narwhal_config::Epoch,
         }
+    }
+
+    pub fn get_current_epoch_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId> {
+        let mut result = HashMap::new();
+        let _: () = self
+            .validators
+            .active_validators
+            .iter()
+            .map(|validator| {
+                let name = validator.authority_name();
+
+                let network_key = narwhal_crypto::NetworkPublicKey::from_bytes(
+                    &validator.metadata.network_pubkey_bytes,
+                )
+                .expect("Can't get narwhal network key");
+
+                let peer_id = PeerId(network_key.0.to_bytes());
+
+                result.insert(name, peer_id);
+            })
+            .collect();
+
+        result
     }
 
     #[allow(clippy::mutable_key_type)]

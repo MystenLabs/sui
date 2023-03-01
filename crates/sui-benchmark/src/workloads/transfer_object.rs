@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SuiAddress},
+    base_types::{ObjectRef, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
     messages::VerifiedTransaction,
     object::Owner,
@@ -32,12 +32,7 @@ pub struct TransferObjectTestPayload {
 }
 
 impl Payload for TransferObjectTestPayload {
-    fn make_new_payload(
-        self: Box<Self>,
-        new_object: ObjectRef,
-        new_gas: ObjectRef,
-        _: &ExecutionEffects,
-    ) -> Box<dyn Payload> {
+    fn make_new_payload(self: Box<Self>, effects: &ExecutionEffects) -> Box<dyn Payload> {
         let recipient = self
             .gas
             .iter()
@@ -49,14 +44,23 @@ impl Payload for TransferObjectTestPayload {
             .into_iter()
             .map(|x| {
                 if x.1.get_owner_address().unwrap() == self.transfer_from {
-                    (new_gas, Owner::AddressOwner(self.transfer_from), x.2)
+                    (
+                        effects.gas_object().0,
+                        Owner::AddressOwner(self.transfer_from),
+                        x.2,
+                    )
                 } else {
                     x
                 }
             })
             .collect();
         Box::new(TransferObjectTestPayload {
-            transfer_object: new_object,
+            transfer_object: effects
+                .mutated()
+                .iter()
+                .find(|(object_ref, _)| object_ref.0 == self.transfer_object.0)
+                .map(|x| x.0)
+                .unwrap(),
             transfer_from: self.transfer_to,
             transfer_to: recipient.get_owner_address().unwrap(),
             gas: updated_gas,
@@ -78,15 +82,8 @@ impl Payload for TransferObjectTestPayload {
             Some(*self.system_state_observer.reference_gas_price.borrow()),
         )
     }
-    fn get_object_id(&self) -> ObjectID {
-        self.transfer_object.0
-    }
     fn get_workload_type(&self) -> WorkloadType {
         WorkloadType::TransferObject
-    }
-
-    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self as &TransferObjectTestPayload)
     }
 }
 
