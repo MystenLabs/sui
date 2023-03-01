@@ -61,14 +61,19 @@ export function createTokenValidation(
         .test({
             name: 'gas-balance-check-enough-single-coin',
             test: function (_, ctx) {
+                const gasBudgetInput = (ctx.parent?.gasInputBudgetEst ||
+                    gasBudget ||
+                    0) as number;
                 // ignore gas budget check if gasBudget is null or gasInputBudgetEst is not null
-                if (!ctx.parent?.gasInputBudgetEst && !gasBudget) {
+                if (ctx.parent?.isPayAllSui && coinType === GAS_TYPE_ARG) {
+                    return true;
+                }
+
+                if (!gasBudgetInput) {
                     return ctx.createError({
                         message: `Insufficient ${GAS_SYMBOL}, there is no individual coin with enough balance to cover for the gas Fee`,
                     });
                 }
-                const gasBudgetInput = (ctx.parent?.gasInputBudgetEst ??
-                    gasBudget) as number;
 
                 if (maxSuiSingleCoinBalance >= gasBudgetInput) {
                     return true;
@@ -91,16 +96,12 @@ export function createTokenValidation(
                     return true;
                 }
 
-                // this should not happen since we have a required validation
-                if (!amount) {
-                    return false;
-                }
                 // check updated gas balance base on gasInputBudgetEst
                 try {
                     let availableGas = gasBalance;
                     if (coinType === GAS_TYPE_ARG) {
                         availableGas -= BigInt(
-                            amount.shiftedBy(decimals).toString()
+                            amount?.shiftedBy(decimals).toString() || '0'
                         );
                     }
                     if (

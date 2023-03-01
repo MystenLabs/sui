@@ -36,48 +36,47 @@ function TransferCoinPage() {
     const [coinDecimals] = useCoinDecimals(coinType);
 
     const signer = useSigner();
-
-    const transferCoin = async () => {
-        if (coinType === null || !signer || !formData) {
-            throw new Error('Missing data');
-        }
-
-        const transaction = Sentry.startTransaction({ name: 'send-tokens' });
-        try {
-            trackEvent('TransferCoins', {
-                props: { coinType },
-            });
-
-            // Use payAllSui if sendMax is true and the token type is SUI
-            if (formData.isPayAllSui && coinType === SUI_TYPE_ARG) {
-                return signer.payAllSui({
-                    recipient: formData.to,
-                    gasBudget: formData.gasBudget,
-                    inputCoins: formData.coinIds,
-                });
+    const executeTransfer = useMutation({
+        mutationFn: async () => {
+            if (coinType === null || !signer || !formData) {
+                throw new Error('Missing data');
             }
 
-            const bigIntAmount = parseAmount(formData.amount, coinDecimals);
-
-            return signer.signAndExecuteTransaction({
-                kind: coinType === SUI_TYPE_ARG ? 'paySui' : 'pay',
-                data: {
-                    inputCoins: formData.coinIds,
-                    recipients: [formData.to],
-                    amounts: [Number(bigIntAmount)],
-                    gasBudget: Number(formData.gasBudget),
-                },
+            const transaction = Sentry.startTransaction({
+                name: 'send-tokens',
             });
-        } catch (error) {
-            transaction.setTag('failure', true);
-            throw error;
-        } finally {
-            transaction.finish();
-        }
-    };
+            try {
+                trackEvent('TransferCoins', {
+                    props: { coinType },
+                });
 
-    const executeTransfer = useMutation({
-        mutationFn: transferCoin,
+                // Use payAllSui if sendMax is true and the token type is SUI
+                if (formData.isPayAllSui && coinType === SUI_TYPE_ARG) {
+                    return signer.payAllSui({
+                        recipient: formData.to,
+                        gasBudget: formData.gasBudget,
+                        inputCoins: formData.coinIds,
+                    });
+                }
+
+                const bigIntAmount = parseAmount(formData.amount, coinDecimals);
+
+                return signer.signAndExecuteTransaction({
+                    kind: coinType === SUI_TYPE_ARG ? 'paySui' : 'pay',
+                    data: {
+                        inputCoins: formData.coinIds,
+                        recipients: [formData.to],
+                        amounts: [Number(bigIntAmount)],
+                        gasBudget: Number(formData.gasBudget),
+                    },
+                });
+            } catch (error) {
+                transaction.setTag('failure', true);
+                throw error;
+            } finally {
+                transaction.finish();
+            }
+        },
         onSuccess: (response) => {
             const txDigest = getTransactionDigest(response);
             const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
@@ -157,7 +156,7 @@ function TransferCoinPage() {
                                 setFormData(formData);
                             }}
                             coinType={coinType}
-                            initialAmount={formData?.amount.toString() || ''}
+                            initialAmount={formData?.amount || ''}
                             initialTo={formData?.to || ''}
                         />
                     </>

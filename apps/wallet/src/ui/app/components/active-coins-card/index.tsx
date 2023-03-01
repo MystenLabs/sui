@@ -2,15 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
-import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
 import { CoinItem } from './CoinItem';
 import { Text } from '_app/shared/text';
 import { CoinIcon } from '_components/coin-icon';
-import Loading from '_components/loading';
-import { useAppSelector, useFormatCoin, useRpc } from '_hooks';
+import { useAppSelector, useFormatCoin } from '_hooks';
+import { accountAggregateBalancesSelector } from '_redux/slices/account';
 
 function SelectedCoinCard({
     balance,
@@ -49,17 +48,16 @@ export function ActiveCoinsCard({
     activeCoinType: string;
     showActiveCoin?: boolean;
 }) {
-    const primaryAddress = useAppSelector(({ account }) => account.address);
-
-    // TODO: remove and use useGetAllBalances hook, once it's merged
-    const rpc = useRpc();
-
-    const { data: coins, isLoading } = useQuery(
-        ['coin-balance', primaryAddress],
-        () => rpc.getAllBalances(primaryAddress!),
-        {
-            enabled: !!primaryAddress,
-        }
+    const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
+    const coins = useMemo(
+        () =>
+            Object.entries(aggregateBalances).map((aType) => {
+                return {
+                    coinType: aType[0],
+                    balance: aType[1],
+                };
+            }),
+        [aggregateBalances]
     );
 
     const activeCoin = useMemo(() => {
@@ -73,7 +71,7 @@ export function ActiveCoinsCard({
                 My Coins
             </Text>
             <div className="flex flex-col justify-between items-center mt-2">
-                {coins?.map(({ coinType, totalBalance }) => (
+                {coins?.map(({ coinType, balance }) => (
                     <Link
                         to={`/send?${new URLSearchParams({
                             type: coinType,
@@ -83,7 +81,7 @@ export function ActiveCoinsCard({
                     >
                         <CoinItem
                             coinType={coinType}
-                            balance={BigInt(totalBalance)}
+                            balance={BigInt(balance)}
                         />
                     </Link>
                 ))}
@@ -92,17 +90,15 @@ export function ActiveCoinsCard({
     );
 
     return (
-        <Loading loading={isLoading}>
-            <div className="flex w-full">
-                {showActiveCoin
-                    ? activeCoin && (
-                          <SelectedCoinCard
-                              coinType={activeCoin.coinType}
-                              balance={activeCoin.totalBalance}
-                          />
-                      )
-                    : CoinListCard}
-            </div>
-        </Loading>
+        <div className="flex w-full">
+            {showActiveCoin
+                ? activeCoin && (
+                      <SelectedCoinCard
+                          coinType={activeCoin.coinType}
+                          balance={activeCoin.balance}
+                      />
+                  )
+                : CoinListCard}
+        </div>
     );
 }

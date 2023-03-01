@@ -2,11 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowRight16 } from '@mysten/icons';
-import { SUI_TYPE_ARG, Coin as CoinAPI, type CoinStruct } from '@mysten/sui.js';
+import {
+    SUI_TYPE_ARG,
+    Coin as CoinAPI,
+    type SuiMoveObject,
+} from '@mysten/sui.js';
 import { Field, Form, useFormikContext, Formik } from 'formik';
 import { useMemo, useEffect } from 'react';
 
 import { createValidationSchemaStepOne } from './validation';
+import { useFormatCoin, CoinFormat } from '_app/hooks/useFormatCoin';
 import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, {
     Content,
@@ -19,12 +24,14 @@ import Loading from '_components/loading';
 import { parseAmount } from '_helpers';
 import {
     useCoinDecimals,
-    useFormatCoin,
     useAppSelector,
-    useGasBudgetEstimationUnits,
-    useGetCoins,
+    useIndividualCoinMaxBalance,
 } from '_hooks';
-import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import {
+    accountAggregateBalancesSelector,
+    accountCoinsSelector,
+} from '_redux/slices/account';
+import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { useGasBudgetInMist } from '_src/ui/app/hooks/useGasBudgetInMist';
 import { InputWithAction } from '_src/ui/app/shared/InputWithAction';
 
@@ -59,13 +66,17 @@ function GasBudgetEstimation({
     suiCoins,
 }: {
     coinDecimals: number;
-    suiCoins: CoinStruct[] | null;
+    suiCoins: SuiMoveObject[];
 }) {
     const { values, setFieldValue } = useFormikContext<FormValues>();
 
-    const gasBudgetEstimationUnits = useGasBudgetEstimationUnits(
-        suiCoins!,
-        BigInt(parseAmount(values?.amount, coinDecimals))
+    const gasBudgetEstimationUnits = useMemo(
+        () =>
+            Coin.computeGasBudgetForPay(
+                suiCoins,
+                parseAmount(values.amount, coinDecimals)
+            ),
+        [coinDecimals, suiCoins, values.amount]
     );
     const { gasBudget: gasBudgetEstimation, isLoading } = useGasBudgetInMist(
         gasBudgetEstimationUnits
@@ -109,49 +120,37 @@ export function SendTokenForm({
     initialAmount = '',
     initialTo = '',
 }: SendTokenFormProps) {
-    const accountAddress = useAppSelector(({ account }) => account.address);
-    // Get all coins of the type
-    const { data: coinsData, isLoading: coinsIsLoading } = useGetCoins(
-        coinType,
-        accountAddress!
+    const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
+    const coinBalance = useMemo(
+        () => (coinType && aggregateBalances[coinType]) || BigInt(0),
+        [coinType, aggregateBalances]
     );
 
-    // Get SUI balance
-    const { data: suiCoinsData, isLoading: suiCoinsIsLoading } = useGetCoins(
-        SUI_TYPE_ARG,
-        accountAddress!
+    const allCoins = useAppSelector(accountCoinsSelector);
+    const coins = useMemo(
+        () =>
+            allCoins.filter(
+                ({ type }) => CoinAPI.getCoinType(type) === coinType
+            ),
+        [allCoins, coinType]
     );
 
-    // filter out locked lockedUntilEpoch
-    const coins =
-        coinsData?.filter(({ lockedUntilEpoch }) => !lockedUntilEpoch) || null;
+    const suiCoins = useMemo(
+        () =>
+            allCoins.filter(
+                ({ type }) => CoinAPI.getCoinType(type) === SUI_TYPE_ARG
+            ),
+        [allCoins]
+    );
 
-    const suiCoins =
-        suiCoinsData?.filter(({ lockedUntilEpoch }) => !lockedUntilEpoch) ||
-        null;
-
-    const coinBalance =
-        coins?.reduce((acc, { balance }) => {
-            return acc + BigInt(balance);
-        }, 0n) || BigInt(0n);
-
-    const gasAggregateBalance =
-        suiCoins?.reduce((acc, { balance }) => {
-            return acc + BigInt(balance);
-        }, 0n) || BigInt(0n);
+    const gasAggregateBalance = aggregateBalances[SUI_TYPE_ARG] || BigInt(0);
 
     const coinSymbol = (coinType && CoinAPI.getCoinSymbol(coinType)) || '';
 
     const [coinDecimals] = useCoinDecimals(coinType);
     const [gasDecimals] = useCoinDecimals(SUI_TYPE_ARG);
 
-    const maxSuiSingleCoinBalance = useMemo(() => {
-        const maxCoin = suiCoins?.reduce(
-            (max, { balance }) => (max < balance ? balance : max),
-            0
-        );
-        return BigInt(maxCoin || 0);
-    }, [suiCoins]);
+    const maxSuiSingleCoinBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
 
     const validationSchemaStepOne = useMemo(
         () =>
@@ -176,17 +175,19 @@ export function SendTokenForm({
         ]
     );
 
-    const [maxToken, symbol, queryResult] = useFormatCoin(
+    const [tokenBalance, symbol, queryResult] = useFormatCoin(
         coinBalance,
-        coinType
+        coinType,
+        CoinFormat.FULL
     );
 
+    // Max token depending on coin response could be '...' base on the query result
+    // remove the comma from the token balance
+    const maxToken =
+        tokenBalance !== '...' ? tokenBalance.replace(/,/g, '') : null;
+
     return (
-        <Loading
-            loading={
-                suiCoinsIsLoading || coinsIsLoading || queryResult.isLoading
-            }
-        >
+        <Loading loading={queryResult.isLoading}>
             <Formik
                 initialValues={{
                     amount: initialAmount,
@@ -207,10 +208,10 @@ export function SendTokenForm({
                 }: FormValues) => {
                     if (!gasInputBudgetEst || !coins || !suiCoins) return;
                     const coinsIDs = coins
-                        .sort((a, b) => a.balance - b.balance)
-                        .map(({ coinObjectId }) => coinObjectId);
+                        .sort((a, b) => a.fields.balance - b.fields.balance)
+                        .map(({ fields }) => fields.coinObjectId);
                     const suiCoinsIds = suiCoins.map(
-                        ({ coinObjectId }) => coinObjectId
+                        ({ fields }) => fields.id.id
                     );
                     const data = {
                         to,
@@ -266,11 +267,10 @@ export function SendTokenForm({
                                             rounded="lg"
                                             dark
                                             onActionClicked={() =>
+                                                // useFormat coin
                                                 setFieldValue(
                                                     'amount',
-                                                    coinType === SUI_TYPE_ARG
-                                                        ? maxToken
-                                                        : coinBalance?.toString(),
+                                                    maxToken,
                                                     true
                                                 )
                                             }
