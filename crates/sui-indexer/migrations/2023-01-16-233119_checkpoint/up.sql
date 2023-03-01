@@ -7,6 +7,7 @@ CREATE TABLE checkpoints (
     -- derived from EndOfEpochData
     next_epoch_committee TEXT,
     next_epoch_protocol_version BIGINT,
+    end_of_epoch_data TEXT,
     -- derived from GasCostSummary
     total_gas_cost BIGINT NOT NULL,
     total_computation_cost BIGINT NOT NULL,

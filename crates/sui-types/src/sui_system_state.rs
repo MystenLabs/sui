@@ -4,10 +4,12 @@
 use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::collection_types::{VecMap, VecSet};
 use crate::committee::{Committee, CommitteeWithNetAddresses, ProtocolVersion, StakeUnit};
-use crate::crypto::{AuthorityPublicKeyBytes, NetworkPublicKey};
+use crate::crypto::AuthorityPublicKeyBytes;
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
 use crate::{balance::Balance, id::UID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
+
+use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use multiaddr::Multiaddr;
@@ -22,6 +24,14 @@ pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
 pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch_safe_mode");
 pub const CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME: &IdentStr =
     ident_str!("consensus_commit_prologue");
+
+const E_METADATA_INVALID_PUBKEY: u64 = 1;
+const E_METADATA_INVALID_NET_PUBKEY: u64 = 2;
+const E_METADATA_INVALID_WORKER_PUBKEY: u64 = 3;
+const E_METADATA_INVALID_NET_ADDR: u64 = 4;
+const E_METADATA_INVALID_P2P_ADDR: u64 = 5;
+const E_METADATA_INVALID_CONSENSUS_ADDR: u64 = 6;
+const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 
 /// Rust version of the Move sui::sui_system::SystemParameters type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
@@ -52,6 +62,93 @@ pub struct ValidatorMetadata {
     pub p2p_address: Vec<u8>,
     pub consensus_address: Vec<u8>,
     pub worker_address: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+pub struct VerifiedValidatorMetadata {
+    pub sui_address: SuiAddress,
+    pub pubkey: narwhal_crypto::PublicKey,
+    pub network_pubkey: narwhal_crypto::NetworkPublicKey,
+    pub worker_pubkey: narwhal_crypto::NetworkPublicKey,
+    pub proof_of_possession_bytes: Vec<u8>,
+    pub name: String,
+    pub description: String,
+    pub image_url: String,
+    pub project_url: String,
+    pub net_address: Multiaddr,
+    pub p2p_address: Multiaddr,
+    pub consensus_address: Multiaddr,
+    pub worker_address: Multiaddr,
+}
+
+impl ValidatorMetadata {
+    /// Verify validator metadata and return a verified version (on success) or error code (on failure)
+    pub fn verify(&self) -> Result<VerifiedValidatorMetadata, u64> {
+        let pubkey = narwhal_crypto::PublicKey::from_bytes(self.pubkey_bytes.as_ref())
+            .map_err(|_| E_METADATA_INVALID_PUBKEY)?;
+        let network_pubkey =
+            narwhal_crypto::NetworkPublicKey::from_bytes(self.network_pubkey_bytes.as_ref())
+                .map_err(|_| E_METADATA_INVALID_NET_PUBKEY)?;
+        let worker_pubkey =
+            narwhal_crypto::NetworkPublicKey::from_bytes(self.worker_pubkey_bytes.as_ref())
+                .map_err(|_| E_METADATA_INVALID_WORKER_PUBKEY)?;
+        let net_address = Multiaddr::try_from(self.net_address.clone())
+            .map_err(|_| E_METADATA_INVALID_NET_ADDR)?;
+        let p2p_address = Multiaddr::try_from(self.p2p_address.clone())
+            .map_err(|_| E_METADATA_INVALID_P2P_ADDR)?;
+        let consensus_address = Multiaddr::try_from(self.consensus_address.clone())
+            .map_err(|_| E_METADATA_INVALID_CONSENSUS_ADDR)?;
+        let worker_address = Multiaddr::try_from(self.worker_address.clone())
+            .map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?;
+        Ok(VerifiedValidatorMetadata {
+            sui_address: self.sui_address,
+            pubkey,
+            network_pubkey,
+            worker_pubkey,
+            proof_of_possession_bytes: self.proof_of_possession_bytes.clone(),
+            name: self.name.clone(),
+            description: self.description.clone(),
+            image_url: self.image_url.clone(),
+            project_url: self.project_url.clone(),
+            net_address,
+            p2p_address,
+            consensus_address,
+            worker_address,
+        })
+    }
+}
+
+impl ValidatorMetadata {
+    pub fn network_address(&self) -> Result<Multiaddr> {
+        Multiaddr::try_from(self.net_address.clone()).map_err(Into::into)
+    }
+
+    pub fn p2p_address(&self) -> Result<Multiaddr> {
+        Multiaddr::try_from(self.p2p_address.clone()).map_err(Into::into)
+    }
+
+    pub fn narwhal_primary_address(&self) -> Result<Multiaddr> {
+        Multiaddr::try_from(self.consensus_address.clone()).map_err(Into::into)
+    }
+
+    pub fn narwhal_worker_address(&self) -> Result<Multiaddr> {
+        Multiaddr::try_from(self.worker_address.clone()).map_err(Into::into)
+    }
+
+    pub fn protocol_key(&self) -> AuthorityPublicKeyBytes {
+        AuthorityPublicKeyBytes::from_bytes(self.pubkey_bytes.as_ref())
+            .expect("Validity of public key bytes should be verified on-chain")
+    }
+
+    pub fn worker_key(&self) -> crate::crypto::NetworkPublicKey {
+        crate::crypto::NetworkPublicKey::from_bytes(self.worker_pubkey_bytes.as_ref())
+            .expect("Validity of public key bytes should be verified on-chain")
+    }
+
+    pub fn network_key(&self) -> crate::crypto::NetworkPublicKey {
+        crate::crypto::NetworkPublicKey::from_bytes(self.network_pubkey_bytes.as_ref())
+            .expect("Validity of public key bytes should be verified on-chain")
+    }
 }
 
 /// Rust version of the Move sui::validator::Validator type
@@ -262,21 +359,16 @@ impl SuiSystemState {
             .active_validators
             .iter()
             .map(|validator| {
-                let name = narwhal_crypto::PublicKey::from_bytes(&validator.metadata.pubkey_bytes)
-                    .expect("Can't get narwhal public key");
-                let network_key = narwhal_crypto::NetworkPublicKey::from_bytes(
-                    &validator.metadata.network_pubkey_bytes,
-                )
-                .expect("Can't get narwhal network key");
-                let primary_address =
-                    Multiaddr::try_from(validator.metadata.consensus_address.clone())
-                        .expect("Can't get narwhal primary address");
+                let verified_metadata = validator
+                    .metadata
+                    .verify()
+                    .expect("Metadata should have been verified upon request");
                 let authority = narwhal_config::Authority {
                     stake: validator.voting_power as narwhal_config::Stake,
-                    primary_address,
-                    network_key,
+                    primary_address: verified_metadata.consensus_address,
+                    network_key: verified_metadata.network_pubkey,
                 };
-                (name, authority)
+                (verified_metadata.pubkey, authority)
             })
             .collect();
 
@@ -296,24 +388,23 @@ impl SuiSystemState {
             .active_validators
             .iter()
             .map(|validator| {
-                let name = narwhal_crypto::PublicKey::from_bytes(&validator.metadata.pubkey_bytes)
-                    .expect("Can't get narwhal public key");
-                let worker_address = Multiaddr::try_from(validator.metadata.worker_address.clone())
-                    .expect("Can't get worker address");
+                let verified_metadata = validator
+                    .metadata
+                    .verify()
+                    .expect("Metadata should have been verified upon request");
                 let workers = [(
                     0,
                     narwhal_config::WorkerInfo {
-                        name: NetworkPublicKey::from_bytes(&validator.metadata.worker_pubkey_bytes)
-                            .expect("Can't get worker key"),
+                        name: verified_metadata.worker_pubkey,
                         transactions: transactions_address.clone(),
-                        worker_address,
+                        worker_address: verified_metadata.worker_address,
                     },
                 )]
                 .into_iter()
                 .collect();
                 let worker_index = WorkerIndex(workers);
 
-                (name, worker_index)
+                (verified_metadata.pubkey, worker_index)
             })
             .collect();
         WorkerCache {

@@ -8671,6 +8671,8 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
+ "multiaddr",
+ "narwhal-crypto",
  "once_cell",
  "serde 1.0.152",
  "smallvec",

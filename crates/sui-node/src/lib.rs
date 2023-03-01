@@ -75,6 +75,7 @@ use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
 use sui_core::epoch::data_removal::EpochDataRemover;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
+use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::narwhal_manager::{NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics};
 use sui_json_rpc::coin_api::CoinReadApi;
 use sui_json_rpc::threshold_bls_api::ThresholdBlsApi;
@@ -174,6 +175,7 @@ impl SuiNode {
         } else {
             None
         };
+        let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
             committee,
@@ -181,6 +183,8 @@ impl SuiNode {
             None,
             EpochMetrics::new(&registry_service.default_registry()),
             epoch_start_configuration,
+            store.clone(),
+            cache_metrics,
         );
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
@@ -241,15 +245,14 @@ impl SuiNode {
         if epoch_store.epoch() == 0 {
             let txn = &genesis.transaction();
             let span = error_span!("genesis_txn", tx_digest = ?txn.digest());
+            let transaction = sui_types::messages::VerifiedExecutableTransaction::new_unchecked(
+                sui_types::messages::ExecutableTransaction::new_from_data_and_sig(
+                    genesis.transaction().data().clone(),
+                    sui_types::certificate_proof::CertificateProof::Checkpoint(0, 0),
+                ),
+            );
             state
-                .execute_certificate(
-                    &genesis
-                        .transaction()
-                        .clone()
-                        .verify(epoch_store.committee())
-                        .unwrap(),
-                    &epoch_store,
-                )
+                .try_execute_immediately(&transaction, &epoch_store)
                 .instrument(span)
                 .await
                 .unwrap();
@@ -384,11 +387,11 @@ impl SuiNode {
         let other_validators = config
             .genesis()?
             .validator_set()
-            .iter()
+            .into_iter()
             .filter(|validator| &validator.network_key != our_network_public_key)
             .map(|validator| sui_config::p2p::SeedPeer {
                 peer_id: Some(anemo::PeerId(validator.network_key.0.to_bytes())),
-                address: validator.p2p_address.clone(),
+                address: validator.p2p_address,
             });
         p2p_config.seed_peers.extend(other_validators);
 
@@ -938,7 +941,6 @@ pub async fn build_server(
         server.register_module(TransactionExecutionApi::new(
             state.clone(),
             transaction_orchestrator.clone(),
-            state.module_cache.clone(),
         ))?;
     }
 
@@ -951,12 +953,12 @@ pub async fn build_server(
     Ok(Some(rpc_server_handle))
 }
 
-#[cfg(test)]
+#[cfg(not(test))]
 fn max_tx_per_checkpoint(protocol_config: &ProtocolConfig) -> usize {
     protocol_config.max_transactions_per_checkpoint()
 }
 
-#[cfg(not(test))]
+#[cfg(test)]
 fn max_tx_per_checkpoint(_: &ProtocolConfig) -> usize {
     2
 }

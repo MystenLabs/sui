@@ -130,7 +130,7 @@ impl TestEnvironment {
         let node_handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
 
         let move_package =
-            publish_move_package(gas_objects.pop().unwrap(), configs.validator_set())
+            publish_move_package(gas_objects.pop().unwrap(), &configs.validator_set())
                 .await
                 .0;
 
@@ -155,7 +155,7 @@ impl TestEnvironment {
                 self.move_package,
                 arguments,
             ),
-            self.configs.validator_set(),
+            &self.configs.validator_set(),
         )
         .await
     }
@@ -173,7 +173,7 @@ impl TestEnvironment {
                 self.move_package,
                 arguments,
             ),
-            self.configs.validator_set(),
+            &self.configs.validator_set(),
         )
         .await
     }

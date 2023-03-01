@@ -53,7 +53,6 @@ mod test {
     }
 
     #[sim_test(config = "test_config()")]
-    #[ignore = "The benchmark client aborts certificates submission when it fails to gather a quorum of acknowledgements. This happens upon epoch change."]
     async fn test_simulated_load_with_reconfig() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 1000).await;
@@ -147,7 +146,6 @@ mod test {
     }
 
     #[sim_test(config = "test_config()")]
-    #[ignore = "The benchmark client aborts certificates submission when it fails to gather a quorum of acknowledgements. This happens upon epoch change."]
     async fn test_simulated_load_pruning() {
         let epoch_duration_ms = 5000;
         let test_cluster = build_test_cluster(4, epoch_duration_ms).await;
@@ -201,7 +199,6 @@ mod test {
         let swarm = &test_cluster.swarm;
         let context = &test_cluster.wallet;
         let sender = test_cluster.get_address_0();
-        let fullnode_rpc_url = &test_cluster.fullnode_handle.rpc_url;
 
         let keystore_path = swarm.dir().join(SUI_KEYSTORE_FILENAME);
         let ed25519_keypair =
@@ -223,12 +220,8 @@ mod test {
 
         let registry = prometheus::Registry::new();
         let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
-            LocalValidatorAggregatorProxy::from_network_config(
-                swarm.config(),
-                &registry,
-                Some(fullnode_rpc_url),
-            )
-            .await,
+            LocalValidatorAggregatorProxy::from_network_config(swarm.config(), &registry, None)
+                .await,
         );
 
         let proxy_gas_and_coins = vec![ProxyGasAndCoin {

@@ -26,6 +26,7 @@ diesel::table! {
         previous_checkpoint_digest -> Nullable<Varchar>,
         next_epoch_committee -> Nullable<Text>,
         next_epoch_protocol_version -> Nullable<Int8>,
+        end_of_epoch_data -> Nullable<Text>,
         total_gas_cost -> Int8,
         total_computation_cost -> Int8,
         total_storage_cost -> Int8,
@@ -177,6 +178,8 @@ diesel::table! {
         storage_rebate -> Int8,
         gas_price -> Int8,
         transaction_content -> Text,
+        transaction_effects_content -> Text,
+        confirmed_local_execution -> Nullable<Bool>,
     }
 }
 

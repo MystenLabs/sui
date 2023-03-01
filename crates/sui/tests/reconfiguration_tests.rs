@@ -331,28 +331,28 @@ async fn test_reconfig_with_committee_change_basic() {
     // that doesn't exist in the previous committee manually.
     // The order of validator_set() and validator_configs() is also different.
     // TODO: We should really fix the above inconveniences.
-    let addresses: HashSet<_> = init_configs
+    let public_keys: HashSet<_> = init_configs
         .validator_set()
         .iter()
-        .map(|v| v.sui_address())
+        .map(|v| v.protocol_key())
         .collect();
     let new_configs = test_and_configure_authority_configs(5);
     let new_validator = new_configs
         .validator_set()
-        .iter()
-        .find(|v| !addresses.contains(&v.sui_address()))
+        .into_iter()
+        .find(|v| !public_keys.contains(&v.protocol_key()))
         .unwrap();
     let new_node_config = new_configs
         .validator_configs()
         .iter()
-        .find(|v| !addresses.contains(&v.sui_address()))
+        .find(|v| !public_keys.contains(&v.protocol_public_key()))
         .unwrap();
     info!(
         "New validator is: {:?}",
         new_validator.protocol_key.concise()
     );
 
-    let sender = new_validator.sui_address();
+    let sender = new_node_config.sui_address();
     let gas = Object::with_owner_for_testing(sender);
     let stake = Object::with_owner_for_testing(sender);
 

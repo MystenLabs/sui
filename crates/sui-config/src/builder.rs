@@ -292,7 +292,6 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     validator.genesis_info.network_key_pair.public().clone();
                 let worker_key: NetworkPublicKey =
                     validator.genesis_info.worker_key_pair.public().clone();
-                let stake = validator.genesis_info.stake;
                 let network_address = validator.genesis_info.network_address.clone();
                 let pop = generate_proof_of_possession(
                     &validator.genesis_info.key_pair,
@@ -306,8 +305,6 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                         worker_key,
                         network_key,
                         account_key,
-                        stake,
-                        delegation: 0, // no delegation yet at genesis
                         gas_price: validator.genesis_info.gas_price,
                         commission_rate: validator.genesis_info.commission_rate,
                         network_address,

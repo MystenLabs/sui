@@ -145,28 +145,29 @@ module sui::governance_test_utils {
         sui_system::request_withdraw_delegation(&mut system_state, staked_sui, ctx);
         test_scenario::return_shared(system_state);
     }
-    
+
     public fun add_validator(validator: address, init_stake_amount: u64, pop: vector<u8>, scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, validator);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
-
+        // This is  equivalent to /ip4/127.0.0.1
+        let addr = vector[4, 127, 0, 0, 1];
         let ctx = test_scenario::ctx(scenario);
 
         sui_system::request_add_validator(
             &mut system_state,
             pubkey,
             vector[171, 2, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38],
-            vector[],
+            vector[171, 2, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38],
             pop,
             b"name",
             b"description",
             b"image_url",
             b"project_url",
-            x"",
-            x"",
-            x"",
-            x"",
+            addr,
+            addr,
+            addr,
+            addr,
             coin::mint_for_testing<SUI>(init_stake_amount, ctx),
             1,
             0,

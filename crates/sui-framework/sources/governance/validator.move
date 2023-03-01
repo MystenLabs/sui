@@ -7,6 +7,7 @@ module sui::validator {
     use std::bcs;
 
     use sui::balance::{Self, Balance};
+    use sui::bcs::to_bytes;
     use sui::sui::SUI;
     use sui::tx_context::{Self, TxContext};
     use sui::stake;
@@ -30,6 +31,28 @@ module sui::validator {
     friend sui::validator_set_tests;
     #[test_only]
     friend sui::governance_test_utils;
+
+    /// Invalid pubkey_bytes field in ValidatorMetadata
+    const EMetadataInvalidPubKey: u64 = 1;
+
+    /// Invalid network_pubkey_bytes field in ValidatorMetadata
+    const EMetadataInvalidNetPubkey: u64 = 2;
+
+    /// Invalid worker_pubkey_bytes field in ValidatorMetadata
+    const EMetadataInvalidWorkerPubKey: u64 = 3;
+
+    /// Invalid net_address field in ValidatorMetadata
+    const EMetadataInvalidNetAddr: u64 = 4;
+
+    /// Invalid p2p_address field in ValidatorMetadata
+    const EMetadataInvalidP2pAddr: u64 = 5;
+
+    /// Invalid consensus_address field in ValidatorMetadata
+    const EMetadataInvalidConsensusAddr: u64 = 6;
+
+    /// Invalidworker_address field in ValidatorMetadata
+    const EMetadataInvalidWorkerAddr: u64 = 7;
+
 
     struct ValidatorMetadata has store, drop, copy {
         /// The Sui Address of the validator. This is the sender that created the Validator object,
@@ -100,12 +123,44 @@ module sui::validator {
         // This proves that the account address is owned by the holder of ValidatorPK, and ensures
         // that PK exists.
         let signed_bytes = pubkey_bytes;
-        let address_bytes = bcs::to_bytes(&sui_address);
+        let address_bytes = to_bytes(&sui_address);
         vector::append(&mut signed_bytes, address_bytes);
         assert!(
             bls12381_min_sig_verify_with_domain(&proof_of_possession, &pubkey_bytes, signed_bytes, PROOF_OF_POSSESSION_DOMAIN) == true,
             0
         );
+    }
+    public(friend) fun new_metadata(
+        sui_address: address,
+        pubkey_bytes: vector<u8>,
+        network_pubkey_bytes: vector<u8>,
+        worker_pubkey_bytes: vector<u8>,
+        proof_of_possession: vector<u8>,
+        name: String,
+        description: String,
+        image_url: Url,
+        project_url: Url,
+        net_address: vector<u8>,
+        p2p_address: vector<u8>,
+        consensus_address: vector<u8>,
+        worker_address: vector<u8>,
+    ): ValidatorMetadata {
+        let metadata = ValidatorMetadata {
+            sui_address,
+            pubkey_bytes,
+            network_pubkey_bytes,
+            worker_pubkey_bytes,
+            proof_of_possession,
+            name,
+            description,
+            image_url,
+            project_url,
+            net_address,
+            p2p_address,
+            consensus_address,
+            worker_address,
+        };
+        metadata
     }
 
     public(friend) fun new(
@@ -145,22 +200,25 @@ module sui::validator {
         );
         let stake_amount = balance::value(&stake);
         stake::create(stake, sui_address, coin_locked_until_epoch, ctx);
+        let metadata =  new_metadata(
+            sui_address,
+            pubkey_bytes,
+            network_pubkey_bytes,
+            worker_pubkey_bytes,
+            proof_of_possession,
+            string::from_ascii(ascii::string(name)),
+            string::from_ascii(ascii::string(description)),
+            url::new_unsafe_from_bytes(image_url),
+            url::new_unsafe_from_bytes(project_url),
+            net_address,
+            p2p_address,
+            consensus_address,
+            worker_address,
+        );
+
+        validate_metadata(&metadata);
         Validator {
-            metadata: ValidatorMetadata {
-                sui_address,
-                pubkey_bytes,
-                network_pubkey_bytes,
-                worker_pubkey_bytes,
-                proof_of_possession,
-                name: string::from_ascii(ascii::string(name)),
-                description: string::from_ascii(ascii::string(description)),
-                image_url: url::new_unsafe_from_bytes(image_url),
-                project_url: url::new_unsafe_from_bytes(project_url),
-                net_address,
-                p2p_address,
-                consensus_address,
-                worker_address,
-            },
+            metadata,
             // Initialize the voting power to be the same as the stake amount.
             // At the epoch change where this validator is actually added to the
             // active validator set, the voting power will be updated accordingly.
@@ -375,6 +433,20 @@ module sui::validator {
             || self.metadata.pubkey_bytes == other.metadata.pubkey_bytes
     }
 
+    /// Aborts if validator metadata is valid
+    public fun validate_metadata(metadata: &ValidatorMetadata) {
+        validate_metadata_bcs(bcs::to_bytes(metadata));
+    }
+
+    public native fun validate_metadata_bcs(metadata: vector<u8>);
+
+    spec validate_metadata_bcs {
+        pragma opaque;
+        // TODO: stub to be replaced by actual abort conditions if any
+        aborts_if [abstract] true;
+        // TODO: specify actual function behavior
+     }
+
     // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.
     // Creates a validator - bypassing the proof of possession in check in the process.
     // TODO: Refactor to share code with new().
@@ -412,21 +484,21 @@ module sui::validator {
         let stake_amount = balance::value(&stake);
         stake::create(stake, sui_address, coin_locked_until_epoch, ctx);
         Validator {
-            metadata: ValidatorMetadata {
+            metadata: new_metadata(
                 sui_address,
                 pubkey_bytes,
                 network_pubkey_bytes,
                 worker_pubkey_bytes,
                 proof_of_possession,
-                name: string::from_ascii(ascii::string(name)),
-                description: string::from_ascii(ascii::string(description)),
-                image_url: url::new_unsafe_from_bytes(image_url),
-                project_url: url::new_unsafe_from_bytes(project_url),
+                string::from_ascii(ascii::string(name)),
+                string::from_ascii(ascii::string(description)),
+                url::new_unsafe_from_bytes(image_url),
+                url::new_unsafe_from_bytes(project_url),
                 net_address,
                 p2p_address,
                 consensus_address,
                 worker_address,
-            },
+            ),
             stake_amount,
             voting_power: stake_amount,
             pending_stake: 0,

@@ -1357,14 +1357,14 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         } else {
             anyhow::bail!("need either NetworkConfig or Genesis.");
         };
-        let committee = make_committee(0, self.protocol_version, validator_info)?;
+        let committee = make_committee(0, self.protocol_version, &validator_info)?;
         let mut registry = &prometheus::Registry::new();
         if self.registry.is_some() {
             registry = self.registry.unwrap();
         }
 
         let auth_clients = make_authority_clients(
-            validator_info,
+            &validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
             DEFAULT_REQUEST_TIMEOUT_SEC,
         );

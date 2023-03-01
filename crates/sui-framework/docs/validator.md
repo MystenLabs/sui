@@ -9,6 +9,7 @@
 -  [Struct `Validator`](#0x2_validator_Validator)
 -  [Constants](#@Constants_0)
 -  [Function `verify_proof_of_possession`](#0x2_validator_verify_proof_of_possession)
+-  [Function `new_metadata`](#0x2_validator_new_metadata)
 -  [Function `new`](#0x2_validator_new)
 -  [Function `destroy`](#0x2_validator_destroy)
 -  [Function `request_add_stake`](#0x2_validator_request_add_stake)
@@ -37,6 +38,8 @@
 -  [Function `pool_token_exchange_rate_at_epoch`](#0x2_validator_pool_token_exchange_rate_at_epoch)
 -  [Function `staking_pool_id`](#0x2_validator_staking_pool_id)
 -  [Function `is_duplicate`](#0x2_validator_is_duplicate)
+-  [Function `validate_metadata`](#0x2_validator_validate_metadata)
+-  [Function `validate_metadata_bcs`](#0x2_validator_validate_metadata_bcs)
 
 
 <pre><code><b>use</b> <a href="">0x1::ascii</a>;
@@ -45,6 +48,7 @@
 <b>use</b> <a href="">0x1::string</a>;
 <b>use</b> <a href="">0x1::vector</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
+<b>use</b> <a href="bcs.md#0x2_bcs">0x2::bcs</a>;
 <b>use</b> <a href="bls12381.md#0x2_bls12381">0x2::bls12381</a>;
 <b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
@@ -259,6 +263,76 @@
 ## Constants
 
 
+<a name="0x2_validator_EMetadataInvalidConsensusAddr"></a>
+
+Invalid consensus_address field in ValidatorMetadata
+
+
+<pre><code><b>const</b> <a href="validator.md#0x2_validator_EMetadataInvalidConsensusAddr">EMetadataInvalidConsensusAddr</a>: u64 = 6;
+</code></pre>
+
+
+
+<a name="0x2_validator_EMetadataInvalidNetAddr"></a>
+
+Invalid net_address field in ValidatorMetadata
+
+
+<pre><code><b>const</b> <a href="validator.md#0x2_validator_EMetadataInvalidNetAddr">EMetadataInvalidNetAddr</a>: u64 = 4;
+</code></pre>
+
+
+
+<a name="0x2_validator_EMetadataInvalidNetPubkey"></a>
+
+Invalid network_pubkey_bytes field in ValidatorMetadata
+
+
+<pre><code><b>const</b> <a href="validator.md#0x2_validator_EMetadataInvalidNetPubkey">EMetadataInvalidNetPubkey</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="0x2_validator_EMetadataInvalidP2pAddr"></a>
+
+Invalid p2p_address field in ValidatorMetadata
+
+
+<pre><code><b>const</b> <a href="validator.md#0x2_validator_EMetadataInvalidP2pAddr">EMetadataInvalidP2pAddr</a>: u64 = 5;
+</code></pre>
+
+
+
+<a name="0x2_validator_EMetadataInvalidPubKey"></a>
+
+Invalid pubkey_bytes field in ValidatorMetadata
+
+
+<pre><code><b>const</b> <a href="validator.md#0x2_validator_EMetadataInvalidPubKey">EMetadataInvalidPubKey</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="0x2_validator_EMetadataInvalidWorkerAddr"></a>
+
+Invalidworker_address field in ValidatorMetadata
+
+
+<pre><code><b>const</b> <a href="validator.md#0x2_validator_EMetadataInvalidWorkerAddr">EMetadataInvalidWorkerAddr</a>: u64 = 7;
+</code></pre>
+
+
+
+<a name="0x2_validator_EMetadataInvalidWorkerPubKey"></a>
+
+Invalid worker_pubkey_bytes field in ValidatorMetadata
+
+
+<pre><code><b>const</b> <a href="validator.md#0x2_validator_EMetadataInvalidWorkerPubKey">EMetadataInvalidWorkerPubKey</a>: u64 = 3;
+</code></pre>
+
+
+
 <a name="0x2_validator_PROOF_OF_POSSESSION_DOMAIN"></a>
 
 
@@ -292,12 +366,65 @@
     // This proves that the account <b>address</b> is owned by the holder of ValidatorPK, and <b>ensures</b>
     // that PK <b>exists</b>.
     <b>let</b> signed_bytes = pubkey_bytes;
-    <b>let</b> address_bytes = <a href="_to_bytes">bcs::to_bytes</a>(&sui_address);
+    <b>let</b> address_bytes = to_bytes(&sui_address);
     <a href="_append">vector::append</a>(&<b>mut</b> signed_bytes, address_bytes);
     <b>assert</b>!(
         bls12381_min_sig_verify_with_domain(&proof_of_possession, &pubkey_bytes, signed_bytes, <a href="validator.md#0x2_validator_PROOF_OF_POSSESSION_DOMAIN">PROOF_OF_POSSESSION_DOMAIN</a>) == <b>true</b>,
         0
     );
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_new_metadata"></a>
+
+## Function `new_metadata`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new_metadata">new_metadata</a>(sui_address: <b>address</b>, pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="_String">string::String</a>, description: <a href="_String">string::String</a>, image_url: <a href="url.md#0x2_url_Url">url::Url</a>, project_url: <a href="url.md#0x2_url_Url">url::Url</a>, net_address: <a href="">vector</a>&lt;u8&gt;, p2p_address: <a href="">vector</a>&lt;u8&gt;, consensus_address: <a href="">vector</a>&lt;u8&gt;, worker_address: <a href="">vector</a>&lt;u8&gt;): <a href="validator.md#0x2_validator_ValidatorMetadata">validator::ValidatorMetadata</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new_metadata">new_metadata</a>(
+    sui_address: <b>address</b>,
+    pubkey_bytes: <a href="">vector</a>&lt;u8&gt;,
+    network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;,
+    worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;,
+    proof_of_possession: <a href="">vector</a>&lt;u8&gt;,
+    name: String,
+    description: String,
+    image_url: Url,
+    project_url: Url,
+    net_address: <a href="">vector</a>&lt;u8&gt;,
+    p2p_address: <a href="">vector</a>&lt;u8&gt;,
+    consensus_address: <a href="">vector</a>&lt;u8&gt;,
+    worker_address: <a href="">vector</a>&lt;u8&gt;,
+): <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a> {
+    <b>let</b> metadata = <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a> {
+        sui_address,
+        pubkey_bytes,
+        network_pubkey_bytes,
+        worker_pubkey_bytes,
+        proof_of_possession,
+        name,
+        description,
+        image_url,
+        project_url,
+        net_address,
+        p2p_address,
+        consensus_address,
+        worker_address,
+    };
+    metadata
 }
 </code></pre>
 
@@ -357,22 +484,25 @@
     );
     <b>let</b> stake_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&<a href="stake.md#0x2_stake">stake</a>);
     <a href="stake.md#0x2_stake_create">stake::create</a>(<a href="stake.md#0x2_stake">stake</a>, sui_address, coin_locked_until_epoch, ctx);
+    <b>let</b> metadata =  <a href="validator.md#0x2_validator_new_metadata">new_metadata</a>(
+        sui_address,
+        pubkey_bytes,
+        network_pubkey_bytes,
+        worker_pubkey_bytes,
+        proof_of_possession,
+        <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(name)),
+        <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(description)),
+        <a href="url.md#0x2_url_new_unsafe_from_bytes">url::new_unsafe_from_bytes</a>(image_url),
+        <a href="url.md#0x2_url_new_unsafe_from_bytes">url::new_unsafe_from_bytes</a>(project_url),
+        net_address,
+        p2p_address,
+        consensus_address,
+        worker_address,
+    );
+
+    <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&metadata);
     <a href="validator.md#0x2_validator_Validator">Validator</a> {
-        metadata: <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a> {
-            sui_address,
-            pubkey_bytes,
-            network_pubkey_bytes,
-            worker_pubkey_bytes,
-            proof_of_possession,
-            name: <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(name)),
-            description: <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(description)),
-            image_url: <a href="url.md#0x2_url_new_unsafe_from_bytes">url::new_unsafe_from_bytes</a>(image_url),
-            project_url: <a href="url.md#0x2_url_new_unsafe_from_bytes">url::new_unsafe_from_bytes</a>(project_url),
-            net_address,
-            p2p_address,
-            consensus_address,
-            worker_address,
-        },
+        metadata,
         // Initialize the voting power <b>to</b> be the same <b>as</b> the <a href="stake.md#0x2_stake">stake</a> amount.
         // At the epoch change <b>where</b> this <a href="validator.md#0x2_validator">validator</a> is actually added <b>to</b> the
         // active <a href="validator.md#0x2_validator">validator</a> set, the voting power will be updated accordingly.
@@ -1134,6 +1264,66 @@ Set the voting power of this validator, called only from validator_set.
         || self.metadata.p2p_address == other.metadata.p2p_address
         || self.metadata.pubkey_bytes == other.metadata.pubkey_bytes
 }
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_validate_metadata"></a>
+
+## Function `validate_metadata`
+
+Aborts if validator metadata is valid
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(metadata: &<a href="validator.md#0x2_validator_ValidatorMetadata">validator::ValidatorMetadata</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(metadata: &<a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a>) {
+    <a href="validator.md#0x2_validator_validate_metadata_bcs">validate_metadata_bcs</a>(<a href="_to_bytes">bcs::to_bytes</a>(metadata));
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_validate_metadata_bcs"></a>
+
+## Function `validate_metadata_bcs`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_validate_metadata_bcs">validate_metadata_bcs</a>(metadata: <a href="">vector</a>&lt;u8&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="validator.md#0x2_validator_validate_metadata_bcs">validate_metadata_bcs</a>(metadata: <a href="">vector</a>&lt;u8&gt;);
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
 
 

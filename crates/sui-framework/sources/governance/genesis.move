@@ -13,9 +13,6 @@ module sui::genesis {
     use sui::validator;
     use std::option;
 
-    /// The initial amount of SUI locked in the storage fund.
-    const INIT_STORAGE_FUND: u64 = 1;
-
     /// Initial value of the lower-bound on the amount of stake required to become a validator.
     /// TODO: testnet only. Needs to be changed.
     const INIT_MIN_VALIDATOR_STAKE: u64 = 1;
@@ -33,6 +30,7 @@ module sui::genesis {
     /// It will create a singleton SuiSystemState object, which contains
     /// all the information we need in the system.
     fun create(
+        initial_sui_custody_account_address: address,
         validator_pubkeys: vector<vector<u8>>,
         validator_network_pubkeys: vector<vector<u8>>,
         validator_worker_pubkeys: vector<vector<u8>>,
@@ -46,7 +44,6 @@ module sui::genesis {
         validator_p2p_addresses: vector<vector<u8>>,
         validator_consensus_addresses: vector<vector<u8>>,
         validator_worker_addresses: vector<vector<u8>>,
-        validator_stakes: vector<u64>,
         validator_gas_prices: vector<u64>,
         validator_commission_rates: vector<u64>,
         protocol_version: u64,
@@ -55,12 +52,11 @@ module sui::genesis {
     ) {
         let sui_supply = sui::new(ctx);
         let subsidy_fund = balance::split(&mut sui_supply, INIT_STAKE_SUBSIDY_FUND_BALANCE);
-        let storage_fund = balance::split(&mut sui_supply, INIT_STORAGE_FUND);
+        let storage_fund = balance::zero();
         let validators = vector::empty();
         let count = vector::length(&validator_pubkeys);
         assert!(
             vector::length(&validator_sui_addresses) == count
-                && vector::length(&validator_stakes) == count
                 && vector::length(&validator_names) == count
                 && vector::length(&validator_descriptions) == count
                 && vector::length(&validator_image_urls) == count
@@ -88,7 +84,6 @@ module sui::genesis {
             let p2p_address = *vector::borrow(&validator_p2p_addresses, i);
             let consensus_address = *vector::borrow(&validator_consensus_addresses, i);
             let worker_address = *vector::borrow(&validator_worker_addresses, i);
-            let stake = *vector::borrow(&validator_stakes, i);
             let gas_price = *vector::borrow(&validator_gas_prices, i);
             let commission_rate = *vector::borrow(&validator_commission_rates, i);
             vector::push_back(&mut validators, validator::new(
@@ -105,7 +100,9 @@ module sui::genesis {
                 p2p_address,
                 consensus_address,
                 worker_address,
-                balance::split(&mut sui_supply, stake),
+                // TODO Figure out if we want to instead initialize validators with 0 stake.
+                // Initialize all validators with 1 Mist stake.
+                balance::split(&mut sui_supply, 1),
                 option::none(),
                 gas_price,
                 commission_rate,
@@ -130,8 +127,6 @@ module sui::genesis {
         clock::create();
 
         // Transfer the remaining balance of sui's supply to the initial account
-        // TODO pass in the account that should recieve the initial
-        // distribution of Sui instead of sending it to address 0x0
-        sui::transfer(coin::from_balance(sui_supply, ctx), @0x0);
+        sui::transfer(coin::from_balance(sui_supply, ctx), initial_sui_custody_account_address);
     }
 }
