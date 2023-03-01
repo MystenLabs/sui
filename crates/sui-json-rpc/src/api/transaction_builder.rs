@@ -128,7 +128,7 @@ pub trait TransactionBuilder {
         function: String,
         /// the type arguments of the Move function
         type_arguments: Vec<SuiTypeTag>,
-        /// the arguments to be passed into the Move function, in [SuiJson](https://docs.sui.io/build/sui-json) format
+        /// the arguments to be passed into the Move function, in SuiJSON format. See https://docs.sui.io/build/sui-json for more information.
         arguments: Vec<SuiJsonValue>,
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
