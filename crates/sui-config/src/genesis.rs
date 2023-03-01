@@ -39,7 +39,8 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::object::Owner;
 use sui_types::sui_system_state::{
-    get_sui_system_state, get_sui_system_state_wrapper, SuiSystemState, SuiSystemStateWrapper,
+    get_sui_system_state, get_sui_system_state_version, get_sui_system_state_wrapper,
+    SuiSystemState, SuiSystemStateWrapper,
 };
 use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::MOVE_STDLIB_ADDRESS;
@@ -982,6 +983,7 @@ pub fn generate_genesis_system_object(
 ) -> Result<()> {
     let genesis_digest = genesis_ctx.digest();
     let protocol_config = ProtocolConfig::get_for_version(protocol_version);
+    let system_state_version = get_sui_system_state_version(protocol_version);
     let mut temporary_store = TemporaryStore::new(
         &*store,
         InputObjects::new(vec![]),
@@ -1051,6 +1053,7 @@ pub fn generate_genesis_system_object(
             CallArg::Pure(bcs::to_bytes(&gas_prices).unwrap()),
             CallArg::Pure(bcs::to_bytes(&commission_rates).unwrap()),
             CallArg::Pure(bcs::to_bytes(&protocol_version.as_u64()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&system_state_version).unwrap()),
             CallArg::Pure(bcs::to_bytes(&epoch_start_timestamp_ms).unwrap()),
         ],
         SuiGasStatus::new_unmetered().create_move_gas_status(),

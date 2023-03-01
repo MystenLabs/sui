@@ -29,7 +29,8 @@ use sui_types::object::{Data, MoveObject, Owner};
 use sui_types::storage::SingleTxContext;
 use sui_types::storage::{ChildObjectResolver, DeleteKind, ParentSync, WriteKind};
 use sui_types::sui_system_state::{
-    ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME,
+    get_sui_system_state_version, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME,
+    CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME,
 };
 #[cfg(test)]
 use sui_types::temporary_store;
@@ -394,6 +395,10 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             CallArg::Pure(bcs::to_bytes(&protocol_config.storage_fund_reinvest_rate()).unwrap()),
             CallArg::Pure(bcs::to_bytes(&protocol_config.reward_slashing_rate()).unwrap()),
             CallArg::Pure(bcs::to_bytes(&change_epoch.epoch_start_timestamp_ms).unwrap()),
+            CallArg::Pure(
+                bcs::to_bytes(&get_sui_system_state_version(change_epoch.protocol_version))
+                    .unwrap(),
+            ),
         ],
         gas_status.create_move_gas_status(),
         tx_ctx,
