@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_core_types::gas_algebra::{GasQuantity, InternalGas, InternalGasUnit};
+
 //
 // Native function costs
 //
@@ -22,4 +24,16 @@ pub enum SuiNativeCostIndex {
 
     TX_CONTEXT_DERIVE_ID = 7,
     TX_CONTEXT_NEW_SIGNER_FROM_ADDR = 8,
+}
+
+pub const NATIVES_COST_LOW: GasQuantity<InternalGasUnit> = InternalGas::new(10);
+pub const NATIVES_COST_MID: GasQuantity<InternalGasUnit> = InternalGas::new(100);
+pub const NATIVES_COST_HIGH: GasQuantity<InternalGasUnit> = InternalGas::new(10000);
+
+/// Base fee for entering a native fn
+pub const NATIVES_COST_BASE_ENTRY: GasQuantity<InternalGasUnit> = NATIVES_COST_HIGH;
+
+#[test]
+pub fn test_natives_cost_tiers() {
+    assert!((NATIVES_COST_LOW < NATIVES_COST_MID) && (NATIVES_COST_MID < NATIVES_COST_HIGH));
 }

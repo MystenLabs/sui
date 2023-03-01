@@ -8674,6 +8674,7 @@ dependencies = [
  "once_cell",
  "serde 1.0.152",
  "smallvec",
+ "sui-cost-tables",
  "sui-framework-build",
  "sui-protocol-config",
  "sui-types",
