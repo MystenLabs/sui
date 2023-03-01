@@ -7,7 +7,7 @@ pub mod narwhal_manager_tests;
 
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
-use narwhal_config::{Committee, Epoch, Parameters, SharedWorkerCache, WorkerId};
+use narwhal_config::{Committee, Epoch, Parameters, WorkerCache, WorkerId};
 use narwhal_executor::ExecutionState;
 use narwhal_node::primary_node::PrimaryNode;
 use narwhal_node::worker_node::WorkerNodes;
@@ -114,7 +114,7 @@ impl NarwhalManager {
     pub async fn start<State, TxValidator: TransactionValidator>(
         &self,
         committee: Committee,
-        shared_worker_cache: SharedWorkerCache,
+        shared_worker_cache: WorkerCache,
         execution_state: Arc<State>,
         tx_validator: TxValidator,
     ) where

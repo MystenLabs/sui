@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{temp_dir, CommitteeFixture};
-use config::{Committee, Parameters, SharedWorkerCache, WorkerId};
+use config::{Committee, Parameters, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::SerializedTransaction;
 use fastcrypto::traits::KeyPair as _;
@@ -33,7 +33,7 @@ pub struct Cluster {
     fixture: CommitteeFixture,
     authorities: HashMap<usize, AuthorityDetails>,
     pub committee_shared: Committee,
-    pub worker_cache_shared: SharedWorkerCache,
+    pub worker_cache_shared: WorkerCache,
     #[allow(dead_code)]
     parameters: Parameters,
 }
@@ -280,7 +280,7 @@ pub struct PrimaryNodeDetails {
     store_path: PathBuf,
     parameters: Parameters,
     committee: Committee,
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
     handlers: Rc<RefCell<Vec<JoinHandle<()>>>>,
     internal_consensus_enabled: bool,
 }
@@ -292,7 +292,7 @@ impl PrimaryNodeDetails {
         network_key_pair: NetworkKeyPair,
         parameters: Parameters,
         committee: Committee,
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         internal_consensus_enabled: bool,
     ) -> Self {
         // used just to initialise the struct value
@@ -408,7 +408,7 @@ pub struct WorkerNodeDetails {
     name: PublicKey,
     node: WorkerNode,
     committee: Committee,
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
     store_path: PathBuf,
 }
 
@@ -419,7 +419,7 @@ impl WorkerNodeDetails {
         parameters: Parameters,
         transactions_address: Multiaddr,
         committee: Committee,
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
     ) -> Self {
         let registry_service = RegistryService::new(Registry::new());
         let node = WorkerNode::new(id, parameters, registry_service);
@@ -515,7 +515,7 @@ impl AuthorityDetails {
         worker_keypairs: Vec<NetworkKeyPair>,
         parameters: Parameters,
         committee: Committee,
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         internal_consensus_enabled: bool,
     ) -> Self {
         // Create all the nodes we have in the committee
@@ -534,7 +534,7 @@ impl AuthorityDetails {
         // act as place holder setups. That gives us the power in a clear way manage
         // the nodes independently.
         let mut workers = HashMap::new();
-        for (worker_id, addresses) in worker_cache.load().workers.get(&name).unwrap().0.clone() {
+        for (worker_id, addresses) in worker_cache.workers.get(&name).unwrap().0.clone() {
             let worker = WorkerNodeDetails::new(
                 worker_id,
                 name.clone(),

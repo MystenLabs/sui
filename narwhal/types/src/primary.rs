@@ -7,7 +7,7 @@ use crate::{
     CertificateDigestProto,
 };
 use bytes::Bytes;
-use config::{Committee, Epoch, SharedWorkerCache, Stake, WorkerId, WorkerInfo};
+use config::{Committee, Epoch, Stake, WorkerCache, WorkerId, WorkerInfo};
 use crypto::{AggregateSignature, PublicKey, Signature};
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
@@ -239,7 +239,7 @@ impl Header {
         *self.digest.get_or_init(|| Hash::digest(self))
     }
 
-    pub fn verify(&self, committee: &Committee, worker_cache: SharedWorkerCache) -> DagResult<()> {
+    pub fn verify(&self, committee: &Committee, worker_cache: WorkerCache) -> DagResult<()> {
         // Ensure the header is from the correct epoch.
         ensure!(
             self.epoch == committee.epoch(),
@@ -265,7 +265,6 @@ impl Header {
         // Ensure all worker ids are correct.
         for (worker_id, _) in self.payload.values() {
             worker_cache
-                .load()
                 .worker(&self.author, worker_id)
                 .map_err(|_| DagError::HeaderHasBadWorkerIds(self.digest()))?;
         }
@@ -660,7 +659,7 @@ impl Certificate {
 
     /// Verifies the validaity of the certificate.
     /// TODO: Output a different type, similar to Sui VerifiedCertificate.
-    pub fn verify(&self, committee: &Committee, worker_cache: SharedWorkerCache) -> DagResult<()> {
+    pub fn verify(&self, committee: &Committee, worker_cache: WorkerCache) -> DagResult<()> {
         // Ensure the header is from the correct epoch.
         ensure!(
             self.epoch() == committee.epoch(),

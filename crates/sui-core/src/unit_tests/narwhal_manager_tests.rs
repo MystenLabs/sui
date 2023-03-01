@@ -7,7 +7,7 @@ use bytes::Bytes;
 use fastcrypto::bls12381;
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
-use narwhal_config::{Epoch, SharedWorkerCache};
+use narwhal_config::{Epoch, WorkerCache};
 use narwhal_executor::ExecutionState;
 use narwhal_types::{ConsensusOutput, TransactionProto, TransactionsClient};
 use narwhal_worker::TrivialTransactionValidator;
@@ -42,12 +42,11 @@ impl ExecutionState for NoOpExecutionState {
 
 async fn send_transactions(
     name: &bls12381::min_sig::BLS12381PublicKey,
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
     epoch: Epoch,
     mut rx_shutdown: broadcast::Receiver<()>,
 ) {
     let target = worker_cache
-        .load()
         .worker(name, /* id */ &0)
         .expect("Our key or worker id is not in the worker cache")
         .transactions;
@@ -123,7 +122,7 @@ async fn test_narwhal_manager() {
         let narwhal_manager = NarwhalManager::new(narwhal_config, metrics);
 
         // start narwhal
-        let shared_worker_cache = SharedWorkerCache::from(worker_cache.clone());
+        let shared_worker_cache = worker_cache.clone();
         narwhal_manager
             .start(
                 narwhal_committee.clone(),
@@ -190,7 +189,7 @@ async fn test_narwhal_manager() {
         });
 
         // start narwhal with advanced epoch
-        let shared_worker_cache = SharedWorkerCache::from(worker_cache.clone());
+        let shared_worker_cache = worker_cache.clone();
         narwhal_manager
             .start(
                 narwhal_committee.clone(),
