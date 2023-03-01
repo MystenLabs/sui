@@ -103,15 +103,6 @@ fn build_anemo_services(out_dir: &Path) {
         .attributes(automock_attribute.clone())
         .method(
             anemo_build::manual::Method::builder()
-                .name("reconfigure")
-                .route_name("Reconfigure")
-                .request_type("crate::WorkerReconfigureMessage")
-                .response_type("()")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
-                .build(),
-        )
-        .method(
-            anemo_build::manual::Method::builder()
                 .name("synchronize")
                 .route_name("Synchronize")
                 .request_type("crate::WorkerSynchronizeMessage")

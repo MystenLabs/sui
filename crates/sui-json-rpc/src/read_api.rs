@@ -23,7 +23,7 @@ use sui_json_rpc_types::{
     Checkpoint, CheckpointId, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
     GetRawObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page, SuiEvent,
     SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct,
-    SuiMoveValue, SuiObjectInfo, SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
+    SuiMoveValue, SuiObjectInfo, SuiTransactionEvents, SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
@@ -164,10 +164,14 @@ impl ReadApiServer for ReadApi {
             .map_err(|e| anyhow!("{e}"))?;
         let checkpoint_timestamp = checkpoint.as_ref().map(|c| c.summary.timestamp_ms);
 
-        Ok(SuiTransactionResponse {
-            transaction: transaction.into_message().try_into()?,
-            effects: SuiTransactionEffects::try_from(
-                effects,
+        let events = if let Some(digest) = effects.events_digest {
+            let events = self
+                .state
+                .get_transaction_events(digest)
+                .await
+                .map_err(Error::from)?;
+            SuiTransactionEvents::try_from(
+                events,
                 // threading the epoch_store through this API does not
                 // seem possible, so we just read it from the state and fetch
                 // the module cache out of it.
@@ -177,7 +181,15 @@ impl ReadApiServer for ReadApi {
                     .load_epoch_store_one_call_per_task()
                     .module_cache()
                     .as_ref(),
-            )?,
+            )?
+        } else {
+            SuiTransactionEvents::default()
+        };
+
+        Ok(SuiTransactionResponse {
+            transaction: transaction.into_message().try_into()?,
+            effects: effects.into(),
+            events,
             timestamp_ms: checkpoint_timestamp,
             confirmed_local_execution: None,
             checkpoint: checkpoint.map(|c| c.summary.sequence_number),
@@ -438,7 +450,7 @@ async fn get_display_object_id(
 ) -> RpcResult<ObjectID> {
     let display_created_event = fullnode_api
         .state
-        .get_events(
+        .query_events(
             EventQuery::MoveEvent(DisplayCreatedEvent::type_(&object_type).to_string()),
             /* cursor */ None,
             /* limit */ 1,

@@ -340,7 +340,6 @@ impl Worker {
             network_admin_server_base_port,
             network.clone(),
             shutdown_receivers.pop().unwrap(),
-            None,
         );
 
         let primary_connector_handle = PrimaryConnector::spawn(

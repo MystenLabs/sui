@@ -15,6 +15,7 @@ use std::path::Path;
 use std::sync::Arc;
 use sui_storage::mutex_table::{LockGuard, MutexTable};
 use sui_types::accumulator::Accumulator;
+use sui_types::digests::TransactionEventsDigest;
 use sui_types::error::UserInputError;
 use sui_types::message_envelope::Message;
 use sui_types::object::Owner;
@@ -116,19 +117,12 @@ impl AuthorityStore {
                 .expect("Cannot bulk insert genesis objects");
 
             // insert txn and effects of genesis
-            let transaction = genesis
-                .transaction()
-                .clone()
-                .verify(&genesis.committee().unwrap())
-                .unwrap();
+            let transaction = VerifiedTransaction::new_unchecked(genesis.transaction().clone());
 
             store
                 .perpetual_tables
                 .transactions
-                .insert(
-                    transaction.digest(),
-                    transaction.clone().into_unsigned().serializable_ref(),
-                )
+                .insert(transaction.digest(), transaction.serializable_ref())
                 .unwrap();
 
             store
@@ -138,6 +132,12 @@ impl AuthorityStore {
                 .unwrap();
             // We don't insert the effects to executed_effects yet because the genesis tx hasn't but will be executed.
             // This is important for fullnodes to be able to generate indexing data right now.
+
+            store
+                .perpetual_tables
+                .events
+                .insert(&genesis.events().digest(), genesis.events())
+                .unwrap();
         }
 
         Ok(store)
@@ -160,6 +160,18 @@ impl AuthorityStore {
             .effects
             .contains_key(effects_digest)
             .map_err(|e| e.into())
+    }
+
+    pub(crate) fn get_events(
+        &self,
+        event_digest: &TransactionEventsDigest,
+    ) -> SuiResult<TransactionEvents> {
+        self.perpetual_tables
+            .events
+            .get(event_digest)?
+            .ok_or(SuiError::TransactionEventsNotFound {
+                digest: *event_digest,
+            })
     }
 
     pub fn multi_get_effects<'a>(
@@ -288,17 +300,6 @@ impl AuthorityStore {
             .get(&ObjectKey(*object_id, version))?)
     }
 
-    pub fn object_version_exists(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-    ) -> Result<bool, SuiError> {
-        Ok(self
-            .perpetual_tables
-            .objects
-            .contains_key(&ObjectKey(*object_id, version))?)
-    }
-
     /// Read an object and return it, or Ok(None) if the object was not found.
     pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         self.perpetual_tables.as_ref().get_object(object_id)
@@ -333,56 +334,60 @@ impl AuthorityStore {
         Ok(result)
     }
 
+    /// Gets the input object keys from input object kinds, by determining the versions of owned,
+    /// shared and package objects.
     /// When making changes, please see if check_sequenced_input_objects() below needs
     /// similar changes as well.
-    pub fn get_missing_input_objects(
+    pub fn get_input_object_keys(
         &self,
         digest: &TransactionDigest,
         objects: &[InputObjectKind],
         epoch_store: &AuthorityPerEpochStore,
-    ) -> Result<Vec<InputKey>, SuiError> {
-        let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
+    ) -> Vec<InputKey> {
+        let mut shared_locks = HashMap::<ObjectID, SequenceNumber>::new();
+        objects
+            .iter()
+            .map(|kind| {
+                match kind {
+                    InputObjectKind::SharedMoveObject { id, .. } => {
+                        if shared_locks.is_empty() {
+                            shared_locks = epoch_store
+                                .get_shared_locks(digest)
+                                .expect("Read from storage should not fail!")
+                                .into_iter()
+                                .collect();
+                        }
+                        // If we can't find the locked version, it means
+                        // 1. either we have a bug that skips shared object version assignment
+                        // 2. or we have some DB corruption
+                        let Some(version) = shared_locks.get(id) else {
+                            panic!(
+                                "Shared object locks should have been set. tx_digset: {digest:?}, obj \
+                                id: {id:?}",
+                            )
+                        };
+                        InputKey(*id, Some(*version))
+                    }
+                    InputObjectKind::MovePackage(id) => InputKey(*id, None),
+                    InputObjectKind::ImmOrOwnedMoveObject(objref) => InputKey(objref.0, Some(objref.1))
+                }
+            })
+            .collect()
+    }
 
-        let mut missing = Vec::new();
-        for kind in objects {
-            match kind {
-                InputObjectKind::SharedMoveObject { id, .. } => {
-                    let shared_locks = shared_locks_cell.get_or_try_init(|| {
-                        Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
-                            epoch_store.get_shared_locks(digest)?.into_iter().collect(),
-                        )
-                    })?;
-                    // If we can't find the locked version, it means
-                    // 1. either we have a bug that skips shared object version assignment
-                    // 2. or we have some DB corruption
-                    let Some(version) = shared_locks.get(id) else {
-                        panic!(
-                            "Shared object locks should have been set. tx_digset: {digest:?}, obj \
-                             id: {id:?}",
-                        )
-                    };
-
-                    if !self.object_version_exists(id, *version)? {
-                        // When this happens, other transactions that use smaller versions of this
-                        // shared object haven't finished execution.
-                        missing.push(InputKey(*id, Some(*version)));
-                    }
-                }
-                InputObjectKind::MovePackage(id) => {
-                    if !self.object_exists(*id)? {
-                        // The cert cannot have been formed if the package was missing.
-                        missing.push(InputKey(*id, None));
-                    }
-                }
-                InputObjectKind::ImmOrOwnedMoveObject(objref) => {
-                    if self.get_object_by_key(&objref.0, objref.1)?.is_none() {
-                        missing.push(InputKey(objref.0, Some(objref.1)));
-                    }
-                }
-            };
+    /// Checks if the input object identified by the InputKey exists, with support for non-system
+    /// packages i.e. when version is None.
+    pub fn input_object_exists(&self, key: &InputKey) -> Result<bool, SuiError> {
+        match key.1 {
+            Some(version) => Ok(self
+                .perpetual_tables
+                .objects
+                .contains_key(&ObjectKey(key.0, version))?),
+            None => match self.get_latest_parent_entry(key.0)? {
+                None => Ok(false),
+                Some(entry) => Ok(entry.0 .2.is_alive()),
+            },
         }
-
-        Ok(missing)
     }
 
     /// Attempts to acquire execution lock for an executable transaction.
@@ -407,7 +412,7 @@ impl AuthorityStore {
         self.execution_lock.write().await
     }
 
-    /// When making changes, please see if get_missing_input_objects() above needs
+    /// When making changes, please see if get_input_object_keys() above needs
     /// similar changes as well.
     ///
     /// Before this function is invoked, TransactionManager must ensure all depended
@@ -646,6 +651,7 @@ impl AuthorityStore {
             mutable_inputs: active_inputs,
             written,
             deleted,
+            events,
         } = inner_temporary_store;
         trace!(written =? written.values().map(|((obj_id, ver, _), _, _)| (obj_id, ver)).collect::<Vec<_>>(),
                "batch_update_objects: temp store written");
@@ -691,6 +697,9 @@ impl AuthorityStore {
                 (ObjectKey::from(obj_ref), new_object)
             }),
         )?;
+
+        write_batch =
+            write_batch.insert_batch(&self.perpetual_tables.events, [(events.digest(), events)])?;
 
         let new_locks_to_init: Vec<_> = written
             .iter()
@@ -1100,13 +1109,6 @@ impl AuthorityStore {
         object_id: ObjectID,
     ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
         self.perpetual_tables.get_latest_parent_entry(object_id)
-    }
-
-    pub fn object_exists(&self, object_id: ObjectID) -> SuiResult<bool> {
-        match self.get_latest_parent_entry(object_id)? {
-            None => Ok(false),
-            Some(entry) => Ok(entry.0 .2.is_alive()),
-        }
     }
 
     pub fn insert_transaction_and_effects(

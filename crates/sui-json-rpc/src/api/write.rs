@@ -4,7 +4,7 @@
 use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
-use sui_json_rpc_types::{DevInspectResults, SuiTransactionEffects, SuiTransactionResponse};
+use sui_json_rpc_types::{DevInspectResults, DryRunTransactionResponse, SuiTransactionResponse};
 
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{EpochId, SuiAddress};
@@ -75,5 +75,5 @@ pub trait WriteApi {
     /// Return transaction execution effects including the gas cost summary,
     /// while the effects are not committed to the chain.
     #[method(name = "dryRunTransaction")]
-    async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<SuiTransactionEffects>;
+    async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<DryRunTransactionResponse>;
 }

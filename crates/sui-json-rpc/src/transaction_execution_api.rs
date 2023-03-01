@@ -15,7 +15,9 @@ use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
-use sui_json_rpc_types::{DevInspectResults, SuiTransactionEffects, SuiTransactionResponse};
+use sui_json_rpc_types::{
+    DevInspectResults, DryRunTransactionResponse, SuiTransactionEvents, SuiTransactionResponse,
+};
 use sui_open_rpc::Module;
 use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::intent::Intent;
@@ -98,17 +100,16 @@ impl WriteApiServer for TransactionExecutionApi {
 
         match response {
             ExecuteTransactionResponse::EffectsCert(cert) => {
-                let (effects, is_executed_locally) = *cert;
+                let (effects, events, is_executed_locally) = *cert;
                 let module_cache = self
                     .state
                     .load_epoch_store_one_call_per_task()
                     .module_cache()
                     .clone();
-                let effects =
-                    SuiTransactionEffects::try_from(effects.effects, module_cache.as_ref())?;
                 Ok(SuiTransactionResponse {
                     transaction: tx,
-                    effects,
+                    effects: effects.effects.into(),
+                    events: SuiTransactionEvents::try_from(events, module_cache.as_ref())?,
                     timestamp_ms: None,
                     confirmed_local_execution: Some(is_executed_locally),
                     checkpoint: None,
@@ -132,7 +133,7 @@ impl WriteApiServer for TransactionExecutionApi {
             .await?)
     }
 
-    async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<SuiTransactionEffects> {
+    async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<DryRunTransactionResponse> {
         let (txn_data, txn_digest) = get_transaction_data_and_digest(tx_bytes)?;
         Ok(self
             .state

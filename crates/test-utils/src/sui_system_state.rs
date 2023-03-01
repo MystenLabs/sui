@@ -8,13 +8,11 @@ use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{
     get_key_pair, AuthorityPublicKeyBytes, KeypairTraits, NetworkKeyPair, ToFromBytes,
 };
-use sui_types::id::UID;
 use sui_types::sui_system_state::SystemParameters;
 use sui_types::sui_system_state::{
     StakeSubsidy, StakingPool, SuiSystemState, Table, TableVec, Validator, ValidatorMetadata,
     ValidatorSet,
 };
-use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 
 pub fn test_validatdor_metadata(
     sui_address: SuiAddress,
@@ -61,12 +59,9 @@ pub fn test_validator(
     let sui_address = SuiAddress::from(&pubkey_bytes);
     Validator {
         metadata: test_validatdor_metadata(sui_address, pubkey_bytes, net_address),
-        voting_power: stake_amount,
-        stake_amount,
-        pending_stake: 1,
-        pending_withdraw: 1,
+        voting_power: stake_amount + delegated_amount,
         gas_price: 1,
-        delegation_staking_pool: test_staking_pool(delegated_amount),
+        staking_pool: test_staking_pool(delegated_amount + stake_amount),
         commission_rate: 0,
         next_epoch_stake: 1,
         next_epoch_delegation: 1,
@@ -77,15 +72,13 @@ pub fn test_validator(
 
 pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiSystemState {
     let validator_set = ValidatorSet {
-        validator_stake: 1,
-        delegation_stake: 1,
+        total_stake: 1,
         active_validators: validators,
         pending_validators: TableVec::default(),
         pending_removals: vec![],
         staking_pool_mappings: Table::default(),
     };
     SuiSystemState {
-        info: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),
         epoch,
         protocol_version: ProtocolVersion::MAX.as_u64(),
         validators: validator_set,

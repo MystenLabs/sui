@@ -2,13 +2,10 @@
 source: crates/sui-config/tests/snapshot_tests.rs
 expression: genesis.sui_system_object()
 ---
-info:
-  id: "0x9dc97c4be6f1d0e61fbdf2cc9d78f9df04cdff7a473e2ec3a65853766dca1177"
 epoch: 0
 protocol_version: 1
 validators:
-  validator_stake: 1
-  delegation_stake: 0
+  total_stake: 1
   active_validators:
     - metadata:
         sui_address: "0x21b60aa9a8cb189ccbe20461dbfad2202fdef55b9418f30ac2c5fe632f6e1cb7"
@@ -233,24 +230,21 @@ validators:
         consensus_address: []
         worker_address: []
       voting_power: 10000
-      stake_amount: 1
-      pending_stake: 0
-      pending_withdraw: 0
       gas_price: 1
-      delegation_staking_pool:
-        id: "0xab8235dace3d68c7fb48110d63cbf4d6fd81ce101610b747b049f97dec31140c"
+      staking_pool:
+        id: "0xd5d9aa879b78dc1f516d71ab979189086eff752f65e4b0dea15829e3157962e1"
         starting_epoch: 0
-        sui_balance: 0
+        sui_balance: 1
         rewards_pool:
           value: 0
-        pool_token_balance: 0
+        pool_token_balance: 1
         exchange_rates:
-          id: "0xd5d9aa879b78dc1f516d71ab979189086eff752f65e4b0dea15829e3157962e1"
+          id: "0xe63945cec193ca7ac76960370028110a907ad1c22ff90b1fd57ea3c441c766b4"
           size: 1
         pending_delegation: 0
         pending_withdraws:
           contents:
-            id: "0x18b8140c8a6ea340142f128061016fc4bd8220ec88875a8e573a5f72a85a15c1"
+            id: "0xab8235dace3d68c7fb48110d63cbf4d6fd81ce101610b747b049f97dec31140c"
             size: 0
       commission_rate: 0
       next_epoch_stake: 1
@@ -266,7 +260,7 @@ validators:
     id: "0x628ffd0e51e9a6ea32c13c2739a31a8f344b557d3429e057b377a9c499b9bb13"
     size: 1
 storage_fund:
-  value: 1
+  value: 0
 parameters:
   min_validator_stake: 1
   max_validator_candidate_count: 100

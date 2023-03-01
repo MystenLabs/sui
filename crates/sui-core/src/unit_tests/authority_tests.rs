@@ -230,7 +230,7 @@ async fn test_dry_run_transaction() {
         )
         .await
         .unwrap();
-    assert_eq!(response.status, SuiExecutionStatus::Success);
+    assert_eq!(response.effects.status, SuiExecutionStatus::Success);
 
     // Make sure that objects are not mutated after dry run.
     let gas_object_version = fullnode
@@ -257,7 +257,9 @@ async fn test_dev_inspect_object_by_bytes() {
         init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
 
     // test normal call
-    let DevInspectResults { effects, results } = call_dev_inspect(
+    let DevInspectResults {
+        effects, results, ..
+    } = call_dev_inspect(
         &fullnode,
         &sender,
         &object_basics.0,
@@ -324,7 +326,9 @@ async fn test_dev_inspect_object_by_bytes() {
     assert_eq!(actual_gas_used, dev_inspect_gas_summary);
 
     // use the created object directly, via its bytes
-    let DevInspectResults { effects, results } = call_dev_inspect(
+    let DevInspectResults {
+        effects, results, ..
+    } = call_dev_inspect(
         &fullnode,
         &sender,
         &object_basics.0,
@@ -428,7 +432,9 @@ async fn test_dev_inspect_unowned_object() {
     assert_eq!(created_object.owner, Owner::AddressOwner(bob));
 
     // alice uses the object with dev inspect, despite not being the owner
-    let DevInspectResults { effects, results } = call_dev_inspect(
+    let DevInspectResults {
+        effects, results, ..
+    } = call_dev_inspect(
         &fullnode,
         &alice,
         &object_basics.0,
@@ -529,7 +535,9 @@ async fn test_dev_inspect_dynamic_field() {
     assert!(matches!(results, Err(e) if e.contains("kind: CircularObjectOwnership")));
 
     // add a dynamic field to an object
-    let DevInspectResults { effects, results } = call_dev_inspect(
+    let DevInspectResults {
+        effects, results, ..
+    } = call_dev_inspect(
         &fullnode,
         &sender,
         &object_basics.0,
@@ -2932,16 +2940,24 @@ async fn test_genesis_sui_system_state_object() {
     // This test verifies that we can read the genesis SuiSystemState object.
     // And its Move layout matches the definition in Rust (so that we can deserialize it).
     let authority_state = init_state().await;
-    let sui_system_object = authority_state
+    let wrapper = authority_state
         .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(sui_system_object.version(), SequenceNumber::from(1));
-    let move_object = sui_system_object.data.try_as_move().unwrap();
+    assert_eq!(wrapper.version(), SequenceNumber::from(1));
+    let move_object = wrapper.data.try_as_move().unwrap();
     let _sui_system_state =
         bcs::from_bytes::<SuiSystemStateWrapper>(move_object.contents()).unwrap();
     assert_eq!(move_object.type_, SuiSystemStateWrapper::type_());
+    let sui_system_state = authority_state
+        .database
+        .get_sui_system_state_object()
+        .unwrap();
+    assert_eq!(
+        &sui_system_state.get_current_epoch_committee().committee,
+        authority_state.epoch_store_for_testing().committee()
+    );
 }
 
 #[tokio::test]

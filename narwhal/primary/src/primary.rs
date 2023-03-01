@@ -163,11 +163,6 @@ impl Primary {
             &primary_channel_metrics.tx_block_synchronizer_commands,
             &primary_channel_metrics.tx_block_synchronizer_commands_total,
         );
-        let (tx_state_handler, _rx_state_handler) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_state_handler,
-            &primary_channel_metrics.tx_state_handler_total,
-        );
         let (tx_committed_own_headers, rx_committed_own_headers) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_commited_own_headers,
@@ -452,7 +447,6 @@ impl Primary {
                 .primary_network_admin_server_port,
             network.clone(),
             tx_shutdown.subscribe(),
-            Some(tx_state_handler),
         );
 
         if let Some(tx_executor_network) = tx_executor_network {

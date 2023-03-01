@@ -57,9 +57,9 @@ pub trait AuthorityAPI {
         request: CommitteeInfoRequest,
     ) -> Result<CommitteeInfoResponse, SuiError>;
 
-    async fn handle_current_epoch_static_info(
+    async fn handle_system_state_object(
         &self,
-        request: CurrentEpochStaticInfoRequest,
+        request: SystemStateRequest,
     ) -> Result<SuiSystemState, SuiError>;
 }
 
@@ -165,12 +165,12 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map_err(Into::into)
     }
 
-    async fn handle_current_epoch_static_info(
+    async fn handle_system_state_object(
         &self,
-        request: CurrentEpochStaticInfoRequest,
+        request: SystemStateRequest,
     ) -> Result<SuiSystemState, SuiError> {
         self.client()
-            .current_epoch_static_info(request)
+            .get_system_state_object(request)
             .await
             .map(tonic::Response::into_inner)
             .map_err(Into::into)

@@ -6,9 +6,9 @@ use std::sync::Arc;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::committee::EpochId;
-use sui_types::digests::TransactionEffectsDigest;
-use sui_types::messages::TransactionEffects;
+use sui_types::digests::{TransactionEffectsDigest, TransactionEventsDigest};
 use sui_types::messages::VerifiedTransaction;
+use sui_types::messages::{TransactionEffects, TransactionEvents};
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::CheckpointDigest;
@@ -103,6 +103,13 @@ impl ReadStore for RocksDbStore {
         digest: &TransactionEffectsDigest,
     ) -> Result<Option<TransactionEffects>, Self::Error> {
         self.authority_store.perpetual_tables.effects.get(digest)
+    }
+
+    fn get_transaction_events(
+        &self,
+        digest: &TransactionEventsDigest,
+    ) -> Result<Option<TransactionEvents>, Self::Error> {
+        self.authority_store.perpetual_tables.events.get(digest)
     }
 }
 

@@ -43,6 +43,7 @@ macro_rules! fp_ensure {
         }
     };
 }
+use crate::digests::TransactionEventsDigest;
 pub(crate) use fp_ensure;
 
 #[macro_export]
@@ -121,16 +122,11 @@ pub enum UserInputError {
     #[error("Gas budget: {:?} is lower than min: {:?}.", gas_budget, min_budget)]
     GasBudgetTooLow { gas_budget: u64, min_budget: u64 },
     #[error(
-        "Balance of gas object {:?} is lower than gas budget: {:?}, with gas price: {:?}.",
+        "Balance of gas object {:?} is lower than gas budget: {:?}.",
         gas_balance,
-        gas_budget,
-        gas_price
+        gas_budget
     )]
-    GasBalanceTooLowToCoverGasBudget {
-        gas_balance: u128,
-        gas_budget: u128,
-        gas_price: u64,
-    },
+    GasBalanceTooLowToCoverGasBudget { gas_balance: u128, gas_budget: u128 },
     #[error("Transaction kind does not support Sponsored Transaction")]
     UnsupportedSponsoredTransactionKind,
     #[error(
@@ -288,6 +284,8 @@ pub enum SuiError {
     },
     #[error("{TRANSACTION_NOT_FOUND_MSG_PREFIX} [{:?}].", digest)]
     TransactionNotFound { digest: TransactionDigest },
+    #[error("Could not find the referenced transaction events [{digest:?}].")]
+    TransactionEventsNotFound { digest: TransactionEventsDigest },
     #[error(
         "Attempt to move to `Executed` state an transaction that has already been executed: {:?}.",
         digest

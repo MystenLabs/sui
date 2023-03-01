@@ -31,7 +31,6 @@ import {
   RpcApiVersion,
   FaucetResponse,
   Order,
-  TransactionEffects,
   CoinMetadata,
   DevInspectResults,
   SuiSystemState,
@@ -46,6 +45,7 @@ import {
   CheckPointContentsDigest,
   Checkpoint,
   CommitteeInfo,
+  DryRunTransactionResponse,
 } from '../types';
 
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
@@ -319,7 +319,7 @@ export abstract class Provider {
   abstract unsubscribeEvent(id: SubscriptionId): Promise<boolean>;
 
   /**
-   * Runs the transaction in dev-inspect mode. Which allows for nearly any
+   * Runs the transaction in dev-inpsect mode. Which allows for nearly any
    * transaction (or Move call) with any arguments. Detailed results are
    * provided, including both the transaction effects and any return values.
    *
@@ -342,7 +342,9 @@ export abstract class Provider {
    * gas budget and the transaction effects
    * @param txBytes
    */
-  abstract dryRunTransaction(txBytes: Uint8Array): Promise<TransactionEffects>;
+  abstract dryRunTransaction(
+    txBytes: Uint8Array,
+  ): Promise<DryRunTransactionResponse>;
 
   /**
    * Return the list of dynamic field objects owned by an object
@@ -382,10 +384,9 @@ export abstract class Provider {
   abstract getValidators(): Promise<ValidatorMetaData[]>;
 
   /**
-   * Return the static validator network information of the current epoch.
-   * Such information remain the same during the epoch.
+   * Return the content of `0x5` object
    */
-  abstract getCurrentEpochStaticInfo(): Promise<SuiSystemState>;
+  abstract getSuiSystemState(): Promise<SuiSystemState>;
 
   /**
    * Get the sequence number of the latest checkpoint that has been executed
