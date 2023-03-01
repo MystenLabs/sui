@@ -4,7 +4,6 @@
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
 use mysten_network::config::Config;
 use std::collections::BTreeMap;
@@ -175,26 +174,6 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map(tonic::Response::into_inner)
             .map_err(Into::into)
     }
-}
-
-// This function errs on URL parsing error. This may happen
-// when a validator provides a bad URL.
-pub fn make_network_authority_client_sets_from_system_state(
-    sui_system_state: &SuiSystemState,
-    network_config: &Config,
-) -> anyhow::Result<BTreeMap<AuthorityName, NetworkAuthorityClient>> {
-    let mut authority_clients = BTreeMap::new();
-    for validator in &sui_system_state.validators.active_validators {
-        let address = Multiaddr::try_from(validator.metadata.net_address.clone())?;
-        let channel = network_config
-            .connect_lazy(&address)
-            .map_err(|err| anyhow!(err.to_string()))?;
-        let client = NetworkAuthorityClient::new(channel);
-        let name: &[u8] = &validator.metadata.protocol_pubkey_bytes;
-        let public_key_bytes = AuthorityName::from_bytes(name)?;
-        authority_clients.insert(public_key_bytes, client);
-    }
-    Ok(authority_clients)
 }
 
 pub fn make_network_authority_client_sets_from_committee(

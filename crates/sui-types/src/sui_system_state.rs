@@ -3,7 +3,7 @@
 
 use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::collection_types::{VecMap, VecSet};
-use crate::committee::{Committee, CommitteeWithNetAddresses, ProtocolVersion, StakeUnit};
+use crate::committee::{Committee, CommitteeWithNetAddresses, EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::AuthorityPublicKeyBytes;
 use crate::dynamic_field::{derive_dynamic_field_id, Field};
 use crate::error::SuiError;
@@ -21,6 +21,7 @@ use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
+use tracing::error;
 
 const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
@@ -376,7 +377,7 @@ pub struct ValidatorSet {
 /// Rust version of the Move sui::sui_system::SuiSystemStateInner type
 /// We want to keep it named as SuiSystemState in Rust since this is the primary interface type.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
-pub struct SuiSystemState {
+pub struct SuiSystemStateInnerV1 {
     pub epoch: u64,
     pub protocol_version: u64,
     pub validators: ValidatorSet,
@@ -415,7 +416,7 @@ pub struct StakeSubsidy {
     pub current_epoch_amount: u64,
 }
 
-impl SuiSystemState {
+impl SuiSystemStateInnerV1 {
     pub fn get_current_epoch_committee(&self) -> CommitteeWithNetAddresses {
         let mut voting_rights = BTreeMap::new();
         let mut net_addresses = BTreeMap::new();
@@ -517,10 +518,36 @@ impl SuiSystemState {
             epoch: self.epoch,
         }
     }
+
+    pub fn get_validator_metadata_vec(&self) -> Vec<ValidatorMetadata> {
+        self.validators
+            .active_validators
+            .iter()
+            .map(|v| v.metadata.clone())
+            .collect()
+    }
+
+    /// Maps from validator Sui address to (public key bytes, staking pool sui balance).
+    /// TODO: Might be useful to return a more organized data structure.
+    pub fn get_staking_pool_info(&self) -> BTreeMap<SuiAddress, (Vec<u8>, u64)> {
+        self.validators
+            .active_validators
+            .iter()
+            .map(|validator| {
+                (
+                    validator.metadata.sui_address,
+                    (
+                        validator.metadata.protocol_pubkey_bytes.clone(),
+                        validator.staking_pool.sui_balance,
+                    ),
+                )
+            })
+            .collect()
+    }
 }
 
 // The default implementation for tests
-impl Default for SuiSystemState {
+impl Default for SuiSystemStateInnerV1 {
     fn default() -> Self {
         let validator_set = ValidatorSet {
             total_stake: 2,
@@ -529,7 +556,7 @@ impl Default for SuiSystemState {
             pending_removals: vec![],
             staking_pool_mappings: Table::default(),
         };
-        SuiSystemState {
+        Self {
             epoch: 0,
             protocol_version: ProtocolVersion::MIN.as_u64(),
             validators: validator_set,
@@ -548,6 +575,106 @@ impl Default for SuiSystemState {
             safe_mode: false,
             epoch_start_timestamp_ms: 0,
         }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[serde(untagged)]
+pub enum SuiSystemState {
+    V1(SuiSystemStateInnerV1),
+}
+
+pub type SuiSystemStateInnerGenesis = SuiSystemStateInnerV1;
+
+impl SuiSystemState {
+    pub fn new_genesis(inner: SuiSystemStateInnerGenesis) -> Self {
+        Self::V1(inner)
+    }
+
+    /// Always return the version that we will be using for genesis.
+    /// Genesis always uses this version regardless of the current version.
+    pub fn into_genesis_version(self) -> SuiSystemStateInnerGenesis {
+        match self {
+            SuiSystemState::V1(inner) => inner,
+        }
+    }
+
+    pub fn epoch(&self) -> u64 {
+        match self {
+            SuiSystemState::V1(inner) => inner.epoch,
+        }
+    }
+
+    pub fn reference_gas_price(&self) -> u64 {
+        match self {
+            SuiSystemState::V1(inner) => inner.reference_gas_price,
+        }
+    }
+
+    pub fn epoch_start_timestamp_ms(&self) -> u64 {
+        match self {
+            SuiSystemState::V1(inner) => inner.epoch_start_timestamp_ms,
+        }
+    }
+
+    pub fn safe_mode(&self) -> bool {
+        match self {
+            SuiSystemState::V1(inner) => inner.safe_mode,
+        }
+    }
+
+    pub fn get_current_epoch_committee(&self) -> CommitteeWithNetAddresses {
+        match self {
+            SuiSystemState::V1(inner) => inner.get_current_epoch_committee(),
+        }
+    }
+
+    pub fn get_current_epoch_narwhal_committee(&self) -> NarwhalCommittee {
+        match self {
+            SuiSystemState::V1(inner) => inner.get_current_epoch_narwhal_committee(),
+        }
+    }
+
+    pub fn get_current_epoch_narwhal_worker_cache(
+        &self,
+        transactions_address: &Multiaddr,
+    ) -> WorkerCache {
+        match self {
+            SuiSystemState::V1(inner) => {
+                inner.get_current_epoch_narwhal_worker_cache(transactions_address)
+            }
+        }
+    }
+
+    pub fn get_validator_metadata_vec(&self) -> Vec<ValidatorMetadata> {
+        match self {
+            SuiSystemState::V1(inner) => inner.get_validator_metadata_vec(),
+        }
+    }
+
+    pub fn get_current_epoch_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId> {
+        match self {
+            SuiSystemState::V1(inner) => inner.get_current_epoch_authority_names_to_peer_ids(),
+        }
+    }
+
+    pub fn get_staking_pool_info(&self) -> BTreeMap<SuiAddress, (Vec<u8>, u64)> {
+        match self {
+            SuiSystemState::V1(inner) => inner.get_staking_pool_info(),
+        }
+    }
+
+    pub fn new_for_testing(epoch: EpochId) -> Self {
+        SuiSystemState::V1(SuiSystemStateInnerV1 {
+            epoch,
+            ..Default::default()
+        })
+    }
+}
+
+impl Default for SuiSystemState {
+    fn default() -> Self {
+        SuiSystemState::V1(SuiSystemStateInnerV1::default())
     }
 }
 
@@ -586,9 +713,18 @@ where
         .data
         .try_as_move()
         .ok_or(SuiError::SuiSystemStateNotFound)?;
-    let result = bcs::from_bytes::<Field<u64, SuiSystemState>>(move_object.contents())
-        .expect("Sui System State object deserialization cannot fail");
-    Ok(result.value)
+    match wrapper.version {
+        1 => {
+            let result =
+                bcs::from_bytes::<Field<u64, SuiSystemStateInnerV1>>(move_object.contents())
+                    .expect("Sui System State object deserialization cannot fail");
+            Ok(SuiSystemState::V1(result.value))
+        }
+        _ => {
+            error!("Unsupported Sui System State version: {}", wrapper.version);
+            Err(SuiError::SuiSystemStateUnexpectedVersion)
+        }
+    }
 }
 
 pub fn get_sui_system_state_version(_protocol_version: ProtocolVersion) -> u64 {

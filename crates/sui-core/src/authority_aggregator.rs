@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::{
-    make_authority_clients, make_network_authority_client_sets_from_committee,
-    make_network_authority_client_sets_from_system_state, AuthorityAPI, NetworkAuthorityClient,
+    make_authority_clients, make_network_authority_client_sets_from_committee, AuthorityAPI,
+    NetworkAuthorityClient,
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
 use crate::validator_info::make_committee;
@@ -433,16 +433,16 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
         auth_agg_metrics: AuthAggMetrics,
     ) -> anyhow::Result<Self> {
         let sui_system_state = store.get_sui_system_state_object()?;
-        Self::new_from_system_state(
-            &sui_system_state,
+        Self::new_from_committee(
+            sui_system_state.get_current_epoch_committee(),
             committee_store,
             safe_client_metrics_base,
             auth_agg_metrics,
         )
     }
 
-    pub fn new_from_system_state(
-        sui_system_state: &SuiSystemState,
+    pub fn new_from_committee(
+        committee: CommitteeWithNetAddresses,
         committee_store: &Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
         auth_agg_metrics: AuthAggMetrics,
@@ -452,9 +452,9 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
         // tolerate it as long as we have 2f+1 good validators.
         // GH issue: https://github.com/MystenLabs/sui/issues/7019
         let authority_clients =
-            make_network_authority_client_sets_from_system_state(sui_system_state, &net_config)?;
+            make_network_authority_client_sets_from_committee(&committee, &net_config)?;
         Ok(Self::new_with_metrics(
-            sui_system_state.get_current_epoch_committee().committee,
+            committee.committee,
             committee_store.clone(),
             authority_clients,
             safe_client_metrics_base,
@@ -854,12 +854,12 @@ where
                             debug!(
                                 "Received system state object from validator {:?} with epoch: {:?}",
                                 name.concise(),
-                                system_state.epoch
+                                system_state.epoch()
                             );
                             if state
                                 .latest_system_state
                                 .as_ref()
-                                .map_or(true, |latest| system_state.epoch > latest.epoch)
+                                .map_or(true, |latest| system_state.epoch() > latest.epoch())
                             {
                                 state.latest_system_state = Some(system_state);
                             }

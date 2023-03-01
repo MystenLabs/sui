@@ -73,11 +73,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
         Ok(self
             .get_sui_system_state()
             .await?
-            .validators
-            .active_validators
-            .into_iter()
-            .map(|v| v.metadata)
-            .collect())
+            .get_validator_metadata_vec())
     }
 
     async fn get_committee_info(&self, epoch: Option<EpochId>) -> RpcResult<CommitteeInfoResponse> {
@@ -96,7 +92,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
     }
 
     async fn get_reference_gas_price(&self) -> RpcResult<u64> {
-        Ok(self.get_sui_system_state().await?.reference_gas_price)
+        Ok(self.get_sui_system_state().await?.reference_gas_price())
     }
 }
 

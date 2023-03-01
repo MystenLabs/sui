@@ -1784,10 +1784,7 @@ async fn test_transaction_expiration() {
         .committee()
         .to_owned();
     committee.epoch = 1;
-    let system_state = SuiSystemState {
-        epoch: 1,
-        ..Default::default()
-    };
+    let system_state = SuiSystemState::new_for_testing(1);
 
     authority_state
         .reconfigure(

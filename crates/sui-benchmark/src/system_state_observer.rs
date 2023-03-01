@@ -29,8 +29,8 @@ impl SystemStateObserver {
                     _ = interval.tick() => {
                         match proxy.get_latest_system_state_object().await {
                             Ok(result) => {
-                                if tx.send(result.reference_gas_price).is_ok() {
-                                    info!("Reference gas price = {:?}", result.reference_gas_price);
+                                if tx.send(result.reference_gas_price()).is_ok() {
+                                    info!("Reference gas price = {:?}", result.reference_gas_price()    );
                                 }
                             }
                             Err(err) => {

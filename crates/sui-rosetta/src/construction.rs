@@ -195,7 +195,7 @@ pub async fn metadata(
         .governance_api()
         .get_sui_system_state()
         .await?
-        .reference_gas_price;
+        .reference_gas_price();
 
     let (tx_metadata, gas, budget) = match &option.internal_operation {
         InternalOperation::PaySui {

@@ -32,7 +32,7 @@ pub trait GovernanceReadApi {
         epoch: Option<EpochId>,
     ) -> RpcResult<CommitteeInfoResponse>;
 
-    /// Return [SuiSystemState]
+    /// Return latest SUI system state object on-chain.
     #[method(name = "getSuiSystemState")]
     async fn get_sui_system_state(&self) -> RpcResult<SuiSystemState>;
 

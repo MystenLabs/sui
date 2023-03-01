@@ -182,7 +182,7 @@ impl SuiNode {
             .expect("Committee of the current epoch must exist");
         let epoch_start_configuration = if cur_epoch == genesis.epoch() {
             Some(EpochStartConfiguration {
-                system_state: genesis.sui_system_object(),
+                system_state: SuiSystemState::new_genesis(genesis.sui_system_object()),
                 epoch_digest: genesis.checkpoint().digest(),
             })
         } else {
@@ -830,7 +830,7 @@ impl SuiNode {
 
             // If we eventually add tests that exercise safe mode, we will need a configurable way of
             // guarding against unexpected safe_mode.
-            debug_assert!(!system_state.safe_mode);
+            debug_assert!(!system_state.safe_mode());
 
             info!(
                 next_epoch,
