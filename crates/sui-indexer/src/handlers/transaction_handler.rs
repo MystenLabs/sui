@@ -19,7 +19,7 @@ use sui_indexer::models::transactions::commit_transactions;
 use sui_indexer::utils::log_errors_to_pg;
 use sui_indexer::{get_pg_pool_connection, PgConnectionPool};
 
-const TRANSACTION_PAGE_SIZE: usize = 100;
+const TRANSACTION_PAGE_SIZE: usize = 10;
 
 pub struct TransactionHandler {
     rpc_client: SuiClient,
