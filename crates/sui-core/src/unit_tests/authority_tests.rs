@@ -42,6 +42,7 @@ use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEW
 
 use crate::epoch::epoch_metrics::EpochMetrics;
 use move_core_types::parser::parse_type_tag;
+use move_core_types::value::MoveStruct;
 use std::{convert::TryInto, env};
 use sui_macros::sim_test;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
@@ -2942,6 +2943,8 @@ async fn test_genesis_sui_system_state_object() {
     let _sui_system_state =
         bcs::from_bytes::<SuiSystemStateWrapper>(move_object.contents()).unwrap();
     assert_eq!(move_object.type_, SuiSystemStateWrapper::type_());
+    MoveStruct::simple_deserialize(move_object.contents(), &SuiSystemStateWrapper::layout())
+        .unwrap();
 }
 
 #[tokio::test]

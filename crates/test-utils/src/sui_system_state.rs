@@ -77,15 +77,15 @@ pub fn test_validator(
 
 pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiSystemState {
     let validator_set = ValidatorSet {
-        validator_stake: 1,
-        delegation_stake: 1,
+        total_validator_stake: 1,
+        total_delegation_stake: 1,
         active_validators: validators,
         pending_validators: TableVec::default(),
         pending_removals: vec![],
         staking_pool_mappings: Table::default(),
     };
     SuiSystemState {
-        info: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),
+        id: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),
         epoch,
         protocol_version: ProtocolVersion::MAX.as_u64(),
         validators: validator_set,

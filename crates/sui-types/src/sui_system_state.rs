@@ -4,11 +4,19 @@
 use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::collection_types::{VecMap, VecSet};
 use crate::committee::{Committee, CommitteeWithNetAddresses, ProtocolVersion, StakeUnit};
+use crate::common_move_layout::{
+    address_field, bool_field, string_field, struct_field, u64_field, uid_field, vec_field,
+    vec_u8_field,
+};
 use crate::crypto::AuthorityPublicKeyBytes;
 use crate::error::SuiError;
+use crate::gas_coin::GAS;
+use crate::id::ID;
 use crate::storage::ObjectStore;
 use crate::{balance::Balance, id::UID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
 use fastcrypto::traits::ToFromBytes;
+use move_core_types::language_storage::TypeTag;
+use move_core_types::value::{MoveStructLayout, MoveTypeLayout};
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use multiaddr::Multiaddr;
 use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
@@ -16,7 +24,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
 pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
 pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch_safe_mode");
@@ -36,6 +43,27 @@ const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 pub struct SystemParameters {
     pub min_validator_stake: u64,
     pub max_validator_candidate_count: u64,
+}
+
+impl SystemParameters {
+    pub fn type_() -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            name: ident_str!("SystemParameters").to_owned(),
+            module: SUI_SYSTEM_MODULE_NAME.to_owned(),
+            type_params: vec![],
+        }
+    }
+
+    pub fn layout() -> MoveStructLayout {
+        MoveStructLayout::WithTypes {
+            type_: Self::type_(),
+            fields: vec![
+                u64_field("min_validator_stake"),
+                u64_field("max_validator_candidate_count"),
+            ],
+        }
+    }
 }
 
 /// Rust version of the Move std::option::Option type.
@@ -60,6 +88,38 @@ pub struct ValidatorMetadata {
     pub p2p_address: Vec<u8>,
     pub consensus_address: Vec<u8>,
     pub worker_address: Vec<u8>,
+}
+
+impl ValidatorMetadata {
+    pub fn type_() -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            name: ident_str!("ValidatorMetadata").to_owned(),
+            module: ident_str!("validator").to_owned(),
+            type_params: vec![],
+        }
+    }
+
+    pub fn layout() -> MoveStructLayout {
+        MoveStructLayout::WithTypes {
+            type_: Self::type_(),
+            fields: vec![
+                address_field("sui_address"),
+                vec_u8_field("pubkey_bytes"),
+                vec_u8_field("network_pubkey_bytes"),
+                vec_u8_field("worker_pubkey_bytes"),
+                vec_u8_field("proof_of_possession"),
+                string_field("name"),
+                string_field("description"),
+                string_field("image_url"),
+                string_field("project_url"),
+                vec_u8_field("net_address"),
+                vec_u8_field("p2p_address"),
+                vec_u8_field("consensus_address"),
+                vec_u8_field("worker_address"),
+            ],
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -145,6 +205,35 @@ impl Validator {
             self.metadata.net_address.clone(),
         )
     }
+
+    pub fn type_() -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            name: ident_str!("Validator").to_owned(),
+            module: ident_str!("validator").to_owned(),
+            type_params: vec![],
+        }
+    }
+
+    pub fn layout() -> MoveStructLayout {
+        MoveStructLayout::WithTypes {
+            type_: Self::type_(),
+            fields: vec![
+                struct_field("metadata", ValidatorMetadata::layout()),
+                u64_field("voting_power"),
+                u64_field("stake_amount"),
+                u64_field("pending_stake"),
+                u64_field("pending_withdraw"),
+                u64_field("gas_price"),
+                struct_field("delegation_staking_pool", StakingPool::layout()),
+                u64_field("commission_rate"),
+                u64_field("next_epoch_stake"),
+                u64_field("next_epoch_delegation"),
+                u64_field("next_epoch_gas_price"),
+                u64_field("next_epoch_commission_rate"),
+            ],
+        }
+    }
 }
 
 /// Rust version of the Move sui::staking_pool::PendingDelegationEntry type.
@@ -163,11 +252,43 @@ pub struct PendingWithdrawEntry {
     withdrawn_pool_tokens: Balance,
 }
 
+impl PendingWithdrawEntry {
+    pub fn type_() -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            name: ident_str!("PendingWithdrawEntry").to_owned(),
+            module: ident_str!("staking_pool").to_owned(),
+            type_params: vec![],
+        }
+    }
+}
+
 /// Rust version of the Move sui::table::Table type. Putting it here since
 /// we only use it in sui_system in the framework.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct TableVec {
     pub contents: Table,
+}
+
+impl TableVec {
+    pub fn type_(element_type: TypeTag) -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            name: ident_str!("TableVec").to_owned(),
+            module: ident_str!("table_vec").to_owned(),
+            type_params: vec![element_type],
+        }
+    }
+
+    pub fn layout(element_type: TypeTag) -> MoveStructLayout {
+        MoveStructLayout::WithTypes {
+            type_: Self::type_(element_type.clone()),
+            fields: vec![struct_field(
+                "contents",
+                Table::layout(TypeTag::U64, element_type),
+            )],
+        }
+    }
 }
 
 impl Default for TableVec {
@@ -187,6 +308,24 @@ impl Default for TableVec {
 pub struct Table {
     pub id: ObjectID,
     pub size: u64,
+}
+
+impl Table {
+    pub fn type_(k_type: TypeTag, v_type: TypeTag) -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            name: ident_str!("Table").to_owned(),
+            module: ident_str!("table").to_owned(),
+            type_params: vec![k_type, v_type],
+        }
+    }
+
+    pub fn layout(k_type: TypeTag, v_type: TypeTag) -> MoveStructLayout {
+        MoveStructLayout::WithTypes {
+            type_: Self::type_(k_type, v_type),
+            fields: vec![uid_field("id"), u64_field("size")],
+        }
+    }
 }
 
 impl Default for Table {
@@ -219,6 +358,22 @@ impl<K> Default for LinkedTable<K> {
     }
 }
 
+pub struct PoolTokenExchangeRate {
+    _sui_amount: u64,
+    _pool_token_amount: u64,
+}
+
+impl PoolTokenExchangeRate {
+    pub fn type_() -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            name: ident_str!("PoolTokenExchangeRate").to_owned(),
+            module: ident_str!("staking_pool").to_owned(),
+            type_params: vec![],
+        }
+    }
+}
+
 /// Rust version of the Move sui::staking_pool::StakingPool type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct StakingPool {
@@ -232,6 +387,42 @@ pub struct StakingPool {
     pub pending_withdraws: TableVec,
 }
 
+impl StakingPool {
+    pub fn type_() -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            name: ident_str!("StakingPool").to_owned(),
+            module: ident_str!("staking_pool").to_owned(),
+            type_params: vec![],
+        }
+    }
+
+    pub fn layout() -> MoveStructLayout {
+        MoveStructLayout::WithTypes {
+            type_: Self::type_(),
+            fields: vec![
+                uid_field("id"),
+                u64_field("starting_epoch"),
+                u64_field("sui_balance"),
+                struct_field("rewards_pool", Balance::layout(GAS::type_())),
+                u64_field("pool_token_balance"),
+                struct_field(
+                    "exchange_rates",
+                    Table::layout(
+                        TypeTag::U64,
+                        TypeTag::Struct(Box::new(PoolTokenExchangeRate::type_())),
+                    ),
+                ),
+                u64_field("pending_delegation"),
+                struct_field(
+                    "pending_withdraws",
+                    TableVec::layout(TypeTag::Struct(Box::new(PendingWithdrawEntry::type_()))),
+                ),
+            ],
+        }
+    }
+}
+
 /// Rust version of the Move sui::validator_set::ValidatorPair type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct ValidatorPair {
@@ -242,19 +433,53 @@ pub struct ValidatorPair {
 /// Rust version of the Move sui::validator_set::ValidatorSet type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct ValidatorSet {
-    pub validator_stake: u64,
-    pub delegation_stake: u64,
+    pub total_validator_stake: u64,
+    pub total_delegation_stake: u64,
     pub active_validators: Vec<Validator>,
     pub pending_validators: TableVec,
     pub pending_removals: Vec<u64>,
     pub staking_pool_mappings: Table,
 }
 
+impl ValidatorSet {
+    pub fn type_() -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            name: ident_str!("ValidatorSet").to_owned(),
+            module: ident_str!("validator_set").to_owned(),
+            type_params: vec![],
+        }
+    }
+
+    pub fn layout() -> MoveStructLayout {
+        MoveStructLayout::WithTypes {
+            type_: Self::type_(),
+            fields: vec![
+                u64_field("total_validator_stake"),
+                u64_field("total_delegation_stake"),
+                vec_field(
+                    "active_validators",
+                    MoveTypeLayout::Struct(Validator::layout()),
+                ),
+                struct_field(
+                    "pending_validators",
+                    TableVec::layout(TypeTag::Struct(Box::new(Validator::type_()))),
+                ),
+                vec_field("pending_removals", MoveTypeLayout::U64),
+                struct_field(
+                    "staking_pool_mappings",
+                    Table::layout(TypeTag::Struct(Box::new(ID::type_())), TypeTag::Address),
+                ),
+            ],
+        }
+    }
+}
+
 /// Rust version of the Move sui::sui_system::SuiSystemStateInner type
 /// We want to keep it named as SuiSystemState in Rust since this is the primary interface type.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct SuiSystemState {
-    pub info: UID,
+    pub id: UID,
     pub epoch: u64,
     pub protocol_version: u64,
     pub validators: ValidatorSet,
@@ -271,7 +496,7 @@ pub struct SuiSystemState {
 /// Rust version of the Move sui::sui_system::SuiSystemState type
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SuiSystemStateWrapper {
-    pub info: UID,
+    pub id: UID,
     pub version: u64,
     pub system_state: SuiSystemState,
 }
@@ -280,9 +505,20 @@ impl SuiSystemStateWrapper {
     pub fn type_() -> StructTag {
         StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
-            name: SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME.to_owned(),
+            name: ident_str!("SuiSystemState").to_owned(),
             module: SUI_SYSTEM_MODULE_NAME.to_owned(),
             type_params: vec![],
+        }
+    }
+
+    pub fn layout() -> MoveStructLayout {
+        MoveStructLayout::WithTypes {
+            type_: Self::type_(),
+            fields: vec![
+                uid_field("id"),
+                u64_field("version"),
+                struct_field("system_state", SuiSystemState::layout()),
+            ],
         }
     }
 }
@@ -292,6 +528,28 @@ pub struct StakeSubsidy {
     pub epoch_counter: u64,
     pub balance: Balance,
     pub current_epoch_amount: u64,
+}
+
+impl StakeSubsidy {
+    pub fn type_() -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            name: ident_str!("StakeSubsidy").to_owned(),
+            module: ident_str!("stake_subsidy").to_owned(),
+            type_params: vec![],
+        }
+    }
+
+    pub fn layout() -> MoveStructLayout {
+        MoveStructLayout::WithTypes {
+            type_: Self::type_(),
+            fields: vec![
+                u64_field("epoch_counter"),
+                struct_field("balance", Balance::layout(GAS::type_())),
+                u64_field("current_epoch_amount"),
+            ],
+        }
+    }
 }
 
 impl SuiSystemState {
@@ -377,21 +635,58 @@ impl SuiSystemState {
             epoch: self.epoch,
         }
     }
+
+    pub fn type_() -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            name: ident_str!("SuiSystemStateInner").to_owned(),
+            module: SUI_SYSTEM_MODULE_NAME.to_owned(),
+            type_params: vec![],
+        }
+    }
+
+    pub fn layout() -> MoveStructLayout {
+        MoveStructLayout::WithTypes {
+            type_: Self::type_(),
+            fields: vec![
+                uid_field("id"),
+                u64_field("epoch"),
+                u64_field("protocol_version"),
+                struct_field("validators", ValidatorSet::layout()),
+                struct_field("storage_fund", Balance::layout(GAS::type_())),
+                struct_field("parameters", SystemParameters::layout()),
+                u64_field("reference_gas_price"),
+                struct_field(
+                    "validator_report_records",
+                    VecMap::<SuiAddress, VecSet<SuiAddress>>::layout(
+                        (TypeTag::Address, MoveTypeLayout::Address),
+                        (
+                            TypeTag::Struct(Box::new(VecSet::<SuiAddress>::type_())),
+                            MoveTypeLayout::Struct(VecSet::<SuiAddress>::layout()),
+                        ),
+                    ),
+                ),
+                struct_field("stake_subsidy", StakeSubsidy::layout()),
+                bool_field("safe_mode"),
+                u64_field("epoch_start_timestamp_ms"),
+            ],
+        }
+    }
 }
 
 // The default implementation for tests
 impl Default for SuiSystemState {
     fn default() -> Self {
         let validator_set = ValidatorSet {
-            validator_stake: 1,
-            delegation_stake: 1,
+            total_validator_stake: 1,
+            total_delegation_stake: 1,
             active_validators: vec![],
             pending_validators: TableVec::default(),
             pending_removals: vec![],
             staking_pool_mappings: Table::default(),
         };
         SuiSystemState {
-            info: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),
+            id: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),
             epoch: 0,
             protocol_version: ProtocolVersion::MIN.as_u64(),
             validators: validator_set,

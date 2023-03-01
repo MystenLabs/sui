@@ -49,8 +49,8 @@ impl From<SuiSystemState> for EpochStaticInfo {
             stake_subsidy_epoch_counter: state.stake_subsidy.epoch_counter,
             stake_subsidy_balance: state.stake_subsidy.balance.value(),
             stake_subsidy_current_epoch_amount: state.stake_subsidy.current_epoch_amount,
-            total_validator_self_stake: state.validators.validator_stake,
-            total_delegation_stake: state.validators.delegation_stake,
+            total_validator_self_stake: state.validators.total_validator_stake,
+            total_delegation_stake: state.validators.total_delegation_stake,
             validators: state
                 .validators
                 .active_validators

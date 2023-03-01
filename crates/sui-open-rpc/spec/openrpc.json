@@ -6044,7 +6044,7 @@
         "required": [
           "epoch",
           "epoch_start_timestamp_ms",
-          "info",
+          "id",
           "parameters",
           "protocol_version",
           "reference_gas_price",
@@ -6065,7 +6065,7 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "info": {
+          "id": {
             "$ref": "#/components/schemas/UID"
           },
           "parameters": {
@@ -6898,11 +6898,11 @@
         "type": "object",
         "required": [
           "active_validators",
-          "delegation_stake",
           "pending_removals",
           "pending_validators",
           "staking_pool_mappings",
-          "validator_stake"
+          "total_delegation_stake",
+          "total_validator_stake"
         ],
         "properties": {
           "active_validators": {
@@ -6910,11 +6910,6 @@
             "items": {
               "$ref": "#/components/schemas/Validator"
             }
-          },
-          "delegation_stake": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
           },
           "pending_removals": {
             "type": "array",
@@ -6930,7 +6925,12 @@
           "staking_pool_mappings": {
             "$ref": "#/components/schemas/Table"
           },
-          "validator_stake": {
+          "total_delegation_stake": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "total_validator_stake": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0

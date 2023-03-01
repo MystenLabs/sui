@@ -27,6 +27,7 @@ pub mod clock;
 pub mod coin;
 pub mod collection_types;
 pub mod committee;
+pub mod common_move_layout;
 pub mod crypto;
 pub mod digests;
 pub mod display;
