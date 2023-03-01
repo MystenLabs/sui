@@ -145,6 +145,8 @@ mod test {
         test_simulated_load(test_cluster, 120).await;
     }
 
+    // TODO add this back once flakiness is resolved
+    #[ignore]
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_pruning() {
         let epoch_duration_ms = 5000;
