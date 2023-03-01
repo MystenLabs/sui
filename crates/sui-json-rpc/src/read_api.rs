@@ -45,7 +45,7 @@ use crate::api::cap_page_limit;
 use crate::error::Error;
 use crate::SuiRpcModule;
 
-pub const QUERY_MAX_RESULT_LIMIT: usize = 1000;
+use crate::api::QUERY_MAX_RESULT_LIMIT;
 
 const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
 
@@ -205,7 +205,7 @@ impl ReadApiServer for ReadApi {
         let mut tx_digests: Vec<TransactionDigest> = digests
             .iter()
             .take(QUERY_MAX_RESULT_LIMIT)
-            .map(|t| *t)
+            .copied()
             .collect();
         tx_digests.dedup();
 
