@@ -4,7 +4,6 @@
 use anyhow::Result;
 use clap::Parser;
 use rand::Rng;
-use std::cmp::min;
 use sui_indexer::new_rpc_client;
 use sui_json_rpc_types::CheckpointId;
 use tracing::info;
@@ -23,7 +22,11 @@ async fn main() -> Result<()> {
 
     let num = rand::thread_rng().gen_range(10..100);
 
-    let target_checkpoint = min(latest_checkpoint - num, 1);
+    let target_checkpoint = if latest_checkpoint - num > 0 {
+        latest_checkpoint - num
+    } else {
+        1
+    };
 
     let fn_checkpoint = fn_rpc_client
         .read_api()
