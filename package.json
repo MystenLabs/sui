@@ -22,14 +22,6 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.26.0",
-<<<<<<< HEAD
-<<<<<<< HEAD
     "turbo": "^1.8.3"
-=======
-    "turbo": "^1.8.2"
->>>>>>> 672b76296 (checkpoint detail)
-=======
-    "turbo": "^1.6.3"
->>>>>>> 7e687e4a3 (add digest to query key)
   }
 }

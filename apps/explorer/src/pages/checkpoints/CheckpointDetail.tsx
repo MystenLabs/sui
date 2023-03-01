@@ -27,7 +27,7 @@ function CheckpointDetail() {
 
     // todo: add user_signatures to combined `getCheckpoint` endpoint
     const contentsQuery = useQuery(
-        ['contents'],
+        ['checkpoints', digest, 'contents'],
         () => rpc.getCheckpointContents(checkpoint.sequenceNumber),
         { enabled: !!checkpointQuery.data }
     );
@@ -153,11 +153,11 @@ function CheckpointDetail() {
     );
 }
 
-export default () => {
+export default function CheckpointDetailFeatureFlagged() {
     const gb = useGrowthBook();
     const enabled = useFeature(GROWTHBOOK_FEATURES.EPOCHS_CHECKPOINTS).on;
     if (gb?.ready) {
         return enabled ? <CheckpointDetail /> : <Navigate to="/" />;
     }
     return <LoadingSpinner />;
-};
+}
