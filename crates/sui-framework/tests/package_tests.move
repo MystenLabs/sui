@@ -107,7 +107,6 @@ module sui::package_tests {
             hash::sha3_256(b"package contents"),
         );
 
-        // Authorize is expected fail, shouldn't reach this line.
         abort 0
     }
 
@@ -131,7 +130,6 @@ module sui::package_tests {
             hash::sha3_256(b"package contents 1"),
         );
 
-        // We shouldn't be able to make further progress
         abort 0
     }
 
