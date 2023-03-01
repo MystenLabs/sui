@@ -17,6 +17,10 @@ import {
     type SuiTransactionResponse,
     getGasData,
     getTransactionDigest,
+    fromSerializedSignature,
+    toB64,
+    SignaturePubkeyPair,
+    SuiAddress,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
@@ -161,6 +165,15 @@ function formatByTransactionKind(
         default:
             return {};
     }
+}
+
+function getSignatureFromAddress(
+    signatures: SignaturePubkeyPair[],
+    suiAddress: SuiAddress
+) {
+    return signatures.find(
+        (signature) => `0x${signature.pubKey.toSuiAddress()}` === suiAddress
+    );
 }
 
 type TxItemView = {
@@ -353,17 +366,6 @@ function TransactionView({
         </div>
     ));
 
-    const transactionSignatureData = {
-        title: 'Transaction Signatures',
-        content: [
-            {
-                label: 'Signature',
-                value: getTransactionSignature(transaction),
-                monotypeClass: true,
-            },
-        ],
-    };
-
     const createdMutateData = generateMutatedCreated(transaction);
 
     const typearguments =
@@ -421,12 +423,23 @@ function TransactionView({
     const txError = getExecutionStatusError(transaction);
 
     const gasData = getGasData(transaction);
-
     const gasPrice = gasData.price || 1;
     const gasPayment = gasData.payment;
     const gasBudget = gasData.budget;
     const gasOwner = gasData.owner;
     const isSponsoredTransaction = gasOwner !== sender;
+
+    const transactionSignatures = getTransactionSignature(transaction);
+    const deserializedTransactionSignatures = transactionSignatures.map(
+        (signature) => fromSerializedSignature(signature)
+    );
+    const accountSignature = getSignatureFromAddress(
+        deserializedTransactionSignatures,
+        sender
+    );
+    const sponsorSignature = isSponsoredTransaction
+        ? getSignatureFromAddress(deserializedTransactionSignatures, gasOwner)
+        : undefined;
 
     const timestamp = transaction.timestamp_ms || transaction.timestampMs;
 
@@ -661,7 +674,54 @@ function TransactionView({
                     )}
                     <TabPanel>
                         <div className={styles.txgridcomponent}>
-                            <ItemView data={transactionSignatureData} />
+                            {accountSignature && (
+                                <ItemView
+                                    data={{
+                                        title: 'Account Signature',
+                                        content: [
+                                            {
+                                                label: 'Scheme',
+                                                value: accountSignature.signatureScheme,
+                                            },
+                                            {
+                                                label: 'PubKey',
+                                                value: `0x${accountSignature.pubKey.toSuiAddress()}`,
+                                                monotypeClass: true,
+                                            },
+                                            {
+                                                label: 'Signature',
+                                                value: toB64(
+                                                    accountSignature.signature
+                                                ),
+                                            },
+                                        ],
+                                    }}
+                                />
+                            )}
+                            {sponsorSignature && (
+                                <ItemView
+                                    data={{
+                                        title: 'Sponsor Signature',
+                                        content: [
+                                            {
+                                                label: 'Scheme',
+                                                value: sponsorSignature.signatureScheme,
+                                            },
+                                            {
+                                                label: 'PubKey',
+                                                value: `0x${sponsorSignature.pubKey.toSuiAddress()}`,
+                                                monotypeClass: true,
+                                            },
+                                            {
+                                                label: 'Signature',
+                                                value: toB64(
+                                                    sponsorSignature.signature
+                                                ),
+                                            },
+                                        ],
+                                    }}
+                                />
+                            )}
                         </div>
                     </TabPanel>
                 </TabPanels>
