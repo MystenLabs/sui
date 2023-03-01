@@ -19,8 +19,8 @@ import {
     getTransactionDigest,
     fromSerializedSignature,
     toB64,
-    SignaturePubkeyPair,
-    SuiAddress,
+    type SignaturePubkeyPair,
+    type SuiAddress,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
