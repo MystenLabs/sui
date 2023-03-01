@@ -1496,7 +1496,6 @@ impl AuthorityState {
         };
         Ok(CommitteeInfoResponse {
             epoch,
-            protocol_version: committee.protocol_version,
             committee_info: committee.voting_rights,
         })
     }
@@ -1542,10 +1541,7 @@ impl AuthorityState {
         epoch_duration_ms: u64,
         state_snapshot_config: &StateSnapshotConfig,
     ) -> Arc<Self> {
-        Self::check_protocol_version(
-            supported_protocol_versions,
-            epoch_store.committee().protocol_version,
-        );
+        Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
         let event_handler = event_store.map(|es| {
             let handler = EventHandler::new(es);
@@ -1799,7 +1795,10 @@ impl AuthorityState {
         new_committee: Committee,
         epoch_start_configuration: EpochStartConfiguration,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
-        Self::check_protocol_version(supported_protocol_versions, new_committee.protocol_version);
+        Self::check_protocol_version(
+            supported_protocol_versions,
+            epoch_start_configuration.protocol_version(),
+        );
 
         self.committee_store.insert_new_committee(&new_committee)?;
         let db = self.db();
@@ -2825,11 +2824,11 @@ impl AuthorityState {
     }
 
     fn choose_protocol_version_and_system_packages(
+        current_protocol_version: ProtocolVersion,
         committee: &Committee,
         protocol_config: &ProtocolConfig,
         capabilities: Vec<AuthorityCapabilities>,
     ) -> (ProtocolVersion, Vec<ObjectRef>) {
-        let current_protocol_version = committee.protocol_version;
         let next_protocol_version = current_protocol_version + 1;
 
         // For each validator, gather the protocol version and system packages that it would like
@@ -2923,6 +2922,7 @@ impl AuthorityState {
 
         let (next_epoch_protocol_version, next_epoch_system_packages) =
             Self::choose_protocol_version_and_system_packages(
+                epoch_store.protocol_version(),
                 epoch_store.committee(),
                 epoch_store.protocol_config(),
                 epoch_store.get_capabilities(),
@@ -3109,13 +3109,13 @@ pub mod sui_framework_injection {
 
     type Framework = Vec<CompiledModule>;
 
-    type FrameworkUpradeCallback =
+    type FrameworkUpgradeCallback =
         Box<dyn Fn(AuthorityName) -> Option<Framework> + Send + Sync + 'static>;
 
     enum FrameworkOverrideConfig {
         Default,
         Global(Framework),
-        PerValidator(FrameworkUpradeCallback),
+        PerValidator(FrameworkUpgradeCallback),
     }
 
     fn compiled_modules_to_bytes(modules: &[CompiledModule]) -> Vec<Vec<u8>> {
@@ -3133,7 +3133,7 @@ pub mod sui_framework_injection {
         OVERRIDE.with(|bs| *bs.borrow_mut() = FrameworkOverrideConfig::Global(modules));
     }
 
-    pub fn set_override_cb(func: FrameworkUpradeCallback) {
+    pub fn set_override_cb(func: FrameworkUpgradeCallback) {
         OVERRIDE.with(|bs| *bs.borrow_mut() = FrameworkOverrideConfig::PerValidator(func));
     }
 

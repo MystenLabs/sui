@@ -29,6 +29,7 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::{EpochId, TransactionDigest};
 use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
@@ -688,7 +689,9 @@ impl CheckpointBuilder {
 
                 Some(EndOfEpochData {
                     next_epoch_committee: committee.voting_rights,
-                    next_epoch_protocol_version: committee.protocol_version,
+                    next_epoch_protocol_version: ProtocolVersion::new(
+                        system_state_obj.protocol_version,
+                    ),
                     root_state_digest: Accumulator::default().digest(),
                 })
             } else {

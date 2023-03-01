@@ -424,14 +424,10 @@ impl SuiSystemState {
             net_addresses.insert(name, net_address);
         }
         CommitteeWithNetAddresses {
-            committee: Committee::new(
-                self.epoch,
-                ProtocolVersion::new(self.protocol_version),
-                voting_rights,
-            )
-            // unwrap is safe because we should have verified the committee on-chain.
-            // TODO: Make sure we actually verify it.
-            .unwrap(),
+            committee: Committee::new(self.epoch, voting_rights)
+                // unwrap is safe because we should have verified the committee on-chain.
+                // TODO: Make sure we actually verify it.
+                .unwrap(),
             net_addresses,
         }
     }
