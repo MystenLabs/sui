@@ -247,6 +247,19 @@ impl ReadApiServer for ReadApi {
         self.get_transaction(digest).await
     }
 
+    async fn multi_get_transactions(
+        &self,
+        digests: Vec<TransactionDigest>,
+    ) -> RpcResult<Vec<SuiTransactionResponse>> {
+        if self
+            .method_to_be_forwarded
+            .contains(&"muti_get_transactions".to_string())
+        {
+            return self.fullnode.multi_get_transactions(digests).await;
+        }
+        self.multi_get_transactions(digests).await
+    }
+
     async fn get_normalized_move_modules_by_package(
         &self,
         package: ObjectID,

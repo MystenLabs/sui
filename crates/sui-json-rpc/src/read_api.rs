@@ -220,7 +220,10 @@ impl ReadApiServer for ReadApi {
                 transaction: txn.clone().0 .0.into_message().try_into()?,
                 effects: SuiTransactionEffects::try_from(
                     txn.0.clone().1,
-                    self.state.module_cache.as_ref(),
+                    self.state
+                        .load_epoch_store_one_call_per_task()
+                        .module_cache()
+                        .as_ref(),
                 )?,
                 timestamp_ms: self.state.get_timestamp_ms(digest).await?,
                 confirmed_local_execution: None,

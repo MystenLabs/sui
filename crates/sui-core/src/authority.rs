@@ -9,7 +9,6 @@ use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::KeyPair;
 use itertools::izip;
-use move_bytecode_utils::module_cache::SyncModuleCache;
 use itertools::Itertools;
 use move_binary_format::compatibility::Compatibility;
 use move_binary_format::CompiledModule;
