@@ -34,9 +34,9 @@ for SUB_SEED in `seq 1 $NUM_CPUS`; do
   #
   # Note that because of --no-capture, even though we are running many tests, they will be
   # serialized here. So we still need the for loop / backgrounding.
-  MSIM_TEST_SEED="$SEED" MSIM_TEST_NUM=1 MSIM_WATCHDOG_TIMEOUT_MS=60000 scripts/simtest/cargo-simtest simtest --package sui-benchmark --no-capture > "$LOG_FILE" 2>&1 &
+  MSIM_TEST_SEED="$SEED" MSIM_TEST_NUM=1 MSIM_WATCHDOG_TIMEOUT_MS=60000 scripts/simtest/cargo-simtest simtest --package sui-benchmark --no-capture # > "$LOG_FILE" 2>&1 &
 done
 
-for JOB in $(jobs -p); do
-  wait $JOB || echo "job failed"
-done
+# for JOB in $(jobs -p); do
+#   wait $JOB || echo "job failed"
+# done
