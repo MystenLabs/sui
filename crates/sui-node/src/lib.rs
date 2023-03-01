@@ -802,10 +802,6 @@ impl SuiNode {
             cur_epoch_store.record_epoch_reconfig_start_time_metric();
             let _ = self.end_of_epoch_channel.send(next_epoch_committee.clone());
 
-            let new_epoch_store = self
-                .reconfigure_state(&cur_epoch_store, next_epoch_committee, system_state)
-                .await;
-
             // The following code handles 4 different cases, depending on whether the node
             // was a validator in the previous epoch, and whether the node is a validator
             // in the new epoch.
@@ -824,6 +820,10 @@ impl SuiNode {
                 drop(checkpoint_service_exit);
 
                 narwhal_manager.shutdown().await;
+
+                let new_epoch_store = self
+                    .reconfigure_state(&cur_epoch_store, next_epoch_committee, system_state)
+                    .await;
 
                 narwhal_epoch_data_remover
                     .remove_old_data(next_epoch - 1)
@@ -852,23 +852,29 @@ impl SuiNode {
                     info!("This node is no longer a validator after reconfiguration");
                     None
                 }
-            } else if self.state.is_validator(&new_epoch_store) {
-                info!("Promoting the node from fullnode to validator, starting grpc server");
-
-                Some(
-                    Self::construct_validator_components(
-                        &self.config,
-                        self.state.clone(),
-                        new_epoch_store.clone(),
-                        self.checkpoint_store.clone(),
-                        self.state_sync.clone(),
-                        self.accumulator.clone(),
-                        &self.registry_service,
-                    )
-                    .await?,
-                )
             } else {
-                None
+                let new_epoch_store = self
+                    .reconfigure_state(&cur_epoch_store, next_epoch_committee, system_state)
+                    .await;
+
+                if self.state.is_validator(&new_epoch_store) {
+                    info!("Promoting the node from fullnode to validator, starting grpc server");
+
+                    Some(
+                        Self::construct_validator_components(
+                            &self.config,
+                            self.state.clone(),
+                            new_epoch_store.clone(),
+                            self.checkpoint_store.clone(),
+                            self.state_sync.clone(),
+                            self.accumulator.clone(),
+                            &self.registry_service,
+                        )
+                        .await?,
+                    )
+                } else {
+                    None
+                }
             };
             *self.validator_components.lock().await = new_validator_components;
             info!("Reconfiguration finished");
