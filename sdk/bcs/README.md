@@ -93,10 +93,10 @@ const bcs = new BCS(getSuiMoveConfig());
 
 // use bcs.ser() to serialize data
 const val = [1, 2, 3, 4];
-const ser = bcs.ser("vector<u8>", val).toBytes();
+const ser = bcs.ser(["vector", BCS.U8], val).toBytes();
 
 // use bcs.de() to deserialize data
-const res = bcs.de("vector<u8>", ser);
+const res = bcs.de(["vector", BCS.U8], ser);
 
 console.assert(res.toString() === val.toString());
 ```
@@ -109,8 +109,8 @@ import { BCS, getRustConfig } from "@mysten/bcs";
 
 const bcs = new BCS(getRustConfig());
 const val = [1, 2, 3, 4];
-const ser = bcs.ser("Vec<u8>", val).toBytes();
-const res = bcs.de("Vec<u8>", ser);
+const ser = bcs.ser(["Vec", BCS.U8], val).toBytes();
+const res = bcs.de(["Vec", BCS.U8], ser);
 
 console.assert(res.toString() === val.toString());
 ```
@@ -154,8 +154,8 @@ let _addr = bcs
 let _str = bcs.ser(BCS.STRING, "this is an ascii string").toBytes();
 
 // Vectors (vector<T>)
-let _u8_vec = bcs.ser("vector<u8>", [1, 2, 3, 4, 5, 6, 7]).toBytes();
-let _bool_vec = bcs.ser("vector<bool>", [true, true, false]).toBytes();
+let _u8_vec = bcs.ser(["vector", BCS.U8], [1, 2, 3, 4, 5, 6, 7]).toBytes();
+let _bool_vec = bcs.ser(["vector", BCS.BOOL], [true, true, false]).toBytes();
 let _str_vec = bcs
   .ser("vector<bool>", ["string1", "string2", "string3"])
   .toBytes();
@@ -256,6 +256,46 @@ let _bytes = bcs
     },
   })
   .toBytes();
+```
+
+## Using Generics
+
+To define a generic struct or an enum, pass the type parameters. It can either be done as a part of a string or as an Array. See below:
+```ts
+// Example: Generics
+import { BCS, getSuiMoveConfig } from "@mysten/bcs";
+const bcs = new BCS(getSuiMoveConfig());
+
+// Container -> the name of the type
+// T -> type parameter which has to be passed in `ser()` or `de()` methods
+// If you're not familiar with generics, treat them as type Templates
+bcs.registerStructType(["Container", "T"], {
+  contents: "T"
+});
+
+// When serializing, we have to pass the type to use for `T`
+bcs.ser(["Container", BCS.U8], {
+  contents: 100
+}).toString("hex");
+
+// Reusing the same Container type with different contents.
+// Mind that generics need to be passed as Array after the main type.
+bcs.ser(["Container", [ "vector", BCS.BOOL ]], {
+  contents: [ true, false, true ]
+}).toString("hex");
+
+// Using multiple generics - you can use any string for convenience and
+// readability. See how we also use array notation for a field definition.
+bcs.registerStructType(["VecMap", "Key", "Val"], {
+  keys: ["vector", "Key"],
+  values: ["vector", "Val"]
+});
+
+// To serialize VecMap, we can use:
+bcs.ser(["VecMap", BCS.STRING, BCS.STRING], {
+  keys: [ "key1", "key2", "key3" ],
+  values: [ "value1", "value2", "value3" ]
+});
 ```
 
 ### Enum

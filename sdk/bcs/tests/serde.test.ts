@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { BCS, getSuiMoveConfig } from "./../src/index";
 
-describe("serde", () => {
+describe("BCS: Serde", () => {
   it("should serialize primitives in both directions", () => {
     const bcs = new BCS(getSuiMoveConfig());
 

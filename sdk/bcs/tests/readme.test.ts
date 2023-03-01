@@ -14,7 +14,7 @@ import {
   getSuiMoveConfig,
 } from "./../src/index";
 
-describe("README Examples", () => {
+describe("BCS: README Examples", () => {
   it("quick start", () => {
     const bcs = new BCS(getSuiMoveConfig());
 
@@ -179,6 +179,45 @@ describe("README Examples", () => {
         },
       })
       .toBytes();
+  });
+
+  it("Example: Generics", () => {
+    const bcs = new BCS(getSuiMoveConfig());
+
+    // Container -> the name of the type
+    // T -> type parameter which has to be passed in `ser()` or `de()` methods
+    // If you're not familiar with generics, treat them as type Templates
+    bcs.registerStructType(["Container", "T"], {
+      contents: "T",
+    });
+
+    // When serializing, we have to pass the type to use for `T`
+    bcs
+      .ser(["Container", BCS.U8], {
+        contents: 100,
+      })
+      .toString("hex");
+
+    // Reusing the same Container type with different contents.
+    // Mind that generics need to be passed as Array after the main type.
+    bcs
+      .ser(["Container", ["vector", BCS.BOOL]], {
+        contents: [true, false, true],
+      })
+      .toString("hex");
+
+    // Using multiple generics - you can use any string for convenience and
+    // readability. See how we also use array notation for a field definition.
+    bcs.registerStructType(["VecMap", "Key", "Val"], {
+      keys: ["vector", "Key"],
+      values: ["vector", "Val"],
+    });
+
+    // To serialize VecMap, we can use:
+    bcs.ser(["VecMap", BCS.STRING, BCS.STRING], {
+      keys: ["key1", "key2", "key3"],
+      values: ["value1", "value2", "value3"],
+    });
   });
 
   it("Example: Enum", () => {
