@@ -22,11 +22,11 @@ while true; do
   MANIFEST_DIR=$(pwd)
 done
 
-cd "$MANIFEST_DIR"
-if ! git diff --quiet Cargo.lock; then
-  echo "Please commit or revert your changes to Cargo.lock before running cargo simtest"
-  exit 1
-fi
+# cd "$MANIFEST_DIR"
+# if ! git diff --quiet Cargo.lock; then
+#   echo "Please commit or revert your changes to Cargo.lock before running cargo simtest"
+#   exit 1
+# fi
 cd "$STARTING_DIR"
 
 cleanup () {
