@@ -93,6 +93,78 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
     command: Command,
 ) -> Result<(), ExecutionError> {
     let results = match command {
+        Command::MakeMoveVec(tag_opt, args) if args.is_empty() => {
+            let Some(tag) = tag_opt else {
+                invariant_violation!(
+                    "input checker ensures if args are empty, there is a type specified"
+                );
+            };
+            let ty = context
+                .session
+                .load_type(&tag)
+                .map_err(|e| context.convert_vm_error(e))?;
+            let abilities = context
+                .session
+                .get_type_abilities(&ty)
+                .map_err(|e| context.convert_vm_error(e))?;
+            let type_ = RawValueType::Loaded {
+                ty,
+                abilities,
+                used_in_non_entry_move_call: false,
+            };
+            // BCS layout for any empty vector should be the same
+            let bytes = bcs::to_bytes::<Vec<u8>>(&vec![]).unwrap();
+            vec![Value::Raw(type_, bytes)]
+        }
+        Command::MakeMoveVec(tag_opt, args) => {
+            let mut res = vec![];
+            leb128::write::unsigned(&mut res, args.len() as u64).unwrap();
+            let mut arg_iter = args.into_iter().enumerate();
+            let (mut used_in_non_entry_move_call, tag) = match tag_opt {
+                Some(tag) => (false, tag),
+                // If no tag specified, it _must_ be an object
+                None => {
+                    // empty args covered above
+                    let (idx, arg) = arg_iter.next().unwrap();
+                    let obj: ObjectValue = context.take_arg(CommandKind::MakeMoveVec, idx, arg)?;
+                    res.extend(obj.to_bcs_bytes());
+                    let tag = TypeTag::Struct(Box::new(obj.type_.clone()));
+                    (obj.used_in_non_entry_move_call, tag)
+                }
+            };
+            let elem_ty = context
+                .session
+                .load_type(&tag)
+                .map_err(|e| context.convert_vm_error(e))?;
+            let elem_abilities = context
+                .session
+                .get_type_abilities(&elem_ty)
+                .map_err(|e| context.convert_vm_error(e))?;
+            for (idx, arg) in arg_iter {
+                let value: Value = if elem_abilities.has_copy() {
+                    context.clone_arg(idx, arg)?
+                } else {
+                    context.take_arg(CommandKind::MakeMoveVec, idx, arg)?
+                };
+                check_param_type(context, idx, &value, &elem_ty)?;
+                used_in_non_entry_move_call =
+                    used_in_non_entry_move_call || value.was_used_in_non_entry_move_call();
+                res.extend(value.to_bcs_bytes());
+            }
+            let ty = Type::Vector(Box::new(elem_ty));
+            let abilities = context
+                .session
+                .get_type_abilities(&ty)
+                .map_err(|e| context.convert_vm_error(e))?;
+            vec![Value::Raw(
+                RawValueType::Loaded {
+                    ty,
+                    abilities,
+                    used_in_non_entry_move_call,
+                },
+                res,
+            )]
+        }
         Command::TransferObjects(objs, addr_arg) => {
             let objs: Vec<ObjectValue> = objs
                 .into_iter()
@@ -206,21 +278,16 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>>(
         by_mut_ref.len() == mutable_reference_outputs.len(),
         "lost mutable input"
     );
-    // write back mutable inputs
+    // write back mutable inputs. We also update if they were used in non entry Move calls
+    // though we do not care for immutable usages of objects or other values
     for ((i1, bytes, _layout), (i2, value_info)) in
         mutable_reference_outputs.into_iter().zip(by_mut_ref)
     {
         assert_invariant!(i1 == i2, "lost mutable input");
         let arg_idx = i1 as usize;
-        let value = make_value(value_info, bytes, /* return value */ false)?;
+        let used_in_non_entry_move_call = function_kind == FunctionKind::NonEntry;
+        let value = make_value(value_info, bytes, used_in_non_entry_move_call)?;
         context.restore_arg(arguments[arg_idx], value)?;
-    }
-    // taint arguments if this function is not an entry function (i.e. just some public function)
-    // &mut on primitive, non-object values will already have been tainted when updating the value
-    if function_kind == FunctionKind::NonEntry {
-        for arg in &arguments {
-            context.mark_used_in_non_entry_move_call(*arg);
-        }
     }
 
     context.take_user_events(module_id)?;
@@ -232,7 +299,10 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>>(
         .into_iter()
         .zip(return_values)
         .map(|(value_info, (bytes, _layout))| {
-            make_value(value_info, bytes, /* return value */ true)
+            // only non entry functions have return values
+            make_value(
+                value_info, bytes, /* used_in_non_entry_move_call */ true,
+            )
         })
         .collect()
 }
@@ -240,7 +310,7 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>>(
 fn make_value(
     value_info: ValueKind,
     bytes: Vec<u8>,
-    is_return_value: bool,
+    used_in_non_entry_move_call: bool,
 ) -> Result<Value, ExecutionError> {
     Ok(match value_info {
         ValueKind::Object {
@@ -249,10 +319,17 @@ fn make_value(
         } => Value::Object(ObjectValue::new(
             type_,
             has_public_transfer,
-            is_return_value,
+            used_in_non_entry_move_call,
             &bytes,
         )?),
-        ValueKind::Raw(ty, abilities) => Value::Raw(ValueType::Loaded { ty, abilities }, bytes),
+        ValueKind::Raw(ty, abilities) => Value::Raw(
+            RawValueType::Loaded {
+                ty,
+                abilities,
+                used_in_non_entry_move_call,
+            },
+            bytes,
+        ),
     })
 }
 
@@ -261,6 +338,10 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     module_bytes: Vec<Vec<u8>>,
 ) -> Result<(), ExecutionError> {
+    assert_invariant!(
+        !module_bytes.is_empty(),
+        "empty package is checked in transaction input checker"
+    );
     let modules = publish_and_verify_modules(context, module_bytes)?;
     let modules_to_init = modules
         .iter()
@@ -648,7 +729,7 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>>(
         let bytes = value.to_bcs_bytes();
         // Any means this was just some bytes passed in as an argument (as opposed to being
         // generated from a Move function). Meaning we will need to run validation
-        if matches!(value, Value::Raw(ValueType::Any, _)) {
+        if matches!(value, Value::Raw(RawValueType::Any, _)) {
             if let Some((string_struct, string_struct_layout)) = is_string_arg(context, param_ty)? {
                 validate_primitive_arg_string(
                     &bytes,
@@ -673,7 +754,7 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>>(
     let obj_ty;
     let ty = match value {
         // TODO dev inspect
-        Value::Raw(ValueType::Any, _) => {
+        Value::Raw(RawValueType::Any, _) => {
             if !is_entry_primitive_type(context, param_ty)? {
                 let msg = format!(
                     "Non-primitive argument at index {}. If it is an object, it must be \
@@ -691,7 +772,7 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>>(
                 return Ok(());
             }
         }
-        Value::Raw(ValueType::Loaded { ty, abilities }, _) => {
+        Value::Raw(RawValueType::Loaded { ty, abilities, .. }, _) => {
             assert_invariant!(!abilities.has_key(), "Raw value should never be an object");
             ty
         }

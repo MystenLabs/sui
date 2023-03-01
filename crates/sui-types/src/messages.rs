@@ -553,6 +553,10 @@ pub enum Command {
     MergeCoins(Argument, Vec<Argument>),
     /// Publishes a Move package
     Publish(Vec<Vec<u8>>),
+    /// `forall T: Vec<T> -> vector<T>`
+    /// Given n-values of the same type, it constructs a vector. For non objects or an empty vector,
+    /// the type tag must be specified.
+    MakeMoveVec(Option<TypeTag>, Vec<Argument>),
 }
 
 /// An argument to a programmable transaction command
@@ -629,7 +633,16 @@ impl Command {
         match self {
             Command::Publish(modules) => Self::publish_command_input_objects(modules),
             Command::MoveCall(c) => c.input_objects(),
-            Command::TransferObjects(_, _)
+            Command::MakeMoveVec(Some(t), _) => {
+                let mut packages = BTreeSet::new();
+                add_type_tag_packages(&mut packages, t);
+                packages
+                    .into_iter()
+                    .map(InputObjectKind::MovePackage)
+                    .collect()
+            }
+            Command::MakeMoveVec(None, _)
+            | Command::TransferObjects(_, _)
             | Command::SplitCoin(_, _)
             | Command::MergeCoins(_, _) => vec![],
         }
@@ -664,29 +677,47 @@ impl Command {
                     }
                 );
             }
-            Command::TransferObjects(v, _) => {
+            Command::TransferObjects(args, _) | Command::MergeCoins(_, args) => {
+                fp_ensure!(!args.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
-                    v.len() < config.max_arguments() as usize,
+                    args.len() < config.max_arguments() as usize,
                     UserInputError::SizeLimitExceeded {
-                        limit: "maximum arguments in a programmable transaction transfer objects command".to_string(),
+                        limit: "maximum arguments in a programmable transaction command"
+                            .to_string(),
                         value: config.max_arguments().to_string()
                     }
                 );
             }
-            Command::SplitCoin(_, _) => (),
-            Command::MergeCoins(_, v) => {
+            Command::MakeMoveVec(ty_opt, args) => {
+                // ty_opt.is_none() ==> !args.is_empty()
                 fp_ensure!(
-                    v.len() < config.max_coins() as usize,
+                    ty_opt.is_some() || !args.is_empty(),
+                    UserInputError::EmptyCommandInput
+                );
+                if let Some(ty) = ty_opt {
+                    let type_arguments_count = type_tag_validity_check(ty, config, 1, 0)?;
+                    fp_ensure!(
+                        type_arguments_count < config.max_type_arguments() as usize,
+                        UserInputError::SizeLimitExceeded {
+                            limit: "maximum type arguments in a call transaction".to_string(),
+                            value: config.max_type_arguments().to_string()
+                        }
+                    );
+                }
+                fp_ensure!(!args.is_empty(), UserInputError::EmptyCommandInput);
+                fp_ensure!(
+                    args.len() < config.max_arguments() as usize,
                     UserInputError::SizeLimitExceeded {
-                        limit: "maximum coins in a programmable transaction merge command"
+                        limit: "maximum arguments in a programmable transaction command"
                             .to_string(),
-                        value: config.max_coins().to_string()
+                        value: config.max_arguments().to_string()
                     }
                 );
             }
-            Command::Publish(v) => {
+            Command::Publish(modules) => {
+                fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
-                    v.len() < config.max_modules_in_publish() as usize,
+                    modules.len() < config.max_modules_in_publish() as usize,
                     UserInputError::SizeLimitExceeded {
                         limit: "maximum modules in a programmable transaction publish command"
                             .to_string(),
@@ -694,6 +725,7 @@ impl Command {
                     }
                 );
             }
+            Command::SplitCoin(_, _) => (),
         };
         Ok(())
     }
@@ -721,13 +753,19 @@ impl ProgrammableTransaction {
             .iter()
             .flat_map(|arg| arg.input_objects())
             .collect::<Vec<_>>();
+        // all objects, not just mutable, must be unique
         let mut used = HashSet::new();
         if !input_arg_objects.iter().all(|o| used.insert(o.object_id())) {
             return Err(UserInputError::DuplicateObjectRefInput);
         }
+        // do not duplicate packages referred to in commands
+        let command_input_objects: BTreeSet<InputObjectKind> = commands
+            .iter()
+            .flat_map(|command| command.input_objects())
+            .collect();
         Ok(input_arg_objects
             .into_iter()
-            .chain(commands.iter().flat_map(|command| command.input_objects()))
+            .chain(command_input_objects)
             .collect())
     }
 
@@ -788,6 +826,17 @@ impl Display for Command {
         match self {
             Command::MoveCall(p) => {
                 write!(f, "MoveCall({p})")
+            }
+            Command::MakeMoveVec(ty_opt, elems) => {
+                write!(f, "MakeMoveVec(")?;
+                if let Some(ty) = ty_opt {
+                    write!(f, "Some{ty}")?;
+                } else {
+                    write!(f, "None")?;
+                }
+                write!(f, ",[")?;
+                write_sep(f, elems, ",")?;
+                write!(f, "])")
             }
             Command::TransferObjects(objs, addr) => {
                 write!(f, "TransferObjects([")?;
@@ -2914,7 +2963,7 @@ pub type VerifiedSignedTransactionEffects = VerifiedTransactionEffectsEnvelope<A
 pub type VerifiedCertifiedTransactionEffects =
     VerifiedTransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, PartialOrd, Ord)]
 pub enum InputObjectKind {
     // A Move package, must be immutable.
     MovePackage(ObjectID),
