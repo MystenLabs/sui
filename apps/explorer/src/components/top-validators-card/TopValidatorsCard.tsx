@@ -7,7 +7,7 @@ import { useMemo } from 'react';
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import { StakeColumn } from './StakeColumn';
 
-import { useGetCurrentEpochStaticInfo } from '~/hooks/useGetObject';
+import { useGetSystemObject } from '~/hooks/useGetObject';
 import { Banner } from '~/ui/Banner';
 import { ImageIcon } from '~/ui/ImageIcon';
 import { ValidatorLink } from '~/ui/InternalLink';
@@ -93,8 +93,7 @@ type TopValidatorsCardProps = {
 };
 
 export function TopValidatorsCard({ limit, showIcon }: TopValidatorsCardProps) {
-    const { data, isLoading, isSuccess, isError } =
-        useGetCurrentEpochStaticInfo();
+    const { data, isLoading, isSuccess, isError } = useGetSystemObject();
 
     const tableData = useMemo(
         () =>

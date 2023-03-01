@@ -487,7 +487,7 @@ where
 
     pub async fn handle_system_state_object(&self) -> Result<SuiSystemState, SuiError> {
         self.authority_client
-            .handle_current_epoch_static_info(CurrentEpochStaticInfoRequest { _unused: false })
+            .handle_system_state_object(SystemStateRequest { _unused: false })
             .await
     }
 }

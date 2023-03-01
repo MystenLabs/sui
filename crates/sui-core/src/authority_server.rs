@@ -471,9 +471,9 @@ impl Validator for ValidatorService {
         return Ok(tonic::Response::new(response));
     }
 
-    async fn current_epoch_static_info(
+    async fn get_system_state_object(
         &self,
-        _request: tonic::Request<CurrentEpochStaticInfoRequest>,
+        _request: tonic::Request<SystemStateRequest>,
     ) -> Result<tonic::Response<SuiSystemState>, tonic::Status> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let response = epoch_store.system_state_object().clone();

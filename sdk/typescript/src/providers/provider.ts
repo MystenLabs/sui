@@ -319,7 +319,7 @@ export abstract class Provider {
   abstract unsubscribeEvent(id: SubscriptionId): Promise<boolean>;
 
   /**
-   * Runs the transaction in dev-inspect mode. Which allows for nearly any
+   * Runs the transaction in dev-inpsect mode. Which allows for nearly any
    * transaction (or Move call) with any arguments. Detailed results are
    * provided, including both the transaction effects and any return values.
    *
@@ -382,10 +382,9 @@ export abstract class Provider {
   abstract getValidators(): Promise<ValidatorMetaData[]>;
 
   /**
-   * Return the static validator network information of the current epoch.
-   * Such information remain the same during the epoch.
+   * Return the content of `0x5` object
    */
-  abstract getCurrentEpochStaticInfo(): Promise<SuiSystemState>;
+  abstract getSuiSystemState(): Promise<SuiSystemState>;
 
   /**
    * Get the sequence number of the latest checkpoint that has been executed

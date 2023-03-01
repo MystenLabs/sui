@@ -17,8 +17,8 @@ use sui_types::{
     error::SuiError,
     messages::{
         CertifiedTransaction, CommitteeInfoRequest, CommitteeInfoResponse,
-        CurrentEpochStaticInfoRequest, HandleTransactionResponse, ObjectInfoRequest,
-        ObjectInfoResponse, Transaction, TransactionInfoRequest, TransactionInfoResponse,
+        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest,
+        Transaction, TransactionInfoRequest, TransactionInfoResponse,
     },
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
     sui_system_state::SuiSystemState,
@@ -111,9 +111,9 @@ impl AuthorityAPI for LocalAuthorityClient {
         state.handle_committee_info_request(&request)
     }
 
-    async fn handle_current_epoch_static_info(
+    async fn handle_system_state_object(
         &self,
-        _request: CurrentEpochStaticInfoRequest,
+        _request: SystemStateRequest,
     ) -> Result<SuiSystemState, SuiError> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         Ok(epoch_store.system_state_object().clone())
@@ -258,9 +258,9 @@ impl AuthorityAPI for MockAuthorityApi {
         self.handle_committee_info_request_result.clone().unwrap()
     }
 
-    async fn handle_current_epoch_static_info(
+    async fn handle_system_state_object(
         &self,
-        _request: CurrentEpochStaticInfoRequest,
+        _request: SystemStateRequest,
     ) -> Result<SuiSystemState, SuiError> {
         unimplemented!();
     }
@@ -315,9 +315,9 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         unimplemented!()
     }
 
-    async fn handle_current_epoch_static_info(
+    async fn handle_system_state_object(
         &self,
-        _request: CurrentEpochStaticInfoRequest,
+        _request: SystemStateRequest,
     ) -> Result<SuiSystemState, SuiError> {
         unimplemented!()
     }

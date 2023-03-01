@@ -8,7 +8,7 @@ import { MetricGroup } from './MetricGroup';
 
 import { useNetwork } from '~/context';
 import { useAppsBackend } from '~/hooks/useAppsBackend';
-import { useGetCurrentEpochStaticInfo } from '~/hooks/useGetObject';
+import { useGetSystemObject } from '~/hooks/useGetObject';
 import { useRpc } from '~/hooks/useRpc';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
@@ -46,7 +46,7 @@ export function HomeMetrics() {
     const enabled = useFeature(GROWTHBOOK_FEATURES.EXPLORER_METRICS).on;
 
     const request = useAppsBackend();
-    const { data: systemData } = useGetCurrentEpochStaticInfo();
+    const { data: systemData } = useGetSystemObject();
 
     const rpc = useRpc();
     const { data: gasData } = useQuery(['reference-gas-price'], () =>
