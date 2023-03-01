@@ -89,7 +89,7 @@ async fn call_shared_object_contract() {
         package_id,
         /* arguments */ Vec::default(),
     );
-    let effects = submit_single_owner_transaction(transaction, &configs.validator_set()).await;
+    let (effects, _) = submit_single_owner_transaction(transaction, &configs.validator_set()).await;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     let counter_creation_transaction = effects.transaction_digest;
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created[0];
@@ -117,7 +117,7 @@ async fn call_shared_object_contract() {
                 CallArg::Pure(0u64.to_le_bytes().to_vec()),
             ],
         );
-        let effects = submit_shared_object_transaction(transaction, &configs.validator_set())
+        let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
             .await
             .unwrap();
         assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
@@ -136,7 +136,7 @@ async fn call_shared_object_contract() {
         package_id,
         vec![CallArg::Object(counter_object_arg)],
     );
-    let effects = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
         .await
         .unwrap();
     let increment_transaction = effects.transaction_digest;
@@ -165,7 +165,7 @@ async fn call_shared_object_contract() {
                 CallArg::Pure(1u64.to_le_bytes().to_vec()),
             ],
         );
-        let effects = submit_shared_object_transaction(transaction, &configs.validator_set())
+        let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
             .await
             .unwrap();
         assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
@@ -185,7 +185,7 @@ async fn call_shared_object_contract() {
         package_id,
         vec![CallArg::Object(counter_object_arg_imm)],
     );
-    let effects = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
         .await
         .unwrap();
     // Transaction fails
@@ -234,7 +234,7 @@ async fn access_clock_object_test() {
     let start = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
-    let effects = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let (effects, events) = submit_shared_object_transaction(transaction, &configs.validator_set())
         .await
         .unwrap();
     let finish = SystemTime::now()
@@ -242,8 +242,8 @@ async fn access_clock_object_test() {
         .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
-    assert_eq!(2, effects.events.len());
-    let event = effects.events.get(1).unwrap();
+    assert_eq!(2, events.data.len());
+    let event = events.data.get(1).unwrap();
     let Event::MoveEvent { contents, .. } = event else { panic!("Expected move event, got {:?}", event) };
 
     use serde::{Deserialize, Serialize};
@@ -306,7 +306,7 @@ async fn shared_object_flood() {
         package_id,
         /* arguments */ Vec::default(),
     );
-    let effects = submit_single_owner_transaction(transaction, &configs.validator_set()).await;
+    let (effects, _) = submit_single_owner_transaction(transaction, &configs.validator_set()).await;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created[0];
     let counter_object_arg = ObjectArg::SharedObject {
@@ -326,7 +326,7 @@ async fn shared_object_flood() {
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
-    let effects = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
         .await
         .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
@@ -339,7 +339,7 @@ async fn shared_object_flood() {
         package_id,
         vec![CallArg::Object(counter_object_arg)],
     );
-    let effects = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
         .await
         .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
@@ -355,7 +355,7 @@ async fn shared_object_flood() {
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
-    let effects = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
         .await
         .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
@@ -394,7 +394,7 @@ async fn shared_object_sync() {
             ) > 0
         });
 
-    let effects = submit_single_owner_transaction(
+    let (effects, _) = submit_single_owner_transaction(
         create_counter_transaction.clone(),
         //&configs.validator_set()[1..],
         &slow_validators,
@@ -440,7 +440,7 @@ async fn shared_object_sync() {
     );
 
     // Let's submit the transaction to the original set of validators.
-    let effects = submit_shared_object_transaction(
+    let (effects, _) = submit_shared_object_transaction(
         increment_counter_transaction.clone(),
         &configs.validator_set()[1..],
     )
@@ -450,7 +450,7 @@ async fn shared_object_sync() {
 
     // Submit transactions to the out-of-date authority.
     // It will succeed because we share owned object certificates through narwhal
-    let effects = submit_shared_object_transaction(
+    let (effects, _) = submit_shared_object_transaction(
         increment_counter_transaction,
         &configs.validator_set()[0..1],
     )
@@ -485,7 +485,7 @@ async fn replay_shared_object_transaction() {
 
     let mut version = None;
     for _ in 0..2 {
-        let effects = submit_single_owner_transaction(
+        let (effects, _) = submit_single_owner_transaction(
             create_counter_transaction.clone(),
             &configs.validator_set(),
         )

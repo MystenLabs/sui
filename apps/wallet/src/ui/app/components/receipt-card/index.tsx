@@ -39,7 +39,7 @@ type ReceiptCardProps = {
 };
 
 function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
-    const { effects } = txn;
+    const { effects, events } = txn;
     const timestamp = txn.timestamp_ms || txn.timestampMs;
     const executionStatus = getExecutionStatusType(txn);
     const error = useMemo(() => getExecutionStatusError(txn), [txn]);
@@ -58,8 +58,8 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
 
         return transferId
             ? transferId
-            : getTxnEffectsEventID(effects, activeAddress)[0];
-    }, [activeAddress, transaction, effects]);
+            : getTxnEffectsEventID(effects, events, activeAddress)[0];
+    }, [transaction, effects, events, activeAddress]);
 
     const gasTotal = getTotalGasUsed(txn);
 
@@ -112,7 +112,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
 
                 {isStakeTxn ? (
                     moveCallLabel === 'Staked' ? (
-                        <StakeTxnCard txnEffects={effects} />
+                        <StakeTxnCard txnEffects={effects} events={events} />
                     ) : (
                         <UnStakeTxnCard
                             txn={txn}

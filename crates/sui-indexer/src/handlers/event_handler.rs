@@ -98,7 +98,7 @@ impl EventHandler {
                 .map(|txn_resp| IndexerEventEnvelope {
                     transaction_digest: txn_resp.effects.transaction_digest,
                     timestamp: txn_resp.timestamp_ms,
-                    events: txn_resp.effects.events,
+                    events: txn_resp.events.data,
                     next_cursor: None,
                 })
                 .collect();

@@ -30,7 +30,7 @@ export function useScorecardHistory(scorecardId?: string | null) {
       );
 
       return txs
-        .reduce((acc: any[], tx) => acc.concat(tx.effects.events || []), [])
+        .reduce((acc: any[], tx) => acc.concat(tx.events || []), [])
         .filter(
           (evt) => "moveEvent" in evt && evt.moveEvent.type == SCORECARD_UPDATED
         )

@@ -31,9 +31,9 @@ use sui_types::gas::SuiGasStatus;
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::intent::{Intent, IntentMessage, IntentScope};
 use sui_types::message_envelope::Message;
-use sui_types::messages::InputObjects;
 use sui_types::messages::Transaction;
 use sui_types::messages::{CallArg, TransactionEffects};
+use sui_types::messages::{InputObjects, TransactionEvents};
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
 };
@@ -58,6 +58,7 @@ pub struct Genesis {
     checkpoint_contents: CheckpointContents,
     transaction: Transaction,
     effects: TransactionEffects,
+    events: TransactionEvents,
     objects: Vec<Object>,
 }
 
@@ -67,6 +68,7 @@ pub struct GenesisTuple(
     pub CheckpointContents,
     pub Transaction,
     pub TransactionEffects,
+    pub TransactionEvents,
     pub Vec<Object>,
 );
 
@@ -106,6 +108,9 @@ impl Genesis {
 
     pub fn effects(&self) -> &TransactionEffects {
         &self.effects
+    }
+    pub fn events(&self) -> &TransactionEvents {
+        &self.events
     }
 
     pub fn checkpoint(&self) -> VerifiedCheckpoint {
@@ -215,19 +220,21 @@ impl Serialize for Genesis {
         use serde::ser::Error;
 
         #[derive(Serialize)]
-        struct RawGeneis<'a> {
+        struct RawGenesis<'a> {
             checkpoint: &'a CertifiedCheckpointSummary,
             checkpoint_contents: &'a CheckpointContents,
             transaction: &'a Transaction,
             effects: &'a TransactionEffects,
+            events: &'a TransactionEvents,
             objects: &'a [Object],
         }
 
-        let raw_genesis = RawGeneis {
+        let raw_genesis = RawGenesis {
             checkpoint: &self.checkpoint,
             checkpoint_contents: &self.checkpoint_contents,
             transaction: &self.transaction,
             effects: &self.effects,
+            events: &self.events,
             objects: &self.objects,
         };
 
@@ -250,11 +257,12 @@ impl<'de> Deserialize<'de> for Genesis {
         use serde::de::Error;
 
         #[derive(Deserialize)]
-        struct RawGeneis {
+        struct RawGenesis {
             checkpoint: CertifiedCheckpointSummary,
             checkpoint_contents: CheckpointContents,
             transaction: Transaction,
             effects: TransactionEffects,
+            events: TransactionEvents,
             objects: Vec<Object>,
         }
 
@@ -266,11 +274,12 @@ impl<'de> Deserialize<'de> for Genesis {
             data
         };
 
-        let RawGeneis {
+        let RawGenesis {
             checkpoint,
             checkpoint_contents,
             transaction,
             effects,
+            events,
             objects,
         } = bcs::from_bytes(&bytes).map_err(|e| Error::custom(e.to_string()))?;
 
@@ -279,6 +288,7 @@ impl<'de> Deserialize<'de> for Genesis {
             checkpoint_contents,
             transaction,
             effects,
+            events,
             objects,
         })
     }
@@ -404,8 +414,14 @@ impl Builder {
     }
 
     pub fn add_validator_signature(mut self, keypair: &AuthorityKeyPair) -> Self {
-        let GenesisTuple(checkpoint, _checkpoint_contents, _transaction, _effects, _objects) =
-            self.build_unsigned_genesis_checkpoint();
+        let GenesisTuple(
+            checkpoint,
+            _checkpoint_contents,
+            _transaction,
+            _effects,
+            _events,
+            _objects,
+        ) = self.build_unsigned_genesis_checkpoint();
 
         let name = keypair.public().into();
         assert!(
@@ -462,7 +478,7 @@ impl Builder {
     }
 
     pub fn build(mut self) -> Genesis {
-        let GenesisTuple(checkpoint, checkpoint_contents, transaction, effects, objects) =
+        let GenesisTuple(checkpoint, checkpoint_contents, transaction, effects, events, objects) =
             self.build_unsigned_genesis_checkpoint();
 
         let committee = Self::committee(&objects);
@@ -494,6 +510,7 @@ impl Builder {
             checkpoint_contents,
             transaction,
             effects,
+            events,
             objects,
         };
 
@@ -704,7 +721,7 @@ fn build_unsigned_genesis_data(
         parameters.initial_sui_custody_account_address,
     );
 
-    let (genesis_transaction, genesis_effects, objects) =
+    let (genesis_transaction, genesis_effects, genesis_events, objects) =
         create_genesis_transaction(objects, &protocol_config, &epoch_data);
     let (checkpoint, checkpoint_contents) =
         create_genesis_checkpoint(parameters, &genesis_transaction, &genesis_effects);
@@ -714,6 +731,7 @@ fn build_unsigned_genesis_data(
         checkpoint_contents,
         genesis_transaction,
         genesis_effects,
+        genesis_events,
         objects,
     )
 }
@@ -747,7 +765,12 @@ fn create_genesis_transaction(
     objects: Vec<Object>,
     protocol_config: &ProtocolConfig,
     epoch_data: &EpochData,
-) -> (Transaction, TransactionEffects, Vec<Object>) {
+) -> (
+    Transaction,
+    TransactionEffects,
+    TransactionEvents,
+    Vec<Object>,
+) {
     let genesis_transaction = {
         let genesis_objects = objects
             .into_iter()
@@ -775,7 +798,7 @@ fn create_genesis_transaction(
     };
 
     // execute txn to effects
-    let (effects, objects) = {
+    let (effects, events, objects) = {
         let mut store = sui_types::in_memory_storage::InMemoryStorage::new(Vec::new());
         let temporary_store = TemporaryStore::new(
             &mut store,
@@ -825,10 +848,10 @@ fn create_genesis_transaction(
                 o
             })
             .collect();
-        (effects, objects)
+        (effects, inner_temp_store.events, objects)
     };
 
-    (genesis_transaction, effects, objects)
+    (genesis_transaction, effects, events, objects)
 }
 
 fn create_genesis_objects(
@@ -939,12 +962,9 @@ fn process_package(
         protocol_config,
     )?;
 
-    let (
-        InnerTemporaryStore {
-            written, deleted, ..
-        },
-        _events,
-    ) = temporary_store.into_inner();
+    let InnerTemporaryStore {
+        written, deleted, ..
+    } = temporary_store.into_inner();
 
     store.finish(written, deleted);
 
@@ -1038,12 +1058,9 @@ pub fn generate_genesis_system_object(
         &protocol_config,
     )?;
 
-    let (
-        InnerTemporaryStore {
-            written, deleted, ..
-        },
-        _events,
-    ) = temporary_store.into_inner();
+    let InnerTemporaryStore {
+        written, deleted, ..
+    } = temporary_store.into_inner();
 
     store.finish(written, deleted);
 

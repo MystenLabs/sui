@@ -23,7 +23,7 @@ use sui_types::intent::Intent;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
     CallArg, ObjectArg, ObjectInfoRequest, ObjectInfoResponse, Transaction, TransactionData,
-    TransactionEffects, VerifiedTransaction,
+    TransactionEffects, TransactionEvents, VerifiedTransaction,
 };
 use sui_types::messages::{ExecuteTransactionRequestType, HandleCertificateResponse};
 use sui_types::object::{Object, Owner};
@@ -54,7 +54,7 @@ pub async fn publish_package(
     path: PathBuf,
     configs: &[ValidatorInfo],
 ) -> ObjectRef {
-    let effects = publish_package_for_effects(gas_object, path, configs).await;
+    let (effects, _) = publish_package_for_effects(gas_object, path, configs).await;
     parse_package_ref(&effects.created).unwrap()
 }
 
@@ -62,7 +62,7 @@ pub async fn publish_package_for_effects(
     gas_object: Object,
     path: PathBuf,
     configs: &[ValidatorInfo],
-) -> TransactionEffects {
+) -> (TransactionEffects, TransactionEvents) {
     submit_single_owner_transaction(make_publish_package(gas_object, path), configs).await
 }
 
@@ -407,7 +407,7 @@ pub async fn delete_devnet_nft(
 pub async fn submit_single_owner_transaction(
     transaction: VerifiedTransaction,
     configs: &[ValidatorInfo],
-) -> TransactionEffects {
+) -> (TransactionEffects, TransactionEvents) {
     let certificate = make_tx_certs_and_signed_effects(vec![transaction])
         .0
         .pop()
@@ -430,7 +430,7 @@ pub async fn submit_single_owner_transaction(
 pub async fn submit_shared_object_transaction(
     transaction: VerifiedTransaction,
     configs: &[ValidatorInfo],
-) -> SuiResult<TransactionEffects> {
+) -> SuiResult<(TransactionEffects, TransactionEvents)> {
     let (committee, key_pairs) = Committee::new_simple_test_committee();
     submit_shared_object_transaction_with_committee(transaction, configs, &committee, &key_pairs)
         .await
@@ -444,7 +444,7 @@ pub async fn submit_shared_object_transaction_with_committee(
     configs: &[ValidatorInfo],
     committee: &Committee,
     key_pairs: &[AuthorityKeyPair],
-) -> SuiResult<TransactionEffects> {
+) -> SuiResult<(TransactionEffects, TransactionEvents)> {
     let certificate =
         make_tx_certs_and_signed_effects_with_committee(vec![transaction], committee, key_pairs)
             .0
@@ -482,14 +482,22 @@ pub async fn submit_shared_object_transaction_with_committee(
     replies.map(get_unique_effects)
 }
 
-pub fn get_unique_effects(replies: Vec<HandleCertificateResponse>) -> TransactionEffects {
+pub fn get_unique_effects(
+    replies: Vec<HandleCertificateResponse>,
+) -> (TransactionEffects, TransactionEvents) {
     let mut all_effects = HashMap::new();
+    let mut all_events = HashMap::new();
     for reply in replies {
         let effects = reply.signed_effects.into_data();
         all_effects.insert(effects.digest(), effects);
+        all_events.insert(reply.events.digest(), reply.events);
     }
     assert_eq!(all_effects.len(), 1);
-    all_effects.into_values().next().unwrap()
+    assert_eq!(all_events.len(), 1);
+    (
+        all_effects.into_values().next().unwrap(),
+        all_events.into_values().next().unwrap(),
+    )
 }
 
 /// Extract the package reference from a transaction effect. This is useful to deduce the

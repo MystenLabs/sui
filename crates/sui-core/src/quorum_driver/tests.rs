@@ -65,7 +65,7 @@ async fn test_quorum_driver_submit_transaction() {
     // Test submit_transaction
     let qd_clone = quorum_driver_handler.clone();
     let handle = tokio::task::spawn(async move {
-        let (tx, QuorumDriverResponse { effects_cert }) = qd_clone
+        let (tx, QuorumDriverResponse { effects_cert, .. }) = qd_clone
             .subscribe_to_effects()
             .recv()
             .await
@@ -95,7 +95,7 @@ async fn test_quorum_driver_submit_transaction_no_ticket() {
     );
     let qd_clone = quorum_driver_handler.clone();
     let handle = tokio::task::spawn(async move {
-        let (tx, QuorumDriverResponse { effects_cert }) = qd_clone
+        let (tx, QuorumDriverResponse { effects_cert, .. }) = qd_clone
             .subscribe_to_effects()
             .recv()
             .await
@@ -115,7 +115,7 @@ async fn verify_ticket_response<'a>(
     ticket: Registration<'a, TransactionDigest, QuorumDriverResult>,
     tx_digest: &TransactionDigest,
 ) {
-    let QuorumDriverResponse { effects_cert } = ticket.await.unwrap();
+    let QuorumDriverResponse { effects_cert, .. } = ticket.await.unwrap();
     assert_eq!(&effects_cert.data().transaction_digest, tx_digest);
 }
 
@@ -137,7 +137,7 @@ async fn test_quorum_driver_with_given_notify_read() {
 
     let qd_clone = quorum_driver_handler.clone();
     let handle = tokio::task::spawn(async move {
-        let (tx, QuorumDriverResponse { effects_cert }) = qd_clone
+        let (tx, QuorumDriverResponse { effects_cert, .. }) = qd_clone
             .subscribe_to_effects()
             .recv()
             .await
@@ -309,7 +309,7 @@ async fn test_quorum_driver_retry_on_object_locked() -> Result<(), anyhow::Error
         .unwrap();
 
     // Aggregator gets three good responses and execution succeeds.
-    let QuorumDriverResponse { effects_cert } = res;
+    let QuorumDriverResponse { effects_cert, .. } = res;
     assert_eq!(effects_cert.transaction_digest, tx2_digest);
 
     // Case 4 - object is locked by 2 txes with weight 2 and 1 respectivefully. Then try to execute the third txn
@@ -370,7 +370,7 @@ async fn test_quorum_driver_retry_on_object_locked() -> Result<(), anyhow::Error
         .await
         .unwrap();
 
-    let QuorumDriverResponse { effects_cert } = res;
+    let QuorumDriverResponse { effects_cert, .. } = res;
     assert_eq!(effects_cert.transaction_digest, tx_digest);
 
     // Case 7 - three validators lock the object, by different txes

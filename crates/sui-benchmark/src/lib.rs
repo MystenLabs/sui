@@ -22,6 +22,7 @@ use sui_json_rpc_types::{SuiObjectRead, SuiTransactionEffects};
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::{AuthorityName, SuiAddress};
+use sui_types::messages::TransactionEvents;
 use sui_types::{
     base_types::ObjectID,
     committee::{Committee, EpochId, ProtocolVersion},
@@ -56,14 +57,14 @@ pub mod workloads;
 /// responses from LocalValidatorAggregatorProxy and FullNodeProxy
 #[allow(clippy::large_enum_variant)]
 pub enum ExecutionEffects {
-    CertifiedTransactionEffects(CertifiedTransactionEffects),
+    CertifiedTransactionEffects(CertifiedTransactionEffects, TransactionEvents),
     SuiTransactionEffects(SuiTransactionEffects),
 }
 
 impl ExecutionEffects {
     pub fn mutated(&self) -> Vec<(ObjectRef, Owner)> {
         match self {
-            ExecutionEffects::CertifiedTransactionEffects(certified_effects) => {
+            ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 certified_effects.data().mutated.clone()
             }
             ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
@@ -77,7 +78,7 @@ impl ExecutionEffects {
 
     pub fn created(&self) -> Vec<(ObjectRef, Owner)> {
         match self {
-            ExecutionEffects::CertifiedTransactionEffects(certified_effects) => {
+            ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 certified_effects.data().created.clone()
             }
             ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
@@ -91,7 +92,7 @@ impl ExecutionEffects {
 
     pub fn quorum_sig(&self) -> Option<&AuthorityStrongQuorumSignInfo> {
         match self {
-            ExecutionEffects::CertifiedTransactionEffects(certified_effects) => {
+            ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 Some(certified_effects.auth_sig())
             }
             ExecutionEffects::SuiTransactionEffects(_) => None,
@@ -100,7 +101,7 @@ impl ExecutionEffects {
 
     pub fn gas_object(&self) -> (ObjectRef, Owner) {
         match self {
-            ExecutionEffects::CertifiedTransactionEffects(certified_effects) => {
+            ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 certified_effects.data().gas_object
             }
             ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => {
@@ -275,9 +276,13 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             // The ticket only times out when QuorumDriver exceeds the retry times
             match ticket.await {
                 Ok(resp) => {
-                    let QuorumDriverResponse { effects_cert } = resp;
+                    let QuorumDriverResponse {
+                        effects_cert,
+                        events,
+                    } = resp;
                     return Ok(ExecutionEffects::CertifiedTransactionEffects(
                         effects_cert.into(),
+                        events,
                     ));
                 }
                 Err(err) => {
@@ -319,7 +324,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                         votes.push(signature);
                     }
                     // The transaction may be submitted again in case the certificate's submission failed.
-                    TransactionStatus::Executed(cert, _effects) => {
+                    TransactionStatus::Executed(cert, _effects, _) => {
                         tracing::warn!("Transaction already submitted: {tx:?}");
                         if let Some(cert) = cert {
                             certificate = Some(CertifiedTransaction::new_from_data_and_sig(
@@ -386,6 +391,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         let mut futures = FuturesUnordered::new();
         total_stake = 0;
         let mut transaction_effects = None;
+        let mut transaction_events = None;
         for client in self.clients.values() {
             let fut = client.handle_certificate(certified_transaction.clone());
             futures.push(fut);
@@ -395,9 +401,13 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         while let Some(response) = futures.next().await {
             match response {
                 // If all goes well, the validators reply with signed effects.
-                Ok(HandleCertificateResponse { signed_effects }) => {
+                Ok(HandleCertificateResponse {
+                    signed_effects,
+                    events,
+                }) => {
                     let author = signed_effects.auth_sig().authority;
                     transaction_effects = Some(signed_effects.data().clone());
+                    transaction_events = Some(events);
                     total_stake += self.committee.weight(&author);
                 }
 
@@ -425,6 +435,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         let signed_material = certified_transaction.auth_sig().clone();
         let effects = ExecutionEffects::CertifiedTransactionEffects(
             Envelope::new_from_data_and_sig(transaction_effects.unwrap(), signed_material),
+            transaction_events.unwrap(),
         );
         Ok(effects)
     }

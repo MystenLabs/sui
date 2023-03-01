@@ -11,21 +11,26 @@ import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
 import { useSystemState } from '_src/ui/app/staking/useSystemState';
 
-import type { TransactionEffects, MoveEvent } from '@mysten/sui.js';
+import type {
+    TransactionEffects,
+    MoveEvent,
+    TransactionEvents,
+} from '@mysten/sui.js';
 
 type StakeTxnCardProps = {
     txnEffects: TransactionEffects;
+    events: TransactionEvents;
 };
 
 const REQUEST_DELEGATION_EVENT = '0x2::validator_set::DelegationRequestEvent';
 
 // TODO: moveEvents is will be changing
 // For Staked Transaction use moveEvent Field to get the validator address, delegation amount, epoch
-export function StakeTxnCard({ txnEffects }: StakeTxnCardProps) {
+export function StakeTxnCard({ txnEffects, events }: StakeTxnCardProps) {
     const stakingData = useMemo(() => {
-        if (!txnEffects?.events) return null;
+        if (!events) return null;
 
-        const event = txnEffects.events.find(
+        const event = events.find(
             (event) =>
                 'moveEvent' in event &&
                 event.moveEvent.type === REQUEST_DELEGATION_EVENT
@@ -33,7 +38,7 @@ export function StakeTxnCard({ txnEffects }: StakeTxnCardProps) {
         if (!event) return null;
         const { moveEvent } = event as { moveEvent: MoveEvent };
         return moveEvent;
-    }, [txnEffects.events]);
+    }, [events]);
 
     const { data: system } = useSystemState();
 
