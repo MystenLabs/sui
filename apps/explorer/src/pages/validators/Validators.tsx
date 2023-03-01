@@ -8,7 +8,7 @@ import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
 import { DelegationAmount } from '~/components/validator/DelegationAmount';
 import { calculateAPY } from '~/components/validator/calculateAPY';
-import { useGetCurrentEpochStaticInfo } from '~/hooks/useGetObject';
+import { useGetSystemObject } from '~/hooks/useGetObject';
 import { useGetValidatorsEvents } from '~/hooks/useGetValidatorsEvents';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
@@ -158,8 +158,7 @@ function validatorsTableData(
 }
 
 function ValidatorPageResult() {
-    const { data, isLoading, isSuccess, isError } =
-        useGetCurrentEpochStaticInfo();
+    const { data, isLoading, isSuccess, isError } = useGetSystemObject();
 
     const numberOfValidators = useMemo(
         () => data?.validators.active_validators.length || null,

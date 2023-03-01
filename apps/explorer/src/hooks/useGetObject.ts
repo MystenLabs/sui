@@ -14,9 +14,9 @@ export function useGetValidators() {
     return useQuery(['system', 'validators'], () => rpc.getValidators());
 }
 
-export function useGetCurrentEpochStaticInfo() {
+export function useGetSystemObject() {
     const rpc = useRpc();
-    return useQuery(['system', 'state'], () => rpc.getCurrentEpochStaticInfo());
+    return useQuery(['system', 'state'], () => rpc.getSuiSystemState());
 }
 
 export function useGetObject(

@@ -41,11 +41,7 @@ pub async fn status(
 ) -> Result<NetworkStatusResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
-    let system_state = context
-        .client
-        .read_api()
-        .get_current_epoch_static_info()
-        .await?;
+    let system_state = context.client.read_api().get_sui_system_state().await?;
 
     let peers = system_state
         .validators

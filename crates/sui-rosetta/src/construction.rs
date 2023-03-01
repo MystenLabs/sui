@@ -193,7 +193,7 @@ pub async fn metadata(
     let gas_price = context
         .client
         .governance_api()
-        .get_current_epoch_static_info()
+        .get_sui_system_state()
         .await?
         .reference_gas_price;
 

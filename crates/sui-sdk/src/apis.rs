@@ -191,8 +191,8 @@ impl ReadApi {
             .await?)
     }
 
-    pub async fn get_current_epoch_static_info(&self) -> SuiRpcResult<SuiSystemState> {
-        Ok(self.api.http.get_current_epoch_static_info().await?)
+    pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemState> {
+        Ok(self.api.http.get_sui_system_state().await?)
     }
 
     pub async fn get_reference_gas_price(&self) -> SuiRpcResult<u64> {
@@ -499,7 +499,7 @@ impl GovernanceApi {
     }
 
     /// Return [SuiSystemState]
-    pub async fn get_current_epoch_static_info(&self) -> SuiRpcResult<SuiSystemState> {
-        Ok(self.api.http.get_current_epoch_static_info().await?)
+    pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemState> {
+        Ok(self.api.http.get_sui_system_state().await?)
     }
 }
