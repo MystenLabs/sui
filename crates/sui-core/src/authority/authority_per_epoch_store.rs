@@ -56,7 +56,7 @@ use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;
 use sui_adapter::adapter;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
@@ -288,6 +288,12 @@ pub struct EpochStartConfiguration {
     pub epoch_digest: CheckpointDigest,
 }
 
+impl EpochStartConfiguration {
+    pub fn protocol_version(&self) -> ProtocolVersion {
+        ProtocolVersion::new(self.system_state.protocol_version)
+    }
+}
+
 impl AuthorityEpochTables {
     pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
         Self::open_tables_transactional(
@@ -399,7 +405,7 @@ impl AuthorityPerEpochStore {
             .current_voting_right
             .set(committee.weight(&name) as i64);
         metrics.epoch_total_votes.set(committee.total_votes as i64);
-        let protocol_version = committee.protocol_version;
+        let protocol_version = epoch_start_configuration.protocol_version();
         let protocol_config = ProtocolConfig::get_for_version(protocol_version);
         let execution_component = ExecutionComponents::new(&protocol_config, store, cache_metrics);
         Arc::new(Self {
@@ -500,6 +506,10 @@ impl AuthorityPerEpochStore {
 
     pub fn reference_gas_price(&self) -> u64 {
         self.system_state_object().reference_gas_price
+    }
+
+    pub fn protocol_version(&self) -> ProtocolVersion {
+        self.epoch_start_configuration.protocol_version()
     }
 
     pub fn module_cache(&self) -> &Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>> {

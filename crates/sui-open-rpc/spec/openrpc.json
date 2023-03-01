@@ -3206,8 +3206,7 @@
         "type": "object",
         "required": [
           "committee_info",
-          "epoch",
-          "protocol_version"
+          "epoch"
         ],
         "properties": {
           "committee_info": {
@@ -3232,9 +3231,6 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
-          },
-          "protocol_version": {
-            "$ref": "#/components/schemas/ProtocolVersion"
           }
         }
       },

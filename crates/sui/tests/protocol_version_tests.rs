@@ -315,7 +315,10 @@ mod sim_only_tests {
         // The dissenting node receives the correct framework via state sync and completes the upgrade
         node_handle.with(|node| {
             let committee = node.state().epoch_store_for_testing().committee().clone();
-            assert_eq!(committee.protocol_version, ProtocolVersion::new(2));
+            assert_eq!(
+                node.state().epoch_store_for_testing().protocol_version(),
+                ProtocolVersion::new(2)
+            );
             assert_eq!(committee.epoch, 2);
         });
     }
@@ -358,17 +361,11 @@ mod sim_only_tests {
             .subscribe_to_epoch_change();
 
         timeout(Duration::from_secs(60), async move {
-            while let Ok(committee) = epoch_rx.recv().await {
-                info!(
-                    "received epoch {} {:?}",
-                    committee.epoch, committee.protocol_version
-                );
+            while let Ok((committee, protocol_version)) = epoch_rx.recv().await {
+                info!("received epoch {} {:?}", committee.epoch, protocol_version);
                 match committee.epoch {
-                    0 => assert_eq!(committee.protocol_version, ProtocolVersion::new(1)),
-                    1 => assert_eq!(
-                        committee.protocol_version,
-                        ProtocolVersion::new(final_version)
-                    ),
+                    0 => assert_eq!(protocol_version, ProtocolVersion::new(1)),
+                    1 => assert_eq!(protocol_version, ProtocolVersion::new(final_version)),
                     2 => break,
                     _ => unreachable!(),
                 }

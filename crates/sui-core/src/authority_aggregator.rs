@@ -1365,7 +1365,7 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         } else {
             anyhow::bail!("need either NetworkConfig or Genesis.");
         };
-        let committee = make_committee(0, self.protocol_version, &validator_info)?;
+        let committee = make_committee(0, &validator_info)?;
         let mut registry = &prometheus::Registry::new();
         if self.registry.is_some() {
             registry = self.registry.unwrap();

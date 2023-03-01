@@ -4726,6 +4726,7 @@ fn test_choose_next_system_packages() {
     assert_eq!(
         (ver(1), vec![]),
         AuthorityState::choose_protocol_version_and_system_packages(
+            ProtocolVersion::MIN,
             &committee,
             &protocol_config,
             capabilities
@@ -4743,6 +4744,7 @@ fn test_choose_next_system_packages() {
     assert_eq!(
         (ver(1), vec![]),
         AuthorityState::choose_protocol_version_and_system_packages(
+            ProtocolVersion::MIN,
             &committee,
             &protocol_config,
             capabilities.clone(),
@@ -4755,6 +4757,7 @@ fn test_choose_next_system_packages() {
     assert_eq!(
         (ver(2), sort(vec![o1, o2])),
         AuthorityState::choose_protocol_version_and_system_packages(
+            ProtocolVersion::MIN,
             &committee,
             &protocol_config,
             capabilities
@@ -4772,6 +4775,7 @@ fn test_choose_next_system_packages() {
     assert_eq!(
         (ver(1), vec![]),
         AuthorityState::choose_protocol_version_and_system_packages(
+            ProtocolVersion::MIN,
             &committee,
             &protocol_config,
             capabilities,
@@ -4789,6 +4793,7 @@ fn test_choose_next_system_packages() {
     assert_eq!(
         (ver(2), sort(vec![o1, o2])),
         AuthorityState::choose_protocol_version_and_system_packages(
+            ProtocolVersion::MIN,
             &committee,
             &protocol_config,
             capabilities
@@ -4806,6 +4811,7 @@ fn test_choose_next_system_packages() {
     assert_eq!(
         (ver(1), vec![]),
         AuthorityState::choose_protocol_version_and_system_packages(
+            ProtocolVersion::MIN,
             &committee,
             &protocol_config,
             capabilities
@@ -4823,6 +4829,7 @@ fn test_choose_next_system_packages() {
     assert_eq!(
         (ver(1), vec![]),
         AuthorityState::choose_protocol_version_and_system_packages(
+            ProtocolVersion::MIN,
             &committee,
             &protocol_config,
             capabilities
