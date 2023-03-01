@@ -53,7 +53,7 @@ pub struct Bullshark {
     pub max_inserted_certificate_round: Round,
     /// The number of committed subdags that will trigger the schedule change and reputation
     /// score reset.
-    pub change_schedule_every_committed_sub_dags: u64,
+    pub num_sub_dags_per_schedule: u64,
 }
 
 impl ConsensusProtocol for Bullshark {
@@ -249,7 +249,7 @@ impl Bullshark {
         store: Arc<ConsensusStore>,
         gc_depth: Round,
         metrics: Arc<ConsensusMetrics>,
-        change_schedule_every_committed_sub_dags: u64,
+        num_sub_dags_per_schedule: u64,
     ) -> Self {
         Self {
             committee,
@@ -259,7 +259,7 @@ impl Bullshark {
             last_leader_election: LastRound::default(),
             max_inserted_certificate_round: 0,
             metrics,
-            change_schedule_every_committed_sub_dags,
+            num_sub_dags_per_schedule,
         }
     }
 
@@ -341,7 +341,7 @@ impl Bullshark {
         // we reset the scores for every schedule change window.
         // TODO: when schedule change is implemented we should probably change a little bit
         // this logic here.
-        if sub_dag_index % self.change_schedule_every_committed_sub_dags == 0 {
+        if sub_dag_index % self.num_sub_dags_per_schedule == 0 {
             state.last_consensus_reputation_score = ReputationScores::default()
         }
 
@@ -367,7 +367,7 @@ impl Bullshark {
         // scores as final_of_schedule = true so any downstream user can now that those are the last
         // ones calculated for the current schedule.
         state.last_consensus_reputation_score.final_of_schedule =
-            (sub_dag_index + 1) % self.change_schedule_every_committed_sub_dags == 0;
+            (sub_dag_index + 1) % self.num_sub_dags_per_schedule == 0;
 
         state.last_consensus_reputation_score.clone()
     }

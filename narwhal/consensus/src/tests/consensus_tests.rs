@@ -37,7 +37,7 @@ async fn test_consensus_recovery_with_bullshark() {
 
     let consensus_store = storage.consensus_store;
     let certificate_store = storage.certificate_store;
-    const CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS: u64 = 100;
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     // AND Setup consensus
     let fixture = CommitteeFixture::builder().build();
@@ -67,7 +67,7 @@ async fn test_consensus_recovery_with_bullshark() {
         consensus_store.clone(),
         gc_depth,
         metrics.clone(),
-        CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+        NUM_SUB_DAGS_PER_SCHEDULE,
     );
 
     let consensus_handle = Consensus::spawn(
@@ -161,7 +161,7 @@ async fn test_consensus_recovery_with_bullshark() {
         consensus_store.clone(),
         gc_depth,
         metrics.clone(),
-        CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+        NUM_SUB_DAGS_PER_SCHEDULE,
     );
 
     let consensus_handle = Consensus::spawn(
@@ -229,7 +229,7 @@ async fn test_consensus_recovery_with_bullshark() {
         consensus_store.clone(),
         gc_depth,
         metrics.clone(),
-        CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+        NUM_SUB_DAGS_PER_SCHEDULE,
     );
 
     let _consensus_handle = Consensus::spawn(

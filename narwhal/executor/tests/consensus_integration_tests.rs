@@ -56,14 +56,14 @@ async fn test_recovery() {
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     const GC_DEPTH: Round = 50;
-    const CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS: u64 = 100;
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
         GC_DEPTH,
         metrics.clone(),
-        CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+        NUM_SUB_DAGS_PER_SCHEDULE,
     );
 
     let _consensus_handle = Consensus::spawn(

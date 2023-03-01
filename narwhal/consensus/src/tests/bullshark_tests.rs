@@ -22,7 +22,7 @@ use types::PreSubscribedBroadcastSender;
 // the leader of round 2.
 #[tokio::test]
 async fn commit_one() {
-    const CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS: u64 = 100;
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
@@ -60,7 +60,7 @@ async fn commit_one() {
         store.clone(),
         gc_depth,
         metrics.clone(),
-        CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+        NUM_SUB_DAGS_PER_SCHEDULE,
     );
 
     let _consensus_handle = Consensus::spawn(
@@ -102,7 +102,7 @@ async fn commit_one() {
 // rounds 2, 4, and 6.
 #[tokio::test]
 async fn dead_node() {
-    const CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS: u64 = 100;
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     // Make the certificates.
     let fixture = CommitteeFixture::builder().build();
@@ -136,7 +136,7 @@ async fn dead_node() {
         store.clone(),
         gc_depth,
         metrics.clone(),
-        CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+        NUM_SUB_DAGS_PER_SCHEDULE,
     );
 
     let _consensus_handle = Consensus::spawn(
@@ -197,7 +197,7 @@ async fn dead_node() {
 // round 4 does. The leader of rounds 2 and 4 should thus be committed (because they are linked).
 #[tokio::test]
 async fn not_enough_support() {
-    const CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS: u64 = 100;
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let mut keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
@@ -279,7 +279,7 @@ async fn not_enough_support() {
         store.clone(),
         gc_depth,
         metrics.clone(),
-        CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+        NUM_SUB_DAGS_PER_SCHEDULE,
     );
 
     let _consensus_handle = Consensus::spawn(
@@ -346,7 +346,7 @@ async fn not_enough_support() {
 // and reappears from round 3.
 #[tokio::test]
 async fn missing_leader() {
-    const CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS: u64 = 100;
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let mut keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
@@ -392,7 +392,7 @@ async fn missing_leader() {
         store.clone(),
         gc_depth,
         metrics.clone(),
-        CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+        NUM_SUB_DAGS_PER_SCHEDULE,
     );
 
     let _consensus_handle = Consensus::spawn(
@@ -445,7 +445,7 @@ async fn committed_round_after_restart() {
     let committee = fixture.committee();
     let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
     let epoch = committee.epoch();
-    const CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS: u64 = 100;
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     // Make certificates for rounds 1 to 11.
     let genesis = Certificate::genesis(&committee)
@@ -473,7 +473,7 @@ async fn committed_round_after_restart() {
             store.clone(),
             gc_depth,
             metrics.clone(),
-            CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+            NUM_SUB_DAGS_PER_SCHEDULE,
         );
 
         let handle = Consensus::spawn(
@@ -537,7 +537,7 @@ async fn committed_round_after_restart() {
 /// from round 2. Certificate 2 should not get committed.
 #[tokio::test]
 async fn delayed_certificates_are_rejected() {
-    const CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS: u64 = 100;
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
@@ -561,7 +561,7 @@ async fn delayed_certificates_are_rejected() {
         store,
         gc_depth,
         metrics,
-        CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+        NUM_SUB_DAGS_PER_SCHEDULE,
     );
 
     // Populate DAG with the rounds up to round 5 so we trigger commits
@@ -589,7 +589,7 @@ async fn delayed_certificates_are_rejected() {
 
 #[tokio::test]
 async fn submitting_equivocating_certificate_should_error() {
-    const CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS: u64 = 100;
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
@@ -613,7 +613,7 @@ async fn submitting_equivocating_certificate_should_error() {
         store,
         gc_depth,
         metrics,
-        CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+        NUM_SUB_DAGS_PER_SCHEDULE,
     );
 
     // Populate DAG with all the certificates
@@ -652,7 +652,7 @@ async fn submitting_equivocating_certificate_should_error() {
 /// Advance the DAG for 50 rounds, while we change "schedule" for every 5 subdag commits.
 #[tokio::test]
 async fn reset_consensus_scores_on_every_schedule_change() {
-    const CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS: u64 = 5;
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 5;
 
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
@@ -676,7 +676,7 @@ async fn reset_consensus_scores_on_every_schedule_change() {
         store,
         gc_depth,
         metrics,
-        CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+        NUM_SUB_DAGS_PER_SCHEDULE,
     );
 
     // Populate DAG with the rounds up to round 50 so we trigger commits
@@ -694,7 +694,7 @@ async fn reset_consensus_scores_on_every_schedule_change() {
         // The first commit has no scores
         if sub_dag.sub_dag_index == 1 {
             assert_eq!(sub_dag.reputation_score.total_authorities(), 0);
-        } else if sub_dag.sub_dag_index % CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS == 0 {
+        } else if sub_dag.sub_dag_index % NUM_SUB_DAGS_PER_SCHEDULE == 0 {
             // On every 5th commit we reset the scores and count from the beginning with
             // scores updated to 1, as we expect now every node to have voted for the previous leader.
             for score in sub_dag.reputation_score.scores_per_authority.values() {
@@ -710,7 +710,7 @@ async fn reset_consensus_scores_on_every_schedule_change() {
                 assert_eq!(*score, current_score);
             }
 
-            if (sub_dag.sub_dag_index + 1) % CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS == 0 {
+            if (sub_dag.sub_dag_index + 1) % NUM_SUB_DAGS_PER_SCHEDULE == 0 {
                 // if this is going to be the last score update for the current schedule, then
                 // make sure that the `fina_of_schedule` will be true
                 assert!(sub_dag.reputation_score.final_of_schedule);
@@ -728,7 +728,7 @@ async fn restart_with_new_committee() {
     let fixture = CommitteeFixture::builder().build();
     let mut committee = fixture.committee();
     let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
-    const CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS: u64 = 100;
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     // Run for a few epochs.
     for epoch in 0..5 {
@@ -748,7 +748,7 @@ async fn restart_with_new_committee() {
             store.clone(),
             gc_depth,
             metrics.clone(),
-            CHANGE_SCHEDULE_EVERY_COMMITTED_SUB_DAGS,
+            NUM_SUB_DAGS_PER_SCHEDULE,
         );
 
         let handle = Consensus::spawn(
