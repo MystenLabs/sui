@@ -12,7 +12,6 @@ The SDK will be published to [npm registry](https://www.npmjs.com/package/@myste
 $ npm install @mysten/sui.js
 ```
 
-
 You can also use your preferred npm client, such as yarn or pnpm.
 
 ## Working with local network
