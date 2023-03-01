@@ -919,12 +919,12 @@ pub async fn build_server(
     Ok(Some(rpc_server_handle))
 }
 
-#[cfg(test)]
+#[cfg(not(test))]
 fn max_tx_per_checkpoint(protocol_config: &ProtocolConfig) -> usize {
     protocol_config.max_transactions_per_checkpoint()
 }
 
-#[cfg(not(test))]
+#[cfg(test)]
 fn max_tx_per_checkpoint(_: &ProtocolConfig) -> usize {
     2
 }

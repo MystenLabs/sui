@@ -974,6 +974,10 @@ impl CheckpointService {
         metrics: Arc<CheckpointMetrics>,
         max_transactions_per_checkpoint: usize,
     ) -> (Arc<Self>, watch::Sender<()> /* The exit sender */) {
+        info!(
+            "Starting checkpoint service with {} max_transactions_per_checkpoint",
+            max_transactions_per_checkpoint
+        );
         let notify_builder = Arc::new(Notify::new());
         let notify_aggregator = Arc::new(Notify::new());
 
