@@ -7,12 +7,20 @@
 NUM_CPUS=2 # testing with just two cores for now
 
 DATE=$(date +%s)
+
+# TODO: increase to 30, 1000 respectively after workflow is debugged.
+export MSIM_TEST_NUM=3
+export SIM_STRESS_TEST_DURATION_SECS=10
+
+# TODO: remove
+NUM_CPUS=2
+
 SEED="$DATE"
 LOG_FILE="log-$SEED"
 # This command runs many different tests, so it already uses all CPUs fairly efficiently, and
 # don't need to be done inside of the for loop below.
 # TODO: this logs directly to stdout since it is not being run in parallel. is that ok?
-MSIM_TEST_SEED="$SEED" MSIM_TEST_NUM=30 MSIM_WATCHDOG_TIMEOUT_MS=60000 scripts/simtest/cargo-simtest simtest --package sui --package sui-core
+MSIM_TEST_SEED="$SEED" MSIM_WATCHDOG_TIMEOUT_MS=60000 scripts/simtest/cargo-simtest simtest --package sui --package sui-core
 
 for SUB_SEED in `seq 1 $NUM_CPUS`; do
   SEED="$SUB_SEED$DATE"
@@ -26,7 +34,7 @@ for SUB_SEED in `seq 1 $NUM_CPUS`; do
   #
   # Note that because of --no-capture, even though we are running many tests, they will be
   # serialized here. So we still need the for loop / backgrounding.
-  MSIM_TEST_SEED="$SEED" SIM_STRESS_TEST_DURATION_SECS=1000 MSIM_WATCHDOG_TIMEOUT_MS=60000 scripts/simtest/cargo-simtest simtest --package sui-benchmark --no-capture > "$LOG_FILE" 2>&1 &
+  MSIM_TEST_SEED="$SEED" MSIM_TEST_NUM=1 MSIM_WATCHDOG_TIMEOUT_MS=60000 scripts/simtest/cargo-simtest simtest --package sui-benchmark --no-capture > "$LOG_FILE" 2>&1 &
 done
 
 for JOB in $(jobs -p); do
