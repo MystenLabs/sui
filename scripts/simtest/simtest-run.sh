@@ -9,8 +9,8 @@ NUM_CPUS=$(cat /proc/cpuinfo | grep processor | wc -l) # ubuntu
 DATE=$(date +%s)
 
 # TODO: increase to 30, 1000 respectively after workflow is debugged.
-export MSIM_TEST_NUM=30
-export SIM_STRESS_TEST_DURATION_SECS=1000
+export MSIM_TEST_NUM=3
+export SIM_STRESS_TEST_DURATION_SECS=100
 
 SEED="$DATE"
 LOG_FILE="log-$SEED"
