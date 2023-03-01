@@ -116,10 +116,6 @@ export const Contents = object({
   fields: ContentsFields,
 });
 
-export const PendingWithdawFields = object({
-  contents: ContentsFieldsWithdraw,
-});
-
 export const DelegationStakingPoolFields = object({
   exchange_rates: object({
     id: string(),
@@ -127,7 +123,8 @@ export const DelegationStakingPoolFields = object({
   }),
   id: string(),
   pending_delegation: number(),
-  pending_withdraws: PendingWithdawFields,
+  pending_pool_token_withdraw: number(),
+  pending_total_sui_withdraw: number(),
   pool_token_balance: number(),
   rewards_pool: object({ value: number() }),
   starting_epoch: number(),
@@ -160,7 +157,6 @@ export const Validator = object({
   staking_pool: DelegationStakingPoolFields,
   commission_rate: number(),
   next_epoch_stake: number(),
-  next_epoch_delegation: number(),
   next_epoch_gas_price: number(),
   next_epoch_commission_rate: number(),
 });

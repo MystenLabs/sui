@@ -46,7 +46,8 @@ pub fn test_staking_pool(sui_balance: u64) -> StakingPool {
         pool_token_balance: 0,
         exchange_rates: Table::default(),
         pending_delegation: 0,
-        pending_withdraws: TableVec::default(),
+        pending_total_sui_withdraw: 0,
+        pending_pool_token_withdraw: 0,
     }
 }
 
@@ -64,7 +65,6 @@ pub fn test_validator(
         staking_pool: test_staking_pool(delegated_amount + stake_amount),
         commission_rate: 0,
         next_epoch_stake: 1,
-        next_epoch_delegation: 1,
         next_epoch_gas_price: 1,
         next_epoch_commission_rate: 0,
     }

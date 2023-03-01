@@ -164,7 +164,6 @@ pub struct Validator {
     pub staking_pool: StakingPool,
     pub commission_rate: u64,
     pub next_epoch_stake: u64,
-    pub next_epoch_delegation: u64,
     pub next_epoch_gas_price: u64,
     pub next_epoch_commission_rate: u64,
 }
@@ -270,7 +269,8 @@ pub struct StakingPool {
     pub pool_token_balance: u64,
     pub exchange_rates: Table,
     pub pending_delegation: u64,
-    pub pending_withdraws: TableVec,
+    pub pending_total_sui_withdraw: u64,
+    pub pending_pool_token_withdraw: u64,
 }
 
 /// Rust version of the Move sui::validator_set::ValidatorPair type

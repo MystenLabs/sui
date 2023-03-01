@@ -6,7 +6,7 @@ module sui::sui_system {
     use sui::clock::{Self, Clock};
     use sui::coin::{Self, Coin};
     use sui::object::{Self, ID, UID};
-    use sui::staking_pool::StakedSui;
+    use sui::staking_pool::{delegation_activation_epoch, StakedSui};
     use sui::locked_coin::{Self, LockedCoin};
     use sui::sui::SUI;
     use sui::transfer;
@@ -326,6 +326,7 @@ module sui::sui_system {
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
+        assert!(delegation_activation_epoch(&staked_sui) <= tx_context::epoch(ctx), 0);
         validator_set::request_withdraw_delegation(
             &mut self.validators, staked_sui, ctx,
         );

@@ -8,6 +8,7 @@ module sui::governance_test_utils {
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
     use sui::staking_pool::{Self, StakedSui, StakingPool};
+    use sui::test_utils::assert_eq;
     use sui::tx_context::{Self, TxContext};
     use sui::validator::{Self, Validator};
     use sui::sui_system::{Self, SuiSystemState};
@@ -199,7 +200,7 @@ module sui::governance_test_utils {
             test_scenario::next_tx(scenario, validator_addr);
             let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
             let stake_plus_rewards = stake_plus_current_rewards_for_validator(validator_addr, &system_state, scenario);
-            assert!(stake_plus_rewards == amount, 0);
+            assert_eq(stake_plus_rewards, amount);
             test_scenario::return_shared(system_state);
             i = i + 1;
         };
