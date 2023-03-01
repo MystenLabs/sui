@@ -348,7 +348,7 @@ pub enum MoveFunctionArgType {
     Object(ObjectValueKind),
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SuiTransactionResponse {
     pub transaction: SuiTransaction,
@@ -1376,7 +1376,7 @@ impl From<PayAllSui> for SuiPayAllSui {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq)]
 #[serde(rename = "GasData", rename_all = "camelCase")]
 pub struct SuiGasData {
     pub payment: SuiObjectRef,
@@ -1385,7 +1385,7 @@ pub struct SuiGasData {
     pub budget: u64,
 }
 
-#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq)]
 #[serde(rename = "TransactionData", rename_all = "camelCase")]
 pub struct SuiTransactionData {
     pub transactions: Vec<SuiTransactionKind>,
@@ -1440,7 +1440,7 @@ impl TryFrom<TransactionData> for SuiTransactionData {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq)]
 #[serde(rename = "Transaction", rename_all = "camelCase")]
 pub struct SuiTransaction {
     pub data: SuiTransactionData,
@@ -1467,19 +1467,19 @@ impl Display for SuiTransaction {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 pub struct SuiGenesisTransaction {
     pub objects: Vec<ObjectID>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 pub struct SuiConsensusCommitPrologue {
     pub epoch: u64,
     pub round: u64,
     pub commit_timestamp_ms: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename = "TransactionKind")]
 pub enum SuiTransactionKind {
     /// Initiate an object transfer between addresses
@@ -1674,7 +1674,7 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename = "MoveCall", rename_all = "camelCase")]
 pub struct SuiMoveCall {
     pub package: ObjectID,
@@ -1686,7 +1686,7 @@ pub struct SuiMoveCall {
     pub arguments: Vec<SuiJsonValue>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 pub struct SuiChangeEpoch {
     pub epoch: EpochId,
     pub storage_charge: u64,
