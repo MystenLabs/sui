@@ -47,6 +47,7 @@ module sui::genesis {
         validator_gas_prices: vector<u64>,
         validator_commission_rates: vector<u64>,
         protocol_version: u64,
+        system_state_version: u64,
         epoch_start_timestamp_ms: u64,
         ctx: &mut TxContext,
     ) {
@@ -120,6 +121,7 @@ module sui::genesis {
             INIT_MIN_VALIDATOR_STAKE,
             INIT_STAKE_SUBSIDY_AMOUNT,
             protocol_version,
+            system_state_version,
             epoch_start_timestamp_ms,
             ctx,
         );
