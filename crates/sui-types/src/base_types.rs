@@ -98,6 +98,15 @@ pub enum ObjectType {
     Struct(StructTag),
 }
 
+impl From<&Object> for ObjectType {
+    fn from(o: &Object) -> Self {
+        o.data
+            .type_()
+            .map(|tag| ObjectType::Struct(tag.clone()))
+            .unwrap_or(ObjectType::Package)
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub struct ObjectInfo {
     pub object_id: ObjectID,
@@ -111,16 +120,11 @@ pub struct ObjectInfo {
 impl ObjectInfo {
     pub fn new(oref: &ObjectRef, o: &Object) -> Self {
         let (object_id, version, digest) = *oref;
-        let type_ = o
-            .data
-            .type_()
-            .map(|tag| ObjectType::Struct(tag.clone()))
-            .unwrap_or(ObjectType::Package);
         Self {
             object_id,
             version,
             digest,
-            type_,
+            type_: o.into(),
             owner: o.owner,
             previous_transaction: o.previous_transaction,
         }

@@ -11,7 +11,7 @@ use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_config::ValidatorInfo;
 use sui_core::authority_client::AuthorityAPI;
 pub use sui_core::test_utils::{compile_basics_package, wait_for_all_txes, wait_for_tx};
-use sui_json_rpc_types::{SuiObjectRead, SuiTransactionResponse};
+use sui_json_rpc_types::{SuiObjectReadDeprecated, SuiTransactionResponse};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::json::SuiJsonValue;
 use sui_types::base_types::ObjectRef;
@@ -245,12 +245,12 @@ pub async fn create_devnet_nft(
     .await?;
 
     let (object_id, digest) = if let SuiClientCommandResult::CreateExampleNFT(
-        SuiObjectRead::Exists(obj),
+        SuiObjectReadDeprecated::Exists(obj),
     ) = res
     {
         (obj.reference.object_id, obj.previous_transaction)
     } else {
-        panic!("CreateExampleNFT command did not return WalletCommandResult::CreateExampleNFT(SuiObjectRead::Exists, got {:?}", res);
+        panic!("CreateExampleNFT command did not return WalletCommandResult::CreateExampleNFT(SuiObjectReadDeprecated::Exists, got {:?}", res);
     };
 
     Ok((sender, object_id, digest))

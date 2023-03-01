@@ -17,10 +17,10 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, EventPage, MoveCallParams, OwnedObjectRef,
     RPCTransactionRequestParams, SuiData, SuiEvent, SuiEventEnvelope, SuiExecutionStatus,
-    SuiGasCostSummary, SuiObject, SuiObjectInfo, SuiObjectRead, SuiObjectRef, SuiParsedData,
-    SuiPastObjectRead, SuiRawData, SuiRawMoveObject, SuiTransaction, SuiTransactionData,
-    SuiTransactionEffects, SuiTransactionEvents, SuiTransactionResponse, TransactionBytes,
-    TransactionsPage, TransferObjectParams,
+    SuiGasCostSummary, SuiObject, SuiObjectInfo, SuiObjectReadDeprecated, SuiObjectRef,
+    SuiParsedData, SuiPastObjectRead, SuiRawData, SuiRawMoveObject, SuiTransaction,
+    SuiTransactionData, SuiTransactionEffects, SuiTransactionEvents, SuiTransactionResponse,
+    TransactionBytes, TransactionsPage, TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
@@ -213,7 +213,7 @@ impl RpcExampleProvider {
 
         let coin = GasCoin::new(object_id, 10000);
 
-        let result = SuiObjectRead::Exists(SuiObject {
+        let result = SuiObjectReadDeprecated::Exists(SuiObject {
             data: SuiParsedData::try_from_object(
                 coin.to_object(SequenceNumber::from_u64(1)),
                 GasCoin::layout(),
@@ -321,7 +321,7 @@ impl RpcExampleProvider {
 
         let coin = GasCoin::new(object_id, 10000);
         let object = coin.to_object(SequenceNumber::from_u64(1));
-        let result = SuiObjectRead::Exists(SuiObject {
+        let result = SuiObjectReadDeprecated::Exists(SuiObject {
             data: SuiRawData::MoveObject(SuiRawMoveObject {
                 type_: GasCoin::type_().to_string(),
                 has_public_transfer: object.has_public_transfer(),

@@ -7,8 +7,8 @@ use std::collections::BTreeMap;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
     GetRawObjectDataResponse, MoveFunctionArgType, SuiMoveNormalizedFunction,
-    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionResponse,
-    TransactionsPage,
+    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectContentOptions, SuiObjectInfo,
+    SuiObjectWithStatus, SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{
@@ -73,6 +73,16 @@ pub trait ReadApi {
         /// the ID of the queried object
         object_id: ObjectID,
     ) -> RpcResult<GetObjectDataResponse>;
+
+    /// Return the object information for a specified object
+    #[method(name = "getObjectWithOptions")]
+    async fn get_object_with_options(
+        &self,
+        /// the ID of the queried object
+        object_id: ObjectID,
+        /// options for specifying the content to be returned
+        options: Option<SuiObjectContentOptions>,
+    ) -> RpcResult<SuiObjectWithStatus>;
 
     /// Return the dynamic field object information for a specified object
     #[method(name = "getDynamicFieldObject")]

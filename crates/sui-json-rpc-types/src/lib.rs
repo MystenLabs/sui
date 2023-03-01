@@ -448,6 +448,73 @@ pub struct SuiObject<T: SuiData> {
     pub reference: SuiObjectRef,
 }
 
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
+#[serde(tag = "status", content = "details", rename = "ObjectRead")]
+pub enum SuiObjectWithStatus {
+    Exists(SuiObjectData),
+    NotExists(ObjectID),
+    Deleted(SuiObjectRef),
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
+#[serde(rename_all = "camelCase", rename = "ObjectData")]
+pub struct SuiObjectData {
+    pub object_id: ObjectID,
+    /// Object version.
+    pub version: SequenceNumber,
+    /// Base64 string representing the object digest
+    pub digest: ObjectDigest,
+    /// The type of the object. Default to be Some(T) unless SuiObjectContentOptions.showType is set to False
+    #[serde(rename = "type")]
+    pub type_: Option<String>,
+    // Default to be None because otherwise it will be repeated for the getObjectsOwnedByAddress endpoint
+    /// The owner of this object. Default to be None unless SuiObjectContentOptions.showOwner is set
+    pub owner: Option<Owner>,
+    /// The digest of the transaction that created or last mutated this object. Default to be None unless
+    /// SuiObjectContentOptions.showPreviousTransaction is set
+    pub previous_transaction: Option<TransactionDigest>,
+    // TODO: uncomment the following in the next PR
+    // /// The Display metadata for frontend UI rendering
+    // pub display: Option<BTreeMap<String, String>>,
+    /// Move object content or package content, default to be None unless SuiObjectContentOptions.showContent is set
+    pub content: Option<SuiParsedData>,
+    /// Move object content or package content in BCS, default to be None unless SuiObjectContentOptions.showContent is set
+    pub bcs: Option<SuiRawData>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
+#[serde(rename_all = "camelCase", rename = "ObjectContentOptions")]
+pub struct SuiObjectContentOptions {
+    /// Whether to show the type of the object. Default to be True
+    pub show_type: Option<bool>,
+    /// Whether to show the owner of the object. Default to be False
+    pub show_owner: Option<bool>,
+    /// Whether to show the previous transaction digest of the object. Default to be False
+    pub show_previous_transaction: Option<bool>,
+    // uncomment the following in the next PR
+    // /// Whether to show the Display metadata of the object for frontend rendering. Default to be False
+    // pub show_display: Option<bool>,
+    /// Whether to show the content(i.e., package content or Move struct content) of the object.
+    /// Default to be False
+    pub show_content: Option<bool>,
+    /// Whether to show the content in BCS format. Default to be False
+    pub show_bcs: Option<bool>,
+}
+
+impl Default for SuiObjectContentOptions {
+    fn default() -> Self {
+        Self {
+            show_type: Some(true),
+            show_owner: Some(false),
+            show_previous_transaction: Some(false),
+            // uncomment the following in the next PR
+            // show_display: Some(false),
+            show_content: Some(false),
+            show_bcs: Some(false),
+        }
+    }
+}
+
 impl TryInto<Object> for SuiObject<SuiRawData> {
     type Error = anyhow::Error;
 
@@ -890,18 +957,18 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
     }
 }
 
-pub type GetObjectDataResponse = SuiObjectRead<SuiParsedData>;
-pub type GetRawObjectDataResponse = SuiObjectRead<SuiRawData>;
+pub type GetObjectDataResponse = SuiObjectReadDeprecated<SuiParsedData>;
+pub type GetRawObjectDataResponse = SuiObjectReadDeprecated<SuiRawData>;
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
-#[serde(tag = "status", content = "details", rename = "ObjectRead")]
-pub enum SuiObjectRead<T: SuiData> {
+#[serde(tag = "status", content = "details", rename = "ObjectReadDeprecated")]
+pub enum SuiObjectReadDeprecated<T: SuiData> {
     Exists(SuiObject<T>),
     NotExists(ObjectID),
     Deleted(SuiObjectRef),
 }
 
-impl<T: SuiData> SuiObjectRead<T> {
+impl<T: SuiData> SuiObjectReadDeprecated<T> {
     /// Returns a reference to the object if there is any, otherwise an Err if
     /// the object does not exist or is deleted.
     pub fn object(&self) -> UserInputResult<&SuiObject<T>> {
@@ -933,16 +1000,16 @@ impl<T: SuiData> SuiObjectRead<T> {
     }
 }
 
-impl<T: SuiData> TryFrom<ObjectRead> for SuiObjectRead<T> {
+impl<T: SuiData> TryFrom<ObjectRead> for SuiObjectReadDeprecated<T> {
     type Error = anyhow::Error;
 
     fn try_from(value: ObjectRead) -> Result<Self, Self::Error> {
         match value {
-            ObjectRead::NotExists(id) => Ok(SuiObjectRead::NotExists(id)),
-            ObjectRead::Exists(_, o, layout) => {
-                Ok(SuiObjectRead::Exists(SuiObject::try_from(o, layout)?))
-            }
-            ObjectRead::Deleted(oref) => Ok(SuiObjectRead::Deleted(oref.into())),
+            ObjectRead::NotExists(id) => Ok(SuiObjectReadDeprecated::NotExists(id)),
+            ObjectRead::Exists(_, o, layout) => Ok(SuiObjectReadDeprecated::Exists(
+                SuiObject::try_from(o, layout)?,
+            )),
+            ObjectRead::Deleted(oref) => Ok(SuiObjectReadDeprecated::Deleted(oref.into())),
         }
     }
 }
