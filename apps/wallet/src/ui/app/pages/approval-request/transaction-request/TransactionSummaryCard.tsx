@@ -11,8 +11,10 @@ import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { useGetNFTMeta, useTransactionSummary } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import { TxnAddressLink } from '_src/ui/app/components/receipt-card/TxnAddressLink';
 import { type CoinsMetaProps } from '_src/ui/app/helpers/getEventsSummary';
 import { type TransactionDryRun } from '_src/ui/app/hooks/useTransactionDryRun';
+import { Text } from '_src/ui/app/shared/text';
 
 import type { TransactionApprovalRequest } from '_payloads/transactions/ApprovalRequest';
 
@@ -23,6 +25,7 @@ type TransferSummerCardProps = {
     objectIDs: string[];
     gasEstimate: number | null;
     addressForTransaction: SuiAddress;
+    sponsorAddress?: SuiAddress;
 };
 
 function MiniNFTLink({ id }: { id: string }) {
@@ -105,8 +108,13 @@ function TransactionSummary({
     coinsMeta,
     gasEstimate,
     addressForTransaction,
+    sponsorAddress,
 }: TransferSummerCardProps) {
     const [gasEst, gasSymbol] = useFormatCoin(gasEstimate || 0, GAS_TYPE_ARG);
+    const [senderTotalAmount, senderTotalAmountSymbol] = useFormatCoin(
+        0,
+        GAS_TYPE_ARG
+    );
 
     return (
         <SummaryCard header="Transaction summary">
@@ -140,8 +148,71 @@ function TransactionSummary({
             )}
 
             <div className={st.cardFooter}>
-                <div>Estimated Gas Fees</div>
-                {gasEst} {gasSymbol}
+                {sponsorAddress ? (
+                    <div>
+                        <Text
+                            variant="captionSmall"
+                            weight="medium"
+                            color="steel"
+                        >
+                            Estimated Gas Fee
+                        </Text>
+                        <div className="flex justify-between items-center w-full">
+                            <Text
+                                variant="p2"
+                                weight="medium"
+                                color="steel-darker"
+                            >
+                                You Paid
+                            </Text>
+                            <div className="flex gap-1 items-center">
+                                <Text
+                                    variant="p2"
+                                    weight="medium"
+                                    color="steel-darker"
+                                >
+                                    {senderTotalAmount}{' '}
+                                    {senderTotalAmountSymbol}
+                                </Text>
+                            </div>
+                        </div>
+                        <div className="flex justify-between items-center w-full">
+                            <Text
+                                variant="p2"
+                                weight="medium"
+                                color="steel-darker"
+                            >
+                                Paid by Sponsor
+                            </Text>
+                            <div className="flex gap-1 items-center">
+                                <Text
+                                    variant="p2"
+                                    weight="medium"
+                                    color="steel-darker"
+                                >
+                                    {gasEst} {gasSymbol}
+                                </Text>
+                            </div>
+                        </div>
+                        <div className="flex justify-between items-center w-full">
+                            <Text
+                                variant="body"
+                                weight="medium"
+                                color="steel-darker"
+                            >
+                                Sponsor
+                            </Text>
+                            <div className="flex gap-1 items-center">
+                                <TxnAddressLink address={sponsorAddress} />
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        <div>Estimated Gas Fees</div>
+                        {gasEst} {gasSymbol}
+                    </>
+                )}
             </div>
         </SummaryCard>
     );
@@ -163,23 +234,18 @@ export function TransactionSummaryCard({
             : txRequest.tx.data
     ) as TransactionDryRun;
 
-    const txReqData = {
+    const [transactionSummary, gasEstimation, gasData] = useTransactionSummary({
         txData: txData,
         addressForTransaction: address,
-    };
+    });
 
-    const [transactionSummary, gasEstimation] =
-        useTransactionSummary(txReqData);
-
-    if (!transactionSummary) {
-        return null;
-    }
-    return (
+    return transactionSummary ? (
         <TransactionSummary
             objectIDs={transactionSummary.objectIDs}
             coinsMeta={transactionSummary.coins}
             gasEstimate={gasEstimation}
             addressForTransaction={address}
+            sponsorAddress={gasData?.owner}
         />
-    );
+    ) : null;
 }

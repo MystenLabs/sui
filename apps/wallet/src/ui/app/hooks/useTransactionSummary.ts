@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getTotalGasUsed } from '@mysten/sui.js';
+import { getTotalGasUsed, getGasData, type SuiGasData } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import {
@@ -19,7 +19,8 @@ type ExecuteDryRunTransactionRequestProps = {
 
 type ExecuteDryRunTransactionReqResponse = [
     TxnMetaResponse | null,
-    number | null
+    number | null,
+    SuiGasData | null
 ];
 
 export function useTransactionSummary({
@@ -33,7 +34,8 @@ export function useTransactionSummary({
             data ? getEventsSummary(data.events, addressForTransaction) : null,
         [data, addressForTransaction]
     );
-    const txGasEstimation = data && getTotalGasUsed(data.effects);
+    const txGasEstimation = data ? getTotalGasUsed(data.effects) : null;
+    const txGasData = data ? getGasData(data) : null;
 
-    return [eventsSummary, txGasEstimation || null];
+    return [eventsSummary, txGasEstimation ?? null, txGasData];
 }
