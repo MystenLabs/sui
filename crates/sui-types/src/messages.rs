@@ -694,6 +694,16 @@ impl Command {
                     ty_opt.is_some() || !args.is_empty(),
                     UserInputError::EmptyCommandInput
                 );
+                if let Some(ty) = ty_opt {
+                    let type_arguments_count = type_tag_validity_check(ty, config, 1, 0)?;
+                    fp_ensure!(
+                        type_arguments_count < config.max_type_arguments() as usize,
+                        UserInputError::SizeLimitExceeded {
+                            limit: "maximum type arguments in a call transaction".to_string(),
+                            value: config.max_type_arguments().to_string()
+                        }
+                    );
+                }
                 fp_ensure!(!args.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
                     args.len() < config.max_arguments() as usize,
