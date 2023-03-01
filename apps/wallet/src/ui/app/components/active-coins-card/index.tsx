@@ -60,10 +60,9 @@ export function ActiveCoinsCard({
         [aggregateBalances]
     );
 
-    const activeCoin = useMemo(() => {
-        if (!coins) return null;
-        return coins.find(({ coinType }) => coinType === activeCoinType);
-    }, [activeCoinType, coins]);
+    const activeCoin = coins.find(
+        ({ coinType }) => coinType === activeCoinType
+    );
 
     const CoinListCard = (
         <div className="flex flex-col w-full">
