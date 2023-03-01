@@ -126,6 +126,81 @@ impl ReadStore for RocksDbStore {
 }
 
 impl WriteStore for RocksDbStore {
+    fn insert_full_bundle(
+        &self,
+        bundle: Vec<(
+            VerifiedCheckpoint,
+            CheckpointContents,
+            Vec<(VerifiedCertificate, TransactionEffects)>,
+        )>,
+    ) -> Result<(), Self::Error> {
+        
+        // Strange that we have an empty bundle, but it happens
+        if bundle.is_empty() {
+            return Ok(())
+        }
+
+        // First write the transactions and effects as a bundle
+        let transaction_inserts = bundle
+            .iter()
+            .map(|(_, _, tx_effs)| {
+                tx_effs
+                    .iter()
+                    .map(|(tx, _effs)| (tx.digest(), tx.serializable_ref()))
+            })
+            .flatten();
+
+        let effects_inserts = bundle
+            .iter()
+            .map(|(_, _, tx_effs)| tx_effs.iter().map(|(_tx, effs)| (effs.digest(), effs)))
+            .flatten();
+
+        // Commit the transaction and effects
+        let batch = self
+            .authority_store
+            .perpetual_tables
+            .synced_transactions
+            .batch()
+            .insert_batch(
+                &self.authority_store.perpetual_tables.synced_transactions,
+                transaction_inserts,
+            )?
+            .insert_batch(
+                &self.authority_store.perpetual_tables.effects,
+                effects_inserts,
+            )?;
+
+        batch.write()?;
+
+        // Note: if we crash here nothing terrible happens, we just have a few more transactions in the
+        // database of transactions and effects. No need to strive for atomicity.
+
+        // Add new committees, again in a non atomic manner. Its ok to known
+        // future committees without having checkpoints for them. Since committee
+        // change is rare we insert one by one.
+        bundle.iter().for_each(|(checkpoint, _, _)| {
+            if let Some(EndOfEpochData {
+                next_epoch_committee,
+                next_epoch_protocol_version,
+            }) = checkpoint.summary.end_of_epoch_data.as_ref()
+            {
+                let next_committee = next_epoch_committee.iter().cloned().collect();
+                let committee = Committee::new(
+                    checkpoint.epoch().saturating_add(1),
+                    *next_epoch_protocol_version,
+                    next_committee,
+                )
+                .expect("new committee from consensus should be constructable");
+                self.insert_committee(committee).expect("database cannot fail here.")
+            }
+        });
+
+        // The write the checkpoint structure
+        self.checkpoint_store.insert_full_verified_bundle(&bundle)?;
+        
+        Ok(())
+    }
+
     fn insert_checkpoint(&self, checkpoint: VerifiedCheckpoint) -> Result<(), Self::Error> {
         if let Some(EndOfEpochData {
             next_epoch_committee,

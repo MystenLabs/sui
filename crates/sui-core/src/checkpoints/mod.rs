@@ -32,7 +32,7 @@ use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
-use sui_types::messages::TransactionEffects;
+use sui_types::messages::{TransactionEffects, VerifiedCertificate};
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
@@ -132,6 +132,58 @@ impl CheckpointStore {
             self.insert_verified_checkpoint(checkpoint.clone()).unwrap();
             self.update_highest_synced_checkpoint(&checkpoint).unwrap();
         }
+    }
+
+    pub fn insert_full_verified_bundle(
+        &self,
+        bundle: &Vec<(
+            VerifiedCheckpoint,
+            CheckpointContents,
+            Vec<(VerifiedCertificate, TransactionEffects)>,
+        )>,
+    ) -> Result<(), TypedStoreError> {
+        // Define a bunch of iterators to do the bulk db inserts
+        // Let's try to not copy data again into new vectors.
+        let checkpoint_inserts = bundle
+            .iter()
+            .map(|(checkpoint, _, _)| (checkpoint.sequence_number(), checkpoint.inner()));
+
+        let checkpoint_digest_inserts = bundle
+            .iter()
+            .map(|(checkpoint, _, _)| (checkpoint.digest(), checkpoint.inner()));
+
+        let checkpoint_contents_inserts = bundle
+            .iter()
+            .map(|(_, contents, _)| (contents.digest(), contents));
+
+        let checkpoint_epoch_inserts = bundle.iter().filter_map(|(checkpoint, _, _)| {
+            checkpoint
+                .inner()
+                .next_epoch_committee()
+                .map(|_| (checkpoint.epoch(), checkpoint.sequence_number()))
+        });
+
+        // Here we need to insert the checkpoints summaries and transaction effects
+        // And possibly set the highest verified checkpoint.
+        let batch = self
+            .certified_checkpoints
+            .batch()
+            .insert_batch(&self.certified_checkpoints, checkpoint_inserts)?
+            .insert_batch(&self.checkpoint_by_digest, checkpoint_digest_inserts)?
+            .insert_batch(&self.checkpoint_content, checkpoint_contents_inserts)?
+            .insert_batch(&self.epoch_last_checkpoint_map, checkpoint_epoch_inserts)?;
+
+        batch.write()?;
+
+        // We separatetly set the highest verified checkpoint, in case we have the latest one
+        // in this batch insertion. This requires a couple more disk / store accesses, but we
+        // may optimize this later.
+        if let Some((checkpoint, _, _)) = bundle.last() {
+            self.insert_verified_checkpoint(checkpoint.clone())?;
+            self.update_highest_synced_checkpoint(checkpoint)?;
+        }
+
+        Ok(())
     }
 
     pub fn get_checkpoint_by_digest(
