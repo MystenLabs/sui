@@ -156,11 +156,8 @@ impl ValidatorMetadata {
 pub struct Validator {
     pub metadata: ValidatorMetadata,
     pub voting_power: u64,
-    pub stake_amount: u64,
-    pub pending_stake: u64,
-    pub pending_withdraw: u64,
     pub gas_price: u64,
-    pub delegation_staking_pool: StakingPool,
+    pub staking_pool: StakingPool,
     pub commission_rate: u64,
     pub next_epoch_stake: u64,
     pub next_epoch_delegation: u64,
@@ -277,8 +274,7 @@ pub struct ValidatorPair {
 /// Rust version of the Move sui::validator_set::ValidatorSet type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct ValidatorSet {
-    pub validator_stake: u64,
-    pub delegation_stake: u64,
+    pub total_stake: u64,
     pub active_validators: Vec<Validator>,
     pub pending_validators: TableVec,
     pub pending_removals: Vec<u64>,
@@ -418,8 +414,7 @@ impl SuiSystemState {
 impl Default for SuiSystemState {
     fn default() -> Self {
         let validator_set = ValidatorSet {
-            validator_stake: 1,
-            delegation_stake: 1,
+            total_stake: 2,
             active_validators: vec![],
             pending_validators: TableVec::default(),
             pending_removals: vec![],
