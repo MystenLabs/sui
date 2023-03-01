@@ -39,6 +39,7 @@ use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
+use sui_types::committee::CommitteeWithNetAddresses;
 use tracing::debug;
 
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
@@ -112,7 +113,7 @@ pub struct SuiNode {
     checkpoint_store: Arc<CheckpointStore>,
     accumulator: Arc<StateAccumulator>,
 
-    end_of_epoch_channel: tokio::sync::broadcast::Sender<Committee>,
+    end_of_epoch_channel: tokio::sync::broadcast::Sender<CommitteeWithNetAddresses>,
 
     #[cfg(msim)]
     sim_node: sui_simulator::runtime::NodeHandle,
@@ -259,14 +260,18 @@ impl SuiNode {
                 .unwrap();
         }
 
-        let (end_of_epoch_channel, _receiver) =
-            broadcast::channel::<Committee>(config.end_of_epoch_broadcast_channel_capacity);
+        let (end_of_epoch_channel, receiver) = broadcast::channel::<CommitteeWithNetAddresses>(
+            config.end_of_epoch_broadcast_channel_capacity,
+        );
 
         let transaction_orchestrator = if is_full_node {
             Some(Arc::new(
                 TransactiondOrchestrator::new_with_network_clients(
+                    epoch_store
+                        .system_state_object()
+                        .get_current_epoch_committee(),
                     state.clone(),
-                    end_of_epoch_channel.subscribe(),
+                    receiver,
                     config.db_path(),
                     &prometheus_registry,
                 )
@@ -332,7 +337,9 @@ impl SuiNode {
         Ok(node)
     }
 
-    pub fn subscribe_to_epoch_change(&self) -> tokio::sync::broadcast::Receiver<Committee> {
+    pub fn subscribe_to_epoch_change(
+        &self,
+    ) -> tokio::sync::broadcast::Receiver<CommitteeWithNetAddresses> {
         self.end_of_epoch_channel.subscribe()
     }
 
@@ -781,18 +788,13 @@ impl SuiNode {
                     .submit(transaction, None, &cur_epoch_store)?;
             }
 
-            let next_epoch_committee = checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
-            let next_epoch = next_epoch_committee.epoch();
-            assert_eq!(cur_epoch_store.epoch() + 1, next_epoch);
+            checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
             let system_state = self
                 .state
                 .get_sui_system_state_object_during_reconfig()
                 .expect("Read Sui System State object cannot fail");
-            // Double check that the committee in the last checkpoint is identical to what's on-chain.
-            assert_eq!(
-                system_state.get_current_epoch_committee().committee,
-                next_epoch_committee
-            );
+            let next_epoch = system_state.epoch;
+            assert_eq!(cur_epoch_store.epoch() + 1, next_epoch);
 
             // If we eventually add tests that exercise safe mode, we will need a configurable way of
             // guarding against unexpected safe_mode.
@@ -804,6 +806,7 @@ impl SuiNode {
             );
 
             cur_epoch_store.record_epoch_reconfig_start_time_metric();
+            let next_epoch_committee = system_state.get_current_epoch_committee();
             let _ = self.end_of_epoch_channel.send(next_epoch_committee.clone());
 
             // The following code handles 4 different cases, depending on whether the node
@@ -826,7 +829,11 @@ impl SuiNode {
                 narwhal_manager.shutdown().await;
 
                 let new_epoch_store = self
-                    .reconfigure_state(&cur_epoch_store, next_epoch_committee, system_state)
+                    .reconfigure_state(
+                        &cur_epoch_store,
+                        next_epoch_committee.committee,
+                        system_state,
+                    )
                     .await;
 
                 narwhal_epoch_data_remover
@@ -858,7 +865,11 @@ impl SuiNode {
                 }
             } else {
                 let new_epoch_store = self
-                    .reconfigure_state(&cur_epoch_store, next_epoch_committee, system_state)
+                    .reconfigure_state(
+                        &cur_epoch_store,
+                        next_epoch_committee.committee,
+                        system_state,
+                    )
                     .await;
 
                 if self.state.is_validator(&new_epoch_store) {

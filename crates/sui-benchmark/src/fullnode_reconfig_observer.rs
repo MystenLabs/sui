@@ -95,8 +95,8 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
                             }
                         };
                         let _ = self.committee_store.insert_new_committee(&new_committee);
-                        match AuthorityAggregator::new_from_system_state(
-                            &sui_system_state,
+                        match AuthorityAggregator::new_from_committee(
+                            new_committee,
                             &self.committee_store,
                             self.safe_client_metrics_base.clone(),
                             self.auth_agg_metrics.clone(),

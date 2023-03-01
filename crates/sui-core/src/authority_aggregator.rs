@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::{
-    make_authority_clients, make_network_authority_client_sets_from_committee,
-    make_network_authority_client_sets_from_system_state, AuthorityAPI, NetworkAuthorityClient,
+    make_authority_clients, make_network_authority_client_sets_from_committee, AuthorityAPI,
+    NetworkAuthorityClient,
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
 use crate::validator_info::make_committee;
@@ -43,7 +43,6 @@ use std::time::Duration;
 use sui_types::committee::{CommitteeWithNetAddresses, StakeUnit};
 use tokio::time::{sleep, timeout};
 
-use crate::authority::AuthorityStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregator};
 
@@ -422,27 +421,12 @@ impl<A> AuthorityAggregator<A> {
 }
 
 impl AuthorityAggregator<NetworkAuthorityClient> {
-    /// Create a new network authority aggregator by reading the committee and
-    /// network address information from the system state object on-chain.
+    /// Create a new network authority aggregator given a committee and
+    /// network address information.
     /// This function needs metrics parameters because registry will panic
     /// if we attempt to register already-registered metrics again.
-    pub fn new_from_local_system_state(
-        store: &Arc<AuthorityStore>,
-        committee_store: &Arc<CommitteeStore>,
-        safe_client_metrics_base: SafeClientMetricsBase,
-        auth_agg_metrics: AuthAggMetrics,
-    ) -> anyhow::Result<Self> {
-        let sui_system_state = store.get_sui_system_state_object()?;
-        Self::new_from_system_state(
-            &sui_system_state,
-            committee_store,
-            safe_client_metrics_base,
-            auth_agg_metrics,
-        )
-    }
-
-    pub fn new_from_system_state(
-        sui_system_state: &SuiSystemState,
+    pub fn new_from_committee(
+        committee: CommitteeWithNetAddresses,
         committee_store: &Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
         auth_agg_metrics: AuthAggMetrics,
@@ -452,9 +436,9 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
         // tolerate it as long as we have 2f+1 good validators.
         // GH issue: https://github.com/MystenLabs/sui/issues/7019
         let authority_clients =
-            make_network_authority_client_sets_from_system_state(sui_system_state, &net_config)?;
+            make_network_authority_client_sets_from_committee(&committee, &net_config)?;
         Ok(Self::new_with_metrics(
-            sui_system_state.get_current_epoch_committee().committee,
+            committee.committee,
             committee_store.clone(),
             authority_clients,
             safe_client_metrics_base,

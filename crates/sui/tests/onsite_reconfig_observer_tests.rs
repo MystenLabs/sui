@@ -31,7 +31,6 @@ async fn test_onsite_reconfig_observer_basic() {
             let registry = Registry::new();
             let mut observer = OnsiteReconfigObserver::new(
                 rx,
-                node.clone_authority_store(),
                 node.clone_committee_store(),
                 SafeClientMetricsBase::new(&registry),
                 AuthAggMetrics::new(&registry),
