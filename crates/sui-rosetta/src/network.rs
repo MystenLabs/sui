@@ -44,14 +44,13 @@ pub async fn status(
     let system_state = context.client.read_api().get_sui_system_state().await?;
 
     let peers = system_state
-        .validators
-        .active_validators
-        .iter()
-        .map(|v| Peer {
-            peer_id: ObjectID::from(v.metadata.sui_address).into(),
+        .get_staking_pool_info()
+        .into_iter()
+        .map(|(sui_address, (pubkey_bytes, balance))| Peer {
+            peer_id: ObjectID::from(sui_address).into(),
             metadata: Some(json!({
-                "public_key": Hex::from_bytes(&v.metadata.protocol_pubkey_bytes),
-                "stake_amount": v.staking_pool.sui_balance,
+                "public_key": Hex::from_bytes(&pubkey_bytes),
+                "stake_amount": balance,
             })),
         })
         .collect();

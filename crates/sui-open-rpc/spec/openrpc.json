@@ -1476,7 +1476,7 @@
           "name": "Governance Read API"
         }
       ],
-      "description": "Return [SuiSystemState]",
+      "description": "Return latest SUI system state object on-chain.",
       "params": [],
       "result": {
         "name": "SuiSystemState",
@@ -6102,6 +6102,13 @@
         ]
       },
       "SuiSystemState": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SuiSystemStateInnerV1"
+          }
+        ]
+      },
+      "SuiSystemStateInnerV1": {
         "description": "Rust version of the Move sui::sui_system::SuiSystemStateInner type We want to keep it named as SuiSystemState in Rust since this is the primary interface type.",
         "type": "object",
         "required": [

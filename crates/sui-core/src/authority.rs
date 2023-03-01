@@ -3051,7 +3051,7 @@ impl AuthorityState {
             "Effects summary of the change epoch transaction: {:?}",
             effects.summary_for_debug()
         );
-        epoch_store.record_is_safe_mode_metric(system_obj.safe_mode);
+        epoch_store.record_is_safe_mode_metric(system_obj.safe_mode());
         // The change epoch transaction cannot fail to execute.
         assert!(effects.status.is_ok());
         Ok((system_obj, effects))
@@ -3105,7 +3105,7 @@ impl AuthorityState {
         let new_epoch = new_committee.epoch;
         info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
         assert_eq!(
-            epoch_start_configuration.system_state.epoch,
+            epoch_start_configuration.system_state.epoch(),
             new_committee.epoch
         );
         let new_epoch_store = cur_epoch_store.new_at_next_epoch(

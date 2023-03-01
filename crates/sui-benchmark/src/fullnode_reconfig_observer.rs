@@ -66,7 +66,7 @@ impl<S: SignatureVerifier + Default> ReconfigObserver<NetworkAuthorityClient, S>
             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
             match self.fullnode_client.read_api().get_sui_system_state().await {
                 Ok(sui_system_state) => {
-                    let epoch_id = sui_system_state.epoch;
+                    let epoch_id = sui_system_state.epoch();
                     if epoch_id > quorum_driver.current_epoch() {
                         debug!(epoch_id, "Got SuiSystemState in newer epoch");
                         let new_committee = match self
@@ -92,8 +92,8 @@ impl<S: SignatureVerifier + Default> ReconfigObserver<NetworkAuthorityClient, S>
                             }
                         };
                         let _ = self.committee_store.insert_new_committee(&new_committee);
-                        match AuthorityAggregator::new_from_system_state(
-                            &sui_system_state,
+                        match AuthorityAggregator::new_from_committee(
+                            sui_system_state.get_current_epoch_committee(),
                             &self.committee_store,
                             self.safe_client_metrics_base.clone(),
                             self.auth_agg_metrics.clone(),
