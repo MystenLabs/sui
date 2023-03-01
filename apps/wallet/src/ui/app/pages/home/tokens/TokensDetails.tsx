@@ -10,7 +10,6 @@ import CoinBalance from './coin-balance';
 import IconLink from './icon-link';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { Text } from '_app/shared/text';
-import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { SuiIcons } from '_font-icons/output/sui-icons';
 import { useAppSelector, useGetAllBalances, useGetCoinBalance } from '_hooks';
@@ -65,11 +64,10 @@ function MyTokens() {
 function TokenDetails({ coinType }: TokenDetailsProps) {
     const activeCoinType = coinType || SUI_TYPE_ARG;
     const accountAddress = useAppSelector(({ account }) => account.address);
-    const {
-        data: coinBalance,
-        isLoading: loadingBalances,
-        isError,
-    } = useGetCoinBalance(activeCoinType, accountAddress);
+    const { data: coinBalance, isLoading: loadingBalances } = useGetCoinBalance(
+        activeCoinType,
+        accountAddress
+    );
 
     const tokenBalance = coinBalance?.totalBalance || BigInt(0);
 
@@ -86,13 +84,6 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                 className="flex flex-col h-full flex-1 flex-grow items-center"
                 data-testid="coin-page"
             >
-                {isError ? (
-                    <Alert>
-                        <div>
-                            <small>Something went wrong</small>
-                        </div>
-                    </Alert>
-                ) : null}
                 {!coinType && <AccountSelector />}
                 <div className="mt-1.5">
                     <Loading loading={loadingBalances}>

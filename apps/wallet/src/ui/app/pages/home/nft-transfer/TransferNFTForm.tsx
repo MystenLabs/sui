@@ -105,7 +105,8 @@ function TransferNFTForm({
                             isSubmitting ||
                             isInsufficientGas ||
                             !gasBudget ||
-                            !gasBudgetInMist
+                            !gasBudgetInMist ||
+                            loadingBalances
                         }
                         size="tall"
                         text="Send NFT Now"

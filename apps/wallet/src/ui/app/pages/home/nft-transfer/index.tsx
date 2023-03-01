@@ -37,6 +37,7 @@ function NftTransferPage() {
 
     // verify that the nft is owned by the user and is transferable
     const { data: objectData, isLoading } = useGetObject(nftId!);
+
     const selectedNft = useMemo(() => {
         if (
             !objectData ||
@@ -53,7 +54,7 @@ function NftTransferPage() {
     const dispatch = useAppDispatch();
     const [sendError, setSendError] = useState<string | null>(null);
     const validationSchema = useMemo(
-        () => createValidationSchema(address!, objectId!),
+        () => createValidationSchema(address || '', objectId || ''),
         [address, objectId]
     );
     const navigate = useNavigate();
