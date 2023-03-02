@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_types::collection_types::VecMap;
 use sui_types::display::{DisplayCreatedEvent, DisplayObject};
+use sui_types::error::UserInputError;
 use sui_types::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use tap::TapFallible;
 
@@ -202,6 +203,12 @@ impl ReadApiServer for ReadApi {
         &self,
         digests: Vec<TransactionDigest>,
     ) -> RpcResult<Vec<SuiTransactionResponse>> {
+        if digests.len() > QUERY_MAX_RESULT_LIMIT {
+            anyhow!(UserInputError::SizeLimitExceeded {
+                limit: "input limit".to_string(),
+                value: QUERY_MAX_RESULT_LIMIT.to_string()
+            });
+        }
         let mut tx_digests: Vec<TransactionDigest> = digests
             .iter()
             .take(QUERY_MAX_RESULT_LIMIT)
@@ -216,12 +223,13 @@ impl ReadApiServer for ReadApi {
             .tap_err(|err| debug!(txs_digests=?tx_digests, "Failed to get batch: {:?}", err))?;
 
         let mut responses: Vec<SuiTransactionResponse> = Vec::new();
-        for (txn, digest) in txn_batch.iter().zip(tx_digests.iter()) {
+        for (txn, digest) in txn_batch.into_iter().zip(tx_digests.iter()) {
+            let (transaction, effects, events, checkpoint) = txn;
             responses.push(SuiTransactionResponse {
-                transaction: txn.clone().0 .0.into_message().try_into()?,
-                effects: txn.0.clone().1.into(),
+                transaction: transaction.into_message().try_into()?,
+                effects: effects.into(),
                 events: SuiTransactionEvents::try_from(
-                    txn.1.clone(),
+                    events,
                     // threading the epoch_store through this API does not
                     // seem possible, so we just read it from the state and fetch
                     // the module cache out of it.
@@ -234,7 +242,7 @@ impl ReadApiServer for ReadApi {
                 )?,
                 timestamp_ms: self.state.get_timestamp_ms(digest).await?,
                 confirmed_local_execution: None,
-                checkpoint: txn.2.map(|(_epoch, checkpoint)| checkpoint),
+                checkpoint: checkpoint.map(|(_epoch, checkpoint)| checkpoint),
             })
         }
         Ok(responses)

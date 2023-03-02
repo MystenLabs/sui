@@ -158,7 +158,8 @@ pub type ReconfigConsensusMessage = (
 );
 
 pub type VerifiedTransactionBatch = Vec<(
-    (VerifiedTransaction, TransactionEffects),
+    VerifiedTransaction,
+    TransactionEffects,
     TransactionEvents,
     Option<(EpochId, CheckpointSequenceNumber)>,
 )>;
@@ -2169,7 +2170,7 @@ impl AuthorityState {
         for data in izip!(digests, transactions, effects, events, checkpoints) {
             match data {
                 (_, Some(tx), Some(effect), Some(event), cp) => {
-                    response.push(((tx, effect), event, cp))
+                    response.push((tx, effect, event, cp))
                 }
                 (digest, _, _, _, _) => missed_digests.push(*digest),
             }
