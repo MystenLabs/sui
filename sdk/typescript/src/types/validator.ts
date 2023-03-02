@@ -156,6 +156,7 @@ export const CommitteeInfo = object({
 export const SystemParameters = object({
   min_validator_stake: number(),
   max_validator_candidate_count: number(),
+  governance_start_epoch: number(),
   storage_gas_price: optional(number()),
 });
 

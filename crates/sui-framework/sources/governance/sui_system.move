@@ -45,6 +45,12 @@ module sui::sui_system {
         /// Maximum number of validator candidates at any moment.
         /// We do not allow the number of validators in any epoch to go above this.
         max_validator_candidate_count: u64,
+
+        /// The starting epoch in which various on-chain governance features take effect:
+        /// - TODO stake subsidies are paid out
+        /// - TODO validators with stake less than a 'validator_stake_threshold' are
+        ///   kicked from the validator set
+        governance_start_epoch: u64,
     }
 
     /// The top-level object containing all information of the Sui system.
@@ -121,6 +127,7 @@ module sui::sui_system {
         storage_fund: Balance<SUI>,
         max_validator_candidate_count: u64,
         min_validator_stake: u64,
+        governance_start_epoch: u64,
         initial_stake_subsidy_amount: u64,
         protocol_version: u64,
         system_state_version: u64,
@@ -137,6 +144,7 @@ module sui::sui_system {
             parameters: SystemParameters {
                 min_validator_stake,
                 max_validator_candidate_count,
+                governance_start_epoch,
             },
             reference_gas_price,
             validator_report_records: vec_map::empty(),
