@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::metrics::new_registry;
 use crate::{try_join_all, FuturesUnordered, NodeError};
 use anemo::PeerId;
 use arc_swap::{ArcSwap, ArcSwapOption};
@@ -9,8 +8,6 @@ use config::{Committee, Parameters, WorkerCache, WorkerId};
 use crypto::{NetworkKeyPair, PublicKey};
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::{RegistryID, RegistryService};
-use network::client::NetworkClient;
-use prometheus::Registry;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -19,7 +16,6 @@ use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::{info, instrument};
 use types::PreSubscribedBroadcastSender;
-use worker::metrics::{initialise_metrics, Metrics};
 use worker::{TransactionValidator, Worker, NUM_SHUTDOWN_RECEIVERS};
 
 pub struct WorkerNodeInner {
@@ -27,10 +23,6 @@ pub struct WorkerNodeInner {
     id: WorkerId,
     // The configuration parameters.
     parameters: Parameters,
-    // A prometheus RegistryService to use for the metrics
-    registry_service: RegistryService,
-    // The latest registry id & registry used for the node
-    registry: Option<(RegistryID, Registry)>,
     // The task handles created from primary
     handles: FuturesUnordered<JoinHandle<()>>,
     // The shutdown signal channel
@@ -60,24 +52,10 @@ impl WorkerNodeInner {
         store: &NodeStorage,
         // The transaction validator that should be used
         tx_validator: impl TransactionValidator,
-        // Optionally, if passed, then this metrics struct should be used instead of creating our
-        // own one.
-        metrics: Option<Metrics>,
     ) -> Result<(), NodeError> {
         if self.is_running().await {
             return Err(NodeError::NodeAlreadyRunning);
         }
-
-        self.own_peer_id = Some(PeerId(network_keypair.public().0.to_bytes()));
-
-        let (metrics, registry) = if let Some(metrics) = metrics {
-            (metrics, None)
-        } else {
-            // create a new registry
-            let registry = new_registry();
-
-            (initialise_metrics(&registry), Some(registry))
-        };
 
         let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -100,14 +78,8 @@ impl WorkerNodeInner {
             tx_validator.clone(),
             client.clone(),
             store.batch_store.clone(),
-            metrics,
             &mut tx_shutdown,
         );
-
-        // store the registry
-        if let Some(registry) = registry {
-            self.swap_registry(Some(registry));
-        }
 
         // now keep the handlers
         self.handles.clear();
@@ -137,8 +109,6 @@ impl WorkerNodeInner {
         // Now wait until handles have been completed
         try_join_all(&mut self.handles).await.unwrap();
 
-        self.swap_registry(None);
-
         info!(
             "Narwhal worker {} shutdown is complete - took {} seconds",
             self.id,
@@ -156,22 +126,6 @@ impl WorkerNodeInner {
     async fn wait(&mut self) {
         try_join_all(&mut self.handles).await.unwrap();
     }
-
-    // Accepts an Option registry. If it's Some, then the new registry will be added in the
-    // registry service and the registry_id will be updated. Also, any previous registry will
-    // be removed. If None is passed, then the registry_id is updated to None and any old
-    // registry is removed from the RegistryService.
-    fn swap_registry(&mut self, registry: Option<Registry>) {
-        if let Some((registry_id, _registry)) = self.registry.as_ref() {
-            self.registry_service.remove(*registry_id);
-        }
-
-        if let Some(registry) = registry {
-            self.registry = Some((self.registry_service.add(registry.clone()), registry));
-        } else {
-            self.registry = None
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -180,16 +134,10 @@ pub struct WorkerNode {
 }
 
 impl WorkerNode {
-    pub fn new(
-        id: WorkerId,
-        parameters: Parameters,
-        registry_service: RegistryService,
-    ) -> WorkerNode {
+    pub fn new(id: WorkerId, parameters: Parameters) -> WorkerNode {
         let inner = WorkerNodeInner {
             id,
             parameters,
-            registry_service,
-            registry: None,
             handles: FuturesUnordered::new(),
             tx_shutdown: None,
             own_peer_id: None,
@@ -217,8 +165,6 @@ impl WorkerNode {
         store: &NodeStorage,
         // The transaction validator defining Tx acceptance,
         tx_validator: impl TransactionValidator,
-        // An optional metrics struct
-        metrics: Option<Metrics>,
     ) -> Result<(), NodeError> {
         let mut guard = self.internal.write().await;
         guard
@@ -230,7 +176,6 @@ impl WorkerNode {
                 client,
                 store,
                 tx_validator,
-                metrics,
             )
             .await
     }
@@ -294,13 +239,6 @@ impl WorkerNodes {
             return Err(NodeError::WorkerNodesAlreadyRunning(worker_ids_running));
         }
 
-        // create the registry first
-        let registry = new_registry();
-
-        let metrics = initialise_metrics(&registry);
-
-        self.client.store(Some(Arc::new(client.clone())));
-
         // now clear the previous handles - we want to do that proactively
         // as it's not guaranteed that shutdown has been called
         self.workers.store(Arc::new(HashMap::default()));
@@ -308,11 +246,7 @@ impl WorkerNodes {
         let mut workers = HashMap::<WorkerId, WorkerNode>::new();
         // start all the workers one by one
         for (worker_id, key_pair) in ids_and_keypairs {
-            let worker = WorkerNode::new(
-                worker_id,
-                self.parameters.clone(),
-                self.registry_service.clone(),
-            );
+            let worker = WorkerNode::new(worker_id, self.parameters.clone());
 
             worker
                 .start(
@@ -323,7 +257,6 @@ impl WorkerNodes {
                     client.clone(),
                     store,
                     tx_validator.clone(),
-                    Some(metrics.clone()),
                 )
                 .await?;
 
@@ -332,14 +265,6 @@ impl WorkerNodes {
 
         // update the worker handles.
         self.workers.store(Arc::new(workers));
-
-        // now add the registry
-        let registry_id = self.registry_service.add(registry);
-
-        if let Some(old_registry_id) = self.registry_id.swap(Some(Arc::new(registry_id))) {
-            // a little of defensive programming - ensure that we always clean up the previous registry
-            self.registry_service.remove(*old_registry_id.as_ref());
-        }
 
         Ok(())
     }

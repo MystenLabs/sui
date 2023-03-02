@@ -11,14 +11,13 @@ use itertools::Itertools;
 use network::{client::NetworkClient, WorkerToPrimaryClient};
 use rand::seq::SliceRandom;
 use std::{collections::HashSet, time::Duration};
-use store::{rocks::DBMap, Map};
-use tokio::time::sleep;
-use tracing::{debug, info, trace, warn};
+use store::Store;
+use tokio::{sync::mpsc, time::sleep};
+use tracing::{debug, error, info, trace, warn};
 use types::{
-    Batch, BatchDigest, FetchBatchesRequest, FetchBatchesResponse, PrimaryToWorker,
-    RequestBatchRequest, RequestBatchResponse, RequestBatchesRequest, RequestBatchesResponse,
+    Batch, BatchDigest, PrimaryToWorker, RequestBatchRequest, RequestBatchResponse,
     WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
-    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
+    WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
 };
 
 use crate::TransactionValidator;
@@ -31,8 +30,8 @@ pub mod handlers_tests;
 #[derive(Clone)]
 pub struct WorkerReceiverHandler<V> {
     pub id: WorkerId,
-    pub client: NetworkClient,
-    pub store: DBMap<BatchDigest, Batch>,
+    pub tx_others_batch: mpsc::Sender<WorkerOthersBatchMessage>,
+    pub store: Store<BatchDigest, Batch>,
     pub validator: V,
 }
 

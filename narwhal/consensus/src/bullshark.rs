@@ -1,7 +1,6 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::metrics::ConsensusMetrics;
 use crate::{
     consensus::{ConsensusProtocol, ConsensusState, Dag},
     utils, ConsensusError, Outcome,
@@ -45,7 +44,6 @@ pub struct Bullshark {
     /// Persistent storage to safe ensure crash-recovery.
     pub store: Arc<ConsensusStore>,
 
-    pub metrics: Arc<ConsensusMetrics>,
     /// The last time we had a successful leader election
     pub last_successful_leader_election_timestamp: Instant,
     /// The last round leader election result
@@ -77,15 +75,9 @@ impl ConsensusProtocol for Bullshark {
             let last_election_round = &self.last_leader_election;
 
             if !last_election_round.leader_found {
-                self.metrics
-                    .leader_election
-                    .with_label_values(&["not_found"])
-                    .inc();
+                // TODO(metrics): Increment leader_election_not_found
             } else if !last_election_round.leader_has_support {
-                self.metrics
-                    .leader_election
-                    .with_label_values(&["not_enough_support"])
-                    .inc();
+                // TODO(metrics): Increment leader_election_not_enough_support
             }
         }
 
@@ -200,29 +192,20 @@ impl ConsensusProtocol for Bullshark {
         }
 
         // record the last time we got a successful leader election
-        let elapsed = self.last_successful_leader_election_timestamp.elapsed();
+        let _elapsed = self.last_successful_leader_election_timestamp.elapsed();
 
-        self.metrics
-            .commit_rounds_latency
-            .observe(elapsed.as_secs_f64());
+        // TODO(metrics): Set commit_rounds_latency to `elapsed.as_secs_f64()`
 
         self.last_successful_leader_election_timestamp = Instant::now();
 
-        self.metrics
-            .leader_election
-            .with_label_values(&["elected"])
-            .inc();
+        // TODO(metrics): Increment leader_election_elected
 
         // The total leader_commits are expected to grow the same amount on validators,
         // but strong vs weak counts are not expected to be the same across validators.
-        self.metrics
-            .leader_commits
-            .with_label_values(&["strong"])
-            .inc();
-        self.metrics
-            .leader_commits
-            .with_label_values(&["weak"])
-            .inc_by(committed_sub_dags.len() as u64 - 1);
+
+        // TODO(metrics): Increment leader_commits_strong
+
+        // TODO(metrics): Increment leader_commits_strong by `committed_sub_dags.len() as u64 - 1`
 
         // Log the latest committed round of every authority (for debug).
         // Performance note: if tracing at the debug log level is disabled, this is cheap, see
@@ -231,9 +214,16 @@ impl ConsensusProtocol for Bullshark {
             debug!("Latest commit of {}: Round {}", name, round);
         }
 
-        self.metrics
-            .committed_certificates
-            .observe(total_committed_certificates as f64);
+        let total_committed_certificates: usize = committed_sub_dags
+            .iter()
+            .map(|x| x.certificates.len())
+            .sum();
+        debug!(
+            "Total committed certificates: {}",
+            total_committed_certificates
+        );
+
+        // TODO(metrics): Set committed_certificates to `total_committed_certificates as f64`
 
         Ok((Outcome::Commit, committed_sub_dags))
     }
@@ -241,20 +231,13 @@ impl ConsensusProtocol for Bullshark {
 
 impl Bullshark {
     /// Create a new Bullshark consensus instance.
-    pub fn new(
-        committee: Committee,
-        store: Arc<ConsensusStore>,
-        metrics: Arc<ConsensusMetrics>,
-        num_sub_dags_per_schedule: u64,
-    ) -> Self {
+    pub fn new(committee: Committee, store: Arc<ConsensusStore>, gc_depth: Round) -> Self {
         Self {
             committee,
             store,
             last_successful_leader_election_timestamp: Instant::now(),
             last_leader_election: LastRound::default(),
             max_inserted_certificate_round: 0,
-            metrics,
-            num_sub_dags_per_schedule,
         }
     }
 

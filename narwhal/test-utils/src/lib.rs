@@ -73,10 +73,7 @@ pub fn ensure_test_environment() {
 #[macro_export]
 macro_rules! test_channel {
     ($e:expr) => {
-        types::metered_channel::channel(
-            $e,
-            &prometheus::IntGauge::new("TEST_COUNTER", "test counter").unwrap(),
-        );
+        tokio::sync::mpsc::channel($e);
     };
 }
 
@@ -93,28 +90,14 @@ macro_rules! test_channel {
 #[macro_export]
 macro_rules! test_committed_certificates_channel {
     ($e:expr) => {
-        types::metered_channel::channel(
-            $e,
-            &prometheus::IntGauge::new(
-                primary::PrimaryChannelMetrics::NAME_COMMITTED_CERTS,
-                primary::PrimaryChannelMetrics::DESC_COMMITTED_CERTS,
-            )
-            .unwrap(),
-        );
+        tokio::sync::mpsc::channel($e);
     };
 }
 
 #[macro_export]
 macro_rules! test_new_certificates_channel {
     ($e:expr) => {
-        types::metered_channel::channel(
-            $e,
-            &prometheus::IntGauge::new(
-                primary::PrimaryChannelMetrics::NAME_NEW_CERTS,
-                primary::PrimaryChannelMetrics::DESC_NEW_CERTS,
-            )
-            .unwrap(),
-        );
+        tokio::sync::mpsc::channel($e);
     };
 }
 

@@ -5,10 +5,9 @@
 use crypto::NetworkPublicKey;
 use futures::{stream::FuturesUnordered, StreamExt};
 use network::{CancelOnDropHandler, ReliableNetwork};
-use tokio::task::JoinHandle;
+use tokio::{sync::mpsc, task::JoinHandle};
 use types::{
-    metered_channel::Receiver, ConditionalBroadcastReceiver, PrimaryResponse,
-    WorkerOthersBatchMessage, WorkerOurBatchMessage,
+    ConditionalBroadcastReceiver, PrimaryResponse, WorkerOthersBatchMessage, WorkerOurBatchMessage,
 };
 
 /// The maximum number of digests kept in memory waiting to be sent to the primary.
@@ -21,8 +20,8 @@ pub struct PrimaryConnector {
     /// Receiver for shutdown.
     rx_shutdown: ConditionalBroadcastReceiver,
     /// Input channels to receive the messages to send to the primary.
-    rx_our_batch: Receiver<(WorkerOurBatchMessage, PrimaryResponse)>,
-    rx_others_batch: Receiver<WorkerOthersBatchMessage>,
+    rx_our_batch: mpsc::Receiver<(WorkerOurBatchMessage, PrimaryResponse)>,
+    rx_others_batch: mpsc::Receiver<WorkerOthersBatchMessage>,
     /// A network sender to send the batches' digests to the primary.
     primary_client: anemo::Network,
 }
@@ -32,8 +31,8 @@ impl PrimaryConnector {
     pub fn spawn(
         primary_name: NetworkPublicKey,
         rx_shutdown: ConditionalBroadcastReceiver,
-        rx_our_batch: Receiver<(WorkerOurBatchMessage, PrimaryResponse)>,
-        rx_others_batch: Receiver<WorkerOthersBatchMessage>,
+        rx_our_batch: mpsc::Receiver<(WorkerOurBatchMessage, PrimaryResponse)>,
+        rx_others_batch: mpsc::Receiver<WorkerOthersBatchMessage>,
         primary_client: anemo::Network,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {

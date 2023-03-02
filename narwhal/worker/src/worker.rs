@@ -5,7 +5,7 @@ use crate::{
     batch_fetcher::BatchFetcher,
     batch_maker::BatchMaker,
     handlers::{PrimaryReceiverHandler, WorkerReceiverHandler},
-    metrics::WorkerChannelMetrics,
+    primary_connector::PrimaryConnector,
     quorum_waiter::QuorumWaiter,
     TransactionValidator, NUM_SHUTDOWN_RECEIVERS,
 };
@@ -23,18 +23,17 @@ use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey, PublicKey};
 use multiaddr::{Multiaddr, Protocol};
 use network::epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY};
 use network::failpoints::FailpointsMakeCallbackHandler;
-use network::metrics::MetricsMakeCallbackHandler;
 use std::collections::HashMap;
 use std::time::Duration;
-use std::{net::Ipv4Addr, sync::Arc, thread::sleep};
-use store::rocks::DBMap;
+use std::{net::Ipv4Addr, thread::sleep};
+use store::Store;
 use tap::TapFallible;
-use tokio::task::JoinHandle;
+use tokio::{sync::mpsc, task::JoinHandle};
 use tower::ServiceBuilder;
 use tracing::{error, info};
 use types::{
-    metered_channel::channel_with_total, Batch, BatchDigest, ConditionalBroadcastReceiver,
-    PreSubscribedBroadcastSender, PrimaryToWorkerServer, WorkerToWorkerServer,
+    Batch, BatchDigest, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender,
+    PrimaryToWorkerServer, WorkerOurBatchMessage, WorkerToWorkerServer,
 };
 
 #[cfg(test)]
@@ -44,7 +43,6 @@ pub mod worker_tests;
 /// The default channel capacity for each channel of the worker.
 pub const CHANNEL_CAPACITY: usize = 1_000;
 
-use crate::metrics::{Metrics, WorkerEndpointMetrics, WorkerMetrics};
 use crate::transactions_server::TxServer;
 
 pub struct Worker {
@@ -73,9 +71,7 @@ impl Worker {
         worker_cache: WorkerCache,
         parameters: Parameters,
         validator: impl TransactionValidator,
-        client: NetworkClient,
-        store: DBMap<BatchDigest, Batch>,
-        metrics: Metrics,
+        store: Store<BatchDigest, Batch>,
         tx_shutdown: &mut PreSubscribedBroadcastSender,
     ) -> Vec<JoinHandle<()>> {
         let worker_name = keypair.public().clone();
@@ -93,12 +89,9 @@ impl Worker {
             store,
         };
 
-        let node_metrics = Arc::new(metrics.worker_metrics.unwrap());
-        let endpoint_metrics = metrics.endpoint_metrics.unwrap();
-        let channel_metrics: Arc<WorkerChannelMetrics> = Arc::new(metrics.channel_metrics.unwrap());
-        let inbound_network_metrics = Arc::new(metrics.inbound_network_metrics.unwrap());
-        let outbound_network_metrics = Arc::new(metrics.outbound_network_metrics.unwrap());
-        let network_connection_metrics = metrics.network_connection_metrics.unwrap();
+        // Spawn all worker tasks.
+        let (tx_our_batch, rx_our_batch) = mpsc::channel(CHANNEL_CAPACITY);
+        let (tx_others_batch, rx_others_batch) = mpsc::channel(CHANNEL_CAPACITY);
 
         let mut shutdown_receivers = tx_shutdown.subscribe_n(NUM_SHUTDOWN_RECEIVERS);
 
@@ -178,10 +171,6 @@ impl Worker {
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
                     .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
             )
-            .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
-                inbound_network_metrics,
-                parameters.anemo.excessive_message_size(),
-            )))
             .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
             .layer(SetResponseHeaderLayer::overriding(
                 EPOCH_HEADER_KEY.parse().unwrap(),
@@ -195,10 +184,6 @@ impl Worker {
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
                     .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
             )
-            .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
-                outbound_network_metrics,
-                parameters.anemo.excessive_message_size(),
-            )))
             .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
             .layer(SetRequestHeaderLayer::overriding(
                 EPOCH_HEADER_KEY.parse().unwrap(),
@@ -329,12 +314,8 @@ impl Worker {
             );
         }
 
-        let (connection_monitor_handle, _) = network::connectivity::ConnectionMonitor::spawn(
-            network.downgrade(),
-            network_connection_metrics,
-            peer_types,
-            Some(shutdown_receivers.pop().unwrap()),
-        );
+        let connection_monitor_handle =
+            network::connectivity::ConnectionMonitor::spawn(network.downgrade(), peer_types);
 
         let network_admin_server_base_port = parameters
             .network_admin_server
@@ -358,9 +339,7 @@ impl Worker {
                 shutdown_receivers.pop().unwrap(),
                 shutdown_receivers.pop().unwrap(),
             ],
-            node_metrics,
-            channel_metrics,
-            endpoint_metrics,
+            tx_our_batch,
             validator,
             client,
             network.clone(),
@@ -426,23 +405,16 @@ impl Worker {
     fn handle_clients_transactions(
         &self,
         mut shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
-        node_metrics: Arc<WorkerMetrics>,
-        channel_metrics: Arc<WorkerChannelMetrics>,
-        endpoint_metrics: WorkerEndpointMetrics,
+        tx_our_batch: mpsc::Sender<(
+            WorkerOurBatchMessage,
+            Option<tokio::sync::oneshot::Sender<()>>,
+        )>,
         validator: impl TransactionValidator,
         client: NetworkClient,
         network: anemo::Network,
     ) -> Vec<JoinHandle<()>> {
-        let (tx_batch_maker, rx_batch_maker) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &channel_metrics.tx_batch_maker,
-            &channel_metrics.tx_batch_maker_total,
-        );
-        let (tx_quorum_waiter, rx_quorum_waiter) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &channel_metrics.tx_quorum_waiter,
-            &channel_metrics.tx_quorum_waiter_total,
-        );
+        let (tx_batch_maker, rx_batch_maker) = mpsc::channel(CHANNEL_CAPACITY);
+        let (tx_quorum_waiter, rx_quorum_waiter) = mpsc::channel(CHANNEL_CAPACITY);
 
         // We first receive clients' transactions from the network.
         let address = self
@@ -457,7 +429,6 @@ impl Worker {
         let tx_server_handle = TxServer::spawn(
             address.clone(),
             shutdown_receivers.pop().unwrap(),
-            endpoint_metrics,
             tx_batch_maker,
             validator,
         );
@@ -472,8 +443,6 @@ impl Worker {
             shutdown_receivers.pop().unwrap(),
             rx_batch_maker,
             tx_quorum_waiter,
-            node_metrics,
-            client,
             self.store.clone(),
         );
 

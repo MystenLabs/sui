@@ -1,25 +1,26 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-use std::sync::Arc;
+#[cfg(feature = "trace_transaction")]
+use byteorder::{BigEndian, ReadBytesExt};
+use fastcrypto::hash::Hash;
+use futures::stream::FuturesOrdered;
+use store::Store;
 
 use config::WorkerId;
 use tracing::error;
 
 use futures::{Future, StreamExt};
 
-use std::sync::Arc;
 use tokio::{
+    sync::mpsc::{Receiver, Sender},
     task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
 use tracing::{error, warn};
 use types::{
-    error::DagError,
-    metered_channel::{Receiver, Sender},
-    now, Batch, BatchAPI, BatchDigest, ConditionalBroadcastReceiver, Transaction, TxResponse,
-    WorkerOurBatchMessage,
+    error::DagError, now, Batch, BatchDigest, ConditionalBroadcastReceiver, PrimaryResponse,
+    Transaction, TxResponse, WorkerOurBatchMessage,
 };
 
 use crate::metrics::WorkerMetrics;
@@ -49,9 +50,7 @@ pub struct BatchMaker {
     /// Channel to receive transactions from the network.
     rx_batch_maker: Receiver<(Transaction, TxResponse)>,
     /// Output channel to deliver sealed batches to the `QuorumWaiter`.
-    tx_quorum_waiter: Sender<(Batch, tokio::sync::oneshot::Sender<()>)>,
-    /// Metrics handler
-    node_metrics: Arc<WorkerMetrics>,
+    tx_message: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
     /// The timestamp of the batch creation.
     /// Average resident time in the batch would be ~ (batch seal time - creation time) / 2
     batch_start_timestamp: Instant,
@@ -69,10 +68,9 @@ impl BatchMaker {
         max_batch_delay: Duration,
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_batch_maker: Receiver<(Transaction, TxResponse)>,
-        tx_quorum_waiter: Sender<(Batch, tokio::sync::oneshot::Sender<()>)>,
-        node_metrics: Arc<WorkerMetrics>,
-        client: NetworkClient,
-        store: DBMap<BatchDigest, Batch>,
+        tx_message: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
+        store: Store<BatchDigest, Batch>,
+        tx_digest: Sender<(WorkerOurBatchMessage, PrimaryResponse)>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -83,7 +81,6 @@ impl BatchMaker {
                 rx_batch_maker,
                 tx_message,
                 batch_start_timestamp: Instant::now(),
-                node_metrics,
                 store,
                 tx_digest,
             }
@@ -117,7 +114,8 @@ impl BatchMaker {
                         if let Some(seal) = self.seal(false, current_batch, current_batch_size, current_responses).await{
                             batch_pipeline.push(seal);
                         }
-                        self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
+
+                        // TODO(metrics): Set `parallel_worker_batches` to `batch_pipeline.len() as i64`
 
                         current_batch = Batch::default();
                         current_responses = Vec::new();
@@ -134,7 +132,8 @@ impl BatchMaker {
                         if let Some(seal) = self.seal(true, current_batch, current_batch_size, current_responses).await {
                             batch_pipeline.push(seal);
                         }
-                        self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
+
+                        // TODO(metrics): Set `parallel_worker_batches` to `batch_pipeline.len() as i64`
 
                         current_batch = Batch::default();
                         current_responses = Vec::new();
@@ -152,7 +151,7 @@ impl BatchMaker {
                 // list, and ensures the main loop in run will always be able to make progress
                 // by lowering it until condition batch_pipeline.len() < MAX_PARALLEL_BATCH is met.
                 _ = batch_pipeline.next(), if !batch_pipeline.is_empty() => {
-                    self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
+                    // TODO(metrics): Set `parallel_worker_batches` to `batch_pipeline.len() as i64`
                 }
 
             }
@@ -167,15 +166,13 @@ impl BatchMaker {
         &self,
         timeout: bool,
         mut batch: Batch,
+        #[allow(unused_variables)]
         size: usize,
         responses: Vec<TxResponse>,
     ) -> Option<impl Future<Output = ()>> {
         let reason = if timeout { "timeout" } else { "size_reached" };
 
-        self.node_metrics
-            .created_batch_size
-            .with_label_values(&[reason])
-            .observe(size as f64);
+        // TODO(metrics): Observe `size as f64` as `created_batch_size`
 
         // Send the batch through the deliver channel for further processing.
         let (notify_done, done_sending) = tokio::sync::oneshot::channel();
@@ -201,10 +198,7 @@ impl BatchMaker {
         // we are deliberately measuring this after the sending to the downstream
         // channel tx_quorum_waiter as the operation is blocking and affects any further
         // batch creation.
-        self.node_metrics
-            .created_batch_latency
-            .with_label_values(&[reason])
-            .observe(batch_creation_duration);
+        // TODO(metrics): Observe `batch_creation_duration` as `created_batch_latency`
 
         // Clone things to not capture self
         let client = self.client.clone();

@@ -7,38 +7,17 @@ use consensus::consensus::ConsensusRound;
 use consensus::dag::Dag;
 use crypto::NetworkPublicKey;
 use fastcrypto::hash::Hash as _;
-use futures::{stream::FuturesOrdered, StreamExt};
-use mysten_common::sync::notify_once::NotifyOnce;
-use mysten_metrics::spawn_monitored_task;
-use network::{
-    anemo_ext::{NetworkExt, WaitingPeer},
-    client::NetworkClient,
-    PrimaryToWorkerClient, RetryConfig,
-};
-use parking_lot::Mutex;
-use std::{
-    cmp::min,
-    collections::{BTreeMap, HashMap, HashSet, VecDeque},
-    iter,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
-use storage::{CertificateStore, PayloadStore};
-use tokio::{
-    sync::{broadcast, mpsc, oneshot, watch, MutexGuard},
-    task::JoinSet,
-    time::sleep,
-};
-use tracing::{debug, error, trace, warn};
+use network::{anemo_ext::NetworkExt, RetryConfig};
+use std::{collections::HashMap, sync::Arc};
+use storage::{CertificateStore, PayloadToken};
+use store::Store;
+use tokio::sync::{mpsc, watch};
+use tracing::debug;
 use types::{
     ensure,
-    error::{AcceptNotification, DagError, DagResult},
-    metered_channel::Sender,
-    Certificate, CertificateAPI, CertificateDigest, Header, HeaderAPI, PrimaryToPrimaryClient,
-    Round, SendCertificateRequest, SendCertificateResponse, WorkerSynchronizeMessage,
+    error::{DagError, DagResult},
+    BatchDigest, Certificate, CertificateDigest, Header, PrimaryToWorkerClient, Round,
+    WorkerSynchronizeMessage,
 };
 
 use crate::{aggregators::CertificatesAggregator, metrics::PrimaryMetrics, CHANNEL_CAPACITY};
@@ -70,24 +49,12 @@ struct Inner {
     client: NetworkClient,
     /// The persistent storage tables.
     certificate_store: CertificateStore,
-    /// The persistent store of the available batch digests produced either via our own workers
-    /// or others workers.
-    payload_store: PayloadStore,
-    /// Send missing certificates to the `CertificateFetcher`.
-    tx_certificate_fetcher: Sender<Certificate>,
-    /// Send certificates to be accepted into a separate task that runs
-    /// `process_certificate_with_lock()` in a loop.
-    /// See comment above `process_certificate_with_lock()` for why this is necessary.
-    tx_certificate_acceptor: mpsc::Sender<(Certificate, oneshot::Sender<DagResult<()>>, bool)>,
-    /// Output all certificates to the consensus layer. Must send certificates in causal order.
-    tx_new_certificates: Sender<Certificate>,
-    /// Send valid a quorum of certificates' ids to the `Proposer` (along with their round).
-    tx_parents: Sender<(Vec<Certificate>, Round, Epoch)>,
-    /// Send own certificates to be broadcasted to all other peers.
-    tx_own_certificate_broadcast: broadcast::Sender<Certificate>,
-    /// Get a signal when the commit & gc round changes.
-    rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
-    /// Genesis digests and contents.
+    payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+    /// Send commands to the `CertificateFetcher`.
+    tx_certificate_fetcher: mpsc::Sender<Certificate>,
+    /// Get a signal when the round changes.
+    rx_consensus_round_updates: watch::Receiver<Round>,
+    /// The genesis and its digests.
     genesis: HashMap<CertificateDigest, Certificate>,
     /// The dag used for the external consensus
     dag: Option<Arc<Dag>>,
@@ -271,12 +238,9 @@ impl Synchronizer {
         gc_depth: Round,
         client: NetworkClient,
         certificate_store: CertificateStore,
-        payload_store: PayloadStore,
-        tx_certificate_fetcher: Sender<Certificate>,
-        tx_new_certificates: Sender<Certificate>,
-        tx_parents: Sender<(Vec<Certificate>, Round, Epoch)>,
-        rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
-        rx_synchronizer_network: oneshot::Receiver<Network>,
+        payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+        tx_certificate_fetcher: mpsc::Sender<Certificate>,
+        rx_consensus_round_updates: watch::Receiver<Round>,
         dag: Option<Arc<Dag>>,
         metrics: Arc<PrimaryMetrics>,
     ) -> Self {

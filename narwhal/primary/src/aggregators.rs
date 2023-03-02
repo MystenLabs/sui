@@ -2,16 +2,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::metrics::PrimaryMetrics;
-use config::{AuthorityIdentifier, Committee, Stake};
-use crypto::{
-    to_intent_message, AggregateSignature, NarwhalAuthorityAggregateSignature,
-    NarwhalAuthoritySignature, Signature,
-};
-use fastcrypto::hash::{Digest, Hash};
+use config::{Committee, Stake};
+use crypto::{PublicKey, Signature};
+use fastcrypto::traits::EncodeDecodeBase64;
 use std::collections::HashSet;
-use std::sync::Arc;
-use tracing::warn;
 use types::{
     ensure,
     error::{DagError, DagResult},
@@ -21,20 +15,18 @@ use types::{
 /// Aggregates votes for a particular header into a certificate.
 pub struct VotesAggregator {
     weight: Stake,
-    votes: Vec<(AuthorityIdentifier, Signature)>,
-    used: HashSet<AuthorityIdentifier>,
-    metrics: Arc<PrimaryMetrics>,
+    votes: Vec<(PublicKey, Signature)>,
+    used: HashSet<PublicKey>,
 }
 
 impl VotesAggregator {
-    pub fn new(metrics: Arc<PrimaryMetrics>) -> Self {
-        metrics.votes_received_last_round.set(0);
+    pub fn new() -> Self {
+        // TODO(metrics): Set `votes_received_last_round` to 0
 
         Self {
             weight: 0,
             votes: Vec::new(),
             used: HashSet::new(),
-            metrics,
         }
     }
 
@@ -55,9 +47,8 @@ impl VotesAggregator {
         self.votes.push((author, vote.signature().clone()));
         self.weight += committee.stake_by_id(author);
 
-        self.metrics
-            .votes_received_last_round
-            .set(self.votes.len() as i64);
+        // TODO(metrics): Set `votes_received_last_round` to `self.votes.len() as i64`
+
         if self.weight >= committee.quorum_threshold() {
             let cert = Certificate::new_unverified(committee, header.clone(), self.votes.clone())?;
             let (_, pks) = cert.signed_by(committee);

@@ -1,30 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::metrics::new_registry;
 use crate::{try_join_all, FuturesUnordered, NodeError};
 use anemo::PeerId;
 use config::{AuthorityIdentifier, Committee, Parameters, WorkerCache};
 use consensus::bullshark::Bullshark;
 use consensus::consensus::ConsensusRound;
 use consensus::dag::Dag;
-use consensus::metrics::{ChannelMetrics, ConsensusMetrics};
+use consensus::metrics::ConsensusMetrics;
 use consensus::Consensus;
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{get_restored_consensus_output, ExecutionState, Executor, SubscriberResult};
 use fastcrypto::traits::{KeyPair as _, VerifyingKey};
-use mysten_metrics::{RegistryID, RegistryService};
-use network::client::NetworkClient;
-use primary::{NetworkModel, Primary, PrimaryChannelMetrics, NUM_SHUTDOWN_RECEIVERS};
-use prometheus::{IntGauge, Registry};
+use primary::{NetworkModel, Primary, NUM_SHUTDOWN_RECEIVERS};
 use std::sync::Arc;
 use std::time::Instant;
 use storage::NodeStorage;
-use tokio::sync::{watch, RwLock};
+use tokio::sync::{mpsc, oneshot, watch, RwLock};
 use tokio::task::JoinHandle;
 use tracing::{debug, info, instrument};
-use types::{
-    metered_channel, Certificate, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender, Round,
-};
+use types::{Certificate, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender, Round};
 
 struct PrimaryNodeInner {
     // The configuration parameters.
@@ -35,10 +29,6 @@ struct PrimaryNodeInner {
     // corresponding gRPC server that is used for communication between narwhal and
     // external consensus is also spawned.
     internal_consensus: bool,
-    // A prometheus RegistryService to use for the metrics
-    registry_service: RegistryService,
-    // The latest registry id & registry used for the node
-    registry: Option<(RegistryID, Registry)>,
     // The task handles created from primary
     handles: FuturesUnordered<JoinHandle<()>>,
     // Keeping NetworkClient here for quicker shutdown.
@@ -84,11 +74,6 @@ impl PrimaryNodeInner {
             return Err(NodeError::NodeAlreadyRunning);
         }
 
-        self.own_peer_id = Some(PeerId(network_keypair.public().0.to_bytes()));
-
-        // create a new registry
-        let registry = new_registry();
-
         // create the channel to send the shutdown signal
         let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -103,13 +88,9 @@ impl PrimaryNodeInner {
             self.parameters.clone(),
             self.internal_consensus,
             execution_state,
-            &registry,
             &mut tx_shutdown,
         )
         .await?;
-
-        // store the registry
-        self.swap_registry(Some(registry));
 
         // now keep the handlers
         self.handles.clear();
@@ -146,8 +127,6 @@ impl PrimaryNodeInner {
         // Now wait until handles have been completed
         try_join_all(&mut self.handles).await.unwrap();
 
-        self.swap_registry(None);
-
         info!(
             "Narwhal primary shutdown is complete - took {} seconds",
             now.elapsed().as_secs_f64()
@@ -163,22 +142,6 @@ impl PrimaryNodeInner {
     // true, otherwise false will returned instead.
     async fn is_running(&self) -> bool {
         self.handles.iter().any(|h| !h.is_finished())
-    }
-
-    // Accepts an Option registry. If it's Some, then the new registry will be added in the
-    // registry service and the registry_id will be updated. Also, any previous registry will
-    // be removed. If None is passed, then the registry_id is updated to None and any old
-    // registry is removed from the RegistryService.
-    fn swap_registry(&mut self, registry: Option<Registry>) {
-        if let Some((registry_id, _registry)) = self.registry.as_ref() {
-            self.registry_service.remove(*registry_id);
-        }
-
-        if let Some(registry) = registry {
-            self.registry = Some((self.registry_service.add(registry.clone()), registry));
-        } else {
-            self.registry = None
-        }
     }
 
     /// Spawn a new primary. Optionally also spawn the consensus and a client executing transactions.
@@ -205,31 +168,16 @@ impl PrimaryNodeInner {
         internal_consensus: bool,
         // The state used by the client to execute transactions.
         execution_state: Arc<State>,
-        // A prometheus exporter Registry to use for the metrics
-        registry: &Registry,
         // The channel to send the shutdown signal
         tx_shutdown: &mut PreSubscribedBroadcastSender,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         State: ExecutionState + Send + Sync + 'static,
     {
-        // These gauge is porcelain: do not modify it without also modifying `primary::metrics::PrimaryChannelMetrics::replace_registered_new_certificates_metric`
-        // This hack avoids a cyclic dependency in the initialization of consensus and primary
-        let new_certificates_counter = IntGauge::new(
-            PrimaryChannelMetrics::NAME_NEW_CERTS,
-            PrimaryChannelMetrics::DESC_NEW_CERTS,
-        )
-        .unwrap();
-        let (tx_new_certificates, rx_new_certificates) =
-            metered_channel::channel(Self::CHANNEL_CAPACITY, &new_certificates_counter);
+        let (tx_new_certificates, rx_new_certificates) = mpsc::channel(Self::CHANNEL_CAPACITY);
 
-        let committed_certificates_counter = IntGauge::new(
-            PrimaryChannelMetrics::NAME_COMMITTED_CERTS,
-            PrimaryChannelMetrics::DESC_COMMITTED_CERTS,
-        )
-        .unwrap();
         let (tx_committed_certificates, rx_committed_certificates) =
-            metered_channel::channel(Self::CHANNEL_CAPACITY, &committed_certificates_counter);
+            mpsc::channel(Self::CHANNEL_CAPACITY);
 
         // Compute the public key of this authority.
         let name = keypair.public().clone();
@@ -244,7 +192,7 @@ impl PrimaryNodeInner {
             watch::channel(ConsensusRound::new(0, 0));
         let (dag, network_model) = if !internal_consensus {
             debug!("Consensus is disabled: the primary will run w/o Bullshark");
-            let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
+            let consensus_metrics = Arc::new(ConsensusMetrics::new());
             let (handle, dag) = Dag::new(
                 &committee,
                 rx_new_certificates,
@@ -268,7 +216,6 @@ impl PrimaryNodeInner {
                 rx_new_certificates,
                 tx_committed_certificates.clone(),
                 tx_consensus_round_updates,
-                registry,
             )
             .await?;
 
@@ -301,7 +248,7 @@ impl PrimaryNodeInner {
             network_model,
             tx_shutdown,
             tx_committed_certificates,
-            registry,
+            Some(tx_executor_network),
         );
         handles.extend(primary_handles);
 
@@ -318,20 +265,15 @@ impl PrimaryNodeInner {
         parameters: Parameters,
         execution_state: State,
         mut shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
-        rx_new_certificates: metered_channel::Receiver<Certificate>,
-        tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
-        tx_consensus_round_updates: watch::Sender<ConsensusRound>,
-        registry: &Registry,
+        rx_new_certificates: mpsc::Receiver<Certificate>,
+        tx_committed_certificates: mpsc::Sender<(Round, Vec<Certificate>)>,
+        tx_consensus_round_updates: watch::Sender<Round>,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         PublicKey: VerifyingKey,
         State: ExecutionState + Send + Sync + 'static,
     {
-        let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
-        let channel_metrics = ChannelMetrics::new(registry);
-
-        let (tx_sequence, rx_sequence) =
-            metered_channel::channel(Self::CHANNEL_CAPACITY, &channel_metrics.tx_sequence);
+        let (tx_sequence, rx_sequence) = mpsc::channel(Self::CHANNEL_CAPACITY);
 
         // Check for any sub-dags that have been sent by consensus but were not processed by the executor.
         let restored_consensus_output = get_restored_consensus_output(
@@ -347,16 +289,14 @@ impl PrimaryNodeInner {
                 "Consensus output on its way to the executor was restored for {num_sub_dags} sub-dags",
             );
         }
-        consensus_metrics
-            .recovered_consensus_output
-            .inc_by(num_sub_dags);
+
+        // TODO(metrics): Increment recovered_consensus_output by `num_sub_dags`
 
         // Spawn the consensus core who only sequences transactions.
         let ordering_engine = Bullshark::new(
             committee.clone(),
             store.consensus_store.clone(),
-            consensus_metrics.clone(),
-            Self::CONSENSUS_SCHEDULE_CHANGE_SUB_DAGS,
+            parameters.gc_depth,
         );
         let consensus_handles = Consensus::spawn(
             committee.clone(),
@@ -369,7 +309,6 @@ impl PrimaryNodeInner {
             tx_consensus_round_updates,
             tx_sequence,
             ordering_engine,
-            consensus_metrics.clone(),
         );
 
         // Spawn the client executing the transactions. It can also synchronize with the
@@ -382,7 +321,6 @@ impl PrimaryNodeInner {
             execution_state,
             shutdown_receivers,
             rx_sequence,
-            registry,
             restored_consensus_output,
         )?;
 
@@ -399,16 +337,10 @@ pub struct PrimaryNode {
 }
 
 impl PrimaryNode {
-    pub fn new(
-        parameters: Parameters,
-        internal_consensus: bool,
-        registry_service: RegistryService,
-    ) -> PrimaryNode {
+    pub fn new(parameters: Parameters, internal_consensus: bool) -> PrimaryNode {
         let inner = PrimaryNodeInner {
             parameters,
             internal_consensus,
-            registry_service,
-            registry: None,
             handles: FuturesUnordered::new(),
             client: None,
             tx_shutdown: None,
@@ -468,10 +400,5 @@ impl PrimaryNode {
     pub async fn wait(&self) {
         let mut guard = self.internal.write().await;
         guard.wait().await
-    }
-
-    pub async fn registry(&self) -> Option<(RegistryID, Registry)> {
-        let guard = self.internal.read().await;
-        guard.registry.clone()
     }
 }

@@ -3,9 +3,8 @@
 
 use self::{configuration::NarwhalConfiguration, validator::NarwhalValidator};
 use crate::{
-    block_synchronizer::handler::Handler,
-    grpc_server::{metrics::EndpointMetrics, proposer::NarwhalProposer},
-    BlockRemover, BlockWaiter,
+    block_synchronizer::handler::Handler, grpc_server::proposer::NarwhalProposer, BlockRemover,
+    BlockWaiter,
 };
 use config::{AuthorityIdentifier, Committee};
 use consensus::dag::Dag;
@@ -33,8 +32,7 @@ pub struct ConsensusAPIGrpc<SynchronizerHandler: Handler + Send + Sync + 'static
     remove_collections_timeout: Duration,
     block_synchronizer_handler: Arc<SynchronizerHandler>,
     dag: Option<Arc<Dag>>,
-    committee: Committee,
-    endpoints_metrics: EndpointMetrics,
+    committee: SharedCommittee,
     rx_shutdown: ConditionalBroadcastReceiver,
 }
 
@@ -49,8 +47,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
         remove_collections_timeout: Duration,
         block_synchronizer_handler: Arc<SynchronizerHandler>,
         dag: Option<Arc<Dag>>,
-        committee: Committee,
-        endpoints_metrics: EndpointMetrics,
+        committee: SharedCommittee,
         rx_shutdown: ConditionalBroadcastReceiver,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -64,7 +61,6 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
                 block_synchronizer_handler,
                 dag,
                 committee,
-                endpoints_metrics,
                 rx_shutdown,
             }
             .run()
@@ -95,7 +91,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
 
         let config = mysten_network::config::Config::default();
         let mut server = config
-            .server_builder_with_metrics(self.endpoints_metrics.clone())
+            .server_builder()
             .add_service(ValidatorServer::new(narwhal_validator))
             .add_service(ConfigurationServer::new(narwhal_configuration))
             .add_service(ProposerServer::new(narwhal_proposer))

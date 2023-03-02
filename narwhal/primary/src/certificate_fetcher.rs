@@ -1,11 +1,8 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{metrics::PrimaryMetrics, synchronizer::Synchronizer};
-use anemo::Request;
-use config::{AuthorityIdentifier, Committee};
-use consensus::consensus::ConsensusRound;
-use crypto::NetworkPublicKey;
+use config::{Committee, SharedWorkerCache};
+use crypto::{NetworkPublicKey, PublicKey};
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use network::PrimaryToPrimaryRpc;
@@ -18,16 +15,18 @@ use std::{
 use storage::CertificateStore;
 use tokio::task::{spawn_blocking, JoinSet};
 use tokio::{
-    sync::watch,
+    sync::{
+        mpsc::{Receiver, Sender},
+        oneshot, watch,
+    },
     task::JoinHandle,
     time::{sleep, timeout, Instant},
 };
 use tracing::{debug, error, instrument, trace, warn};
 use types::{
     error::{DagError, DagResult},
-    metered_channel::Receiver,
-    Certificate, CertificateAPI, ConditionalBroadcastReceiver, FetchCertificatesRequest,
-    FetchCertificatesResponse, HeaderAPI, Round,
+    Certificate, ConditionalBroadcastReceiver, FetchCertificatesRequest, FetchCertificatesResponse,
+    Round,
 };
 
 #[cfg(test)]
@@ -82,10 +81,8 @@ struct CertificateFetcherState {
     authority_id: AuthorityIdentifier,
     /// Network client to fetch certificates from other primaries.
     network: anemo::Network,
-    /// Accepts Certificates into local storage.
-    synchronizer: Arc<Synchronizer>,
-    /// The metrics handler
-    metrics: Arc<PrimaryMetrics>,
+    /// Loops fetched certificates back to the core. Certificates are ensured to have all parents.
+    tx_certificates_loopback: Sender<CertificateLoopbackMessage>,
 }
 
 impl CertificateFetcher {
@@ -98,14 +95,12 @@ impl CertificateFetcher {
         rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_certificate_fetcher: Receiver<Certificate>,
-        synchronizer: Arc<Synchronizer>,
-        metrics: Arc<PrimaryMetrics>,
+        tx_certificates_loopback: Sender<CertificateLoopbackMessage>,
     ) -> JoinHandle<()> {
         let state = Arc::new(CertificateFetcherState {
             authority_id,
             network,
-            synchronizer,
-            metrics,
+            tx_certificates_loopback,
         });
 
         tokio::spawn(async move {
@@ -255,7 +250,7 @@ impl CertificateFetcher {
             gc_round
         );
         self.fetch_certificates_task.spawn(async move {
-            state.metrics.certificate_fetcher_inflight_fetch.inc();
+            // TODO(metrics): Increment `certificate_fetcher_inflight_fetch` by 1
 
             let now = Instant::now();
             match run_fetch_task(
@@ -278,7 +273,7 @@ impl CertificateFetcher {
                 }
             };
 
-            state.metrics.certificate_fetcher_inflight_fetch.dec();
+            // TODO(metrics): Decrement `certificate_fetcher_inflight_fetch` by 1
         });
     }
 
@@ -306,11 +301,15 @@ async fn run_fetch_task(
 
     // Process and store fetched certificates.
     let num_certs_fetched = response.certificates.len();
-    process_certificates_helper(response, &state.synchronizer).await?;
-    state
-        .metrics
-        .certificate_fetcher_num_certificates_processed
-        .add(num_certs_fetched as i64);
+    process_certificates_helper(
+        response,
+        &state.tx_certificates_loopback,
+        &committee,
+        &worker_cahce,
+    )
+    .await?;
+
+    // TODO(metrics): Increment `certificate_fetcher_num_certificates_processed` by `num_certs_fetched as i64`
 
     debug!("Successfully fetched and processed {num_certs_fetched} certificates");
     Ok(())

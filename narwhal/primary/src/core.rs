@@ -4,7 +4,6 @@
 use crate::{
     aggregators::{CertificatesAggregator, VotesAggregator},
     certificate_fetcher::CertificateLoopbackMessage,
-    metrics::PrimaryMetrics,
     primary::PrimaryMessage,
     synchronizer::Synchronizer,
 };
@@ -21,14 +20,16 @@ use std::{collections::HashMap, sync::Arc, time::Instant};
 use storage::CertificateStore;
 use store::Store;
 use tokio::{
-    sync::{oneshot, watch},
+    sync::{
+        mpsc::{Receiver, Sender},
+        oneshot, watch,
+    },
     task::{JoinHandle, JoinSet},
 };
 use tracing::{debug, enabled, error, info, instrument, trace, warn};
 use types::{
     ensure,
     error::{DagError, DagResult},
-    metered_channel::{Receiver, Sender},
     Certificate, CertificateDigest, ConditionalBroadcastReceiver, Header, HeaderDigest,
     PrimaryToPrimaryClient, RequestVoteRequest, Round, Vote,
 };
@@ -94,8 +95,6 @@ pub struct Core {
     certificates_aggregators: HashMap<Round, Box<CertificatesAggregator>>,
     /// A network sender to send the batches to the other workers.
     network: anemo::Network,
-    /// Metrics handler
-    metrics: Arc<PrimaryMetrics>,
 }
 
 impl Core {
@@ -117,7 +116,6 @@ impl Core {
         rx_headers: Receiver<Header>,
         tx_new_certificates: Sender<Certificate>,
         tx_parents: Sender<(Vec<Certificate>, Round, Epoch)>,
-        metrics: Arc<PrimaryMetrics>,
         primary_network: anemo::Network,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -146,7 +144,6 @@ impl Core {
                 propose_header_tasks: JoinSet::new(),
                 certificates_aggregators: HashMap::with_capacity(2 * gc_depth as usize),
                 network: primary_network,
-                metrics,
             }
             .run_inner()
             .await
@@ -301,7 +298,6 @@ impl Core {
         header_store: Store<HeaderDigest, Header>,
         certificate_store: CertificateStore,
         signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
-        metrics: Arc<PrimaryMetrics>,
         network: anemo::Network,
         header: Header,
         mut cancel: oneshot::Receiver<()>,
@@ -322,10 +318,11 @@ impl Core {
         header_store
             .async_write(header.digest(), header.clone())
             .await;
-        metrics.proposed_header_round.set(header.round as i64);
+
+        // TODO(metrics): Set `proposed_header_round` to `header.round as i64`.
 
         // Reset the votes aggregator and sign our own header.
-        let mut votes_aggregator = VotesAggregator::new(metrics.clone());
+        let mut votes_aggregator = VotesAggregator::new();
         let vote = Vote::new(&header, &name, &signature_service).await;
         let mut certificate = votes_aggregator.append(vote, &committee, &header)?;
 
@@ -467,11 +464,9 @@ impl Core {
             ));
 
         // Update metrics.
-        self.metrics.certificate_created_round.set(round as i64);
-        self.metrics.certificates_created.inc();
-        self.metrics
-            .header_to_certificate_latency
-            .observe(header_to_certificate_duration);
+        // TODO(metrics): Set `certificate_created_round` to `round as i64`
+        // TODO(metrics): Increment `certificates_created` by 1
+        // TODO(metrics): Observe `header_to_certificate_duration` as `header_to_certificate_latency`
 
         // NOTE: This log entry is used to compute performance.
         debug!(
@@ -535,7 +530,7 @@ impl Core {
         let digest = certificate.digest();
         if self.certificate_store.contains(&digest)? {
             trace!("Certificate {digest:?} has already been processed. Skip processing.");
-            self.metrics.duplicate_certificates_processed.inc();
+            // TODO(metrics): Increment `duplicate_certificates_processed` by 1
             return Ok(());
         }
         debug!(
@@ -544,16 +539,13 @@ impl Core {
             certificate.round()
         );
 
-        let certificate_source = if self.name.eq(&certificate.header.author) {
+        let _certificate_source = if self.name.eq(&certificate.header.author) {
             "own"
         } else {
             "other"
         };
         self.highest_received_round = self.highest_received_round.max(certificate.round());
-        self.metrics
-            .highest_received_round
-            .with_label_values(&[certificate_source])
-            .set(self.highest_received_round as i64);
+        // TODO(metrics): Set `highest_received_round` to `self.highest_received_round as i64`
 
         // Let the proposer draw early conclusions from a certificate at this round and epoch, without its
         // parents or payload (which we may not have yet).
@@ -587,10 +579,7 @@ impl Core {
                 "Processing certificate {:?} suspended: missing ancestors",
                 certificate
             );
-            self.metrics
-                .certificates_suspended
-                .with_label_values(&["missing_parents"])
-                .inc();
+            // TODO(metrics): Increment `certificates_suspended` by 1
             return Err(DagError::Suspended);
         }
 
@@ -601,14 +590,8 @@ impl Core {
 
         // Update metrics for processed certificates.
         self.highest_processed_round = self.highest_processed_round.max(certificate.round());
-        self.metrics
-            .highest_processed_round
-            .with_label_values(&[certificate_source])
-            .set(self.highest_processed_round as i64);
-        self.metrics
-            .certificates_processed
-            .with_label_values(&[certificate_source])
-            .inc();
+        // TODO(metrics): Set `highest_processed_round` to `self.highest_processed_round as i64`
+        // TODO(metrics): Increment `certificates_processed` by 1
 
         // Append the certificate to the aggregator of the
         // corresponding round.
@@ -719,7 +702,6 @@ impl Core {
                     let header_store = self.header_store.clone();
                     let certificate_store = self.certificate_store.clone();
                     let signature_service = self.signature_service.clone();
-                    let metrics = self.metrics.clone();
                     let network = self.network.clone();
                     self.propose_header_tasks.spawn(Self::propose_header(
                         name,
@@ -727,7 +709,6 @@ impl Core {
                         header_store,
                         certificate_store,
                         signature_service,
-                        metrics,
                         network,
                         header,
                         rx_cancel,
@@ -759,15 +740,13 @@ impl Core {
                 Ok(()) = self.rx_consensus_round_updates.changed() => {
                     let round = *self.rx_consensus_round_updates.borrow();
                     if round > self.gc_depth {
-                        let now = Instant::now();
+                        let _now = Instant::now();
 
                         let gc_round = round - self.gc_depth;
                         self.certificates_aggregators.retain(|k, _| k > &gc_round);
                         self.gc_round = gc_round;
 
-                        self.metrics
-                            .gc_core_latency
-                            .observe(now.elapsed().as_secs_f64());
+                        // TODO(metrics): Observe `now.elapsed().as_secs_f64()` as `gc_core_latency`
                     }
 
                     Ok(())

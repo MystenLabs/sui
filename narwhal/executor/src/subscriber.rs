@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{errors::SubscriberResult, metrics::ExecutorMetrics, ExecutionState};
+use crate::{errors::SubscriberResult, ExecutionState};
 
 use config::{AuthorityIdentifier, Committee, WorkerCache, WorkerId};
 use crypto::NetworkPublicKey;
@@ -10,11 +10,9 @@ use futures::StreamExt;
 
 use network::PrimaryToWorkerClient;
 
-use network::client::NetworkClient;
-use std::collections::HashMap;
-use std::collections::HashSet;
+use anyhow::bail;
 use std::{sync::Arc, time::Duration, vec};
-use types::FetchBatchesRequest;
+use tokio::sync::mpsc;
 
 use fastcrypto::hash::Hash;
 use rand::prelude::SliceRandom;
@@ -24,8 +22,8 @@ use tokio::{sync::oneshot, task::JoinHandle};
 use tracing::{debug, error, warn};
 use tracing::{info, instrument};
 use types::{
-    metered_channel, Batch, BatchAPI, BatchDigest, Certificate, CertificateAPI, CommittedSubDag,
-    ConditionalBroadcastReceiver, ConsensusOutput, HeaderAPI, Timestamp,
+    Batch, BatchDigest, Certificate, CommittedSubDag, ConditionalBroadcastReceiver,
+    ConsensusOutput, Timestamp,
 };
 
 /// The `Subscriber` receives certificates sequenced by the consensus and waits until the
@@ -35,17 +33,13 @@ pub struct Subscriber {
     /// Receiver for shutdown
     rx_shutdown: ConditionalBroadcastReceiver,
     /// A channel to receive sequenced consensus messages.
-    rx_sequence: metered_channel::Receiver<CommittedSubDag>,
-    /// Inner state.
-    inner: Arc<Inner>,
+    rx_sequence: mpsc::Receiver<CommittedSubDag>,
+
+    fetcher: Fetcher<Network>,
 }
 
-struct Inner {
-    authority_id: AuthorityIdentifier,
-    worker_cache: WorkerCache,
-    committee: Committee,
-    client: NetworkClient,
-    metrics: Arc<ExecutorMetrics>,
+struct Fetcher<Network> {
+    network: Network,
 }
 
 pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
@@ -54,8 +48,7 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
     committee: Committee,
     client: NetworkClient,
     mut shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
-    rx_sequence: metered_channel::Receiver<CommittedSubDag>,
-    metrics: Arc<ExecutorMetrics>,
+    rx_sequence: mpsc::Receiver<CommittedSubDag>,
     restored_consensus_output: Vec<CommittedSubDag>,
     state: State,
 ) -> Vec<JoinHandle<()>> {
@@ -64,8 +57,7 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
     // To construct server side we need to set up routes first, which requires starting Primary
     // Some cleanup is needed
 
-    let (tx_notifier, rx_notifier) =
-        metered_channel::channel(primary::CHANNEL_CAPACITY, &metrics.tx_notifier);
+    let (tx_notifier, rx_notifier) = mpsc::channel(primary::CHANNEL_CAPACITY);
 
     let rx_shutdown_notify = shutdown_receivers
         .pop()
@@ -83,7 +75,6 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
             committee,
             rx_shutdown_subscriber,
             rx_sequence,
-            metrics,
             restored_consensus_output,
             tx_notifier,
         )),
@@ -92,7 +83,7 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
 
 async fn run_notify<State: ExecutionState + Send + Sync + 'static>(
     state: State,
-    mut rx_notify: metered_channel::Receiver<ConsensusOutput>,
+    mut tr_notify: mpsc::Receiver<ConsensusOutput>,
     mut rx_shutdown: ConditionalBroadcastReceiver,
 ) {
     loop {
@@ -114,23 +105,22 @@ async fn create_and_run_subscriber(
     worker_cache: WorkerCache,
     committee: Committee,
     rx_shutdown: ConditionalBroadcastReceiver,
-    rx_sequence: metered_channel::Receiver<CommittedSubDag>,
-    client: NetworkClient,
-    metrics: Arc<ExecutorMetrics>,
+    rx_sequence: mpsc::Receiver<CommittedSubDag>,
     restored_consensus_output: Vec<CommittedSubDag>,
-    tx_notifier: metered_channel::Sender<ConsensusOutput>,
+    tx_notifier: mpsc::Sender<ConsensusOutput>,
 ) {
     info!("Starting subscriber");
+    let network = SubscriberNetworkImpl {
+        name,
+        worker_cache,
+        committee,
+        network,
+    };
+    let fetcher = Fetcher { network };
     let subscriber = Subscriber {
         rx_shutdown,
         rx_sequence,
-        inner: Arc::new(Inner {
-            authority_id,
-            committee,
-            worker_cache,
-            client,
-            metrics,
-        }),
+        fetcher,
     };
     subscriber
         .run(restored_consensus_output, tx_notifier)
@@ -146,7 +136,7 @@ impl Subscriber {
     async fn run(
         mut self,
         restored_consensus_output: Vec<CommittedSubDag>,
-        tx_notifier: metered_channel::Sender<ConsensusOutput>,
+        tx_notifier: mpsc::Sender<ConsensusOutput>,
     ) -> SubscriberResult<()> {
         // It's important to have the futures in ordered fashion as we want
         // to guarantee that will deliver to the executor the certificates
@@ -162,10 +152,7 @@ impl Subscriber {
             let future = Self::fetch_batches(self.inner.clone(), message);
             waiting.push_back(future);
 
-            self.inner
-                .metrics
-                .subscriber_recovered_certificates_count
-                .inc();
+            // TODO(metrics): Increment `subscriber_recovered_certificates_count` by 1.
         }
 
         // Listen to sequenced consensus message and process them.
@@ -193,10 +180,7 @@ impl Subscriber {
 
             }
 
-            self.inner
-                .metrics
-                .waiting_elements_subscriber
-                .set(waiting.len() as i64);
+            // TODO(metrics): Set `waiting_elements_subscriber` to `waiting.len() as i64`
         }
     }
 
@@ -266,21 +250,15 @@ impl Subscriber {
             let mut output_batches = Vec::with_capacity(cert.header().payload().len());
             let output_cert = cert.clone();
 
-            inner
-                .metrics
-                .subscriber_current_round
-                .set(cert.round() as i64);
+            // TODO(metrics): Set `subscriber_current_round` to `cert.round() as i64`.
+            // TODO(metrics): Set `subscriber_certificate_latency` to `cert.metadata.created_at.elapsed().as_secs_f64()`.
 
-            inner
-                .metrics
-                .subscriber_certificate_latency
-                .observe(cert.metadata().created_at.elapsed().as_secs_f64());
+            for (digest, (worker_id, _)) in cert.header.payload.iter() {
+                // TODO(metrics): Increment `subscriber_processed_batches` by 1.
 
-            for (digest, (_, _)) in cert.header().payload().iter() {
-                inner.metrics.subscriber_processed_batches.inc();
-                let batch = fetched_batches
-                    .get(digest)
-                    .expect("[Protocol violation] Batch not found in fetched batches from workers of certificate signers");
+                let mut workers = self.network.workers_for_certificate(cert, worker_id);
+
+                workers.shuffle(&mut ThreadRng::default());
 
                 debug!(
                     "Adding fetched batch {digest} from certificate {} to consensus output",
@@ -295,6 +273,133 @@ impl Subscriber {
         subscriber_output
     }
 
+    /// Fetches single payload from network
+    /// This future performs infinite retries and blocks until Batch is available
+    /// As an optimization it tries to download from local worker first, but then fans out
+    /// requests to remote worker if not found locally
+    #[instrument(level = "debug", skip_all, fields(digest = % digest, worker_id = % worker_id))]
+    async fn fetch_payload(
+        &self,
+        digest: BatchDigest,
+        worker_id: WorkerId,
+        workers: Vec<NetworkPublicKey>,
+    ) -> Batch {
+        if let Some(payload) = self.try_fetch_locally(digest, worker_id).await {
+            let batch_fetch_duration = payload.metadata.created_at.elapsed().as_secs_f64();
+            // TODO(metrics): Observe `batch_fetch_duration` as `batch_execution_latency`
+
+            debug!(
+                "Batch {:?} took {} seconds to be fetched for execution since creation",
+                payload.digest(),
+                batch_fetch_duration
+            );
+            return payload;
+        }
+        // TODO(metrics): Start `subscriber_remote_fetch_latency` timer.
+        let mut stagger = Duration::from_secs(0);
+        let mut futures = vec![];
+        for worker in workers {
+            let future = self.fetch_from_worker(stagger, worker, digest);
+            futures.push(future.boxed());
+            // TODO: Make this a parameter, and also record workers / authorities that are down
+            //       to request from them batches later.
+            stagger += Duration::from_millis(200);
+        }
+        let (batch, _, _) = futures::future::select_all(futures).await;
+        let batch_fetch_duration = batch.metadata.created_at.elapsed().as_secs_f64();
+
+        // TODO(metrics): Observe `batch_fetch_duration` as `batch_execution_latency`
+
+        debug!(
+            "Batch {:?} took {} seconds to be fetched for execution since creation",
+            batch.digest(),
+            batch_fetch_duration
+        );
+        batch
+    }
+
+    #[instrument(level = "debug", skip_all, fields(digest = % digest, worker_id = % worker_id))]
+    async fn try_fetch_locally(&self, digest: BatchDigest, worker_id: WorkerId) -> Option<Batch> {
+        // TODO(metrics): Start `subscriber_local_fetch_latency` timer.
+        let worker = self.network.my_worker(&worker_id);
+        let payload = self.network.request_batch(digest, worker).await;
+        match payload {
+            Ok(Some(batch)) => {
+                debug!("Payload {} found locally", digest);
+                // TODO(metrics): Increment `subscriber_local_hit` by 1.
+                return Some(batch);
+            }
+            Ok(None) => debug!("Payload {} not found locally", digest),
+            Err(err) => warn!("Error communicating with own worker: {}", err),
+        }
+        None
+    }
+
+    /// This future performs fetch from given worker
+    /// This future performs infinite retries with exponential backoff
+    /// You can specify stagger_delay before request is issued
+    #[instrument(level = "debug", skip_all, fields(stagger_delay = ? stagger_delay, worker = % worker, digest = % digest))]
+    async fn fetch_from_worker(
+        &self,
+        stagger_delay: Duration,
+        worker: NetworkPublicKey,
+        digest: BatchDigest,
+    ) -> Batch {
+        tokio::time::sleep(stagger_delay).await;
+        // TODO: Make these config parameters
+        let max_timeout = Duration::from_secs(60);
+        let mut timeout = Duration::from_secs(10);
+        let mut attempt = 0usize;
+        loop {
+            attempt += 1;
+            let deadline = Instant::now() + timeout;
+            // TODO(metrics): Increment `pending_remote_request_batch` by 1.
+            let payload =
+                tokio::time::timeout_at(deadline, self.safe_request_batch(digest, worker.clone()))
+                    .await;
+            // TODO(metrics): Decrement `pending_remote_request_batch` by 1.
+            match payload {
+                Ok(Ok(Some(payload))) => return payload,
+                Ok(Ok(None)) => error!("[Protocol violation] Payload {} was not found at worker {} while authority signed certificate", digest, worker),
+                Ok(Err(err)) => debug!(
+                    "Error retrieving payload {} from {}: {}",
+                    digest, worker, err
+                ),
+                Err(_elapsed) => warn!("Timeout retrieving payload {} from {} attempt {}",
+                    digest, worker, attempt
+                ),
+            }
+            timeout += timeout / 2;
+            timeout = std::cmp::min(max_timeout, timeout);
+            // Since the call might have returned before timeout, we wait until originally planned deadline
+            tokio::time::sleep_until(deadline).await;
+        }
+    }
+
+    /// Issue request_batch RPC and verifies response integrity
+    async fn safe_request_batch(
+        &self,
+        digest: BatchDigest,
+        worker: NetworkPublicKey,
+    ) -> anyhow::Result<Option<Batch>> {
+        let payload = self.network.request_batch(digest, worker.clone()).await?;
+        if let Some(payload) = payload {
+            let payload_digest = payload.digest();
+            if payload_digest != digest {
+                bail!("[Protocol violation] Worker {} returned batch with mismatch digest {} requested {}", worker, payload_digest, digest );
+            } else {
+                Ok(Some(payload))
+            }
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+// Trait for unit tests
+#[async_trait]
+pub trait SubscriberNetwork: Send + Sync {
+    fn my_worker(&self, worker_id: &WorkerId) -> NetworkPublicKey;
     fn workers_for_certificate(
         inner: &Inner,
         certificate: &Certificate,

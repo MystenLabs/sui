@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 use crypto::PublicKey;
 use tap::TapFallible;
-use tokio::task::JoinHandle;
-use tracing::{debug, error, info, warn};
-use types::{
-    metered_channel::{Receiver, Sender},
-    Certificate, CertificateAPI, ConditionalBroadcastReceiver, HeaderAPI, Round,
+use tokio::{
+    sync::mpsc::{Receiver, Sender},
+    task::JoinHandle,
 };
+use tracing::{debug, error, info, warn};
+use types::{Certificate, ConditionalBroadcastReceiver, Round};
 
 /// Receives the highest round reached by consensus and update it for all tasks.
 pub struct StateHandler {

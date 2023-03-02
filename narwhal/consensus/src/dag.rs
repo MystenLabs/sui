@@ -13,13 +13,13 @@ use std::{
 use thiserror::Error;
 use tokio::{
     sync::{
-        mpsc::{Receiver, Sender},
+        mpsc::{self, Receiver, Sender},
         oneshot,
     },
     task::JoinHandle,
 };
 use tracing::instrument;
-use types::{metered_channel, Certificate, CertificateDigest, ConditionalBroadcastReceiver, Round};
+use types::{Certificate, CertificateDigest, ConditionalBroadcastReceiver, Round};
 
 use crate::{metrics::ConsensusMetrics, DEFAULT_CHANNEL_SIZE};
 
@@ -36,7 +36,7 @@ pub mod dag_tests;
 struct InnerDag {
     /// Receives new certificates from the primary. The primary should send us new certificates only
     /// if it already sent us its whole history.
-    rx_primary: metered_channel::Receiver<Certificate>,
+    rx_primary: mpsc::Receiver<Certificate>,
 
     /// Receives new commands for the Dag.
     rx_commands: Receiver<DagCommand>,
@@ -104,7 +104,7 @@ enum DagCommand {
 impl InnerDag {
     fn new(
         committee: &Committee,
-        rx_primary: metered_channel::Receiver<Certificate>,
+        rx_primary: mpsc::Receiver<Certificate>,
         rx_commands: Receiver<DagCommand>,
         dag: NodeDag<Certificate>,
         vertices: RwLock<BTreeMap<(AuthorityIdentifier, Round), CertificateDigest>>,
@@ -330,24 +330,17 @@ impl InnerDag {
 
     /// Updates the dag-related metrics
     fn update_metrics(&self) {
-        let vertices = self.vertices.read().unwrap();
+        let _vertices = self.vertices.read().unwrap();
 
-        self.metrics
-            .external_consensus_dag_vertices_elements
-            .with_label_values(&[])
-            .set(vertices.len() as i64);
-
-        self.metrics
-            .external_consensus_dag_size
-            .with_label_values(&[])
-            .set(self.dag.size() as i64)
+        // TODO(metrics): Set external_consensus_dag_vertices_elements to `vertices.len() as i64`
+        // TODO(metrics): Set external_consensus_dag_size to `self.dag.size() as i64`
     }
 }
 
 impl Dag {
     pub fn new(
         committee: &Committee,
-        rx_primary: metered_channel::Receiver<Certificate>,
+        rx_primary: mpsc::Receiver<Certificate>,
         metrics: Arc<ConsensusMetrics>,
         rx_shutdown: ConditionalBroadcastReceiver,
     ) -> (JoinHandle<()>, Self) {

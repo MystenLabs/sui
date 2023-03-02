@@ -13,7 +13,6 @@ use config::{Committee, Import, Parameters, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair};
 use eyre::Context;
 use fastcrypto::traits::KeyPair as _;
-use mysten_metrics::RegistryService;
 use narwhal_node as node;
 use narwhal_node::primary_node::PrimaryNode;
 use narwhal_node::worker_node::WorkerNode;
@@ -255,7 +254,6 @@ async fn run(
             let primary = PrimaryNode::new(
                 parameters.clone(),
                 !sub_matches.is_present("consensus-disabled"),
-                registry_service,
             );
 
             primary
@@ -281,7 +279,7 @@ async fn run(
                 .parse::<WorkerId>()
                 .context("The worker id must be a positive integer")?;
 
-            let worker = WorkerNode::new(id, parameters.clone(), registry_service);
+            let worker = WorkerNode::new(id, parameters.clone());
 
             worker
                 .start(
@@ -292,7 +290,6 @@ async fn run(
                     client,
                     &store,
                     TrivialTransactionValidator::default(),
-                    None,
                 )
                 .await?;
 

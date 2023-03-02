@@ -7,7 +7,6 @@ use crate::{
     certificate_fetcher::CertificateFetcher,
     certifier::Certifier,
     grpc_server::ConsensusAPIGrpc,
-    metrics::{initialise_metrics, PrimaryMetrics},
     proposer::{OurDigestMessage, Proposer},
     state_handler::StateHandler,
     synchronizer::Synchronizer,
@@ -43,8 +42,9 @@ use network::{
     client::NetworkClient,
     epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY},
 };
-use network::{failpoints::FailpointsMakeCallbackHandler, metrics::MetricsMakeCallbackHandler};
-use prometheus::Registry;
+use multiaddr::{Multiaddr, Protocol};
+use network::epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY};
+use network::failpoints::FailpointsMakeCallbackHandler;
 use std::collections::HashMap;
 use std::{
     cmp::Reverse,
@@ -54,7 +54,9 @@ use std::{
     thread::sleep,
     time::Duration,
 };
-use storage::{CertificateStore, HeaderStore, PayloadStore, ProposerStore, VoteDigestStore};
+use storage::{CertificateStore, PayloadToken, ProposerStore};
+use store::Store;
+use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::{sync::watch, task::JoinHandle};
 use tokio::{
     sync::{mpsc, oneshot},
@@ -66,12 +68,11 @@ use tracing::{debug, error, info, instrument, warn};
 use types::{
     ensure,
     error::{DagError, DagResult},
-    metered_channel::{channel_with_total, Receiver, Sender},
-    now, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
-    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, HeaderAPI,
-    PayloadAvailabilityRequest, PayloadAvailabilityResponse, PreSubscribedBroadcastSender,
-    PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round,
-    SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI, WorkerOthersBatchMessage,
+    now, BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
+    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
+    HeaderDigest, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
+    PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
+    RequestVoteResponse, Round, Vote, VoteInfo, WorkerInfoResponse, WorkerOthersBatchMessage,
     WorkerOurBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
 
@@ -119,7 +120,8 @@ impl Primary {
         network_model: NetworkModel,
         tx_shutdown: &mut PreSubscribedBroadcastSender,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
-        registry: &Registry,
+        // See comments in Subscriber::spawn
+        tx_executor_network: Option<oneshot::Sender<anemo::Network>>,
     ) -> Vec<JoinHandle<()>> {
         // Write the parameters to the logs.
         parameters.tracing();
@@ -132,57 +134,16 @@ impl Primary {
             authority.protocol_key().encode_base64(),
         );
 
-        // Initialize the metrics
-        let metrics = initialise_metrics(registry);
-        let endpoint_metrics = metrics.endpoint_metrics.unwrap();
-        let mut primary_channel_metrics = metrics.primary_channel_metrics.unwrap();
-        let inbound_network_metrics = Arc::new(metrics.inbound_network_metrics.unwrap());
-        let outbound_network_metrics = Arc::new(metrics.outbound_network_metrics.unwrap());
-        let node_metrics = Arc::new(metrics.node_metrics.unwrap());
-        let network_connection_metrics = metrics.network_connection_metrics.unwrap();
-
-        let (tx_our_digests, rx_our_digests) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_our_digests,
-            &primary_channel_metrics.tx_our_digests_total,
-        );
-        let (tx_parents, rx_parents) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_parents,
-            &primary_channel_metrics.tx_parents_total,
-        );
-        let (tx_headers, rx_headers) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_headers,
-            &primary_channel_metrics.tx_headers_total,
-        );
-        let (tx_certificate_fetcher, rx_certificate_fetcher) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_certificate_fetcher,
-            &primary_channel_metrics.tx_certificate_fetcher_total,
-        );
-        let (tx_block_synchronizer_commands, rx_block_synchronizer_commands) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_block_synchronizer_commands,
-            &primary_channel_metrics.tx_block_synchronizer_commands_total,
-        );
-        let (tx_committed_own_headers, rx_committed_own_headers) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_commited_own_headers,
-            &primary_channel_metrics.tx_commited_own_headers_total,
-        );
-
-        // we need to hack the gauge from this consensus channel into the primary registry
-        // This avoids a cyclic dependency in the initialization of consensus and primary
-        let committed_certificates_gauge = tx_committed_certificates.gauge().clone();
-        primary_channel_metrics.replace_registered_committed_certificates_metric(
-            registry,
-            Box::new(committed_certificates_gauge),
-        );
-
-        let new_certificates_gauge = tx_new_certificates.gauge().clone();
-        primary_channel_metrics
-            .replace_registered_new_certificates_metric(registry, Box::new(new_certificates_gauge));
+        let (tx_our_digests, rx_our_digests) = mpsc::channel(CHANNEL_CAPACITY);
+        let (tx_parents, rx_parents) = mpsc::channel(CHANNEL_CAPACITY);
+        let (tx_headers, rx_headers) = mpsc::channel(CHANNEL_CAPACITY);
+        let (tx_certificate_fetcher, rx_certificate_fetcher) = mpsc::channel(CHANNEL_CAPACITY);
+        let (tx_certificates_loopback, rx_certificates_loopback) = mpsc::channel(1);
+        let (tx_certificates, rx_certificates) = mpsc::channel(CHANNEL_CAPACITY);
+        let (tx_block_synchronizer_commands, rx_block_synchronizer_commands) =
+            mpsc::channel(CHANNEL_CAPACITY);
+        let (tx_state_handler, _rx_state_handler) = mpsc::channel(CHANNEL_CAPACITY);
+        let (tx_committed_own_headers, rx_committed_own_headers) = mpsc::channel(CHANNEL_CAPACITY);
 
         let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
         let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
@@ -221,8 +182,7 @@ impl Primary {
             certificate_store: certificate_store.clone(),
             payload_store: payload_store.clone(),
             vote_digest_store,
-            rx_narwhal_round_updates,
-            metrics: node_metrics.clone(),
+            rx_narwhal_round_updates: rx_narwhal_round_updates.clone(),
         })
         // Allow only one inflight RequestVote RPC at a time per peer.
         // This is required for correctness.
@@ -302,10 +262,6 @@ impl Primary {
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
                     .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
             )
-            .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
-                inbound_network_metrics,
-                parameters.anemo.excessive_message_size(),
-            )))
             .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
             .layer(SetResponseHeaderLayer::overriding(
                 EPOCH_HEADER_KEY.parse().unwrap(),
@@ -319,10 +275,6 @@ impl Primary {
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
                     .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
             )
-            .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
-                outbound_network_metrics,
-                parameters.anemo.excessive_message_size(),
-            )))
             .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
             .layer(SetRequestHeaderLayer::overriding(
                 EPOCH_HEADER_KEY.parse().unwrap(),
@@ -432,12 +384,8 @@ impl Primary {
             );
         }
 
-        let (connection_monitor_handle, _) = network::connectivity::ConnectionMonitor::spawn(
-            network.downgrade(),
-            network_connection_metrics,
-            peer_types,
-            Some(tx_shutdown.subscribe()),
-        );
+        let connection_monitor_handle =
+            network::connectivity::ConnectionMonitor::spawn(network.downgrade(), peer_types);
 
         info!(
             "Primary {} listening to network admin messages on 127.0.0.1:{}",
@@ -464,7 +412,8 @@ impl Primary {
             signature_service,
             tx_shutdown.subscribe(),
             rx_headers,
-            node_metrics.clone(),
+            tx_new_certificates,
+            tx_parents,
             network.clone(),
         );
 
@@ -478,8 +427,7 @@ impl Primary {
             rx_consensus_round_updates,
             tx_shutdown.subscribe(),
             rx_certificate_fetcher,
-            synchronizer.clone(),
-            node_metrics.clone(),
+            tx_certificates_loopback,
         );
 
         // When the `Synchronizer` collects enough parent certificates, the `Proposer` generates
@@ -500,7 +448,6 @@ impl Primary {
             tx_headers,
             tx_narwhal_round_updates,
             rx_committed_own_headers,
-            node_metrics,
         );
 
         let mut handles = vec![
@@ -584,8 +531,7 @@ impl Primary {
                 parameters.consensus_api_grpc.remove_collections_timeout,
                 block_synchronizer_handler,
                 dag,
-                committee,
-                endpoint_metrics,
+                committee.clone(),
                 tx_shutdown.subscribe(),
             );
 
@@ -647,7 +593,6 @@ struct PrimaryReceiverHandler {
     vote_digest_store: VoteDigestStore,
     /// Get a signal when the round changes.
     rx_narwhal_round_updates: watch::Receiver<Round>,
-    metrics: Arc<PrimaryMetrics>,
 }
 
 #[allow(clippy::result_large_err)]
@@ -670,6 +615,17 @@ impl PrimaryReceiverHandler {
             current_round = round;
         }
         Ok(None)
+    }
+
+    fn deduplicate_and_verify(&self, certificate: &Certificate) -> DagResult<bool> {
+        let digest = certificate.digest();
+        if self.certificate_store.contains(&digest)? {
+            trace!("Certificate {digest:?} has already been processed. Skip processing.");
+            // TODO(metrics): Increment `duplicate_certificates_processed` by 1
+            return Ok(false);
+        }
+        certificate.verify(&self.committee.load(), self.worker_cache.clone())?;
+        Ok(true)
     }
 
     #[allow(clippy::mutable_key_type)]
@@ -872,11 +828,8 @@ impl PrimaryReceiverHandler {
                         header.epoch(),
                         header.round()
                     );
-                    self.metrics.votes_dropped_equivocation_protection.inc();
-                    return Err(DagError::AlreadyVoted(
-                        vote_info.vote_digest(),
-                        header.round(),
-                    ));
+                    // TODO(metrics): Increment `votes_dropped_equivocation_protection` by 1
+                    return Err(DagError::AlreadyVoted(vote_info.vote_digest, header.round));
                 }
             }
         }

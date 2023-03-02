@@ -5,8 +5,8 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use prometheus::IntGauge;
 
 use super::DagError;
-use crate::metered_channel::{channel, Receiver, Sender, WithPermit};
 use std::{future, time::Duration};
+use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 pub struct Processor {
     input: Receiver<usize>,
@@ -50,8 +50,8 @@ impl Processor {
 async fn with_permit_unhappy_case() {
     let counter = IntGauge::new("TEST_COUNTER", "test").unwrap();
 
-    let (tx_inbound, rx_inbound) = channel(100, &counter); // we'll make sure we always have stuff inbound
-    let (tx_outbound, mut rx_outbound) = channel(1, &counter); // we'll constrain the output
+    let (tx_inbound, rx_inbound) = channel(100); // we'll make sure we always have stuff inbound
+    let (tx_outbound, mut rx_outbound) = channel(1); // we'll constrain the output
 
     Processor::spawn(rx_inbound, tx_outbound);
     // we fill the inbound channel with stuff
