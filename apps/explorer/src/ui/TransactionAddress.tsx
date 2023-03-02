@@ -1,26 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ReactComponent as Recipient } from './icons/checkfill.svg';
-import { ReactComponent as Sender } from './icons/sender.svg';
-
 import { Link } from '~/ui/Link';
 
-export type SenderRecipientAddressProps = {
-    isSender?: boolean;
+export type TransactionAddressProps = {
     address: string;
+    icon: React.ReactNode;
 };
 
-export function SenderRecipientAddress({
-    isSender,
-    address,
-}: SenderRecipientAddressProps) {
+export function TransactionAddress({ icon, address }: TransactionAddressProps) {
     return (
         <div className="flex items-center gap-2 break-all">
-            <div className="mt-1 w-4">
-                {isSender ? <Sender /> : <Recipient />}
-            </div>
-
+            <div className="w-4">{icon}</div>
             <Link
                 variant="mono"
                 size="md"

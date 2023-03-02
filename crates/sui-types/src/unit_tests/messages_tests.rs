@@ -1023,7 +1023,7 @@ fn verify_sender_signature_correctly_with_flag() {
 
 #[test]
 fn test_change_epoch_transaction() {
-    let tx = VerifiedTransaction::new_change_epoch(1, ProtocolVersion::MIN, 0, 0, 0, 0);
+    let tx = VerifiedTransaction::new_change_epoch(1, ProtocolVersion::MIN, 0, 0, 0, 0, vec![]);
     assert!(tx.contains_shared_object());
     assert_eq!(
         tx.shared_input_objects().next().unwrap(),

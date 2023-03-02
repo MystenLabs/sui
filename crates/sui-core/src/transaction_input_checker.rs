@@ -56,7 +56,7 @@ pub async fn check_transaction_input(
     let gas_status = get_gas_status(store, epoch_store, transaction).await?;
     let input_objects = transaction.input_objects()?;
     let objects = store.check_input_objects(&input_objects)?;
-    let input_objects = check_objects(transaction, input_objects, objects).await?;
+    let input_objects = check_objects(transaction, input_objects, objects)?;
     Ok((gas_status, input_objects))
 }
 
@@ -122,7 +122,7 @@ pub async fn check_certificate_input(
     } else {
         store.check_sequenced_input_objects(cert.digest(), &input_object_kinds, epoch_store)?
     };
-    let input_objects = check_objects(tx_data, input_object_kinds, input_object_data).await?;
+    let input_objects = check_objects(tx_data, input_object_kinds, input_object_data)?;
     Ok((gas_status, input_objects))
 }
 
@@ -217,7 +217,7 @@ async fn check_gas(
 /// Check all the objects used in the transaction against the database, and ensure
 /// that they are all the correct version and number.
 #[instrument(level = "trace", skip_all)]
-async fn check_objects(
+pub fn check_objects(
     transaction: &TransactionData,
     input_objects: Vec<InputObjectKind>,
     objects: Vec<Object>,

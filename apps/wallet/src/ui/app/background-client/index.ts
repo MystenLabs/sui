@@ -284,7 +284,20 @@ export class BackgroundClient {
                     type: 'keyring',
                     method: 'deriveNextAccount',
                 })
-            ).pipe(take(1))
+            ).pipe(
+                take(1),
+                map(({ payload }) => {
+                    if (
+                        isKeyringPayload(payload, 'deriveNextAccount') &&
+                        payload.return
+                    ) {
+                        return payload.return.accountAddress;
+                    }
+                    throw new Error(
+                        'Error unknown response for derive account message'
+                    );
+                })
+            )
         );
     }
 
