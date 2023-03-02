@@ -23,9 +23,18 @@ const getCoinType = (
     const events = txEffects?.events || [];
     const coinType = events
         ?.map((event: SuiEvent) => {
-            const data = Object.values(event).find(
-                (itm) => itm?.owner?.AddressOwner === address
-            );
+            const data = Object.values(event).find((itm) => {
+                if (
+                    itm?.changeType &&
+                    ['Receive', 'Pay'].includes(itm?.changeType) &&
+                    itm?.transactionModule !== 'gas'
+                ) {
+                    const { owner, sender } = itm;
+                    const { AddressOwner } = owner as { AddressOwner: string };
+                    return AddressOwner === address || address === sender;
+                }
+                return false;
+            });
             return data?.coinType;
         })
         .filter(Boolean);
