@@ -17,10 +17,9 @@ Version: 2
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}}
 
 task 4 'transfer-object'. lines 27-27:
-Error: Transaction Effects Status: Invalid Transfer Object Transaction. Possibly not address-owned or possibly does not have public transfer.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidTransferObject, source: None, command: None } }
+Error: Attempt to transfer object 0x745ea5d547883aa753c1f9ad61290dafd7a462cc162ae5ddf2ede94917e3bf49 that does not have public transfer. Object transfer must be done instead using a distinct Move function call.
 
 task 5 'view-object'. lines 29-29:
 Owner: Shared
-Version: 3
+Version: 2
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}}
