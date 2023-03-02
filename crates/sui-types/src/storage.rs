@@ -288,16 +288,16 @@ impl<T: ReadStore> ReadStore for &T {
     }
 }
 
+pub type CheckpointBundle = (
+    VerifiedCheckpoint,
+    CheckpointContents,
+    Vec<(VerifiedTransaction, TransactionEffects)>,
+);
+
 pub trait WriteStore: ReadStore {
     // Define how to commit a bundle of checkpoints to the DB
-    fn insert_full_bundle(
-        &self,
-        bundle: Vec<(
-            VerifiedCheckpoint,
-            CheckpointContents,
-            Vec<(VerifiedTransaction, TransactionEffects)>,
-        )>,
-    ) -> Result<(), Self::Error> {
+
+    fn insert_full_bundle(&self, bundle: Vec<CheckpointBundle>) -> Result<(), Self::Error> {
         for bundle_item in bundle {
             let (verified_checkpoint, contents, transaction_effects) = bundle_item;
             // Insert the newly verified checkpoint into our store, which will bump our highest
