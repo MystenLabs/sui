@@ -102,10 +102,9 @@ export function createTokenValidation(
                         availableGas -= BigInt(
                             amount?.shiftedBy(decimals).toString() || '0'
                         );
-
-                        if (availableGas >= gasBudgetInput) {
-                            return true;
-                        }
+                    }
+                    if (availableGas >= gasBudgetInput) {
+                        return true;
                     }
                 } catch (e) {
                     // ignore error
