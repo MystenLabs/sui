@@ -23,6 +23,11 @@
         "access": "public"
     },
     "homepage": "https://github.com/MystenLabs/sui/sdk/ledgerjs-hw-app-sui/#readme",
+    "files": [
+      "dist",
+      "src",
+      "CHANGELOG.md"
+    ],
     "main": "dist/Sui.js",
     "module": "dist/Sui.mjs",
     "types": "dist/Sui.d.ts",
