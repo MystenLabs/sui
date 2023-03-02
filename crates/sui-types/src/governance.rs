@@ -25,6 +25,7 @@ pub const ADD_DELEGATION_LOCKED_COIN_FUN_NAME: &IdentStr =
     ident_str!("request_add_delegation_mul_locked_coin");
 pub const WITHDRAW_DELEGATION_FUN_NAME: &IdentStr = ident_str!("request_withdraw_delegation");
 
+// TODO: this no longer exists at Move level, we need to remove this and update the governance API.
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 pub struct Delegation {
     pub id: UID,
@@ -86,5 +87,6 @@ pub struct DelegatedStake {
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 pub enum DelegationStatus {
     Pending,
+    // TODO: remove the `Delegation` object here.
     Active(Delegation),
 }

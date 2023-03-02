@@ -946,19 +946,6 @@ impl PayloadAvailabilityResponse {
     }
 }
 
-/// Message to reconfigure worker tasks. This message must be sent by a trusted source.
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub enum ReconfigureNotification {
-    /// Indicate a shutdown.
-    Shutdown,
-}
-
-/// Used by the primary to reconfigure the worker.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WorkerReconfigureMessage {
-    pub message: ReconfigureNotification,
-}
-
 /// Used by the primary to request that the worker sync the target missing batches.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorkerSynchronizeMessage {

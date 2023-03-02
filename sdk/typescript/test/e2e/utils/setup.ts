@@ -23,8 +23,10 @@ const DEFAULT_FULLNODE_URL =
   import.meta.env.VITE_FULLNODE_URL ?? TEST_ENDPOINTS.fullnode;
 const SUI_BIN = import.meta.env.VITE_SUI_BIN ?? 'cargo run --bin sui';
 
-export const DEFAULT_RECIPIENT = '0x36096be6a0314052931babed39f53c0666a6b0df';
-export const DEFAULT_RECIPIENT_2 = '0x46096be6a0314052931babed39f53c0666a6b0da';
+export const DEFAULT_RECIPIENT =
+  '0x0c567ffdf8162cb6d51af74be0199443b92e823d4ba6ced24de5c6c463797d46';
+export const DEFAULT_RECIPIENT_2 =
+  '0xbb967ddbebfee8c40d8fdd2c24cb02452834cd3a7061d18564448f900eb9e66d';
 export const DEFAULT_GAS_BUDGET = 10000;
 
 export class TestToolbox {
@@ -93,5 +95,9 @@ export async function publishPackage(
   const publishEvent = getEvents(publishTxn)?.find((e) => 'publish' in e);
 
   // @ts-ignore: Publish not narrowed:
-  return publishEvent?.publish.packageId.replace(/^(0x)(0+)/, '0x');
+  const packageId = publishEvent?.publish.packageId.replace(/^(0x)(0+)/, '0x');
+  console.info(
+    `Published package ${packageId} from address ${await signer.getAddress()}}`,
+  );
+  return packageId;
 }

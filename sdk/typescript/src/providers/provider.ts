@@ -31,7 +31,6 @@ import {
   RpcApiVersion,
   FaucetResponse,
   Order,
-  TransactionEffects,
   CoinMetadata,
   DevInspectResults,
   SuiSystemState,
@@ -46,6 +45,7 @@ import {
   CheckPointContentsDigest,
   Checkpoint,
   CommitteeInfo,
+  DryRunTransactionResponse,
 } from '../types';
 
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
@@ -138,8 +138,14 @@ export abstract class Provider {
   /**
    * Get all objects owned by an address
    */
+  /**
+   * @param addressOrObjectId owner address or object id
+   * @param typeFilter? a fully qualified type name for the object(e.g., 0x2::coin::Coin<0x2::sui::SUI>)
+   * or type name without generics (e.g., 0x2::coin::Coin will match all 0x2::coin::Coin<T>)
+   */
   abstract getObjectsOwnedByAddress(
     addressOrObjectId: string,
+    typeFilter?: string,
   ): Promise<SuiObjectInfo[]>;
 
   /**
@@ -336,7 +342,9 @@ export abstract class Provider {
    * gas budget and the transaction effects
    * @param txBytes
    */
-  abstract dryRunTransaction(txBytes: Uint8Array): Promise<TransactionEffects>;
+  abstract dryRunTransaction(
+    txBytes: Uint8Array,
+  ): Promise<DryRunTransactionResponse>;
 
   /**
    * Return the list of dynamic field objects owned by an object

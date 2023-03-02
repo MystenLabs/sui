@@ -49,11 +49,9 @@ export function getValidatorSelector(validatorAddress?: string) {
     return createSelector(suiSystemObjectSelector, (systemObj) => {
         const { data } = systemObj || {};
         if (data?.dataType === 'moveObject') {
-            const { active_validators: active, next_epoch_validators: next } =
-                data.fields.validators.fields;
+            const { active_validators: active } = data.fields.validators.fields;
             const validator: SuiMoveObject | undefined = [
                 ...active.map((v: SuiMoveObject) => v.fields.metadata),
-                ...next,
             ].find(
                 (aValidator) =>
                     aValidator.fields.sui_address === validatorAddress

@@ -13,8 +13,6 @@ use std::collections::VecDeque;
 
 const E_ADDRESS_PARSE_ERROR: u64 = 0;
 
-const E_CANT_CONVERT_ADDRESS_TO_U256: u64 = 1;
-
 // Implementation of the Move native function address::from_bytes(bytes: vector<u8>): address;
 pub fn from_bytes(
     _context: &mut NativeContext,
@@ -46,10 +44,8 @@ pub fn to_u256(
     debug_assert!(args.len() == 1);
 
     let addr = pop_arg!(args, AccountAddress);
-    // convert the address into a u256 by padding out the lower 12 bytes with 0's
     let mut addr_bytes_le = addr.to_vec();
     addr_bytes_le.reverse();
-    addr_bytes_le.resize(32, 0);
     // unwrap safe because we know addr_bytes_le is length 32
     let u256_val = Value::u256(U256::from_le_bytes(&addr_bytes_le.try_into().unwrap()));
     // TODO: what should the cost of this be?
@@ -72,13 +68,8 @@ pub fn from_u256(
     let u256 = pop_arg!(args, U256);
     let mut u256_bytes = u256.to_le_bytes().to_vec();
     u256_bytes.reverse();
-    // check that this is representable as u256 by confirming that the higher-order 12 bytes are all zeros
-    for b in u256_bytes.iter().take(12) {
-        if *b != 0x0 {
-            return Ok(NativeResult::err(cost, E_CANT_CONVERT_ADDRESS_TO_U256));
-        }
-    }
-    // unwrap safe because we are passing a 20 byte slice
-    let addr_val = Value::address(AccountAddress::from_bytes(&u256_bytes[12..]).unwrap());
+
+    // unwrap safe because we are passing a 32 byte slice
+    let addr_val = Value::address(AccountAddress::from_bytes(&u256_bytes[..]).unwrap());
     Ok(NativeResult::ok(cost, smallvec![addr_val]))
 }

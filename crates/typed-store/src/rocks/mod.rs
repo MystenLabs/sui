@@ -21,7 +21,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::{
     borrow::Borrow,
     collections::BTreeMap,
-    env,
+    env, fs,
     marker::PhantomData,
     path::{Path, PathBuf},
     sync::Arc,
@@ -166,12 +166,14 @@ macro_rules! retry_transaction_forever {
 pub struct DBWithThreadModeWrapper {
     pub underlying: rocksdb::DBWithThreadMode<MultiThreaded>,
     pub metric_conf: MetricConf,
+    pub db_path: PathBuf,
 }
 
 #[derive(Debug)]
 pub struct OptimisticTransactionDBWrapper {
     pub underlying: rocksdb::OptimisticTransactionDB<MultiThreaded>,
     pub metric_conf: MetricConf,
+    pub db_path: PathBuf,
 }
 
 /// Thin wrapper to unify interface across different db types
@@ -378,18 +380,25 @@ impl RocksDB {
         delegate_call!(self.flush())
     }
 
-    pub fn checkpoint(&self, path: &Path) -> Result<(), rocksdb::Error> {
-        match self {
-            Self::DBWithThreadMode(d) => {
-                let checkpoint = Checkpoint::new(&d.underlying)?;
-                checkpoint.create_checkpoint(path)?;
-            }
+    pub fn checkpoint(&self, path: &Path) -> Result<PathBuf, TypedStoreError> {
+        let (checkpoint, path) = match self {
+            Self::DBWithThreadMode(d) => (Checkpoint::new(&d.underlying)?, d.db_path.join(path)),
             Self::OptimisticTransactionDB(d) => {
-                let checkpoint = Checkpoint::new(&d.underlying)?;
-                checkpoint.create_checkpoint(path)?;
+                (Checkpoint::new(&d.underlying)?, d.db_path.join(path))
             }
+        };
+        if path.exists() {
+            fs::remove_dir_all(path.clone()).map_err(|e| {
+                TypedStoreError::RocksDBError(format!(
+                    "Failed to delete existing checkpoint dir: {:?}",
+                    e.to_string()
+                ))
+            })?;
         }
-        Ok(())
+        checkpoint
+            .create_checkpoint(&path)
+            .map_err(|e| TypedStoreError::RocksDBError(e.to_string()))?;
+        Ok(path)
     }
 
     pub fn flush_cf(&self, cf: &impl AsColumnFamilyRef) -> Result<(), rocksdb::Error> {
@@ -1841,6 +1850,7 @@ pub fn open_cf_opts<P: AsRef<Path>>(
             DBWithThreadModeWrapper {
                 underlying: rocksdb,
                 metric_conf,
+                db_path: PathBuf::from(path),
             },
         )))
     })
@@ -1869,6 +1879,7 @@ pub fn open_cf_opts_transactional<P: AsRef<Path>>(
             OptimisticTransactionDBWrapper {
                 underlying: rocksdb,
                 metric_conf,
+                db_path: PathBuf::from(path),
             },
         )))
     })
@@ -1930,6 +1941,7 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
             DBWithThreadModeWrapper {
                 underlying: rocksdb,
                 metric_conf,
+                db_path: secondary_path,
             },
         )))
     })

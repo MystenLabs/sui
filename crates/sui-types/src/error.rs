@@ -43,6 +43,7 @@ macro_rules! fp_ensure {
         }
     };
 }
+use crate::digests::TransactionEventsDigest;
 pub(crate) use fp_ensure;
 
 #[macro_export]
@@ -84,6 +85,8 @@ pub enum UserInputError {
     DependentPackageNotFound { package_id: ObjectID },
     #[error("Mutable parameter provided, immutable parameter expected.")]
     ImmutableParameterExpectedError { object_id: ObjectID },
+    #[error("Size limit exceeded: {limit} is {value}")]
+    SizeLimitExceeded { limit: String, value: String },
     #[error(
         "Object {child_id:?} is owned by object {parent_id:?}. \
         Objects owned by other objects cannot be used as input arguments."
@@ -121,16 +124,11 @@ pub enum UserInputError {
     #[error("Gas budget: {:?} is lower than min: {:?}.", gas_budget, min_budget)]
     GasBudgetTooLow { gas_budget: u64, min_budget: u64 },
     #[error(
-        "Balance of gas object {:?} is lower than gas budget: {:?}, with gas price: {:?}.",
+        "Balance of gas object {:?} is lower than gas budget: {:?}.",
         gas_balance,
-        gas_budget,
-        gas_price
+        gas_budget
     )]
-    GasBalanceTooLowToCoverGasBudget {
-        gas_balance: u128,
-        gas_budget: u128,
-        gas_price: u64,
-    },
+    GasBalanceTooLowToCoverGasBudget { gas_balance: u128, gas_budget: u128 },
     #[error("Transaction kind does not support Sponsored Transaction")]
     UnsupportedSponsoredTransactionKind,
     #[error(
@@ -170,6 +168,12 @@ pub enum UserInputError {
 
     #[error("Attempt to transfer object {object_id} that does not have public transfer. Object transfer must be done instead using a distinct Move function call.")]
     TransferObjectWithoutPublicTransferError { object_id: ObjectID },
+
+    #[error(
+        "TransferObjects, MergeCoin, and Publish cannot have empty arguments. \
+        If MakeMoveVec has empty arguments, it must have a type specified"
+    )]
+    EmptyCommandInput,
 
     #[error("Feature is not yet supported: {0}")]
     Unsupported(String),
@@ -288,6 +292,8 @@ pub enum SuiError {
     },
     #[error("{TRANSACTION_NOT_FOUND_MSG_PREFIX} [{:?}].", digest)]
     TransactionNotFound { digest: TransactionDigest },
+    #[error("Could not find the referenced transaction events [{digest:?}].")]
+    TransactionEventsNotFound { digest: TransactionEventsDigest },
     #[error(
         "Attempt to move to `Executed` state an transaction that has already been executed: {:?}.",
         digest

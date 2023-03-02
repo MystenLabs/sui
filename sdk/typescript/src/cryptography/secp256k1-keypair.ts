@@ -148,7 +148,10 @@ export class Secp256k1Keypair implements Keypair {
    * If path is none, it will default to m/54'/784'/0'/0/0, otherwise the path must
    * be compliant to BIP-32 in form m/54'/784'/{account_index}'/{change_index}/{address_index}.
    */
-  static deriveKeypair(path: string, mnemonics: string): Secp256k1Keypair {
+  static deriveKeypair(mnemonics: string, path?: string): Secp256k1Keypair {
+    if (path == null) {
+      path = DEFAULT_SECP256K1_DERIVATION_PATH;
+    }
     if (!isValidBIP32Path(path)) {
       throw new Error('Invalid derivation path');
     }

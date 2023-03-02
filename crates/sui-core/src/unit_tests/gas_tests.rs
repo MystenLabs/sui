@@ -70,7 +70,6 @@ async fn test_tx_gas_balance_less_than_budget() {
         UserInputError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: gas_balance as u128,
             gas_budget: (gas_price * budget) as u128,
-            gas_price
         }
     );
 }
@@ -154,16 +153,15 @@ async fn test_native_transfer_gas_price_is_used() {
     );
 
     // test overflow with insufficient gas
-    let gas_balance = *MAX_GAS_BUDGET;
+    let gas_balance = *MAX_GAS_BUDGET - 1;
     let gas_budget = *MAX_GAS_BUDGET;
-    let gas_price = u64::MAX;
+    let gas_price = 10;
     let result = execute_transfer_with_price(gas_balance, gas_budget, gas_price, true).await;
     assert_eq!(
         UserInputError::try_from(result.response.unwrap_err()).unwrap(),
         UserInputError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: (gas_balance as u128),
-            gas_budget: (gas_budget as u128) * (gas_price as u128),
-            gas_price
+            gas_budget: (gas_budget as u128),
         }
     );
 }
@@ -596,6 +594,7 @@ async fn execute_transfer_with_price(
     let object_id: ObjectID = ObjectID::random();
     let recipient = dbg_addr(2);
     let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
     let gas_object_id = ObjectID::random();
     let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, gas_balance);
     let gas_object_ref = gas_object.compute_object_reference();
@@ -616,10 +615,16 @@ async fn execute_transfer_with_price(
     let response = if run_confirm {
         send_and_confirm_transaction(&authority_state, tx)
             .await
-            .map(|(cert, effects)| TransactionStatus::Executed(Some(cert.into_sig()), effects))
+            .map(|(cert, effects)| {
+                TransactionStatus::Executed(
+                    Some(cert.into_sig()),
+                    effects,
+                    TransactionEvents::default(),
+                )
+            })
     } else {
         authority_state
-            .handle_transaction(tx)
+            .handle_transaction(&epoch_store, tx)
             .await
             .map(|r| r.status)
     };

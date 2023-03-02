@@ -11,7 +11,7 @@ AccountAddress:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
-      SIZE: 20
+      SIZE: 32
 Argument:
   ENUM:
     0:
@@ -85,6 +85,13 @@ Command:
         NEWTYPE:
           SEQ:
             SEQ: U8
+    5:
+      MakeMoveVec:
+        TUPLE:
+          - OPTION:
+              TYPENAME: TypeTag
+          - SEQ:
+              TYPENAME: Argument
 ConsensusCommitPrologue:
   STRUCT:
     - epoch: U64
@@ -566,7 +573,7 @@ SuiAddress:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
-      SIZE: 20
+      SIZE: 32
 TransactionDigest:
   NEWTYPESTRUCT:
     TYPENAME: Sha3Digest

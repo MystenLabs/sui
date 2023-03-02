@@ -223,7 +223,7 @@ struct ProcessCertificateState {
 #[derive(Debug)]
 pub enum ProcessTransactionResult {
     Certified(VerifiedCertificate),
-    Executed(VerifiedCertifiedTransactionEffects),
+    Executed(VerifiedCertifiedTransactionEffects, TransactionEvents),
 }
 
 impl ProcessTransactionResult {
@@ -1010,13 +1010,13 @@ where
                 debug!(?tx_digest, name=?name.concise(), weight, "Received signed transaction from validator handle_transaction");
                 self.handle_transaction_response_with_signed(state, signed)
             }
-            Ok(VerifiedTransactionInfoResponse::ExecutedWithCert(cert, effects)) => {
+            Ok(VerifiedTransactionInfoResponse::ExecutedWithCert(cert, effects, events)) => {
                 debug!(?tx_digest, name=?name.concise(), weight, "Received prev certificate and effects from validator handle_transaction");
-                self.handle_transaction_response_with_executed(state, Some(cert), effects)
+                self.handle_transaction_response_with_executed(state, Some(cert), effects, events)
             }
-            Ok(VerifiedTransactionInfoResponse::ExecutedWithoutCert(_, effects)) => {
+            Ok(VerifiedTransactionInfoResponse::ExecutedWithoutCert(_, effects, events)) => {
                 debug!(?tx_digest, name=?name.concise(), weight, "Received prev effects from validator handle_transaction");
-                self.handle_transaction_response_with_executed(state, None, effects)
+                self.handle_transaction_response_with_executed(state, None, effects, events)
             }
             Err(err) => {
                 self.record_conflicting_transaction_if_any(state, name, weight, &err);
@@ -1070,6 +1070,7 @@ where
         state: &mut ProcessTransactionState,
         certificate: Option<VerifiedCertificate>,
         signed_effects: VerifiedSignedTransactionEffects,
+        events: TransactionEvents,
     ) -> SuiResult<Option<ProcessTransactionResult>> {
         match certificate {
             Some(certificate) if certificate.epoch() == self.committee.epoch => {
@@ -1091,6 +1092,7 @@ where
                             CertifiedTransactionEffects::new_from_data_and_sig(effects, cert_sig);
                         Ok(Some(ProcessTransactionResult::Executed(
                             ct.verify(&self.committee)?,
+                            events,
                         )))
                     }
                 }
@@ -1133,7 +1135,10 @@ where
     pub async fn process_certificate(
         &self,
         certificate: CertifiedTransaction,
-    ) -> Result<VerifiedCertifiedTransactionEffects, QuorumExecuteCertificateError> {
+    ) -> Result<
+        (VerifiedCertifiedTransactionEffects, TransactionEvents),
+        QuorumExecuteCertificateError,
+    > {
         let state = ProcessCertificateState {
             effects_map: MultiStakeAggregator::new(Arc::new(self.committee.clone())),
             bad_stake: 0,
@@ -1216,9 +1221,12 @@ where
         state: &mut ProcessCertificateState,
         response: SuiResult<VerifiedHandleCertificateResponse>,
         name: AuthorityName,
-    ) -> SuiResult<Option<VerifiedCertifiedTransactionEffects>> {
+    ) -> SuiResult<Option<(VerifiedCertifiedTransactionEffects, TransactionEvents)>> {
         match response {
-            Ok(VerifiedHandleCertificateResponse { signed_effects }) => {
+            Ok(VerifiedHandleCertificateResponse {
+                signed_effects,
+                events,
+            }) => {
                 debug!(
                     ?tx_digest,
                     name = ?name.concise(),
@@ -1240,7 +1248,7 @@ where
                         );
                         ct.verify(&self.committee).map(|ct| {
                             debug!(?tx_digest, "Got quorum for validators handle_certificate.");
-                            Some(ct)
+                            Some((ct, events))
                         })
                     }
                 }
@@ -1259,7 +1267,7 @@ where
             .await?;
         let cert = match result {
             ProcessTransactionResult::Certified(cert) => cert,
-            ProcessTransactionResult::Executed(effects) => {
+            ProcessTransactionResult::Executed(effects, _) => {
                 return Ok(effects);
             }
         };
@@ -1269,7 +1277,7 @@ where
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
 
-        Ok(response)
+        Ok(response.0)
     }
 
     /// This function tries to get SignedTransaction OR CertifiedTransaction from
@@ -1357,14 +1365,14 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         } else {
             anyhow::bail!("need either NetworkConfig or Genesis.");
         };
-        let committee = make_committee(0, self.protocol_version, validator_info)?;
+        let committee = make_committee(0, self.protocol_version, &validator_info)?;
         let mut registry = &prometheus::Registry::new();
         if self.registry.is_some() {
             registry = self.registry.unwrap();
         }
 
         let auth_clients = make_authority_clients(
-            validator_info,
+            &validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
             DEFAULT_REQUEST_TIMEOUT_SEC,
         );

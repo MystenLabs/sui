@@ -49,7 +49,7 @@ impl MoveEventHandler {
         );
         if let (Some(tx_dig), Some(event_seq)) = (tx_dig_opt, event_seq_opt) {
             let tx_digest = tx_dig.parse().map_err(|e| {
-                IndexerError::TransactionDigestParsingError(format!(
+                IndexerError::JsonSerdeError(format!(
                     "Failed parsing transaction digest {:?} with error: {:?}",
                     tx_dig, e
                 ))

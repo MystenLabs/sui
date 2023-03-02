@@ -71,7 +71,7 @@ impl TestCaseImpl for CallContractTest {
             .object_id;
 
         // Examine effects
-        let events = &response.effects.events;
+        let events = &response.events.data;
         assert_eq!(
             events.len(),
             3,

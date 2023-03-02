@@ -11,7 +11,7 @@ use test_utils::{
 };
 use types::{
     BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Round, VoteInfo,
-    WorkerReconfigureMessage, WorkerSynchronizeMessage,
+    WorkerSynchronizeMessage,
 };
 
 use crypto::PublicKey;
@@ -77,11 +77,9 @@ pub fn worker_listener(
     num_of_expected_responses: i32,
     address: multiaddr::Multiaddr,
     keypair: NetworkKeyPair,
-) -> JoinHandle<(Vec<WorkerReconfigureMessage>, Vec<WorkerSynchronizeMessage>)> {
+) -> JoinHandle<Vec<WorkerSynchronizeMessage>> {
     tokio::spawn(async move {
-        let (mut recv_msg, mut recv_sync, _network) =
-            PrimaryToWorkerMockServer::spawn(keypair, address);
-        let mut msgs = Vec::new();
+        let (mut recv_sync, _network) = PrimaryToWorkerMockServer::spawn(keypair, address);
         let mut syncs = Vec::new();
 
         let timer = tokio::time::sleep(Duration::from_secs(1));
@@ -89,27 +87,18 @@ pub fn worker_listener(
 
         loop {
             tokio::select! {
-                Some(message) = recv_msg.recv() => {
-                    timer.as_mut().reset(Instant::now() + Duration::from_secs(1));
-                    msgs.push(message);
-                    if num_of_expected_responses != -1
-                        && (msgs.len() + syncs.len()) as i32 == num_of_expected_responses
-                    {
-                        return (msgs, syncs);
-                    }
-                }
                 Some(message) = recv_sync.recv() => {
                     timer.as_mut().reset(Instant::now() + Duration::from_secs(1));
                     syncs.push(message);
                     if num_of_expected_responses != -1
-                        && (msgs.len() + syncs.len()) as i32 == num_of_expected_responses
+                        && syncs.len() as i32 == num_of_expected_responses
                     {
-                        return (msgs, syncs);
+                        return syncs;
                     }
                 }
                 () = &mut timer => {
                     // timeout happened - just return whatever has already
-                    return (msgs, syncs);
+                    return syncs;
                 }
             }
         }

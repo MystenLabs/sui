@@ -11,6 +11,7 @@ mod test_scenario;
 mod transfer;
 mod tx_context;
 mod types;
+mod validator;
 
 use crate::make_native;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
@@ -223,6 +224,11 @@ pub fn all_natives(
             "types",
             "is_one_time_witness",
             make_native!(types::is_one_time_witness),
+        ),
+        (
+            "validator",
+            "validate_metadata_bcs",
+            make_native!(validator::validate_metadata_bcs),
         ),
     ];
     sui_natives

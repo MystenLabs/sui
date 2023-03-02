@@ -190,6 +190,16 @@ impl fmt::UpperHex for CheckpointDigest {
     }
 }
 
+impl std::str::FromStr for CheckpointDigest {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut result = [0; 32];
+        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        Ok(CheckpointDigest::new(result))
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct CheckpointContentsDigest(Sha3Digest);
 
@@ -455,6 +465,30 @@ impl fmt::LowerHex for TransactionEffectsDigest {
 impl fmt::UpperHex for TransactionEffectsDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::UpperHex::fmt(&self.0, f)
+    }
+}
+
+#[serde_as]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
+pub struct TransactionEventsDigest(Sha3Digest);
+
+impl TransactionEventsDigest {
+    pub const ZERO: Self = Self(Sha3Digest::ZERO);
+
+    pub const fn new(digest: [u8; 32]) -> Self {
+        Self(Sha3Digest::new(digest))
+    }
+
+    pub fn random() -> Self {
+        Self(Sha3Digest::random())
+    }
+}
+
+impl fmt::Debug for TransactionEventsDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("TransactionEventsDigest")
+            .field(&self.0)
+            .finish()
     }
 }
 

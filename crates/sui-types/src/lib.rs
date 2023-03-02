@@ -29,6 +29,7 @@ pub mod collection_types;
 pub mod committee;
 pub mod crypto;
 pub mod digests;
+pub mod display;
 pub mod dynamic_field;
 pub mod event;
 pub mod filter;

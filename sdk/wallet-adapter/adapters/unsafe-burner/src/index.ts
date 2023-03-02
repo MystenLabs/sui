@@ -9,7 +9,7 @@ import {
   LocalTxnDataSerializer,
   RawSigner,
   Connection,
-  devnetConnection,
+  devnetConnection, getEvents,
 } from "@mysten/sui.js";
 import {
   WalletAdapter,
@@ -76,6 +76,7 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
       return {
         certificate: getCertifiedTransaction(response)!,
         effects: getTransactionEffects(response)!,
+        events: getEvents(response)!,
         timestamp_ms: null,
         parsed_data: null,
       };

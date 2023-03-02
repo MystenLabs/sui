@@ -40,8 +40,8 @@ pub enum IndexerError {
     #[error("Indexer failed to initialize fullnode RPC client with error: `{0}`")]
     RpcClientInitError(String),
 
-    #[error("Indexer failed to parse transaction digest read from DB with error: `{0}`")]
-    TransactionDigestParsingError(String),
+    #[error("Indexer failed to serialize/deserialize JSON with error: `{0}`")]
+    JsonSerdeError(String),
 }
 
 impl IndexerError {
@@ -52,15 +52,13 @@ impl IndexerError {
             IndexerError::PostgresWriteError(_) => "PostgresWriteError".into(),
             IndexerError::InsertableParsingError(_) => "InsertableParsingError".into(),
             IndexerError::DateTimeParsingError(_) => "DateTimeParsingError".into(),
-            IndexerError::TransactionDigestParsingError(_) => {
-                "TransactionDigestParsingError".into()
-            }
             IndexerError::ObjectMutationNotAvailable => "ObjectMutationNotAvailable".into(),
             IndexerError::EventDeserializationError(_) => "EventDeserializationError".into(),
             IndexerError::PgConnectionPoolInitError(_) => "PgConnectionPoolInitError".into(),
             IndexerError::RpcClientInitError(_) => "RpcClientInitError".into(),
             IndexerError::PgPoolConnectionError(_) => "PgPoolConnectionError".into(),
             IndexerError::JsonRpcServerError(_) => "JsonRpcServerError".into(),
+            IndexerError::JsonSerdeError(_) => "JsonSerdeError".into(),
         }
     }
 }

@@ -67,8 +67,6 @@ pub enum IntentScope {
     PersonalMessage = 3,
     SenderSignedTransaction = 4,
     ProofOfPossession = 5,
-    TransactionEffectsDigest = 6,
-    ExecutionDigests = 7,
 }
 
 impl TryFrom<u8> for IntentScope {
@@ -81,8 +79,6 @@ impl TryFrom<u8> for IntentScope {
             3 => Ok(Self::PersonalMessage),
             4 => Ok(Self::SenderSignedTransaction),
             5 => Ok(Self::ProofOfPossession),
-            6 => Ok(Self::TransactionEffectsDigest),
-            7 => Ok(Self::ExecutionDigests),
             _ => Err(eyre!("Invalid IntentScope")),
         }
     }

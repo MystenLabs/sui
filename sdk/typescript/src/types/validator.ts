@@ -116,15 +116,16 @@ export const Contents = object({
   fields: ContentsFields,
 });
 
-export const PendingWithdawFields = object({
-  contents: ContentsFieldsWithdraw,
-});
-
 export const DelegationStakingPoolFields = object({
+  exchange_rates: object({
+    id: string(),
+    size: number(),
+  }),
   id: string(),
-  delegation_token_supply: SuiSupplyFields,
-  pending_delegations: ContentsFields,
-  pending_withdraws: PendingWithdawFields,
+  pending_delegation: number(),
+  pending_pool_token_withdraw: number(),
+  pending_total_sui_withdraw: number(),
+  pool_token_balance: number(),
   rewards_pool: object({ value: number() }),
   starting_epoch: number(),
   sui_balance: number(),
@@ -152,14 +153,10 @@ export const SystemParameters = object({
 export const Validator = object({
   metadata: ValidatorMetaData,
   voting_power: number(),
-  stake_amount: number(),
-  pending_stake: number(),
-  pending_withdraw: number(),
   gas_price: number(),
-  delegation_staking_pool: DelegationStakingPoolFields,
+  staking_pool: DelegationStakingPoolFields,
   commission_rate: number(),
   next_epoch_stake: number(),
-  next_epoch_delegation: number(),
   next_epoch_gas_price: number(),
   next_epoch_commission_rate: number(),
 });
@@ -171,12 +168,15 @@ export const ValidatorPair = object({
 });
 
 export const ValidatorSet = object({
-  validator_stake: number(),
-  delegation_stake: number(),
+  total_stake: number(),
   active_validators: array(Validator),
-  pending_validators: array(Validator),
+  pending_validators: object({
+    contents: object({
+      id: string(),
+      size: number(),
+    }),
+  }),
   pending_removals: array(number()),
-  next_epoch_validators: array(ValidatorMetaData),
   // TODO: Remove this after 0.28.0 is released
   pending_delegation_switches: optional(
     object({ contents: array(ValidatorPair) }),
@@ -188,7 +188,6 @@ export const ValidatorSet = object({
 });
 
 export const SuiSystemState = object({
-  info: object({ id: string() }),
   epoch: number(),
   // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
   protocol_version: optional(number()),

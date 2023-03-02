@@ -96,6 +96,11 @@ impl TransactionManager {
         transaction_manager
     }
 
+    /// Enqueues certificates / verified transactions into TransactionManager. Once all of the input objects are available
+    /// locally for a certificate, the certified transaction will be sent to execution driver.
+    ///
+    /// REQUIRED: Shared object locks must be taken before calling this function on transactions
+    /// containing shared objects!
     pub(crate) fn enqueue_certificates(
         &self,
         certs: Vec<VerifiedCertificate>,
@@ -108,32 +113,71 @@ impl TransactionManager {
         self.enqueue(executable_txns, epoch_store)
     }
 
-    /// Enqueues certificates into TransactionManager. Once all of the input objects are available
-    /// locally for a certificate, the certified transaction will be sent to execution driver.
-    ///
-    /// REQUIRED: Shared object locks must be taken before calling this function on shared object
-    /// transactions!
-    ///
-    /// TODO: it may be less error prone to take shared object locks inside this function, or
-    /// require shared object lock versions get passed in as input. But this function should not
-    /// have many callsites. Investigate the alternatives here.
     pub(crate) fn enqueue(
         &self,
         certs: Vec<VerifiedExecutableTransaction>,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<()> {
-        let inner = &mut self.inner.write();
+        // First, determine missing input objects without lock.
+        let mut pending = Vec::new();
         for cert in certs {
-            if inner.epoch != cert.epoch() {
+            let digest = *cert.digest();
+            // skip already executed txes
+            if self.authority_store.is_tx_already_executed(&digest)? {
+                // also ensure the transaction will not be retried after restart.
+                let _ = epoch_store.remove_pending_execution(&digest);
+                self.metrics
+                    .transaction_manager_num_enqueued_certificates
+                    .with_label_values(&["already_executed"])
+                    .inc();
+                continue;
+            }
+            let input_object_kinds = cert.data().intent_message.value.input_objects()?;
+            let input_object_keys = self.authority_store.get_input_object_keys(
+                &digest,
+                &input_object_kinds,
+                epoch_store,
+            );
+            pending.push(PendingCertificate {
+                certificate: cert,
+                missing: input_object_keys
+                    .into_iter()
+                    .filter(|key| {
+                        !self
+                            .authority_store
+                            .input_object_exists(key)
+                            .expect("Checking object existence cannot fail!")
+                    })
+                    .collect(),
+            });
+        }
+
+        // After this point, the function cannot return early and must run to the end. Otherwise,
+        // it can lead to data inconsistencies and potentially some transactions will never get
+        // executed.
+
+        let mut missing_input_objects = Vec::new();
+
+        // Internal lock is held only for updating the internal state.
+        let mut inner = self.inner.write();
+
+        for pending_cert in pending {
+            // Tx lock is not held here, which makes it possible to send duplicated transactions to
+            // the execution driver after crash-recovery, when the same transaction is recovered
+            // from recovery log and pending certificates table. The transaction will still only
+            // execute once, because tx lock is acquired in execution driver and executed effects
+            // table is consulted. So this behavior is benigh.
+            let digest = *pending_cert.certificate.digest();
+
+            if inner.epoch != pending_cert.certificate.epoch() {
                 warn!(
                     "Ignoring enqueued certificate from wrong epoch. Expected={} Certificate={:?}",
-                    inner.epoch, cert
+                    inner.epoch, pending_cert.certificate
                 );
+                // also ensure the transaction will not be retried after restart.
+                let _ = epoch_store.remove_pending_execution(&digest);
+                continue;
             }
-            let digest = *cert.digest();
-            // hold the tx lock until we have finished checking if objects are missing, so that we
-            // don't race with a concurrent execution of this tx.
-            let _tx_lock = epoch_store.acquire_tx_lock(&digest);
 
             // skip already pending txes
             if inner.pending_certificates.contains_key(&digest) {
@@ -161,39 +205,18 @@ impl TransactionManager {
                     .inc();
                 continue;
             }
-
-            let missing = self
-                .authority_store
-                .get_missing_input_objects(
-                    &digest,
-                    &cert.data().intent_message.value.input_objects()?,
-                    epoch_store,
-                )
-                .expect("Are shared object locks set prior to enqueueing certificates?");
-
-            if missing.is_empty() {
-                debug!("certificate ready");
-                assert!(inner.executing_certificates.insert(digest));
-                self.certificate_ready(cert);
+            // Ready transactions can start to execute.
+            if pending_cert.missing.is_empty() {
                 self.metrics
                     .transaction_manager_num_enqueued_certificates
                     .with_label_values(&["ready"])
                     .inc();
+                self.certificate_ready(pending_cert.certificate);
                 continue;
             }
 
-            // A missing input object in TransactionManager will definitely be notified via
-            // objects_committed(), when the object actually gets committed, because:
-            // 1. Assume rocksdb is strongly consistent, writing the object to the objects
-            // table must happen after not finding the object in get_missing_input_objects().
-            // 2. Notification via objects_committed() will happen after an object is written
-            // into the objects table.
-            // 3. TransactionManager is protected by a mutex. The notification via
-            // objects_committed() can only arrive after the current enqueue() call finishes.
-            debug!(tx_digest = ?digest, ?missing, "certificate waiting on missing objects");
-
-            for input in missing.iter() {
-                debug!(?input, ?digest, "adding missing object entry");
+            missing_input_objects.extend(pending_cert.missing.iter().cloned());
+            for input in &pending_cert.missing {
                 assert!(
                     inner
                         .missing_inputs
@@ -207,17 +230,10 @@ impl TransactionManager {
                 let input_count = inner.input_objects.entry(input.0).or_default();
                 *input_count += 1;
             }
-
             assert!(
                 inner
                     .pending_certificates
-                    .insert(
-                        digest,
-                        PendingCertificate {
-                            certificate: cert,
-                            missing: missing.into_iter().collect()
-                        }
-                    )
+                    .insert(digest, pending_cert)
                     .is_none(),
                 "Duplicated pending certificate {:?}",
                 digest
@@ -235,11 +251,40 @@ impl TransactionManager {
         self.metrics
             .transaction_manager_num_pending_certificates
             .set(inner.pending_certificates.len() as i64);
+
+        // Unnecessary to keep holding the lock while re-checking input object existence.
+        drop(inner);
+
+        // An object will not remain forever as a missing input in TransactionManager,
+        // if the object is or later becomes available in storage, because:
+        // 1. At this point the object either exists in storage or not.
+        // 2. If the object exists in storage, it will be found via input_object_exists() below.
+        // 3. If it is not and but becomes available eventually, the transaction commit logic will
+        //    call objects_available() on the object.
+        // 4. If the node crashes after the object is created but before the transaction consuming
+        //    it finishes, on restart the object will be found for the transaction.
+
+        // Rechecking missing input objects is needed, because some objects could have become
+        // available between the 1st time objects existence were checked, and the objects getting
+        // added into the missing_input table.
+        // In the likely common case, missing_input_objects is empty and no check is needed.
+        if !missing_input_objects.is_empty() {
+            let available_objects: Vec<_> = missing_input_objects
+                .into_iter()
+                .filter(|key| {
+                    self.authority_store
+                        .input_object_exists(key)
+                        .expect("Checking object existence cannot fail!")
+                })
+                .collect();
+            self.objects_available(available_objects, epoch_store);
+        }
+
         Ok(())
     }
 
-    /// Notifies TransactionManager that the given objects have been committed.
-    pub(crate) fn objects_committed(
+    /// Notifies TransactionManager that the given objects are available in the objects table.
+    pub(crate) fn objects_available(
         &self,
         input_keys: Vec<InputKey>,
         epoch_store: &AuthorityPerEpochStore,

@@ -90,7 +90,7 @@ impl CheckpointHandler {
                 .db_write_request_latency
                 .start_timer();
             // unwrap here is safe because we checked for error above
-            let new_checkpoint = create_checkpoint(checkpoint.unwrap(), previous_checkpoint);
+            let new_checkpoint = create_checkpoint(checkpoint.unwrap(), previous_checkpoint)?;
             commit_checkpoint(&mut pg_pool_conn, new_checkpoint.clone())?;
             info!("Checkpoint {} committed", next_cursor_sequence_number);
             self.checkpoint_handler_metrics

@@ -386,7 +386,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         vec![
             system_object_arg.clone(),
             CallArg::Pure(bcs::to_bytes(&change_epoch.epoch).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&change_epoch.protocol_version).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.protocol_version.as_u64()).unwrap()),
             CallArg::Pure(bcs::to_bytes(&change_epoch.storage_charge).unwrap()),
             CallArg::Pure(bcs::to_bytes(&change_epoch.computation_charge).unwrap()),
             CallArg::Pure(bcs::to_bytes(&change_epoch.storage_rebate).unwrap()),
@@ -713,7 +713,7 @@ fn pay_all_sui<S>(
     recipient: SuiAddress,
 ) -> Result<(), ExecutionError> {
     let (mut coins, _coin_type) = check_coins(coin_objects, Some(GasCoin::type_()))?;
-    // overflow is not possible b/c total SUI supply is 10B SUI or 10^19 MISTs, and 10^19 < u64::MAX
+    // overflow is not possible b/c total SUI supply is 10B SUI or 10^19 MIST, and 10^19 < u64::MAX
     let total_coins = coins.iter().fold(0, |acc, c| acc + c.value());
 
     let mut merged_coin = coins.swap_remove(0);
@@ -1000,7 +1000,7 @@ fn test_pay_success_without_delete() {
     let mut ctx = TxContext::with_sender_for_testing_only(&sender);
 
     assert!(pay(&mut store, coin_objects, recipients, amounts, &mut ctx).is_ok());
-    let (store, _events) = store.into_inner();
+    let store = store.into_inner();
 
     assert!(store.deleted.is_empty());
     assert_eq!(store.created().len(), 2);
@@ -1037,7 +1037,7 @@ fn test_pay_success_delete_one() {
     let mut ctx = TxContext::random_for_testing_only();
 
     assert!(pay(&mut store, coin_objects, recipients, amounts, &mut ctx).is_ok());
-    let (store, _events) = store.into_inner();
+    let store = store.into_inner();
 
     assert_eq!(store.deleted.len(), 1);
     assert!(store.deleted.contains_key(&input_coin_id1));
@@ -1073,7 +1073,7 @@ fn test_pay_success_delete_all() {
     let mut ctx = TxContext::with_sender_for_testing_only(&sender);
 
     assert!(pay(&mut store, coin_objects, recipients, amounts, &mut ctx).is_ok());
-    let (store, _events) = store.into_inner();
+    let store = store.into_inner();
 
     assert_eq!(store.deleted.len(), 2);
     assert!(store.deleted.contains_key(&input_coin_id1));
@@ -1108,7 +1108,7 @@ fn test_pay_sui_success_one_input_coin() {
     );
     let mut ctx = TxContext::with_sender_for_testing_only(&sender);
     assert!(pay_sui(&mut store, &mut coin_objects, recipients, amounts, &mut ctx).is_ok());
-    let (store, _events) = store.into_inner();
+    let store = store.into_inner();
 
     assert!(store.deleted.is_empty());
     assert_eq!(store.written.len(), 3);
@@ -1147,7 +1147,7 @@ fn test_pay_sui_success_multiple_input_coins() {
     );
     let mut ctx = TxContext::with_sender_for_testing_only(&sender);
     assert!(pay_sui(&mut store, &mut coin_objects, recipients, amounts, &mut ctx).is_ok());
-    let (store, _events) = store.into_inner();
+    let store = store.into_inner();
 
     assert_eq!(store.deleted.len(), 2);
     assert!(store.deleted.contains_key(&input_coin_id2));
@@ -1186,7 +1186,7 @@ fn test_pay_all_sui_success_multiple_input_coins() {
         input_objects_from_objects(coin_objects.clone()),
     );
     assert!(pay_all_sui(sender, &mut store, &mut coin_objects, recipient).is_ok());
-    let (store, _events) = store.into_inner();
+    let store = store.into_inner();
 
     assert_eq!(store.deleted.len(), 2);
     assert!(store.deleted.contains_key(&input_coin_id2));
