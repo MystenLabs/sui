@@ -31,7 +31,7 @@ pub struct QuorumWaiter {
     /// Receiver for shutdown.
     rx_shutdown: ConditionalBroadcastReceiver,
     /// Input Channel to receive commands.
-    rx_quorum_waiter: Receiver<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
+    rx_quorum_waiter: Receiver<(Batch, tokio::sync::oneshot::Sender<()>)>,
     /// A network sender to broadcast the batches to the other workers.
     network: anemo::Network,
 }
@@ -45,7 +45,7 @@ impl QuorumWaiter {
         committee: Committee,
         worker_cache: SharedWorkerCache,
         rx_shutdown: ConditionalBroadcastReceiver,
-        rx_quorum_waiter: Receiver<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
+        rx_quorum_waiter: Receiver<(Batch, tokio::sync::oneshot::Sender<()>)>,
         network: anemo::Network,
     ) -> JoinHandle<()> {
         spawn_logged_monitored_task!(
@@ -87,7 +87,7 @@ impl QuorumWaiter {
                 // task to the pipeline to send this batch to workers.
                 //
                 // TODO: make the constant a config parameter.
-                Some((batch, mut opt_channel)) = self.rx_quorum_waiter.recv(), if pipeline.len() < MAX_PARALLEL_BATCH => {
+                Some((batch, channel)) = self.rx_quorum_waiter.recv(), if pipeline.len() < MAX_PARALLEL_BATCH => {
                     // Broadcast the batch to the other workers.
                     let workers: Vec<_> = self
                         .worker_cache
@@ -117,23 +117,23 @@ impl QuorumWaiter {
                     let mut total_stake = self.committee.stake(&self.name);
 
                     pipeline.push(async move {
-                        // A future that sends to 2/3 stake then returns. Also prints an error
+                        // A future that sends to 2/3 stake then returns. Also prints a warning
                         // if we terminate before we have managed to get to the full 2/3 stake.
+                        let mut opt_channel = Some(channel);
                         loop{
                             if let Some(stake) = wait_for_quorum.next().await {
                                 total_stake += stake;
                                 if total_stake >= threshold {
                                     // Notify anyone waiting for this.
-                                    if let Some(channel) = opt_channel.take() {
-                                        if let Err(e) = channel.send(()) {
-                                            warn!("Channel waiting for quorum response dropped: {:?}", e);
-                                        }
+                                    let channel = opt_channel.take().unwrap();
+                                    if let Err(e) = channel.send(()) {
+                                        warn!("Channel waiting for quorum response dropped: {:?}", e);
                                     }
                                     break
                                 }
                             } else {
-                                // This should not happen, because `broadcast()` is supposed to
-                                // keep retrying.
+                                // This should not happen unless shutting down, because
+                                // `broadcast()` is supposed to keep retrying.
                                 warn!("Batch dissemination ended without a quorum. Shutting down.");
                                 break;
                             }
