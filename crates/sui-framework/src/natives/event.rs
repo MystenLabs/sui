@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{legacy_emit_cost, natives::object_runtime::ObjectRuntime};
+use crate::natives::object_runtime::ObjectRuntime;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{language_storage::TypeTag, vm_status::StatusCode};
 use move_vm_runtime::{

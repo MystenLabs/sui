@@ -27,8 +27,8 @@ pub enum SuiNativeCostIndex {
 }
 
 pub const NATIVES_COST_LOW: GasQuantity<InternalGasUnit> = InternalGas::new(10);
-pub const NATIVES_COST_MID: GasQuantity<InternalGasUnit> = InternalGas::new(100);
-pub const NATIVES_COST_HIGH: GasQuantity<InternalGasUnit> = InternalGas::new(10000);
+pub const NATIVES_COST_MID: GasQuantity<InternalGasUnit> = InternalGas::new(1_000);
+pub const NATIVES_COST_HIGH: GasQuantity<InternalGasUnit> = InternalGas::new(1_000_000);
 
 /// Base fee for entering a native fn
 pub const NATIVES_COST_BASE_ENTRY: GasQuantity<InternalGasUnit> = NATIVES_COST_HIGH;
