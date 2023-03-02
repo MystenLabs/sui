@@ -13,16 +13,16 @@ import {
 import { Provider } from '../providers/provider';
 import {
   Commands,
-  TransactionArgument,
+  CommandArgument,
   TransactionCommand,
   TransactionInput,
 } from './Commands';
 import { create } from './utils';
 
-type TransactionResult = TransactionArgument & TransactionArgument[];
+type TransactionResult = CommandArgument & CommandArgument[];
 
 function createTransactionResult(index: number): TransactionResult {
-  const baseResult: TransactionArgument = { kind: 'Result', index };
+  const baseResult: CommandArgument = { kind: 'Result', index };
 
   return new Proxy(baseResult, {
     set() {
@@ -163,10 +163,22 @@ export class Transaction<Inputs extends string = never> {
     this.#gasConfig.gasBudget = String(budget);
   }
 
-  // Dynamically create a new input, which is separate from the `input`. This is important
-  // for generated clients to be able to define unique inputs that are non-overlapping with the
-  // defined inputs.
+  /**
+   * Dynamically create a new input, which is separate from the `input`. This is important
+   * for generated clients to be able to define unique inputs that are non-overlapping with the
+   * defined inputs.
+   *
+   * For `Uint8Array` type automatically convert the input into a `Pure` CallArg, since this
+   * is the format required for custom serialization.
+   *
+   * For `
+   */
   createInput(value?: unknown) {
+    // For Uint8Array
+    if (value instanceof Uint8Array) {
+      value = { Pure: value };
+    }
+
     const index = this.#inputs.length;
     const input = create({ kind: 'Input', value, index }, TransactionInput);
     this.#inputs.push(input);
@@ -192,7 +204,7 @@ export class Transaction<Inputs extends string = never> {
   }
 
   /** Returns an argument for the gas coin, to be used in a transaction. */
-  gas(): TransactionArgument {
+  gas(): CommandArgument {
     return { kind: 'GasCoin' };
   }
 

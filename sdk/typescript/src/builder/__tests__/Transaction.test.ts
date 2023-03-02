@@ -27,9 +27,7 @@ it('supports nested results through either array index or destructuring', () => 
   const tx = new Transaction();
   const registerResult = tx.add(
     Commands.MoveCall({
-      package: '0x2',
-      function: 'game',
-      module: 'register',
+      target: '0x2::game::register',
       arguments: [],
       typeArguments: [],
     }),

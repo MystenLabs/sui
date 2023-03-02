@@ -3,3 +3,4 @@
 
 export * from './Transaction';
 export * from './Commands';
+export * from './bcs';
