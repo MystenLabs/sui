@@ -18,6 +18,7 @@ use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::Registry;
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{ConsensusConfig, NodeConfig};
@@ -119,6 +120,14 @@ pub struct SuiNode {
 
     #[cfg(msim)]
     sim_node: sui_simulator::runtime::NodeHandle,
+}
+
+impl fmt::Debug for SuiNode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("SuiNode")
+            .field("name", &self.state.name.concise())
+            .finish()
+    }
 }
 
 impl SuiNode {
@@ -243,6 +252,7 @@ impl SuiNode {
             &config.authority_store_pruning_config,
             genesis.objects(),
             config.epoch_duration_ms,
+            &config.state_snapshot_config,
         )
         .await;
 
@@ -799,6 +809,7 @@ impl SuiNode {
                         self.config
                             .supported_protocol_versions
                             .expect("Supported versions should be populated"),
+                        self.state.get_available_system_packages().await,
                     ));
                 info!(?transaction, "submitting capabilities to consensus");
                 components

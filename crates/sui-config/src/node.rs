@@ -98,6 +98,9 @@ pub struct NodeConfig {
     /// order to test protocol upgrades.
     #[serde(skip)]
     pub supported_protocol_versions: Option<SupportedProtocolVersions>,
+
+    #[serde(default)]
+    pub state_snapshot_config: StateSnapshotConfig,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
@@ -334,6 +337,21 @@ pub struct MetricsConfig {
     pub push_interval_seconds: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub push_url: Option<String>,
+}
+
+#[derive(Default, Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct StateSnapshotConfig {
+    pub enabled: bool,
+}
+
+impl StateSnapshotConfig {
+    pub fn validator_config() -> Self {
+        Self { enabled: false }
+    }
+    pub fn fullnode_config() -> Self {
+        Self { enabled: true }
+    }
 }
 
 /// Publicly known information about a validator

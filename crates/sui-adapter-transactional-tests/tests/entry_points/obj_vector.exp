@@ -27,8 +27,7 @@ created: object(113), object(114)
 written: object(111), object(112)
 
 task 7 'run'. lines 132-136:
-Error: Transaction Effects Status: Invalid Object Owned Argument. Object fake(113) is owned by object fake(114). Objects owned by other objects cannot be used as input arguments.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidChildObjectArgument(InvalidChildObjectArgument { child: fake(113), parent: fake(114) }), source: None, command: None } }
+Error: Object 0x01b2156087ad45d0d2fb96eb055cd6257a53618f4086e94ee301ec3388d82896 is owned by object 0xb221913a3af7acfea147609cf80ac9ff54e941c3fc918fc4972a9a2c95b9c5ba. Objects owned by other objects cannot be used as input arguments.
 
 task 8 'run'. lines 138-138:
 created: object(117)

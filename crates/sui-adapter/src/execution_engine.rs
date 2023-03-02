@@ -4,10 +4,11 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use crate::execution_mode::{self, ExecutionMode};
+use move_binary_format::CompiledModule;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_vm_runtime::move_vm::MoveVM;
 use sui_types::base_types::SequenceNumber;
-use tracing::{debug, instrument};
+use tracing::{debug, info, instrument};
 
 use crate::{adapter, programmable_transactions};
 use sui_protocol_config::ProtocolConfig;
@@ -46,8 +47,8 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_types::{
-    MOVE_STDLIB_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    is_system_package, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+    SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 
 use sui_types::temporary_store::TemporaryStore;
@@ -126,7 +127,7 @@ fn charge_gas_for_object_read<S>(
         .objects()
         .iter()
         // don't charge for loading Sui Framework or Move stdlib
-        .filter(|(id, _)| *id != &SUI_FRAMEWORK_OBJECT_ID && *id != &MOVE_STDLIB_OBJECT_ID)
+        .filter(|(id, _)| !is_system_package(**id))
         .map(|(_, obj)| obj.object_size_for_gas_metering())
         .sum();
     gas_status.charge_storage_read(total_size)
@@ -398,6 +399,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         tx_ctx,
         protocol_config,
     );
+
     if result.is_err() {
         tracing::error!(
             "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. System state object: {:?}. Tx data: {:?}",
@@ -423,6 +425,26 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             protocol_config,
         )?;
     }
+
+    for (version, modules) in change_epoch.system_packages.into_iter() {
+        let modules = modules
+            .into_iter()
+            .map(|m| CompiledModule::deserialize(&m).unwrap())
+            .collect();
+
+        let new_package = Object::new_system_package(modules, version, tx_ctx.digest())?;
+
+        info!(
+            "upgraded system object {:?}",
+            new_package.compute_object_reference()
+        );
+        temporary_store.write_object(
+            &SingleTxContext::sui_system(),
+            new_package,
+            WriteKind::Mutate,
+        );
+    }
+
     Ok(())
 }
 

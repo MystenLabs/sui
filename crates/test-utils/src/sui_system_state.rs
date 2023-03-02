@@ -16,13 +16,13 @@ use sui_types::sui_system_state::{
 
 pub fn test_validatdor_metadata(
     sui_address: SuiAddress,
-    pubkey_bytes: AuthorityPublicKeyBytes,
+    protocol_pubkey_bytes: AuthorityPublicKeyBytes,
     net_address: Vec<u8>,
 ) -> ValidatorMetadata {
     let network_keypair: NetworkKeyPair = get_key_pair().1;
     ValidatorMetadata {
         sui_address,
-        pubkey_bytes: pubkey_bytes.as_bytes().to_vec(),
+        protocol_pubkey_bytes: protocol_pubkey_bytes.as_bytes().to_vec(),
         network_pubkey_bytes: network_keypair.public().as_bytes().to_vec(),
         worker_pubkey_bytes: vec![],
         proof_of_possession_bytes: vec![],
@@ -34,6 +34,14 @@ pub fn test_validatdor_metadata(
         p2p_address: vec![],
         consensus_address: vec![],
         worker_address: vec![],
+        next_epoch_protocol_pubkey_bytes: None,
+        next_epoch_proof_of_possession: None,
+        next_epoch_network_pubkey_bytes: None,
+        next_epoch_worker_pubkey_bytes: None,
+        next_epoch_net_address: None,
+        next_epoch_p2p_address: None,
+        next_epoch_consensus_address: None,
+        next_epoch_worker_address: None,
     }
 }
 
@@ -46,25 +54,25 @@ pub fn test_staking_pool(sui_balance: u64) -> StakingPool {
         pool_token_balance: 0,
         exchange_rates: Table::default(),
         pending_delegation: 0,
-        pending_withdraws: TableVec::default(),
+        pending_total_sui_withdraw: 0,
+        pending_pool_token_withdraw: 0,
     }
 }
 
 pub fn test_validator(
-    pubkey_bytes: AuthorityPublicKeyBytes,
+    protocol_pubkey_bytes: AuthorityPublicKeyBytes,
     net_address: Vec<u8>,
     stake_amount: u64,
     delegated_amount: u64,
 ) -> Validator {
-    let sui_address = SuiAddress::from(&pubkey_bytes);
+    let sui_address = SuiAddress::from(&protocol_pubkey_bytes);
     Validator {
-        metadata: test_validatdor_metadata(sui_address, pubkey_bytes, net_address),
+        metadata: test_validatdor_metadata(sui_address, protocol_pubkey_bytes, net_address),
         voting_power: stake_amount + delegated_amount,
         gas_price: 1,
         staking_pool: test_staking_pool(delegated_amount + stake_amount),
         commission_rate: 0,
         next_epoch_stake: 1,
-        next_epoch_delegation: 1,
         next_epoch_gas_price: 1,
         next_epoch_commission_rate: 0,
     }

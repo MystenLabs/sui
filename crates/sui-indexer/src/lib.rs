@@ -37,6 +37,7 @@ pub const FAKE_PKG_VERSION: &str = "0.0.0";
 pub async fn new_rpc_client(http_url: String) -> Result<SuiClient, IndexerError> {
     info!("Getting new RPC client...");
     SuiClientBuilder::default()
+        .max_concurrent_requests(5)
         .build(http_url)
         .await
         .map_err(|e| {

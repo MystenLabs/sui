@@ -22,6 +22,8 @@ use types::PreSubscribedBroadcastSender;
 // the leader of round 2.
 #[tokio::test]
 async fn commit_one() {
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
+
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     // Make certificates for rounds 1 and 2.
@@ -53,7 +55,13 @@ async fn commit_one() {
     let cert_store = make_certificate_store(&test_utils::temp_dir());
     let gc_depth = 50;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth, metrics.clone());
+    let bullshark = Bullshark::new(
+        committee.clone(),
+        store.clone(),
+        gc_depth,
+        metrics.clone(),
+        NUM_SUB_DAGS_PER_SCHEDULE,
+    );
 
     let _consensus_handle = Consensus::spawn(
         committee,
@@ -77,7 +85,7 @@ async fn commit_one() {
 
     // Ensure the first 4 ordered certificates are from round 1 (they are the parents of the committed
     // leader); then the leader's certificate should be committed.
-    let committed_sub_dag = rx_output.recv().await.unwrap();
+    let committed_sub_dag: CommittedSubDag = rx_output.recv().await.unwrap();
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for _ in 1..=4 {
         let output = sequence.next().unwrap();
@@ -85,12 +93,17 @@ async fn commit_one() {
     }
     let output = sequence.next().unwrap();
     assert_eq!(output.round(), 2);
+
+    // AND the reputation scores have not been updated
+    assert_eq!(committed_sub_dag.reputation_score.total_authorities(), 0);
 }
 
 // Run for 8 dag rounds with one dead node node (that is not a leader). We should commit the leaders of
 // rounds 2, 4, and 6.
 #[tokio::test]
 async fn dead_node() {
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
+
     // Make the certificates.
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
@@ -118,7 +131,13 @@ async fn dead_node() {
     let cert_store = make_certificate_store(&test_utils::temp_dir());
     let gc_depth = 50;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth, metrics.clone());
+    let bullshark = Bullshark::new(
+        committee.clone(),
+        store.clone(),
+        gc_depth,
+        metrics.clone(),
+        NUM_SUB_DAGS_PER_SCHEDULE,
+    );
 
     let _consensus_handle = Consensus::spawn(
         committee,
@@ -143,9 +162,11 @@ async fn dead_node() {
 
     // We should commit 4 leaders (rounds 2, 4, 6, and 8).
     let mut committed = Vec::new();
+    let mut committed_sub_dags: Vec<CommittedSubDag> = Vec::new();
     for _commit_rounds in 1..=4 {
         let committed_sub_dag = rx_output.recv().await.unwrap();
-        committed.extend(committed_sub_dag.certificates);
+        committed.extend(committed_sub_dag.certificates.clone());
+        committed_sub_dags.push(committed_sub_dag);
     }
 
     let mut sequence = committed.into_iter();
@@ -156,12 +177,27 @@ async fn dead_node() {
     }
     let output = sequence.next().unwrap();
     assert_eq!(output.round(), 8);
+
+    // AND check that the consensus scores are the expected ones
+    for (index, sub_dag) in committed_sub_dags.iter().enumerate() {
+        // For the first commit we don't expect to have any score updates
+        if index == 0 {
+            assert_eq!(sub_dag.reputation_score.total_authorities(), 0);
+        } else {
+            // For any other commit we expect to always have a +1 score for each authority, as everyone
+            // always votes for the leader
+            for score in sub_dag.reputation_score.scores_per_authority.values() {
+                assert_eq!(*score as usize, index);
+            }
+        }
+    }
 }
 
 // Run for 5 dag rounds. The leader of round 2 does not have enough support, but the leader of
 // round 4 does. The leader of rounds 2 and 4 should thus be committed (because they are linked).
 #[tokio::test]
 async fn not_enough_support() {
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let mut keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
@@ -238,7 +274,13 @@ async fn not_enough_support() {
     let cert_store = make_certificate_store(&test_utils::temp_dir());
     let gc_depth = 50;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth, metrics.clone());
+    let bullshark = Bullshark::new(
+        committee.clone(),
+        store.clone(),
+        gc_depth,
+        metrics.clone(),
+        NUM_SUB_DAGS_PER_SCHEDULE,
+    );
 
     let _consensus_handle = Consensus::spawn(
         committee,
@@ -261,7 +303,7 @@ async fn not_enough_support() {
     }
 
     // We should commit 2 leaders (rounds 2 and 4).
-    let committed_sub_dag = rx_output.recv().await.unwrap();
+    let committed_sub_dag: CommittedSubDag = rx_output.recv().await.unwrap();
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for _ in 1..=3 {
         let output = sequence.next().unwrap();
@@ -270,7 +312,10 @@ async fn not_enough_support() {
     let output = sequence.next().unwrap();
     assert_eq!(output.round(), 2);
 
-    let committed_sub_dag = rx_output.recv().await.unwrap();
+    // AND no scores exist for leader 2 , as this is the first commit
+    assert_eq!(committed_sub_dag.reputation_score.total_authorities(), 0);
+
+    let committed_sub_dag: CommittedSubDag = rx_output.recv().await.unwrap();
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for _ in 1..=3 {
         let output = sequence.next().unwrap();
@@ -282,12 +327,26 @@ async fn not_enough_support() {
     }
     let output = sequence.next().unwrap();
     assert_eq!(output.round(), 4);
+
+    // AND scores should be updated with everyone that has voted for leader of round 2.
+    // Only node 0 has voted for the leader of this round, so only 1 score should exist
+    // with value 1
+    assert_eq!(committed_sub_dag.reputation_score.total_authorities(), 1);
+
+    let node_0_name = &keys[0];
+    let score = committed_sub_dag
+        .reputation_score
+        .scores_per_authority
+        .get(node_0_name)
+        .unwrap();
+    assert_eq!(*score, 1);
 }
 
 // Run for 7 dag rounds. Node 0 (the leader of round 2) is missing for rounds 1 and 2,
 // and reappears from round 3.
 #[tokio::test]
 async fn missing_leader() {
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let mut keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
@@ -328,7 +387,13 @@ async fn missing_leader() {
     let cert_store = make_certificate_store(&test_utils::temp_dir());
     let gc_depth = 50;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth, metrics.clone());
+    let bullshark = Bullshark::new(
+        committee.clone(),
+        store.clone(),
+        gc_depth,
+        metrics.clone(),
+        NUM_SUB_DAGS_PER_SCHEDULE,
+    );
 
     let _consensus_handle = Consensus::spawn(
         committee,
@@ -351,7 +416,7 @@ async fn missing_leader() {
     }
 
     // Ensure the commit sequence is as expected.
-    let committed_sub_dag = rx_output.recv().await.unwrap();
+    let committed_sub_dag: CommittedSubDag = rx_output.recv().await.unwrap();
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for _ in 1..=3 {
         let output = sequence.next().unwrap();
@@ -367,6 +432,9 @@ async fn missing_leader() {
     }
     let output = sequence.next().unwrap();
     assert_eq!(output.round(), 4);
+
+    // AND no scores exist since this is the first commit that has happened
+    assert_eq!(committed_sub_dag.reputation_score.total_authorities(), 0);
 }
 
 // Run for 11 dag rounds in ideal conditions (all nodes reference all other nodes).
@@ -377,6 +445,7 @@ async fn committed_round_after_restart() {
     let committee = fixture.committee();
     let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
     let epoch = committee.epoch();
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     // Make certificates for rounds 1 to 11.
     let genesis = Certificate::genesis(&committee)
@@ -399,7 +468,13 @@ async fn committed_round_after_restart() {
         let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
         let gc_depth = 50;
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-        let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth, metrics.clone());
+        let bullshark = Bullshark::new(
+            committee.clone(),
+            store.clone(),
+            gc_depth,
+            metrics.clone(),
+            NUM_SUB_DAGS_PER_SCHEDULE,
+        );
 
         let handle = Consensus::spawn(
             committee.clone(),
@@ -462,6 +537,8 @@ async fn committed_round_after_restart() {
 /// from round 2. Certificate 2 should not get committed.
 #[tokio::test]
 async fn delayed_certificates_are_rejected() {
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
+
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
@@ -479,7 +556,13 @@ async fn delayed_certificates_are_rejected() {
 
     let store = make_consensus_store(&test_utils::temp_dir());
     let mut state = ConsensusState::new(metrics.clone());
-    let mut bullshark = Bullshark::new(committee, store, gc_depth, metrics);
+    let mut bullshark = Bullshark::new(
+        committee,
+        store,
+        gc_depth,
+        metrics,
+        NUM_SUB_DAGS_PER_SCHEDULE,
+    );
 
     // Populate DAG with the rounds up to round 5 so we trigger commits
     let mut all_subdags = Vec::new();
@@ -506,6 +589,8 @@ async fn delayed_certificates_are_rejected() {
 
 #[tokio::test]
 async fn submitting_equivocating_certificate_should_error() {
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
+
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
@@ -523,7 +608,13 @@ async fn submitting_equivocating_certificate_should_error() {
 
     let store = make_consensus_store(&test_utils::temp_dir());
     let mut state = ConsensusState::new(metrics.clone());
-    let mut bullshark = Bullshark::new(committee.clone(), store, gc_depth, metrics);
+    let mut bullshark = Bullshark::new(
+        committee.clone(),
+        store,
+        gc_depth,
+        metrics,
+        NUM_SUB_DAGS_PER_SCHEDULE,
+    );
 
     // Populate DAG with all the certificates
     for certificate in certificates.clone() {
@@ -558,6 +649,78 @@ async fn submitting_equivocating_certificate_should_error() {
     }
 }
 
+/// Advance the DAG for 50 rounds, while we change "schedule" for every 5 subdag commits.
+#[tokio::test]
+async fn reset_consensus_scores_on_every_schedule_change() {
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 5;
+
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let epoch = committee.epoch();
+    let gc_depth = 10;
+
+    // Make certificates for rounds 1 to 50.
+    let genesis = Certificate::genesis(&committee)
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let (certificates, _) =
+        test_utils::make_certificates_with_epoch(&committee, 1..=50, epoch, &genesis, &keys);
+
+    let store = make_consensus_store(&test_utils::temp_dir());
+    let mut state = ConsensusState::new(metrics.clone());
+    let mut bullshark = Bullshark::new(
+        committee,
+        store,
+        gc_depth,
+        metrics,
+        NUM_SUB_DAGS_PER_SCHEDULE,
+    );
+
+    // Populate DAG with the rounds up to round 50 so we trigger commits
+    let mut all_subdags = Vec::new();
+    for certificate in certificates {
+        let (_, committed_subdags) = bullshark
+            .process_certificate(&mut state, certificate)
+            .unwrap();
+        all_subdags.extend(committed_subdags);
+    }
+
+    // ensure the leaders of rounds 2 and 4 have been committed
+    let mut current_score = 0;
+    for sub_dag in all_subdags {
+        // The first commit has no scores
+        if sub_dag.sub_dag_index == 1 {
+            assert_eq!(sub_dag.reputation_score.total_authorities(), 0);
+        } else if sub_dag.sub_dag_index % NUM_SUB_DAGS_PER_SCHEDULE == 0 {
+            // On every 5th commit we reset the scores and count from the beginning with
+            // scores updated to 1, as we expect now every node to have voted for the previous leader.
+            for score in sub_dag.reputation_score.scores_per_authority.values() {
+                assert_eq!(*score as usize, 1);
+            }
+            current_score = 1;
+        } else {
+            // On every other commit the scores get calculated incrementally with +1 score
+            // for every commit.
+            current_score += 1;
+
+            for score in sub_dag.reputation_score.scores_per_authority.values() {
+                assert_eq!(*score, current_score);
+            }
+
+            if (sub_dag.sub_dag_index + 1) % NUM_SUB_DAGS_PER_SCHEDULE == 0 {
+                // if this is going to be the last score update for the current schedule, then
+                // make sure that the `fina_of_schedule` will be true
+                assert!(sub_dag.reputation_score.final_of_schedule);
+            } else {
+                assert!(!sub_dag.reputation_score.final_of_schedule);
+            }
+        }
+    }
+}
+
 // Run for 4 dag rounds in ideal conditions (all nodes reference all other nodes). We should commit
 // the leader of round 2. Then shutdown consensus and restart in a new epoch.
 #[tokio::test]
@@ -565,6 +728,7 @@ async fn restart_with_new_committee() {
     let fixture = CommitteeFixture::builder().build();
     let mut committee = fixture.committee();
     let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     // Run for a few epochs.
     for epoch in 0..5 {
@@ -579,7 +743,13 @@ async fn restart_with_new_committee() {
         let cert_store = make_certificate_store(&test_utils::temp_dir());
         let gc_depth = 50;
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-        let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth, metrics.clone());
+        let bullshark = Bullshark::new(
+            committee.clone(),
+            store.clone(),
+            gc_depth,
+            metrics.clone(),
+            NUM_SUB_DAGS_PER_SCHEDULE,
+        );
 
         let handle = Consensus::spawn(
             committee.clone(),
