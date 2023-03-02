@@ -123,10 +123,9 @@ impl WriteStore for RocksDbStore {
             Vec<(VerifiedTransaction, TransactionEffects)>,
         )>,
     ) -> Result<(), Self::Error> {
-        
         // Strange that we have an empty bundle, but it happens
         if bundle.is_empty() {
-            return Ok(())
+            return Ok(());
         }
 
         // First write the transactions and effects as a bundle
@@ -186,7 +185,7 @@ impl WriteStore for RocksDbStore {
 
         // The write the checkpoint structure
         self.checkpoint_store.insert_full_verified_bundle(&bundle)?;
-        
+
         Ok(())
     }
 

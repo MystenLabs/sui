@@ -174,10 +174,10 @@ impl CheckpointExecutor {
                     self.process_executed_checkpoint(&checkpoint);
                     highest_executed = Some(checkpoint);
 
-                    // Estimate TPS every 10k transactions or 30 sec
+                    // Estimate TPS every 10k transactions or 5 sec
                     let elapsed = now_time.elapsed().as_millis();
                     let current_transaction_num =  highest_executed.as_ref().map(|c| c.summary.network_total_transactions).unwrap_or(0);
-                    if current_transaction_num - now_transaction_num > 10_000 || elapsed > 30_000{
+                    if current_transaction_num - now_transaction_num > 10_000 || elapsed > 5_000{
                         let tps = (1000.0 * (current_transaction_num - now_transaction_num) as f64 / elapsed as f64) as i32;
                         self.metrics.checkpoint_exec_sync_tps.set(tps as i64);
                         now_time = Instant::now();
@@ -186,6 +186,7 @@ impl CheckpointExecutor {
 
                 }
                 // Check for newly synced checkpoints from StateSync.
+                // This is simply used to 'wake up' this thread
                 received = self.mailbox.recv() => match received {
                     Ok(checkpoint) => {
                         debug!(

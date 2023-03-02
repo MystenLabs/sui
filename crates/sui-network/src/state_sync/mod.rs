@@ -48,7 +48,7 @@
 //! of the newly synchronized checkpoint so that it can help other peers synchronize.
 
 use anemo::{types::PeerEvent, PeerId, Request, Response, Result};
-use anyhow::anyhow;
+
 use futures::{FutureExt, StreamExt};
 use std::{
     collections::HashMap,
@@ -56,16 +56,16 @@ use std::{
     time::{Duration, SystemTime},
 };
 use sui_config::p2p::StateSyncConfig;
+use sui_types::{messages_checkpoint::CertifiedCheckpointSummary, messages::Transaction};
 use sui_types::{
-    base_types::ExecutionDigests,
-    digests::{CheckpointContentsDigest, CheckpointDigest},
+    digests::{CheckpointDigest},
     message_envelope::Message,
     messages_checkpoint::{
         CertifiedCheckpointSummary as Checkpoint, CheckpointContents, CheckpointSequenceNumber,
         VerifiedCheckpoint,
     },
     storage::ReadStore,
-    storage::WriteStore, messages::VerifiedTransaction,
+    storage::WriteStore, messages::{TransactionEffects, VerifiedTransaction},
 };
 use tap::{Pipe, TapFallible, TapOptional};
 use tokio::{
@@ -542,6 +542,7 @@ where
                 self.config.timeout(),
                 // The if condition should ensure that this is Some
                 highest_known_checkpoint.unwrap(),
+                self.weak_sender.clone(),
             )
             .map(|result| match result {
                 Ok(()) => {}
@@ -551,49 +552,6 @@ where
             });
             let task_handle = self.tasks.spawn(task);
             self.sync_checkpoint_summaries_task = Some(task_handle);
-        }
-    }
-
-    fn maybe_start_checkpoint_contents_sync_task(&mut self) {
-        // Only run one sync task at a time
-        if self.sync_checkpoint_contents_task.is_some() {
-            return;
-        }
-
-        let highest_verified_checkpoint = self
-            .store
-            .get_highest_verified_checkpoint()
-            .expect("store operation should not fail");
-        let highest_synced_checkpoint = self
-            .store
-            .get_highest_synced_checkpoint()
-            .expect("store operation should not fail");
-
-        if highest_verified_checkpoint.sequence_number()
-            > highest_synced_checkpoint.sequence_number()
-            // skip if we aren't connected to any peers that can help
-            && self
-                .peer_heights
-                .read()
-                .unwrap()
-                .highest_known_checkpoint_sequence_number()
-                > Some(highest_synced_checkpoint.sequence_number())
-        {
-            let task = sync_checkpoint_contents(
-                self.network.clone(),
-                self.store.clone(),
-                self.peer_heights.clone(),
-                self.weak_sender.clone(),
-                self.checkpoint_event_sender.clone(),
-                self.metrics.clone(),
-                self.config.transaction_download_concurrency(),
-                self.config.checkpoint_content_download_concurrency(),
-                self.config.timeout(),
-                highest_verified_checkpoint,
-            );
-
-            let task_handle = self.tasks.spawn(task);
-            self.sync_checkpoint_contents_task = Some(task_handle);
         }
     }
 
@@ -802,6 +760,7 @@ async fn sync_to_checkpoint<S>(
     checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
     timeout: Duration,
     checkpoint: Checkpoint,
+    sender: mpsc::WeakSender<StateSyncMessage>,
 ) -> Result<()>
 where
     S: WriteStore,
@@ -821,14 +780,14 @@ where
     }
 
     // Define an epoch within which we are doing sync. After that we stop this
-    // sync and start again a sync for the next epoch. If the last verified checkpoint 
+    // sync and start again a sync for the next epoch. If the last verified checkpoint
     // is at an epoch boundary we are in the next epoch, otherwise we are in the same
     // epoch.
-    let sync_epoch = current.next_epoch_committee().map(|_| { 
-        current.epoch() + 1
-    }).unwrap_or(current.epoch());
+    let sync_epoch = current
+        .next_epoch_committee()
+        .map(|_| current.epoch() + 1)
+        .unwrap_or(current.epoch());
 
-    let mut rng = <rand::rngs::StdRng as rand::SeedableRng>::from_entropy();
     // get a list of peers that can help
     let peers = peer_heights
         .read()
@@ -852,127 +811,12 @@ where
     let request_stream = (current.sequence_number().saturating_add(1)
         ..=checkpoint.sequence_number())
         .map(|next| {
-            let mut peers = peers
-                .iter()
-                // Filter out any peers who can't help with this particular checkpoint
-                .filter(|(_peer_id, info)| info.height >= next)
-                // Filter out any peers who we aren't connected with
-                .flat_map(|(peer_id, _height)| network.peer(*peer_id))
-                .map(StateSyncClient::new)
-                .collect::<Vec<_>>();
-
-            rand::seq::SliceRandom::shuffle(peers.as_mut_slice(), &mut rng);
-            let transaction_download_concurrency = 1_000;
-
-            // let peer_heights = peer_heights.clone();
-            async move {
-                let now = tokio::time::Instant::now();
-
-                // Iterate through our selected peers trying each one in turn until we're able to
-                // successfully get the target checkpoint
-                'outer_peer_loop: for mut peer in peers {
-                    let request = Request::new(GetCheckpointSummaryRequest::BySequenceNumber(next))
-                        .with_timeout(timeout);
-
-                    if let Some(checkpoint) = peer
-                        .get_checkpoint_summary(request)
-                        .await
-                        .tap_err(|e| trace!("{e:?}"))
-                        .ok()
-                        .and_then(Response::into_inner)
-                        .tap_none(|| trace!("peer unable to help sync"))
-                    {
-                        // peer didn't give us a checkpoint with the height that we requested
-                        if checkpoint.sequence_number() != next {
-                            continue 'outer_peer_loop;
-                        }
-
-                        // Now get the contents structure
-                        let request =
-                            Request::new(checkpoint.content_digest()).with_timeout(timeout);
-                        let contents = if let Some(contents) = peer
-                            .get_checkpoint_contents(request)
-                            .await
-                            .tap_err(|e| trace!("{e:?}"))
-                            .ok()
-                            .and_then(Response::into_inner)
-                            .tap_none(|| trace!("peer unable to help sync"))
-                        {
-                            if checkpoint.content_digest() != contents.digest() {
-                                continue 'outer_peer_loop;
-                            }
-
-                            contents
-                        } else {
-                            continue 'outer_peer_loop;
-                        };
-
-                        let num_txns = contents.size() as u64;
-
-                        // Sync transactions and effects
-                        let mut stream = contents
-                            .iter()
-                            .cloned()
-                            .into_iter()
-                            .map(|digests| {
-                                let digests = digests.clone();
-                                let mut peer = peer.clone();
-                                async move {
-                                    // Ask for all requests
-                                    let request = Request::new(digests).with_timeout(timeout);
-                                    if let Some((transaction, effects)) = peer
-                                        .get_transaction_and_effects(request)
-                                        .await
-                                        .tap_err(|e| trace!("{e:?}"))
-                                        .ok()
-                                        .and_then(Response::into_inner)
-                                        .tap_none(|| trace!("peer unable to help sync"))
-                                    {
-                                        if !(transaction.digest() == &digests.transaction
-                                            && effects.digest() == digests.effects
-                                            && effects.transaction_digest == digests.transaction)
-                                        {
-                                            return None;
-                                        }
-
-                                        Some((transaction, effects))
-                                    } else {
-                                        None
-                                    }
-                                }
-                            })
-                            .pipe(futures::stream::iter)
-                            .buffer_unordered(transaction_download_concurrency);
-
-                        let mut transaction_effects = Vec::with_capacity(num_txns as usize);
-                        while let Some(result) = stream.next().await {
-                            if let Some((transaction, effects)) = result {
-                                transaction_effects.push((transaction, effects));
-                            } else {
-                                continue 'outer_peer_loop;
-                            }
-                        }
-
-                        // Let go of the &stream reference
-                        drop(stream);
-
-                        trace!(
-                            "Full Sync: {} L: {}\t{}ms",
-                            checkpoint.sequence_number(),
-                            num_txns,
-                            now.elapsed().as_millis()
-                        );
-                        return (
-                            Some((checkpoint, contents, transaction_effects)),
-                            next,
-                            Some(peer.inner().peer_id()),
-                        );
-                    }
-                }
-
-                warn!("Failed to download checkpoint: {}", next);
-                (None, next, None)
-            }
+            download_full_checkpoint(
+                next,
+                peers.clone(),
+                &network,
+                timeout.clone(),
+            )
         })
         .pipe(futures::stream::iter)
         .buffered(checkpoint_header_download_concurrency);
@@ -982,7 +826,6 @@ where
 
     let mut now_net = tokio::time::Instant::now();
     while let Some(mut vec_checkpoints) = chucks_stream.next().await {
-
         let net_elapsed = now_net.elapsed().as_millis();
         total_on_net += net_elapsed;
         let now = tokio::time::Instant::now();
@@ -992,7 +835,7 @@ where
             .into_iter()
             .take_while(|item| item.0.is_some())
             .map(|item| {
-                let (opt_items, next, opt_peer) = item;
+                let (opt_items, _next, _opt_peer) = item;
                 let (checkpoint, contents, transaction_effects) = opt_items.unwrap(); // Safe due to take_whie check
 
                 // Change all transaction to be certified.
@@ -1099,7 +942,7 @@ where
 
             // Verify the checkpoint
             let checkpoint = {
-                let (checkpoint, contents, transaction_effects) = maybe_checkpoint
+                let (checkpoint, _contents, _transaction_effects) = maybe_checkpoint
                     .ok_or_else(|| anyhow::anyhow!("no peers were able to help sync"))?;
 
                 // Do the work for summary.
@@ -1139,6 +982,12 @@ where
 
         metrics.set_highest_verified_checkpoint(current.sequence_number());
         metrics.set_highest_synced_checkpoint(current.sequence_number());
+
+        // Notify event loop to notify our peers that we've synced to a new checkpoint height
+        if let Some(sender) = sender.upgrade() {
+            let message = StateSyncMessage::SyncedCheckpoint(Box::new(current.clone()));
+            let _ = sender.send(message).await;
+        }
 
         let now_db_elapsed = now_db.elapsed().as_millis();
 
@@ -1181,9 +1030,139 @@ where
     Ok(())
 }
 
+fn download_full_checkpoint(
+    next: u64,
+    peers: Vec<(PeerId, PeerStateSyncInfo)>,
+    network: &anemo::Network,
+    timeout: Duration,
+) -> impl core::future::Future<Output=(Option<(CertifiedCheckpointSummary, CheckpointContents, Vec<(Transaction, TransactionEffects)>)>, u64, Option<PeerId>)> {
+    let mut peers = peers
+        .iter()
+        // Filter out any peers who can't help with this particular checkpoint
+        .filter(|(_peer_id, info)| info.height >= next)
+        // Filter out any peers who we aren't connected with
+        .flat_map(|(peer_id, _height)| network.peer(*peer_id).map(|c| (*peer_id, c)))
+        .map(|(peer_id, client)| (peer_id, StateSyncClient::new(client)))
+        .collect::<Vec<_>>();
+
+    let mut rng = <rand::rngs::StdRng as rand::SeedableRng>::from_entropy();
+    rand::seq::SliceRandom::shuffle(peers.as_mut_slice(), &mut rng);
+    let transaction_download_concurrency = 1_000;
+
+    async move {
+        let now = tokio::time::Instant::now();
+
+        // Iterate through our selected peers trying each one in turn until we're able to
+        // successfully get the target checkpoint
+        // info!("Num peers: {}", peers.len());
+        'outer_peer_loop: for (peer_id, mut peer) in peers {
+            let request = Request::new(GetCheckpointSummaryRequest::BySequenceNumber(next))
+                .with_timeout(timeout);
+
+            if let Some(checkpoint) = peer
+                .get_checkpoint_summary(request)
+                .await
+                .tap_err(|e| error!("{e:?}"))
+                .ok()
+                .and_then(Response::into_inner)
+                .tap_none(|| warn!("Peer unable to help sync checkpoint {}", peer_id))
+            {
+                // peer didn't give us a checkpoint with the height that we requested
+                if checkpoint.sequence_number() != next {
+                    continue 'outer_peer_loop;
+                }
+
+                // Now get the contents structure
+                let request = Request::new(checkpoint.content_digest()).with_timeout(timeout);
+                let contents = if let Some(contents) = peer
+                    .get_checkpoint_contents(request)
+                    .await
+                    .tap_err(|e| error!("{e:?}"))
+                    .ok()
+                    .and_then(Response::into_inner)
+                    .tap_none(|| warn!("Peer unable to help sync contents {}", peer_id))
+                {
+                    if checkpoint.content_digest() != contents.digest() {
+                        continue 'outer_peer_loop;
+                    }
+
+                    contents
+                } else {
+                    continue 'outer_peer_loop;
+                };
+
+                let num_txns = contents.size() as u64;
+
+                // Sync transactions and effects
+                let mut stream = contents
+                    .iter()
+                    .cloned()
+                    .into_iter()
+                    .map(|digests| {
+                        let digests = digests.clone();
+                        let mut peer = peer.clone();
+                        async move {
+                            // Ask for all requests
+                            let request = Request::new(digests).with_timeout(timeout);
+                            if let Some((transaction, effects)) = peer
+                                .get_transaction_and_effects(request)
+                                .await
+                                .tap_err(|e| error!("{e:?}"))
+                                .ok()
+                                .and_then(Response::into_inner)
+                                .tap_none(|| warn!("Peer unable to help sync transaction {}", peer_id))
+                            {
+                                if !(transaction.digest() == &digests.transaction
+                                    && effects.digest() == digests.effects
+                                    && effects.transaction_digest == digests.transaction)
+                                {
+                                    return None;
+                                }
+
+                                Some((transaction, effects))
+                            } else {
+                                None
+                            }
+                        }
+                    })
+                    .pipe(futures::stream::iter)
+                    .buffer_unordered(transaction_download_concurrency);
+
+                let mut transaction_effects = Vec::with_capacity(num_txns as usize);
+                while let Some(result) = stream.next().await {
+                    if let Some((transaction, effects)) = result {
+                        transaction_effects.push((transaction, effects));
+                    } else {
+                        continue 'outer_peer_loop;
+                    }
+                }
+
+                // Let go of the &stream reference
+                drop(stream);
+
+                trace!(
+                    "Full Sync: {} L: {}\t{}ms",
+                    checkpoint.sequence_number(),
+                    num_txns,
+                    now.elapsed().as_millis()
+                );
+
+                return (
+                    Some((checkpoint, contents, transaction_effects)),
+                    next,
+                    Some(peer.inner().peer_id()),
+                );
+            }
+        }
+
+        warn!("Failed to download checkpoint: {}", next);
+        (None, next, None)
+    }
+}
+
 fn verify_checkpoint_not_certificate<S>(
     current: &VerifiedCheckpoint,
-    store: S,
+    _store: S,
     checkpoint: Checkpoint,
 ) -> Result<VerifiedCheckpoint, Checkpoint>
 where
@@ -1229,223 +1208,4 @@ where
     }
 
     Ok(VerifiedCheckpoint::new_unchecked(checkpoint))
-}
-
-async fn sync_checkpoint_contents<S>(
-    network: anemo::Network,
-    store: S,
-    peer_heights: Arc<RwLock<PeerHeights>>,
-    sender: mpsc::WeakSender<StateSyncMessage>,
-    checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
-    metrics: Metrics,
-    transaction_download_concurrency: usize,
-    checkpoint_content_download_concurrency: usize,
-    timeout: Duration,
-    target_checkpoint: VerifiedCheckpoint,
-) where
-    S: WriteStore + Clone,
-    <S as ReadStore>::Error: std::error::Error,
-{
-    let mut highest_synced = store
-        .get_highest_synced_checkpoint()
-        .expect("store operation should not fail");
-
-    let start = highest_synced.sequence_number().saturating_add(1);
-
-    let mut checkpoint_contents_stream = (start..=target_checkpoint.sequence_number())
-        .map(|next| {
-            store
-                .get_checkpoint_by_sequence_number(next)
-                .expect("store operation should not fail")
-                .expect(
-                    "BUG: store should have all checkpoints older than highest_verified_checkpoint",
-                )
-        })
-        .map(|checkpoint| {
-            sync_one_checkpoint_contents(
-                network.clone(),
-                &store,
-                peer_heights.clone(),
-                transaction_download_concurrency,
-                timeout,
-                checkpoint,
-            )
-        })
-        .pipe(futures::stream::iter)
-        .buffered(checkpoint_content_download_concurrency);
-
-    while let Some(maybe_checkpoint) = checkpoint_contents_stream.next().await {
-        match maybe_checkpoint {
-            Ok((checkpoint, num_txns)) => {
-                // if this fails, there is a bug in checkpoint construction (or the chain is
-                // corrupted)
-                assert_eq!(
-                    highest_synced.summary.network_total_transactions + num_txns,
-                    checkpoint.summary.network_total_transactions
-                );
-
-                store
-                    .update_highest_synced_checkpoint(&checkpoint)
-                    .expect("store operation should not fail");
-                metrics.set_highest_synced_checkpoint(checkpoint.sequence_number());
-                // We don't care if no one is listening as this is a broadcast channel
-                let _ = checkpoint_event_sender.send(checkpoint.clone());
-                highest_synced = checkpoint;
-            }
-            Err(err) => {
-                debug!("unable to sync contents of checkpoint: {err}");
-                break;
-            }
-        }
-    }
-
-    // Notify event loop to notify our peers that we've synced to a new checkpoint height
-    if let Some(sender) = sender.upgrade() {
-        let message = StateSyncMessage::SyncedCheckpoint(Box::new(highest_synced));
-        let _ = sender.send(message).await;
-    }
-}
-
-async fn sync_one_checkpoint_contents<S>(
-    network: anemo::Network,
-    store: S,
-    peer_heights: Arc<RwLock<PeerHeights>>,
-    transaction_download_concurrency: usize,
-    timeout: Duration,
-    checkpoint: VerifiedCheckpoint,
-) -> Result<(VerifiedCheckpoint, u64)>
-where
-    S: WriteStore + Clone,
-    <S as ReadStore>::Error: std::error::Error,
-{
-    let mut rng = <rand::rngs::StdRng as rand::SeedableRng>::from_entropy();
-    // get a list of peers that can help
-    let mut peers = peer_heights
-        .read()
-        .unwrap()
-        .peers_on_same_chain()
-        // Filter out any peers who can't help with this particular checkpoint
-        .filter(|(_peer_id, info)| info.height >= checkpoint.sequence_number())
-        // Filter out any peers who we aren't connected with
-        .flat_map(|(peer_id, _height)| network.peer(*peer_id))
-        .map(StateSyncClient::new)
-        .collect::<Vec<_>>();
-    rand::seq::SliceRandom::shuffle(peers.as_mut_slice(), &mut rng);
-
-    let Some(contents) = get_checkpoint_contents(&mut peers, &store, checkpoint.content_digest(), timeout).await else {
-        return Err(anyhow!("unable to sync checkpoint contents for checkpoint {}", checkpoint.sequence_number()));
-    };
-
-    let num_txns = contents.size() as u64;
-
-    // Sync transactions and effects
-    let mut stream = contents
-        .into_inner()
-        .into_iter()
-        .map(|digests| get_transaction_and_effects(peers.clone(), store.clone(), digests, timeout))
-        .pipe(futures::stream::iter)
-        .buffer_unordered(transaction_download_concurrency);
-
-    while let Some(result) = stream.next().await {
-        result?;
-    }
-
-    Ok((checkpoint, num_txns))
-}
-
-async fn get_checkpoint_contents<S>(
-    peers: &mut [StateSyncClient<anemo::Peer>],
-    store: S,
-    digest: CheckpointContentsDigest,
-    timeout: Duration,
-) -> Option<CheckpointContents>
-where
-    S: WriteStore,
-    <S as ReadStore>::Error: std::error::Error,
-{
-    if let Some(contents) = store
-        .get_checkpoint_contents(&digest)
-        .expect("store operation should not fail")
-    {
-        return Some(contents);
-    }
-
-    // Iterate through our selected peers trying each one in turn until we're able to
-    // successfully get the target checkpoint
-    for peer in peers.iter_mut() {
-        let request = Request::new(digest).with_timeout(timeout);
-        if let Some(contents) = peer
-            .get_checkpoint_contents(request)
-            .await
-            .tap_err(|e| trace!("{e:?}"))
-            .ok()
-            .and_then(Response::into_inner)
-            .tap_none(|| trace!("peer unable to help sync"))
-        {
-            if digest == contents.digest() {
-                store
-                    .insert_checkpoint_contents(contents.clone())
-                    .expect("store operation should not fail");
-                return Some(contents);
-            }
-        }
-    }
-
-    None
-}
-
-async fn get_transaction_and_effects<S>(
-    peers: Vec<StateSyncClient<anemo::Peer>>,
-    store: S,
-    digests: ExecutionDigests,
-    timeout: Duration,
-) -> Result<()>
-where
-    S: WriteStore,
-    <S as ReadStore>::Error: std::error::Error,
-{
-    if let (Some(_transaction), Some(_effects)) = (
-        store
-            .get_transaction(&digests.transaction)
-            .expect("store operation should not fail"),
-        store
-            .get_transaction_effects(&digests.effects)
-            .expect("store operation should not fail"),
-    ) {
-        return Ok(());
-    }
-
-    // Iterate through our selected peers trying each one in turn until we're able to
-    // successfully get the target checkpoint
-    for mut peer in peers {
-        let request = Request::new(digests).with_timeout(timeout);
-        if let Some((transaction, effects)) = peer
-            .get_transaction_and_effects(request)
-            .await
-            .tap_err(|e| trace!("{e:?}"))
-            .ok()
-            .and_then(Response::into_inner)
-            .tap_none(|| trace!("peer unable to help sync"))
-        {
-            if transaction.digest() == &digests.transaction
-                && effects.digest() == digests.effects
-                && effects.transaction_digest == digests.transaction
-            {
-                store
-                    .insert_transaction_and_effects(
-                        sui_types::messages::VerifiedTransaction::new_unchecked(transaction),
-                        effects,
-                    )
-                    .expect("store operation should not fail");
-                // TODO: If the transaction has already been executed, we should check that the executed
-                // effects match. If they don't, it's a bug and we should panic.
-                return Ok(());
-            }
-        }
-    }
-
-    Err(anyhow!(
-        "unable to sync transaction {:?} from any of our peers",
-        digests.transaction
-    ))
 }
