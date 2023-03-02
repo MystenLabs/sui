@@ -11748,8 +11748,6 @@ dependencies = [
  "winapi",
  "winapi-util",
  "windows-sys 0.42.0",
- "windows-sys 0.45.0",
- "windows-targets",
  "windows_x86_64_msvc",
  "winreg",
  "wyz",
