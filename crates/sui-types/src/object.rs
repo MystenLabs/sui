@@ -94,7 +94,9 @@ impl MoveObject {
         )
     }
 
-    unsafe fn new_from_execution_with_limit(
+    /// # Safety
+    /// This function should ONLY be called if has_public_transfer has been determined by the type_
+    pub unsafe fn new_from_execution_with_limit(
         type_: StructTag,
         has_public_transfer: bool,
         version: SequenceNumber,
