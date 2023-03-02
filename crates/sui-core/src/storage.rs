@@ -134,10 +134,9 @@ impl WriteStore for RocksDbStore {
             Vec<(VerifiedCertificate, TransactionEffects)>,
         )>,
     ) -> Result<(), Self::Error> {
-        
         // Strange that we have an empty bundle, but it happens
         if bundle.is_empty() {
-            return Ok(())
+            return Ok(());
         }
 
         // First write the transactions and effects as a bundle
@@ -191,13 +190,14 @@ impl WriteStore for RocksDbStore {
                     next_committee,
                 )
                 .expect("new committee from consensus should be constructable");
-                self.insert_committee(committee).expect("database cannot fail here.")
+                self.insert_committee(committee)
+                    .expect("database cannot fail here.")
             }
         });
 
         // The write the checkpoint structure
         self.checkpoint_store.insert_full_verified_bundle(&bundle)?;
-        
+
         Ok(())
     }
 

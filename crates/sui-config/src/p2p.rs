@@ -145,7 +145,7 @@ impl StateSyncConfig {
     }
 
     pub fn checkpoint_header_download_concurrency(&self) -> usize {
-        const CHECKPOINT_HEADER_DOWNLOAD_CONCURRENCY: usize = 6_000;
+        const CHECKPOINT_HEADER_DOWNLOAD_CONCURRENCY: usize = 12_000;
 
         self.checkpoint_header_download_concurrency
             .unwrap_or(CHECKPOINT_HEADER_DOWNLOAD_CONCURRENCY)
@@ -166,7 +166,7 @@ impl StateSyncConfig {
     }
 
     pub fn timeout(&self) -> Duration {
-        const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
+        const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
         self.timeout_ms
             .map(Duration::from_millis)

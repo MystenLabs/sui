@@ -7,6 +7,7 @@ use prometheus::{
     register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry, IntCounterVec,
     IntGaugeVec, Registry,
 };
+use tracing::log::debug;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -184,7 +185,7 @@ impl Histogram {
             Err(TrySendError::Closed(_)) => {
                 // can happen during runtime shutdown
             }
-            Err(TrySendError::Full(_)) => error!("Histogram channel is full, dropping data"),
+            Err(TrySendError::Full(_)) => debug!("Histogram channel is full, dropping data"),
         }
     }
 
