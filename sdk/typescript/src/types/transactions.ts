@@ -111,16 +111,16 @@ export type TransactionKindName =
   | 'Genesis';
 
 export const SuiTransactionKind = union([
-  object({ TransferObject: TransferObject }),
-  object({ Publish: SuiMovePackage }),
-  object({ Call: MoveCall }),
-  object({ TransferSui: SuiTransferSui }),
-  object({ ChangeEpoch: SuiChangeEpoch }),
-  object({ ConsensusCommitPrologue: SuiConsensusCommitPrologue }),
-  object({ Pay: Pay }),
-  object({ PaySui: PaySui }),
-  object({ PayAllSui: PayAllSui }),
-  object({ Genesis: Genesis }),
+  object({ type: literal("TransferObject"), content: TransferObject }),
+  object({ type: literal("Publish"), content: SuiMovePackage }),
+  object({ type: literal("Call"), content: MoveCall }),
+  object({ type: literal("TransferSui"), content: SuiTransferSui }),
+  object({ type: literal("ChangeEpoch"), content: SuiChangeEpoch }),
+  object({ type: literal("ConsensusCommitPrologue"), content: SuiConsensusCommitPrologue }),
+  object({ type: literal("Pay"), content: Pay }),
+  object({ type: literal("PaySui"), content: PaySui }),
+  object({ type: literal("PayAllSui"), content: PayAllSui }),
+  object({ type: literal("Genesis"), content: Genesis }),
 ]);
 export type SuiTransactionKind = Infer<typeof SuiTransactionKind>;
 
@@ -489,54 +489,54 @@ export function getTransactionGasBudget(
 export function getTransferObjectTransaction(
   data: SuiTransactionKind,
 ): TransferObject | undefined {
-  return 'TransferObject' in data ? data.TransferObject : undefined;
+  return data.type === 'TransferObject' ? data.content : undefined;
 }
 
 export function getPublishTransaction(
   data: SuiTransactionKind,
 ): SuiMovePackage | undefined {
-  return 'Publish' in data ? data.Publish : undefined;
+  return data.type === 'Publish' ? data.content : undefined;
 }
 
 export function getMoveCallTransaction(
   data: SuiTransactionKind,
 ): MoveCall | undefined {
-  return 'Call' in data ? data.Call : undefined;
+  return data.type === 'Call' ? data.content : undefined;
 }
 
 export function getTransferSuiTransaction(
   data: SuiTransactionKind,
 ): SuiTransferSui | undefined {
-  return 'TransferSui' in data ? data.TransferSui : undefined;
+  return data.type === 'TransferSui' ? data.content : undefined;
 }
 
 export function getPayTransaction(data: SuiTransactionKind): Pay | undefined {
-  return 'Pay' in data ? data.Pay : undefined;
+  return data.type == 'Pay' ? data.content : undefined;
 }
 
 export function getPaySuiTransaction(
   data: SuiTransactionKind,
 ): PaySui | undefined {
-  return 'PaySui' in data ? data.PaySui : undefined;
+  return data.type === 'PaySui' ? data.content : undefined;
 }
 
 export function getPayAllSuiTransaction(
   data: SuiTransactionKind,
 ): PayAllSui | undefined {
-  return 'PayAllSui' in data ? data.PayAllSui : undefined;
+  return data.type === 'PayAllSui' ? data.content : undefined;
 }
 
 export function getChangeEpochTransaction(
   data: SuiTransactionKind,
 ): SuiChangeEpoch | undefined {
-  return 'ChangeEpoch' in data ? data.ChangeEpoch : undefined;
+  return data.type === 'ChangeEpoch' ? data.content : undefined;
 }
 
 export function getConsensusCommitPrologueTransaction(
   data: SuiTransactionKind,
 ): SuiConsensusCommitPrologue | undefined {
-  return 'ConsensusCommitPrologue' in data
-    ? data.ConsensusCommitPrologue
+  return data.type === 'ConsensusCommitPrologue'
+    ? data.content
     : undefined;
 }
 
@@ -549,8 +549,8 @@ export function getTransactions(
 }
 
 export function getTransferSuiAmount(data: SuiTransactionKind): bigint | null {
-  return 'TransferSui' in data && data.TransferSui.amount
-    ? BigInt(data.TransferSui.amount)
+  return data.type === 'TransferSui' && data.content.amount
+    ? BigInt(data.content.amount)
     : null;
 }
 

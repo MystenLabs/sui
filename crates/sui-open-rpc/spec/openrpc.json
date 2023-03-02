@@ -294,7 +294,8 @@
                 "data": {
                   "transactions": [
                     {
-                      "TransferObject": {
+                      "type": "TransferObject",
+                      "content": {
                         "recipient": "0x557dc42aaefeeb8c154d7ddc456b8aeaa3132c7403531dc98e83f6e198d2d7d1",
                         "objectRef": {
                           "objectId": "0x7ba91ddc7e717cf708c937060f04048736ec33fb1746d999a5e58cd5c677ed80",
@@ -1582,7 +1583,8 @@
                 "data": {
                   "transactions": [
                     {
-                      "TransferObject": {
+                      "type": "TransferObject",
+                      "content": {
                         "recipient": "0x64bb73a1ed58b2c18b0cbf377792e206e6b80d4d5eea64e2e70563b1589026c4",
                         "objectRef": {
                           "objectId": "0xe37f941a451ef8209a0fbfbf1b549b2bb26b8eaee08895146df27bc3cf2610c1",
@@ -2557,7 +2559,8 @@
                 "data": {
                   "transactions": [
                     {
-                      "TransferObject": {
+                      "type": "TransferObject",
+                      "content": {
                         "recipient": "0x32f4bf6c3e8ac42eef1385e01403e49a4b296adcb22ea27d3c92e4ce2256ac64",
                         "objectRef": {
                           "objectId": "0x5cbabdc36cf1b9f2ec8481a26ca7d81169559794028b8f02e4302a5595d8889a",
@@ -6498,131 +6501,191 @@
             "description": "Initiate an object transfer between addresses",
             "type": "object",
             "required": [
-              "TransferObject"
+              "content",
+              "type"
             ],
             "properties": {
-              "TransferObject": {
+              "content": {
                 "$ref": "#/components/schemas/TransferObject"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "TransferObject"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Pay one or more recipients from a set of input coins",
             "type": "object",
             "required": [
-              "Pay"
+              "content",
+              "type"
             ],
             "properties": {
-              "Pay": {
+              "content": {
                 "$ref": "#/components/schemas/Pay"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Pay"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Pay one or more recipients from a set of Sui coins, the input coins are also used to for gas payments.",
             "type": "object",
             "required": [
-              "PaySui"
+              "content",
+              "type"
             ],
             "properties": {
-              "PaySui": {
+              "content": {
                 "$ref": "#/components/schemas/PaySui"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "PaySui"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Pay one or more recipients from a set of Sui coins, the input coins are also used to for gas payments.",
             "type": "object",
             "required": [
-              "PayAllSui"
+              "content",
+              "type"
             ],
             "properties": {
-              "PayAllSui": {
+              "content": {
                 "$ref": "#/components/schemas/PayAllSui"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "PayAllSui"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Publish a new Move module",
             "type": "object",
             "required": [
-              "Publish"
+              "content",
+              "type"
             ],
             "properties": {
-              "Publish": {
+              "content": {
                 "$ref": "#/components/schemas/MovePackage"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Publish"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Call a function in a published Move module",
             "type": "object",
             "required": [
-              "Call"
+              "content",
+              "type"
             ],
             "properties": {
-              "Call": {
+              "content": {
                 "$ref": "#/components/schemas/MoveCall"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Call"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Initiate a SUI coin transfer between addresses",
             "type": "object",
             "required": [
-              "TransferSui"
+              "content",
+              "type"
             ],
             "properties": {
-              "TransferSui": {
+              "content": {
                 "$ref": "#/components/schemas/TransferSui"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "TransferSui"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "A system transaction that will update epoch information on-chain.",
             "type": "object",
             "required": [
-              "ChangeEpoch"
+              "content",
+              "type"
             ],
             "properties": {
-              "ChangeEpoch": {
+              "content": {
                 "$ref": "#/components/schemas/SuiChangeEpoch"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ChangeEpoch"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "A system transaction used for initializing the initial state of the chain.",
             "type": "object",
             "required": [
-              "Genesis"
+              "content",
+              "type"
             ],
             "properties": {
-              "Genesis": {
+              "content": {
                 "$ref": "#/components/schemas/SuiGenesisTransaction"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Genesis"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "A system transaction marking the start of a series of transactions scheduled as part of a checkpoint",
             "type": "object",
             "required": [
-              "ConsensusCommitPrologue"
+              "content",
+              "type"
             ],
             "properties": {
-              "ConsensusCommitPrologue": {
+              "content": {
                 "$ref": "#/components/schemas/SuiConsensusCommitPrologue"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ConsensusCommitPrologue"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           }
         ]
       },

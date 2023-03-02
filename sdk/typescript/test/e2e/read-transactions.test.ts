@@ -62,6 +62,6 @@ describe('Transaction Reading API', () => {
       allTransactions.data[0],
     );
     const [txKind] = getTransactions(txEffects);
-    expect('Genesis' in txKind).toBe(true);
+    expect(txKind.type === 'Genesis').toBe(true);
   });
 });

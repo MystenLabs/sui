@@ -1480,7 +1480,7 @@ pub struct SuiConsensusCommitPrologue {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "TransactionKind")]
+#[serde(rename = "TransactionKind", tag = "type", content = "content")]
 pub enum SuiTransactionKind {
     /// Initiate an object transfer between addresses
     TransferObject(SuiTransferObject),
