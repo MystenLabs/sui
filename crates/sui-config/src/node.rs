@@ -101,19 +101,6 @@ pub struct NodeConfig {
     pub supported_protocol_versions: Option<SupportedProtocolVersions>,
 }
 
-impl NodeConfig {
-    /// Find the ip address embedded in a multiaddr. For instance, on input
-    /// `/ip4/155.138.174.208/tcp/1500/http` the function returns `155.138.174.208`.
-    pub fn find_ip_of_multiaddr(address: &Multiaddr) -> Option<Ipv4Addr> {
-        for component in address {
-            if let multiaddr::Protocol::Ip4(ip) = component {
-                return Some(ip);
-            }
-        }
-        None
-    }
-}
-
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
     AuthorityStorePruningConfig::default()
 }

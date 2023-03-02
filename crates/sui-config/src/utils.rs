@@ -78,6 +78,24 @@ pub fn udp_multiaddr_to_listen_address(
     }
 }
 
+pub fn tcp_multiaddr_to_listen_address(
+    multiaddr: &multiaddr::Multiaddr,
+) -> Option<std::net::SocketAddr> {
+    use multiaddr::Protocol;
+    let mut iter = multiaddr.iter();
+
+    match (iter.next(), iter.next()) {
+        (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Tcp(port))) => Some((ipaddr, port).into()),
+        (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Tcp(port))) => Some((ipaddr, port).into()),
+
+        (Some(Protocol::Dns(_)), Some(Protocol::Tcp(port))) => {
+            Some((std::net::Ipv4Addr::UNSPECIFIED, port).into())
+        }
+
+        _ => None,
+    }
+}
+
 pub fn socket_address_to_udp_multiaddr(address: std::net::SocketAddr) -> multiaddr::Multiaddr {
     match address {
         std::net::SocketAddr::V4(v4) => format!("/ip4/{}/udp/{}", v4.ip(), v4.port()),
