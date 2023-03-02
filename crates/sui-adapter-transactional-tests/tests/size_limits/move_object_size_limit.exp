@@ -1,33 +1,36 @@
 processed 9 tasks
 
+init:
+A: object(100)
+
 task 1 'publish'. lines 8-79:
-created: object(104)
-written: object(103)
+created: object(105)
+written: object(104)
 
 task 2 'run'. lines 80-82:
 Error: Transaction Effects Status: Move object with size 256001 is larger than the maximum object size 256000
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveObjectTooBig { object_size: 256001, max_object_size: 256000 }, source: None, command: None } }
 
 task 3 'run'. lines 83-85:
-created: object(107)
-written: object(106)
+created: object(108)
+written: object(107)
 
 task 4 'run'. lines 86-88:
-created: object(109)
-written: object(108)
+created: object(110)
+written: object(109)
 
 task 5 'run'. lines 89-91:
 Error: Transaction Effects Status: Move object with size 256001 is larger than the maximum object size 256000
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveObjectTooBig { object_size: 256001, max_object_size: 256000 }, source: None, command: None } }
 
 task 6 'run'. lines 92-92:
-created: object(112)
-written: object(111)
+created: object(113)
+written: object(112)
 
 task 7 'run'. lines 94-94:
-created: object(114)
-written: object(113)
-deleted: object(112)
+created: object(115)
+written: object(114)
+deleted: object(113)
 
 task 8 'run'. lines 96-96:
 Error: Transaction Effects Status: Move object with size 256001 is larger than the maximum object size 256000
