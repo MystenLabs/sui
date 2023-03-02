@@ -7,18 +7,19 @@ use crate::models::error_logs::commit_error_logs;
 use crate::schema::addresses::account_address;
 use crate::schema::checkpoints::dsl::checkpoints as checkpoints_table;
 use crate::schema::checkpoints::sequence_number;
-use crate::schema::{addresses, events, objects, owner_changes, transactions};
+use crate::schema::packages::{author, module_names, package_content, package_id};
+use crate::schema::{addresses, events, objects, owner_changes, packages, transactions};
 use crate::store::indexer_store::TemporaryCheckpointStore;
 use crate::store::{IndexerStore, TemporaryEpochStore};
 use crate::{get_pg_pool_connection, PgConnectionPool};
 use async_trait::async_trait;
 use diesel::dsl::max;
 use diesel::sql_types::VarChar;
+use diesel::upsert::excluded;
 use diesel::ExpressionMethods;
 use diesel::QueryableByName;
 use diesel::{QueryDsl, RunQueryDsl};
 use std::collections::BTreeMap;
-use std::sync::Arc;
 use sui_types::committee::EpochId;
 use tracing::{error, info};
 
@@ -36,12 +37,12 @@ GROUP BY table_name;
 
 #[derive(Clone)]
 pub struct PgIndexerStore {
-    cp: Arc<PgConnectionPool>,
+    cp: PgConnectionPool,
     partition_manager: PartitionManager,
 }
 
 impl PgIndexerStore {
-    pub fn new(cp: Arc<PgConnectionPool>) -> Self {
+    pub fn new(cp: PgConnectionPool) -> Self {
         PgIndexerStore {
             cp: cp.clone(),
             partition_manager: PartitionManager::new(cp).unwrap(),
@@ -98,6 +99,7 @@ impl IndexerStore for PgIndexerStore {
             objects,
             owner_changes,
             addresses,
+            packages,
             // TODO: store raw object
         } = data;
 
@@ -134,6 +136,17 @@ impl IndexerStore for PgIndexerStore {
                     .values(addresses)
                     .on_conflict(account_address)
                     .do_nothing()
+                    .execute(conn)?;
+
+                diesel::insert_into(packages::table)
+                    .values(packages)
+                    .on_conflict(package_id)
+                    .do_update()
+                    .set((
+                        author.eq(excluded(author)),
+                        module_names.eq(excluded(module_names)),
+                        package_content.eq(excluded(package_content)),
+                    ))
                     .execute(conn)
 
             })
@@ -164,12 +177,12 @@ impl IndexerStore for PgIndexerStore {
 
 #[derive(Clone)]
 struct PartitionManager {
-    cp: Arc<PgConnectionPool>,
+    cp: PgConnectionPool,
     tables: Vec<String>,
 }
 
 impl PartitionManager {
-    fn new(cp: Arc<PgConnectionPool>) -> Result<Self, IndexerError> {
+    fn new(cp: PgConnectionPool) -> Result<Self, IndexerError> {
         // Find all tables with partition
         let mut manager = Self { cp, tables: vec![] };
         let tables = manager.get_table_partitions()?;

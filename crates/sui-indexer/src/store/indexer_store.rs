@@ -10,6 +10,7 @@ use crate::models::owners::OwnerChange;
 use crate::models::transactions::Transaction;
 use async_trait::async_trait;
 use sui_json_rpc_types::{Checkpoint as RpcCheckpoint, SuiParsedObject, SuiTransactionResponse};
+use crate::models::packages::Package;
 
 #[async_trait]
 pub trait IndexerStore {
@@ -36,6 +37,7 @@ pub struct TemporaryCheckpointStore {
     pub objects: Vec<Object>,
     pub owner_changes: Vec<OwnerChange>,
     pub addresses: Vec<Address>,
+    pub packages: Vec<Package>,
 }
 
 // Per epoch indexing

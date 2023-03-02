@@ -10,7 +10,6 @@ use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClientBuilder};
 use prometheus::Registry;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::Arc;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, CLIENT_SDK_TYPE_HEADER};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use tracing::{info, warn};
@@ -20,6 +19,7 @@ pub mod errors;
 mod handlers;
 pub mod metrics;
 pub mod models;
+pub mod processors;
 pub mod schema;
 pub mod store;
 pub mod utils;
@@ -87,21 +87,18 @@ pub fn establish_connection(db_url: String) -> PgConnection {
     PgConnection::establish(&db_url).unwrap_or_else(|_| panic!("Error connecting to {}", db_url))
 }
 
-pub async fn new_pg_connection_pool(db_url: &str) -> Result<Arc<PgConnectionPool>, IndexerError> {
+pub async fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerError> {
     let manager = ConnectionManager::<PgConnection>::new(db_url);
     // default connection pool max size is 10
-    let pool = Pool::builder().build(manager).map_err(|e| {
+    Pool::builder().build(manager).map_err(|e| {
         IndexerError::PgConnectionPoolInitError(format!(
             "Failed to initialize connection pool with error: {:?}",
             e
         ))
-    })?;
-    Ok(Arc::new(pool))
+    })
 }
 
-pub fn get_pg_pool_connection(
-    pool: &Arc<PgConnectionPool>,
-) -> Result<PgPoolConnection, IndexerError> {
+pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnection, IndexerError> {
     retry(ExponentialBackoff::default(), || {
         let pool_conn = pool.get()?;
         Ok(pool_conn)

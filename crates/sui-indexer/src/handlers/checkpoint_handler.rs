@@ -5,6 +5,8 @@ use chrono::NaiveDateTime;
 use futures::future::join_all;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
+use std::collections::BTreeMap;
+use sui_json_rpc_types::{SuiParsedData, SuiParsedObject, SuiTransactionResponse};
 use sui_sdk::SuiClient;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
@@ -13,6 +15,7 @@ use crate::errors::IndexerError;
 use crate::metrics::IndexerCheckpointHandlerMetrics;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::events::Event;
+use crate::models::packages::Package;
 use crate::models::transactions::Transaction;
 use crate::store::{CheckpointData, IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore};
 use sui_sdk::error::Error;
@@ -214,13 +217,16 @@ where
             .collect::<Result<Vec<_>, _>>()?;
 
         // Index objects
-        let objects = objects.into_iter().map(|o| o.into()).collect::<Vec<_>>();
+        let db_objects = objects.iter().map(|o| o.clone().into()).collect::<Vec<_>>();
 
         // Index addresses
         let addresses = db_transactions
             .iter()
             .map(|tx: &Transaction| tx.into())
             .collect();
+
+        // Index packages
+        let packages = Self::index_packages(&transactions, &objects)?;
 
         // Index epoch
         // TODO: Aggregate all object owner changes into owner index at epoch change.
@@ -237,11 +243,40 @@ where
                 checkpoint: Checkpoint::from(&checkpoint, &previous_cp)?,
                 transactions: db_transactions,
                 events,
-                objects,
+                objects: db_objects,
                 owner_changes: vec![],
                 addresses,
+                packages,
             },
             epoch_index,
         ))
+    }
+
+    fn index_packages(
+        transactions: &[SuiTransactionResponse],
+        objects: &[SuiParsedObject],
+    ) -> Result<Vec<Package>, IndexerError> {
+        let object_map = objects
+            .iter()
+            .filter_map(|o| {
+                if let SuiParsedData::Package(p) = &o.data {
+                    Some((o.reference.object_id, p))
+                } else {
+                    None
+                }
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        transactions
+            .iter()
+            .flat_map(|tx| {
+                tx.effects.created.iter().map(|oref| {
+                    object_map.get(&oref.reference.object_id).map(|o| {
+                        Package::try_from(oref.reference.object_id, tx.transaction.data.sender, o)
+                    })
+                })
+            })
+            .filter_map(|o| o)
+            .collect()
     }
 }
