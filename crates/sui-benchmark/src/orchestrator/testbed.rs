@@ -369,7 +369,7 @@ impl<C> Testbed<C> {
         .unwrap();
 
         let url = self.settings.repository.url.clone();
-        let name = self.settings.repository.name.clone();
+        let name = self.settings.repository_name();
         let command = [
             "sudo apt-get update",
             "sudo apt-get -y upgrade",
@@ -423,7 +423,7 @@ impl<C> Testbed<C> {
         .join(" && ");
 
         let id = "update";
-        let repo_name = self.settings.repository.name.clone();
+        let repo_name = self.settings.repository_name();
         let ssh_command = SshCommand::new(move |_| command.clone())
             .run_background(id.into())
             .with_execute_from_path(repo_name.into());
@@ -453,7 +453,7 @@ impl<C> Testbed<C> {
             .iter()
             .cloned()
             .map(|instance| {
-                let repo_name = self.settings.repository.name.clone();
+                let repo_name = self.settings.repository_name();
                 let config_files = config.files();
                 let genesis_command = config.genesis_command();
                 let ssh_manager = self.ssh_manager.clone();
@@ -530,11 +530,11 @@ impl<C> Testbed<C> {
             ["source $HOME/.cargo/env", &run].join(" && ")
         };
 
-        let repo = self.settings.repository.name.clone().into();
+        let repo = self.settings.repository_name();
         let ssh_command = SshCommand::new(command)
             .run_background("node".into())
             .with_log_file("~/node.log".into())
-            .with_execute_from_path(repo);
+            .with_execute_from_path(repo.into());
         self.ssh_manager.execute(&instances, ssh_command).await?;
 
         println!(" [{}]", "Ok".green());
@@ -569,11 +569,11 @@ impl<C> Testbed<C> {
             ["source $HOME/.cargo/env", &run].join(" && ")
         };
 
-        let repo = self.settings.repository.name.clone().into();
+        let repo = self.settings.repository_name();
         let ssh_command = SshCommand::new(command)
             .run_background("client".into())
             .with_log_file("~/client.log".into())
-            .with_execute_from_path(repo);
+            .with_execute_from_path(repo.into());
         self.ssh_manager.execute(&instances, ssh_command).await?;
 
         println!(" [{}]", "Ok".green());

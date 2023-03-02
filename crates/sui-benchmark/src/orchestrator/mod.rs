@@ -68,6 +68,23 @@ impl<C: Client> Orchestrator<C> {
         Ok(())
     }
 
+    pub async fn terraform_testbed(&mut self) -> TestbedResult<()> {
+        self.testbed.install().await?;
+        self.testbed.update().await?;
+        self.testbed.info();
+
+        crossterm::execute!(
+            stdout(),
+            SetForegroundColor(Color::Green),
+            SetAttribute(Attribute::Bold),
+            Print("\nTestbed ready for use\n"),
+            ResetColor
+        )
+        .unwrap();
+
+        Ok(())
+    }
+
     pub async fn destroy_testbed(&mut self) -> TestbedResult<()> {
         self.testbed.destroy().await
     }

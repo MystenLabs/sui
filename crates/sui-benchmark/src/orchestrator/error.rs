@@ -5,6 +5,8 @@
 //     };
 // }
 
+use reqwest::Url;
+
 #[macro_export(local_inner_macros)]
 macro_rules! ensure {
     ($cond:expr, $e:expr) => {
@@ -26,6 +28,9 @@ pub enum SettingsError {
 
     #[error("Failed to read ssh public key file '{file:?}': {message}")]
     InvalidSshPublicKeyFile { file: String, message: String },
+
+    #[error("Invalid repository url: {0:?}")]
+    InvalidRepositoryUrl(Url),
 }
 
 pub type CloudProviderResult<T> = Result<T, CloudProviderError>;

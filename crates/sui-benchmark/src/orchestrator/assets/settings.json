@@ -1,5 +1,5 @@
 {
-    "testbed": "alberto-sui",
+    "testbed_id": "alberto-sui",
     "cloud_provider": "aws",
     "token_file": "/Users/alberto/.aws/credentials",
     "ssh_private_key_file": "/Users/alberto/.ssh/aws",

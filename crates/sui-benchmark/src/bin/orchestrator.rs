@@ -29,6 +29,12 @@ async fn execute<C: Client>(settings: Settings, client: C, opts: Opts) -> Result
             .await
             .wrap_err("Failed to deploy testbed")?,
 
+        // Install the codebase and all dependencies on all instances.
+        Operation::Terraform => orchestrator
+            .terraform_testbed()
+            .await
+            .wrap_err("Failed to terraform testbed")?,
+
         // Start the specified number of instances on an existing testbed.
         Operation::Start { instances } => orchestrator
             .start_testbed(instances)
@@ -117,12 +123,15 @@ pub enum Operation {
     /// Display the testbed status.
     Info,
 
-    /// Create a new testbed.
+    /// Create and configure a new testbed.
     Deploy {
         /// Number of instances to deploy.
         #[clap(long)]
         instances: usize,
     },
+
+    /// Install the codebase and all dependencies on all instances.
+    Terraform,
 
     // Start the specified number of instances on an existing testbed.
     Start {

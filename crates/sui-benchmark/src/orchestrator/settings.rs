@@ -11,7 +11,6 @@ use crate::orchestrator::error::{SettingsError, SettingsResult};
 
 #[derive(Deserialize, Clone)]
 pub struct Repository {
-    pub name: String,
     #[serde(deserialize_with = "parse_url")]
     pub url: Url,
     pub branch: String,
@@ -35,7 +34,7 @@ pub enum CloudProvider {
 
 #[derive(Deserialize, Clone)]
 pub struct Settings {
-    pub testbed: String,
+    pub testbed_id: String,
     pub cloud_provider: CloudProvider,
     pub token_file: PathBuf,
     pub ssh_private_key_file: PathBuf,
@@ -61,10 +60,31 @@ impl Settings {
 
             Ok(settings)
         };
-        reader().map_err(|e| SettingsError::InvalidSettings {
+
+        let settings = reader().map_err(|e| SettingsError::InvalidSettings {
             file: path.to_string(),
             message: e.to_string(),
-        })
+        })?;
+
+        settings
+            .repository
+            .url
+            .path_segments()
+            .map(|mut x| x.next())
+            .flatten()
+            .ok_or_else(|| SettingsError::InvalidRepositoryUrl(settings.repository.url.clone()))?;
+
+        Ok(settings)
+    }
+
+    pub fn repository_name(&self) -> String {
+        self.repository
+            .url
+            .path_segments()
+            .map(|mut x| x.next())
+            .flatten()
+            .unwrap() // Already checked upon creating the settings
+            .into()
     }
 
     pub fn load_token(&self) -> SettingsResult<String> {
@@ -101,7 +121,7 @@ impl Settings {
     #[cfg(test)]
     pub fn new_for_test() -> Self {
         Self {
-            testbed: "testbed".into(),
+            testbed_id: "testbed".into(),
             cloud_provider: CloudProvider::Aws,
             token_file: "/path/to/token/file".into(),
             ssh_private_key_file: "/path/to/private/key/file".into(),
@@ -109,8 +129,7 @@ impl Settings {
             regions: vec!["London".into(), "New York".into()],
             specs: "small".into(),
             repository: Repository {
-                name: "my_repo".into(),
-                url: Url::parse("https://example.net").unwrap(),
+                url: Url::parse("https://example.net/my-repo").unwrap(),
                 branch: "main".into(),
             },
             results_directory: "results".into(),

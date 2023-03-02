@@ -90,7 +90,7 @@ impl AwsClient {
                 .unwrap_or_else(|| "0.0.0.0") // Stopped instances do not have an ip address.
                 .parse()
                 .expect("AWS instance should have a valid ip"),
-            tags: vec![self.settings.testbed.clone()],
+            tags: vec![self.settings.testbed_id.clone()],
             plan: format!(
                 "{:?}",
                 aws_instance
@@ -139,7 +139,7 @@ impl AwsClient {
         // Create a security group (if it doesn't already exist).
         let request = client
             .create_security_group()
-            .group_name(&self.settings.testbed)
+            .group_name(&self.settings.testbed_id)
             .description("Allow all traffic (used for benchmarks).");
 
         let response = request.send().await;
@@ -149,7 +149,7 @@ impl AwsClient {
         for protocol in ["tcp", "udp"] {
             let request = client
                 .authorize_security_group_ingress()
-                .group_name(&self.settings.testbed)
+                .group_name(&self.settings.testbed_id)
                 .ip_protocol(protocol)
                 .cidr_ip("0.0.0.0/0")
                 .from_port(0)
@@ -169,7 +169,7 @@ impl Client for AwsClient {
     async fn list_instances(&self) -> CloudProviderResult<Vec<Instance>> {
         let filter = filter::Builder::default()
             .name("tag:Name")
-            .values(self.settings.testbed.clone())
+            .values(self.settings.testbed_id.clone())
             .build();
 
         let mut instances = Vec::new();
@@ -238,7 +238,7 @@ impl Client for AwsClient {
         S: Into<String> + Serialize + Send,
     {
         let region = region.into();
-        let testbed_id = &self.settings.testbed;
+        let testbed_id = &self.settings.testbed_id;
 
         let client = self.clients.get(&region).ok_or_else(|| {
             CloudProviderError::RequestError(format!("Undefined region {region:?}"))
@@ -268,7 +268,7 @@ impl Client for AwsClient {
             .key_name(testbed_id)
             .min_count(1)
             .max_count(1)
-            .security_groups(&self.settings.testbed)
+            .security_groups(&self.settings.testbed_id)
             .tag_specifications(tags);
 
         let response = request.send().await?;
@@ -296,7 +296,7 @@ impl Client for AwsClient {
         for client in self.clients.values() {
             let request = client
                 .import_key_pair()
-                .key_name(&self.settings.testbed)
+                .key_name(&self.settings.testbed_id)
                 .public_key_material(Blob::new::<String>(public_key.clone()));
 
             let response = request.send().await;

@@ -55,7 +55,7 @@ impl From<VultrInstance> for Instance {
 impl VultrInstance {
     pub fn filter(&self, settings: &Settings) -> bool {
         settings.regions.contains(&self.region)
-            && self.tags.contains(&settings.testbed)
+            && self.tags.contains(&settings.testbed_id)
             && self.plan == settings.specs
     }
 }
@@ -117,7 +117,9 @@ impl VultrClient {
         let content = json["ssh_keys"].clone();
         let keys: Vec<SshKey> = serde_json::from_value(content)?;
 
-        Ok(keys.into_iter().find(|x| x.name == self.settings.testbed))
+        Ok(keys
+            .into_iter()
+            .find(|x| x.name == self.settings.testbed_id))
     }
 
     /// Delete all copies of the public key.
@@ -205,7 +207,7 @@ impl Client for VultrClient {
     where
         S: Into<String> + Serialize + Send,
     {
-        let testbed_name = self.settings.testbed.clone();
+        let testbed_name = self.settings.testbed_id.clone();
         let ssh_key_id = match self.get_key().await? {
             Some(key) => key.id,
             None => return Err(CloudProviderError::SshKeyNotFound(testbed_name.clone())),
@@ -216,7 +218,7 @@ impl Client for VultrClient {
                 "region": region,
                 "plan": self.settings.specs.clone(),
                 "os_id": Self::DEFAULT_OS,
-                "label": self.settings.testbed.clone(),
+                "label": self.settings.testbed_id.clone(),
                 "sshkey_id": [ssh_key_id],
                 "hostname": "validator",
                 "tag": testbed_name
@@ -261,7 +263,7 @@ impl Client for VultrClient {
 
         let url = self.base_url.join("ssh-keys").unwrap();
         let parameters = json!({
-                "name": self.settings.testbed.clone(),
+                "name": self.settings.testbed_id.clone(),
                 "ssh_key": public_key
         });
 
