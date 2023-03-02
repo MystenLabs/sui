@@ -5,8 +5,8 @@ use std::{
 
 use aws_config::profile::profile_file::{ProfileFileKind, ProfileFiles};
 use aws_sdk_ec2::{
-    model::{filter, tag, tag_specification},
-    types::SdkError,
+    model::{filter, tag, tag_specification, ResourceType},
+    types::{Blob, SdkError},
     Region,
 };
 use serde::Serialize;
@@ -40,8 +40,6 @@ impl Display for AwsClient {
 }
 
 impl AwsClient {
-    const DEFAULT_OS: &'static str = "ami-0735c191cf914754d"; // Ubuntu 22.04 x64
-
     pub async fn new(settings: Settings) -> Self {
         let profile_files = ProfileFiles::builder()
             .with_file(ProfileFileKind::Credentials, &settings.token_file)
@@ -85,18 +83,75 @@ impl AwsClient {
         }
     }
 
-    async fn create_security_group(&self, region: &Region) -> CloudProviderResult<String> {
+    async fn find_image_id(&self, client: &aws_sdk_ec2::Client) -> CloudProviderResult<String> {
+        let response = client
+            .describe_images()
+            .filters(
+                filter::Builder::default()
+                    .name("description")
+                    .values("Canonical, Ubuntu, 22.04 LTS, amd64 jammy image build on 2023-02-16")
+                    .build(),
+            )
+            .send()
+            .await?;
+
+        response
+            .images()
+            .ok_or_else(|| CloudProviderError::RequestError("Cannot find image id".into()))?
+            .first()
+            .ok_or_else(|| CloudProviderError::RequestError("Cannot find image id".into()))?
+            .image_id
+            .clone()
+            .ok_or_else(|| {
+                CloudProviderError::RequestError("Received image description without id".into())
+            })
+    }
+
+    async fn register_ssh_key(&self, client: &aws_sdk_ec2::Client) -> CloudProviderResult<()> {
+        let public_key = self.settings.load_ssh_public_key().unwrap();
+
+        let request = client
+            .import_key_pair()
+            .key_name(&self.settings.testbed)
+            .public_key_material(Blob::new::<String>(public_key.into()));
+
+        match request.send().await {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                let error_message = format!("{e:?}");
+                if error_message.to_lowercase().contains("duplicate") {
+                    Ok(())
+                } else {
+                    Err(e.into())
+                }
+            }
+        }
+    }
+
+    async fn create_security_group(&self, region: &Region) -> CloudProviderResult<()> {
         let client = self.clients.get(&region).ok_or_else(|| {
             CloudProviderError::RequestError(format!("Undefined region {region:?}"))
         })?;
 
         //
-        let response = client
+        let response = match client
             .create_security_group()
-            .group_name("all-allowed")
-            .dry_run(true) // TODO: Disable this
+            .group_name(&self.settings.testbed)
+            .description("Allow all traffic (used for benchmarks).")
+            // .dry_run(true) // TODO: Disable this
             .send()
-            .await?;
+            .await
+        {
+            Ok(response) => response,
+            Err(e) => {
+                let error_message = format!("{e:?}");
+                if error_message.to_lowercase().contains("duplicate") {
+                    return Ok(());
+                } else {
+                    return Err(e.into());
+                }
+            }
+        };
 
         let group_id = response.group_id().unwrap();
 
@@ -109,11 +164,11 @@ impl AwsClient {
             .cidr_ip("0.0.0.0/0")
             .from_port(0)
             .to_port(65535)
-            .dry_run(true) // TODO: Disable this
+            // .dry_run(true) // TODO: Disable this
             .send()
             .await?;
 
-        Ok(group_id.into())
+        Ok(())
     }
 }
 
@@ -207,27 +262,31 @@ impl Client for AwsClient {
                     .value(testbed_id)
                     .build(),
             )
+            .resource_type(ResourceType::Instance)
             .build();
 
-        let security_group_id = self.create_security_group(&region).await?;
+        let client = self.clients.get(&region).ok_or_else(|| {
+            CloudProviderError::RequestError(format!("Undefined region {region:?}"))
+        })?;
 
-        let client = self
-            .clients
-            .get(&region)
-            .ok_or_else(|| {
-                CloudProviderError::RequestError(format!("Undefined region {region:?}"))
-            })?
+        self.register_ssh_key(&client).await?;
+
+        let image_id = self.find_image_id(&client).await?;
+
+        self.create_security_group(&region).await?;
+
+        let request = client
             .run_instances()
-            .image_id(Self::DEFAULT_OS)
+            .image_id(image_id)
             .instance_type(self.settings.specs.as_str().into())
             .key_name(testbed_id)
             .min_count(1)
             .max_count(1)
-            .security_group_ids(security_group_id)
-            .dry_run(true) // TODO: Disable this
+            .security_groups(&self.settings.testbed)
+            // .dry_run(true) // TODO: Disable this
             .tag_specifications(tags);
 
-        let response = client.send().await?;
+        let response = request.send().await?;
         let instance = &response.instances().unwrap()[0];
         Ok(self.format_instance(&region, instance))
     }
