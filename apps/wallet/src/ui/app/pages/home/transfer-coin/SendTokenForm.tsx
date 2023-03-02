@@ -174,7 +174,6 @@ export function SendTokenForm({
 
     // remove the comma from the token balance
     const formattedTokenBalance = tokenBalance.replace(/,/g, '');
-    const maxToken = parseAmount(formattedTokenBalance, coinDecimals);
     const initAmountBig = parseAmount(initialAmount, coinDecimals);
 
     return (
@@ -185,7 +184,7 @@ export function SendTokenForm({
                     to: initialTo,
                     isPayAllSui:
                         !!initAmountBig &&
-                        initAmountBig === maxToken &&
+                        initAmountBig === coinBalance &&
                         coinType === SUI_TYPE_ARG,
                     gasInputBudgetEst: initialGasEstimation,
                 }}
@@ -201,8 +200,8 @@ export function SendTokenForm({
                 }: FormValues) => {
                     if (!gasInputBudgetEst || !coins || !suiCoins) return;
                     const coinsIDs = coins
-                        .sort((a, b) => b.fields.balance - a.fields.balance)
-                        .map(({ fields }) => fields.coinObjectId);
+                        .reverse()
+                        .map(({ fields }) => fields.id.id);
 
                     const data = {
                         to,
@@ -222,8 +221,8 @@ export function SendTokenForm({
                     submitForm,
                 }) => {
                     const newPaySuiAll =
-                        parseAmount(values.amount, coinDecimals) === maxToken &&
-                        coinType === SUI_TYPE_ARG;
+                        parseAmount(values.amount, coinDecimals) ===
+                            coinBalance && coinType === SUI_TYPE_ARG;
                     if (values.isPayAllSui !== newPaySuiAll) {
                         setFieldValue('isPayAllSui', newPaySuiAll);
                     }
@@ -269,9 +268,9 @@ export function SendTokenForm({
                                                 parseAmount(
                                                     values?.amount,
                                                     coinDecimals
-                                                ) === maxToken ||
+                                                ) === coinBalance ||
                                                 queryResult.isLoading ||
-                                                !maxToken ||
+                                                !coinBalance ||
                                                 !values.gasInputBudgetEst
                                             }
                                         />
