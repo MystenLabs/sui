@@ -171,7 +171,7 @@ module sui::sui_system {
         project_url: vector<u8>,
         net_address: vector<u8>,
         p2p_address: vector<u8>,
-        consensus_address: vector<u8>,
+        primary_address: vector<u8>,
         worker_address: vector<u8>,
         stake: Coin<SUI>,
         gas_price: u64,
@@ -200,7 +200,7 @@ module sui::sui_system {
             project_url,
             net_address,
             p2p_address,
-            consensus_address,
+            primary_address,
             worker_address,
             coin::into_balance(stake),
             option::none(),
@@ -446,19 +446,19 @@ module sui::sui_system {
         validator::update_next_epoch_p2p_address(validator, p2p_address);
     }
 
-    /// Update a validator's consensus address.
+    /// Update a validator's narwhal primary address.
     /// The change will only take effects starting from the next epoch.
-    public entry fun update_validator_next_epoch_consensus_address(
+    public entry fun update_validator_next_epoch_primary_address(
         self: &mut SuiSystemState,
-        consensus_address: vector<u8>,
+        primary_address: vector<u8>,
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
         let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
-        validator::update_next_epoch_consensus_address(validator, consensus_address);
+        validator::update_next_epoch_primary_address(validator, primary_address);
     }
 
-    /// Update a validator's worker address.
+    /// Update a validator's narwhal worker address.
     /// The change will only take effects starting from the next epoch.
     public entry fun update_validator_next_epoch_worker_address(
         self: &mut SuiSystemState,

@@ -47,8 +47,8 @@ module sui::validator {
     /// Invalid p2p_address field in ValidatorMetadata
     const EMetadataInvalidP2pAddr: u64 = 5;
 
-    /// Invalid consensus_address field in ValidatorMetadata
-    const EMetadataInvalidConsensusAddr: u64 = 6;
+    /// Invalid primary_address field in ValidatorMetadata
+    const EMetadataInvalidPrimaryAddr: u64 = 6;
 
     /// Invalidworker_address field in ValidatorMetadata
     const EMetadataInvalidWorkerAddr: u64 = 7;
@@ -79,7 +79,7 @@ module sui::validator {
         /// The address of the validator used for p2p activities such as state sync (could also contain extra info such as port, DNS and etc.).
         p2p_address: vector<u8>,
         /// The address of the narwhal primary
-        consensus_address: vector<u8>,
+        primary_address: vector<u8>,
         /// The address of the narwhal worker
         worker_address: vector<u8>,
 
@@ -91,7 +91,7 @@ module sui::validator {
         next_epoch_worker_pubkey_bytes: Option<vector<u8>>,
         next_epoch_net_address: Option<vector<u8>>,
         next_epoch_p2p_address: Option<vector<u8>>,
-        next_epoch_consensus_address: Option<vector<u8>>,
+        next_epoch_primary_address: Option<vector<u8>>,
         next_epoch_worker_address: Option<vector<u8>>,
     }
 
@@ -146,7 +146,7 @@ module sui::validator {
         project_url: Url,
         net_address: vector<u8>,
         p2p_address: vector<u8>,
-        consensus_address: vector<u8>,
+        primary_address: vector<u8>,
         worker_address: vector<u8>,
     ): ValidatorMetadata {
         let metadata = ValidatorMetadata {
@@ -161,7 +161,7 @@ module sui::validator {
             project_url,
             net_address,
             p2p_address,
-            consensus_address,
+            primary_address,
             worker_address,
             next_epoch_protocol_pubkey_bytes: option::none(),
             next_epoch_network_pubkey_bytes: option::none(),
@@ -169,7 +169,7 @@ module sui::validator {
             next_epoch_proof_of_possession: option::none(),
             next_epoch_net_address: option::none(),
             next_epoch_p2p_address: option::none(),
-            next_epoch_consensus_address: option::none(),
+            next_epoch_primary_address: option::none(),
             next_epoch_worker_address: option::none(),
         };
         metadata
@@ -187,7 +187,7 @@ module sui::validator {
         project_url: vector<u8>,
         net_address: vector<u8>,
         p2p_address: vector<u8>,
-        consensus_address: vector<u8>,
+        primary_address: vector<u8>,
         worker_address: vector<u8>,
         stake: Balance<SUI>,
         coin_locked_until_epoch: Option<EpochTimeLock>,
@@ -224,7 +224,7 @@ module sui::validator {
             url::new_unsafe_from_bytes(project_url),
             net_address,
             p2p_address,
-            consensus_address,
+            primary_address,
             worker_address,
         );
 
@@ -355,8 +355,8 @@ module sui::validator {
         &self.metadata.p2p_address
     }
 
-    public fun consensus_address(self: &Validator): &vector<u8> {
-        &self.metadata.consensus_address
+    public fun primary_address(self: &Validator): &vector<u8> {
+        &self.metadata.primary_address
     }
 
     public fun worker_address(self: &Validator): &vector<u8> {
@@ -387,8 +387,8 @@ module sui::validator {
         &self.metadata.next_epoch_p2p_address
     }
 
-    public fun next_epoch_consensus_address(self: &Validator): &Option<vector<u8>> {
-        &self.metadata.next_epoch_consensus_address
+    public fun next_epoch_primary_address(self: &Validator): &Option<vector<u8>> {
+        &self.metadata.next_epoch_primary_address
     }
 
     public fun next_epoch_worker_address(self: &Validator): &Option<vector<u8>> {
@@ -509,8 +509,8 @@ module sui::validator {
     }
 
     /// Update consensus address of this validator, taking effects from next epoch
-    public(friend) fun update_next_epoch_consensus_address(self: &mut Validator, consensus_address: vector<u8>) {
-        self.metadata.next_epoch_consensus_address = option::some(consensus_address);
+    public(friend) fun update_next_epoch_primary_address(self: &mut Validator, primary_address: vector<u8>) {
+        self.metadata.next_epoch_primary_address = option::some(primary_address);
         validate_metadata(&self.metadata);
     }
 
@@ -555,9 +555,9 @@ module sui::validator {
             self.metadata.next_epoch_p2p_address = option::none();
         };
 
-        if (option::is_some(next_epoch_consensus_address(self))) {
-            self.metadata.consensus_address = option::extract(&mut self.metadata.next_epoch_consensus_address);
-            self.metadata.next_epoch_consensus_address = option::none();
+        if (option::is_some(next_epoch_primary_address(self))) {
+            self.metadata.primary_address = option::extract(&mut self.metadata.next_epoch_primary_address);
+            self.metadata.next_epoch_primary_address = option::none();
         };
 
         if (option::is_some(next_epoch_worker_address(self))) {
@@ -618,7 +618,7 @@ module sui::validator {
         project_url: vector<u8>,
         net_address: vector<u8>,
         p2p_address: vector<u8>,
-        consensus_address: vector<u8>,
+        primary_address: vector<u8>,
         worker_address: vector<u8>,
         stake: Balance<SUI>,
         coin_locked_until_epoch: Option<EpochTimeLock>,
@@ -655,7 +655,7 @@ module sui::validator {
                 url::new_unsafe_from_bytes(project_url),
                 net_address,
                 p2p_address,
-                consensus_address,
+                primary_address,
                 worker_address,
             ),
             voting_power: stake_amount,

@@ -996,7 +996,7 @@ pub fn generate_genesis_system_object(
     let mut sui_addresses = Vec::new();
     let mut network_addresses = Vec::new();
     let mut p2p_addresses = Vec::new();
-    let mut consensus_addresses = Vec::new();
+    let mut primary_addresses = Vec::new();
     let mut worker_addresses = Vec::new();
     let mut names = Vec::new();
     let mut descriptions = Vec::new();
@@ -1017,7 +1017,7 @@ pub fn generate_genesis_system_object(
         sui_addresses.push(validator.sui_address());
         network_addresses.push(validator.network_address());
         p2p_addresses.push(validator.p2p_address());
-        consensus_addresses.push(validator.narwhal_primary_address());
+        primary_addresses.push(validator.narwhal_primary_address());
         worker_addresses.push(validator.narwhal_worker_address());
         names.push(validator.name().to_owned().into_bytes());
         descriptions.push(validator.description.clone().into_bytes());
@@ -1046,7 +1046,7 @@ pub fn generate_genesis_system_object(
             CallArg::Pure(bcs::to_bytes(&project_url).unwrap()),
             CallArg::Pure(bcs::to_bytes(&network_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&p2p_addresses).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&consensus_addresses).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&primary_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&worker_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&gas_prices).unwrap()),
             CallArg::Pure(bcs::to_bytes(&commission_rates).unwrap()),
