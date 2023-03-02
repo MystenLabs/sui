@@ -17,8 +17,8 @@ function TransactionsPage() {
     const {
         data: txns,
         isLoading,
-        isError,
         error,
+        isError,
     } = useGetTransactionsByAddress(activeAddress);
 
     if (isError) {
@@ -26,7 +26,7 @@ function TransactionsPage() {
             <div className="p-2">
                 <Alert mode="warning">
                     <div className="font-semibold">
-                        {error?.message || 'Something went wrong'}
+                        {(error as Error).message}
                     </div>
                 </Alert>
             </div>
