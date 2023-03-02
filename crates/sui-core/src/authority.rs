@@ -2944,7 +2944,7 @@ impl AuthorityState {
             //   state sync, and execute it. This will upgrade the framework packages, reconfigure,
             //   and most likely shut down in the new epoch (this validator likely doesn't support
             //   the new protocol version, or else it should have had the packages.)
-            return Err(anyhow!("cannot upgrade packages"));
+            return Err(anyhow!("missing system packages: cannot form ChangeEpochTx"));
         };
 
         let tx = VerifiedTransaction::new_change_epoch(
