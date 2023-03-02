@@ -1,4 +1,4 @@
-name: simtest-nightly
+name: Simulator Tests
 
 on:
   schedule:
@@ -56,9 +56,10 @@ jobs:
     name: Notify
     needs: [cluster-test]
     runs-on: [self-hosted, self-hosted-arc]
-    if: failure() # only notify on failure
+    if: always() # only notify on failure
 
     steps:
+    - uses: technote-space/workflow-conclusion-action@v3
     - name: Post to slack
       uses: slackapi/slack-github-action@936158bbe252e9a6062e793ea4609642c966e302 # pin@v1.21.0
       env:
@@ -67,13 +68,13 @@ jobs:
         channel-id: 'simtest-nightly'
         payload: |
           {
-            "text": "*${{ github.workflow }}* workflow has failed",
+            "text": "*${{ github.workflow }}* workflow has ${{ env.WORKFLOW_CONCLUSION }}",
             "blocks": [
               {
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "*${{ github.workflow }}* workflow has failed"
+                  "text": "*${{ github.workflow }}* workflow has ${{ env.WORKFLOW_CONCLUSION }}"
                 }
               },
               {
