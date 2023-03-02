@@ -5116,7 +5116,7 @@ dependencies = [
 name = "mysten-network"
 version = "0.2.0"
 dependencies = [
- "bincode",
+ "bcs",
  "bytes",
  "eyre",
  "futures",
@@ -8503,7 +8503,6 @@ dependencies = [
  "arc-swap",
  "async-trait",
  "bcs",
- "bincode",
  "bytes",
  "chrono",
  "clap 3.2.23",
@@ -8657,7 +8656,6 @@ dependencies = [
  "anyhow",
  "bcs",
  "better_any",
- "bincode",
  "curve25519-dalek-ng",
  "digest 0.10.6",
  "fastcrypto",
@@ -8821,7 +8819,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
- "bincode",
  "colored",
  "either",
  "fastcrypto",
@@ -9379,7 +9376,6 @@ dependencies = [
  "anemo-tower",
  "anyhow",
  "bcs",
- "bincode",
  "byteorder",
  "criterion",
  "derive_more",

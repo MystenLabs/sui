@@ -43,9 +43,9 @@ fn test_signatures_serde() {
     let foo = Foo("hello".into());
     let s = Signature::new(&foo, &sec1);
 
-    let serialized = bincode::serialize(&s).unwrap();
+    let serialized = bcs::to_bytes(&s).unwrap();
     println!("{:?}", serialized);
-    let deserialized: Signature = bincode::deserialize(&serialized).unwrap();
+    let deserialized: Signature = bcs::from_bytes(&serialized).unwrap();
     assert_eq!(deserialized.as_ref(), s.as_ref());
 }
 
@@ -196,9 +196,9 @@ fn test_object_id_serde_json() {
 #[test]
 fn test_object_id_serde_not_human_readable() {
     let obj_id = ObjectID::random();
-    let serialized = bincode::serialize(&obj_id).unwrap();
+    let serialized = bcs::to_bytes(&obj_id).unwrap();
     assert_eq!(obj_id.0.to_vec(), serialized);
-    let deserialized: ObjectID = bincode::deserialize(&serialized).unwrap();
+    let deserialized: ObjectID = bcs::from_bytes(&serialized).unwrap();
     assert_eq!(deserialized, obj_id);
 }
 
@@ -249,12 +249,12 @@ fn test_address_display() {
 #[test]
 fn test_address_serde_not_human_readable() {
     let address = SuiAddress::random_for_testing_only();
-    let serialized = bincode::serialize(&address).unwrap();
+    let serialized = bcs::to_bytes(&address).unwrap();
     let bcs_serialized = bcs::to_bytes(&address).unwrap();
     // bincode use 8 bytes for BYTES len and bcs use 1 byte
     assert_eq!(serialized, bcs_serialized);
     assert_eq!(address.0, serialized[..]);
-    let deserialized: SuiAddress = bincode::deserialize(&serialized).unwrap();
+    let deserialized: SuiAddress = bcs::from_bytes(&serialized).unwrap();
     assert_eq!(deserialized, address);
 }
 
@@ -281,12 +281,12 @@ fn test_address_serde_with_expected_value() {
 #[test]
 fn test_transaction_digest_serde_not_human_readable() {
     let digest = TransactionDigest::random();
-    let serialized = bincode::serialize(&digest).unwrap();
+    let serialized = bcs::to_bytes(&digest).unwrap();
     let bcs_serialized = bcs::to_bytes(&digest).unwrap();
     // bincode use 8 bytes for BYTES len and bcs use 1 byte
     assert_eq!(serialized[8..], bcs_serialized[1..]);
     assert_eq!(digest.inner(), &serialized[8..]);
-    let deserialized: TransactionDigest = bincode::deserialize(&serialized).unwrap();
+    let deserialized: TransactionDigest = bcs::from_bytes(&serialized).unwrap();
     assert_eq!(deserialized, digest);
 }
 
@@ -310,11 +310,11 @@ fn test_authority_signature_serde_not_human_readable() {
         &0,
         &key,
     );
-    let serialized = bincode::serialize(&sig).unwrap();
+    let serialized = bcs::to_bytes(&sig).unwrap();
     let bcs_serialized = bcs::to_bytes(&sig).unwrap();
 
     assert_eq!(serialized, bcs_serialized);
-    let deserialized: AuthoritySignature = bincode::deserialize(&serialized).unwrap();
+    let deserialized: AuthoritySignature = bcs::from_bytes(&serialized).unwrap();
     assert_eq!(deserialized.as_ref(), sig.as_ref());
 }
 
