@@ -59,6 +59,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "afl"
+version = "0.12.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc9414e3ccb11f46a0baf4fa75e46821183be5a993d605cf0bb73360e02bd4dd"
+dependencies = [
+ "clap 4.1.4",
+ "fs_extra",
+ "home",
+ "libc",
+ "rustc_version 0.4.0",
+ "tempfile",
+ "xdg",
+]
+
+[[package]]
 name = "ahash"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -219,6 +234,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "224afbd727c3d6e4b90103ece64b8d1b67fbb1973b1046c2281eed3f3803f800"
 dependencies = [
  "backtrace",
+]
+
+[[package]]
+name = "arbitrary"
+version = "1.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e90af4de65aa7b293ef2d09daff88501eb254f58edde2e1ac02c82d873eadad"
+dependencies = [
+ "derive_arbitrary",
 ]
 
 [[package]]
@@ -2087,6 +2111,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive_arbitrary"
+version = "1.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8beee4701e2e229e8098bbdecdca12449bc3e322f137d269182fa1291e20bd00"
+dependencies = [
+ "proc-macro2 1.0.51",
+ "quote 1.0.23",
+ "syn 1.0.107",
+]
+
+[[package]]
 name = "derive_builder"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2823,9 +2858,9 @@ checksum = "6c2141d6d6c8512188a7891b4b01590a45f6dac67afb4f255c4124dbb86d4eaa"
 
 [[package]]
 name = "fs_extra"
-version = "1.2.0"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2022715d62ab30faffd124d40b76f4134a550a87792276512b18d63272333394"
+checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 
 [[package]]
 name = "funty"
@@ -4326,8 +4361,11 @@ version = "0.0.3"
 source = "git+https://github.com/move-language/move?rev=7343821f67c070d28dcdb5bf7d2e07ced046b52f#7343821f67c070d28dcdb5bf7d2e07ced046b52f"
 dependencies = [
  "anyhow",
+ "arbitrary",
  "move-core-types",
  "once_cell",
+ "proptest",
+ "proptest-derive",
  "ref-cast",
  "serde 1.0.152",
  "variant_count",
@@ -4493,12 +4531,15 @@ version = "0.0.4"
 source = "git+https://github.com/move-language/move?rev=7343821f67c070d28dcdb5bf7d2e07ced046b52f#7343821f67c070d28dcdb5bf7d2e07ced046b52f"
 dependencies = [
  "anyhow",
+ "arbitrary",
  "bcs",
  "ethnum",
  "hex",
  "num",
  "once_cell",
  "primitive-types",
+ "proptest",
+ "proptest-derive",
  "rand 0.8.5",
  "ref-cast",
  "serde 1.0.152",
@@ -6764,6 +6805,7 @@ version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72ef4ced82a24bb281af338b9e8f94429b6eca01b4e66d899f40031f074e74c9"
 dependencies = [
+ "arbitrary",
  "bytes",
  "rand 0.8.5",
  "ring",
@@ -9429,6 +9471,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-verifier-fuzzer"
+version = "0.0.0"
+dependencies = [
+ "afl",
+ "arbitrary",
+ "move-binary-format",
+ "move-bytecode-verifier",
+ "quinn-proto",
+ "sui-framework-build",
+ "sui-verifier",
+]
+
+[[package]]
 name = "sui-verifier-transactional-tests"
 version = "0.1.0"
 dependencies = [
@@ -10943,6 +10998,7 @@ dependencies = [
  "anes",
  "ansi_term",
  "anyhow",
+ "arbitrary",
  "arc-swap",
  "ark-bls12-377",
  "ark-bls12-381",
@@ -11110,6 +11166,7 @@ dependencies = [
  "der-parser",
  "derivative",
  "derive-syn-parse",
+ "derive_arbitrary",
  "derive_builder",
  "derive_builder_core",
  "derive_builder_macro",
@@ -11766,6 +11823,15 @@ dependencies = [
  "rusticata-macros",
  "thiserror",
  "time 0.3.17",
+]
+
+[[package]]
+name = "xdg"
+version = "2.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c4583db5cbd4c4c0303df2d15af80f0539db703fa1c68802d4cbbd2dd0f88f6"
+dependencies = [
+ "dirs",
 ]
 
 [[package]]
