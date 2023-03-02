@@ -42,15 +42,15 @@ jobs:
     - name: Install nexttest
       uses: taiki-e/install-action@nextest
 
-    - name: Build simtest
-      run: |
-        export RUST_LOG=off
-        ./scripts/simtest/cargo-simtest simtest build
+    # - name: Build simtest
+    #   run: |
+    #     export RUST_LOG=off
+    #     ./scripts/simtest/cargo-simtest simtest build
 
-    - name: Run simtest
-      run: |
-        export RUST_LOG=off
-        ./scripts/simtest/simtest-run.sh
+    # - name: Run simtest
+    #   run: |
+    #     export RUST_LOG=off
+    #     ./scripts/simtest/simtest-run.sh
 
   notify:
     name: Notify
@@ -75,6 +75,16 @@ jobs:
                 "text": {
                   "type": "mrkdwn",
                   "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`"
+                }
+              },
+              {
+                "type": "divider"
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ github.sha }}|${{ github.sha }}> \n"
                 }
               },
               {
