@@ -348,7 +348,7 @@ pub enum MoveFunctionArgType {
     Object(ObjectValueKind),
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SuiTransactionResponse {
     pub transaction: SuiTransaction,
@@ -361,6 +361,17 @@ pub struct SuiTransactionResponse {
     /// The checkpoint number when this transaction was included and hence finalized.
     /// This is only returned in the read api, not in the transaction execution api.
     pub checkpoint: Option<CheckpointSequenceNumber>,
+}
+
+/// We are specifically ignoring events for now until events become more stable.
+impl PartialEq for SuiTransactionResponse {
+    fn eq(&self, other: &Self) -> bool {
+        self.transaction == other.transaction
+            && self.effects == other.effects
+            && self.timestamp_ms == other.timestamp_ms
+            && self.confirmed_local_execution == other.confirmed_local_execution
+            && self.checkpoint == other.checkpoint
+    }
 }
 
 #[allow(clippy::large_enum_variant)]
