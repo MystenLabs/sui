@@ -14,6 +14,9 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
+/// Minimum amount of stake required for a validator to be in the validator set
+pub const MINIMUM_VALIDATOR_STAKE_SUI: u64 = 25_000_000;
+
 pub const STAKING_POOL_MODULE_NAME: &IdentStr = ident_str!("staking_pool");
 pub const STAKED_SUI_STRUCT_NAME: &IdentStr = ident_str!("StakedSui");
 pub const DELEGATION_STRUCT_NAME: &IdentStr = ident_str!("Delegation");
