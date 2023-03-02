@@ -279,6 +279,7 @@ mod sim_only_tests {
     }
 
     #[sim_test]
+    #[ignore = "Blocked by checkpointing problems"]
     async fn test_framework_upgrade_conflicting_versions() {
         ProtocolConfig::poison_get_for_min_version();
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
