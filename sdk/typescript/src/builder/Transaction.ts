@@ -175,9 +175,9 @@ export class Transaction<Inputs extends string = never> {
    */
   createInput(value?: unknown) {
     // For Uint8Array
-    if (value instanceof Uint8Array) {
-      value = { Pure: value };
-    }
+    // if (value instanceof Uint8Array) {
+    //   value = { Pure: value };
+    // }
 
     const index = this.#inputs.length;
     const input = create({ kind: 'Input', value, index }, TransactionInput);
