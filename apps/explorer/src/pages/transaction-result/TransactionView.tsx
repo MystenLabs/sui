@@ -439,7 +439,7 @@ function TransactionView({
     );
     const sponsorSignature = isSponsoredTransaction
         ? getSignatureFromAddress(deserializedTransactionSignatures, gasOwner)
-        : undefined;
+        : null;
 
     const timestamp = transaction.timestamp_ms || transaction.timestampMs;
 
