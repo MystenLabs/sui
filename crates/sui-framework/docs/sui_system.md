@@ -114,7 +114,7 @@ A list of system config parameters.
 </dt>
 <dd>
  The starting epoch in which various on-chain governance features take effect:
- - TODO stake subsidies are paid out
+ - stake subsidies are paid out
  - TODO validators with stake less than a 'validator_stake_threshold' are
    kicked from the validator set
 </dd>
@@ -1316,7 +1316,13 @@ gas coins.
     <b>let</b> computation_reward = <a href="balance.md#0x2_balance_create_staking_rewards">balance::create_staking_rewards</a>(computation_charge);
 
     // Include stake subsidy in the rewards given out <b>to</b> validators and delegators.
-    <b>let</b> <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a> = <a href="stake_subsidy.md#0x2_stake_subsidy_advance_epoch">stake_subsidy::advance_epoch</a>(&<b>mut</b> self.<a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>);
+    // Delay distributing any stake subsidies until after `governance_start_epoch`.
+    <b>let</b> <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a> = <b>if</b> (<a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) &gt;= self.parameters.governance_start_epoch) {
+        <a href="stake_subsidy.md#0x2_stake_subsidy_advance_epoch">stake_subsidy::advance_epoch</a>(&<b>mut</b> self.<a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>)
+    } <b>else</b> {
+        <a href="balance.md#0x2_balance_zero">balance::zero</a>()
+    };
+
     <b>let</b> stake_subsidy_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&<a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>);
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> computation_reward, <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>);
 

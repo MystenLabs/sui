@@ -47,7 +47,7 @@ module sui::sui_system {
         max_validator_candidate_count: u64,
 
         /// The starting epoch in which various on-chain governance features take effect:
-        /// - TODO stake subsidies are paid out
+        /// - stake subsidies are paid out
         /// - TODO validators with stake less than a 'validator_stake_threshold' are
         ///   kicked from the validator set
         governance_start_epoch: u64,
@@ -560,7 +560,13 @@ module sui::sui_system {
         let computation_reward = balance::create_staking_rewards(computation_charge);
 
         // Include stake subsidy in the rewards given out to validators and delegators.
-        let stake_subsidy = stake_subsidy::advance_epoch(&mut self.stake_subsidy);
+        // Delay distributing any stake subsidies until after `governance_start_epoch`.
+        let stake_subsidy = if (tx_context::epoch(ctx) >= self.parameters.governance_start_epoch) {
+            stake_subsidy::advance_epoch(&mut self.stake_subsidy)
+        } else {
+            balance::zero()
+        };
+
         let stake_subsidy_amount = balance::value(&stake_subsidy);
         balance::join(&mut computation_reward, stake_subsidy);
 
