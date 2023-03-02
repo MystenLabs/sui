@@ -121,6 +121,7 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
             certificates,
             leader,
             sub_dag_index,
+            reputation_score: compressed_sub_dag.reputation_score,
         });
     }
 

@@ -5542,7 +5542,8 @@
           "exchange_rates",
           "id",
           "pending_delegation",
-          "pending_withdraws",
+          "pending_pool_token_withdraw",
+          "pending_total_sui_withdraw",
           "pool_token_balance",
           "rewards_pool",
           "starting_epoch",
@@ -5560,8 +5561,15 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "pending_withdraws": {
-            "$ref": "#/components/schemas/TableVec"
+          "pending_pool_token_withdraw": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "pending_total_sui_withdraw": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           },
           "pool_token_balance": {
             "type": "integer",
@@ -6073,7 +6081,6 @@
         "required": [
           "epoch",
           "epoch_start_timestamp_ms",
-          "info",
           "parameters",
           "protocol_version",
           "reference_gas_price",
@@ -6093,9 +6100,6 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
-          },
-          "info": {
-            "$ref": "#/components/schemas/UID"
           },
           "parameters": {
             "$ref": "#/components/schemas/SystemParameters"
@@ -6787,16 +6791,12 @@
         "type": "object",
         "required": [
           "commission_rate",
-          "delegation_staking_pool",
           "gas_price",
           "metadata",
           "next_epoch_commission_rate",
-          "next_epoch_delegation",
           "next_epoch_gas_price",
           "next_epoch_stake",
-          "pending_stake",
-          "pending_withdraw",
-          "stake_amount",
+          "staking_pool",
           "voting_power"
         ],
         "properties": {
@@ -6804,9 +6804,6 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
-          },
-          "delegation_staking_pool": {
-            "$ref": "#/components/schemas/StakingPool"
           },
           "gas_price": {
             "type": "integer",
@@ -6821,11 +6818,6 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "next_epoch_delegation": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
           "next_epoch_gas_price": {
             "type": "integer",
             "format": "uint64",
@@ -6836,20 +6828,8 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "pending_stake": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "pending_withdraw": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "stake_amount": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+          "staking_pool": {
+            "$ref": "#/components/schemas/StakingPool"
           },
           "voting_power": {
             "type": "integer",
@@ -6870,7 +6850,7 @@
           "p2p_address",
           "project_url",
           "proof_of_possession_bytes",
-          "pubkey_bytes",
+          "protocol_pubkey_bytes",
           "sui_address",
           "worker_address",
           "worker_pubkey_bytes"
@@ -6909,6 +6889,94 @@
               "minimum": 0.0
             }
           },
+          "next_epoch_consensus_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_net_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_network_pubkey_bytes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_p2p_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_proof_of_possession": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_protocol_pubkey_bytes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_worker_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_worker_pubkey_bytes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
           "p2p_address": {
             "type": "array",
             "items": {
@@ -6928,7 +6996,7 @@
               "minimum": 0.0
             }
           },
-          "pubkey_bytes": {
+          "protocol_pubkey_bytes": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -6962,11 +7030,10 @@
         "type": "object",
         "required": [
           "active_validators",
-          "delegation_stake",
           "pending_removals",
           "pending_validators",
           "staking_pool_mappings",
-          "validator_stake"
+          "total_stake"
         ],
         "properties": {
           "active_validators": {
@@ -6974,11 +7041,6 @@
             "items": {
               "$ref": "#/components/schemas/Validator"
             }
-          },
-          "delegation_stake": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
           },
           "pending_removals": {
             "type": "array",
@@ -6994,7 +7056,7 @@
           "staking_pool_mappings": {
             "$ref": "#/components/schemas/Table"
           },
-          "validator_stake": {
+          "total_stake": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0

@@ -8,7 +8,7 @@ use types::PreSubscribedBroadcastSender;
 
 #[tokio::test]
 async fn wait_for_quorum() {
-    let (tx_message, rx_message) = test_utils::test_channel!(1);
+    let (tx_quorum_waiter, rx_quorum_waiter) = test_utils::test_channel!(1);
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
@@ -26,7 +26,7 @@ async fn wait_for_quorum() {
         committee.clone(),
         worker_cache.clone(),
         tx_shutdown.subscribe(),
-        rx_message,
+        rx_quorum_waiter,
         network.clone(),
     );
 
@@ -52,7 +52,10 @@ async fn wait_for_quorum() {
 
     // Forward the batch along with the handlers to the `QuorumWaiter`.
     let (s, r) = tokio::sync::oneshot::channel();
-    tx_message.send((batch.clone(), Some(s))).await.unwrap();
+    tx_quorum_waiter
+        .send((batch.clone(), Some(s)))
+        .await
+        .unwrap();
 
     // Wait for the `QuorumWaiter` to gather enough acknowledgements and output the batch.
     r.await.unwrap();
@@ -65,7 +68,7 @@ async fn wait_for_quorum() {
 
 #[tokio::test]
 async fn pipeline_for_quorum() {
-    let (tx_message, rx_message) = test_utils::test_channel!(1);
+    let (tx_quorum_waiter, rx_quorum_waiter) = test_utils::test_channel!(1);
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
@@ -83,7 +86,7 @@ async fn pipeline_for_quorum() {
         committee.clone(),
         worker_cache.clone(),
         tx_shutdown.subscribe(),
-        rx_message,
+        rx_quorum_waiter,
         network.clone(),
     );
 
@@ -109,11 +112,17 @@ async fn pipeline_for_quorum() {
 
     // Forward the batch along with the handlers to the `QuorumWaiter`.
     let (s0, r0) = tokio::sync::oneshot::channel();
-    tx_message.send((batch.clone(), Some(s0))).await.unwrap();
+    tx_quorum_waiter
+        .send((batch.clone(), Some(s0)))
+        .await
+        .unwrap();
 
     // Forward the batch along with the handlers to the `QuorumWaiter`.
     let (s1, r1) = tokio::sync::oneshot::channel();
-    tx_message.send((batch.clone(), Some(s1))).await.unwrap();
+    tx_quorum_waiter
+        .send((batch.clone(), Some(s1)))
+        .await
+        .unwrap();
 
     // Wait for the `QuorumWaiter` to gather enough acknowledgements and output the batch.
     r0.await.unwrap();

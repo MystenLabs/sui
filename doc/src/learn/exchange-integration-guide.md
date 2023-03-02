@@ -360,7 +360,7 @@ There's no contract-level storage in Sui. In general, this contract-level inform
 
 ### Is the gas price dynamic? Is it available through JSON-RPC?
 
-Yes, the gas price is dynamic and exposed via the [sui_getReferenceGasPrice](https://github.com/MystenLabs/sui/blob/main/crates/sui-json-rpc/src/api.rs#L337-L339) endpoint.
+Yes, the gas price is dynamic and exposed via the [sui_getReferenceGasPrice](https://docs.sui.io/sui-jsonrpc#sui_getReferenceGasPrice) endpoint.
 
 ### How can I delete an object within Sui?
 

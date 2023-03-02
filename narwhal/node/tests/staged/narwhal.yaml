@@ -58,10 +58,6 @@ HeaderDigest:
 Metadata:
   STRUCT:
     - created_at: U64
-ReconfigureNotification:
-  ENUM:
-    0:
-      Shutdown: UNIT
 WorkerIndex:
   NEWTYPESTRUCT:
     MAP:
@@ -88,10 +84,6 @@ WorkerOurBatchMessage:
     - worker_id: U32
     - metadata:
         TYPENAME: Metadata
-WorkerReconfigureMessage:
-  STRUCT:
-    - message:
-        TYPENAME: ReconfigureNotification
 WorkerSynchronizeMessage:
   STRUCT:
     - digests:

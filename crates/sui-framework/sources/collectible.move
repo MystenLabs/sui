@@ -9,7 +9,7 @@
 /// require additional work on the creator side to set up metadata creation methods.
 module sui::collectible {
     use sui::object::{Self, UID};
-    use sui::publisher::{Self, Publisher};
+    use sui::package::{Self, Publisher};
     use sui::tx_context::{TxContext};
     use sui::display::{Self, Display};
     use std::option::{Self, Option};
@@ -73,8 +73,8 @@ module sui::collectible {
     ) {
         assert!(sui::types::is_one_time_witness(&otw), ENotOneTimeWitness);
 
-        let pub = publisher::claim(otw, ctx);
-        assert!(publisher::is_module<T>(&pub), EModuleDoesNotContainT);
+        let pub = package::claim(otw, ctx);
+        assert!(package::from_module<T>(&pub), EModuleDoesNotContainT);
 
         (
             pub,

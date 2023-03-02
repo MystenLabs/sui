@@ -49,7 +49,7 @@ pub struct BatchMaker {
     /// Channel to receive transactions from the network.
     rx_batch_maker: Receiver<(Transaction, TxResponse)>,
     /// Output channel to deliver sealed batches to the `QuorumWaiter`.
-    tx_message: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
+    tx_quorum_waiter: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
     /// Metrics handler
     node_metrics: Arc<WorkerMetrics>,
     /// The timestamp of the batch creation.
@@ -69,7 +69,7 @@ impl BatchMaker {
         max_batch_delay: Duration,
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_batch_maker: Receiver<(Transaction, TxResponse)>,
-        tx_message: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
+        tx_quorum_waiter: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
         node_metrics: Arc<WorkerMetrics>,
         store: Store<BatchDigest, Batch>,
         tx_digest: Sender<(WorkerOurBatchMessage, PrimaryResponse)>,
@@ -82,7 +82,7 @@ impl BatchMaker {
                     max_batch_delay,
                     rx_shutdown,
                     rx_batch_maker,
-                    tx_message,
+                    tx_quorum_waiter,
                     batch_start_timestamp: Instant::now(),
                     node_metrics,
                     store,
@@ -232,7 +232,7 @@ impl BatchMaker {
         // Send the batch through the deliver channel for further processing.
         let (notify_done, done_sending) = tokio::sync::oneshot::channel();
         if self
-            .tx_message
+            .tx_quorum_waiter
             .send((batch.clone(), Some(notify_done)))
             .await
             .is_err()
@@ -251,7 +251,7 @@ impl BatchMaker {
         );
 
         // we are deliberately measuring this after the sending to the downstream
-        // channel tx_message as the operation is blocking and affects any further
+        // channel tx_quorum_waiter as the operation is blocking and affects any further
         // batch creation.
         self.node_metrics
             .created_batch_latency

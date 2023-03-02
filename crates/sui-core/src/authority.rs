@@ -25,7 +25,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, pin::Pin};
-use sui_config::node::AuthorityStorePruningConfig;
+use sui_config::node::{AuthorityStorePruningConfig, StateSnapshotConfig};
 use sui_types::crypto::AuthoritySignInfo;
 use sui_types::error::UserInputError;
 use sui_types::intent::Intent;
@@ -90,7 +90,7 @@ use crate::authority::authority_per_epoch_store::{
     AuthorityPerEpochStore, EpochStartConfiguration,
 };
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
-use crate::authority::authority_store::{ExecutionLockReadGuard, ObjectLockStatus};
+use crate::authority::authority_store::{ExecutionLockReadGuard, InputKey, ObjectLockStatus};
 use crate::authority::authority_store_pruner::AuthorityStorePruner;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
@@ -103,8 +103,6 @@ use crate::{
 };
 use sui_adapter::execution_engine;
 use sui_types::digests::TransactionEventsDigest;
-
-use self::authority_store::InputKey;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -131,6 +129,7 @@ pub mod authority_per_epoch_store_pruner;
 
 pub mod authority_store_pruner;
 pub mod authority_store_tables;
+pub mod authority_store_types;
 
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
@@ -170,6 +169,7 @@ pub struct AuthorityMetrics {
     internal_execution_latency: Histogram,
     prepare_certificate_latency: Histogram,
     commit_certificate_latency: Histogram,
+    state_snapshot_checkpoint_latency: Histogram,
 
     pub(crate) transaction_manager_num_enqueued_certificates: IntCounterVec,
     pub(crate) transaction_manager_num_missing_objects: IntGauge,
@@ -191,6 +191,7 @@ pub struct AuthorityMetrics {
     /// Consensus handler metrics
     pub consensus_handler_processed_batches: IntCounter,
     pub consensus_handler_processed_bytes: IntCounter,
+    pub consensus_handler_processed: IntCounterVec,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -306,6 +307,12 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            state_snapshot_checkpoint_latency: register_histogram_with_registry!(
+                "state_snapshot_checkpoint_latency",
+                "Latency of checkpointing perpetual db",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
             transaction_manager_num_enqueued_certificates: register_int_counter_vec_with_registry!(
                 "transaction_manager_num_enqueued_certificates",
                 "Current number of certificates enqueued to TransactionManager",
@@ -383,6 +390,8 @@ impl AuthorityMetrics {
                 "Number of bytes processed by consensus_handler",
                 registry
             ).unwrap(),
+            consensus_handler_processed: register_int_counter_vec_with_registry!("consensus_handler_processed", "Number of transactions processed by consensus handler", &["class"], registry)
+                .unwrap()
         }
     }
 }
@@ -424,6 +433,9 @@ pub struct AuthorityState {
     pub metrics: Arc<AuthorityMetrics>,
     _objects_pruner: AuthorityStorePruner,
     _authority_per_epoch_pruner: AuthorityPerEpochStorePruner,
+
+    /// Take snapshot of the live object set at the end of epoch
+    enable_state_snapshot: bool,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -502,18 +514,18 @@ impl AuthorityState {
     /// Initiate a new transaction.
     pub async fn handle_transaction(
         &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
     ) -> Result<HandleTransactionResponse, SuiError> {
-        let epoch_store = self.load_epoch_store_one_call_per_task();
-
         let tx_digest = *transaction.digest();
         debug!(
             "handle_transaction with transaction data: {:?}",
             &transaction.data().intent_message.value
         );
+
         // Ensure an idempotent answer. This is checked before the system_tx check so that
         // a validator is able to return the signed system tx if it was already signed locally.
-        if let Some((_, status)) = self.get_transaction_status(&tx_digest, &epoch_store)? {
+        if let Some((_, status)) = self.get_transaction_status(&tx_digest, epoch_store)? {
             return Ok(HandleTransactionResponse { status });
         }
         // CRITICAL! Validators should never sign an external system transaction.
@@ -544,9 +556,7 @@ impl AuthorityState {
             return Err(SuiError::TransactionExpired);
         }
 
-        let signed = self
-            .handle_transaction_impl(transaction, &epoch_store)
-            .await;
+        let signed = self.handle_transaction_impl(transaction, epoch_store).await;
         match signed {
             Ok(s) => Ok(HandleTransactionResponse {
                 status: TransactionStatus::Signed(s.into_inner().into_sig()),
@@ -556,7 +566,7 @@ impl AuthorityState {
             // In that case, we could still return Ok to avoid showing confusing errors.
             Err(err) => Ok(HandleTransactionResponse {
                 status: self
-                    .get_transaction_status(&tx_digest, &epoch_store)?
+                    .get_transaction_status(&tx_digest, epoch_store)?
                     .ok_or(err)?
                     .1,
             }),
@@ -1040,6 +1050,7 @@ impl AuthorityState {
         );
         let (gas_object_ref, input_objects) = transaction_input_checker::check_dev_inspect_input(
             &self.database,
+            protocol_config,
             &transaction_kind,
             gas_object,
         )
@@ -1524,6 +1535,7 @@ impl AuthorityState {
         pruning_config: &AuthorityStorePruningConfig,
         genesis_objects: &[Object],
         epoch_duration_ms: u64,
+        state_snapshot_config: &StateSnapshotConfig,
     ) -> Arc<Self> {
         Self::check_protocol_version(
             supported_protocol_versions,
@@ -1568,6 +1580,7 @@ impl AuthorityState {
             metrics,
             _objects_pruner,
             _authority_per_epoch_pruner,
+            enable_state_snapshot: state_snapshot_config.enabled,
         });
 
         // Process tx recovery log first, so that checkpoint recovery (below)
@@ -1658,6 +1671,7 @@ impl AuthorityState {
             &AuthorityStorePruningConfig::default(),
             genesis.objects(),
             10000,
+            &StateSnapshotConfig::default(),
         )
         .await;
 
@@ -1787,6 +1801,11 @@ impl AuthorityState {
         let mut execution_lock = db.execution_lock_for_reconfiguration().await;
         self.revert_uncommitted_epoch_transactions(cur_epoch_store)
             .await?;
+        if self.enable_state_snapshot {
+            let _checkpointed_db_path = self.checkpoint_perpetual_db()?;
+            // TODO: Start a background task to persist live object set in
+            // checkpointed db to canonical storage format
+        }
         let new_epoch = new_committee.epoch;
         let new_epoch_store = self
             .reopen_epoch_db(cur_epoch_store, new_committee, epoch_start_configuration)
@@ -1842,6 +1861,8 @@ impl AuthorityState {
     }
 
     /// This function should be called once and exactly once during reconfiguration.
+    /// Instead of this function use AuthorityEpochStore::epoch_start_configuration() to access this object everywhere
+    /// besides when we are reading fields for the current epoch
     pub fn get_sui_system_state_object_during_reconfig(&self) -> SuiResult<SuiSystemState> {
         self.database.get_sui_system_state_object()
     }
@@ -2659,7 +2680,8 @@ impl AuthorityState {
             } else {
                 info!(
                     "validator {:?} does not support {:?}",
-                    authority, next_protocol_version
+                    authority.concise(),
+                    next_protocol_version
                 );
             }
         }
@@ -2826,6 +2848,20 @@ impl AuthorityState {
         self.epoch_store.store(new_epoch_store.clone());
         cur_epoch_store.epoch_terminated().await;
         Ok(new_epoch_store)
+    }
+
+    pub fn checkpoint_perpetual_db(&self) -> SuiResult<PathBuf> {
+        let _metrics_guard = self.metrics.state_snapshot_checkpoint_latency.start_timer();
+        let checkpoint_path = PathBuf::from(format!(
+            "perpetual_store_snapshot_epoch_{}",
+            self.db().perpetual_tables.get_recovery_epoch_at_restart()?
+        ));
+        self.database
+            .perpetual_tables
+            .objects
+            .rocksdb
+            .checkpoint(&checkpoint_path)
+            .map_err(SuiError::StorageError)
     }
 
     #[cfg(test)]

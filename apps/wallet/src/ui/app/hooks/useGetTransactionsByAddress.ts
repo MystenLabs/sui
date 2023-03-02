@@ -1,24 +1,39 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiTransactionResponse, type SuiAddress } from '@mysten/sui.js';
+import { type SuiAddress } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 
 import { useRpc } from '_hooks';
 
+const dedupe = (arr: string[]) => Array.from(new Set(arr));
+
 export function useGetTransactionsByAddress(address: SuiAddress | null) {
     const rpc = useRpc();
 
-    const response = useQuery<SuiTransactionResponse[], Error>(
+    return useQuery(
         ['transactions-by-address', address],
         async () => {
-            if (!address) return [];
-            const txnIdDs = await rpc.getTransactions({
-                ToAddress: address,
-            });
-            return rpc.getTransactionWithEffectsBatch(txnIdDs.data);
+            // combine from and to transactions
+            const [txnIds, fromTxnIds] = await Promise.all([
+                rpc.getTransactions({
+                    ToAddress: address!,
+                }),
+                rpc.getTransactions({
+                    FromAddress: address!,
+                }),
+            ]);
+            const resp = await rpc.getTransactionWithEffectsBatch(
+                dedupe([...txnIds.data, ...fromTxnIds.data])
+            );
+
+            return resp.sort(
+                // timestamp could be null, so we need to handle
+                (a, b) =>
+                    (b.timestamp_ms || b.timestampMs || 0) -
+                    (a.timestamp_ms || b.timestampMs || 0)
+            );
         },
         { enabled: !!address, staleTime: 10 * 1000 }
     );
-    return response;
 }

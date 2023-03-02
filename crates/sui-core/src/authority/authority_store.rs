@@ -4,6 +4,7 @@
 use super::authority_notify_read::NotifyRead;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_store_types::StoreObjectPair;
 use either::Either;
 use move_core_types::resolver::ModuleResolver;
 use once_cell::sync::OnceCell;
@@ -294,10 +295,11 @@ impl AuthorityStore {
         object_id: &ObjectID,
         version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
-        Ok(self
-            .perpetual_tables
+        self.perpetual_tables
             .objects
-            .get(&ObjectKey(*object_id, version))?)
+            .get(&ObjectKey(*object_id, version))?
+            .map(|object| self.perpetual_tables.object(object))
+            .transpose()
     }
 
     /// Read an object and return it, or Ok(None) if the object was not found.
@@ -523,10 +525,17 @@ impl AuthorityStore {
         let mut write_batch = self.perpetual_tables.objects.batch();
 
         // Insert object
+        let StoreObjectPair(store_object, indirect_object) = object.clone().into();
         write_batch = write_batch.insert_batch(
             &self.perpetual_tables.objects,
-            std::iter::once((ObjectKey::from(object_ref), object)),
+            std::iter::once((ObjectKey::from(object_ref), store_object)),
         )?;
+        if let Some(indirect_obj) = indirect_object {
+            write_batch = write_batch.insert_batch(
+                &self.perpetual_tables.indirect_move_objects,
+                std::iter::once((indirect_obj.digest(), indirect_obj)),
+            )?;
+        }
 
         // Update the index
         if object.get_single_owner().is_some() {
@@ -558,9 +567,19 @@ impl AuthorityStore {
         batch = batch
             .insert_batch(
                 &self.perpetual_tables.objects,
-                ref_and_objects
-                    .iter()
-                    .map(|(oref, o)| (ObjectKey::from(oref), **o)),
+                ref_and_objects.iter().map(|(oref, o)| {
+                    (
+                        ObjectKey::from(oref),
+                        StoreObjectPair::from((**o).clone()).0,
+                    )
+                }),
+            )?
+            .insert_batch(
+                &self.perpetual_tables.indirect_move_objects,
+                ref_and_objects.iter().filter_map(|(_, o)| {
+                    let StoreObjectPair(_, indirect_object) = (**o).clone().into();
+                    indirect_object.map(|obj| (obj.digest(), obj))
+                }),
             )?
             .insert_batch(
                 &self.perpetual_tables.parent_sync,
@@ -690,13 +709,24 @@ impl AuthorityStore {
         )?;
 
         // Insert each output object into the stores
-        write_batch = write_batch.insert_batch(
-            &self.perpetual_tables.objects,
-            written.iter().map(|(_, (obj_ref, new_object, _kind))| {
+        let (new_objects, new_indirect_move_objects): (Vec<_>, Vec<_>) = written
+            .iter()
+            .map(|(_, (obj_ref, new_object, _))| {
                 debug!(?obj_ref, "writing object");
-                (ObjectKey::from(obj_ref), new_object)
-            }),
-        )?;
+                let StoreObjectPair(store_object, indirect_object) = new_object.clone().into();
+                (
+                    (ObjectKey::from(obj_ref), store_object),
+                    indirect_object.map(|obj| (obj.digest(), obj)),
+                )
+            })
+            .unzip();
+
+        write_batch = write_batch
+            .insert_batch(&self.perpetual_tables.objects, new_objects.into_iter())?
+            .merge_batch(
+                &self.perpetual_tables.indirect_move_objects,
+                new_indirect_move_objects.into_iter().flatten(),
+            )?;
 
         write_batch =
             write_batch.insert_batch(&self.perpetual_tables.events, [(events.digest(), events)])?;
@@ -1048,8 +1078,13 @@ impl AuthorityStore {
                     .into_iter()
                     .zip($object_keys)
                     .filter_map(|(obj_opt, key)| {
-                        let obj =
-                            obj_opt.expect(&format!("Older object version not found: {:?}", key));
+                        let obj = self
+                            .perpetual_tables
+                            .object(
+                                obj_opt
+                                    .expect(&format!("Older object version not found: {:?}", key)),
+                            )
+                            .expect("Matching indirect object not found");
 
                         if obj.is_immutable() {
                             return None;
@@ -1153,6 +1188,8 @@ impl AuthorityStore {
     }
 
     // TODO: Transaction Orchestrator also calls this, which is not ideal.
+    // Instead of this function use AuthorityEpochStore::epoch_start_configuration() to access this object everywhere
+    // besides when we are reading fields for the current epoch
     pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
         get_sui_system_state(self.perpetual_tables.as_ref())
     }

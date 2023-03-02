@@ -18,7 +18,7 @@ type ValidatorMetaProps = {
 
 export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
     const validatorPublicKey = toB64(
-        new Uint8Array(validatorData.metadata.pubkey_bytes)
+        new Uint8Array(validatorData.metadata.protocol_pubkey_bytes)
     );
 
     const validatorName = validatorData.metadata.name;

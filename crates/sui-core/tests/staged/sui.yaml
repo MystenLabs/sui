@@ -85,6 +85,13 @@ Command:
         NEWTYPE:
           SEQ:
             SEQ: U8
+    5:
+      MakeMoveVec:
+        TUPLE:
+          - OPTION:
+              TYPENAME: TypeTag
+          - SEQ:
+              TYPENAME: Argument
 ConsensusCommitPrologue:
   STRUCT:
     - epoch: U64
