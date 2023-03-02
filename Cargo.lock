@@ -8673,7 +8673,6 @@ dependencies = [
  "move-core-types",
  "move-package",
  "move-stdlib",
- "move-unit-test",
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
@@ -8707,6 +8706,18 @@ dependencies = [
  "sui-types",
  "sui-verifier",
  "tempfile",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-framework-test"
+version = "0.1.0"
+dependencies = [
+ "move-cli",
+ "move-package",
+ "sui-framework",
+ "sui-framework-build",
+ "sui-move",
  "workspace-hack",
 ]
 
@@ -8896,7 +8907,10 @@ dependencies = [
  "move-prover-boogie-backend",
  "move-stackless-bytecode",
  "move-unit-test",
+ "move-vm-runtime",
+ "move-vm-test-utils",
  "mysten-metrics",
+ "once_cell",
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.152",
@@ -8907,6 +8921,7 @@ dependencies = [
  "sui-framework-build",
  "sui-macros",
  "sui-node",
+ "sui-protocol-config",
  "sui-simulator",
  "sui-types",
  "telemetry-subscribers",
