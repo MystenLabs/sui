@@ -386,17 +386,9 @@ where
             }
             input_object_metadata.insert(object_metadata.id, object_metadata);
         };
-        // gas can be unused
         let gas_id = gas.object_metadata.as_ref().unwrap().id;
         add_input_object_write(gas);
-        // all other inputs must be used at least once
-        for (idx, input) in inputs.into_iter().enumerate() {
-            if input.inner.last_usage_kind.is_none() {
-                return Err(ExecutionErrorKind::UnusedInput {
-                    input_idx: idx as u16,
-                }
-                .into());
-            }
+        for input in inputs {
             add_input_object_write(input)
         }
         // check for unused values

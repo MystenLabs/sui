@@ -1,6 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use super::{base_types::*, committee::Committee, error::*, event::Event};
 use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
@@ -48,6 +49,7 @@ use std::{
 use strum::IntoStaticStr;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use tap::Pipe;
+use thiserror::Error;
 use tracing::debug;
 
 pub const DUMMY_GAS_PRICE: u64 = 1;
@@ -2307,9 +2309,6 @@ pub enum ExecutionFailureStatus {
         arg_idx: u16,
         kind: CommandArgumentError,
     },
-    UnusedInput {
-        input_idx: u16,
-    },
     UnusedValueWithoutDrop {
         result_idx: u16,
         secondary_idx: u16,
@@ -2376,19 +2375,50 @@ pub struct InvalidSharedByValue {
     pub object: ObjectID,
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash, Error)]
 pub enum CommandArgumentError {
+    #[error("The type of the value does not match the expected type")]
     TypeMismatch,
+    #[error("The argument cannot be deserialized into a value of the specified type")]
     InvalidBCSBytes,
+    #[error("The argument cannot be instantiated from raw bytes")]
     InvalidUsageOfPureArg,
+    #[error(
+        "Invalid argument to private entry function. \
+        These functions cannot take arguments from other Move functions"
+    )]
     InvalidArgumentToPrivateEntryFunction,
+    #[error("Out of bounds access to input or result vector {idx}")]
     IndexOutOfBounds { idx: u16 },
+    #[error(
+        "Out of bounds secondary access to result vector \
+        {result_idx} at secondary index {secondary_idx}"
+    )]
     SecondaryIndexOutOfBounds { result_idx: u16, secondary_idx: u16 },
+    #[error(
+        "Invalid usage of result {result_idx}, \
+        expected a single result but found multiple return values"
+    )]
     InvalidResultArity { result_idx: u16 },
+    #[error(
+        "Invalid taking of the Gas coin. \
+        It can only be used by-value with TransferObjects"
+    )]
     InvalidGasCoinUsage,
+    #[error(
+        "Invalid usage of borrowed value. \
+        Mutably borrowed values require unique usage. \
+        Immutably borrowed values cannot be taken or borrowed mutably"
+    )]
     InvalidUsageOfBorrowedValue,
+    #[error(
+        "Invalid usage of already taken value. \
+        There is now no value available at this location"
+    )]
     InvalidUsageOfTakenValue,
+    #[error("Immutable and shared objects cannot be passed by-value.")]
     InvalidObjectByValue,
+    #[error("Immutable objects cannot be passed by mutable reference, &mut.")]
     InvalidObjectByMutRef,
 }
 
@@ -2594,9 +2624,6 @@ impl Display for ExecutionFailureStatus {
             ExecutionFailureStatus::CommandArgumentError { arg_idx, kind } => {
                 write!(f, "Invalid command argument at {arg_idx}. {kind}")
             }
-            ExecutionFailureStatus::UnusedInput { input_idx } => {
-                write!(f, "Unused input {input_idx}")
-            }
             ExecutionFailureStatus::UnusedValueWithoutDrop {
                 result_idx,
                 secondary_idx,
@@ -2743,71 +2770,6 @@ impl Display for InvalidSharedByValue {
         the shared object's type must be defined in the same module as the called function. The \
         shared object {object} is not defined in this module",
         )
-    }
-}
-
-impl Display for CommandArgumentError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CommandArgumentError::TypeMismatch => {
-                write!(f, "The type of the value does not match the expected type")
-            }
-            CommandArgumentError::InvalidBCSBytes => write!(
-                f,
-                "The argument cannot be deserialized into a value of the specified type"
-            ),
-            CommandArgumentError::InvalidUsageOfPureArg => {
-                write!(f, "The argument cannot be instantiated from raw bytes")
-            }
-            CommandArgumentError::InvalidArgumentToPrivateEntryFunction => {
-                write!(
-                    f,
-                    "Invalid argument to private entry function. \
-                    These functions cannot take arguments from other Move functions"
-                )
-            }
-            CommandArgumentError::IndexOutOfBounds { idx } => {
-                write!(f, "Out of bounds access to input or result vector {idx}")
-            }
-            CommandArgumentError::SecondaryIndexOutOfBounds {
-                result_idx,
-                secondary_idx,
-            } => write!(
-                f,
-                "Out of bounds secondary access to result vector \
-                {result_idx} at secondary index {secondary_idx}"
-            ),
-            CommandArgumentError::InvalidResultArity { result_idx } => {
-                write!(
-                    f,
-                    "Invalid usage of result {result_idx}, \
-                    expected a single result but found multiple return values"
-                )
-            }
-            CommandArgumentError::InvalidGasCoinUsage => write!(
-                f,
-                "Invalid taking of the Gas coin. \
-                It can only be used by-value with TransferObjects"
-            ),
-            CommandArgumentError::InvalidUsageOfBorrowedValue => write!(
-                f,
-                "Invalid usage of borrowed value. \
-                Mutably borrowed values require unique usage. \
-                Immutably borrowed values cannot be taken or borrowed mutably"
-            ),
-            CommandArgumentError::InvalidUsageOfTakenValue => write!(
-                f,
-                "Invalid usage of already taken value. \
-            There is now no value available at this location"
-            ),
-            CommandArgumentError::InvalidObjectByValue => {
-                write!(f, "Immutable and shared objects cannot be passed by-value.")
-            }
-            CommandArgumentError::InvalidObjectByMutRef => write!(
-                f,
-                "Immutable objects cannot be passed by mutable reference, &mut."
-            ),
-        }
     }
 }
 
