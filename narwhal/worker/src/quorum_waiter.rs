@@ -31,7 +31,7 @@ pub struct QuorumWaiter {
     /// Receiver for shutdown.
     rx_shutdown: ConditionalBroadcastReceiver,
     /// Input Channel to receive commands.
-    rx_message: Receiver<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
+    rx_quorum_waiter: Receiver<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
     /// A network sender to broadcast the batches to the other workers.
     network: anemo::Network,
 }
@@ -45,7 +45,7 @@ impl QuorumWaiter {
         committee: Committee,
         worker_cache: SharedWorkerCache,
         rx_shutdown: ConditionalBroadcastReceiver,
-        rx_message: Receiver<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
+        rx_quorum_waiter: Receiver<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
         network: anemo::Network,
     ) -> JoinHandle<()> {
         spawn_logged_monitored_task!(
@@ -56,7 +56,7 @@ impl QuorumWaiter {
                     committee,
                     worker_cache,
                     rx_shutdown,
-                    rx_message,
+                    rx_quorum_waiter,
                     network,
                 }
                 .run()
@@ -88,7 +88,7 @@ impl QuorumWaiter {
                 // task to the pipeline to send this batch to workers.
                 //
                 // TODO: make the constant a config parameter.
-                Some((batch, opt_channel)) = self.rx_message.recv(), if pipeline.len() < MAX_PARALLEL_BATCH => {
+                Some((batch, opt_channel)) = self.rx_quorum_waiter.recv(), if pipeline.len() < MAX_PARALLEL_BATCH => {
                     // Broadcast the batch to the other workers.
                     let workers: Vec<_> = self
                         .worker_cache

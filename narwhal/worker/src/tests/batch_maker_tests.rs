@@ -29,7 +29,7 @@ async fn make_batch() {
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_batch_maker, rx_batch_maker) = test_utils::test_channel!(1);
     let (tx_quorum_waiter, mut rx_quorum_waiter) = test_utils::test_channel!(1);
-    let (tx_digest, mut rx_digest) = test_utils::test_channel!(1);
+    let (tx_our_batch, mut rx_our_batch) = test_utils::test_channel!(1);
     let node_metrics = WorkerMetrics::new(&Registry::new());
 
     // Spawn a `BatchMaker` instance.
@@ -44,7 +44,7 @@ async fn make_batch() {
         tx_quorum_waiter,
         Arc::new(node_metrics),
         store.clone(),
-        tx_digest,
+        tx_our_batch,
     );
 
     // Send enough transactions to seal a batch.
@@ -66,7 +66,7 @@ async fn make_batch() {
     }
 
     // Now we send to primary
-    let (_message, respond) = rx_digest.recv().await.unwrap();
+    let (_message, respond) = rx_our_batch.recv().await.unwrap();
     assert!(respond.unwrap().send(()).is_ok());
 
     assert!(r0.await.is_ok());
@@ -87,7 +87,7 @@ async fn batch_timeout() {
     let (tx_batch_maker, rx_batch_maker) = test_utils::test_channel!(1);
     let (tx_quorum_waiter, mut rx_quorum_waiter) = test_utils::test_channel!(1);
     let node_metrics = WorkerMetrics::new(&Registry::new());
-    let (tx_digest, mut rx_digest) = test_utils::test_channel!(1);
+    let (tx_our_batch, mut rx_our_batch) = test_utils::test_channel!(1);
 
     // Spawn a `BatchMaker` instance.
     let id = 0;
@@ -101,7 +101,7 @@ async fn batch_timeout() {
         tx_quorum_waiter,
         Arc::new(node_metrics),
         store.clone(),
-        tx_digest,
+        tx_our_batch,
     );
 
     // Do not send enough transactions to seal a batch.
@@ -120,7 +120,7 @@ async fn batch_timeout() {
     }
 
     // Now we send to primary
-    let (_message, respond) = rx_digest.recv().await.unwrap();
+    let (_message, respond) = rx_our_batch.recv().await.unwrap();
     assert!(respond.unwrap().send(()).is_ok());
 
     assert!(r0.await.is_ok());
