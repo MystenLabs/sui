@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-  any,
   array,
   boolean,
   literal,
@@ -11,7 +10,6 @@ import {
   string,
   union,
   Infer,
-  nullable,
   tuple,
   optional,
 } from 'superstruct';
@@ -26,17 +24,14 @@ export const ValidatorMetaData = object({
   network_pubkey_bytes: array(number()),
   worker_pubkey_bytes: array(number()),
   proof_of_possession_bytes: array(number()),
-  name: union([string(), array(number())]),
-  description: union([string(), nullable(array(number()))]),
-  image_url: union([string(), nullable(array(number()))]),
-  project_url: union([string(), nullable(array(number()))]),
+  name: string(),
+  description: string(),
+  image_url: string(),
+  project_url: string(),
+  p2p_address: array(number()),
   net_address: array(number()),
   consensus_address: array(number()),
   worker_address: array(number()),
-  next_epoch_stake: number(),
-  next_epoch_delegation: number(),
-  next_epoch_gas_price: number(),
-  next_epoch_commission_rate: number(),
 });
 
 export type DelegatedStake = Infer<typeof DelegatedStake>;
@@ -53,8 +48,8 @@ export const StakedSui = object({
   id: object({
     id: string(),
   }),
-  validator_address: SuiAddress,
-  pool_starting_epoch: number(),
+  pool_id: string(),
+  validator_address: string(),
   delegation_request_epoch: number(),
   principal: Balance,
   sui_token_lock: union([number(), literal(null)]),
@@ -126,13 +121,17 @@ export const PendingWithdawFields = object({
 });
 
 export const DelegationStakingPoolFields = object({
-  delegation_token_supply: SuiSupplyFields,
-  pending_delegations: ContentsFields,
+  exchange_rates: object({
+    id: string(),
+    size: number(),
+  }),
+  id: string(),
+  pending_delegation: number(),
   pending_withdraws: PendingWithdawFields,
+  pool_token_balance: number(),
   rewards_pool: object({ value: number() }),
   starting_epoch: number(),
   sui_balance: number(),
-  validator_address: string(),
 });
 
 export const DelegationStakingPool = object({
@@ -157,13 +156,15 @@ export const SystemParameters = object({
 export const Validator = object({
   metadata: ValidatorMetaData,
   voting_power: number(),
-  stake_amount: number(),
-  pending_stake: number(),
-  pending_withdraw: number(),
   gas_price: number(),
-  delegation_staking_pool: DelegationStakingPoolFields,
+  staking_pool: DelegationStakingPoolFields,
   commission_rate: number(),
+  next_epoch_stake: number(),
+  next_epoch_delegation: number(),
+  next_epoch_gas_price: number(),
+  next_epoch_commission_rate: number(),
 });
+export type Validator = Infer<typeof Validator>;
 
 export const ValidatorPair = object({
   from: SuiAddress,
@@ -171,13 +172,23 @@ export const ValidatorPair = object({
 });
 
 export const ValidatorSet = object({
-  validator_stake: number(),
-  delegation_stake: number(),
+  total_stake: number(),
   active_validators: array(Validator),
-  pending_validators: array(Validator),
+  pending_validators: object({
+    contents: object({
+      id: string(),
+      size: number(),
+    }),
+  }),
   pending_removals: array(number()),
-  next_epoch_validators: array(ValidatorMetaData),
-  pending_delegation_switches: object({ contents: array(ValidatorPair) }),
+  // TODO: Remove this after 0.28.0 is released
+  pending_delegation_switches: optional(
+    object({ contents: array(ValidatorPair) }),
+  ),
+  staking_pool_mappings: object({
+    id: string(),
+    size: number(),
+  }),
 });
 
 export const SuiSystemState = object({
@@ -186,7 +197,6 @@ export const SuiSystemState = object({
   // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
   protocol_version: optional(number()),
   validators: ValidatorSet,
-  treasury_cap: SuiSupplyFields,
   storage_fund: Balance,
   parameters: SystemParameters,
   reference_gas_price: number(),
@@ -197,154 +207,3 @@ export const SuiSystemState = object({
 });
 
 export type SuiSystemState = Infer<typeof SuiSystemState>;
-
-/* ---------------- Types for the SuiSystemState Move object ---------------- */
-
-const MovePendingWithdrawals = object({
-  type: string(),
-  fields: object({
-    contents: object({
-      type: string(),
-      fields: object({
-        id: object({
-          id: string(),
-        }),
-        size: string(),
-      }),
-    }),
-  }),
-});
-
-const MovePendingDelegations = object({
-  type: string(),
-  fields: object({
-    id: object({
-      id: string(),
-    }),
-    head: nullable(string()),
-    size: string(),
-    tail: nullable(string()),
-  }),
-});
-
-export const MoveDelegationStakingPoolFields = object({
-  delegation_token_supply: object({
-    type: string(),
-    fields: object({
-      value: string(),
-    }),
-  }),
-  pending_delegations: MovePendingDelegations,
-  pending_withdraws: MovePendingWithdrawals,
-  rewards_pool: string(),
-  starting_epoch: string(),
-  sui_balance: string(),
-  validator_address: string(),
-});
-
-export type MoveSuiSystemObjectFields = Infer<typeof MoveSuiSystemObjectFields>;
-export type MoveSuiSystemObject = Infer<typeof MoveSuiSystemObject>;
-export type MoveActiveValidator = Infer<typeof MoveActiveValidator>;
-
-const ValidatorReportRecords = object({
-  type: string(),
-  fields: object({
-    contents: array(any()),
-  }),
-});
-
-export const MoveNextEpochValidatorFields = object({
-  consensus_address: array(number()),
-  name: union([string(), array(number())]),
-  description: optional(union([string(), array(number())])),
-  image_url: optional(union([string(), array(number())])),
-  project_url: optional(union([string(), array(number())])),
-  net_address: array(number()),
-  network_pubkey_bytes: array(number()),
-  next_epoch_commission_rate: string(),
-  next_epoch_delegation: string(),
-  next_epoch_gas_price: string(),
-  next_epoch_stake: string(),
-  proof_of_possession: array(number()),
-  pubkey_bytes: array(number()),
-  sui_address: string(),
-  worker_address: array(number()),
-  worker_pubkey_bytes: array(number()),
-});
-
-const MoveNextEpochValidator = object({
-  type: string(),
-  fields: MoveNextEpochValidatorFields,
-});
-
-export const MoveActiveValidatorFields = object({
-  commission_rate: string(),
-  delegation_staking_pool: object({
-    type: string(),
-    fields: MoveDelegationStakingPoolFields,
-  }),
-  gas_price: string(),
-  metadata: MoveNextEpochValidator,
-  pending_stake: string(),
-  pending_withdraw: string(),
-  stake_amount: string(),
-  voting_power: nullable(string()),
-});
-
-export const MoveActiveValidator = object({
-  type: string(),
-  fields: MoveActiveValidatorFields,
-});
-
-export const MoveValidatorsFieldsClass = object({
-  active_validators: array(MoveActiveValidator),
-  next_epoch_validators: array(MoveNextEpochValidator),
-  pending_delegation_switches: ValidatorReportRecords,
-  pending_removals: array(number()),
-  pending_validators: array(number()),
-  quorum_stake_threshold: optional(string()),
-  total_delegation_stake: string(),
-  total_validator_stake: string(),
-});
-
-export const MoveSuiSystemObjectFields = object({
-  chain_id: optional(number()),
-  epoch: string(),
-  // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
-  protocol_version: optional(string()),
-  // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
-  epoch_start_timestamp_ms: optional(string()),
-  safe_mode: boolean(),
-  id: object({
-    id: string(),
-  }),
-  parameters: Parameters,
-  reference_gas_price: string(),
-  stake_subsidy: object({
-    type: string(),
-    fields: object({
-      balance: string(),
-      current_epoch_amount: string(),
-      epoch_counter: string(),
-    }),
-  }),
-  storage_fund: string(),
-  sui_supply: object({
-    type: string(),
-    fields: object({
-      value: string(),
-    }),
-  }),
-  validator_report_records: ValidatorReportRecords,
-  validators: object({
-    type: string(),
-    fields: MoveValidatorsFieldsClass,
-  }),
-});
-
-export const MoveSuiSystemObject = object({
-  dataType: literal('moveObject'),
-  type: string(),
-  has_public_transfer: boolean(),
-  fields: MoveSuiSystemObjectFields,
-});

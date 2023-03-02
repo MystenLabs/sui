@@ -1,53 +1,23 @@
 <p align="center">
-  <a href="https://docs.sui.io/">
-    <img src="https://github.com/MystenLabs/sui/blob/main/doc/static/Sui_Icon_Brand.png" alt="Logo" width="80" height="80">
-  </a>
-  
-  <h3 align="center">Sui</h3>
-
-  <p align="center">
-    Welcome to Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model.
-    <br />
-    <a href="#"><strong>Explore more about Sui »</strong></a>
-    <br />
-    <br />
-    <a href="https://discord.gg/sui">Community</a>
-    ·
-    <a href="https://docs.sui.io/">Docs</a>
-  </p>
+<img src="https://github.com/MystenLabs/sui/blob/main/doc/static/Sui_Icon_Brand.png" alt="Logo" width="100" height="100">
 </p>
-<hr>
 
-|             |             |
-| ----------- | ----------- |
-| Welcome to Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by the [Move programming language](https://github.com/MystenLabs/awesome-move)! Find everything you need within the [Sui Developer Guides](doc/src/learn/index.md) and supporting materials below.      | <img src="doc/static/Sui_Icon_Brand.png" alt="sui_icon" width="200"/>      |
+# Welcome to Sui
 
-[![Documentation (main)](https://img.shields.io/badge/docs-main-59f)](https://mystenlabs.github.io/sui)
+Sui is a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by the [Move programming language](https://github.com/MystenLabs/awesome-move).
 
-## Quick links
+## Sui Highlights
 
-* To learn how to use Sui, take our [end-to-end tutorial](doc/src/explore/tutorials.md).
-* To jump right into building smart contract applications on top of Sui, start at the [Move Smart Contract Quick Start](doc/src/build/move/index.md).
-* To experiment with the Sui CLI client, check out [Sui CLI client Quick Start](doc/src/build/cli-client.md).
-* To understand what's possible by browsing Move code built on top of Sui, review the [examples](doc/src/explore/examples.md).
-* To start coding against Sui's JSON-RPC APIs, start at [JSON-RPC API Quick Start](doc/src/build/json-rpc.md).
-* To learn what distinguishes Sui from other blockchain systems, see [How Sui Differs?](doc/src/learn/sui-compared.md).
-* To go deep on how Sui works, read the [Sui Smart Contract Platform](doc/paper/sui.pdf) white paper.
-* To help Sui grow, follow [Contributing to Sui](doc/src/contribute/index.md).
-* To connect with the Sui community, join our [Discord](https://discord.gg/sui).
+Sui offers the following benefits and capabilities:
 
-### Highlights
-
-Sui offers:
-
-* Unmatched scalability, instant settlement
-* A safe smart contract language accessible to mainstream developers
-* Ability to define rich and composable on-chain assets
-* Better user experience for web3 apps
+ * Unmatched scalability, instant settlement
+ * A safe smart contract language accessible to mainstream developers
+ * Ability to define rich and composable on-chain assets
+ * Better user experience for web3 apps
 
 Sui is the only blockchain today that can scale with the growth of web3 while achieving industry-leading performance, cost, programmability, and usability. As we push towards mainnet launch, we will demonstrate capacity beyond the transaction processing capabilities of established systems – traditional and blockchain alike. We see Sui as the first internet-scale programmable blockchain platform, a foundational layer for web3.
 
-## Architecture
+## Sui Architecture
 
 ```mermaid
 flowchart LR
@@ -66,7 +36,7 @@ flowchart LR
     AC2 <==>|Network TCP| Authority2
 ```
 
-## Overview
+## Sui Overview
 
 Sui is a smart contract platform maintained by a permissionless set of authorities that play a role similar to validators or miners in other blockchain systems.
 
@@ -77,3 +47,12 @@ Sui is written in [Rust](https://www.rust-lang.org) and supports smart contracts
 Sui has a native token called SUI, with a fixed supply. The SUI token is used to pay for gas, and is also used as [delegated stake on authorities](https://learn.bybit.com/blockchain/delegated-proof-of-stake-dpos/) within an epoch. The voting power of authorities within this epoch is a function of this delegated stake. Authorities are periodically reconfigured according to the stake delegated to them. In any epoch, the set of authorities is [Byzantine fault tolerant](https://pmg.csail.mit.edu/papers/osdi99.pdf). At the end of the epoch, fees collected through all transactions processed are distributed to authorities according to their contribution to the operation of the system. Authorities can in turn share some of the fees as rewards to users that delegated stakes to them.
 
 Sui is backed by a number of state-of-the-art [peer-reviewed works](https://github.com/MystenLabs/sui/blob/main/doc/src/contribute/research-papers.md) and years of open source development.
+
+## More About Sui
+
+Use the following links to learn more about Sui and the Sui ecosystem:
+
+ * Learn more about working with Sui in the [Sui Documentation](doc/src/learn/index.md).
+ * Join the Sui community on [Sui Discord](https://discord.gg/sui).
+ * Find out more about the Sui ecosystem on the [Sui Resources](https://sui.io/resources/) page.
+ * Review information about Sui governance, [decentralization](https://suifoundation.org/decentralization), and [Developer Grants Program](https://suifoundation.org/#grants) on the [Sui Foundation](https://suifoundation.org/) site. 

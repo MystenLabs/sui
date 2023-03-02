@@ -12,7 +12,7 @@ export const root = ReactDOM.createRoot(
 );
 root.render(
   <React.StrictMode>
-    <WalletKitProvider enableUnsafeBurner>
+    <WalletKitProvider features={["sui:signTransaction"]} enableUnsafeBurner>
       <App />
     </WalletKitProvider>
   </React.StrictMode>

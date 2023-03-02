@@ -2,6 +2,7 @@ CREATE TABLE transactions (
     id BIGSERIAL PRIMARY KEY,
     transaction_digest VARCHAR(255) NOT NULL,
     sender VARCHAR(255) NOT NULL,
+    checkpoint_sequence_number BIGINT NOT NULL,
     transaction_time TIMESTAMP,
     transaction_kinds TEXT[] NOT NULL,
     -- object related
@@ -25,6 +26,8 @@ CREATE TABLE transactions (
     gas_price BIGINT NOT NULL,
     -- serialized transaction
     transaction_content TEXT NOT NULL,
+    transaction_effects_content TEXT NOT NULL,
+    confirmed_local_execution BOOLEAN,
     UNIQUE(transaction_digest) 
 );
 
@@ -32,3 +35,4 @@ CREATE INDEX transactions_transaction_digest ON transactions (transaction_digest
 CREATE INDEX transactions_transaction_time ON transactions (transaction_time);
 CREATE INDEX transactions_sender ON transactions (sender);
 CREATE INDEX transactions_gas_object_id ON transactions (gas_object_id);
+CREATE INDEX transactions_checkpoint_sequence_number ON transactions (checkpoint_sequence_number);

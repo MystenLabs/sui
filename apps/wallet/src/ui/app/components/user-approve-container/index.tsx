@@ -1,15 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type SuiAddress } from '@mysten/sui.js';
 import cl from 'classnames';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
+import { Button } from '../../shared/ButtonUI';
 import AccountAddress from '_components/account-address';
 import ExternalLink from '_components/external-link';
-import Icon from '_components/icon';
-import LoadingIndicator from '_components/loading/LoadingIndicator';
 
-import type { MouseEventHandler, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 import st from './UserApproveContainer.module.scss';
 
@@ -19,26 +19,31 @@ type UserApproveContainerProps = {
     originFavIcon?: string;
     rejectTitle: string;
     approveTitle: string;
+    approveDisabled?: boolean;
     onSubmit: (approved: boolean) => void;
     isConnect?: boolean;
     isWarning?: boolean;
+    addressHidden?: boolean;
+    address?: SuiAddress;
 };
 
-function UserApproveContainer({
+export function UserApproveContainer({
     origin,
     originFavIcon,
     children,
     rejectTitle,
     approveTitle,
+    approveDisabled = false,
     onSubmit,
     isConnect,
     isWarning,
+    addressHidden = false,
+    address,
 }: UserApproveContainerProps) {
     const [submitting, setSubmitting] = useState(false);
-    const handleOnResponse = useCallback<MouseEventHandler<HTMLButtonElement>>(
-        async (e) => {
+    const handleOnResponse = useCallback(
+        async (allowed: boolean) => {
             setSubmitting(true);
-            const allowed = e.currentTarget.dataset.allow === 'true';
             await onSubmit(allowed);
             setSubmitting(false);
         },
@@ -70,60 +75,46 @@ function UserApproveContainer({
                             </ExternalLink>
                         </div>
                     </div>
-                    <div className={st.cardFooter}>
-                        <div className={st.label}>Your address</div>
-                        <AccountAddress
-                            showLink={false}
-                            mode="normal"
-                            copyable
-                            className={st.address}
-                        />
-                    </div>
+                    {!addressHidden ? (
+                        <div className={st.cardFooter}>
+                            <div className={st.label}>Your address</div>
+                            <AccountAddress
+                                showLink={false}
+                                mode="normal"
+                                copyable
+                                className={st.address}
+                                address={address}
+                            />
+                        </div>
+                    ) : null}
                 </div>
                 <div className={st.children}>{children}</div>
             </div>
             <div className={st.actionsContainer}>
                 <div className={cl(st.actions, isWarning && st.flipActions)}>
-                    <button
-                        type="button"
-                        data-allow="false"
-                        onClick={handleOnResponse}
-                        className={cl(
-                            st.button,
-                            isWarning
-                                ? st.reject
-                                : isConnect
-                                ? st.cancel
-                                : st.reject
-                        )}
+                    <Button
+                        size="tall"
+                        variant="warning"
+                        onClick={() => {
+                            handleOnResponse(false);
+                        }}
                         disabled={submitting}
-                    >
-                        {rejectTitle}
-                    </button>
-                    <button
-                        type="button"
-                        className={cl(
-                            st.button,
-                            isWarning ? st.cancel : st.approve,
-                            submitting && st.loading
-                        )}
-                        data-allow="true"
-                        onClick={handleOnResponse}
-                        disabled={submitting}
-                    >
-                        <span>
-                            {submitting ? (
-                                <LoadingIndicator color="inherit" />
-                            ) : (
-                                approveTitle
-                            )}
-                        </span>
-                        {isWarning && <Icon icon="arrow-right" />}
-                    </button>
+                        text={rejectTitle}
+                    />
+                    <Button
+                        // recreate the button when changing the variant to avoid animating to the new styles
+                        key={`approve_${isWarning}`}
+                        size="tall"
+                        variant={isWarning ? 'secondary' : 'primary'}
+                        onClick={() => {
+                            handleOnResponse(true);
+                        }}
+                        disabled={approveDisabled}
+                        loading={submitting}
+                        text={approveTitle}
+                    />
                 </div>
             </div>
         </div>
     );
 }
-
-export default memo(UserApproveContainer);

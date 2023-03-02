@@ -11,7 +11,6 @@ import {
   PureArg,
   RawSigner,
   RpcTxnDataSerializer,
-  SuiMoveObject,
   SUI_SYSTEM_STATE_OBJECT_ID,
   UnserializedSignableTransaction,
   getObjectReference,
@@ -21,7 +20,6 @@ import {
   getObjectId,
   PayAllSuiTx,
   PayAllSuiTransaction,
-  TransactionData_v26,
 } from '../../src';
 import { CallArgSerializer } from '../../src/signers/txn-data-serializers/call-arg-serializer';
 import {
@@ -96,7 +94,8 @@ describe('Transaction Serialization and deserialization', () => {
       toolbox.address(),
     );
     const moveCall = {
-      packageObjectId: '0000000000000000000000000000000000000002',
+      packageObjectId:
+        '0000000000000000000000000000000000000000000000000000000000000002',
       module: 'devnet_nft',
       function: 'mint',
       typeArguments: [],
@@ -134,13 +133,12 @@ describe('Transaction Serialization and deserialization', () => {
       toolbox.address(),
     );
 
-    const validators = await toolbox.getActiveValidators();
-    const validator_metadata = (validators[0] as SuiMoveObject).fields.metadata;
-    const validator_address = (validator_metadata as SuiMoveObject).fields
-      .sui_address;
+    const [{ sui_address: validator_address }] =
+      await toolbox.getActiveValidators();
 
     const moveCall = {
-      packageObjectId: '0000000000000000000000000000000000000002',
+      packageObjectId:
+        '0000000000000000000000000000000000000000000000000000000000000002',
       module: 'sui_system',
       function: 'request_add_delegation',
       typeArguments: [],
@@ -222,27 +220,17 @@ describe('Transaction Serialization and deserialization', () => {
       },
     } as PaySuiTx;
 
-    const version = await localSerializer.getRpcApiVersion();
-    const tx_data =
-      version?.major === 0 && version?.minor <= 26
-        ? ({
-            sender: DEFAULT_RECIPIENT_2,
-            gasBudget: gasBudget,
-            gasPrice: 100,
-            kind: { Single: paySuiTx } as TransactionKind,
-            gasPayment: getObjectReference(coins[1]),
-          } as TransactionData_v26)
-        : ({
-            sender: DEFAULT_RECIPIENT_2,
-            kind: { Single: paySuiTx } as TransactionKind,
-            gasData: {
-              owner: DEFAULT_RECIPIENT_2,
-              budget: gasBudget,
-              price: 100,
-              payment: getObjectReference(coins[1]),
-            },
-            expiration: { None: null },
-          } as TransactionData);
+    const tx_data = {
+      sender: DEFAULT_RECIPIENT_2,
+      kind: { Single: paySuiTx } as TransactionKind,
+      gasData: {
+        owner: DEFAULT_RECIPIENT_2,
+        budget: gasBudget,
+        price: 100,
+        payment: getObjectReference(coins[1]),
+      },
+      expiration: { None: null },
+    } as TransactionData;
 
     const serializedData = await localSerializer.serializeTransactionData(
       tx_data,
@@ -278,28 +266,17 @@ describe('Transaction Serialization and deserialization', () => {
         recipient: DEFAULT_RECIPIENT,
       },
     } as PayAllSuiTx;
-
-    const version = await localSerializer.getRpcApiVersion();
-    const tx_data =
-      version?.major === 0 && version?.minor <= 26
-        ? ({
-            sender: DEFAULT_RECIPIENT_2,
-            gasBudget: gasBudget,
-            gasPrice: 100,
-            kind: { Single: payAllSui } as TransactionKind,
-            gasPayment: getObjectReference(coins[1]),
-          } as TransactionData_v26)
-        : ({
-            sender: DEFAULT_RECIPIENT_2,
-            kind: { Single: payAllSui } as TransactionKind,
-            gasData: {
-              owner: DEFAULT_RECIPIENT_2,
-              budget: gasBudget,
-              price: 100,
-              payment: getObjectReference(coins[1]),
-            },
-            expiration: { None: null },
-          } as TransactionData);
+    const tx_data = {
+      sender: DEFAULT_RECIPIENT_2,
+      kind: { Single: payAllSui } as TransactionKind,
+      gasData: {
+        owner: DEFAULT_RECIPIENT_2,
+        budget: gasBudget,
+        price: 100,
+        payment: getObjectReference(coins[1]),
+      },
+      expiration: { None: null },
+    } as TransactionData;
 
     const serializedData = await localSerializer.serializeTransactionData(
       tx_data,

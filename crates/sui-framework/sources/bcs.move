@@ -79,7 +79,7 @@ module sui::bcs {
     public fun peel_address(bcs: &mut BCS): address {
         assert!(v::length(&bcs.bytes) >= address::length(), EOutOfRange);
         let (addr_bytes, i) = (v::empty(), 0);
-        while (i < 20) {
+        while (i < address::length()) {
             v::push_back(&mut addr_bytes, v::pop_back(&mut bcs.bytes));
             i = i + 1;
         };

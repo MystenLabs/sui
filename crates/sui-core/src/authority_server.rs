@@ -16,8 +16,11 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::{error::*, messages::*};
+use sui_types::{
+    messages_checkpoint::{CheckpointRequest, CheckpointResponse},
+    sui_system_state::SuiSystemState,
+};
 use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tracing::{error_span, info, Instrument};
@@ -294,8 +297,15 @@ impl ValidatorService {
         if let Some(signed_effects) =
             state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store)?
         {
+            let events = if let Some(digest) = signed_effects.events_digest {
+                state.get_transaction_events(digest).await?
+            } else {
+                TransactionEvents::default()
+            };
+
             return Ok(tonic::Response::new(HandleCertificateResponse {
                 signed_effects: signed_effects.into_inner(),
+                events,
             }));
         }
 
@@ -317,7 +327,8 @@ impl ValidatorService {
                 .intent_message
                 .value
                 .kind
-                .input_objects()?
+                .input_objects()
+                .map_err(SuiError::from)?
                 .into_iter()
                 .map(|r| r.object_id())
                 .collect(),
@@ -379,9 +390,17 @@ impl ValidatorService {
         // the execution results if it contains shared objects.
         let res = state.execute_certificate(&certificate, &epoch_store).await;
         match res {
-            Ok(effects) => Ok(tonic::Response::new(HandleCertificateResponse {
-                signed_effects: effects.into_inner(),
-            })),
+            Ok(effects) => {
+                let events = if let Some(event_digest) = effects.events_digest {
+                    state.get_transaction_events(event_digest).await?
+                } else {
+                    TransactionEvents::default()
+                };
+                Ok(tonic::Response::new(HandleCertificateResponse {
+                    signed_effects: effects.into_inner(),
+                    events,
+                }))
+            }
             Err(e) => Err(tonic::Status::from(e)),
         }
     }
@@ -463,6 +482,16 @@ impl Validator for ValidatorService {
         let request = request.into_inner();
 
         let response = self.state.handle_committee_info_request(&request)?;
+
+        return Ok(tonic::Response::new(response));
+    }
+
+    async fn get_system_state_object(
+        &self,
+        _request: tonic::Request<SystemStateRequest>,
+    ) -> Result<tonic::Response<SuiSystemState>, tonic::Status> {
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        let response = epoch_store.system_state_object().clone();
 
         return Ok(tonic::Response::new(response));
     }

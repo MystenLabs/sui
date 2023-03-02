@@ -59,4 +59,8 @@ export class Account {
             derivationPath: this.derivationPath,
         };
     }
+
+    get publicKey() {
+        return this.#keypair.getPublicKey();
+    }
 }

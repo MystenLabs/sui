@@ -9,6 +9,7 @@ import {
     getTotalGasUsed,
     getTransactionDigest,
     getObjectVersion,
+    SUI_SYSTEM_STATE_OBJECT_ID,
 } from '@mysten/sui.js';
 import {
     createAsyncThunk,
@@ -17,7 +18,6 @@ import {
 } from '@reduxjs/toolkit';
 
 import { activeAccountSelector } from '../account';
-import { SUI_SYSTEM_STATE_OBJECT_ID } from './Coin';
 import { ExampleNFT } from './NFT';
 
 import type { SuiObject, SuiAddress, ObjectId } from '@mysten/sui.js';

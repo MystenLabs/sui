@@ -10,7 +10,6 @@ use serde_with::serde_as;
 use tracing::info;
 
 use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::committee::StakeUnit;
 use sui_types::crypto::{
     get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, NetworkKeyPair, SuiKeyPair,
 };
@@ -19,7 +18,7 @@ use sui_types::object::Object;
 use crate::genesis::GenesisChainParameters;
 use crate::node::DEFAULT_GRPC_CONCURRENCY_LIMIT;
 use crate::Config;
-use crate::{utils, DEFAULT_COMMISSION_RATE, DEFAULT_GAS_PRICE, DEFAULT_STAKE};
+use crate::{utils, DEFAULT_COMMISSION_RATE, DEFAULT_GAS_PRICE};
 
 // All information needed to build a NodeConfig for a validator.
 #[derive(Serialize, Deserialize)]
@@ -107,7 +106,6 @@ pub struct ValidatorGenesisInfo {
     pub network_key_pair: NetworkKeyPair,
     pub network_address: Multiaddr,
     pub p2p_address: Multiaddr,
-    pub stake: StakeUnit,
     pub gas_price: u64,
     pub commission_rate: u64,
     pub narwhal_primary_address: Multiaddr,
@@ -128,7 +126,6 @@ impl ValidatorGenesisInfo {
             network_key_pair,
             network_address: utils::new_tcp_network_address(),
             p2p_address: utils::new_udp_network_address(),
-            stake: DEFAULT_STAKE,
             gas_price: DEFAULT_GAS_PRICE,
             commission_rate: DEFAULT_COMMISSION_RATE,
             narwhal_primary_address: utils::new_udp_network_address(),
@@ -160,7 +157,6 @@ impl ValidatorGenesisInfo {
             network_key_pair,
             network_address: make_tcp_addr(1000 + port_offset),
             p2p_address: make_udp_addr(5000 + port_offset),
-            stake: DEFAULT_STAKE,
             gas_price: DEFAULT_GAS_PRICE,
             commission_rate: DEFAULT_COMMISSION_RATE,
             narwhal_primary_address: make_udp_addr(2000 + port_offset),

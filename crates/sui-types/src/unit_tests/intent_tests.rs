@@ -96,7 +96,7 @@ fn test_authority_signature_intent() {
     assert_eq!(&intent_bcs[3..], signed_data_bcs);
 
     // Let's ensure we can sign and verify intents.
-    let s = AuthoritySignature::new_secure(&tx1.data().intent_message, &kp);
-    let verification = s.verify_secure(&tx1.data().intent_message, kp.public().into());
+    let s = AuthoritySignature::new_secure(&tx1.data().intent_message, &0, &kp);
+    let verification = s.verify_secure(&tx1.data().intent_message, 0, kp.public().into());
     assert!(verification.is_ok())
 }

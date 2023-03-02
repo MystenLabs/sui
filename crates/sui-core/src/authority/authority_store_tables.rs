@@ -6,9 +6,10 @@ use crate::authority::authority_store::LockDetails;
 use rocksdb::Options;
 use std::path::Path;
 use sui_storage::default_db_options;
+use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
-use sui_types::crypto::AuthorityStrongQuorumSignInfo;
-use sui_types::messages::TrustedCertificate;
+use sui_types::digests::TransactionEventsDigest;
+use sui_types::storage::ObjectStore;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::{DBMap, DBOptions, MetricConf, ReadWriteOptions};
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
@@ -43,14 +44,11 @@ pub struct AuthorityPerpetualTables {
     #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
     pub(crate) owned_object_transaction_locks: DBMap<ObjectRef, Option<LockDetails>>,
 
-    /// This is a map between the transaction digest and the corresponding certificate for all
-    /// certificates that have been successfully executed by this authority.
-    #[default_options_override_fn = "certificates_table_default_config"]
-    pub(crate) executed_transactions: DBMap<TransactionDigest, TrustedTransaction>,
-
-    /// Signatures of transaction certificates that are executed locally.
-    /// TODO: This table will be move to the per-epoch store.
-    pub(crate) transaction_cert_signatures: DBMap<TransactionDigest, AuthorityStrongQuorumSignInfo>,
+    /// This is a map between the transaction digest and the corresponding transaction that's known to be
+    /// executable. This means that it may have been executed locally, or it may have been synced through
+    /// state-sync but hasn't been executed yet.
+    #[default_options_override_fn = "transactions_table_default_config"]
+    pub(crate) transactions: DBMap<TransactionDigest, TrustedTransaction>,
 
     /// The map between the object ref of objects processed at all versions and the transaction
     /// digest of the certificate that lead to the creation of this version of the object.
@@ -75,13 +73,19 @@ pub struct AuthorityPerpetualTables {
     /// tables.
     pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
-    /// This is currently used by state-sync to store downloaded transaction certs.
-    /// TODO: This table will be merged with executed_transactions.
-    pub(crate) synced_transactions: DBMap<TransactionDigest, TrustedCertificate>,
+    // Currently this is needed in the validator for returning events during process certificates.
+    // We could potentially remove this if we decided not to provide events in the execution path.
+    // TODO: Figure out what to do with this table in the long run. Also we need a pruning policy for this table.
+    pub(crate) events: DBMap<TransactionEventsDigest, TransactionEvents>,
 
     /// When transaction is executed via checkpoint executor, we store association here
     pub(crate) executed_transactions_to_checkpoint:
         DBMap<TransactionDigest, (EpochId, CheckpointSequenceNumber)>,
+
+    // Finalized root state accumulator for epoch, to be included in CheckpointSummary
+    // of last checkpoint of epoch. These values should only ever be written once
+    // and never changed
+    pub(crate) root_state_hash_by_epoch: DBMap<EpochId, (CheckpointSequenceNumber, Accumulator)>,
 
     /// A singleton table that stores the current epoch number. This is used only for the purpose of
     /// crash recovery so that when we restart we know which epoch we are at. This is needed because
@@ -106,44 +110,6 @@ impl AuthorityPerpetualTables {
 
     pub fn open_readonly(parent_path: &Path) -> AuthorityPerpetualTablesReadOnly {
         Self::get_read_only_handle(Self::path(parent_path), None, None, MetricConf::default())
-    }
-
-    /// Read an object and return it, or Ok(None) if the object was not found.
-    pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        let obj_entry = self
-            .objects
-            .iter()
-            .skip_prior_to(&ObjectKey::max_for_id(object_id))?
-            .next();
-
-        let obj = match obj_entry {
-            Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => obj,
-            _ => return Ok(None),
-        };
-
-        // Note that the two reads in this function are (obviously) not atomic, and the
-        // object may be deleted after we have read it. Hence we check get_latest_parent_entry
-        // last, so that the write to self.parent_sync gets the last word.
-        //
-        // TODO: verify this race is ok.
-        //
-        // I believe it is - Even if the reads were atomic, calls to this function would still
-        // race with object deletions (the object could be deleted between when the function is
-        // called and when the first read takes place, which would be indistinguishable to the
-        // caller with the case in which the object is deleted in between the two reads).
-        let parent_entry = self.get_latest_parent_entry(*object_id)?;
-
-        match parent_entry {
-            None => {
-                error!(
-                    ?object_id,
-                    "Object is missing parent_sync entry, data store is inconsistent"
-                );
-                Ok(None)
-            }
-            Some((obj_ref, _)) if obj_ref.2.is_alive() => Ok(Some(obj)),
-            _ => Ok(None),
-        }
     }
 
     // This is used by indexer to find the correct version of dynamic field child object.
@@ -181,19 +147,6 @@ impl AuthorityPerpetualTables {
         }))
     }
 
-    pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
-        let sui_system_object = self
-            .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)?
-            .expect("Sui System State object must always exist");
-        let move_object = sui_system_object
-            .data
-            .try_as_move()
-            .expect("Sui System State object must be a Move object");
-        let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
-            .expect("Sui System State object deserialization cannot fail");
-        Ok(result)
-    }
-
     pub fn get_recovery_epoch_at_restart(&self) -> SuiResult<EpochId> {
         Ok(self
             .current_epoch
@@ -219,6 +172,46 @@ impl AuthorityPerpetualTables {
         LiveSetIter {
             iter: self.parent_sync.keys(),
             prev: None,
+        }
+    }
+}
+
+impl ObjectStore for &AuthorityPerpetualTables {
+    /// Read an object and return it, or Ok(None) if the object was not found.
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        let obj_entry = self
+            .objects
+            .iter()
+            .skip_prior_to(&ObjectKey::max_for_id(object_id))?
+            .next();
+
+        let obj = match obj_entry {
+            Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => obj,
+            _ => return Ok(None),
+        };
+
+        // Note that the two reads in this function are (obviously) not atomic, and the
+        // object may be deleted after we have read it. Hence we check get_latest_parent_entry
+        // last, so that the write to self.parent_sync gets the last word.
+        //
+        // TODO: verify this race is ok.
+        //
+        // I believe it is - Even if the reads were atomic, calls to this function would still
+        // race with object deletions (the object could be deleted between when the function is
+        // called and when the first read takes place, which would be indistinguishable to the
+        // caller with the case in which the object is deleted in between the two reads).
+        let parent_entry = self.get_latest_parent_entry(*object_id)?;
+
+        match parent_entry {
+            None => {
+                error!(
+                    ?object_id,
+                    "Object is missing parent_sync entry, data store is inconsistent"
+                );
+                Ok(None)
+            }
+            Some((obj_ref, _)) if obj_ref.2.is_alive() => Ok(Some(obj)),
+            _ => Ok(None),
         }
     }
 }
@@ -267,7 +260,7 @@ fn objects_table_default_config() -> DBOptions {
         },
     }
 }
-fn certificates_table_default_config() -> DBOptions {
+fn transactions_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
 fn effects_table_default_config() -> DBOptions {

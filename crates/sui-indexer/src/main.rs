@@ -40,9 +40,13 @@ async fn main() -> Result<(), IndexerError> {
 
     let json_rpc_prometheus_registry = registry_service.default_registry();
     let pg_connection_pool = new_pg_connection_pool(indexer_config.db_url.clone()).await?;
-    let handle = build_json_rpc_server(&json_rpc_prometheus_registry, pg_connection_pool.clone())
-        .await
-        .expect("Json rpc server should not run into errors upon start.");
+    let handle = build_json_rpc_server(
+        &json_rpc_prometheus_registry,
+        pg_connection_pool.clone(),
+        &indexer_config.rpc_client_url,
+    )
+    .await
+    .expect("Json rpc server should not run into errors upon start.");
     // let JSON RPC server run forever.
     spawn_monitored_task!(handle.stopped());
 

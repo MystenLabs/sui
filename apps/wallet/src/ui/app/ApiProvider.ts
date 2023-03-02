@@ -7,6 +7,7 @@ import {
     LocalTxnDataSerializer,
 } from '@mysten/sui.js';
 
+import { SentryRPCClient } from './SentryRpcClient';
 import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
 import { queryClient } from './helpers/queryClient';
 import { growthbook } from '_app/experimentation/feature-gating';
@@ -66,6 +67,7 @@ function getDefaultAPI(env: API_ENV) {
 }
 
 export const DEFAULT_API_ENV = getDefaultApiEnv();
+const SENTRY_MONITORED_ENVS = [API_ENV.devNet, API_ENV.testNet];
 
 type NetworkTypes = keyof typeof API_ENV;
 
@@ -89,11 +91,15 @@ export default class ApiProvider {
         apiEnv: API_ENV = DEFAULT_API_ENV,
         customRPC?: string | null
     ) {
-        this._apiFullNodeProvider = new JsonRpcProvider(
-            customRPC
-                ? new Connection({ fullnode: customRPC })
-                : getDefaultAPI(apiEnv)
-        );
+        const connection = customRPC
+            ? new Connection({ fullnode: customRPC })
+            : getDefaultAPI(apiEnv);
+        this._apiFullNodeProvider = new JsonRpcProvider(connection, {
+            rpcClient:
+                !customRPC && SENTRY_MONITORED_ENVS.includes(apiEnv)
+                    ? new SentryRPCClient(connection.fullnode)
+                    : undefined,
+        });
         this._signerByAddress.clear();
         // We also clear the query client whenever set set a new API provider:
         queryClient.resetQueries();

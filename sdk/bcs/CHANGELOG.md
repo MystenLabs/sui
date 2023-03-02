@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.6.1
+
+### Patch Changes
+
+- 0e202a543: Remove pending delegation switches.
+
 ## 0.6.0
 
 ### Minor Changes

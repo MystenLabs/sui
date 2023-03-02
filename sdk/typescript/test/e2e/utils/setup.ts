@@ -7,15 +7,11 @@ import {
   getEvents,
   getExecutionStatusType,
   JsonRpcProvider,
-  JsonRpcProviderWithCache,
   ObjectId,
   RawSigner,
-  SUI_SYSTEM_STATE_OBJECT_ID,
   fromB64,
   localnetConnection,
   Connection,
-  SuiMoveObject,
-  SuiObject,
 } from '../../../src';
 import { retry } from 'ts-retry-promise';
 import { FaucetRateLimitError } from '../../../src/rpc/faucet-client';
@@ -27,8 +23,10 @@ const DEFAULT_FULLNODE_URL =
   import.meta.env.VITE_FULLNODE_URL ?? TEST_ENDPOINTS.fullnode;
 const SUI_BIN = import.meta.env.VITE_SUI_BIN ?? 'cargo run --bin sui';
 
-export const DEFAULT_RECIPIENT = '0x36096be6a0314052931babed39f53c0666a6b0df';
-export const DEFAULT_RECIPIENT_2 = '0x46096be6a0314052931babed39f53c0666a6b0da';
+export const DEFAULT_RECIPIENT =
+  '0x0c567ffdf8162cb6d51af74be0199443b92e823d4ba6ced24de5c6c463797d46';
+export const DEFAULT_RECIPIENT_2 =
+  '0xbb967ddbebfee8c40d8fdd2c24cb02452834cd3a7061d18564448f900eb9e66d';
 export const DEFAULT_GAS_BUDGET = 10000;
 
 export class TestToolbox {
@@ -41,24 +39,13 @@ export class TestToolbox {
     return this.keypair.getPublicKey().toSuiAddress();
   }
 
-  // TODO: clean this up using `provider.getValidators()` method
-  public async getActiveValidators(): Promise<Array<SuiMoveObject>> {
-    const contents = await this.provider.getObject(SUI_SYSTEM_STATE_OBJECT_ID);
-    const data = (contents.details as SuiObject).data;
-    const validators = (data as SuiMoveObject).fields.validators;
-    const active_validators = (validators as SuiMoveObject).fields
-      .active_validators;
-    return active_validators as Array<SuiMoveObject>;
+  public async getActiveValidators() {
+    return this.provider.getValidators();
   }
 }
 
-type ProviderType = 'rpc' | 'rpc-with-cache';
-
-export function getProvider(providerType: ProviderType): JsonRpcProvider {
-  const Provider =
-    providerType === 'rpc' ? JsonRpcProvider : JsonRpcProviderWithCache;
-
-  return new Provider(
+export function getProvider(): JsonRpcProvider {
+  return new JsonRpcProvider(
     new Connection({
       fullnode: DEFAULT_FULLNODE_URL,
       faucet: DEFAULT_FAUCET_URL,
@@ -69,10 +56,10 @@ export function getProvider(providerType: ProviderType): JsonRpcProvider {
   );
 }
 
-export async function setup(providerType: ProviderType = 'rpc') {
+export async function setup() {
   const keypair = Ed25519Keypair.generate();
   const address = keypair.getPublicKey().toSuiAddress();
-  const provider = getProvider(providerType);
+  const provider = getProvider();
   await retry(() => provider.requestSuiFromFaucet(address), {
     backoff: 'EXPONENTIAL',
     // overall timeout in 60 seconds
@@ -108,5 +95,9 @@ export async function publishPackage(
   const publishEvent = getEvents(publishTxn)?.find((e) => 'publish' in e);
 
   // @ts-ignore: Publish not narrowed:
-  return publishEvent?.publish.packageId.replace(/^(0x)(0+)/, '0x');
+  const packageId = publishEvent?.publish.packageId.replace(/^(0x)(0+)/, '0x');
+  console.info(
+    `Published package ${packageId} from address ${await signer.getAddress()}}`,
+  );
+  return packageId;
 }

@@ -19,14 +19,16 @@ function App() {
         onClick={async () => {
           console.log(
             await signTransaction({
-              kind: "moveCall",
-              data: {
-                packageObjectId: "0x2",
-                module: "devnet_nft",
-                function: "mint",
-                typeArguments: [],
-                arguments: ["foo", "bar", "baz"],
-                gasBudget: 2000,
+              transaction: {
+                kind: "moveCall",
+                data: {
+                  packageObjectId: "0x2",
+                  module: "devnet_nft",
+                  function: "mint",
+                  typeArguments: [],
+                  arguments: ["foo", "bar", "baz"],
+                  gasBudget: 2000,
+                },
               },
             })
           );

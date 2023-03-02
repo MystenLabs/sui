@@ -9,24 +9,7 @@
     flex-grow: 1;
     width: 100%;
     max-height: 100%;
-    background-color: colors.$gray-40;
-}
-
-.header {
-    display: flex;
-    flex-flow: row nowrap;
-    align-items: center;
-    padding: 0 12px;
-    min-height: 52px;
-    gap: 20px;
-
-    &.center {
-        justify-content: center;
-    }
-}
-
-.menu-button {
-    justify-self: flex-end;
+    background-color: v.use(v.$colors-background-color);
 }
 
 .content {
@@ -53,25 +36,4 @@
 .with-nav {
     padding: 25px sizing.$main-sides-space;
     @include utils.main-extra-space-for-nav;
-}
-
-.dapp-status-container {
-    display: flex;
-    align-items: center;
-    overflow: hidden;
-}
-
-.logo-container,
-.menu-container {
-    display: flex;
-    flex: 1 0;
-    align-items: center;
-}
-
-.logo-container {
-    justify-content: flex-start;
-}
-
-.menu-container {
-    justify-content: flex-end;
 }

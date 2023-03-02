@@ -6,6 +6,7 @@
 /// custom coins with `Supply` and `Balance`s.
 module sui::balance {
     friend sui::sui_system;
+    friend sui::sui;
 
     /// For when trying to destroy a non-zero balance.
     const ENonZero: u64 = 0;
@@ -117,6 +118,12 @@ module sui::balance {
         let Balance { value: _ } = self;
     }
 
+    /// Destroy a `Supply` preventing any further minting and burning.
+    public(friend) fun destroy_supply<T>(self: Supply<T>): u64 {
+        let Supply { value } = self;
+        value
+    }
+
     #[test_only]
     /// Create a `Balance` of any coin for testing purposes.
     public fun create_for_testing<T>(value: u64): Balance<T> {
@@ -135,12 +142,6 @@ module sui::balance {
     public fun destroy_supply_for_testing<T>(self: Supply<T>): u64 {
         let Supply { value } = self;
         value
-    }
-
-    #[test_only]
-    /// Create a `Supply` of any coin for testing purposes.
-    public fun create_supply_for_testing<T>(value: u64): Supply<T> {
-        Supply { value }
     }
 }
 

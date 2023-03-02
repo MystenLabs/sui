@@ -18,4 +18,5 @@ export {
   CheckpointContents,
   CheckpointDigest,
   CheckPointContentsDigest,
+  Checkpoint,
 } from './checkpoints';

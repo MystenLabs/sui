@@ -7,8 +7,7 @@ import { useMemo } from 'react';
 import { getStakingRewards } from '../getStakingRewards';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { STATE_OBJECT } from '../usePendingDelegation';
-import { validatorsFields } from '../validatorsFields';
+import { useSystemState } from '../useSystemState';
 import { DelegationCard } from './../home/DelegationCard';
 import BottomMenuLayout, {
     Menu,
@@ -20,7 +19,7 @@ import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useAppSelector, useGetObject } from '_hooks';
+import { useAppSelector } from '_hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
 
 export function ValidatorsCard() {
@@ -32,25 +31,21 @@ export function ValidatorsCard() {
         error,
     } = useGetDelegatedStake(accountAddress || '');
 
-    const { data: validators } = useGetObject(STATE_OBJECT);
+    const { data: system } = useSystemState();
 
-    const validatorsData = validators && validatorsFields(validators);
-
-    const activeValidators =
-        validatorsData?.validators.fields.active_validators;
+    const activeValidators = system?.validators.active_validators;
     // Total earn token for all delegations
     const totalEarnToken = useMemo(() => {
-        if (!delegations || !validatorsData) return 0;
+        if (!delegations || !system) return 0;
 
-        const activeValidators =
-            validatorsData.validators.fields.active_validators;
+        const activeValidators = system.validators.active_validators;
 
         return delegations.reduce(
             (acc, delegation) =>
                 acc + getStakingRewards(activeValidators, delegation),
             0
         );
-    }, [delegations, validatorsData]);
+    }, [delegations, system]);
 
     // Total active stake for all delegations
 
@@ -133,13 +128,13 @@ export function ValidatorsCard() {
                         </Card>
 
                         <div className="grid grid-cols-2 gap-2.5 mt-4">
-                            {validatorsData &&
+                            {system &&
                                 activeValidators &&
                                 delegations.map((delegationObject) => (
                                     <DelegationCard
                                         delegationObject={delegationObject}
                                         activeValidators={activeValidators}
-                                        currentEpoch={+validatorsData.epoch}
+                                        currentEpoch={+system.epoch}
                                         key={delegationObject.staked_sui.id.id}
                                     />
                                 ))}

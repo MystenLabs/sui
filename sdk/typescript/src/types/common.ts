@@ -10,7 +10,7 @@ import {
   union,
   unknown,
 } from 'superstruct';
-import { CallArg, TransactionData, TransactionData_v26 } from './sui-bcs';
+import { CallArg, TransactionData } from './sui-bcs';
 import { sha256Hash } from '../cryptography/hash';
 import { BCS, fromB58, toB58 } from '@mysten/bcs';
 
@@ -19,6 +19,9 @@ export type TransactionDigest = Infer<typeof TransactionDigest>;
 
 export const TransactionEffectsDigest = string();
 export type TransactionEffectsDigest = Infer<typeof TransactionEffectsDigest>;
+
+export const TransactionEventDigest = string();
+export type TransactionEventDigest = Infer<typeof TransactionEventDigest>;
 
 export const ObjectId = string();
 export type ObjectId = Infer<typeof ObjectId>;
@@ -76,7 +79,7 @@ export function isValidTransactionDigest(
 // which uses the Move account address length
 // https://github.com/move-language/move/blob/67ec40dc50c66c34fd73512fcc412f3b68d67235/language/move-core/types/src/account_address.rs#L23 .
 
-export const SUI_ADDRESS_LENGTH = 20;
+export const SUI_ADDRESS_LENGTH = 32;
 export function isValidSuiAddress(value: string): value is SuiAddress {
   return isHex(value) && getHexByteLength(value) === SUI_ADDRESS_LENGTH;
 }
@@ -123,7 +126,7 @@ export function normalizeSuiObjectId(
  * @param publicKey public key
  */
 export function generateTransactionDigest(
-  data: TransactionData | TransactionData_v26,
+  data: TransactionData,
   bcs: BCS,
 ): string {
   const txBytes = bcs.ser('TransactionData', data).toBytes();

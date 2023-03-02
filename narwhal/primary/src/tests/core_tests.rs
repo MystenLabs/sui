@@ -89,7 +89,7 @@ async fn propose_header() {
     // Spawn the core.
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificate_store.clone(),
@@ -183,7 +183,7 @@ async fn propose_header_failure() {
     // Spawn the core.
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificate_store.clone(),
@@ -245,7 +245,7 @@ async fn shutdown_core() {
     // Make a synchronizer for the core.
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         certificate_store.clone(),

@@ -88,7 +88,7 @@ module sui::test_scenario {
     public fun begin(sender: address): Scenario {
         Scenario {
             txn_number: 0,
-            ctx: tx_context::new_from_hint(sender, 0, 0, 0),
+            ctx: tx_context::new_from_hint(sender, 0, 0, 0, 0),
         }
     }
 
@@ -105,16 +105,35 @@ module sui::test_scenario {
         // digest (and consequently, different object ID's) than the previous tx
         scenario.txn_number = scenario.txn_number + 1;
         let epoch = tx_context::epoch(&scenario.ctx);
-        scenario.ctx = tx_context::new_from_hint(sender,  scenario.txn_number, epoch, 0);
+        let epoch_timestamp = tx_context::epoch_timestamp(&scenario.ctx);
+        scenario.ctx = tx_context::new_from_hint(
+            sender,
+            scenario.txn_number,
+            epoch,
+            epoch_timestamp,
+            0,
+        );
         // end the transaction
         end_transaction()
     }
 
     /// Advance the scenario to a new epoch and end the transaction
-    /// See `next_transaction` for further details
+    /// See `next_tx` for further details
     public fun next_epoch(scenario: &mut Scenario, sender: address): TransactionEffects {
         tx_context::increment_epoch_number(&mut scenario.ctx);
         next_tx(scenario, sender)
+    }
+
+    /// Advance the scenario to a new epoch, `delta_ms` milliseconds in the future and end
+    /// the transaction.
+    /// See `next_tx` for further details
+    public fun later_epoch(
+        scenario: &mut Scenario,
+        delta_ms: u64,
+        sender: address,
+    ): TransactionEffects {
+        tx_context::increment_epoch_timestamp(&mut scenario.ctx, delta_ms);
+        next_epoch(scenario, sender)
     }
 
     /// Ends the test scenario

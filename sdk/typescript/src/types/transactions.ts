@@ -23,6 +23,7 @@ import {
   SuiAddress,
   SuiJsonValue,
   TransactionDigest,
+  TransactionEventDigest,
 } from './common';
 
 // TODO: support u64
@@ -51,7 +52,9 @@ export const SuiChangeEpoch = object({
 export type SuiChangeEpoch = Infer<typeof SuiChangeEpoch>;
 
 export const SuiConsensusCommitPrologue = object({
-  checkpoint_start_timestamp_ms: number(),
+  epoch: number(),
+  round: number(),
+  commit_timestamp_ms: number(),
 });
 export type SuiConsensusCommitPrologue = Infer<
   typeof SuiConsensusCommitPrologue
@@ -78,12 +81,11 @@ export const PayAllSui = object({
 export type PayAllSui = Infer<typeof PayAllSui>;
 
 export const MoveCall = object({
-  // TODO: Simplify once 0.24.0 lands
-  package: union([string(), SuiObjectRef]),
+  package: string(),
   module: string(),
   function: string(),
   typeArguments: optional(array(string())),
-  arguments: array(SuiJsonValue),
+  arguments: optional(array(SuiJsonValue)),
 });
 export type MoveCall = Infer<typeof MoveCall>;
 
@@ -211,11 +213,20 @@ export const TransactionEffects = object({
    */
   gasObject: OwnedObjectRef,
   /** The events emitted during execution. Note that only successful transactions emit events */
-  events: optional(array(SuiEvent)),
+  eventsDigest: optional(TransactionEventDigest),
   /** The set of transaction digests this transaction depends on */
   dependencies: optional(array(TransactionDigest)),
 });
 export type TransactionEffects = Infer<typeof TransactionEffects>;
+
+export const TransactionEvents = array(SuiEvent);
+export type TransactionEvents = Infer<typeof TransactionEvents>;
+
+export const DryRunTransactionResponse = object({
+  effects: TransactionEffects,
+  events: TransactionEvents,
+});
+export type DryRunTransactionResponse = Infer<typeof DryRunTransactionResponse>;
 
 const ReturnValueType = tuple([array(number()), string()]);
 const MutableReferenceOutputType = tuple([number(), array(number()), string()]);
@@ -232,6 +243,7 @@ const DevInspectResultsType = union([
 
 export const DevInspectResults = object({
   effects: TransactionEffects,
+  events: TransactionEvents,
   results: DevInspectResultsType,
 });
 export type DevInspectResults = Infer<typeof DevInspectResults>;
@@ -255,49 +267,6 @@ export const SuiFinalizedEffects = object({
   finalityInfo: SuiEffectsFinalityInfo,
 });
 export type SuiFinalizedEffects = Infer<typeof SuiFinalizedEffects>;
-
-export const SuiTransactionData_v26 = object({
-  transactions: array(SuiTransactionKind),
-  sender: SuiAddress,
-  gasPayment: SuiObjectRef,
-  // TODO: remove optional after 0.21.0 is released
-  gasPrice: optional(number()),
-  gasBudget: number(),
-});
-export type SuiTransactionData_v26 = Infer<typeof SuiTransactionData_v26>;
-
-export function toSuiTransactionData(
-  tx_data: SuiTransactionData_v26,
-): SuiTransactionData {
-  return {
-    transactions: tx_data.transactions,
-    sender: tx_data.sender,
-    gasData: {
-      payment: tx_data.gasPayment,
-      owner: tx_data.sender,
-      budget: tx_data.gasBudget,
-      price: tx_data.gasPrice!,
-    },
-  };
-}
-
-export const CertifiedTransaction_v26 = object({
-  transactionDigest: TransactionDigest,
-  data: SuiTransactionData_v26,
-  txSignature: string(),
-  authSignInfo: AuthorityQuorumSignInfo,
-});
-export type CertifiedTransaction_v26 = Infer<typeof CertifiedTransaction_v26>;
-
-export const SuiExecuteTransactionResponse_v26 = object({
-  certificate: optional(CertifiedTransaction_v26),
-  effects: SuiFinalizedEffects,
-  confirmed_local_execution: boolean(),
-});
-
-export type SuiExecuteTransactionResponse_v26 = Infer<
-  typeof SuiExecuteTransactionResponse_v26
->;
 
 // TODO: Remove after devnet 0.28.0
 
@@ -388,10 +357,9 @@ export const SuiTransactionResponse = object({
   // TODO: Remove optional after devnet 0.28.0
   transaction: optional(SuiTransaction),
   // TODO: Remove after devnet 0.28.0
-  certificate: optional(
-    union([CertifiedTransaction, CertifiedTransaction_v26]),
-  ),
+  certificate: optional(CertifiedTransaction),
   effects: TransactionEffects,
+  events: TransactionEvents,
   // TODO: Remove after devnet 0.28.0
   timestamp_ms: optional(union([number(), literal(null)])),
   // TODO: Remove optional after devnet 0.28.0
@@ -433,7 +401,7 @@ export type SuiExecuteTransactionResponse = Infer<
 
 export function getCertifiedTransaction(
   tx: SuiTransactionResponse | SuiExecuteTransactionResponse,
-): CertifiedTransaction | CertifiedTransaction_v26 | undefined {
+): CertifiedTransaction | undefined {
   if ('certificate' in tx) {
     return tx.certificate;
   } else if ('EffectsCert' in tx) {
@@ -445,7 +413,6 @@ export function getCertifiedTransaction(
 export function getTransactionDigest(
   tx:
     | CertifiedTransaction
-    | CertifiedTransaction_v26
     | SuiTransactionResponse
     | SuiExecuteTransactionResponse,
 ): TransactionDigest {
@@ -457,7 +424,7 @@ export function getTransactionDigest(
 }
 
 export function getTransactionSignature(
-  tx: SuiTransactionResponse | CertifiedTransaction | CertifiedTransaction_v26,
+  tx: SuiTransactionResponse | CertifiedTransaction,
 ): string[] {
   const certificateOrTx =
     'certificate' in tx
@@ -468,10 +435,6 @@ export function getTransactionSignature(
 
   if ('txSignatures' in certificateOrTx) {
     return certificateOrTx.txSignatures;
-  }
-
-  if ('txSignature' in certificateOrTx) {
-    return [certificateOrTx.txSignature];
   }
 
   return [];
@@ -499,17 +462,7 @@ export function getGasData(
   }
 
   if ('certificate' in tx) {
-    const data = tx.certificate!.data;
-    if ('gasData' in data) {
-      return data.gasData;
-    } else {
-      return {
-        payment: data.gasPayment,
-        budget: data.gasBudget,
-        owner: data.sender,
-        price: data.gasPrice!,
-      };
-    }
+    return tx.certificate!.data.gasData;
   }
 
   return tx.transaction!.data.gasData;
@@ -679,7 +632,10 @@ export function getTransactionEffects(
 export function getEvents(
   data: SuiExecuteTransactionResponse | SuiTransactionResponse,
 ): SuiEvent[] | undefined {
-  return getTransactionEffects(data)?.events;
+  if ('events' in data) {
+    return data.events;
+  }
+  return undefined;
 }
 
 export function getCreatedObjects(

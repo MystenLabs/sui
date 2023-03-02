@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { SUI_ADDRESS_LENGTH } from "../../typescript/src";
 import {
   BCS,
   BcsWriter,
@@ -30,8 +31,14 @@ describe("README Examples", () => {
     });
 
     // deserialization: BCS bytes into Coin
-    let bcsBytes = "2b3962603a5a0a5915349523120e441a5d20be92001100A1001100A1";
-    let coin = bcs.de("Coin", bcsBytes, "hex");
+    let bytes = bcs
+      .ser("Coin", {
+        id: "0000000000000000000000000000000000000000000000000000000000000001",
+        value: 1000000n,
+      })
+      .toBytes();
+  
+    let coin = bcs.de("Coin", bytes);
 
     // serialization: Object into bytes
     let data = bcs.ser("Option<Coin>", { some: coin }).toString("hex");
@@ -40,7 +47,7 @@ describe("README Examples", () => {
   it("Example: All options used", () => {
     const bcs = new BCS({
       vectorType: "vector<T>",
-      addressLength: 20,
+      addressLength: SUI_ADDRESS_LENGTH,
       addressEncoding: "hex",
       genericSeparators: ["<", ">"],
       types: {
@@ -173,7 +180,7 @@ describe("README Examples", () => {
     // structure as the definition
     let _bytes = bcs
       .ser("Coin", {
-        id: "0x0000000000000000000000000000000000000005",
+        id: "0x0000000000000000000000000000000000000000000000000000000000000005",
         balance: {
           value: 100000000n,
         },
@@ -222,7 +229,7 @@ describe("README Examples", () => {
 
     // Some value we want to serialize
     const coin = {
-      id: "0000000000000000000000000000000000000005",
+      id: "0000000000000000000000000000000000000000000000000000000000000005",
       value: 1111333333222n,
     };
 

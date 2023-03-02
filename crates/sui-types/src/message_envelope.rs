@@ -6,9 +6,10 @@ use crate::certificate_proof::CertificateProof;
 use crate::committee::{Committee, EpochId};
 use crate::crypto::{
     AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
-    AuthorityStrongQuorumSignInfo, EmptySignInfo, Signable, Signer,
+    AuthorityStrongQuorumSignInfo, EmptySignInfo, Signer,
 };
 use crate::error::SuiResult;
+use crate::intent::{Intent, IntentScope};
 use crate::messages_checkpoint::CheckpointSequenceNumber;
 use once_cell::sync::OnceCell;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -17,6 +18,7 @@ use std::ops::{Deref, DerefMut};
 
 pub trait Message {
     type DigestType: Clone + Debug;
+    const SCOPE: IntentScope;
 
     fn digest(&self) -> Self::DigestType;
 
@@ -112,7 +114,7 @@ impl<T: Message> Envelope<T, EmptySignInfo> {
 
 impl<T> Envelope<T, AuthoritySignInfo>
 where
-    T: Message + Signable<Vec<u8>>,
+    T: Message + Serialize,
 {
     pub fn new(
         epoch: EpochId,
@@ -120,7 +122,13 @@ where
         secret: &dyn Signer<AuthoritySignature>,
         authority: AuthorityName,
     ) -> Self {
-        let auth_signature = AuthoritySignInfo::new(epoch, &data, authority, secret);
+        let auth_signature = AuthoritySignInfo::new(
+            epoch,
+            &data,
+            Intent::default().with_scope(T::SCOPE),
+            authority,
+            secret,
+        );
         Self {
             digest: OnceCell::new(),
             data,
@@ -134,7 +142,11 @@ where
 
     pub fn verify_signature(&self, committee: &Committee) -> SuiResult {
         self.data.verify()?;
-        self.auth_signature.verify(self.data(), committee)
+        self.auth_signature.verify_secure(
+            self.data(),
+            Intent::default().with_scope(T::SCOPE),
+            committee,
+        )
     }
 
     pub fn verify(
@@ -150,7 +162,7 @@ where
 
 impl<T, const S: bool> Envelope<T, AuthorityQuorumSignInfo<S>>
 where
-    T: Message + Signable<Vec<u8>>,
+    T: Message + Serialize,
 {
     pub fn new(
         data: T,
@@ -176,7 +188,11 @@ where
     // and make sure they all call verify to avoid repeated verifications.
     pub fn verify_signature(&self, committee: &Committee) -> SuiResult {
         self.data.verify()?;
-        self.auth_signature.verify(self.data(), committee)
+        self.auth_signature.verify_secure(
+            self.data(),
+            Intent::default().with_scope(T::SCOPE),
+            committee,
+        )
     }
 
     pub fn verify(
@@ -364,17 +380,6 @@ impl<T: Message> VerifiedEnvelope<T, CertificateProof> {
         })
     }
 
-    // TODO: All callsites will eventually be replaced with new_from_checkpoint once
-    // we are ready.
-    pub fn new_from_checkpoint_to_be_replaced(
-        certificate: VerifiedEnvelope<T, AuthorityStrongQuorumSignInfo>,
-        _epoch: EpochId,
-        _checkpoint: CheckpointSequenceNumber,
-    ) -> Self {
-        Self::new_from_certificate(certificate)
-    }
-
-    // TODO: This is currently not used, but will be soon.
     pub fn new_from_checkpoint(
         transaction: VerifiedEnvelope<T, EmptySignInfo>,
         epoch: EpochId,
@@ -390,6 +395,20 @@ impl<T: Message> VerifiedEnvelope<T, CertificateProof> {
             digest,
             data,
             auth_signature: CertificateProof::new_from_checkpoint(epoch, checkpoint),
+        })
+    }
+
+    pub fn new_system(transaction: VerifiedEnvelope<T, EmptySignInfo>, epoch: EpochId) -> Self {
+        let inner = transaction.into_inner();
+        let Envelope {
+            digest,
+            data,
+            auth_signature: _,
+        } = inner;
+        VerifiedEnvelope::new_unchecked(Envelope {
+            digest,
+            data,
+            auth_signature: CertificateProof::new_system(epoch),
         })
     }
 

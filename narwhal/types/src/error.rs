@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{HeaderDigest, Round, TimestampMs, VoteDigest};
+use crate::{CertificateDigest, HeaderDigest, Round, TimestampMs, VoteDigest};
 use config::Epoch;
 use fastcrypto::hash::Digest;
 use std::sync::{Arc, Mutex};
@@ -31,7 +31,8 @@ macro_rules! ensure {
 
 pub type DagResult<T> = Result<T, DagError>;
 
-/// Notification for certificate accepted.
+// Notification for certificate accepted.
+// TODO: use a lighter weight alternative to broadcast::channel.
 pub type AcceptNotification = Arc<Mutex<Option<broadcast::Receiver<()>>>>;
 
 #[derive(Clone, Debug, Error)]
@@ -105,6 +106,9 @@ pub enum DagError {
         local_time: TimestampMs,
     },
 
+    #[error("Invalid parent {0} (not found in genesis)")]
+    InvalidGenesisParent(CertificateDigest),
+
     #[error("No peer can be reached for fetching certificates! Check if network is healthy.")]
     NoCertificateFetched,
 
@@ -134,4 +138,8 @@ impl<T> From<tokio::sync::mpsc::error::TrySendError<T>> for DagError {
             tokio::sync::mpsc::error::TrySendError::Closed(_) => DagError::ShuttingDown,
         }
     }
+}
+
+pub fn new_accept_notification(receiver: broadcast::Receiver<()>) -> AcceptNotification {
+    Arc::new(std::sync::Mutex::new(Some(receiver)))
 }

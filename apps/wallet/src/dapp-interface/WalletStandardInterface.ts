@@ -33,7 +33,7 @@ import {
 import { API_ENV } from '_src/shared/api-env';
 import { isWalletStatusChangePayload } from '_src/shared/messaging/messages/payloads/wallet-status-change';
 
-import type { SuiAddress } from '@mysten/sui.js/src';
+import type { SuiAddress } from '@mysten/sui.js';
 import type { BasePayload, Payload } from '_payloads';
 import type { GetAccount } from '_payloads/account/GetAccount';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
@@ -98,7 +98,8 @@ export class SuiWallet implements Wallet {
 
     get features(): ConnectFeature &
         EventsFeature &
-        SuiFeatures &
+        // TODO: Support SignMessage:
+        Omit<SuiFeatures, 'sui:signMessage'> &
         SuiWalletStakeFeature {
         return {
             'standard:connect': {
@@ -110,11 +111,11 @@ export class SuiWallet implements Wallet {
                 on: this.#on,
             },
             'sui:signTransaction': {
-                version: '1.0.0',
+                version: '2.0.0',
                 signTransaction: this.#signTransaction,
             },
             'sui:signAndExecuteTransaction': {
-                version: '1.1.0',
+                version: '2.0.0',
                 signAndExecuteTransaction: this.#signAndExecuteTransaction,
             },
             'suiWallet:stake': {
@@ -220,7 +221,15 @@ export class SuiWallet implements Wallet {
         return mapToPromise(
             this.#send<SignTransactionRequest, SignTransactionResponse>({
                 type: 'sign-transaction-request',
-                transaction: input,
+                transaction: {
+                    ...input,
+                    // account might be undefined if previous version of adapters is used
+                    // in that case use the first account address
+                    account:
+                        input.account?.address ||
+                        this.#accounts[0]?.address ||
+                        '',
+                },
             }),
             (response) => response.result
         );
@@ -236,6 +245,12 @@ export class SuiWallet implements Wallet {
                     type: 'v2',
                     data: input.transaction,
                     options: input.options,
+                    // account might be undefined if previous version of adapters is used
+                    // in that case use the first account address
+                    account:
+                        input.account?.address ||
+                        this.#accounts[0]?.address ||
+                        '',
                 },
             }),
             (response) => response.result

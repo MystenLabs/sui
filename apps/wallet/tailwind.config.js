@@ -34,11 +34,15 @@ module.exports = {
                 'wallet-content': '0px -5px 20px 5px rgba(160, 182, 195, 0.15)',
                 button: '0px 1px 2px rgba(16, 24, 40, 0.05)',
                 notification: '0px 0px 20px rgba(29, 55, 87, 0.11)',
+                'wallet-modal': '0px 0px 44px 0px rgba(0, 0, 0, 0.15)',
             },
             borderRadius: {
                 20: '1.25rem',
                 15: '0.9375rem',
                 '2lg': '0.625rem',
+            },
+            gridTemplateColumns: {
+                header: '1fr fit-content(160px) 1fr',
             },
             height: {
                 header: '4.25rem',

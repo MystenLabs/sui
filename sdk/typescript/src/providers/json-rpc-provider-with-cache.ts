@@ -26,8 +26,11 @@ export class JsonRpcProviderWithCache extends JsonRpcProvider {
   private objectRefs: Map<string, SuiObjectRef> = new Map();
 
   // Objects
-  async getObjectsOwnedByAddress(address: string): Promise<SuiObjectInfo[]> {
-    const resp = await super.getObjectsOwnedByAddress(address);
+  async getObjectsOwnedByAddress(
+    address: string,
+    typefilter?: string,
+  ): Promise<SuiObjectInfo[]> {
+    const resp = await super.getObjectsOwnedByAddress(address, typefilter);
     resp.forEach((r) => this.updateObjectRefCache(r));
     return resp;
   }

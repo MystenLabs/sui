@@ -72,10 +72,6 @@ pub struct PrimaryChannelMetrics {
     pub tx_certificate_fetcher: IntGauge,
     /// occupancy of the channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`
     pub tx_block_synchronizer_commands: IntGauge,
-    /// occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`
-    pub tx_state_handler: IntGauge,
-    /// occupancy of the channel from the reconfigure notification to most components.
-    pub tx_reconfigure: IntGauge,
     /// occupancy of the channel from the `Consensus` to the `primary::Core`
     pub tx_committed_certificates: IntGauge,
     /// occupancy of the channel from the `primary::Core` to the `Consensus`
@@ -98,8 +94,6 @@ pub struct PrimaryChannelMetrics {
     pub tx_block_synchronizer_commands_total: IntCounter,
     /// total received on channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`
     pub tx_state_handler_total: IntCounter,
-    /// total received on channel from the reconfigure notification to most components.
-    pub tx_reconfigure_total: IntCounter,
     /// total received on channel from the `Consensus` to the `primary::Core`
     pub tx_committed_certificates_total: IntCounter,
     /// total received on channel from the `primary::Core` to the `Consensus`
@@ -163,16 +157,6 @@ impl PrimaryChannelMetrics {
                 "occupancy of the channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`",
                 registry
             ).unwrap(),
-            tx_state_handler: register_int_gauge_with_registry!(
-                "tx_state_handler",
-                "occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`",
-                registry
-            ).unwrap(),
-            tx_reconfigure: register_int_gauge_with_registry!(
-                "tx_reconfigure",
-                "occupancy of the channel from the reconfigure notification to most components.",
-                registry
-            ).unwrap(),
             tx_committed_certificates: register_int_gauge_with_registry!(
                 Self::NAME_COMMITTED_CERTS,
                 Self::DESC_COMMITTED_CERTS,
@@ -223,11 +207,6 @@ impl PrimaryChannelMetrics {
             tx_state_handler_total: register_int_counter_with_registry!(
                 "tx_state_handler_total",
                 "total received on channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`",
-                registry
-            ).unwrap(),
-            tx_reconfigure_total: register_int_counter_with_registry!(
-                "tx_reconfigure_total",
-                "total received on channel from the reconfigure notification to most components.",
                 registry
             ).unwrap(),
             tx_committed_certificates_total: register_int_counter_with_registry!(
@@ -300,6 +279,8 @@ pub struct PrimaryMetrics {
     pub certificates_processed: IntCounterVec,
     /// count number of certificates that the node suspended their processing
     pub certificates_suspended: IntCounterVec,
+    /// number of certificates that are currently suspended.
+    pub certificates_currently_suspended: IntGauge,
     /// count number of duplicate certificates that the node processed (others + own)
     pub duplicate_certificates_processed: IntCounter,
     /// Latency to perform a garbage collection in core module
@@ -391,6 +372,12 @@ impl PrimaryMetrics {
                 "certificates_suspended",
                 "Number of certificates that node suspended processing of",
                 &["reason"],
+                registry
+            )
+            .unwrap(),
+            certificates_currently_suspended: register_int_gauge_with_registry!(
+                "certificates_currently_suspended",
+                "Number of certificates that are suspended in memory",
                 registry
             )
             .unwrap(),

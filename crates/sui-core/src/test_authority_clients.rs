@@ -11,16 +11,18 @@ use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
+use sui_types::messages::TransactionEvents;
 use sui_types::{
     committee::Committee,
     crypto::AuthorityKeyPair,
     error::SuiError,
     messages::{
         CertifiedTransaction, CommitteeInfoRequest, CommitteeInfoResponse,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, Transaction,
-        TransactionInfoRequest, TransactionInfoResponse, VerifiedExecutableTransaction,
+        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest,
+        Transaction, TransactionInfoRequest, TransactionInfoResponse,
     },
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
+    sui_system_state::SuiSystemState,
 };
 use sui_types::{error::SuiResult, messages::HandleCertificateResponse};
 
@@ -109,6 +111,14 @@ impl AuthorityAPI for LocalAuthorityClient {
 
         state.handle_committee_info_request(&request)
     }
+
+    async fn handle_system_state_object(
+        &self,
+        _request: SystemStateRequest,
+    ) -> Result<SuiSystemState, SuiError> {
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        Ok(epoch_store.system_state_object().clone())
+    }
 }
 
 impl LocalAuthorityClient {
@@ -145,21 +155,27 @@ impl LocalAuthorityClient {
             match state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store) {
                 Ok(Some(effects)) => effects,
                 _ => {
-                    let certificate = { certificate.verify(epoch_store.committee())? };
-                    let executable_tx =
-                        VerifiedExecutableTransaction::new_from_certificate(certificate);
-                    state
-                        .try_execute_immediately(&executable_tx, &epoch_store)
-                        .await?
+                    let certificate = certificate.verify(epoch_store.committee())?;
+                    state.try_execute_for_test(&certificate).await?
                 }
             }
             .into_inner();
+
+        let events = if let Some(digest) = signed_effects.events_digest {
+            state.get_transaction_events(digest).await?
+        } else {
+            TransactionEvents::default()
+        };
+
         if fault_config.fail_after_handle_confirmation {
             return Err(SuiError::GenericAuthorityError {
                 error: "Mock error after handle_confirmation_transaction".to_owned(),
             });
         }
-        Ok(HandleCertificateResponse { signed_effects })
+        Ok(HandleCertificateResponse {
+            signed_effects,
+            events,
+        })
     }
 }
 
@@ -199,7 +215,7 @@ impl AuthorityAPI for MockAuthorityApi {
         &self,
         _transaction: Transaction,
     ) -> Result<HandleTransactionResponse, SuiError> {
-        unreachable!();
+        unimplemented!();
     }
 
     /// Execute a certificate.
@@ -207,7 +223,7 @@ impl AuthorityAPI for MockAuthorityApi {
         &self,
         _certificate: CertifiedTransaction,
     ) -> Result<HandleCertificateResponse, SuiError> {
-        unreachable!()
+        unimplemented!()
     }
 
     /// Handle Object information requests for this account.
@@ -243,7 +259,7 @@ impl AuthorityAPI for MockAuthorityApi {
         &self,
         _request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        unreachable!();
+        unimplemented!();
     }
 
     async fn handle_committee_info_request(
@@ -251,6 +267,13 @@ impl AuthorityAPI for MockAuthorityApi {
         _request: CommitteeInfoRequest,
     ) -> Result<CommitteeInfoResponse, SuiError> {
         self.handle_committee_info_request_result.clone().unwrap()
+    }
+
+    async fn handle_system_state_object(
+        &self,
+        _request: SystemStateRequest,
+    ) -> Result<SuiSystemState, SuiError> {
+        unimplemented!();
     }
 }
 
@@ -300,6 +323,13 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         &self,
         _request: CommitteeInfoRequest,
     ) -> Result<CommitteeInfoResponse, SuiError> {
+        unimplemented!()
+    }
+
+    async fn handle_system_state_object(
+        &self,
+        _request: SystemStateRequest,
+    ) -> Result<SuiSystemState, SuiError> {
         unimplemented!()
     }
 }

@@ -26,8 +26,10 @@ module sui::tx_context {
         sender: address,
         /// Hash of the current transaction
         tx_hash: vector<u8>,
-        /// The current epoch number.
+        /// The current epoch number
         epoch: u64,
+        /// Timestamp that the epoch started at
+        epoch_timestamp_ms: u64,
         /// Counter recording the number of fresh id's created while executing
         /// this transaction. Always 0 at the start of a transaction
         ids_created: u64
@@ -42,6 +44,11 @@ module sui::tx_context {
     /// Return the current epoch
     public fun epoch(self: &TxContext): u64 {
         self.epoch
+    }
+
+    /// Return the epoch start time as a unix timestamp in milliseconds.
+    public fun epoch_timestamp(self: &TxContext): u64 {
+       self.epoch_timestamp_ms
     }
 
     /// Generate a new, globally unique object ID with version 0
@@ -72,22 +79,34 @@ module sui::tx_context {
 
     #[test_only]
     /// Create a `TxContext` for testing
-    public fun new(sender: address, tx_hash: vector<u8>, epoch: u64, ids_created: u64): TxContext {
+    public fun new(
+        sender: address,
+        tx_hash: vector<u8>,
+        epoch: u64,
+        epoch_timestamp_ms: u64,
+        ids_created: u64,
+    ): TxContext {
         assert!(vector::length(&tx_hash) == TX_HASH_LENGTH, EBadTxHashLength);
-        TxContext { sender, tx_hash, epoch, ids_created }
+        TxContext { sender, tx_hash, epoch, epoch_timestamp_ms, ids_created }
     }
 
     #[test_only]
     /// Create a `TxContext` for testing, with a potentially non-zero epoch number.
-    public fun new_from_hint(addr: address, hint: u64, epoch: u64, ids_created: u64): TxContext {
-        new(addr, dummy_tx_hash_with_hint(hint), epoch, ids_created)
+    public fun new_from_hint(
+        addr: address,
+        hint: u64,
+        epoch: u64,
+        epoch_timestamp_ms: u64,
+        ids_created: u64,
+    ): TxContext {
+        new(addr, dummy_tx_hash_with_hint(hint), epoch, epoch_timestamp_ms, ids_created)
     }
 
     #[test_only]
     /// Create a dummy `TxContext` for testing
     public fun dummy(): TxContext {
         let tx_hash = x"3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532";
-        new(@0x0, tx_hash, 0, 0)
+        new(@0x0, tx_hash, 0, 0, 0)
     }
 
     #[test_only]
@@ -116,6 +135,12 @@ module sui::tx_context {
     public fun increment_epoch_number(self: &mut TxContext) {
         self.epoch = self.epoch + 1
     }
+
+    #[test_only]
+    public fun increment_epoch_timestamp(self: &mut TxContext, delta_ms: u64) {
+        self.epoch_timestamp_ms = self.epoch_timestamp_ms + delta_ms
+    }
+
 
     // Cost calibration functions
     #[test_only]

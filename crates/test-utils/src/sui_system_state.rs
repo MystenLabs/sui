@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_types::balance::{Balance, Supply};
-use sui_types::base_types::SuiAddress;
+use sui_types::balance::Balance;
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::collection_types::VecMap;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{
@@ -11,7 +11,7 @@ use sui_types::crypto::{
 use sui_types::id::UID;
 use sui_types::sui_system_state::SystemParameters;
 use sui_types::sui_system_state::{
-    LinkedTable, StakeSubsidy, StakingPool, SuiSystemState, TableVec, Validator, ValidatorMetadata,
+    StakeSubsidy, StakingPool, SuiSystemState, Table, TableVec, Validator, ValidatorMetadata,
     ValidatorSet,
 };
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
@@ -33,23 +33,21 @@ pub fn test_validatdor_metadata(
         image_url: "".to_string(),
         project_url: "".to_string(),
         net_address,
+        p2p_address: vec![],
         consensus_address: vec![],
         worker_address: vec![],
-        next_epoch_stake: 1,
-        next_epoch_delegation: 1,
-        next_epoch_gas_price: 1,
-        next_epoch_commission_rate: 0,
     }
 }
 
-pub fn test_staking_pool(sui_address: SuiAddress, sui_balance: u64) -> StakingPool {
+pub fn test_staking_pool(sui_balance: u64) -> StakingPool {
     StakingPool {
-        validator_address: sui_address,
+        id: ObjectID::from(SuiAddress::ZERO),
         starting_epoch: 0,
         sui_balance,
         rewards_pool: Balance::new(0),
-        delegation_token_supply: Supply { value: 0 },
-        pending_delegations: LinkedTable::default(),
+        pool_token_balance: 0,
+        exchange_rates: Table::default(),
+        pending_delegation: 0,
         pending_withdraws: TableVec::default(),
     }
 }
@@ -63,32 +61,30 @@ pub fn test_validator(
     let sui_address = SuiAddress::from(&pubkey_bytes);
     Validator {
         metadata: test_validatdor_metadata(sui_address, pubkey_bytes, net_address),
-        voting_power: stake_amount,
-        stake_amount,
-        pending_stake: 1,
-        pending_withdraw: 1,
+        voting_power: stake_amount + delegated_amount,
         gas_price: 1,
-        delegation_staking_pool: test_staking_pool(sui_address, delegated_amount),
+        staking_pool: test_staking_pool(delegated_amount + stake_amount),
         commission_rate: 0,
+        next_epoch_stake: 1,
+        next_epoch_delegation: 1,
+        next_epoch_gas_price: 1,
+        next_epoch_commission_rate: 0,
     }
 }
 
 pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiSystemState {
     let validator_set = ValidatorSet {
-        validator_stake: 1,
-        delegation_stake: 1,
+        total_stake: 1,
         active_validators: validators,
-        pending_validators: vec![],
+        pending_validators: TableVec::default(),
         pending_removals: vec![],
-        next_epoch_validators: vec![],
-        pending_delegation_switches: VecMap { contents: vec![] },
+        staking_pool_mappings: Table::default(),
     };
     SuiSystemState {
         info: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),
         epoch,
         protocol_version: ProtocolVersion::MAX.as_u64(),
         validators: validator_set,
-        treasury_cap: Supply { value: 0 },
         storage_fund: Balance::new(0),
         parameters: SystemParameters {
             min_validator_stake: 1,

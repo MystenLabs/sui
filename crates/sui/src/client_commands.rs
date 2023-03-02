@@ -19,6 +19,7 @@ use fastcrypto::{
     encoding::{Base64, Encoding},
     traits::ToFromBytes,
 };
+use move_cli::base;
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
 use prettytable::Table;
@@ -39,6 +40,7 @@ use sui_json_rpc_types::{
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::SuiClient;
+use sui_types::crypto::SignatureScheme;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::intent::Intent;
 use sui_types::signature::GenericSignature;
@@ -49,7 +51,6 @@ use sui_types::{
     object::Owner,
     parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS,
 };
-use sui_types::{crypto::SignatureScheme, intent::IntentMessage};
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
@@ -465,6 +466,8 @@ impl SuiClientCommands {
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
+
+                let build_config = resolve_lock_file_path(build_config, package_path.clone())?;
 
                 let compiled_package = build_move_package(
                     &package_path,
@@ -936,12 +939,9 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .transfer_sui(from, object_id, gas_budget, to, amount)
                     .await?;
-                let data1 = data.clone();
-                let intent_msg = IntentMessage::new(Intent::default(), data);
-                SuiClientCommandResult::SerializeTransferSui(
-                    Base64::encode(bcs::to_bytes(&intent_msg)?.as_slice()),
-                    Base64::encode(bcs::to_bytes(&data1).unwrap()),
-                )
+                SuiClientCommandResult::SerializeTransferSui(Base64::encode(
+                    bcs::to_bytes(&data).unwrap(),
+                ))
             }
 
             SuiClientCommands::ExecuteSignedTx {
@@ -1007,6 +1007,8 @@ impl SuiClientCommands {
                     ));
                 }
 
+                let build_config = resolve_lock_file_path(build_config, package_path.clone())?;
+
                 let compiled_package = build_move_package(
                     &package_path,
                     BuildConfig {
@@ -1042,6 +1044,18 @@ impl SuiClientCommands {
         config.active_env = env;
         Ok(())
     }
+}
+
+/// Resolve Move.lock file path in package directory (where Move.toml is).
+fn resolve_lock_file_path(
+    build_config: MoveBuildConfig,
+    package_path: PathBuf,
+) -> Result<MoveBuildConfig, anyhow::Error> {
+    let package_root = base::reroot_path(Some(package_path))?;
+    let lock_file_path = package_root.join("Move.lock");
+    let mut build_config = build_config;
+    build_config.lock_file = Some(lock_file_path);
+    Ok(build_config)
 }
 
 pub struct WalletContext {
@@ -1360,9 +1374,8 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::ExecuteSignedTx(response) => {
                 write!(writer, "{}", write_transaction_response(response)?)?;
             }
-            SuiClientCommandResult::SerializeTransferSui(data_to_sign, data_to_execute) => {
-                writeln!(writer, "Intent message to sign: {}", data_to_sign)?;
-                writeln!(writer, "Raw transaction to execute: {}", data_to_execute)?;
+            SuiClientCommandResult::SerializeTransferSui(data) => {
+                writeln!(writer, "Raw tx_bytes to execute: {}", data)?;
             }
             SuiClientCommandResult::ActiveEnv(env) => {
                 write!(writer, "{}", env.as_deref().unwrap_or("None"))?;
@@ -1536,7 +1549,7 @@ pub enum SuiClientCommandResult {
     ActiveEnv(Option<String>),
     Envs(Vec<SuiEnv>, Option<String>),
     CreateExampleNFT(GetObjectDataResponse),
-    SerializeTransferSui(String, String),
+    SerializeTransferSui(String),
     ExecuteSignedTx(SuiTransactionResponse),
     NewEnv(SuiEnv),
 }

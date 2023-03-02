@@ -197,7 +197,7 @@ async fn create_txes(
     // Using the `counter` example
     //
 
-    let package_id = publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set())
+    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.validator_set())
         .await
         .0;
 
@@ -210,8 +210,8 @@ async fn create_txes(
         package_id,
         /* arguments */ Vec::default(),
     );
-    let effects =
-        submit_single_owner_transaction(transaction.clone(), configs.validator_set()).await;
+    let (effects, _) =
+        submit_single_owner_transaction(transaction.clone(), &configs.validator_set()).await;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created[0];
     let counter_object_arg = ObjectArg::SharedObject {
@@ -272,14 +272,16 @@ async fn run_actual_costs(
     let tx_map = create_txes(sender, &keypair, &gas_objects, &configs).await;
     for (tx_type, tx) in tx_map {
         let gas_used = if tx_type.is_shared_object_tx() {
-            submit_shared_object_transaction(tx, configs.validator_set())
+            submit_shared_object_transaction(tx, &configs.validator_set())
                 .await
                 .unwrap()
+                .0
                 .gas_cost_summary()
                 .clone()
         } else {
-            submit_single_owner_transaction(tx, configs.validator_set())
+            submit_single_owner_transaction(tx, &configs.validator_set())
                 .await
+                .0
                 .gas_cost_summary()
                 .clone()
         };

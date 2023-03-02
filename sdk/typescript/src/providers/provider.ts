@@ -31,7 +31,6 @@ import {
   RpcApiVersion,
   FaucetResponse,
   Order,
-  TransactionEffects,
   CoinMetadata,
   DevInspectResults,
   SuiSystemState,
@@ -44,10 +43,12 @@ import {
   CheckpointContents,
   CheckpointDigest,
   CheckPointContentsDigest,
+  Checkpoint,
   CommitteeInfo,
+  DryRunTransactionResponse,
 } from '../types';
 
-import { DynamicFieldPage } from '../types/dynamic_fields';
+import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 
 ///////////////////////////////
 // Exported Abstracts
@@ -137,8 +138,14 @@ export abstract class Provider {
   /**
    * Get all objects owned by an address
    */
+  /**
+   * @param addressOrObjectId owner address or object id
+   * @param typeFilter? a fully qualified type name for the object(e.g., 0x2::coin::Coin<0x2::sui::SUI>)
+   * or type name without generics (e.g., 0x2::coin::Coin will match all 0x2::coin::Coin<T>)
+   */
   abstract getObjectsOwnedByAddress(
     addressOrObjectId: string,
+    typeFilter?: string,
   ): Promise<SuiObjectInfo[]>;
 
   /**
@@ -335,7 +342,9 @@ export abstract class Provider {
    * gas budget and the transaction effects
    * @param txBytes
    */
-  abstract dryRunTransaction(txBytes: Uint8Array): Promise<TransactionEffects>;
+  abstract dryRunTransaction(
+    txBytes: Uint8Array,
+  ): Promise<DryRunTransactionResponse>;
 
   /**
    * Return the list of dynamic field objects owned by an object
@@ -356,7 +365,7 @@ export abstract class Provider {
    */
   abstract getDynamicFieldObject(
     parent_object_id: ObjectId,
-    name: string,
+    name: string | DynamicFieldName,
   ): Promise<GetObjectDataResponse>;
 
   /**
@@ -387,6 +396,7 @@ export abstract class Provider {
   /**
    * Returns checkpoint summary based on a checkpoint sequence number
    * @param sequence_number - The sequence number of the desired checkpoint summary
+   * @deprecated - Prefer `getCheckpoint` instead
    */
   abstract getCheckpointSummary(
     sequenceNumber: number,
@@ -395,6 +405,7 @@ export abstract class Provider {
   /**
    * Returns checkpoint summary based on a checkpoint digest
    * @param digest - The checkpoint digest
+   * @deprecated - Prefer `getCheckpoint` instead
    */
   abstract getCheckpointSummaryByDigest(
     digest: CheckpointDigest,
@@ -403,6 +414,7 @@ export abstract class Provider {
   /**
    * Return contents of a checkpoint, namely a list of execution digests
    * @param sequence_number - The sequence number of the desired checkpoint contents
+   * @deprecated - Prefer `getCheckpoint` instead
    */
   abstract getCheckpointContents(
     sequenceNumber: number,
@@ -415,6 +427,12 @@ export abstract class Provider {
   abstract getCheckpointContentsByDigest(
     digest: CheckPointContentsDigest,
   ): Promise<CheckpointContents>;
+
+  /**
+   * Returns information about a given checkpoint
+   * @param id - The checkpoint digest or sequence number
+   */
+  abstract getCheckpoint(id: CheckpointDigest | number): Promise<Checkpoint>;
 
   /**
    * Return the committee information for the asked epoch

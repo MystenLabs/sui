@@ -25,9 +25,7 @@ use move_transactional_test_runner::{
     framework::{CompiledState, MoveTestAdapter},
     tasks::{InitCommand, SyntaxChoice, TaskInput},
 };
-use move_vm_runtime::{
-    move_vm::MoveVM, native_functions::NativeFunctionTable, session::SerializedReturnValues,
-};
+use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues};
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::fmt::Write;
@@ -74,7 +72,6 @@ const RNG_SEED: [u8; 32] = [
 pub struct SuiTestAdapter<'a> {
     vm: Arc<MoveVM>,
     pub(crate) storage: Arc<InMemoryStorage>,
-    native_functions: NativeFunctionTable,
     pub(crate) compiled_state: CompiledState<'a>,
     accounts: BTreeMap<String, (SuiAddress, AccountKeyPair)>,
     default_syntax: SyntaxChoice,
@@ -250,9 +247,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         }
 
         let mut test_adapter = Self {
-            vm: Arc::new(new_move_vm(native_functions.clone(), &PROTOCOL_CONSTANTS).unwrap()),
+            vm: Arc::new(new_move_vm(native_functions, &PROTOCOL_CONSTANTS).unwrap()),
             storage: Arc::new(InMemoryStorage::new(objects)),
-            native_functions,
             compiled_state: CompiledState::new(
                 named_address_mapping,
                 pre_compiled_deps,
@@ -517,7 +513,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             SuiSubcommand::ConsensusCommitPrologue(ConsensusCommitPrologueCommand {
                 timestamp_ms,
             }) => {
-                let transaction = VerifiedTransaction::new_consensus_commit_prologue(timestamp_ms);
+                let transaction =
+                    VerifiedTransaction::new_consensus_commit_prologue(0, 0, timestamp_ms);
                 let summary = self.execute_txn(transaction, GAS_VALUE_FOR_TESTING)?;
                 let output = self.object_summary_output(&summary, false);
                 Ok(output)
@@ -597,7 +594,6 @@ impl<'a> SuiTestAdapter<'a> {
             inner,
             TransactionEffects {
                 status,
-                events,
                 created,
                 mutated,
                 unwrapped,
@@ -618,10 +614,9 @@ impl<'a> SuiTestAdapter<'a> {
             transaction_digest,
             transaction_dependencies,
             &self.vm,
-            &self.native_functions,
             gas_status,
             // TODO: Support different epochs in transactional tests.
-            &EpochData::genesis(),
+            &EpochData::new_test(),
             &PROTOCOL_CONSTANTS,
         );
 
@@ -666,7 +661,7 @@ impl<'a> SuiTestAdapter<'a> {
                 created: created_ids,
                 written: written_ids,
                 deleted: deleted_ids,
-                events,
+                events: inner.events.data,
             }),
             ExecutionStatus::Failure { error, .. } => {
                 Err(anyhow::anyhow!(self.stabilize_str(format!(

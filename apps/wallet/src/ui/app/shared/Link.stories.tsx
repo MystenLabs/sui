@@ -27,5 +27,7 @@ export const Default: StoryObj<typeof Link> = {
     args: {
         text: 'Default Link',
         after: <ArrowUpRight12 />,
+        color: 'steelDark',
+        weight: 'semibold',
     },
 };

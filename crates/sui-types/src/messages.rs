@@ -8,16 +8,19 @@ use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
     Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignatureInner, ToFromBytes,
 };
+use crate::digests::TransactionEventsDigest;
 use crate::gas::GasCostSummary;
-use crate::intent::{Intent, IntentMessage};
+use crate::intent::{Intent, IntentMessage, IntentScope};
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
-use crate::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMessage};
-use crate::object::{MoveObject, Object, ObjectFormatOptions, Owner, PACKAGE_VERSION};
+use crate::messages_checkpoint::{
+    CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointTimestamp,
+};
+use crate::object::{MoveObject, Object, ObjectFormatOptions, Owner};
 use crate::signature::{AuthenticatorTrait, GenericSignature};
 use crate::storage::{DeleteKind, WriteKind};
 use crate::{
-    SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_OBJECT_ID,
-    SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::encoding::Base64;
@@ -36,34 +39,20 @@ use serde_with::Bytes;
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::{Hash, Hasher},
     iter,
 };
 use strum::IntoStaticStr;
+use sui_protocol_config::SupportedProtocolVersions;
 use tap::Pipe;
 use tracing::debug;
 
 pub const DUMMY_GAS_PRICE: u64 = 1;
 
-const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 3] = [
-    (
-        SUI_FRAMEWORK_OBJECT_ID,
-        "sui_system",
-        "request_add_validator",
-    ),
-    (
-        SUI_FRAMEWORK_OBJECT_ID,
-        "sui_system",
-        "request_remove_validator",
-    ),
-    (
-        SUI_FRAMEWORK_OBJECT_ID,
-        "sui_system",
-        "request_set_commission_rate",
-    ),
-];
+const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 0] = [];
 
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
@@ -199,10 +188,16 @@ pub enum GenesisObject {
     },
 }
 
+/// Only commit_timestamp_ms is passed to the move call currently.
+/// However we include epoch and round to make sure each ConsensusCommitPrologue has a unique tx digest.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct ConsensusCommitPrologue {
+    /// Epoch of the commit prologue transaction
+    pub epoch: u64,
+    /// Consensus round of the commit
+    pub round: u64,
     /// Unix timestamp from consensus
-    pub checkpoint_start_timestamp_ms: u64,
+    pub commit_timestamp_ms: CheckpointTimestamp,
 }
 
 impl GenesisObject {
@@ -449,7 +444,7 @@ impl Command {
         }
     }
 
-    fn validity_check(&self) -> SuiResult {
+    fn validity_check(&self) -> UserInputResult {
         match self {
             Command::MoveCall(call) => {
                 let is_blocked = BLOCKED_MOVE_FUNCTIONS.contains(&(
@@ -457,7 +452,7 @@ impl Command {
                     call.module.as_str(),
                     call.function.as_str(),
                 ));
-                fp_ensure!(!is_blocked, SuiError::BlockedMoveFunction);
+                fp_ensure!(!is_blocked, UserInputError::BlockedMoveFunction);
             }
             Command::TransferObjects(_, _)
             | Command::SplitCoin(_, _)
@@ -484,7 +479,7 @@ fn write_sep<T: Display>(
 }
 
 impl ProgrammableTransaction {
-    pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
+    pub fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>> {
         let ProgrammableTransaction { inputs, commands } = self;
         let input_arg_objects = inputs
             .iter()
@@ -492,7 +487,7 @@ impl ProgrammableTransaction {
             .collect::<Vec<_>>();
         let mut used = HashSet::new();
         if !input_arg_objects.iter().all(|o| used.insert(o.object_id())) {
-            return Err(SuiError::DuplicateObjectRefInput);
+            return Err(UserInputError::DuplicateObjectRefInput);
         }
         Ok(input_arg_objects
             .into_iter()
@@ -500,9 +495,9 @@ impl ProgrammableTransaction {
             .collect())
     }
 
-    fn validity_check(&self) -> SuiResult {
+    fn validity_check(&self) -> UserInputResult {
         if !cfg!(test) {
-            return Err(SuiError::Unknown(
+            return Err(UserInputError::Unsupported(
                 "Programmable transactions are not yet available".to_owned(),
             ));
         }
@@ -678,7 +673,7 @@ impl SingleTransactionKind {
     /// For a Move object, we attach the object reference;
     /// for a Move package, we provide the object id only since they never change on chain.
     /// TODO: use an iterator over references here instead of a Vec to avoid allocations.
-    pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
+    pub fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>> {
         let input_objects = match &self {
             Self::TransferObject(TransferObject { object_ref, .. }) => {
                 vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
@@ -730,12 +725,12 @@ impl SingleTransactionKind {
         // transaction.
         let mut used = HashSet::new();
         if !input_objects.iter().all(|o| used.insert(o.object_id())) {
-            return Err(SuiError::DuplicateObjectRefInput);
+            return Err(UserInputError::DuplicateObjectRefInput);
         }
         Ok(input_objects)
     }
 
-    pub fn validity_check(&self, gas_payment: &ObjectRef) -> SuiResult {
+    pub fn validity_check(&self, gas_payment: &ObjectRef) -> UserInputResult {
         match self {
             SingleTransactionKind::Call(call) => {
                 let is_blocked = BLOCKED_MOVE_FUNCTIONS.contains(&(
@@ -743,7 +738,7 @@ impl SingleTransactionKind {
                     call.module.as_str(),
                     call.function.as_str(),
                 ));
-                fp_ensure!(!is_blocked, SuiError::BlockedMoveFunction);
+                fp_ensure!(!is_blocked, UserInputError::BlockedMoveFunction);
             }
             SingleTransactionKind::Pay(_)
             | SingleTransactionKind::Publish(_)
@@ -753,19 +748,19 @@ impl SingleTransactionKind {
             | SingleTransactionKind::Genesis(_)
             | SingleTransactionKind::ConsensusCommitPrologue(_) => (),
             SingleTransactionKind::PaySui(p) => {
-                fp_ensure!(!p.coins.is_empty(), SuiError::EmptyInputCoins);
+                fp_ensure!(!p.coins.is_empty(), UserInputError::EmptyInputCoins);
                 fp_ensure!(
                     // unwrap() is safe because coins are not empty.
                     p.coins.first().unwrap() == gas_payment,
-                    SuiError::UnexpectedGasPaymentObject
+                    UserInputError::UnexpectedGasPaymentObject
                 );
             }
             SingleTransactionKind::PayAllSui(pa) => {
-                fp_ensure!(!pa.coins.is_empty(), SuiError::EmptyInputCoins);
+                fp_ensure!(!pa.coins.is_empty(), UserInputError::EmptyInputCoins);
                 fp_ensure!(
                     // unwrap() is safe because coins are not empty.
                     pa.coins.first().unwrap() == gas_payment,
-                    SuiError::UnexpectedGasPaymentObject
+                    UserInputError::UnexpectedGasPaymentObject
                 );
             }
             SingleTransactionKind::ProgrammableTransaction(p) => p.validity_check()?,
@@ -864,7 +859,7 @@ impl Display for SingleTransactionKind {
             }
             Self::ConsensusCommitPrologue(p) => {
                 writeln!(writer, "Transaction Kind : Consensus Commit Prologue")?;
-                writeln!(writer, "Timestamp : {}", p.checkpoint_start_timestamp_ms)?;
+                writeln!(writer, "Timestamp : {}", p.commit_timestamp_ms)?;
             }
             Self::ProgrammableTransaction(p) => {
                 writeln!(writer, "Transaction Kind : Programmable")?;
@@ -901,11 +896,11 @@ impl TransactionKind {
         }
     }
 
-    pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
+    pub fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>> {
         let inputs: Vec<_> = self
             .single_transactions()
             .map(|s| s.input_objects())
-            .collect::<SuiResult<Vec<_>>>()?
+            .collect::<UserInputResult<Vec<_>>>()?
             .into_iter()
             .flatten()
             .collect();
@@ -1323,11 +1318,8 @@ impl TransactionData {
             .collect()
     }
 
-    pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
-        let mut inputs = self
-            .kind
-            .input_objects()
-            .map_err(SuiError::into_transaction_input_error)?;
+    pub fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>> {
+        let mut inputs = self.kind.input_objects()?;
 
         if !self.kind.is_system_tx() && !self.kind.is_pay_sui_tx() {
             inputs.push(InputObjectKind::ImmOrOwnedMoveObject(
@@ -1337,13 +1329,13 @@ impl TransactionData {
         Ok(inputs)
     }
 
-    pub fn validity_check(&self) -> SuiResult {
+    pub fn validity_check(&self) -> UserInputResult {
         Self::validity_check_impl(&self.kind, self.gas_payment_object_ref())?;
         self.check_sponsorship()
     }
 
     /// Check if the transaction is compliant with sponsorship.
-    fn check_sponsorship(&self) -> SuiResult {
+    fn check_sponsorship(&self) -> UserInputResult {
         // Not a sponsored transaction, nothing to check
         if self.gas_owner() == self.sender() {
             return Ok(());
@@ -1369,15 +1361,15 @@ impl TransactionData {
         if allow_sponsored_tx {
             return Ok(());
         }
-        Err(SuiError::UnsupportedSponsoredTransactionKind)
+        Err(UserInputError::UnsupportedSponsoredTransactionKind)
     }
 
-    pub fn validity_check_impl(kind: &TransactionKind, gas_payment: &ObjectRef) -> SuiResult {
+    pub fn validity_check_impl(kind: &TransactionKind, gas_payment: &ObjectRef) -> UserInputResult {
         match kind {
             TransactionKind::Batch(b) => {
                 fp_ensure!(
                     !b.is_empty(),
-                    SuiError::InvalidBatchTransaction {
+                    UserInputError::InvalidBatchTransaction {
                         error: "Batch Transaction cannot be empty".to_string(),
                     }
                 );
@@ -1397,7 +1389,7 @@ impl TransactionData {
                 });
                 fp_ensure!(
                     valid,
-                    SuiError::InvalidBatchTransaction {
+                    UserInputError::InvalidBatchTransaction {
                         error: "Batch transaction contains non-batchable transactions. Only Call,
                         Pay and TransferObject are allowed"
                             .to_string()
@@ -1467,6 +1459,7 @@ impl SenderSignedData {
 
 impl Message for SenderSignedData {
     type DigestType = TransactionDigest;
+    const SCOPE: IntentScope = IntentScope::SenderSignedTransaction;
 
     fn digest(&self) -> Self::DigestType {
         TransactionDigest::new(sha3_hash(&self.intent_message.value))
@@ -1571,7 +1564,6 @@ impl Transaction {
         )
     }
 
-    // FIXME move this to another place
     pub fn signature_from_signer(
         data: TransactionData,
         intent: Intent,
@@ -1630,9 +1622,15 @@ impl VerifiedTransaction {
             .pipe(Self::new_system_transaction)
     }
 
-    pub fn new_consensus_commit_prologue(checkpoint_start_timestamp_ms: u64) -> Self {
+    pub fn new_consensus_commit_prologue(
+        epoch: u64,
+        round: u64,
+        commit_timestamp_ms: CheckpointTimestamp,
+    ) -> Self {
         ConsensusCommitPrologue {
-            checkpoint_start_timestamp_ms,
+            epoch,
+            round,
+            commit_timestamp_ms,
         }
         .pipe(SingleTransactionKind::ConsensusCommitPrologue)
         .pipe(Self::new_system_transaction)
@@ -1690,7 +1688,11 @@ pub type SignedTransaction = Envelope<SenderSignedData, AuthoritySignInfo>;
 pub type VerifiedSignedTransaction = VerifiedEnvelope<SenderSignedData, AuthoritySignInfo>;
 
 pub type CertifiedTransaction = Envelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
-pub type TxCertAndSignedEffects = (CertifiedTransaction, SignedTransactionEffects);
+pub type TxCertAndSignedEffects = (
+    CertifiedTransaction,
+    SignedTransactionEffects,
+    TransactionEvents,
+);
 
 pub type VerifiedCertificate = VerifiedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
@@ -1799,6 +1801,7 @@ pub enum TransactionStatus {
     Executed(
         Option<AuthorityStrongQuorumSignInfo>,
         SignedTransactionEffects,
+        TransactionEvents,
     ),
 }
 
@@ -1812,7 +1815,7 @@ impl TransactionStatus {
 
     pub fn into_effects_for_testing(self) -> SignedTransactionEffects {
         match self {
-            Self::Executed(_, e) => e,
+            Self::Executed(_, e, _) => e,
             _ => unreachable!("Incorrect response type"),
         }
     }
@@ -1825,11 +1828,12 @@ impl PartialEq for TransactionStatus {
                 Self::Signed(s2) => s1.epoch == s2.epoch,
                 _ => false,
             },
-            Self::Executed(c1, e1) => match other {
-                Self::Executed(c2, e2) => {
+            Self::Executed(c1, e1, ev1) => match other {
+                Self::Executed(c2, e2, ev2) => {
                     c1.as_ref().map(|a| a.epoch) == c2.as_ref().map(|a| a.epoch)
                         && e1.epoch() == e2.epoch()
                         && e1.digest() == e2.digest()
+                        && ev1.digest() == ev2.digest()
                 }
                 _ => false,
             },
@@ -1850,16 +1854,24 @@ pub struct TransactionInfoResponse {
 #[derive(Clone, Debug)]
 pub enum VerifiedTransactionInfoResponse {
     Signed(VerifiedSignedTransaction),
-    ExecutedWithCert(VerifiedCertificate, VerifiedSignedTransactionEffects),
-    ExecutedWithoutCert(VerifiedTransaction, VerifiedSignedTransactionEffects),
+    ExecutedWithCert(
+        VerifiedCertificate,
+        VerifiedSignedTransactionEffects,
+        TransactionEvents,
+    ),
+    ExecutedWithoutCert(
+        VerifiedTransaction,
+        VerifiedSignedTransactionEffects,
+        TransactionEvents,
+    ),
 }
 
 impl VerifiedTransactionInfoResponse {
     pub fn is_executed(&self) -> bool {
         match self {
             VerifiedTransactionInfoResponse::Signed(_) => false,
-            VerifiedTransactionInfoResponse::ExecutedWithCert(_, _)
-            | VerifiedTransactionInfoResponse::ExecutedWithoutCert(_, _) => true,
+            VerifiedTransactionInfoResponse::ExecutedWithCert(_, _, _)
+            | VerifiedTransactionInfoResponse::ExecutedWithoutCert(_, _, _) => true,
         }
     }
 }
@@ -1868,11 +1880,13 @@ impl VerifiedTransactionInfoResponse {
 pub struct HandleCertificateResponse {
     pub signed_effects: SignedTransactionEffects,
     // TODO: Add a case for finalized transaction.
+    pub events: TransactionEvents,
 }
 
 #[derive(Clone, Debug)]
 pub struct VerifiedHandleCertificateResponse {
     pub signed_effects: VerifiedSignedTransactionEffects,
+    pub events: TransactionEvents,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -1900,9 +1914,16 @@ pub enum CallResult {
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum ExecutionStatus {
     Success,
-    // Gas used in the failed case, and the error.
-    Failure { error: ExecutionFailureStatus },
+    /// Gas used in the failed case, and the error.
+    Failure {
+        /// The error
+        error: ExecutionFailureStatus,
+        /// Which command the error occurred
+        command: Option<CommandIndex>,
+    },
 }
+
+pub type CommandIndex = usize;
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum ExecutionFailureStatus {
@@ -1989,7 +2010,9 @@ pub enum ExecutionFailureStatus {
     VMInvariantViolation,
 
     /// The total amount of coins to be paid is larger than the maximum value of u64.
-    TotalAmountOverflow,
+    TotalPaymentAmountOverflow,
+    /// The total balance of coins is larger than the maximum value of u64.
+    TotalCoinBalanceOverflow,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }
@@ -2086,12 +2109,6 @@ impl Display for ExecutionFailureStatus {
                 write!(
                     f,
                     "Coin exceeds maximum value for a single coin"
-                )
-            },
-            ExecutionFailureStatus::TotalAmountOverflow => {
-                write!(
-                    f,
-                    "The total amount of coins to be paid is larger than the maximum value of u64"
                 )
             },
             ExecutionFailureStatus::EmptyInputCoins => {
@@ -2231,7 +2248,19 @@ impl Display for ExecutionFailureStatus {
             ),
             ExecutionFailureStatus::VMInvariantViolation => {
                 write!(f, "MOVE VM INVARIANT VIOLATION.")
-            }
+            },
+            ExecutionFailureStatus::TotalPaymentAmountOverflow => {
+                write!(
+                    f,
+                    "The total amount of coins to be paid overflows of u64"
+                )
+            },
+            ExecutionFailureStatus::TotalCoinBalanceOverflow => {
+                write!(
+                    f,
+                    "The total balance of coins overflows u64"
+                )
+            },
         }
     }
 }
@@ -2360,8 +2389,11 @@ impl Display for InvalidSharedByValue {
 impl std::error::Error for ExecutionFailureStatus {}
 
 impl ExecutionStatus {
-    pub fn new_failure(error: ExecutionFailureStatus) -> ExecutionStatus {
-        ExecutionStatus::Failure { error }
+    pub fn new_failure(
+        error: ExecutionFailureStatus,
+        command: Option<CommandIndex>,
+    ) -> ExecutionStatus {
+        ExecutionStatus::Failure { error, command }
     }
 
     pub fn is_ok(&self) -> bool {
@@ -2381,12 +2413,12 @@ impl ExecutionStatus {
         }
     }
 
-    pub fn unwrap_err(self) -> ExecutionFailureStatus {
+    pub fn unwrap_err(self) -> (ExecutionFailureStatus, Option<CommandIndex>) {
         match self {
             ExecutionStatus::Success { .. } => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
-            ExecutionStatus::Failure { error } => error,
+            ExecutionStatus::Failure { error, command } => (error, command),
         }
     }
 }
@@ -2456,8 +2488,9 @@ pub struct TransactionEffects {
     /// The updated gas object reference. Have a dedicated field for convenient access.
     /// It's also included in mutated.
     pub gas_object: (ObjectRef, Owner),
-    /// The events emitted during execution. Note that only successful transactions emit events
-    pub events: Vec<Event>,
+    /// The digest of the events emitted during execution,
+    /// can be None if the transaction does not emmit any event.
+    pub events_digest: Option<TransactionEventsDigest>,
     /// The set of transaction digests this transaction depends on.
     pub dependencies: Vec<TransactionDigest>,
 }
@@ -2521,38 +2554,25 @@ impl TransactionEffects {
             unwrapped_object_count: self.unwrapped.len(),
             deleted_object_count: self.deleted.len(),
             wrapped_object_count: self.wrapped.len(),
-            event_count: self.events.len(),
             dependency_count: self.dependencies.len(),
         }
     }
 }
 
-impl Message for TransactionEffectsDigest {
-    type DigestType = TransactionEffectsDigest;
-
-    fn digest(&self) -> Self::DigestType {
-        *self
-    }
-
-    fn verify(&self) -> SuiResult {
-        Ok(())
-    }
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Default)]
+pub struct TransactionEvents {
+    pub data: Vec<Event>,
 }
 
-impl Message for ExecutionDigests {
-    type DigestType = TransactionDigest;
-
-    fn digest(&self) -> Self::DigestType {
-        self.transaction
-    }
-
-    fn verify(&self) -> SuiResult {
-        Ok(())
+impl TransactionEvents {
+    pub fn digest(&self) -> TransactionEventsDigest {
+        TransactionEventsDigest::new(sha3_hash(self))
     }
 }
 
 impl Message for TransactionEffects {
     type DigestType = TransactionEffectsDigest;
+    const SCOPE: IntentScope = IntentScope::TransactionEffects;
 
     fn digest(&self) -> Self::DigestType {
         TransactionEffectsDigest::new(sha3_hash(self))
@@ -2624,7 +2644,7 @@ impl Default for TransactionEffects {
                 random_object_ref(),
                 Owner::AddressOwner(SuiAddress::default()),
             ),
-            events: Vec::new(),
+            events_digest: None,
             dependencies: Vec::new(),
         }
     }
@@ -2642,7 +2662,6 @@ pub struct TransactionEffectsDebugSummary {
     pub unwrapped_object_count: usize,
     pub deleted_object_count: usize,
     pub wrapped_object_count: usize,
-    pub event_count: usize,
     pub dependency_count: usize,
     // TODO: Add deleted_and_unwrapped_object_count and event digest.
 }
@@ -2683,20 +2702,22 @@ impl InputObjectKind {
 
     pub fn version(&self) -> Option<SequenceNumber> {
         match self {
-            Self::MovePackage(..) => Some(PACKAGE_VERSION),
+            Self::MovePackage(..) => None,
             Self::ImmOrOwnedMoveObject((_, version, _)) => Some(*version),
             Self::SharedMoveObject { .. } => None,
         }
     }
 
-    pub fn object_not_found_error(&self) -> SuiError {
+    pub fn object_not_found_error(&self) -> UserInputError {
         match *self {
-            Self::MovePackage(package_id) => SuiError::DependentPackageNotFound { package_id },
-            Self::ImmOrOwnedMoveObject((object_id, version, _)) => SuiError::ObjectNotFound {
+            Self::MovePackage(package_id) => {
+                UserInputError::DependentPackageNotFound { package_id }
+            }
+            Self::ImmOrOwnedMoveObject((object_id, version, _)) => UserInputError::ObjectNotFound {
                 object_id,
                 version: Some(version),
             },
-            Self::SharedMoveObject { id, .. } => SuiError::ObjectNotFound {
+            Self::SharedMoveObject { id, .. } => UserInputError::ObjectNotFound {
                 object_id: id,
                 version: None,
             },
@@ -2835,6 +2856,7 @@ pub enum ConsensusTransactionKey {
     Certificate(TransactionDigest),
     CheckpointSignature(AuthorityName, CheckpointSequenceNumber),
     EndOfPublish(AuthorityName),
+    CapabilityNotification(AuthorityName, u64 /* generation */),
 }
 
 impl Debug for ConsensusTransactionKey {
@@ -2845,6 +2867,60 @@ impl Debug for ConsensusTransactionKey {
                 write!(f, "CheckpointSignature({:?}, {:?})", name.concise(), seq)
             }
             Self::EndOfPublish(name) => write!(f, "EndOfPublish({:?})", name.concise()),
+            Self::CapabilityNotification(name, generation) => write!(
+                f,
+                "CapabilityNotification({:?}, {:?})",
+                name.concise(),
+                generation
+            ),
+        }
+    }
+}
+
+/// Used to advertise capabilities of each authority via narwhal. This allows validators to
+/// negotiate the creation of the ChangeEpoch transaction.
+#[derive(Serialize, Deserialize, Clone, Hash)]
+pub struct AuthorityCapabilities {
+    /// Originating authority - must match narwhal transaction source.
+    pub authority: AuthorityName,
+    /// Generation number set by sending authority. Used to determine which of multiple
+    /// AuthorityCapabilities messages from the same authority is the most recent.
+    ///
+    /// (Currently, we just set this to the current time in milliseconds since the epoch, but this
+    /// should not be interpreted as a timestamp.)
+    pub generation: u64,
+    /// ProtocolVersions that the authority supports.
+    pub supported_protocol_versions: SupportedProtocolVersions,
+}
+
+impl Debug for AuthorityCapabilities {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthorityCapabilities")
+            .field("authority", &self.authority.concise())
+            .field("generation", &self.generation)
+            .field(
+                "supported_protocol_versions",
+                &self.supported_protocol_versions,
+            )
+            .finish()
+    }
+}
+
+impl AuthorityCapabilities {
+    pub fn new(
+        authority: AuthorityName,
+        supported_protocol_versions: SupportedProtocolVersions,
+    ) -> Self {
+        let generation = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Sui did not exist prior to 1970")
+            .as_millis()
+            .try_into()
+            .expect("This build of sui is not supported in the year 500,000,000");
+        Self {
+            authority,
+            generation,
+            supported_protocol_versions,
         }
     }
 }
@@ -2854,6 +2930,7 @@ pub enum ConsensusTransactionKind {
     UserTransaction(Box<CertifiedTransaction>),
     CheckpointSignature(Box<CheckpointSignatureMessage>),
     EndOfPublish(AuthorityName),
+    CapabilityNotification(AuthorityCapabilities),
 }
 
 impl ConsensusTransaction {
@@ -2892,6 +2969,16 @@ impl ConsensusTransaction {
         }
     }
 
+    pub fn new_capability_notification(capabilities: AuthorityCapabilities) -> Self {
+        let mut hasher = DefaultHasher::new();
+        capabilities.hash(&mut hasher);
+        let tracking_id = hasher.finish().to_le_bytes();
+        Self {
+            tracking_id,
+            kind: ConsensusTransactionKind::CapabilityNotification(capabilities),
+        }
+    }
+
     pub fn get_tracking_id(&self) -> u64 {
         (&self.tracking_id[..])
             .read_u64::<BigEndian>()
@@ -2904,7 +2991,10 @@ impl ConsensusTransaction {
                 certificate.verify_signature(committee)
             }
             ConsensusTransactionKind::CheckpointSignature(data) => data.verify(committee),
-            ConsensusTransactionKind::EndOfPublish(_) => Ok(()),
+            // EndOfPublish and CapabilityNotification are authenticated in
+            // AuthorityPerEpochStore::verify_consensus_transaction
+            ConsensusTransactionKind::EndOfPublish(_)
+            | ConsensusTransactionKind::CapabilityNotification(_) => Ok(()),
         }
     }
 
@@ -2921,6 +3011,9 @@ impl ConsensusTransaction {
             }
             ConsensusTransactionKind::EndOfPublish(authority) => {
                 ConsensusTransactionKey::EndOfPublish(*authority)
+            }
+            ConsensusTransactionKind::CapabilityNotification(cap) => {
+                ConsensusTransactionKey::CapabilityNotification(cap.authority, cap.generation)
             }
         }
     }
@@ -3001,8 +3094,8 @@ pub type IsTransactionExecutedLocally = bool;
 pub enum ExecuteTransactionResponse {
     EffectsCert(
         Box<(
-            Option<CertifiedTransaction>,
             FinalizedEffects,
+            TransactionEvents,
             IsTransactionExecutedLocally,
         )>,
     ),
@@ -3015,8 +3108,8 @@ pub struct QuorumDriverRequest {
 
 #[derive(Debug, Clone)]
 pub struct QuorumDriverResponse {
-    pub tx_cert: Option<VerifiedCertificate>,
     pub effects_cert: VerifiedCertifiedTransactionEffects,
+    pub events: TransactionEvents,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -3048,4 +3141,10 @@ pub struct CommitteeInfo {
     pub committee_info: Vec<(AuthorityName, StakeUnit)>,
     // TODO: We could also return the certified checkpoint that contains this committee.
     // This would allows a client to verify the authenticity of the committee.
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SystemStateRequest {
+    // This is needed to make gRPC happy.
+    pub _unused: bool,
 }

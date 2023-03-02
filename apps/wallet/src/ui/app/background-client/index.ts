@@ -5,6 +5,7 @@ import {
     type SerializedSignature,
     toB64,
     type SignedTransaction,
+    type ExportedKeypair,
 } from '@mysten/sui.js';
 import { lastValueFrom, map, take } from 'rxjs';
 
@@ -47,7 +48,7 @@ export class BackgroundClient {
     private _dispatch: AppDispatch | null = null;
     private _initialized = false;
 
-    public async init(dispatch: AppDispatch) {
+    public init(dispatch: AppDispatch) {
         if (this._initialized) {
             throw new Error('[BackgroundClient] already initialized');
         }
@@ -82,7 +83,7 @@ export class BackgroundClient {
         );
     }
 
-    public async sendGetPermissionRequests() {
+    public sendGetPermissionRequests() {
         return lastValueFrom(
             this.sendMessage(
                 createMessage<GetPermissionRequests>({
@@ -92,7 +93,7 @@ export class BackgroundClient {
         );
     }
 
-    public async sendTransactionRequestResponse(
+    public sendTransactionRequestResponse(
         txID: string,
         approved: boolean,
         txResult?: SuiTransactionResponse,
@@ -111,7 +112,7 @@ export class BackgroundClient {
         );
     }
 
-    public async sendGetTransactionRequests() {
+    public sendGetTransactionRequests() {
         return lastValueFrom(
             this.sendMessage(
                 createMessage<GetTransactionRequests>({
@@ -121,16 +122,28 @@ export class BackgroundClient {
         );
     }
 
-    public async disconnectApp(origin: string) {
+    /**
+     * Disconnect a dapp, if specificAccounts contains accounts then only those accounts will be disconnected.
+     * @param origin The origin of the dapp
+     * @param specificAccounts Accounts to disconnect. If not provided or it's an empty array all accounts will be disconnected
+     */
+    public async disconnectApp(
+        origin: string,
+        specificAccounts?: SuiAddress[]
+    ) {
         await lastValueFrom(
             this.sendMessage(
-                createMessage<DisconnectApp>({ type: 'disconnect-app', origin })
+                createMessage<DisconnectApp>({
+                    type: 'disconnect-app',
+                    origin,
+                    specificAccounts,
+                })
             ).pipe(take(1))
         );
     }
 
-    public async createVault(password: string, importedEntropy?: string) {
-        return await lastValueFrom(
+    public createVault(password: string, importedEntropy?: string) {
+        return lastValueFrom(
             this.sendMessage(
                 createMessage<KeyringPayload<'create'>>({
                     type: 'keyring',
@@ -142,8 +155,8 @@ export class BackgroundClient {
         );
     }
 
-    public async unlockWallet(password: string) {
-        return await lastValueFrom(
+    public unlockWallet(password: string) {
+        return lastValueFrom(
             this.sendMessage(
                 createMessage<KeyringPayload<'unlock'>>({
                     type: 'keyring',
@@ -155,8 +168,8 @@ export class BackgroundClient {
         );
     }
 
-    public async lockWallet() {
-        return await lastValueFrom(
+    public lockWallet() {
+        return lastValueFrom(
             this.sendMessage(
                 createMessage<KeyringPayload<'lock'>>({
                     type: 'keyring',
@@ -166,8 +179,8 @@ export class BackgroundClient {
         );
     }
 
-    public async clearWallet() {
-        return await lastValueFrom(
+    public clearWallet() {
+        return lastValueFrom(
             this.sendMessage(
                 createMessage<KeyringPayload<'clear'>>({
                     type: 'keyring',
@@ -177,8 +190,8 @@ export class BackgroundClient {
         );
     }
 
-    public async getEntropy(password?: string) {
-        return await lastValueFrom(
+    public getEntropy(password?: string) {
+        return lastValueFrom(
             this.sendMessage(
                 createMessage<KeyringPayload<'getEntropy'>>({
                     type: 'keyring',
@@ -201,8 +214,8 @@ export class BackgroundClient {
         );
     }
 
-    public async setKeyringLockTimeout(timeout: number) {
-        return await lastValueFrom(
+    public setKeyringLockTimeout(timeout: number) {
+        return lastValueFrom(
             this.sendMessage(
                 createMessage<KeyringPayload<'setLockTimeout'>>({
                     type: 'keyring',
@@ -213,11 +226,11 @@ export class BackgroundClient {
         );
     }
 
-    public async signData(
+    public signData(
         address: SuiAddress,
         data: Uint8Array
     ): Promise<SerializedSignature> {
-        return await lastValueFrom(
+        return lastValueFrom(
             this.sendMessage(
                 createMessage<KeyringPayload<'signData'>>({
                     type: 'keyring',
@@ -241,8 +254,8 @@ export class BackgroundClient {
         );
     }
 
-    public async setActiveNetworkEnv(network: NetworkEnvType) {
-        return await lastValueFrom(
+    public setActiveNetworkEnv(network: NetworkEnvType) {
+        return lastValueFrom(
             this.sendMessage(
                 createMessage<SetNetworkPayload>({
                     type: 'set-network',
@@ -252,8 +265,8 @@ export class BackgroundClient {
         );
     }
 
-    public async selectAccount(address: SuiAddress) {
-        return await lastValueFrom(
+    public selectAccount(address: SuiAddress) {
+        return lastValueFrom(
             this.sendMessage(
                 createMessage<KeyringPayload<'switchAccount'>>({
                     type: 'keyring',
@@ -264,12 +277,61 @@ export class BackgroundClient {
         );
     }
 
-    public async deriveNextAccount() {
-        return await lastValueFrom(
+    public deriveNextAccount() {
+        return lastValueFrom(
             this.sendMessage(
                 createMessage<KeyringPayload<'deriveNextAccount'>>({
                     type: 'keyring',
                     method: 'deriveNextAccount',
+                })
+            ).pipe(take(1))
+        );
+    }
+
+    public verifyPassword(password: string) {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'verifyPassword'>>({
+                    type: 'keyring',
+                    method: 'verifyPassword',
+                    args: { password },
+                })
+            ).pipe(take(1))
+        );
+    }
+
+    public exportAccount(password: string, accountAddress: SuiAddress) {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'exportAccount'>>({
+                    type: 'keyring',
+                    method: 'exportAccount',
+                    args: { password, accountAddress },
+                })
+            ).pipe(
+                take(1),
+                map(({ payload }) => {
+                    if (
+                        isKeyringPayload(payload, 'exportAccount') &&
+                        payload.return
+                    ) {
+                        return payload.return.keyPair;
+                    }
+                    throw new Error(
+                        'Error unknown response for export account message'
+                    );
+                })
+            )
+        );
+    }
+
+    public importPrivateKey(password: string, keyPair: ExportedKeypair) {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'importPrivateKey'>>({
+                    type: 'keyring',
+                    method: 'importPrivateKey',
+                    args: { password, keyPair },
                 })
             ).pipe(take(1))
         );
@@ -292,8 +354,8 @@ export class BackgroundClient {
         );
     }
 
-    private async getWalletStatus() {
-        return await lastValueFrom(
+    private getWalletStatus() {
+        return lastValueFrom(
             this.sendMessage(
                 createMessage<KeyringPayload<'walletStatusUpdate'>>({
                     type: 'keyring',
@@ -303,8 +365,8 @@ export class BackgroundClient {
         );
     }
 
-    private async loadFeatures() {
-        return await lastValueFrom(
+    private loadFeatures() {
+        return lastValueFrom(
             this.sendMessage(
                 createMessage<BasePayload>({
                     type: 'get-features',
@@ -313,8 +375,8 @@ export class BackgroundClient {
         );
     }
 
-    private async getNetwork() {
-        return await lastValueFrom(
+    private getNetwork() {
+        return lastValueFrom(
             this.sendMessage(
                 createMessage<BasePayload>({
                     type: 'get-network',

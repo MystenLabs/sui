@@ -22,23 +22,9 @@ use sui_open_rpc::Module;
 use sui_types::event::{EventEnvelope, EventID};
 use sui_types::query::EventQuery;
 
+use crate::api::cap_page_limit;
 use crate::api::EventReadApiServer;
-use crate::api::{cap_page_limit, EventStreamingApiServer};
 use crate::SuiRpcModule;
-
-pub struct EventStreamingApiImpl {
-    state: Arc<AuthorityState>,
-    event_handler: Arc<EventHandler>,
-}
-
-impl EventStreamingApiImpl {
-    pub fn new(state: Arc<AuthorityState>, event_handler: Arc<EventHandler>) -> Self {
-        Self {
-            state,
-            event_handler,
-        }
-    }
-}
 
 fn spawn_subscription<S, T, E>(mut sink: SubscriptionSink, rx: S)
 where
@@ -60,55 +46,12 @@ where
     });
 }
 
-#[async_trait]
-impl EventStreamingApiServer for EventStreamingApiImpl {
-    fn subscribe_event(
-        &self,
-        mut sink: SubscriptionSink,
-        filter: SuiEventFilter,
-    ) -> SubscriptionResult {
-        let filter = match filter.try_into() {
-            Ok(filter) => filter,
-            Err(e) => {
-                let e = jsonrpsee::core::Error::from(e);
-                warn!(error = ?e, "Rejecting subscription request.");
-                return Ok(sink.reject(e)?);
-            }
-        };
-
-        let state = self.state.clone();
-        let stream = self.event_handler.subscribe(filter);
-        let stream = stream.map(move |e: EventEnvelope| {
-            let event = SuiEvent::try_from(e.event, state.module_cache.as_ref());
-            event.map(|event| SuiEventEnvelope {
-                timestamp: e.timestamp,
-                tx_digest: e.tx_digest,
-                id: EventID::from((e.tx_digest, e.event_num as i64)),
-                event,
-            })
-        });
-        spawn_subscription(sink, stream);
-        Ok(())
-    }
-}
-
-impl SuiRpcModule for EventStreamingApiImpl {
-    fn rpc(self) -> RpcModule<Self> {
-        self.into_rpc()
-    }
-
-    fn rpc_doc_module() -> Module {
-        crate::api::EventStreamingApiOpenRpc::module_doc()
-    }
-}
-
-#[allow(unused)]
-pub struct EventReadApiImpl {
+pub struct EventReadApi {
     state: Arc<AuthorityState>,
     event_handler: Arc<EventHandler>,
 }
 
-impl EventReadApiImpl {
+impl EventReadApi {
     pub fn new(state: Arc<AuthorityState>, event_handler: Arc<EventHandler>) -> Self {
         Self {
             state,
@@ -117,9 +60,8 @@ impl EventReadApiImpl {
     }
 }
 
-#[allow(unused)]
 #[async_trait]
-impl EventReadApiServer for EventReadApiImpl {
+impl EventReadApiServer for EventReadApi {
     async fn get_events(
         &self,
         query: EventQuery,
@@ -139,16 +81,56 @@ impl EventReadApiServer for EventReadApiImpl {
         // Retrieve 1 extra item for next cursor
         let mut data = self
             .state
-            .get_events(query, cursor, limit + 1, descending)
+            .query_events(query, cursor, limit + 1, descending)
             .await?;
         let next_cursor = data.get(limit).map(|(id, _)| id.clone());
         data.truncate(limit);
         let data = data.into_iter().map(|(_, event)| event).collect();
         Ok(EventPage { data, next_cursor })
     }
+
+    fn subscribe_event(
+        &self,
+        mut sink: SubscriptionSink,
+        filter: SuiEventFilter,
+    ) -> SubscriptionResult {
+        let filter = match filter.try_into() {
+            Ok(filter) => filter,
+            Err(e) => {
+                let e = jsonrpsee::core::Error::from(e);
+                warn!(error = ?e, "Rejecting subscription request.");
+                return Ok(sink.reject(e)?);
+            }
+        };
+
+        let state = self.state.clone();
+        let stream = self.event_handler.subscribe(filter);
+        let stream = stream.map(move |e: EventEnvelope| {
+            let event = SuiEvent::try_from(
+                e.event,
+                // threading the epoch_store through this API does not
+                // seem possible, so we just read it from the state and fetch
+                // the module cache out of it.
+                // Notice that no matter what module cache we get things
+                // should work
+                state
+                    .load_epoch_store_one_call_per_task()
+                    .module_cache()
+                    .as_ref(),
+            );
+            event.map(|event| SuiEventEnvelope {
+                timestamp: e.timestamp,
+                tx_digest: e.tx_digest,
+                id: EventID::from((e.tx_digest, e.event_num as i64)),
+                event,
+            })
+        });
+        spawn_subscription(sink, stream);
+        Ok(())
+    }
 }
 
-impl SuiRpcModule for EventReadApiImpl {
+impl SuiRpcModule for EventReadApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

@@ -75,7 +75,11 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let (_, _, executed_locally) = *result;
     assert!(executed_locally);
 
-    assert!(node.state().get_transaction(digest).await.is_ok());
+    assert!(node
+        .state()
+        .get_executed_transaction_and_effects(digest)
+        .await
+        .is_ok());
 
     Ok(())
 }
@@ -246,7 +250,7 @@ async fn test_tx_across_epoch_boundaries() {
                 {
                     Ok(ExecuteTransactionResponse::EffectsCert(res)) => {
                         info!(?tx_digest, "tx result: ok");
-                        let (_, effects_cert, _) = *res;
+                        let (effects_cert, _, _) = *res;
                         result_tx.send(effects_cert).await.unwrap();
                     }
                     Err(QuorumDriverError::TimeoutBeforeFinality) => {

@@ -21,8 +21,9 @@ use sui_json_rpc_types::{
 use sui_open_rpc::Module;
 use sui_types::base_types::ObjectID;
 use sui_types::crypto::construct_tbls_randomness_object_message;
-use sui_types::error::SuiError;
+use sui_types::error::{SuiError, UserInputError};
 use sui_types::object::{Object, ObjectRead};
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 pub struct ThresholdBlsApi {
     state: Arc<AuthorityState>,
@@ -36,15 +37,15 @@ impl ThresholdBlsApi {
     /// Check that the given layout represents a Randomness object.
     fn is_randomness_object(layout: &MoveStructLayout) -> bool {
         let MoveStructLayout::WithTypes{type_, fields: _} = layout else { return false; };
-        let prefix = "0000000000000000000000000000000000000002::randomness::Randomness";
-        type_.to_canonical_string().starts_with(prefix)
+        let prefix = format!("{:?}::randomness::Randomness", SUI_FRAMEWORK_ADDRESS);
+        type_.to_canonical_string().starts_with(&prefix)
     }
 
     /// Get the object and check if it is a Randomness object.
     async fn get_randomness_object(&self, object_id: ObjectID) -> Result<Object, Error> {
         let obj_read = self.state.get_object_read(&object_id).await?;
         let ObjectRead::Exists(_obj_ref, obj, layout) = obj_read else {
-            Err(Error::SuiError(SuiError::ObjectNotFound{ object_id, version: None }))? };
+            Err(Error::SuiError(UserInputError::ObjectNotFound{ object_id, version: None }.into()))? };
         let Some(layout) = layout else {
             Err(Error::InternalError(anyhow!("Object does not have a layout")))?};
         if !Self::is_randomness_object(&layout) {

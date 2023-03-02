@@ -48,7 +48,7 @@ impl ProcessorOrchestrator {
         let addr_handle = tokio::task::spawn(async move {
             let addr_result = retry(ExponentialBackoff::default(), || async {
                 let addr_processor_exec_res = address_processor.start().await;
-                if let Err(e) = addr_processor_exec_res.clone() {
+                if let Err(e) = &addr_processor_exec_res {
                     address_processor
                         .address_processor_metrics
                         .total_address_processor_error
@@ -71,7 +71,7 @@ impl ProcessorOrchestrator {
         let obj_handle = tokio::task::spawn(async move {
             let obj_result = retry(ExponentialBackoff::default(), || async {
                 let obj_processor_exec_res = object_processor.start().await;
-                if let Err(e) = obj_processor_exec_res.clone() {
+                if let Err(e) = &obj_processor_exec_res {
                     object_processor
                         .object_processor_metrics
                         .total_object_processor_error
@@ -94,7 +94,7 @@ impl ProcessorOrchestrator {
         let pkg_handle = tokio::task::spawn(async move {
             let pkg_result = retry(ExponentialBackoff::default(), || async {
                 let pkg_processor_exec_res = package_processor.start().await;
-                if let Err(e) = pkg_processor_exec_res.clone() {
+                if let Err(e) = &pkg_processor_exec_res {
                     package_processor
                         .package_processor_metrics
                         .total_package_processor_error

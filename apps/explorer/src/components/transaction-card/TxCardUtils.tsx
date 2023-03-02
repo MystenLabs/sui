@@ -15,12 +15,13 @@ import {
     type TransactionKindName,
     type JsonRpcProvider,
     getTransactionSender,
+    formatDigest,
+    formatAddress,
 } from '@mysten/sui.js';
 import { Fragment } from 'react';
 
 import { ReactComponent as ContentArrowRight } from '../../assets/SVGIcons/16px/ArrowRight.svg';
 import { getAmount } from '../../utils/getAmount';
-import { truncate } from '../../utils/stringUtils';
 import { TxTimeType } from '../tx-time/TxTimeType';
 
 import styles from './RecentTxCard.module.css';
@@ -103,7 +104,7 @@ export const genTableDataFromTxData = (
                 content={[
                     {
                         url: txn.txId,
-                        name: truncate(txn.txId, truncateLength),
+                        name: formatDigest(txn.txId),
                         category: 'transaction',
                     },
                 ]}
@@ -114,14 +115,14 @@ export const genTableDataFromTxData = (
                 content={[
                     {
                         url: txn.From,
-                        name: truncate(txn.From, truncateLength),
+                        name: formatAddress(txn.From),
                         category: 'address',
                     },
                     ...(txn.To
                         ? [
                               {
                                   url: txn.To,
-                                  name: truncate(txn.To, truncateLength),
+                                  name: formatAddress(txn.To),
                                   category: 'address',
                               } as const,
                           ]
@@ -139,10 +140,6 @@ export const genTableDataFromTxData = (
         gas: <SuiAmount amount={txn.txGas} />,
     })),
     columns: [
-        {
-            header: 'Time',
-            accessorKey: 'date',
-        },
         {
             header: 'Type',
             accessorKey: 'txTypes',
@@ -164,6 +161,10 @@ export const genTableDataFromTxData = (
         {
             header: 'Gas',
             accessorKey: 'gas',
+        },
+        {
+            header: 'Time',
+            accessorKey: 'date',
         },
     ],
 });

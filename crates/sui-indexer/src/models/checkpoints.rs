@@ -1,23 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::errors::IndexerError;
-use crate::schema::checkpoints;
-use crate::schema::checkpoints::dsl::{checkpoints as checkpoints_table, sequence_number};
-use crate::PgPoolConnection;
-
 use chrono::NaiveDateTime;
 use diesel::dsl::max;
 use diesel::prelude::*;
 use diesel::result::Error;
+use sui_json_rpc_types::{Checkpoint as RpcCheckpoint, CheckpointId};
+use sui_types::base_types::TransactionDigest;
+use sui_types::digests::CheckpointDigest;
+use sui_types::gas::GasCostSummary;
 
-use sui_types::messages_checkpoint::CheckpointSummary;
+use crate::errors::IndexerError;
+use crate::schema::checkpoints::dsl::{checkpoints as checkpoints_table, sequence_number};
+use crate::schema::checkpoints::{self, checkpoint_digest, end_of_epoch_data};
+use crate::PgPoolConnection;
+use sui_types::messages_checkpoint::EndOfEpochData;
 
 #[derive(Queryable, Debug, Clone)]
 pub struct Checkpoint {
     pub sequence_number: i64,
-    pub content_digest: String,
+    pub checkpoint_digest: String,
     pub epoch: i64,
+    pub transactions: Vec<Option<String>>,
+    pub previous_checkpoint_digest: Option<String>,
+    pub next_epoch_committee: Option<String>,
+    pub next_epoch_protocol_version: Option<i64>,
+    pub end_of_epoch_data: Option<String>,
     pub total_gas_cost: i64,
     pub total_computation_cost: i64,
     pub total_storage_cost: i64,
@@ -25,8 +33,6 @@ pub struct Checkpoint {
     pub total_transactions: i64,
     pub total_transactions_current_epoch: i64,
     pub total_transactions_from_genesis: i64,
-    pub previous_digest: Option<String>,
-    pub next_epoch_committee: Option<String>,
     pub timestamp_ms: i64,
     pub timestamp_ms_str: NaiveDateTime,
     pub checkpoint_tps: f32,
@@ -36,8 +42,13 @@ impl Default for Checkpoint {
     fn default() -> Checkpoint {
         Checkpoint {
             sequence_number: 0,
-            content_digest: String::from(""),
+            checkpoint_digest: "".into(),
             epoch: 0,
+            transactions: vec![],
+            previous_checkpoint_digest: None,
+            next_epoch_committee: None,
+            next_epoch_protocol_version: None,
+            end_of_epoch_data: None,
             total_gas_cost: 0,
             total_computation_cost: 0,
             total_storage_cost: 0,
@@ -45,8 +56,6 @@ impl Default for Checkpoint {
             total_transactions: 0,
             total_transactions_current_epoch: 0,
             total_transactions_from_genesis: 0,
-            previous_digest: None,
-            next_epoch_committee: None,
             timestamp_ms: 0,
             timestamp_ms_str: NaiveDateTime::from_timestamp_millis(0).unwrap(),
             checkpoint_tps: 0.0,
@@ -58,8 +67,13 @@ impl Default for Checkpoint {
 #[diesel(table_name = checkpoints)]
 pub struct NewCheckpoint {
     pub sequence_number: i64,
-    pub content_digest: String,
+    pub checkpoint_digest: String,
     pub epoch: i64,
+    pub transactions: Vec<Option<String>>,
+    pub previous_checkpoint_digest: Option<String>,
+    pub next_epoch_committee: Option<String>,
+    pub next_epoch_protocol_version: Option<i64>,
+    pub end_of_epoch_data: Option<String>,
     pub total_gas_cost: i64,
     pub total_computation_cost: i64,
     pub total_storage_cost: i64,
@@ -67,8 +81,6 @@ pub struct NewCheckpoint {
     pub total_transactions: i64,
     pub total_transactions_current_epoch: i64,
     pub total_transactions_from_genesis: i64,
-    pub previous_digest: Option<String>,
-    pub next_epoch_committee: Option<String>,
     pub timestamp_ms: i64,
     pub timestamp_ms_str: NaiveDateTime,
     pub checkpoint_tps: f32,
@@ -78,8 +90,13 @@ impl From<NewCheckpoint> for Checkpoint {
     fn from(new_checkpoint: NewCheckpoint) -> Self {
         Checkpoint {
             sequence_number: new_checkpoint.sequence_number,
-            content_digest: new_checkpoint.content_digest,
+            checkpoint_digest: new_checkpoint.checkpoint_digest,
             epoch: new_checkpoint.epoch,
+            transactions: new_checkpoint.transactions,
+            previous_checkpoint_digest: new_checkpoint.previous_checkpoint_digest,
+            next_epoch_committee: new_checkpoint.next_epoch_committee,
+            next_epoch_protocol_version: new_checkpoint.next_epoch_protocol_version,
+            end_of_epoch_data: new_checkpoint.end_of_epoch_data,
             total_gas_cost: new_checkpoint.total_gas_cost,
             total_computation_cost: new_checkpoint.total_computation_cost,
             total_storage_cost: new_checkpoint.total_storage_cost,
@@ -87,8 +104,6 @@ impl From<NewCheckpoint> for Checkpoint {
             total_transactions: new_checkpoint.total_transactions,
             total_transactions_current_epoch: new_checkpoint.total_transactions_current_epoch,
             total_transactions_from_genesis: new_checkpoint.total_transactions_from_genesis,
-            previous_digest: new_checkpoint.previous_digest,
-            next_epoch_committee: new_checkpoint.next_epoch_committee,
             timestamp_ms: new_checkpoint.timestamp_ms,
             timestamp_ms_str: new_checkpoint.timestamp_ms_str,
             checkpoint_tps: new_checkpoint.checkpoint_tps,
@@ -96,37 +111,127 @@ impl From<NewCheckpoint> for Checkpoint {
     }
 }
 
+impl TryFrom<Checkpoint> for RpcCheckpoint {
+    type Error = IndexerError;
+    fn try_from(checkpoint: Checkpoint) -> Result<Self, Self::Error> {
+        let parsed_digest = checkpoint
+            .checkpoint_digest
+            .parse::<CheckpointDigest>()
+            .map_err(|e| {
+                IndexerError::JsonSerdeError(format!(
+                    "Failed to decode checkpoint digest: {:?} with err: {:?}",
+                    checkpoint.checkpoint_digest, e
+                ))
+            })?;
+
+        let parsed_previous_digest = checkpoint
+            .previous_checkpoint_digest
+            .map(|digest| {
+                digest.parse::<CheckpointDigest>().map_err(|e| {
+                    IndexerError::JsonSerdeError(format!(
+                        "Failed to decode previous checkpoint digest: {:?} with err: {:?}",
+                        digest, e
+                    ))
+                })
+            })
+            .transpose()?;
+        let parsed_txn_digests: Vec<TransactionDigest> = checkpoint
+            .transactions
+            .into_iter()
+            .filter_map(|txn| {
+                txn.map(|txn| {
+                    txn.parse().map_err(|e| {
+                        IndexerError::JsonSerdeError(format!(
+                            "Failed to decode transaction digest: {:?} with err: {:?}",
+                            txn, e
+                        ))
+                    })
+                })
+            })
+            .collect::<Result<Vec<TransactionDigest>, IndexerError>>()?;
+
+        let data: Option<EndOfEpochData> =
+            if let Some(end_of_epoch_data_str) = checkpoint.end_of_epoch_data {
+                Some(serde_json::from_str(&end_of_epoch_data_str).map_err(|e| {
+                    IndexerError::JsonSerdeError(format!(
+                        "Failed to decode end_of_epoch_data: {:?} with err: {:?}",
+                        end_of_epoch_data, e
+                    ))
+                })?)
+            } else {
+                None
+            };
+
+        Ok(RpcCheckpoint {
+            epoch: checkpoint.epoch as u64,
+            sequence_number: checkpoint.sequence_number as u64,
+            digest: parsed_digest,
+            previous_digest: parsed_previous_digest,
+            end_of_epoch_data: data,
+            epoch_rolling_gas_cost_summary: GasCostSummary {
+                computation_cost: checkpoint.total_computation_cost as u64,
+                storage_cost: checkpoint.total_storage_cost as u64,
+                storage_rebate: checkpoint.total_storage_rebate as u64,
+            },
+            network_total_transactions: checkpoint.total_transactions_from_genesis as u64,
+            timestamp_ms: checkpoint.timestamp_ms as u64,
+            transactions: parsed_txn_digests,
+        })
+    }
+}
+
 pub fn create_checkpoint(
-    checkpoint_summary: CheckpointSummary,
+    rpc_checkpoint: RpcCheckpoint,
     previous_checkpoint_commit: Checkpoint,
-) -> NewCheckpoint {
-    let total_gas_cost = checkpoint_summary
+) -> Result<NewCheckpoint, IndexerError> {
+    let total_gas_cost = rpc_checkpoint
         .epoch_rolling_gas_cost_summary
         .computation_cost
-        + checkpoint_summary
-            .epoch_rolling_gas_cost_summary
-            .storage_cost
-        - checkpoint_summary
-            .epoch_rolling_gas_cost_summary
-            .storage_rebate;
-    let next_committee_json = checkpoint_summary.end_of_epoch_data.map(|e| {
-        serde_json::to_string(&e.next_epoch_committee)
-            .expect("Failed to serialize next_epoch_committee to JSON")
-    });
+        + rpc_checkpoint.epoch_rolling_gas_cost_summary.storage_cost
+        - rpc_checkpoint.epoch_rolling_gas_cost_summary.storage_rebate;
 
-    // Unsure how to calculate TPS for first item
+    let end_of_epoch_data_json = rpc_checkpoint
+        .end_of_epoch_data
+        .clone()
+        .map(|data| {
+            serde_json::to_string(&data).map_err(|e| {
+                IndexerError::JsonSerdeError(format!(
+                    "Failed to serialize end_of_epoch_data to JSON: {:?}",
+                    e
+                ))
+            })
+        })
+        .transpose()?;
+    let next_epoch_committee_json = rpc_checkpoint
+        .end_of_epoch_data
+        .clone()
+        .map(|data| {
+            serde_json::to_string(&data.next_epoch_committee).map_err(|e| {
+                IndexerError::JsonSerdeError(format!(
+                    "Failed to serialize next_epoch_committee to JSON: {:?}",
+                    e
+                ))
+            })
+        })
+        .transpose()?;
+    let next_epoch_version = rpc_checkpoint
+        .end_of_epoch_data
+        .clone()
+        .map(|e| e.next_epoch_protocol_version.as_u64() as i64);
+
+    // TPS of the first row is always 0
     let mut tps = 0.0;
-    let mut checkpoint_transaction_count = checkpoint_summary.network_total_transactions as i64;
-    let mut current_epoch_transaction_count = checkpoint_summary.network_total_transactions as i64;
+    let mut checkpoint_transaction_count = rpc_checkpoint.network_total_transactions as i64;
+    let mut current_epoch_transaction_count = rpc_checkpoint.network_total_transactions as i64;
 
-    if checkpoint_summary.sequence_number != 0 {
-        tps = (checkpoint_summary.network_total_transactions as f32
+    if rpc_checkpoint.sequence_number != 0 {
+        tps = (rpc_checkpoint.network_total_transactions as f32
             - previous_checkpoint_commit.total_transactions_from_genesis as f32)
-            / ((checkpoint_summary.timestamp_ms - previous_checkpoint_commit.timestamp_ms as u64)
+            / ((rpc_checkpoint.timestamp_ms - previous_checkpoint_commit.timestamp_ms as u64)
                 as f32
                 / 1000.0);
 
-        checkpoint_transaction_count = checkpoint_summary.network_total_transactions as i64
+        checkpoint_transaction_count = rpc_checkpoint.network_total_transactions as i64
             - previous_checkpoint_commit.total_transactions_from_genesis;
 
         current_epoch_transaction_count =
@@ -137,35 +242,38 @@ pub fn create_checkpoint(
                 checkpoint_transaction_count
             };
     }
+    let checkpoint_transactions: Vec<Option<String>> = rpc_checkpoint
+        .transactions
+        .iter()
+        .map(|t| Some(t.base58_encode()))
+        .collect();
 
-    NewCheckpoint {
-        sequence_number: checkpoint_summary.sequence_number as i64,
-        content_digest: checkpoint_summary.content_digest.base58_encode(),
-        epoch: checkpoint_summary.epoch as i64,
+    Ok(NewCheckpoint {
+        sequence_number: rpc_checkpoint.sequence_number as i64,
+        checkpoint_digest: rpc_checkpoint.digest.base58_encode(),
+        epoch: rpc_checkpoint.epoch as i64,
+        transactions: checkpoint_transactions,
+        previous_checkpoint_digest: rpc_checkpoint.previous_digest.map(|d| d.base58_encode()),
+
+        next_epoch_committee: next_epoch_committee_json,
+        next_epoch_protocol_version: next_epoch_version,
+        end_of_epoch_data: end_of_epoch_data_json,
+
         total_gas_cost: total_gas_cost as i64,
-        total_computation_cost: checkpoint_summary
+        total_computation_cost: rpc_checkpoint
             .epoch_rolling_gas_cost_summary
             .computation_cost as i64,
-        total_storage_cost: checkpoint_summary
-            .epoch_rolling_gas_cost_summary
-            .storage_cost as i64,
-        total_storage_rebate: checkpoint_summary
-            .epoch_rolling_gas_cost_summary
-            .storage_rebate as i64,
+        total_storage_cost: rpc_checkpoint.epoch_rolling_gas_cost_summary.storage_cost as i64,
+        total_storage_rebate: rpc_checkpoint.epoch_rolling_gas_cost_summary.storage_rebate as i64,
+
         total_transactions: checkpoint_transaction_count,
-        total_transactions_from_genesis: checkpoint_summary.network_total_transactions as i64,
+        total_transactions_from_genesis: rpc_checkpoint.network_total_transactions as i64,
         total_transactions_current_epoch: current_epoch_transaction_count,
-        previous_digest: checkpoint_summary
-            .previous_digest
-            .map(|d| d.base58_encode()),
-        next_epoch_committee: next_committee_json,
-        timestamp_ms: checkpoint_summary.timestamp_ms as i64,
-        timestamp_ms_str: NaiveDateTime::from_timestamp_millis(
-            checkpoint_summary.timestamp_ms as i64,
-        )
-        .unwrap(),
+        timestamp_ms: rpc_checkpoint.timestamp_ms as i64,
+        timestamp_ms_str: NaiveDateTime::from_timestamp_millis(rpc_checkpoint.timestamp_ms as i64)
+            .unwrap(),
         checkpoint_tps: tps,
-    }
+    })
 }
 
 pub fn commit_checkpoint(
@@ -173,47 +281,6 @@ pub fn commit_checkpoint(
     checkpoint: NewCheckpoint,
 ) -> Result<usize, IndexerError> {
     commit_checkpoint_impl(pg_pool_conn, checkpoint)
-}
-
-pub fn read_previous_checkpoint(
-    pg_pool_conn: &mut PgPoolConnection,
-    currency_checkpoint_sequence_number: i64,
-) -> Result<Checkpoint, IndexerError> {
-    let checkpoint_read_result: Result<Checkpoint, Error> = pg_pool_conn
-        .build_transaction()
-        .read_only()
-        .run::<_, Error, _>(|conn| {
-            checkpoints_table
-                .filter(sequence_number.eq(currency_checkpoint_sequence_number - 1))
-                .limit(1)
-                .first::<Checkpoint>(conn)
-        });
-    checkpoint_read_result.map_err(|e| {
-        IndexerError::PostgresReadError(format!(
-            "Failed reading previous checkpoint in PostgresDB with error {:?}",
-            e
-        ))
-    })
-}
-
-pub fn get_latest_checkpoint_sequence_number(
-    pg_pool_conn: &mut PgPoolConnection,
-) -> Result<i64, IndexerError> {
-    let latest_checkpoint_sequence_number_read_result: Result<i64, Error> = pg_pool_conn
-        .build_transaction()
-        .read_only()
-        .run::<_, Error, _>(|conn| {
-            checkpoints_table
-                .select(max(sequence_number))
-                .first::<Option<i64>>(conn)
-                .map(|o| o.unwrap_or(0))
-        });
-    latest_checkpoint_sequence_number_read_result.map_err(|e| {
-        IndexerError::PostgresReadError(format!(
-            "Failed reading latest checkpoint sequence number in PostgresDB with error {:?}",
-            e
-        ))
-    })
 }
 
 fn commit_checkpoint_impl(
@@ -231,4 +298,80 @@ fn commit_checkpoint_impl(
             checkpoint, e
         ))
     })
+}
+
+pub fn get_checkpoint(
+    pg_pool_conn: &mut PgPoolConnection,
+    checkpoint_sequence_number: i64,
+) -> Result<Checkpoint, IndexerError> {
+    let checkpoint_read_result = pg_pool_conn
+        .build_transaction()
+        .read_only()
+        .run::<_, Error, _>(|conn| {
+            checkpoints_table
+                .filter(sequence_number.eq(checkpoint_sequence_number))
+                .limit(1)
+                .first::<Checkpoint>(conn)
+        });
+    checkpoint_read_result.map_err(|e| {
+        IndexerError::PostgresReadError(format!(
+            "Failed reading checkpoint from PostgresDB with error {:?}",
+            e
+        ))
+    })
+}
+
+pub fn get_checkpoint_from_digest(
+    pg_pool_conn: &mut PgPoolConnection,
+    checkpoint_digest_str: String,
+) -> Result<Checkpoint, IndexerError> {
+    let checkpoint_read_result = pg_pool_conn
+        .build_transaction()
+        .read_only()
+        .run::<_, Error, _>(|conn| {
+            checkpoints_table
+                .filter(checkpoint_digest.eq(checkpoint_digest_str.clone()))
+                .limit(1)
+                .first::<Checkpoint>(conn)
+        });
+    checkpoint_read_result.map_err(|e| {
+        IndexerError::PostgresReadError(format!(
+            "Failed reading checkpoint from PostgresDB with digest {:?} and error {:?}",
+            checkpoint_digest_str, e
+        ))
+    })
+}
+
+pub fn get_latest_checkpoint_sequence_number(
+    pg_pool_conn: &mut PgPoolConnection,
+) -> Result<i64, IndexerError> {
+    let latest_checkpoint_sequence_number_read_result: Result<i64, Error> = pg_pool_conn
+        .build_transaction()
+        .read_only()
+        .run::<_, Error, _>(|conn| {
+            checkpoints_table
+                .select(max(sequence_number))
+                .first::<Option<i64>>(conn)
+                // -1 to differentiate between no checkpoints and the first checkpoint
+                .map(|o| o.unwrap_or(-1))
+        });
+    latest_checkpoint_sequence_number_read_result.map_err(|e| {
+        IndexerError::PostgresReadError(format!(
+            "Failed reading latest checkpoint sequence number in PostgresDB with error {:?}",
+            e
+        ))
+    })
+}
+
+pub fn get_rpc_checkpoint(
+    pg_pool_conn: &mut PgPoolConnection,
+    checkpoint_id: CheckpointId,
+) -> Result<RpcCheckpoint, IndexerError> {
+    let checkpoint = match checkpoint_id {
+        CheckpointId::SequenceNumber(seq) => get_checkpoint(pg_pool_conn, seq as i64)?,
+        CheckpointId::Digest(digest) => {
+            get_checkpoint_from_digest(pg_pool_conn, digest.base58_encode())?
+        }
+    };
+    checkpoint.try_into()
 }

@@ -352,10 +352,10 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                 let committee_cloned = Arc::new(worker.proxy.clone_committee());
                                 let start = Arc::new(Instant::now());
                                 let res = worker.proxy
-                                    .execute_bench_transaction(b.0.clone().into())
+                                    .execute_transaction(b.0.clone().into())
                                     .then(|res| async move  {
                                         match res {
-                                            Ok((_, effects)) => {
+                                            Ok(effects) => {
                                                 let new_version = effects.mutated().iter().find(|(object_ref, _)| {
                                                     object_ref.0 == b.1.get_object_id()
                                                 }).map(|x| x.0).unwrap();
@@ -400,10 +400,10 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                 // TODO: clone committee for each request is not ideal.
                                 let committee_cloned = Arc::new(worker.proxy.clone_committee());
                                 let res = worker.proxy
-                                    .execute_bench_transaction(tx.clone().into())
+                                    .execute_transaction(tx.clone().into())
                                 .then(|res| async move {
                                     match res {
-                                        Ok((_, effects)) => {
+                                        Ok(effects) => {
                                             let new_version = effects.mutated().iter().find(|(object_ref, _)| {
                                                 object_ref.0 == payload.get_object_id()
                                             }).map(|x| x.0).unwrap();

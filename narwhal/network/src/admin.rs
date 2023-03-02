@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::routing::post;
 use axum::{extract::Extension, http::StatusCode, routing::get, Json, Router};
 use mysten_metrics::{spawn_logged_monitored_task, spawn_monitored_task};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
@@ -9,26 +8,16 @@ use std::time::Duration;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tracing::{error, info};
-use types::metered_channel::Sender;
-use types::{ConditionalBroadcastReceiver, ReconfigureNotification};
+use types::ConditionalBroadcastReceiver;
 
 pub fn start_admin_server(
     port: u16,
     network: anemo::Network,
     mut tr_shutdown: ConditionalBroadcastReceiver,
-    tx_state_handler: Option<Sender<ReconfigureNotification>>,
 ) -> Vec<JoinHandle<()>> {
     let mut router = Router::new()
         .route("/peers", get(get_peers))
         .route("/known_peers", get(get_known_peers));
-
-    // Primaries will have this service enabled
-    if let Some(tx_state_handler) = tx_state_handler {
-        let r = Router::new()
-            .route("/reconfigure", post(reconfigure))
-            .layer(Extension(tx_state_handler));
-        router = router.merge(r);
-    }
 
     router = router.layer(Extension(network));
 
@@ -114,12 +103,4 @@ async fn get_known_peers(
                 .collect(),
         ),
     )
-}
-
-async fn reconfigure(
-    Extension(tx_state_handler): Extension<Sender<ReconfigureNotification>>,
-    Json(reconfigure_notification): Json<ReconfigureNotification>,
-) -> StatusCode {
-    let _ = tx_state_handler.send(reconfigure_notification).await;
-    StatusCode::OK
 }

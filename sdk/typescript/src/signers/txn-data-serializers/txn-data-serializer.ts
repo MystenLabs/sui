@@ -156,6 +156,11 @@ export type SignedTransaction = {
   signature: SerializedSignature;
 };
 
+export type SignedMessage = {
+  messageBytes: string;
+  signature: SerializedSignature;
+};
+
 /** A type that represents the possible transactions that can be signed: */
 export type SignableTransaction =
   | UnserializedSignableTransaction

@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::TransactionExecutionApiServer;
+use crate::api::WriteApiServer;
+use crate::read_api::get_transaction_data_and_digest;
 use crate::SuiRpcModule;
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -9,37 +10,42 @@ use fastcrypto::encoding::Base64;
 use fastcrypto::traits::ToFromBytes;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
-use move_bytecode_utils::module_cache::SyncModuleCache;
 use mysten_metrics::spawn_monitored_task;
 use std::sync::Arc;
-use sui_core::authority::{AuthorityStore, ResolverWrapper};
+use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
-use sui_json_rpc_types::{SuiTransactionEffects, SuiTransactionResponse};
+use sui_json_rpc_types::{
+    DevInspectResults, DryRunTransactionResponse, SuiTransactionEvents, SuiTransactionResponse,
+};
 use sui_open_rpc::Module;
+use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::intent::Intent;
-use sui_types::messages::{ExecuteTransactionRequest, ExecuteTransactionRequestType};
+use sui_types::messages::{
+    ExecuteTransactionRequest, ExecuteTransactionRequestType, TransactionKind,
+};
 use sui_types::messages::{ExecuteTransactionResponse, Transaction};
 use sui_types::signature::GenericSignature;
-pub struct FullNodeTransactionExecutionApi {
-    pub transaction_orchestrator: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
-    pub module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
+
+pub struct TransactionExecutionApi {
+    state: Arc<AuthorityState>,
+    transaction_orchestrator: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
 }
 
-impl FullNodeTransactionExecutionApi {
+impl TransactionExecutionApi {
     pub fn new(
+        state: Arc<AuthorityState>,
         transaction_orchestrator: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
-        module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
     ) -> Self {
         Self {
+            state,
             transaction_orchestrator,
-            module_cache,
         }
     }
 }
 
 #[async_trait]
-impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
+impl WriteApiServer for TransactionExecutionApi {
     async fn execute_transaction(
         &self,
         tx_bytes: Base64,
@@ -94,13 +100,16 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
 
         match response {
             ExecuteTransactionResponse::EffectsCert(cert) => {
-                let (_, effects, is_executed_locally) = *cert;
+                let (effects, events, is_executed_locally) = *cert;
+                let module_cache = self
+                    .state
+                    .load_epoch_store_one_call_per_task()
+                    .module_cache()
+                    .clone();
                 Ok(SuiTransactionResponse {
                     transaction: tx,
-                    effects: SuiTransactionEffects::try_from(
-                        effects.effects,
-                        self.module_cache.as_ref(),
-                    )?,
+                    effects: effects.effects.into(),
+                    events: SuiTransactionEvents::try_from(events, module_cache.as_ref())?,
                     timestamp_ms: None,
                     confirmed_local_execution: Some(is_executed_locally),
                     checkpoint: None,
@@ -108,14 +117,37 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
             }
         }
     }
+
+    async fn dev_inspect_transaction(
+        &self,
+        sender_address: SuiAddress,
+        tx_bytes: Base64,
+        gas_price: Option<u64>,
+        _epoch: Option<EpochId>,
+    ) -> RpcResult<DevInspectResults> {
+        let tx_kind: TransactionKind =
+            bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
+        Ok(self
+            .state
+            .dev_inspect_transaction(sender_address, tx_kind, gas_price)
+            .await?)
+    }
+
+    async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<DryRunTransactionResponse> {
+        let (txn_data, txn_digest) = get_transaction_data_and_digest(tx_bytes)?;
+        Ok(self
+            .state
+            .dry_exec_transaction(txn_data, txn_digest)
+            .await?)
+    }
 }
 
-impl SuiRpcModule for FullNodeTransactionExecutionApi {
+impl SuiRpcModule for TransactionExecutionApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::TransactionExecutionApiOpenRpc::module_doc()
+        crate::api::WriteApiOpenRpc::module_doc()
     }
 }

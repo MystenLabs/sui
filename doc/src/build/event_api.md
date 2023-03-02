@@ -35,7 +35,7 @@ Move event attributes:
 ```json
 {
   "moveEvent": {
-    "packageId": "0x0000000000000000000000000000000000000002",
+    "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
     "transactionModule": "devnet_nft",
     "sender": "0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1",
     "type": "0x2::devnet_nft::MintNFTEvent",
@@ -90,7 +90,7 @@ Transfer event attributes:
 ```json
 {
   "transferObject": {
-    "packageId": "0x0000000000000000000000000000000000000002",
+    "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
     "transactionModule": "native",
     "sender": "0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1",
     "recipient": {
@@ -145,7 +145,7 @@ New object event attributes:
 ```json
 {
   "newObject": {
-    "packageId": "0x0000000000000000000000000000000000000002",
+    "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
     "transactionModule": "devnet_nft",
     "sender": "0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1",
     "recipient": {
@@ -244,7 +244,7 @@ curl --location --request POST '127.0.0.1:9000' \
                 },
                 "event": {
                     "moveEvent": {
-                        "packageId": "0x0000000000000000000000000000000000000002",
+                        "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
                         "transactionModule": "devnet_nft",
                         "sender": "0xfed4906d71b8a583fffd8e95676027b6bb81d7cf",
                         "type": "0x2::devnet_nft::MintNFTEvent",
@@ -266,7 +266,7 @@ curl --location --request POST '127.0.0.1:9000' \
                 },
                 "event": {
                     "newObject": {
-                        "packageId": "0x0000000000000000000000000000000000000002",
+                        "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
                         "transactionModule": "devnet_nft",
                         "sender": "0xfed4906d71b8a583fffd8e95676027b6bb81d7cf",
                         "recipient": {
@@ -285,7 +285,7 @@ curl --location --request POST '127.0.0.1:9000' \
                 },
                 "event": {
                     "moveEvent": {
-                        "packageId": "0x0000000000000000000000000000000000000002",
+                        "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
                         "transactionModule": "devnet_nft",
                         "sender": "0xfed4906d71b8a583fffd8e95676027b6bb81d7cf",
                         "type": "0x2::devnet_nft::MintNFTEvent",
@@ -307,7 +307,7 @@ curl --location --request POST '127.0.0.1:9000' \
                 },
                 "event": {
                     "newObject": {
-                        "packageId": "0x0000000000000000000000000000000000000002",
+                        "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
                         "transactionModule": "devnet_nft",
                         "sender": "0xfed4906d71b8a583fffd8e95676027b6bb81d7cf",
                         "recipient": {
@@ -358,7 +358,7 @@ curl --location --request POST '127.0.0.1:9000' \
                 },
                 "event": {
                     "moveEvent": {
-                        "packageId": "0x0000000000000000000000000000000000000002",
+                        "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
                         "transactionModule": "devnet_nft",
                         "sender": "0xfed4906d71b8a583fffd8e95676027b6bb81d7cf",
                         "type": "0x2::devnet_nft::MintNFTEvent",
@@ -380,7 +380,7 @@ curl --location --request POST '127.0.0.1:9000' \
                 },
                 "event": {
                     "moveEvent": {
-                        "packageId": "0x0000000000000000000000000000000000000002",
+                        "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
                         "transactionModule": "devnet_nft",
                         "sender": "0xfed4906d71b8a583fffd8e95676027b6bb81d7cf",
                         "type": "0x2::devnet_nft::MintNFTEvent",
@@ -433,7 +433,7 @@ curl --location --request POST '127.0.0.1:9000' \
                 },
                 "event": {
                     "newObject": {
-                        "packageId": "0x0000000000000000000000000000000000000002",
+                        "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
                         "transactionModule": "devnet_nft",
                         "sender": "0xfed4906d71b8a583fffd8e95676027b6bb81d7cf",
                         "recipient": {
@@ -452,7 +452,7 @@ curl --location --request POST '127.0.0.1:9000' \
                 },
                 "event": {
                     "moveEvent": {
-                        "packageId": "0x0000000000000000000000000000000000000002",
+                        "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
                         "transactionModule": "devnet_nft",
                         "sender": "0xfed4906d71b8a583fffd8e95676027b6bb81d7cf",
                         "type": "0x2::devnet_nft::MintNFTEvent",

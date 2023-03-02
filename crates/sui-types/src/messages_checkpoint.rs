@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::hash::Digest;
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -10,6 +11,7 @@ use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
+use crate::intent::{Intent, IntentScope};
 use crate::signature::GenericSignature;
 use crate::{
     base_types::AuthorityName,
@@ -61,6 +63,11 @@ pub struct EndOfEpochData {
     /// The protocol version that is in effect during the epoch that starts immediately after this
     /// checkpoint.
     pub next_epoch_protocol_version: ProtocolVersion,
+
+    /// The digest of the union of all checkpoint accumulators,
+    /// representing the state of the system at the end of the epoch.
+    #[schemars(with = "[u8; 32]")]
+    pub root_state_digest: Digest<32>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
@@ -75,6 +82,7 @@ pub struct CheckpointSummary {
     /// The running total gas costs of all transactions included in the current epoch so far
     /// until this checkpoint.
     pub epoch_rolling_gas_cost_summary: GasCostSummary,
+
     /// Timestamp of the checkpoint - number of milliseconds from the Unix epoch
     /// Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent
     /// checkpoints can have same timestamp if they originate from the same underlining consensus commit
@@ -98,7 +106,7 @@ impl CheckpointSummary {
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
         epoch_rolling_gas_cost_summary: GasCostSummary,
-        next_epoch_committee: Option<Committee>,
+        end_of_epoch_data: Option<EndOfEpochData>,
         timestamp_ms: CheckpointTimestamp,
     ) -> CheckpointSummary {
         let content_digest = transactions.digest();
@@ -110,10 +118,7 @@ impl CheckpointSummary {
             content_digest,
             previous_digest,
             epoch_rolling_gas_cost_summary,
-            end_of_epoch_data: next_epoch_committee.map(|c| EndOfEpochData {
-                next_epoch_committee: c.voting_rights,
-                next_epoch_protocol_version: c.protocol_version,
-            }),
+            end_of_epoch_data,
             timestamp_ms,
             version_specific_data: Vec::new(),
         }
@@ -206,7 +211,7 @@ impl SignedCheckpointSummary {
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
         epoch_rolling_gas_cost_summary: GasCostSummary,
-        next_epoch_committee: Option<Committee>,
+        end_of_epoch_data: Option<EndOfEpochData>,
         timestamp_ms: CheckpointTimestamp,
     ) -> SignedCheckpointSummary {
         let checkpoint = CheckpointSummary::new(
@@ -216,7 +221,7 @@ impl SignedCheckpointSummary {
             transactions,
             previous_digest,
             epoch_rolling_gas_cost_summary,
-            next_epoch_committee,
+            end_of_epoch_data,
             timestamp_ms,
         );
         SignedCheckpointSummary::new_from_summary(checkpoint, authority, signer)
@@ -228,7 +233,13 @@ impl SignedCheckpointSummary {
         signer: &dyn Signer<AuthoritySignature>,
     ) -> SignedCheckpointSummary {
         let epoch = checkpoint.epoch;
-        let auth_signature = AuthoritySignInfo::new(epoch, &checkpoint, authority, signer);
+        let auth_signature = AuthoritySignInfo::new(
+            epoch,
+            &checkpoint,
+            Intent::default().with_scope(IntentScope::CheckpointSummary),
+            authority,
+            signer,
+        );
         SignedCheckpointSummary {
             summary: checkpoint,
             auth_signature,
@@ -250,8 +261,11 @@ impl SignedCheckpointSummary {
             self.summary.epoch == committee.epoch,
             SuiError::from("Epoch in the summary doesn't match with the signature")
         );
-
-        self.auth_signature.verify(&self.summary, committee)?;
+        self.auth_signature.verify_secure(
+            &self.summary,
+            Intent::default().with_scope(IntentScope::CheckpointSummary),
+            committee,
+        )?;
 
         if let Some(contents) = contents {
             let content_digest = contents.digest();
@@ -325,7 +339,11 @@ impl CertifiedCheckpointSummary {
             SuiError::from("Epoch in the summary doesn't match with the committee")
         );
         let mut obligation = VerificationObligation::default();
-        let idx = obligation.add_message(&self.summary, self.auth_signature.epoch);
+        let idx = obligation.add_message(
+            &self.summary,
+            self.auth_signature.epoch,
+            Intent::default().with_scope(IntentScope::CheckpointSummary),
+        );
         self.auth_signature
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
 
@@ -399,12 +417,9 @@ pub struct CheckpointSignatureMessage {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct CheckpointContents {
     transactions: Vec<ExecutionDigests>,
-    /// This field 'pins' user signatures for the checkpoint:
-    ///
-    /// * For normal checkpoint this field will contain same number of elements as transactions.
-    /// * Genesis checkpoint has transactions but this field is empty.
-    /// * Last checkpoint in the epoch will have (last)extra system transaction
-    /// in the transactions list not covered in the signatures list
+    /// This field 'pins' user signatures for the checkpoint
+    /// The length of this vector is same as length of transactions vector
+    /// System transactions has empty signatures
     user_signatures: Vec<Vec<GenericSignature>>,
 }
 
@@ -419,22 +434,26 @@ impl CheckpointContents {
     where
         T: IntoIterator<Item = ExecutionDigests>,
     {
+        let transactions: Vec<_> = contents.into_iter().collect();
+        let user_signatures = transactions.iter().map(|_| vec![]).collect();
         Self {
-            transactions: contents.into_iter().collect(),
-            user_signatures: vec![],
+            transactions,
+            user_signatures,
         }
     }
 
     pub fn new_with_causally_ordered_transactions_and_signatures<T>(
         contents: T,
-        signatures: Vec<Vec<GenericSignature>>,
+        user_signatures: Vec<Vec<GenericSignature>>,
     ) -> Self
     where
         T: IntoIterator<Item = ExecutionDigests>,
     {
+        let transactions: Vec<_> = contents.into_iter().collect();
+        assert_eq!(transactions.len(), user_signatures.len());
         Self {
-            transactions: contents.into_iter().collect(),
-            user_signatures: signatures,
+            transactions,
+            user_signatures,
         }
     }
 

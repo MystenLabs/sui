@@ -31,8 +31,6 @@ impl ProtocolVersion {
     const MAX_ALLOWED: Self = Self(MAX_PROTOCOL_VERSION + 1);
 
     pub fn new(v: u64) -> Self {
-        assert!(v >= Self::MIN.0, "{:?}", v);
-        assert!(v <= Self::MAX_ALLOWED.0, "{:?}", v);
         Self(v)
     }
 
@@ -64,7 +62,7 @@ impl std::ops::Add<u64> for ProtocolVersion {
 /// Models the set of protocol versions supported by a validator.
 /// The `sui-node` binary will always use the SYSTEM_DEFAULT constant, but for testing we need
 /// to be able to inject arbitrary versions into SuiNode.
-#[derive(Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash)]
 pub struct SupportedProtocolVersions {
     min: ProtocolVersion,
     max: ProtocolVersion,
@@ -229,10 +227,6 @@ pub struct ProtocolConfig {
     /// In basis point.
     reward_slashing_rate: Option<u64>,
 
-    /// The stake subsidy we mint each epoch is 0.01% of the total stake.
-    /// In basis point.
-    stake_subsidy_rate: Option<u64>,
-
     /// Unit gas price, Mist per internal gas unit.
     storage_gas_price: Option<u64>,
 
@@ -241,6 +235,12 @@ pub struct ProtocolConfig {
     /// Max number of transactions per checkpoint.
     /// Note that this is constant and not a config as validators must have this set to the same value, otherwise they *will* fork
     max_transactions_per_checkpoint: Option<usize>,
+
+    /// A protocol upgrade always requires 2f+1 stake to agree. We support a buffer of additional
+    /// stake (as a fraction of f, expressed in basis points) that is required before an upgrade
+    /// can happen automatically. 10000bps would indicate that complete unanimity is required (all
+    /// 3f+1 must vote), while 0bps would indicate that 2f+1 is sufficient.
+    buffer_stake_for_protocol_upgrade_bps: Option<u64>,
 }
 
 const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protocol version";
@@ -353,14 +353,15 @@ impl ProtocolConfig {
     pub fn reward_slashing_rate(&self) -> u64 {
         self.reward_slashing_rate.expect(CONSTANT_ERR_MSG)
     }
-    pub fn stake_subsidy_rate(&self) -> u64 {
-        self.stake_subsidy_rate.expect(CONSTANT_ERR_MSG)
-    }
     pub fn storage_gas_price(&self) -> u64 {
         self.storage_gas_price.expect(CONSTANT_ERR_MSG)
     }
     pub fn max_transactions_per_checkpoint(&self) -> usize {
         self.max_transactions_per_checkpoint
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn buffer_stake_for_protocol_upgrade_bps(&self) -> u64 {
+        self.buffer_stake_for_protocol_upgrade_bps
             .expect(CONSTANT_ERR_MSG)
     }
 
@@ -489,9 +490,11 @@ impl ProtocolConfig {
                 storage_rebate_rate: Some(9900),
                 storage_fund_reinvest_rate: Some(500),
                 reward_slashing_rate: Some(5000),
-                stake_subsidy_rate: Some(1),
                 storage_gas_price: Some(1),
                 max_transactions_per_checkpoint: Some(1000),
+                // require 2f+1 + 0.75 * f stake for automatic protocol upgrades.
+                // TODO: tune based on experience in testnet
+                buffer_stake_for_protocol_upgrade_bps: Some(7500),
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
@@ -535,6 +538,9 @@ impl ProtocolConfig {
 impl ProtocolConfig {
     pub fn set_max_function_definitions_for_testing(&mut self, m: usize) {
         self.max_function_definitions = Some(m)
+    }
+    pub fn set_buffer_stake_for_protocol_upgrade_bps_for_testing(&mut self, b: u64) {
+        self.buffer_stake_for_protocol_upgrade_bps = Some(b)
     }
 }
 

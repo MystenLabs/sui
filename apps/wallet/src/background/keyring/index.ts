@@ -162,7 +162,8 @@ export class Keyring {
         keypair: ExportedKeypair,
         password: string
     ) {
-        if (this.isLocked) {
+        const currentAccounts = this.getAccounts();
+        if (this.isLocked || !currentAccounts) {
             // this function is expected to be called from UI when unlocked
             // so this shouldn't happen
             throw new Error('Wallet is locked');
@@ -173,8 +174,17 @@ export class Keyring {
             // update the vault and encrypt it to persist the new keypair in storage
             throw new Error('Wrong password');
         }
-        const added = await VaultStorage.importKeypair(keypair, password);
+        const added = await VaultStorage.importKeypair(
+            keypair,
+            password,
+            currentAccounts
+        );
         if (added) {
+            const importedAccount = new Account({
+                type: 'imported',
+                keypair: added,
+            });
+            this.#accountsMap.set(importedAccount.address, importedAccount);
             this.notifyAccountsChanged();
         }
         return added;
@@ -274,6 +284,52 @@ export class Keyring {
                     throw new Error('Failed to derive next account');
                 }
                 uiConnection.send(createMessage({ type: 'done' }, id));
+            } else if (
+                isKeyringPayload(payload, 'verifyPassword') &&
+                payload.args
+            ) {
+                if (
+                    !(await VaultStorage.verifyPassword(payload.args.password))
+                ) {
+                    throw new Error('Wrong password');
+                }
+                uiConnection.send(createMessage({ type: 'done' }, id));
+            } else if (
+                isKeyringPayload(payload, 'exportAccount') &&
+                payload.args
+            ) {
+                const keyPair = await this.exportAccountKeypair(
+                    payload.args.accountAddress,
+                    payload.args.password
+                );
+
+                if (!keyPair) {
+                    throw new Error(
+                        `Account ${payload.args.accountAddress} not found`
+                    );
+                }
+                uiConnection.send(
+                    createMessage<KeyringPayload<'exportAccount'>>(
+                        {
+                            type: 'keyring',
+                            method: 'exportAccount',
+                            return: { keyPair },
+                        },
+                        id
+                    )
+                );
+            } else if (
+                isKeyringPayload(payload, 'importPrivateKey') &&
+                payload.args
+            ) {
+                const imported = await this.importAccountKeypair(
+                    payload.args.keyPair,
+                    payload.args.password
+                );
+                if (!imported) {
+                    throw new Error('Duplicate account not imported');
+                }
+                uiConnection.send(createMessage({ type: 'done' }, id));
             }
         } catch (e) {
             uiConnection.send(
@@ -338,7 +394,11 @@ export class Keyring {
                 type: 'imported',
                 keypair: anImportedKey,
             });
-            this.#accountsMap.set(account.address, account);
+            // there is a case where we can import a private key of an account that can be derived from the mnemonic but not yet derived
+            // if later we derive it skip overriding the derived account with the imported one (convert the imported as derived in a way)
+            if (!this.#accountsMap.has(account.address)) {
+                this.#accountsMap.set(account.address, account);
+            }
         });
         mnemonic = null;
         this.#locked = false;

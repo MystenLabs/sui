@@ -335,7 +335,9 @@ impl ConsensusAdapter {
         }
 
         let processed_waiter = epoch_store
-            .consensus_message_processed_notify(transaction.key())
+            .consensus_message_processed_notify(SequencedConsensusTransactionKey::External(
+                transaction.key(),
+            ))
             .boxed();
         let (await_submit, position) =
             Self::await_submit_delay(epoch_store.committee(), &self.authority, &transaction);
@@ -570,6 +572,7 @@ impl<'a> Drop for InflightDropGuard<'a> {
 }
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::consensus_handler::SequencedConsensusTransactionKey;
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
 
 #[async_trait::async_trait]
