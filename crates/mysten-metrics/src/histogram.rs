@@ -7,7 +7,6 @@ use prometheus::{
     register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry, IntCounterVec,
     IntGaugeVec, Registry,
 };
-use tracing::log::debug;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -18,6 +17,7 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::time::Instant;
 use tracing::error;
+use tracing::log::debug;
 
 type Point = u64;
 type HistogramMessage = (HistogramLabels, Point);

@@ -140,19 +140,15 @@ impl WriteStore for RocksDbStore {
         }
 
         // First write the transactions and effects as a bundle
-        let transaction_inserts = bundle
-            .iter()
-            .map(|(_, _, tx_effs)| {
-                tx_effs
-                    .iter()
-                    .map(|(tx, _effs)| (tx.digest(), tx.serializable_ref()))
-            })
-            .flatten();
+        let transaction_inserts = bundle.iter().flat_map(|(_, _, tx_effs)| {
+            tx_effs
+                .iter()
+                .map(|(tx, _effs)| (tx.digest(), tx.serializable_ref()))
+        });
 
         let effects_inserts = bundle
             .iter()
-            .map(|(_, _, tx_effs)| tx_effs.iter().map(|(_tx, effs)| (effs.digest(), effs)))
-            .flatten();
+            .flat_map(|(_, _, tx_effs)| tx_effs.iter().map(|(_tx, effs)| (effs.digest(), effs)));
 
         // Commit the transaction and effects
         let batch = self

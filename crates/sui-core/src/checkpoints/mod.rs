@@ -19,6 +19,7 @@ use futures::FutureExt;
 use mysten_metrics::{monitored_scope, spawn_monitored_task, MonitoredFutureExt};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use sui_types::storage::CheckpointBundle;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority_aggregator::TransactionCertifier;
@@ -32,7 +33,7 @@ use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
-use sui_types::messages::{TransactionEffects, VerifiedCertificate};
+use sui_types::messages::TransactionEffects;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
@@ -136,11 +137,7 @@ impl CheckpointStore {
 
     pub fn insert_full_verified_bundle(
         &self,
-        bundle: &Vec<(
-            VerifiedCheckpoint,
-            CheckpointContents,
-            Vec<(VerifiedCertificate, TransactionEffects)>,
-        )>,
+        bundle: &[CheckpointBundle],
     ) -> Result<(), TypedStoreError> {
         // Define a bunch of iterators to do the bulk db inserts
         // Let's try to not copy data again into new vectors.
