@@ -123,7 +123,7 @@ it('can serialize transaction data with a programmable transaction', () => {
               typeArguments: [`${sui}::capy::Capy`],
               arguments: [
                 // result of the first command
-                { kind: 'Result', index: 1 },
+                { kind: 'Result', index: 0 },
                 // second argument - vector of names
                 { kind: 'Input', index: 1 },
                 // third argument - vector of values
@@ -136,14 +136,14 @@ it('can serialize transaction data with a programmable transaction', () => {
               typeArguments: [`${sui}::capy::Capy`],
               arguments: [
                 // result of the first command again
-                { kind: 'Result', index: 1 },
+                { kind: 'Result', index: 0 },
               ],
             },
             {
               kind: 'TransferObjects',
               objects: [
                 // the display object
-                { kind: 'Result', index: 1 },
+                { kind: 'Result', index: 0 },
               ],
               // address is also an input
               address: { kind: 'Input', index: 3 },
