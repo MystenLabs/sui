@@ -177,7 +177,13 @@ export function SendTokenForm({
     const initAmountBig = parseAmount(initialAmount, coinDecimals);
 
     return (
-        <Loading loading={queryResult.isLoading || gasQueryResult.isLoading || coinDecimalsQueryResult.isLoading}>
+        <Loading
+            loading={
+                queryResult.isLoading ||
+                gasQueryResult.isLoading ||
+                coinDecimalsQueryResult.isLoading
+            }
+        >
             <Formik
                 initialValues={{
                     amount: initialAmount,
@@ -200,8 +206,8 @@ export function SendTokenForm({
                 }: FormValues) => {
                     if (!gasInputBudgetEst || !coins || !suiCoins) return;
                     const coinsIDs = coins
-                        .reverse()
-                        .map(({ fields }) => fields.id.id);
+                        .sort((a, b) => b.fields.balance - a.fields.balance)
+                        .map((coin) => CoinAPI.getID(coin));
 
                     const data = {
                         to,
