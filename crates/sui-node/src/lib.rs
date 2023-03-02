@@ -630,9 +630,7 @@ impl SuiNode {
         // will read the values to make decisions about which validator submits a transaction to consensus
         let scores_per_authority = Arc::new(DashMap::new());
 
-        consensus_adapter
-            .reputation_score_status
-            .update_mapping_for_epoch(scores_per_authority.clone());
+        consensus_adapter.swap_low_scoring_authorities(scores_per_authority.clone());
 
         let consensus_handler = Arc::new(ConsensusHandler::new(
             epoch_store.clone(),
@@ -767,7 +765,7 @@ impl SuiNode {
         );
 
         let reputation_score_status = ReputationScoreStatus {
-            scores_per_authority: ArcSwap::from_pointee(Arc::new(DashMap::new())),
+            low_scoring_authorities: ArcSwap::from_pointee(Arc::new(DashMap::new())),
         };
 
         let ca_metrics = ConsensusAdapterMetrics::new(prometheus_registry);
@@ -777,7 +775,6 @@ impl SuiNode {
             Box::new(consensus_client),
             authority,
             Box::new(connection_monitor_status),
-            Box::new(reputation_score_status),
             ca_metrics,
         )
     }

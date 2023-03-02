@@ -88,7 +88,6 @@ impl AuthorityServer {
             consensus_client,
             state.name,
             Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
-            Box::new(ReputationScoreStatusForTests {}),
             ConsensusAdapterMetrics::new_test(),
         );
 
