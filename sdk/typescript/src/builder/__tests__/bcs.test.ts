@@ -60,24 +60,23 @@ it('can serialize enum with "kind" property', () => {
   expect(result).toEqual(command);
 });
 
-function ref(): SuiObjectRef {
+function ref(): { objectId: string, version: bigint, digest: string } {
   return {
-    objectId: (Math.random() * 100000).toFixed(0).padEnd(40, '0'),
+    objectId: (Math.random() * 100000).toFixed(0).padEnd(64, '0'),
+    version: BigInt((Math.random() * 10000).toFixed(0)),
     digest: toB58(new Uint8Array([0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9])),
-    version: +(Math.random() * 10000).toFixed(0),
   };
 }
 
 it('can serialize transaction data with a programmable transaction', () => {
   let sui = normalizeSuiAddress('0x2').replace('0x', '');
-
   let txData = {
     sender: normalizeSuiAddress('0xBAD').replace('0x', ''),
-    expiration: { None: null },
+    expiration: { None: true },
     gasData: {
       payment: ref(),
       owner: sui,
-      price: 1,
+      price: 1n,
       budget: 1000000n,
     },
     kind: {
@@ -87,26 +86,26 @@ it('can serialize transaction data with a programmable transaction', () => {
             // first argument is the publisher object
             { Object: { ImmOrOwned: ref() } },
             // second argument is a vector of names
-            // {
-            //   Pure: builder
-            //     .ser('vector<string>', ['name', 'description', 'img_url'])
-            //     .toBytes(),
-            // },
-            // // third argument is a vector of values
-            // {
-            //   Pure: builder
-            //     .ser('vector<string>', [
-            //         'Capy {name}',
-            //         'A cute little creature',
-            //         'https://api.capy.art/{id}/svg',
-            //       ],
-            //     )
-            //     .toBytes(),
-            // },
-            // // 4th and last argument is the account address to send display to
-            // {
-            //     Pure: builder.ser('address', ref().objectId).toBytes()
-            // }
+            {
+              Pure: Array.from(builder
+                .ser('vector<string>', ['name', 'description', 'img_url'])
+                .toBytes()),
+            },
+            // third argument is a vector of values
+            {
+              Pure: Array.from(builder
+                .ser('vector<string>', [
+                    'Capy {name}',
+                    'A cute little creature',
+                    'https://api.capy.art/{id}/svg',
+                  ],
+                )
+                .toBytes()),
+            },
+            // 4th and last argument is the account address to send display to
+            {
+                Pure: Array.from(builder.ser('address', ref().objectId).toBytes())
+            }
           ],
           commands: [
             {
@@ -155,39 +154,8 @@ it('can serialize transaction data with a programmable transaction', () => {
     },
   };
 
-  console.log(builder.types.get('ObjectDigest'));
-
-  const value = txData.kind.Single.ProgrammableTransaction.inputs[0];
-  const type = [CALL_ARG] as TypeName; // 'TransactionData';
-
-  const bytes = builder.ser(type, value).toBytes();
-  console.log(value, toHEX(bytes));
-
-  // 01007627900000000000000000000000000000000000b80e000000000000080000000000000000
-  // length is 78 / 2 = 39 bytes
-
-  // 1st byte - order byte of the CallArg enum - 1 (1)
-  // 2nd byte - order byte of the ObjectArg enum - 0 (1 + 1)
-  // 20 bytes of the address (2 + 20)
-  // version 8 bytes (22 + 8)
-  // 8 bytes of the version + 1 byte length (30 + 9)
-  // total 39 bytes -> should be correct.
-
-  console.log('len', bytes.length);
-
-  const reader = new BcsReader(bytes);
-  expect(reader.read8()).toEqual(1);
-  expect(reader.read8()).toEqual(0);
-  expect(reader.readBytes(20)).toEqual(
-    fromHEX(value.Object.ImmOrOwned.objectId),
-  );
-
-  expect(reader.read64()).toEqual(BigInt(value.Object.ImmOrOwned.version));
-  reader.shift(9);
-  //   expect(reader.read64()).toEqual(BigInt(value.Object.ImmOrOwned.version));
-
-  //   console.log('origin', JSON.stringify(value, null, 2));
-  //   console.log('result', JSON.stringify(result, null, 2));
+  const type = 'TransactionData';
+  const bytes = builder.ser(type, txData).toBytes();
   const result = builder.de(type, bytes);
-  expect(result).toEqual(value);
+  expect(result).toEqual(txData);
 });

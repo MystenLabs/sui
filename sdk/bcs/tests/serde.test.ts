@@ -158,6 +158,27 @@ describe("BCS: Serde", () => {
       );
     }
   });
+
+  it("should serde SuiObjectRef", () => {
+    const bcs = new BCS(getSuiMoveConfig());
+    bcs.registerStructType('SuiObjectRef', {
+      objectId: 'address',
+      version: 'u64',
+      digest: 'ObjectDigest',
+    });
+
+    // console.log('base58', toB64('1Bhh3pU9gLXZhoVxkr5wyg9sX6'));
+
+    bcs.registerAlias('ObjectDigest', BCS.STRING);
+
+    const value = {
+      objectId: '5443700000000000000000000000000000000000000000000000000000000000',
+      version: 9180n,
+      digest: 'hahahahahaha'
+    };
+
+    expect(serde(bcs, 'SuiObjectRef', value)).toEqual(value);
+  });
 });
 
 function serde(bcs: BCS, type, data) {
