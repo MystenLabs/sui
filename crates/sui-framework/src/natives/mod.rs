@@ -8,6 +8,7 @@ mod event;
 mod object;
 pub mod object_runtime;
 mod test_scenario;
+mod test_utils;
 mod transfer;
 mod tx_context;
 mod types;
@@ -230,6 +231,7 @@ pub fn all_natives(
             "validate_metadata_bcs",
             make_native!(validator::validate_metadata_bcs),
         ),
+        ("test_utils", "destroy", make_native!(test_utils::destroy)),
     ];
     sui_natives
         .iter()

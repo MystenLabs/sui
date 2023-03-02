@@ -16,6 +16,7 @@ module sui::validator_tests {
     use sui::balance;
     use sui::staking_pool::{Self, StakedSui};
     use std::vector;
+    use sui::test_utils;
 
 
     const VALID_PUBKEY: vector<u8> = vector[153, 242, 94, 246, 31, 128, 50, 185, 20, 99, 100, 96, 152, 44, 92, 198, 241, 52, 239, 29, 218, 231, 102, 87, 242, 203, 254, 193, 235, 252, 141, 9, 115, 116, 8, 13, 246, 252, 240, 220, 184, 188, 75, 13, 142, 10, 245, 216, 14, 187, 255, 43, 76, 89, 159, 84, 244, 45, 99, 18, 223, 195, 20, 39, 96, 120, 193, 204, 52, 126, 187, 190, 197, 25, 139, 226, 88, 81, 63, 56, 107, 147, 13, 2, 194, 116, 154, 128, 62, 35, 48, 149, 94, 189, 26, 16];
@@ -72,7 +73,7 @@ module sui::validator_tests {
             assert!(validator::total_stake_amount(&validator) == 10, 0);
             assert!(validator::sui_address(&validator) == sender, 0);
 
-            validator::destroy(validator, ctx);
+            test_utils::destroy(validator);
         };
 
         // Check that after destroy, the original stake still exists.
@@ -133,7 +134,7 @@ module sui::validator_tests {
             test_scenario::return_to_sender(scenario, withdraw);
         };
 
-        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_utils::destroy(validator);
         test_scenario::end(scenario_val);
     }
 
@@ -391,7 +392,7 @@ module sui::validator_tests {
             );
         };
 
-        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_utils::destroy(validator);
         test_scenario::end(scenario_val);
     }
 
@@ -416,7 +417,7 @@ module sui::validator_tests {
             );
         };
 
-        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_utils::destroy(validator);
         test_scenario::end(scenario_val);
     }
 
@@ -439,7 +440,7 @@ module sui::validator_tests {
             );
         };
 
-        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_utils::destroy(validator);
         test_scenario::end(scenario_val);
     }
 
@@ -463,7 +464,7 @@ module sui::validator_tests {
             );
         };
 
-        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_utils::destroy(validator);
         test_scenario::end(scenario_val);
     }
 
@@ -486,7 +487,7 @@ module sui::validator_tests {
             );
         };
 
-        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_utils::destroy(validator);
         test_scenario::end(scenario_val);
     }
 
@@ -509,7 +510,7 @@ module sui::validator_tests {
             );
         };
 
-        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_utils::destroy(validator);
         test_scenario::end(scenario_val);
     }
 
@@ -532,7 +533,7 @@ module sui::validator_tests {
             );
         };
 
-        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_utils::destroy(validator);
         test_scenario::end(scenario_val);
     }
 
@@ -555,7 +556,7 @@ module sui::validator_tests {
             );
         };
 
-        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_utils::destroy(validator);
         test_scenario::end(scenario_val);
     }
 }

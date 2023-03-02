@@ -4,7 +4,6 @@
 #[test_only]
 module sui::voting_power_tests {
     use sui::governance_test_utils as gtu;
-    use sui::validator_set;
     use sui::voting_power;
     use sui::test_scenario;
     use sui::test_utils;
@@ -20,7 +19,7 @@ module sui::voting_power_tests {
         let validators = gtu::create_validators_with_stakes(stakes, ctx);
         voting_power::set_voting_power(&mut validators);
         test_utils::assert_eq(get_voting_power(&validators), voting_power);
-        validator_set::destroy_validators_for_testing(validators);
+        test_utils::destroy(validators);
     }
 
     #[test]
