@@ -127,6 +127,20 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             Arc::new(consensus_output.sub_dag.leader.clone()),
         ));
 
+        if consensus_output.sub_dag.reputation_score.final_of_schedule {
+            // save the scores for use in the consensus adapter
+            for (authority, score) in consensus_output
+                .sub_dag
+                .reputation_score
+                .scores_per_authority
+                .clone()
+                .iter()
+            {
+                self.scores_per_authority
+                    .insert(AuthorityName::from(authority), *score);
+            }
+        }
+
         for (cert, batches) in consensus_output.batches {
             let author = cert.header.author.clone();
             let output_cert = Arc::new(cert);
