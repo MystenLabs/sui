@@ -49,7 +49,7 @@ pub struct BatchMaker {
     /// Channel to receive transactions from the network.
     rx_batch_maker: Receiver<(Transaction, TxResponse)>,
     /// Output channel to deliver sealed batches to the `QuorumWaiter`.
-    tx_quorum_waiter: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
+    tx_quorum_waiter: Sender<(Batch, tokio::sync::oneshot::Sender<()>)>,
     /// Metrics handler
     node_metrics: Arc<WorkerMetrics>,
     /// The timestamp of the batch creation.
@@ -69,7 +69,7 @@ impl BatchMaker {
         max_batch_delay: Duration,
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_batch_maker: Receiver<(Transaction, TxResponse)>,
-        tx_quorum_waiter: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
+        tx_quorum_waiter: Sender<(Batch, tokio::sync::oneshot::Sender<()>)>,
         node_metrics: Arc<WorkerMetrics>,
         store: Store<BatchDigest, Batch>,
         tx_our_batch: Sender<(WorkerOurBatchMessage, PrimaryResponse)>,
@@ -233,7 +233,7 @@ impl BatchMaker {
         let (notify_done, done_sending) = tokio::sync::oneshot::channel();
         if self
             .tx_quorum_waiter
-            .send((batch.clone(), Some(notify_done)))
+            .send((batch.clone(), notify_done))
             .await
             .is_err()
         {

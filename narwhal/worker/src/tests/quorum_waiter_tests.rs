@@ -52,10 +52,7 @@ async fn wait_for_quorum() {
 
     // Forward the batch along with the handlers to the `QuorumWaiter`.
     let (s, r) = tokio::sync::oneshot::channel();
-    tx_quorum_waiter
-        .send((batch.clone(), Some(s)))
-        .await
-        .unwrap();
+    tx_quorum_waiter.send((batch.clone(), s)).await.unwrap();
 
     // Wait for the `QuorumWaiter` to gather enough acknowledgements and output the batch.
     r.await.unwrap();
@@ -112,17 +109,11 @@ async fn pipeline_for_quorum() {
 
     // Forward the batch along with the handlers to the `QuorumWaiter`.
     let (s0, r0) = tokio::sync::oneshot::channel();
-    tx_quorum_waiter
-        .send((batch.clone(), Some(s0)))
-        .await
-        .unwrap();
+    tx_quorum_waiter.send((batch.clone(), s0)).await.unwrap();
 
     // Forward the batch along with the handlers to the `QuorumWaiter`.
     let (s1, r1) = tokio::sync::oneshot::channel();
-    tx_quorum_waiter
-        .send((batch.clone(), Some(s1)))
-        .await
-        .unwrap();
+    tx_quorum_waiter.send((batch.clone(), s1)).await.unwrap();
 
     // Wait for the `QuorumWaiter` to gather enough acknowledgements and output the batch.
     r0.await.unwrap();
