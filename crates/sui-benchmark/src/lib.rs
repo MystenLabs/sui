@@ -10,6 +10,7 @@ use roaring::RoaringBitmap;
 use std::{collections::BTreeMap, sync::Arc};
 use sui_config::genesis::Genesis;
 use sui_config::NetworkConfig;
+use sui_core::signature_verifier::IgnoreSignatureVerifier;
 use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::{make_authority_clients, AuthorityAPI, NetworkAuthorityClient},
@@ -135,8 +136,9 @@ pub trait ValidatorProxy {
 
 // TODO: Eventually remove this proxy because we shouldn't rely on validators to read objects.
 pub struct LocalValidatorAggregatorProxy {
-    _qd_handler: QuorumDriverHandler<NetworkAuthorityClient>,
-    qd: Arc<QuorumDriver<NetworkAuthorityClient>>,
+    _qd_handler: QuorumDriverHandler<NetworkAuthorityClient, IgnoreSignatureVerifier>,
+    // Stress client does not verify individual validator signatures since this is very expensive
+    qd: Arc<QuorumDriver<NetworkAuthorityClient, IgnoreSignatureVerifier>>,
     committee: Committee,
     clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
 }
@@ -199,7 +201,7 @@ impl LocalValidatorAggregatorProxy {
     }
 
     async fn new_impl(
-        aggregator: AuthorityAggregator<NetworkAuthorityClient>,
+        aggregator: AuthorityAggregator<NetworkAuthorityClient, IgnoreSignatureVerifier>,
         registry: &Registry,
         reconfig_fullnode_rpc_url: Option<&str>,
         clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
