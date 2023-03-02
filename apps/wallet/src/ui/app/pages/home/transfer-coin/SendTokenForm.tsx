@@ -173,7 +173,6 @@ export function SendTokenForm({
         CoinFormat.FULL
     );
 
-
     // remove the comma from the token balance
     const maxToken = tokenBalance.replace(/,/g, '');
 
@@ -201,14 +200,12 @@ export function SendTokenForm({
                     const coinsIDs = coins
                         .sort((a, b) => b.fields.balance - a.fields.balance)
                         .map(({ fields }) => fields.coinObjectId);
-                    const suiCoinsIds = suiCoins.map(
-                        ({ fields }) => fields.id.id
-                    );
+
                     const data = {
                         to,
                         amount,
                         isPayAllSui,
-                        coinIds: isPayAllSui ? suiCoinsIds : coinsIDs,
+                        coinIds: coinsIDs,
                         gasBudget: gasInputBudgetEst,
                     };
                     onSubmit(data);
