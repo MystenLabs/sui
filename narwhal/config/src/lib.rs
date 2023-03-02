@@ -9,7 +9,6 @@
 )]
 #![allow(clippy::mutable_key_type)]
 
-use arc_swap::ArcSwap;
 use crypto::{NetworkPublicKey, PublicKey};
 use fastcrypto::traits::EncodeDecodeBase64;
 use multiaddr::Multiaddr;
@@ -20,7 +19,6 @@ use std::{
     fs::{self, OpenOptions},
     io::{BufWriter, Write as _},
     num::NonZeroU32,
-    sync::Arc,
     time::Duration,
 };
 use thiserror::Error;
