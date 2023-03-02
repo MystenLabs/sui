@@ -19,6 +19,8 @@
 -  [Function `process_pending_delegation_withdraw`](#0x2_staking_pool_process_pending_delegation_withdraw)
 -  [Function `process_pending_delegation`](#0x2_staking_pool_process_pending_delegation)
 -  [Function `withdraw_rewards_and_burn_pool_tokens`](#0x2_staking_pool_withdraw_rewards_and_burn_pool_tokens)
+-  [Function `activate_staking_pool`](#0x2_staking_pool_activate_staking_pool)
+-  [Function `request_withdraw_delegation_preactive`](#0x2_staking_pool_request_withdraw_delegation_preactive)
 -  [Function `deactivate_staking_pool`](#0x2_staking_pool_deactivate_staking_pool)
 -  [Function `sui_balance`](#0x2_staking_pool_sui_balance)
 -  [Function `pool_id`](#0x2_staking_pool_pool_id)
@@ -32,8 +34,11 @@
 -  [Function `pool_token_exchange_rate_at_epoch`](#0x2_staking_pool_pool_token_exchange_rate_at_epoch)
 -  [Function `pending_stake_amount`](#0x2_staking_pool_pending_stake_amount)
 -  [Function `pending_stake_withdraw_amount`](#0x2_staking_pool_pending_stake_withdraw_amount)
+-  [Function `is_preactive_at_epoch`](#0x2_staking_pool_is_preactive_at_epoch)
+-  [Function `is_preactive`](#0x2_staking_pool_is_preactive)
 -  [Function `get_sui_amount`](#0x2_staking_pool_get_sui_amount)
 -  [Function `get_token_amount`](#0x2_staking_pool_get_token_amount)
+-  [Function `initial_exchange_rate`](#0x2_staking_pool_initial_exchange_rate)
 -  [Function `check_balance_invariants`](#0x2_staking_pool_check_balance_invariants)
 
 
@@ -76,10 +81,11 @@ A staking pool embedded in each validator struct in the system state object.
 
 </dd>
 <dt>
-<code>starting_epoch: u64</code>
+<code>activation_epoch: <a href="_Option">option::Option</a>&lt;u64&gt;</code>
 </dt>
 <dd>
- The epoch at which this pool started operating. Should be the epoch at which the validator became active.
+ The epoch at which this pool became active.
+ The value is <code>None</code> if the pool is pre-active and <code>Some(&lt;epoch_number&gt;)</code> if active or inactive.
 </dd>
 <dt>
 <code>deactivation_epoch: <a href="_Option">option::Option</a>&lt;u64&gt;</code>
@@ -309,6 +315,24 @@ A self-custodial object holding the staked SUI tokens.
 
 
 
+<a name="0x2_staking_pool_EPoolAlreadyActive"></a>
+
+
+
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EPoolAlreadyActive">EPoolAlreadyActive</a>: u64 = 14;
+</code></pre>
+
+
+
+<a name="0x2_staking_pool_EPoolNotPreactive"></a>
+
+
+
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EPoolNotPreactive">EPoolNotPreactive</a>: u64 = 15;
+</code></pre>
+
+
+
 <a name="0x2_staking_pool_ETokenBalancesDoNotMatchExchangeRate"></a>
 
 
@@ -332,6 +356,15 @@ A self-custodial object holding the staked SUI tokens.
 
 
 <pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EWithdrawAmountCannotBeZero">EWithdrawAmountCannotBeZero</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="0x2_staking_pool_EWithdrawalInSameEpoch"></a>
+
+
+
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EWithdrawalInSameEpoch">EWithdrawalInSameEpoch</a>: u64 = 13;
 </code></pre>
 
 
@@ -361,7 +394,7 @@ A self-custodial object holding the staked SUI tokens.
 Create a new, empty staking pool.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_new">new</a>(starting_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_new">new</a>(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>
 </code></pre>
 
 
@@ -370,16 +403,11 @@ Create a new, empty staking pool.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_new">new</a>(starting_epoch: u64, ctx: &<b>mut</b> TxContext) : <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a> {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_new">new</a>(ctx: &<b>mut</b> TxContext) : <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a> {
     <b>let</b> exchange_rates = <a href="table.md#0x2_table_new">table::new</a>(ctx);
-    <a href="table.md#0x2_table_add">table::add</a>(
-        &<b>mut</b> exchange_rates,
-        starting_epoch,
-        <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">PoolTokenExchangeRate</a> { sui_amount: 0, pool_token_amount: 0 }
-    );
     <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a> {
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
-        starting_epoch,
+        activation_epoch: <a href="_none">option::none</a>(),
         deactivation_epoch: <a href="_none">option::none</a>(),
         sui_balance: 0,
         rewards_pool: <a href="balance.md#0x2_balance_zero">balance::zero</a>(),
@@ -743,6 +771,84 @@ portion because the principal portion was already taken out of the delegator's s
 
 </details>
 
+<a name="0x2_staking_pool_activate_staking_pool"></a>
+
+## Function `activate_staking_pool`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_activate_staking_pool">activate_staking_pool</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, activation_epoch: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_activate_staking_pool">activate_staking_pool</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, activation_epoch: u64) {
+    // Add the initial exchange rate <b>to</b> the <a href="table.md#0x2_table">table</a>.
+    <a href="table.md#0x2_table_add">table::add</a>(
+        &<b>mut</b> pool.exchange_rates,
+        activation_epoch,
+        <a href="staking_pool.md#0x2_staking_pool_initial_exchange_rate">initial_exchange_rate</a>()
+    );
+    // Fill in the active epoch.
+    <b>assert</b>!(<a href="_is_none">option::is_none</a>(&pool.activation_epoch), <a href="staking_pool.md#0x2_staking_pool_EPoolAlreadyActive">EPoolAlreadyActive</a>);
+    <a href="_fill">option::fill</a>(&<b>mut</b> pool.activation_epoch, activation_epoch);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_request_withdraw_delegation_preactive"></a>
+
+## Function `request_withdraw_delegation_preactive`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_request_withdraw_delegation_preactive">request_withdraw_delegation_preactive</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_request_withdraw_delegation_preactive">request_withdraw_delegation_preactive</a>(
+    pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>,
+    staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>,
+    ctx: &<b>mut</b> TxContext
+) : u64 {
+    // Check that the delegation information matches the pool.
+    <b>assert</b>!(staked_sui.pool_id == <a href="object.md#0x2_object_id">object::id</a>(pool), <a href="staking_pool.md#0x2_staking_pool_EWrongPool">EWrongPool</a>);
+
+    <b>assert</b>!(<a href="staking_pool.md#0x2_staking_pool_is_preactive">is_preactive</a>(pool), <a href="staking_pool.md#0x2_staking_pool_EPoolNotPreactive">EPoolNotPreactive</a>);
+
+    <b>let</b> delegator = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
+
+    <b>let</b> (principal, time_lock) = <a href="staking_pool.md#0x2_staking_pool_unwrap_staked_sui">unwrap_staked_sui</a>(staked_sui);
+    <b>let</b> withdraw_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&principal);
+    pool.sui_balance = pool.sui_balance - withdraw_amount;
+    pool.pool_token_balance = pool.pool_token_balance - withdraw_amount;
+
+    <b>if</b> (<a href="_is_some">option::is_some</a>(&time_lock)) {
+        <a href="locked_coin.md#0x2_locked_coin_new_from_balance">locked_coin::new_from_balance</a>(principal, <a href="_destroy_some">option::destroy_some</a>(time_lock), delegator, ctx);
+    } <b>else</b> {
+        <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(principal, ctx), delegator);
+        <a href="_destroy_none">option::destroy_none</a>(time_lock);
+    };
+    withdraw_amount
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_staking_pool_deactivate_staking_pool"></a>
 
 ## Function `deactivate_staking_pool`
@@ -1041,8 +1147,14 @@ Returns true if all the staking parameters of the staked sui except the principa
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pool_token_exchange_rate_at_epoch">pool_token_exchange_rate_at_epoch</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, epoch: u64): <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">PoolTokenExchangeRate</a> {
+    // If the pool is preactive then the exchange rate is always 1:1.
+    <b>if</b> (<a href="staking_pool.md#0x2_staking_pool_is_preactive_at_epoch">is_preactive_at_epoch</a>(pool, epoch)) {
+        <b>return</b> <a href="staking_pool.md#0x2_staking_pool_initial_exchange_rate">initial_exchange_rate</a>()
+    };
     <b>let</b> clamped_epoch = <a href="_get_with_default">option::get_with_default</a>(&pool.deactivation_epoch, epoch);
     <b>let</b> epoch = <a href="math.md#0x2_math_min">math::min</a>(clamped_epoch, epoch);
+    // TODO: there might be epochs <b>where</b> we skip updating the exchange rate <a href="table.md#0x2_table">table</a>, in which case
+    // we need <b>to</b> find the latest entry in the <a href="table.md#0x2_table">table</a> earlier than this epoch.
     *<a href="table.md#0x2_table_borrow">table::borrow</a>(&pool.exchange_rates, epoch)
 }
 </code></pre>
@@ -1094,6 +1206,55 @@ Calculate the current the total withdrawal from the staking pool this epoch.
 
 <pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pending_stake_withdraw_amount">pending_stake_withdraw_amount</a>(<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>): u64 {
     <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>.pending_total_sui_withdraw
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_is_preactive_at_epoch"></a>
+
+## Function `is_preactive_at_epoch`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_preactive_at_epoch">is_preactive_at_epoch</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, epoch: u64): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_preactive_at_epoch">is_preactive_at_epoch</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, epoch: u64): bool{
+    // Either the pool is currently preactive or the pool's starting epoch is later than the provided epoch.
+    <a href="staking_pool.md#0x2_staking_pool_is_preactive">is_preactive</a>(pool) || (*<a href="_borrow">option::borrow</a>(&pool.activation_epoch) &gt; epoch)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_is_preactive"></a>
+
+## Function `is_preactive`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_preactive">is_preactive</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_preactive">is_preactive</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>): bool{
+    <a href="_is_none">option::is_none</a>(&pool.activation_epoch)
 }
 </code></pre>
 
@@ -1158,6 +1319,30 @@ Calculate the current the total withdrawal from the staking pool this epoch.
             * (sui_amount <b>as</b> u128)
             / (exchange_rate.sui_amount <b>as</b> u128);
     (res <b>as</b> u64)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_initial_exchange_rate"></a>
+
+## Function `initial_exchange_rate`
+
+
+
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_initial_exchange_rate">initial_exchange_rate</a>(): <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">staking_pool::PoolTokenExchangeRate</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_initial_exchange_rate">initial_exchange_rate</a>(): <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">PoolTokenExchangeRate</a> {
+    <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">PoolTokenExchangeRate</a> { sui_amount: 0, pool_token_amount: 0 }
 }
 </code></pre>
 

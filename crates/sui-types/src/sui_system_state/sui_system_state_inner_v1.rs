@@ -35,7 +35,7 @@ const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 #[serde(rename = "SystemParameters")]
 pub struct SystemParametersV1 {
     pub min_validator_stake: u64,
-    pub max_validator_candidate_count: u64,
+    pub max_validator_count: u64,
     pub governance_start_epoch: u64,
 }
 
@@ -254,7 +254,7 @@ impl ValidatorV1 {
 #[serde(rename = "StakingPool")]
 pub struct StakingPoolV1 {
     pub id: ObjectID,
-    pub starting_epoch: u64,
+    pub activation_epoch: MoveOption<u64>,
     pub deactivation_epoch: MoveOption<u64>,
     pub sui_balance: u64,
     pub rewards_pool: Balance,
@@ -272,10 +272,11 @@ pub struct StakingPoolV1 {
 pub struct ValidatorSetV1 {
     pub total_stake: u64,
     pub active_validators: Vec<ValidatorV1>,
-    pub pending_validators: TableVec,
+    pub pending_active_validators: TableVec,
     pub pending_removals: Vec<u64>,
     pub staking_pool_mappings: Table,
     pub inactive_pools: Table,
+    pub validator_candidates: Table,
 }
 
 /// Rust version of the Move sui::sui_system::SuiSystemStateInner type
@@ -409,7 +410,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             safe_mode: self.safe_mode,
             epoch_start_timestamp_ms: self.epoch_start_timestamp_ms,
             min_validator_stake: self.parameters.min_validator_stake,
-            max_validator_candidate_count: self.parameters.max_validator_candidate_count,
+            max_validator_candidate_count: self.parameters.max_validator_count,
             governance_start_epoch: self.parameters.governance_start_epoch,
             stake_subsidy_epoch_counter: self.stake_subsidy.epoch_counter,
             stake_subsidy_balance: self.stake_subsidy.balance.value(),
@@ -448,7 +449,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                     next_epoch_gas_price: v.next_epoch_gas_price,
                     next_epoch_commission_rate: v.next_epoch_commission_rate,
                     staking_pool_id: v.staking_pool.id,
-                    staking_pool_starting_epoch: v.staking_pool.starting_epoch,
+                    staking_pool_activation_epoch: v.staking_pool.activation_epoch.into_option(),
                     staking_pool_deactivation_epoch: v
                         .staking_pool
                         .deactivation_epoch
@@ -471,10 +472,11 @@ impl Default for SuiSystemStateInnerV1 {
         let validator_set = ValidatorSetV1 {
             total_stake: 2,
             active_validators: vec![],
-            pending_validators: TableVec::default(),
+            pending_active_validators: TableVec::default(),
             pending_removals: vec![],
             staking_pool_mappings: Table::default(),
             inactive_pools: Table::default(),
+            validator_candidates: Table::default(),
         };
         Self {
             epoch: 0,
@@ -483,7 +485,7 @@ impl Default for SuiSystemStateInnerV1 {
             storage_fund: Balance::new(0),
             parameters: SystemParametersV1 {
                 min_validator_stake: 1,
-                max_validator_candidate_count: 100,
+                max_validator_count: 100,
                 governance_start_epoch: 0,
             },
             reference_gas_price: 1,

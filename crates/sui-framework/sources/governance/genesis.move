@@ -14,8 +14,7 @@ module sui::genesis {
     use std::option;
 
     /// Initial value of the lower-bound on the amount of stake required to become a validator.
-    /// TODO: testnet only. Needs to be changed.
-    const INIT_MIN_VALIDATOR_STAKE: u64 = 1;
+    const INIT_MIN_VALIDATOR_STAKE: u64 = 25_000_000_000_000_000;
 
     /// Initial value of the upper-bound on the number of validators.
     const INIT_MAX_VALIDATOR_COUNT: u64 = 100;
@@ -104,11 +103,11 @@ module sui::genesis {
                 primary_address,
                 worker_address,
                 // Initialize all validators with uniform stake taken from the subsidy fund.
-                balance::split(&mut subsidy_fund, initial_validator_stake_mist),
+                option::some(balance::split(&mut subsidy_fund, initial_validator_stake_mist)),
                 option::none(),
                 gas_price,
                 commission_rate,
-                0, // start operating right away at epoch 0
+                true, // validator is active right away
                 ctx
             ));
             i = i + 1;

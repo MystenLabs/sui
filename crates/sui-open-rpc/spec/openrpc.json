@@ -5528,6 +5528,7 @@
         "description": "Rust version of the Move sui::staking_pool::StakingPool type",
         "type": "object",
         "required": [
+          "activation_epoch",
           "deactivation_epoch",
           "exchange_rates",
           "id",
@@ -5536,10 +5537,12 @@
           "pending_total_sui_withdraw",
           "pool_token_balance",
           "rewards_pool",
-          "starting_epoch",
           "sui_balance"
         ],
         "properties": {
+          "activation_epoch": {
+            "$ref": "#/components/schemas/MoveOption_for_uint64"
+          },
           "deactivation_epoch": {
             "$ref": "#/components/schemas/MoveOption_for_uint64"
           },
@@ -5571,11 +5574,6 @@
           },
           "rewards_pool": {
             "$ref": "#/components/schemas/Balance"
-          },
-          "starting_epoch": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
           },
           "sui_balance": {
             "type": "integer",
@@ -6885,7 +6883,7 @@
         "type": "object",
         "required": [
           "governance_start_epoch",
-          "max_validator_candidate_count",
+          "max_validator_count",
           "min_validator_stake"
         ],
         "properties": {
@@ -6894,7 +6892,7 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "max_validator_candidate_count": {
+          "max_validator_count": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -7709,10 +7707,11 @@
         "required": [
           "active_validators",
           "inactive_pools",
+          "pending_active_validators",
           "pending_removals",
-          "pending_validators",
           "staking_pool_mappings",
-          "total_stake"
+          "total_stake",
+          "validator_candidates"
         ],
         "properties": {
           "active_validators": {
@@ -7724,6 +7723,9 @@
           "inactive_pools": {
             "$ref": "#/components/schemas/Table"
           },
+          "pending_active_validators": {
+            "$ref": "#/components/schemas/TableVec"
+          },
           "pending_removals": {
             "type": "array",
             "items": {
@@ -7732,9 +7734,6 @@
               "minimum": 0.0
             }
           },
-          "pending_validators": {
-            "$ref": "#/components/schemas/TableVec"
-          },
           "staking_pool_mappings": {
             "$ref": "#/components/schemas/Table"
           },
@@ -7742,6 +7741,9 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          },
+          "validator_candidates": {
+            "$ref": "#/components/schemas/Table"
           }
         }
       },
