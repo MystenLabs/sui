@@ -4,7 +4,6 @@
 
 NUM_CPUS=$(cat /proc/cpuinfo | grep processor | wc -l) # ubuntu
 # NUM_CPUS=$(sysctl -n hw.ncpu) # mac
-# NUM_CPUS=2 # testing with just two cores for now
 
 DATE=$(date +%s)
 
@@ -18,7 +17,7 @@ SEED="$DATE"
 # This command runs many different tests, so it already uses all CPUs fairly efficiently, and
 # don't need to be done inside of the for loop below.
 # TODO: this logs directly to stdout since it is not being run in parallel. is that ok?
-# MSIM_TEST_SEED="$SEED" MSIM_WATCHDOG_TIMEOUT_MS=60000 scripts/simtest/cargo-simtest simtest --package sui --package sui-core
+MSIM_TEST_SEED="$SEED" MSIM_WATCHDOG_TIMEOUT_MS=60000 scripts/simtest/cargo-simtest simtest --package sui --package sui-core
 
 for SUB_SEED in `seq 1 $NUM_CPUS`; do
   SEED="$SUB_SEED$DATE"
@@ -35,9 +34,5 @@ for SUB_SEED in `seq 1 $NUM_CPUS`; do
   MSIM_TEST_SEED="$SEED" MSIM_TEST_NUM=1 MSIM_WATCHDOG_TIMEOUT_MS=60000 scripts/simtest/cargo-simtest simtest --package sui-benchmark --test-threads 1 & # > "$LOG_FILE" 2>&1 &
 done
 
+# wait for all the jobs to end
 wait
-
-
-# for JOB in $(jobs -p); do
-#   wait $JOB || echo "job failed"
-# done
