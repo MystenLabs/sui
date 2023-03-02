@@ -5,11 +5,11 @@ use crate::metrics::WorkerMetrics;
 #[cfg(feature = "trace_transaction")]
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::hash::Hash;
-use futures::stream::{FuturesOrdered, FuturesUnordered};
+use futures::stream::FuturesUnordered;
 use store::Store;
 
 use config::WorkerId;
-use tracing::{error, debug};
+use tracing::{debug, error};
 
 #[cfg(feature = "benchmark")]
 use std::convert::TryInto;
@@ -58,7 +58,7 @@ pub struct BatchMaker {
     /// The batch store to store our own batches.
     store: Store<BatchDigest, Batch>,
     // Output channel to send out batches' digests.
-    tx_digest: Sender<(WorkerOurBatchMessage, PrimaryResponse)>,
+    tx_our_batch: Sender<(WorkerOurBatchMessage, PrimaryResponse)>,
 }
 
 impl BatchMaker {
@@ -72,7 +72,7 @@ impl BatchMaker {
         tx_quorum_waiter: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
         node_metrics: Arc<WorkerMetrics>,
         store: Store<BatchDigest, Batch>,
-        tx_digest: Sender<(WorkerOurBatchMessage, PrimaryResponse)>,
+        tx_our_batch: Sender<(WorkerOurBatchMessage, PrimaryResponse)>,
     ) -> JoinHandle<()> {
         spawn_logged_monitored_task!(
             async move {
@@ -86,7 +86,7 @@ impl BatchMaker {
                     batch_start_timestamp: Instant::now(),
                     node_metrics,
                     store,
-                    tx_digest,
+                    tx_our_batch,
                 }
                 .run()
                 .await;
@@ -261,7 +261,7 @@ impl BatchMaker {
         // Clone things to not capture self
         let store = self.store.clone();
         let worker_id = self.id;
-        let tx_digest = self.tx_digest.clone();
+        let tx_our_batch = self.tx_our_batch.clone();
 
         // The batch has been sealed so we can officially set its creation time
         // for latency calculations.
@@ -292,7 +292,7 @@ impl BatchMaker {
                 worker_id,
                 metadata,
             };
-            if tx_digest
+            if tx_our_batch
                 .send((message, Some(primary_response)))
                 .await
                 .is_err()
