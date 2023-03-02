@@ -76,7 +76,6 @@ impl Display for VultrClient {
 impl VultrClient {
     const BASE_URL: &str = "https://api.vultr.com/v2/";
     const DEFAULT_OS: u16 = 1743; // Ubuntu 22.04 x64
-    const INSTANCE_LABEL: &str = "validator"; // Machine label and hostname
 
     pub fn new<T: Into<String>>(token: T, settings: Settings) -> Self {
         Self {
@@ -217,9 +216,9 @@ impl Client for VultrClient {
                 "region": region,
                 "plan": self.settings.specs.clone(),
                 "os_id": Self::DEFAULT_OS,
-                "label": Self::INSTANCE_LABEL,
+                "label": self.settings.testbed.clone(),
                 "sshkey_id": [ssh_key_id],
-                "hostname": Self::INSTANCE_LABEL,
+                "hostname": "validator",
                 "tag": testbed_name
         });
 

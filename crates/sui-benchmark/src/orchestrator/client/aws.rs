@@ -61,7 +61,20 @@ impl AwsClient {
         Self { settings, clients }
     }
 
-    fn format_instance(
+    fn ignore_duplicates<T, E>(response: Result<T, SdkError<E>>) -> CloudProviderResult<()>
+    where
+        E: Debug + std::error::Error + Send + Sync + 'static,
+    {
+        if let Err(e) = response {
+            let error_message = format!("{e:?}");
+            if !error_message.to_lowercase().contains("duplicate") {
+                return Err(e.into());
+            }
+        }
+        Ok(())
+    }
+
+    fn into_instance(
         &self,
         region: String,
         aws_instance: &aws_sdk_ec2::model::Instance,
@@ -129,34 +142,22 @@ impl AwsClient {
             .group_name(&self.settings.testbed)
             .description("Allow all traffic (used for benchmarks).");
 
-        let response = match request.send().await {
-            Ok(response) => response,
-            Err(e) => {
-                let error_message = format!("{e:?}");
-                if error_message.to_lowercase().contains("duplicate") {
-                    return Ok(());
-                } else {
-                    return Err(e.into());
-                }
-            }
-        };
-
-        // Extract the group id.
-        let group_id = response
-            .group_id()
-            .expect("AWS security group should have an id");
+        let response = request.send().await;
+        Self::ignore_duplicates(response)?;
 
         // Authorize all traffic on the security group.
-        let request = client
-            .authorize_security_group_ingress()
-            .group_id(group_id)
-            .ip_protocol("tcp")
-            .ip_protocol("udp")
-            .cidr_ip("0.0.0.0/0")
-            .from_port(0)
-            .to_port(65535);
+        for protocol in ["tcp", "udp"] {
+            let request = client
+                .authorize_security_group_ingress()
+                .group_name(&self.settings.testbed)
+                .ip_protocol(protocol)
+                .cidr_ip("0.0.0.0/0")
+                .from_port(0)
+                .to_port(65535);
 
-        request.send().await?;
+            let response = request.send().await;
+            Self::ignore_duplicates(response)?;
+        }
         Ok(())
     }
 }
@@ -178,7 +179,7 @@ impl Client for AwsClient {
                 for reservation in reservations {
                     if let Some(aws_instances) = reservation.instances() {
                         for instance in aws_instances {
-                            instances.push(self.format_instance(region.clone(), instance));
+                            instances.push(self.into_instance(region.clone(), instance));
                         }
                     }
                 }
@@ -277,7 +278,7 @@ impl Client for AwsClient {
             .flatten()
             .expect("AWS instances list should contain instances");
 
-        Ok(self.format_instance(region, instance))
+        Ok(self.into_instance(region, instance))
     }
 
     async fn delete_instance(&self, instance_id: String) -> CloudProviderResult<()> {
@@ -298,12 +299,8 @@ impl Client for AwsClient {
                 .key_name(&self.settings.testbed)
                 .public_key_material(Blob::new::<String>(public_key.clone()));
 
-            if let Err(e) = request.send().await {
-                let error_message = format!("{e:?}");
-                if !error_message.to_lowercase().contains("duplicate") {
-                    return Err(e.into());
-                }
-            }
+            let response = request.send().await;
+            Self::ignore_duplicates(response)?;
         }
         Ok(())
     }
