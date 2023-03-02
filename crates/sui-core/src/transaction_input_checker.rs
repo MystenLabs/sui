@@ -14,7 +14,9 @@ use sui_types::{
     error::SuiResult,
     fp_ensure,
     gas::{self, SuiGasStatus},
-    messages::{InputObjectKind, InputObjects, SingleTransactionKind, TransactionData},
+    messages::{
+        InputObjectKind, InputObjects, SingleTransactionKind, TransactionData, TransactionDataAPI,
+    },
     object::{Object, Owner},
 };
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
@@ -25,7 +27,7 @@ async fn get_gas_status(
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
 ) -> SuiResult<SuiGasStatus<'static>> {
-    let tx_kind = &transaction.kind;
+    let tx_kind = transaction.kind();
     let gas_object_ref = transaction.gas_payment_object_ref();
     let gas_object_refs = match tx_kind {
         TransactionKind::Single(SingleTransactionKind::PaySui(p)) => p.coins.clone(),
@@ -40,7 +42,7 @@ async fn get_gas_status(
         gas_object_ref,
         transaction.gas_budget(),
         transaction.gas_price(),
-        &transaction.kind,
+        transaction.kind(),
         extra_gas_object_refs,
     )
     .await
@@ -69,7 +71,7 @@ pub(crate) async fn check_dev_inspect_input(
     gas_object: Object,
 ) -> Result<(ObjectRef, InputObjects), anyhow::Error> {
     let gas_object_ref = gas_object.compute_object_reference();
-    TransactionData::validity_check_impl(config, kind, &gas_object_ref)?;
+    kind.validity_check(config, &gas_object_ref)?;
     for k in kind.single_transactions() {
         match k {
             SingleTransactionKind::TransferObject(_)
@@ -115,7 +117,7 @@ pub async fn check_certificate_input(
     let tx_data = &cert.data().intent_message.value;
     let gas_status = get_gas_status(store, epoch_store, tx_data).await?;
     let input_object_kinds = tx_data.input_objects()?;
-    let input_object_data = if tx_data.kind.is_change_epoch_tx() {
+    let input_object_data = if tx_data.is_change_epoch_tx() {
         // When changing the epoch, we update a the system object, which is shared, without going
         // through sequencing, so we must bypass the sequence checks here.
         store.check_input_objects(&input_object_kinds)?
@@ -245,7 +247,7 @@ pub fn check_objects(
     // Gather all objects and errors.
     let mut all_objects = Vec::with_capacity(input_objects.len());
     let transfer_object_ids: HashSet<_> = transaction
-        .kind
+        .kind()
         .single_transactions()
         .filter_map(|s| {
             if let SingleTransactionKind::TransferObject(t) = s {
@@ -272,11 +274,11 @@ pub fn check_objects(
         };
         // Check if the object contents match the type of lock we need for
         // this object.
-        let system_transaction = transaction.kind.is_system_tx();
+        let system_transaction = transaction.is_system_tx();
         check_one_object(&owner_address, object_kind, &object, system_transaction)?;
         all_objects.push((object_kind, object));
     }
-    if !transaction.kind.is_genesis_tx() && all_objects.is_empty() {
+    if !transaction.is_genesis_tx() && all_objects.is_empty() {
         return Err(UserInputError::ObjectInputArityViolation);
     }
 

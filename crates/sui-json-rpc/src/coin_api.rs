@@ -21,7 +21,7 @@ use sui_types::coin::{Coin, CoinMetadata, LockedCoin, TreasuryCap};
 use sui_types::error::SuiError;
 use sui_types::event::Event;
 use sui_types::gas_coin::GAS;
-use sui_types::messages::TransactionEvents;
+use sui_types::messages::{TransactionEffectsAPI, TransactionEvents};
 use sui_types::object::Object;
 use sui_types::parse_sui_struct_tag;
 
@@ -129,8 +129,8 @@ impl CoinReadApi {
             .get_executed_transaction_and_effects(publish_txn_digest)
             .await?;
 
-        let events = if let Some(digests) = effect.events_digest {
-            self.state.get_transaction_events(digests).await?
+        let events = if let Some(digests) = effect.events_digest() {
+            self.state.get_transaction_events(*digests).await?
         } else {
             TransactionEvents::default()
         };

@@ -84,7 +84,7 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
         .unwrap()
         .into_effects_for_testing()
         .into_data();
-    let gas_cost = effects.gas_used;
+    let gas_cost = effects.gas_cost_summary();
     assert!(gas_cost.computation_cost > *MIN_GAS_BUDGET);
     assert!(gas_cost.storage_cost > 0);
     // Removing genesis object does not have rebate.
@@ -121,7 +121,7 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
     gas_status.charge_storage_read(obj_size + gas_size)?;
     gas_status.charge_storage_mutation(obj_size, obj_size, 0.into())?;
     gas_status.charge_storage_mutation(gas_size, gas_size, 0.into())?;
-    assert_eq!(&gas_cost, &gas_status.summary(true));
+    assert_eq!(gas_cost, &gas_status.summary(true));
     Ok(())
 }
 
@@ -190,11 +190,11 @@ async fn test_transfer_sui_insufficient_gas() {
         .into_data();
     // We expect this to fail due to insufficient gas.
     assert_eq!(
-        effects.status,
+        *effects.status(),
         ExecutionStatus::new_failure(ExecutionFailureStatus::InsufficientGas, None)
     );
     // Ensure that the owner of the object did not change if the transfer failed.
-    assert_eq!(effects.mutated[0].1, sender);
+    assert_eq!(effects.mutated()[0].1, sender);
 }
 
 #[tokio::test]
@@ -211,7 +211,7 @@ async fn test_native_transfer_insufficient_gas_reading_objects() {
         .into_effects_for_testing()
         .into_data();
     assert_eq!(
-        effects.status.unwrap_err().0,
+        effects.into_status().unwrap_err().0,
         ExecutionFailureStatus::InsufficientGas
     );
 }
@@ -228,7 +228,7 @@ async fn test_native_transfer_insufficient_gas_execution() {
         .unwrap()
         .into_effects_for_testing()
         .data()
-        .gas_used
+        .gas_cost_summary()
         .gas_used();
     let budget = total_gas - 1;
     let result = execute_transfer(budget, budget, true).await;
@@ -238,7 +238,7 @@ async fn test_native_transfer_insufficient_gas_execution() {
         .into_effects_for_testing()
         .into_data();
     // We won't drain the entire budget because we don't charge for storage if tx failed.
-    assert!(effects.gas_used.gas_used() < budget);
+    assert!(effects.gas_cost_summary().gas_used() < budget);
     let gas_object = result
         .authority_state
         .get_object(&result.gas_object_id)
@@ -246,15 +246,18 @@ async fn test_native_transfer_insufficient_gas_execution() {
         .unwrap()
         .unwrap();
     let gas_coin = GasCoin::try_from(&gas_object).unwrap();
-    assert_eq!(gas_coin.value(), budget - effects.gas_used.gas_used());
+    assert_eq!(
+        gas_coin.value(),
+        budget - effects.gas_cost_summary().gas_used()
+    );
     // After a failed transfer, the version should have been incremented,
     // but the owner of the object should remain the same, unchanged.
-    let ((_, version, _), owner) = effects.mutated_excluding_gas().next().unwrap();
+    let ((_, version, _), owner) = effects.mutated_excluding_gas().first().unwrap();
     assert_eq!(version, &gas_object.version());
     assert_eq!(owner, &gas_object.owner);
 
     assert_eq!(
-        effects.status.unwrap_err().0,
+        effects.into_status().unwrap_err().0,
         ExecutionFailureStatus::InsufficientGas,
     );
 }
@@ -277,10 +280,10 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     )
     .await;
     let effects = response.1.into_data();
-    let gas_cost = effects.gas_used;
+    let gas_cost = effects.gas_cost_summary();
     assert!(gas_cost.storage_cost > 0);
 
-    let ((package_id, _, _), _) = effects.created[0];
+    let ((package_id, _, _), _) = effects.created()[0];
     let package = authority_state.get_object(&package_id).await?.unwrap();
     let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
     let expected_gas_balance = GAS_VALUE_FOR_TESTING - gas_cost.gas_used();
@@ -296,7 +299,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         .data()
         .intent_message
         .value
-        .kind
+        .kind()
         .single_transactions()
         .next()
         .unwrap()
@@ -332,7 +335,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         gas_object.object_size_for_gas_metering(),
         0.into(),
     )?;
-    assert_eq!(&gas_cost, &gas_status.summary(true));
+    assert_eq!(gas_cost, &gas_status.summary(true));
 
     // Create a transaction with budget DELTA less than the gas cost required.
     let total_gas_used = gas_cost.gas_used();
@@ -351,8 +354,8 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     )
     .await;
     let effects = response.1.into_data();
-    let gas_cost = effects.gas_used;
-    let err = effects.status.unwrap_err().0;
+    let gas_cost = effects.gas_cost_summary().clone();
+    let err = effects.into_status().unwrap_err().0;
 
     assert_eq!(err, ExecutionFailureStatus::InsufficientGas);
 
@@ -383,8 +386,8 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     )
     .await;
     let effects = response.1.into_data();
-    let gas_cost = effects.gas_used;
-    let err = effects.status.unwrap_err().0;
+    let gas_cost = effects.gas_cost_summary().clone();
+    let err = effects.into_status().unwrap_err().0;
     assert_eq!(err, ExecutionFailureStatus::InsufficientGas);
     assert_eq!(gas_cost.storage_cost, 0);
     assert_eq!(gas_cost.storage_rebate, 0);
@@ -419,9 +422,9 @@ async fn test_move_call_gas() -> SuiResult {
     let tx = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await?;
     let effects = response.1.into_data();
-    let created_object_ref = effects.created[0].0;
-    assert!(effects.status.is_ok());
-    let gas_cost = effects.gas_used;
+    let created_object_ref = effects.created()[0].0;
+    assert!(effects.status().is_ok());
+    let gas_cost = effects.gas_cost_summary();
     assert!(gas_cost.storage_cost > 0);
     assert_eq!(gas_cost.storage_rebate, 0);
     let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
@@ -450,7 +453,7 @@ async fn test_move_call_gas() -> SuiResult {
     )?;
     let gas_used_before_vm_exec = gas_status.summary(true).gas_used();
     let created_object = authority_state
-        .get_object(&effects.created[0].0 .0)
+        .get_object(&effects.created()[0].0 .0)
         .await?
         .unwrap();
     gas_status.charge_storage_mutation(
@@ -487,8 +490,8 @@ async fn test_move_call_gas() -> SuiResult {
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, transaction).await?;
     let effects = response.1.into_data();
-    assert!(effects.status.is_ok());
-    let gas_cost = effects.gas_used;
+    assert!(effects.status().is_ok());
+    let gas_cost = effects.gas_cost_summary();
     // storage_cost should be less than rebate because for object deletion, we only
     // rebate without charging.
     assert!(gas_cost.storage_cost > 0 && gas_cost.storage_cost < gas_cost.storage_rebate);
@@ -513,8 +516,8 @@ async fn test_move_call_gas() -> SuiResult {
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, transaction).await?;
     let effects = response.1.into_data();
-    let gas_cost = effects.gas_used;
-    let err = effects.status.unwrap_err().0;
+    let gas_cost = effects.gas_cost_summary().clone();
+    let err = effects.into_status().unwrap_err().0;
     // We will run out of gas during VM execution.
     assert!(matches!(err, ExecutionFailureStatus::InsufficientGas));
     let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();

@@ -18,7 +18,8 @@ use sui_types::crypto::{generate_proof_of_possession, get_account_key_pair};
 use sui_types::gas::GasCostSummary;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
-    CallArg, CertifiedTransactionEffects, ObjectArg, TransactionData, VerifiedTransaction,
+    CallArg, CertifiedTransactionEffects, ObjectArg, TransactionData, TransactionEffectsAPI,
+    VerifiedTransaction,
 };
 use sui_types::object::Object;
 use sui_types::utils::to_sender_signed_transaction;
@@ -55,7 +56,7 @@ async fn advance_epoch_tx_test() {
             // Check that the validator didn't commit the transaction yet.
             assert!(state
                 .get_signed_effects_and_maybe_resign(
-                    &effects.transaction_digest,
+                    effects.transaction_digest(),
                     &state.epoch_store_for_testing()
                 )
                 .unwrap()
@@ -402,7 +403,7 @@ async fn test_reconfig_with_committee_change_basic() {
     let effects = execute_transaction(&authorities, transaction)
         .await
         .unwrap();
-    assert!(effects.status.is_ok());
+    assert!(effects.status().is_ok());
 
     trigger_reconfiguration(&authorities).await;
     // Check that a new validator has joined the committee.
@@ -468,7 +469,7 @@ async fn test_reconfig_with_committee_change_basic() {
     let effects = execute_transaction(&authorities, transaction)
         .await
         .unwrap();
-    assert!(effects.status.is_ok());
+    assert!(effects.status().is_ok());
 
     authorities.push(handle);
     trigger_reconfiguration(&authorities).await;

@@ -60,6 +60,7 @@ use sui_types::{
     base_types::ExecutionDigests,
     digests::{CheckpointContentsDigest, CheckpointDigest},
     message_envelope::Message,
+    messages::TransactionEffectsAPI,
     messages_checkpoint::{
         CertifiedCheckpointSummary as Checkpoint, CheckpointContents, CheckpointSequenceNumber,
         VerifiedCheckpoint,
@@ -1166,7 +1167,7 @@ where
         {
             if transaction.digest() == &digests.transaction
                 && effects.digest() == digests.effects
-                && effects.transaction_digest == digests.transaction
+                && *effects.transaction_digest() == digests.transaction
             {
                 store
                     .insert_transaction_and_effects(

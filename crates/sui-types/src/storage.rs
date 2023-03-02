@@ -10,7 +10,8 @@ use crate::error::SuiError;
 use crate::message_envelope::Message;
 use crate::messages::InputObjectKind::{ImmOrOwnedMoveObject, MovePackage, SharedMoveObject};
 use crate::messages::{
-    SenderSignedData, TransactionEffects, TransactionEvents, VerifiedTransaction,
+    SenderSignedData, TransactionDataAPI, TransactionEffects, TransactionEvents,
+    VerifiedTransaction,
 };
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, VerifiedCheckpoint,

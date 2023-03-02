@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::{sync::Arc, time::Duration};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_types::digests::CheckpointDigest;
-use sui_types::messages::TransactionEffects;
+use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::{
     base_types::{ObjectID, VersionNumber},
     storage::ObjectKey,
@@ -43,7 +43,7 @@ impl AuthorityStorePruner {
 
         let mut object_keys_to_prune = vec![];
         for effects in &transaction_effects {
-            for (object_id, seq_number) in &effects.modified_at_versions {
+            for (object_id, seq_number) in effects.modified_at_versions() {
                 object_keys_to_prune.push(ObjectKey(*object_id, *seq_number));
             }
         }
@@ -237,7 +237,7 @@ mod tests {
     #[cfg(not(target_env = "msvc"))]
     use pprof::Symbol;
     use sui_types::base_types::{ObjectDigest, VersionNumber};
-    use sui_types::messages::TransactionEffects;
+    use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
     use sui_types::{
         base_types::{ObjectID, SequenceNumber},
         object::Object,
@@ -387,10 +387,9 @@ mod tests {
                 total_unique_object_ids,
             )
             .unwrap();
-            let effects = TransactionEffects {
-                modified_at_versions: to_delete.into_iter().map(|o| (o.0, o.1)).collect(),
-                ..Default::default()
-            };
+            let mut effects = TransactionEffects::default();
+            *effects.modified_at_versions_mut_for_testing() =
+                to_delete.into_iter().map(|o| (o.0, o.1)).collect();
             AuthorityStorePruner::prune_effects(vec![effects], &db, deletion_method).unwrap();
             to_keep
         };

@@ -298,6 +298,8 @@ impl ValidatorService {
         let epoch_store = state.load_epoch_store_one_call_per_task();
 
         let certificate = request.into_inner();
+        certificate.check_version_supported(epoch_store.protocol_version())?;
+
         let shared_object_tx = certificate.contains_shared_object();
 
         let _metrics_guard = if shared_object_tx {
@@ -313,8 +315,8 @@ impl ValidatorService {
         if let Some(signed_effects) =
             state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store)?
         {
-            let events = if let Some(digest) = signed_effects.events_digest {
-                state.get_transaction_events(digest).await?
+            let events = if let Some(digest) = signed_effects.events_digest() {
+                state.get_transaction_events(*digest).await?
             } else {
                 TransactionEvents::default()
             };
@@ -342,7 +344,7 @@ impl ValidatorService {
                 .data()
                 .intent_message
                 .value
-                .kind
+                .kind()
                 .input_objects()
                 .map_err(SuiError::from)?
                 .into_iter()
@@ -407,8 +409,8 @@ impl ValidatorService {
         let res = state.execute_certificate(&certificate, &epoch_store).await;
         match res {
             Ok(effects) => {
-                let events = if let Some(event_digest) = effects.events_digest {
-                    state.get_transaction_events(event_digest).await?
+                let events = if let Some(event_digest) = effects.events_digest() {
+                    state.get_transaction_events(*event_digest).await?
                 } else {
                     TransactionEvents::default()
                 };

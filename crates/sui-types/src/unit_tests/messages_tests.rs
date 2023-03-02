@@ -471,7 +471,7 @@ fn test_digest_caching() {
 
     let mut signed_tx = SignedTransaction::new(
         committee.epoch(),
-        transaction.into_message(),
+        transaction.clone().into_message(),
         &sec1,
         AuthorityPublicKeyBytes::from(sec1.public()),
     );
@@ -483,7 +483,7 @@ fn test_digest_caching() {
         .data_mut_for_testing()
         .intent_message
         .value
-        .gas_data
+        .gas_data_mut()
         .budget += 1;
 
     // digest is cached
@@ -496,11 +496,10 @@ fn test_digest_caching() {
     // cached digest was not serialized/deserialized
     assert_ne!(initial_digest, *deserialized_tx.digest());
 
-    let effects = TransactionEffects {
-        transaction_digest: initial_digest,
-        gas_object: (random_object_ref(), Owner::AddressOwner(a1)),
-        ..Default::default()
-    };
+    let effects = TransactionEffects::new_with_tx_and_gas(
+        &transaction,
+        (random_object_ref(), Owner::AddressOwner(a1)),
+    );
 
     let mut signed_effects = SignedTransactionEffects::new(
         committee.epoch(),
@@ -512,7 +511,7 @@ fn test_digest_caching() {
     let initial_effects_digest = *signed_effects.digest();
     signed_effects
         .data_mut_for_testing()
-        .gas_used
+        .gas_cost_summary_mut_for_testing()
         .computation_cost += 1;
 
     // digest is cached
@@ -542,7 +541,7 @@ fn test_user_signature_committed_in_transactions() {
     );
 
     let mut tx_data_2 = tx_data.clone();
-    tx_data_2.gas_data.budget += 1;
+    tx_data_2.gas_data_mut().budget += 1;
 
     let transaction_a =
         Transaction::from_data_and_signer(tx_data.clone(), Intent::default(), vec![&sender_sec]);
@@ -919,14 +918,14 @@ fn verify_sender_signature_correctly_with_flag() {
     // create a sender keypair with Ed25519
     let sender_kp_2 = SuiKeyPair::Ed25519(get_key_pair().1);
     let mut tx_data_2 = tx_data.clone();
-    tx_data_2.sender = (&sender_kp_2.public()).into();
-    tx_data_2.gas_data.owner = tx_data_2.sender;
+    *tx_data_2.sender_mut() = (&sender_kp_2.public()).into();
+    tx_data_2.gas_data_mut().owner = tx_data_2.sender();
 
     // create a sender keypair with Secp256r1
     let sender_kp_3 = SuiKeyPair::Secp256r1(get_key_pair().1);
     let mut tx_data_3 = tx_data.clone();
-    tx_data_3.sender = (&sender_kp_3.public()).into();
-    tx_data_3.gas_data.owner = tx_data_3.sender;
+    *tx_data_3.sender_mut() = (&sender_kp_3.public()).into();
+    tx_data_3.gas_data_mut().owner = tx_data_3.sender();
 
     let transaction =
         Transaction::from_data_and_signer(tx_data, Intent::default(), vec![&sender_kp])
