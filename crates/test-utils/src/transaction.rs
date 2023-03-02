@@ -23,7 +23,7 @@ use sui_types::intent::Intent;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
     CallArg, ObjectArg, ObjectInfoRequest, ObjectInfoResponse, Transaction, TransactionData,
-    TransactionEffects, TransactionEvents, VerifiedTransaction,
+    TransactionEffects, TransactionEffectsAPI, TransactionEvents, VerifiedTransaction,
 };
 use sui_types::messages::{ExecuteTransactionRequestType, HandleCertificateResponse};
 use sui_types::object::{Object, Owner};
@@ -55,7 +55,7 @@ pub async fn publish_package(
     configs: &[ValidatorInfo],
 ) -> ObjectRef {
     let (effects, _) = publish_package_for_effects(gas_object, path, configs).await;
-    parse_package_ref(&effects.created).unwrap()
+    parse_package_ref(effects.created()).unwrap()
 }
 
 pub async fn publish_package_for_effects(

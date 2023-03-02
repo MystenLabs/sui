@@ -25,8 +25,8 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     AuthorityCapabilities, CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey,
     ConsensusTransactionKind, SenderSignedData, SharedInputObject, TransactionData,
-    TransactionEffects, TrustedExecutableTransaction, VerifiedCertificate,
-    VerifiedExecutableTransaction, VerifiedSignedTransaction,
+    TransactionDataAPI, TransactionEffects, TransactionEffectsAPI, TrustedExecutableTransaction,
+    VerifiedCertificate, VerifiedExecutableTransaction, VerifiedSignedTransaction,
 };
 use sui_types::signature::GenericSignature;
 use tracing::{debug, info, trace, warn};
@@ -801,6 +801,7 @@ impl AuthorityPerEpochStore {
             // from the cert.
             let initial_versions: HashMap<_, _> = tx_data
                 .shared_input_objects()
+                .into_iter()
                 .map(SharedInputObject::into_id_and_version)
                 .collect();
 
@@ -900,7 +901,7 @@ impl AuthorityPerEpochStore {
         self.set_assigned_shared_object_versions(
             certificate,
             &effects
-                .shared_objects
+                .shared_objects()
                 .iter()
                 .map(|(id, version, _)| (*id, *version))
                 .collect(),

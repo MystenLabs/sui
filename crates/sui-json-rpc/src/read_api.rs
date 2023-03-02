@@ -31,7 +31,7 @@ use sui_types::base_types::{
     ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
 };
 use sui_types::crypto::sha3_hash;
-use sui_types::messages::TransactionData;
+use sui_types::messages::{TransactionData, TransactionEffectsAPI};
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
     CheckpointSummary,
@@ -171,10 +171,10 @@ impl ReadApiServer for ReadApi {
             .map_err(|e| anyhow!("{e}"))?;
         let checkpoint_timestamp = checkpoint.as_ref().map(|c| c.summary.timestamp_ms);
 
-        let events = if let Some(digest) = effects.events_digest {
+        let events = if let Some(digest) = effects.events_digest() {
             let events = self
                 .state
-                .get_transaction_events(digest)
+                .get_transaction_events(*digest)
                 .await
                 .map_err(Error::from)?;
             SuiTransactionEvents::try_from(

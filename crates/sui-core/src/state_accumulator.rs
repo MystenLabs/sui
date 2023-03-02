@@ -7,12 +7,11 @@ use tracing::debug;
 use typed_store::Map;
 
 use std::sync::Arc;
-use sui_types::base_types::ObjectDigest;
 
 use fastcrypto::hash::{Digest, MultisetHash};
 use sui_types::accumulator::Accumulator;
 use sui_types::error::SuiResult;
-use sui_types::messages::TransactionEffects;
+use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use typed_store::rocks::TypedStoreError;
 
@@ -46,40 +45,19 @@ impl StateAccumulator {
         acc.insert_all(
             effects
                 .iter()
-                .flat_map(|fx| {
-                    fx.created
-                        .clone()
-                        .into_iter()
-                        .map(|(obj_ref, _)| obj_ref.2)
-                        .collect::<Vec<ObjectDigest>>()
-                })
-                .collect::<Vec<ObjectDigest>>(),
+                .flat_map(|fx| fx.created().iter().map(|(obj_ref, _)| obj_ref.2)),
         );
         acc.remove_all(
             effects
                 .iter()
-                .flat_map(|fx| {
-                    fx.deleted
-                        .clone()
-                        .into_iter()
-                        .map(|obj_ref| obj_ref.2)
-                        .collect::<Vec<ObjectDigest>>()
-                })
-                .collect::<Vec<ObjectDigest>>(),
+                .flat_map(|fx| fx.deleted().iter().map(|obj_ref| obj_ref.2)),
         );
 
         // TODO almost certainly not currectly handling "mutated" effects.
         acc.insert_all(
             effects
                 .iter()
-                .flat_map(|fx| {
-                    fx.mutated
-                        .clone()
-                        .into_iter()
-                        .map(|(obj_ref, _)| obj_ref.2)
-                        .collect::<Vec<ObjectDigest>>()
-                })
-                .collect::<Vec<ObjectDigest>>(),
+                .flat_map(|fx| fx.mutated().iter().map(|(obj_ref, _)| obj_ref.2)),
         );
 
         epoch_store.insert_state_hash_for_checkpoint(&checkpoint_seq_num, &acc)?;

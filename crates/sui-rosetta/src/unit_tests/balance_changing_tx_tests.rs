@@ -25,7 +25,7 @@ use sui_types::intent::Intent;
 use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, InputObjectKind, MoveCall, MoveModulePublish,
     ObjectArg, Pay, PayAllSui, PaySui, SingleTransactionKind, Transaction, TransactionData,
-    TransactionKind, TransferSui,
+    TransactionDataAPI, TransactionKind, TransferSui,
 };
 use test_utils::network::TestClusterBuilder;
 
@@ -184,7 +184,7 @@ async fn test_split_coin() {
         .split_coin(sender, coin.0, vec![100000], None, 10000)
         .await
         .unwrap();
-    let tx = tx.kind.single_transactions().next().unwrap().clone();
+    let tx = tx.into_kind().single_transactions().next().unwrap().clone();
     test_transaction(&client, keystore, vec![], sender, tx, None, 10000, false).await;
 }
 
@@ -203,7 +203,7 @@ async fn test_merge_coin() {
         .merge_coins(sender, coin.0, coin2.0, None, 10000)
         .await
         .unwrap();
-    let tx = tx.kind.single_transactions().next().unwrap().clone();
+    let tx = tx.into_kind().single_transactions().next().unwrap().clone();
     test_transaction(&client, keystore, vec![], sender, tx, None, 10000, false).await;
 }
 
@@ -378,7 +378,7 @@ async fn test_delegate_sui() {
         )
         .await
         .unwrap();
-    let tx = tx.kind.into_single_transactions().next().unwrap();
+    let tx = tx.into_kind().into_single_transactions().next().unwrap();
 
     test_transaction(&client, keystore, vec![], sender, tx, None, 10000, false).await;
 }
@@ -407,7 +407,7 @@ async fn test_delegate_sui_with_none_amount() {
         )
         .await
         .unwrap();
-    let tx = tx.kind.into_single_transactions().next().unwrap();
+    let tx = tx.into_kind().into_single_transactions().next().unwrap();
 
     test_transaction(&client, keystore, vec![], sender, tx, None, 10000, false).await;
 }

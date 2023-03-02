@@ -27,15 +27,12 @@ use sui_types::object::OBJECT_START_VERSION;
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
-    base_types::{
-        random_object_ref, AuthorityName, ExecutionDigests, ObjectRef, SuiAddress,
-        TransactionDigest,
-    },
+    base_types::{AuthorityName, ExecutionDigests, ObjectRef, SuiAddress, TransactionDigest},
     committee::Committee,
     crypto::{AuthoritySignInfo, AuthoritySignature},
     message_envelope::Message,
     messages::{CertifiedTransaction, Transaction, TransactionEffects},
-    object::{Object, Owner},
+    object::Object,
 };
 use tokio::time::timeout;
 use tracing::{info, warn};
@@ -127,14 +124,7 @@ pub fn create_fake_cert_and_effect_digest<'a>(
 }
 
 pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
-    TransactionEffects {
-        transaction_digest: *tx.digest(),
-        gas_object: (
-            random_object_ref(),
-            Owner::AddressOwner(tx.data().intent_message.value.sender()),
-        ),
-        ..Default::default()
-    }
+    TransactionEffects::new_with_tx(tx)
 }
 
 pub fn compile_basics_package() -> CompiledPackage {
