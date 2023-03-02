@@ -11,7 +11,9 @@ use tracing::{info, warn};
 pub const MIN_PROTOCOL_VERSION: u64 = 1;
 pub const MAX_PROTOCOL_VERSION: u64 = 1;
 
-#[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(
+    Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
+)]
 pub struct ProtocolVersion(u64);
 
 impl ProtocolVersion {

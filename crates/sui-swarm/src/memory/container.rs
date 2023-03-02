@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::FutureExt;
+use std::sync::{Arc, Weak};
 use std::thread;
 use sui_config::NodeConfig;
-use sui_node::{metrics, SuiNode};
+use sui_node::{metrics, SuiNode, SuiNodeHandle};
 use tracing::{info, trace};
 
 use super::node::RuntimeType;
@@ -13,6 +14,7 @@ use super::node::RuntimeType;
 pub(crate) struct Container {
     join_handle: Option<thread::JoinHandle<()>>,
     cancel_sender: Option<tokio::sync::oneshot::Sender<()>>,
+    node: Weak<SuiNode>,
 }
 
 /// When dropped, stop and wait for the node running in this Container to completely shutdown.
@@ -80,9 +82,9 @@ impl Container {
                     "Started Prometheus HTTP endpoint. To query metrics use\n\tcurl -s http://{}/metrics",
                     config.metrics_address
                 );
-                let _server = SuiNode::start(&config, registry_service).await.unwrap();
+                let server = SuiNode::start(&config, registry_service).await.unwrap();
                 // Notify that we've successfully started the node
-                let _ = startup_sender.send(());
+                let _ = startup_sender.send(Arc::downgrade(&server));
                 // run until canceled
                 cancel_reciever.map(|_| ()).await;
 
@@ -90,12 +92,18 @@ impl Container {
             });
         });
 
-        startup_reciever.await.unwrap();
+        let node = startup_reciever.await.unwrap();
 
         Self {
             join_handle: Some(thread),
             cancel_sender: Some(cancel_sender),
+            node,
         }
+    }
+
+    /// Get a SuiNodeHandle to the node owned by the container.
+    pub fn get_node_handle(&self) -> Option<SuiNodeHandle> {
+        Some(SuiNodeHandle::new(self.node.upgrade()?))
     }
 
     /// Check to see that the Node is still alive by checking if the receiving side of the

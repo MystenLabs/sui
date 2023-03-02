@@ -53,6 +53,12 @@ ChangeEpoch:
     - computation_charge: U64
     - storage_rebate: U64
     - epoch_start_timestamp_ms: U64
+    - system_packages:
+        SEQ:
+          TUPLE:
+            - TYPENAME: SequenceNumber
+            - SEQ:
+                SEQ: U8
 CircularObjectOwnership:
   STRUCT:
     - object:
