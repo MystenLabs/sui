@@ -28,7 +28,7 @@ async fn make_batch() {
     let store = create_batches_store();
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_batch_maker, rx_batch_maker) = test_utils::test_channel!(1);
-    let (tx_message, mut rx_message) = test_utils::test_channel!(1);
+    let (tx_quorum_waiter, mut rx_quorum_waiter) = test_utils::test_channel!(1);
     let (tx_digest, mut rx_digest) = test_utils::test_channel!(1);
     let node_metrics = WorkerMetrics::new(&Registry::new());
 
@@ -41,7 +41,7 @@ async fn make_batch() {
         Duration::from_millis(1_000_000), // Ensure the timer is not triggered.
         tx_shutdown.subscribe(),
         rx_batch_maker,
-        tx_message,
+        tx_quorum_waiter,
         Arc::new(node_metrics),
         store.clone(),
         tx_digest,
@@ -56,7 +56,7 @@ async fn make_batch() {
 
     // Ensure the batch is as expected.
     let expected_batch = Batch::new(vec![tx.clone(), tx.clone()]);
-    let (batch, overall_response) = rx_message.recv().await.unwrap();
+    let (batch, overall_response) = rx_quorum_waiter.recv().await.unwrap();
 
     assert_eq!(batch.transactions, expected_batch.transactions);
 
@@ -85,7 +85,7 @@ async fn batch_timeout() {
     let store = create_batches_store();
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_batch_maker, rx_batch_maker) = test_utils::test_channel!(1);
-    let (tx_message, mut rx_message) = test_utils::test_channel!(1);
+    let (tx_quorum_waiter, mut rx_quorum_waiter) = test_utils::test_channel!(1);
     let node_metrics = WorkerMetrics::new(&Registry::new());
     let (tx_digest, mut rx_digest) = test_utils::test_channel!(1);
 
@@ -98,7 +98,7 @@ async fn batch_timeout() {
         Duration::from_millis(50), // Ensure the timer is triggered.
         tx_shutdown.subscribe(),
         rx_batch_maker,
-        tx_message,
+        tx_quorum_waiter,
         Arc::new(node_metrics),
         store.clone(),
         tx_digest,
@@ -110,7 +110,7 @@ async fn batch_timeout() {
     tx_batch_maker.send((tx.clone(), s0)).await.unwrap();
 
     // Ensure the batch is as expected.
-    let (batch, overall_response) = rx_message.recv().await.unwrap();
+    let (batch, overall_response) = rx_quorum_waiter.recv().await.unwrap();
     let expected_batch = Batch::new(vec![tx.clone()]);
     assert_eq!(batch.transactions, expected_batch.transactions);
 
