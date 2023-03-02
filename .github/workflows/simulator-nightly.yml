@@ -68,13 +68,13 @@ jobs:
         channel-id: 'simtest-nightly'
         payload: |
           {
-            "text": "*${{ github.workflow }}* workflow has ${{ env.WORKFLOW_CONCLUSION }}",
+            "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`",
             "blocks": [
               {
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "*${{ github.workflow }}* workflow has ${{ env.WORKFLOW_CONCLUSION }}"
+                  "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`"
                 }
               },
               {
