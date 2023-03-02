@@ -35,29 +35,23 @@ export function SponsoredTxnGasSummary({
                 <Text variant="body" weight="medium" color="steel-darker">
                     You Paid
                 </Text>
-                <div className="flex gap-1 items-center">
-                    <Text variant="body" weight="medium" color="steel-darker">
-                        {senderTotalAmount} {senderTotalAmountSymbol}
-                    </Text>
-                </div>
+                <Text variant="body" weight="medium" color="steel-darker">
+                    {senderTotalAmount} {senderTotalAmountSymbol}
+                </Text>
             </div>
             <div className="flex justify-between items-center w-full">
                 <Text variant="body" weight="medium" color="steel-darker">
                     Paid by Sponsor
                 </Text>
-                <div className="flex gap-1 items-center">
-                    <Text variant="body" weight="medium" color="steel-darker">
-                        {sponsorTotalAmount} {sponsorTotalAmountSymbol}
-                    </Text>
-                </div>
+                <Text variant="body" weight="medium" color="steel-darker">
+                    {sponsorTotalAmount} {sponsorTotalAmountSymbol}
+                </Text>
             </div>
             <div className="flex justify-between items-center w-full">
                 <Text variant="body" weight="medium" color="steel-darker">
                     Sponsor
                 </Text>
-                <div className="flex gap-1 items-center">
-                    <TxnAddressLink address={sponsor} />
-                </div>
+                <TxnAddressLink address={sponsor} />
             </div>
         </div>
     );

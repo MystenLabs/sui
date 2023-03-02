@@ -31,27 +31,18 @@ export function TxnGasSummary({
                 <Text variant="body" weight="medium" color="steel-darker">
                     Gas Fees
                 </Text>
-                <div className="flex gap-1 items-center">
-                    <Text variant="body" weight="medium" color="steel-darker">
-                        {gas} {symbol}
-                    </Text>
-                </div>
+                <Text variant="body" weight="medium" color="steel-darker">
+                    {gas} {symbol}
+                </Text>
             </div>
             {transferAmount ? (
                 <div className="flex justify-between items-center w-full">
                     <Text variant="body" weight="medium" color="steel-darker">
                         Total Amount
                     </Text>
-
-                    <div className="flex gap-1 items-center">
-                        <Text
-                            variant="body"
-                            weight="medium"
-                            color="steel-darker"
-                        >
-                            {totalAmount} {totalAmountSymbol}
-                        </Text>
-                    </div>
+                    <Text variant="body" weight="medium" color="steel-darker">
+                        {totalAmount} {totalAmountSymbol}
+                    </Text>
                 </div>
             ) : null}
         </div>
