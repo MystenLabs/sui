@@ -708,7 +708,6 @@ module sui::validator_set {
         storage_fund_reward: &mut Balance<SUI>,
         ctx: &mut TxContext
     ) {
-        let new_epoch = tx_context::epoch(ctx) + 1;
         let length = vector::length(validators);
         assert!(length > 0, 0);
         let i = 0;
@@ -735,7 +734,7 @@ module sui::validator_set {
             };
 
             // Add rewards to delegation staking pool to auto compound for delegators.
-            validator::deposit_delegation_rewards(validator, delegator_reward, new_epoch);
+            validator::deposit_delegation_rewards(validator, delegator_reward);
             i = i + 1;
         }
     }

@@ -13,7 +13,6 @@ module sui::validator_tests {
     use sui::coin::{Self, Coin};
     use sui::balance;
     use sui::staking_pool::{Self, StakedSui};
-    use sui::tx_context;
     use std::vector;
 
 
@@ -127,16 +126,16 @@ module sui::validator_tests {
 
             assert!(validator::total_stake(&validator) == 10, 0);
             assert!(validator::pending_stake_amount(&validator) == 30, 0);
-            assert!(validator::pending_principal_withdrawals(&validator) == 10, 0);
+            assert!(validator::pending_stake_withdraw_amount(&validator) == 10, 0);
 
-            validator::deposit_delegation_rewards(&mut validator, balance::zero(), tx_context::epoch(ctx) + 1);
+            validator::deposit_delegation_rewards(&mut validator, balance::zero());
 
             // Calling `process_pending_delegations_and_withdraws` will withdraw the coin and transfer to sender.
             validator::process_pending_delegations_and_withdraws(&mut validator, ctx);
 
             assert!(validator::total_stake(&validator) == 30, 0);
             assert!(validator::pending_stake_amount(&validator) == 0, 0);
-            assert!(validator::pending_principal_withdrawals(&validator) == 0, 0);
+            assert!(validator::pending_stake_withdraw_amount(&validator) == 0, 0);
         };
 
         test_scenario::next_tx(scenario, sender);

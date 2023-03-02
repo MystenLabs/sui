@@ -1548,7 +1548,6 @@ The staking rewards are shared with the delegators while the storage fund ones a
     storage_fund_reward: &<b>mut</b> Balance&lt;SUI&gt;,
     ctx: &<b>mut</b> TxContext
 ) {
-    <b>let</b> new_epoch = <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) + 1;
     <b>let</b> length = <a href="_length">vector::length</a>(validators);
     <b>assert</b>!(length &gt; 0, 0);
     <b>let</b> i = 0;
@@ -1575,7 +1574,7 @@ The staking rewards are shared with the delegators while the storage fund ones a
         };
 
         // Add rewards <b>to</b> delegation staking pool <b>to</b> auto compound for delegators.
-        <a href="validator.md#0x2_validator_deposit_delegation_rewards">validator::deposit_delegation_rewards</a>(<a href="validator.md#0x2_validator">validator</a>, delegator_reward, new_epoch);
+        <a href="validator.md#0x2_validator_deposit_delegation_rewards">validator::deposit_delegation_rewards</a>(<a href="validator.md#0x2_validator">validator</a>, delegator_reward);
         i = i + 1;
     }
 }
