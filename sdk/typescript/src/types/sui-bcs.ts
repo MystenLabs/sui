@@ -317,6 +317,14 @@ const BCS_SPEC: TypeSchema = {
       Pay: 'PayTx',
       PaySui: 'PaySuiTx',
       PayAllSui: 'PayAllSuiTx',
+
+      // can not be called from sui.js; dummy placement
+      // to set the enum counter right for ProgrammableTransact
+      ChangeEpoch: null,
+      Genesis: null,
+      ConsensusCommitPrologue: null,
+
+      ProgrammableTransaction: 'ProgrammableTransaction'
     },
     TransactionKind: {
       Single: 'Transaction',

@@ -1282,6 +1282,8 @@ export class BCS {
         let typeOrParam =
           paramIndex === -1 ? invariantType : typeParams[paramIndex];
 
+        console.log(typeName, orderByte, invariantType);
+
         {
           let { name, params } = this.parseTypeName(typeOrParam);
           return {

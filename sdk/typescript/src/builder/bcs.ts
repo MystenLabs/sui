@@ -33,19 +33,6 @@ export const PROGRAMMABLE_CALL = 'SimpleProgrammableMoveCall';
 export type Option<T> = { some: T } | { none: true };
 
 export const builder = new BCS(bcs)
-  .registerEnumType(OBJECT_ARG, {
-    ImmOrOwnedObject: 'SuiObjectRef',
-    SharedObject: {
-      id: BCS.ADDRESS,
-      initial_shared_version: BCS.U64,
-      mutable: BCS.BOOL,
-    },
-  })
-  .registerEnumType(CALL_ARG, {
-    Pure: [VECTOR, BCS.U8],
-    Object: OBJECT_ARG,
-    ObjVec: OBJECT_ARG,
-  })
   .registerStructType(PROGRAMMABLE_TX, {
     inputs: [VECTOR, CALL_ARG],
     commands: [VECTOR, COMMAND],
@@ -75,7 +62,7 @@ export const builder = new BCS(bcs)
      */
     TransferObjects: {
       objects: [VECTOR, ARGUMENT],
-      receiver: ARGUMENT,
+      address: ARGUMENT,
     },
     /**
      * Split `amount` from a `coin`.
@@ -116,9 +103,9 @@ type ProgrammableCallInner = {
  * Wrapper around Enum, which transforms any `T` into an object with `kind` property:
  * @example
  * ```
- * let bcsEnum = { TransferObjects: { objects: [], receiver: ... } }
+ * let bcsEnum = { TransferObjects: { objects: [], address: ... } }
  * // becomes
- * let translatedEnum = { kind: 'TransferObjects', objects: [], receiver: ... };
+ * let translatedEnum = { kind: 'TransferObjects', objects: [], address: ... };
  * ```
  */
 builder.registerType(
@@ -139,8 +126,8 @@ builder.registerType(
     return { kind, ...data[kind] };
   },
   (data: { kind: string }) => {
-    if ('kind' in data == false) {
-      throw new Error(`EnumKind: Missing property "kind" in the object ${JSON.stringify(data)}`);
+    if (typeof data !== 'object' && 'kind' in data == false) {
+      throw new Error(`EnumKind: Missing property "kind" in the input ${JSON.stringify(data)}`);
     }
 
     return true;
