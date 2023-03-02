@@ -116,7 +116,10 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
 
                     {isStakeTxn ? (
                         moveCallLabel === 'Staked' ? (
-                            <StakeTxnCard txnEffects={effects} events={events}/>
+                            <StakeTxnCard
+                                txnEffects={effects}
+                                events={events}
+                            />
                         ) : (
                             <UnStakeTxnCard
                                 txn={txn}
