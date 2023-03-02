@@ -212,7 +212,7 @@ export function SendTokenForm({
                         to,
                         amount,
                         isPayAllSui,
-                        coins,
+                        coins: allCoins,
                         coinIds: coinsIDs,
                         gasBudget: gasInputBudgetEst,
                     };
