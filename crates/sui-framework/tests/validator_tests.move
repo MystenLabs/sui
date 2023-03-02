@@ -5,11 +5,13 @@
 module sui::validator_tests {
     use sui::sui::SUI;
     use sui::test_scenario;
-    use sui::validator;
     use sui::url;
+    use std::string::Self;
+    use sui::validator::{Self, Validator};
+    use sui::tx_context::{Self, TxContext};
+    use sui::balance::Balance;
     use std::option;
     use std::ascii;
-    use std::string;
     use sui::coin::{Self, Coin};
     use sui::balance;
     use sui::staking_pool::{Self, StakedSui};
@@ -25,11 +27,37 @@ module sui::validator_tests {
     // Proof of possesion generated from sui/crates/sui-types/src/unit_tests/crypto_tests.rs
     const PROOF_OF_POSESSION: vector<u8> = vector[170, 123, 102, 14, 115, 218, 115, 118, 170, 89, 192, 247, 101, 58, 60, 31, 48, 30, 9, 47, 0, 59, 54, 9, 136, 148, 14, 159, 198, 205, 109, 33, 189, 144, 195, 122, 18, 111, 137, 207, 112, 77, 204, 241, 187, 152, 88, 238];
 
-    /// These  equivalent to /ip4/127.0.0.1
+    /// These are equivalent to /ip4/127.0.0.1
     const VALID_NET_ADDR: vector<u8> = vector[4, 127, 0, 0, 1];
     const VALID_P2P_ADDR: vector<u8> = vector[4, 127, 0, 0, 1];
     const VALID_CONSENSUS_ADDR: vector<u8> = vector[4, 127, 0, 0, 1];
     const VALID_WORKER_ADDR: vector<u8> = vector[4, 127, 0, 0, 1];
+
+    #[test_only]
+    fun get_test_validator(ctx: &mut TxContext, init_stake: Balance<SUI>): Validator {
+        let sender = tx_context::sender(ctx);
+        validator::new(
+            sender,
+            VALID_PUBKEY,
+            VALID_NET_PUBKEY,
+            VALID_WORKER_PUBKEY,
+            PROOF_OF_POSESSION,
+            b"Validator1",
+            b"Validator1",
+            b"Validator1",
+            b"Validator1",
+            VALID_NET_ADDR,
+            VALID_P2P_ADDR,
+            VALID_CONSENSUS_ADDR,
+            VALID_WORKER_ADDR,
+            init_stake,
+            option::none(),
+            1,
+            0,
+            0,
+            ctx
+        )
+    }
 
     #[test]
     fun test_validator_owner_flow() {
@@ -40,27 +68,7 @@ module sui::validator_tests {
             let ctx = test_scenario::ctx(scenario);
 
             let init_stake = coin::into_balance(coin::mint_for_testing(10, ctx));
-            let validator = validator::new(
-                sender,
-                VALID_PUBKEY,
-                VALID_NET_PUBKEY,
-                VALID_WORKER_PUBKEY,
-                PROOF_OF_POSESSION,
-                b"Validator1",
-                b"Validator1",
-                b"Validator1",
-                b"Validator1",
-                VALID_NET_ADDR,
-                VALID_P2P_ADDR,
-                VALID_CONSENSUS_ADDR,
-                VALID_WORKER_ADDR,
-                init_stake,
-                option::none(),
-                1,
-                0,
-                0,
-                ctx
-            );
+            let validator = get_test_validator(ctx, init_stake);
             assert!(validator::total_stake_amount(&validator) == 10, 0);
             assert!(validator::sui_address(&validator) == sender, 0);
 
@@ -85,28 +93,7 @@ module sui::validator_tests {
         let ctx = test_scenario::ctx(scenario);
         let init_stake = coin::into_balance(coin::mint_for_testing(10, ctx));
 
-        let validator = validator::new(
-            sender,
-            VALID_PUBKEY,
-            VALID_NET_PUBKEY,
-            VALID_WORKER_PUBKEY,
-            PROOF_OF_POSESSION,
-            b"Validator1",
-            b"Validator1",
-            b"image_url1",
-            b"project_url1",
-            VALID_NET_ADDR,
-            VALID_P2P_ADDR,
-            VALID_CONSENSUS_ADDR,
-            VALID_WORKER_ADDR,
-            init_stake,
-            option::none(),
-            1,
-            0,
-            0,
-            ctx
-        );
-
+        let validator = get_test_validator(ctx, init_stake);
         test_scenario::next_tx(scenario, sender);
         {
             let ctx = test_scenario::ctx(scenario);
@@ -325,4 +312,250 @@ module sui::validator_tests {
         validator::validate_metadata(&metadata);
     }
 
+    #[test]
+    fun test_validator_update_metadata_ok() {
+        let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+        let scenario_val = test_scenario::begin(sender);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+        let init_stake = coin::into_balance(coin::mint_for_testing(10, ctx));
+        let new_protocol_pub_key = vector[143, 97, 231, 116, 194, 3, 239, 10, 180, 80, 18, 78, 135, 46, 201, 7, 72, 33, 52, 183, 108, 35, 55, 55, 38, 187, 187, 150, 233, 146, 117, 165, 157, 219, 220, 157, 150, 19, 224, 131, 23, 206, 189, 221, 55, 134, 90, 140, 21, 159, 246, 179, 108, 104, 152, 249, 176, 243, 55, 27, 154, 78, 142, 169, 64, 77, 159, 227, 43, 123, 35, 252, 28, 205, 209, 160, 249, 40, 110, 101, 55, 16, 176, 56, 56, 177, 123, 185, 58, 61, 63, 88, 239, 241, 95, 99];
+        let new_pop = vector[161, 130, 28, 216, 188, 134, 52, 4, 25, 167, 187, 251, 207, 203, 145, 37, 30, 135, 202, 189, 170, 87, 115, 250, 82, 59, 216, 9, 150, 110, 52, 167, 225, 17, 132, 192, 32, 41, 20, 124, 115, 54, 158, 228, 55, 75, 98, 36];
+        let new_worker_pub_key = vector[115, 220, 238, 151, 134, 159, 173, 41, 80, 2, 66, 196, 61, 17, 191, 76, 103, 39, 246, 127, 171, 85, 19, 235, 210, 106, 97, 97, 116, 48, 244, 191];
+        let new_network_pub_key = vector[149, 128, 161, 13, 11, 183, 96, 45, 89, 20, 188, 205, 26, 127, 147, 254, 184, 229, 184, 102, 64, 170, 104, 29, 191, 171, 91, 99, 58, 178, 41, 156];
+
+        let validator = get_test_validator(ctx, init_stake);
+
+        test_scenario::next_tx(scenario, sender);
+        {
+            validator::update_next_epoch_network_address(&mut validator, vector[4, 192, 168, 1, 1]);
+            validator::update_next_epoch_p2p_address(&mut validator, vector[4, 192, 168, 1, 1]);
+            validator::update_next_epoch_consensus_address(&mut validator, vector[4, 192, 168, 1, 1]);
+            validator::update_next_epoch_worker_address(&mut validator, vector[4, 192, 168, 1, 1]);
+            validator::update_next_epoch_protocol_pubkey(
+                &mut validator,
+                new_protocol_pub_key,
+                new_pop,
+            );
+            validator::update_next_epoch_worker_pubkey(
+                &mut validator,
+                new_worker_pub_key,
+            );
+            validator::update_next_epoch_network_pubkey(
+                &mut validator,
+                new_network_pub_key,
+            );
+
+            validator::update_name(&mut validator, string::from_ascii(ascii::string(b"new_name")));
+            validator::update_description(&mut validator, string::from_ascii(ascii::string(b"new_desc")));
+            validator::update_image_url(&mut validator, url::new_unsafe_from_bytes(b"new_image_url"));
+            validator::update_project_url(&mut validator, url::new_unsafe_from_bytes(b"new_proj_url"));
+        };
+
+        test_scenario::next_tx(scenario, sender);
+        {
+            // Current epoch
+            assert!(validator::name(&mut validator) == &string::from_ascii(ascii::string(b"new_name")), 0);
+            assert!(validator::description(&mut validator) == &string::from_ascii(ascii::string(b"new_desc")), 0);
+            assert!(validator::image_url(&mut validator) == &url::new_unsafe_from_bytes(b"new_image_url"), 0);
+            assert!(validator::project_url(&mut validator) == &url::new_unsafe_from_bytes(b"new_proj_url"), 0);
+            assert!(validator::network_address(&validator) == &VALID_NET_ADDR, 0);
+            assert!(validator::p2p_address(&validator) == &VALID_P2P_ADDR, 0);
+            assert!(validator::consensus_address(&validator) == &VALID_CONSENSUS_ADDR, 0);
+            assert!(validator::worker_address(&validator) == &VALID_WORKER_ADDR, 0);
+            assert!(validator::protocol_pubkey_bytes(&validator) == &VALID_PUBKEY, 0);
+            assert!(validator::proof_of_possession(&validator) == &PROOF_OF_POSESSION, 0);
+            assert!(validator::network_pubkey_bytes(&validator) == &VALID_NET_PUBKEY, 0);
+            assert!(validator::worker_pubkey_bytes(&validator) == &VALID_WORKER_PUBKEY, 0);
+
+            // Next epoch
+            assert!(validator::next_epoch_network_address(&validator) == &option::some(vector[4, 192, 168, 1, 1]), 0);
+            assert!(validator::next_epoch_p2p_address(&validator) == &option::some(vector[4, 192, 168, 1, 1]), 0);
+            assert!(validator::next_epoch_consensus_address(&validator) == &option::some(vector[4, 192, 168, 1, 1]), 0);
+            assert!(validator::next_epoch_worker_address(&validator) == &option::some(vector[4, 192, 168, 1, 1]), 0);
+            assert!(
+                validator::next_epoch_protocol_pubkey_bytes(&validator) == &option::some(new_protocol_pub_key),
+                0
+            );
+            assert!(
+                validator::next_epoch_proof_of_possession(&validator) == &option::some(new_pop),
+                0
+            );
+            assert!(
+                validator::next_epoch_worker_pubkey_bytes(&validator) == &option::some(new_worker_pub_key),
+                0
+            );
+            assert!(
+                validator::next_epoch_network_pubkey_bytes(&validator) == &option::some(new_network_pub_key),
+                0
+            );
+        };
+
+        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_scenario::end(scenario_val);
+    }
+
+    #[expected_failure(abort_code = sui::validator::EInvalidProofOfPossession)]
+    #[test]
+    fun test_validator_update_metadata_invalid_proof_of_possession() {
+        let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+        let scenario_val = test_scenario::begin(sender);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+        let init_stake = coin::into_balance(coin::mint_for_testing(10, ctx));
+
+        let validator = get_test_validator(ctx, init_stake);
+
+        test_scenario::next_tx(scenario, sender);
+        {
+            validator::update_next_epoch_protocol_pubkey(
+                &mut validator,
+                vector[143, 97, 231, 116, 194, 3, 239, 10, 180, 80, 18, 78, 135, 46, 201, 7, 72, 33, 52, 183, 108, 35, 55, 55, 38, 187, 187, 150, 233, 146, 117, 165, 157, 219, 220, 157, 150, 19, 224, 131, 23, 206, 189, 221, 55, 134, 90, 140, 21, 159, 246, 179, 108, 104, 152, 249, 176, 243, 55, 27, 154, 78, 142, 169, 64, 77, 159, 227, 43, 123, 35, 252, 28, 205, 209, 160, 249, 40, 110, 101, 55, 16, 176, 56, 56, 177, 123, 185, 58, 61, 63, 88, 239, 241, 95, 99],
+                // This is an invalid proof of possession, so we abort
+                vector[111, 130, 28, 216, 188, 134, 52, 4, 25, 167, 187, 251, 207, 203, 145, 37, 30, 135, 202, 189, 170, 87, 115, 250, 82, 59, 216, 9, 150, 110, 52, 167, 225, 17, 132, 192, 32, 41, 20, 124, 115, 54, 158, 228, 55, 75, 98, 36],
+            );
+        };
+
+        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_scenario::end(scenario_val);
+    }
+
+    #[expected_failure(abort_code = sui::validator::EMetadataInvalidNetPubkey)]
+    #[test]
+    fun test_validator_update_metadata_invalid_network_key() {
+        let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+        let scenario_val = test_scenario::begin(sender);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+        let init_stake = coin::into_balance(coin::mint_for_testing(10, ctx));
+
+        let validator = get_test_validator(ctx, init_stake);
+
+        test_scenario::next_tx(scenario, sender);
+        {
+            validator::update_next_epoch_network_pubkey(
+                &mut validator,
+                x"beef",
+            );
+        };
+
+        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_scenario::end(scenario_val);
+    }
+
+
+    #[expected_failure(abort_code = sui::validator::EMetadataInvalidWorkerPubKey)]
+    #[test]
+    fun test_validator_update_metadata_invalid_worker_key() {
+        let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+        let scenario_val = test_scenario::begin(sender);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+        let init_stake = coin::into_balance(coin::mint_for_testing(10, ctx));
+
+        let validator = get_test_validator(ctx, init_stake);
+
+        test_scenario::next_tx(scenario, sender);
+        {
+            validator::update_next_epoch_worker_pubkey(
+                &mut validator,
+                x"beef",
+            );
+        };
+
+        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_scenario::end(scenario_val);
+    }
+
+    #[expected_failure(abort_code = sui::validator::EMetadataInvalidNetAddr)]
+    #[test]
+    fun test_validator_update_metadata_invalid_network_addr() {
+        let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+        let scenario_val = test_scenario::begin(sender);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+        let init_stake = coin::into_balance(coin::mint_for_testing(10, ctx));
+
+        let validator = get_test_validator(ctx, init_stake);
+
+        test_scenario::next_tx(scenario, sender);
+        {
+            validator::update_next_epoch_network_address(
+                &mut validator,
+                x"beef",
+            );
+        };
+
+        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_scenario::end(scenario_val);
+    }
+
+    #[expected_failure(abort_code = sui::validator::EMetadataInvalidConsensusAddr)]
+    #[test]
+    fun test_validator_update_metadata_invalid_consensus_addr() {
+        let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+        let scenario_val = test_scenario::begin(sender);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+        let init_stake = coin::into_balance(coin::mint_for_testing(10, ctx));
+
+        let validator = get_test_validator(ctx, init_stake);
+
+        test_scenario::next_tx(scenario, sender);
+        {
+            validator::update_next_epoch_consensus_address(
+                &mut validator,
+                x"beef",
+            );
+        };
+
+        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_scenario::end(scenario_val);
+    }
+
+    #[expected_failure(abort_code = sui::validator::EMetadataInvalidWorkerAddr)]
+    #[test]
+    fun test_validator_update_metadata_invalid_worker_addr() {
+        let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+        let scenario_val = test_scenario::begin(sender);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+        let init_stake = coin::into_balance(coin::mint_for_testing(10, ctx));
+
+        let validator = get_test_validator(ctx, init_stake);
+
+        test_scenario::next_tx(scenario, sender);
+        {
+            validator::update_next_epoch_worker_address(
+                &mut validator,
+                x"beef",
+            );
+        };
+
+        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_scenario::end(scenario_val);
+    }
+
+    #[expected_failure(abort_code = sui::validator::EMetadataInvalidP2pAddr)]
+    #[test]
+    fun test_validator_update_metadata_invalid_p2p_address() {
+        let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+        let scenario_val = test_scenario::begin(sender);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+        let init_stake = coin::into_balance(coin::mint_for_testing(10, ctx));
+
+        let validator = get_test_validator(ctx, init_stake);
+
+        test_scenario::next_tx(scenario, sender);
+        {
+            validator::update_next_epoch_p2p_address(
+                &mut validator,
+                x"beef",
+            );
+        };
+
+        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_scenario::end(scenario_val);
+    }
 }

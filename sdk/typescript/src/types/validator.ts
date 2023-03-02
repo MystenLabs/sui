@@ -10,6 +10,7 @@ import {
   string,
   union,
   Infer,
+  nullable,
   tuple,
   optional,
 } from 'superstruct';
@@ -20,7 +21,7 @@ import { AuthorityName } from './transactions';
 
 export const ValidatorMetaData = object({
   sui_address: SuiAddress,
-  pubkey_bytes: array(number()),
+  protocol_pubkey_bytes: array(number()),
   network_pubkey_bytes: array(number()),
   worker_pubkey_bytes: array(number()),
   proof_of_possession_bytes: array(number()),
@@ -32,6 +33,14 @@ export const ValidatorMetaData = object({
   net_address: array(number()),
   consensus_address: array(number()),
   worker_address: array(number()),
+  next_epoch_protocol_pubkey_bytes: nullable(array(number())),
+  next_epoch_proof_of_possession: nullable(array(number())),
+  next_epoch_network_pubkey_bytes: nullable(array(number())),
+  next_epoch_worker_pubkey_bytes: nullable(array(number())),
+  next_epoch_net_address: nullable(array(number())),
+  next_epoch_p2p_address: nullable(array(number())),
+  next_epoch_consensus_address: nullable(array(number())),
+  next_epoch_worker_address: nullable(array(number())),
 });
 
 export type DelegatedStake = Infer<typeof DelegatedStake>;

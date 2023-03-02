@@ -173,6 +173,7 @@ impl StateAccumulator {
             .root_state_notify_read
             .notify(epoch, &(last_checkpoint_of_epoch, root_state_hash.clone()));
 
+        debug!("Accumulated epoch {}", epoch);
         Ok(root_state_hash)
     }
 
