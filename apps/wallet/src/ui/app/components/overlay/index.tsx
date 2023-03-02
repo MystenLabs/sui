@@ -16,7 +16,7 @@ type OverlayProps = {
     showModal: boolean;
     closeOverlay?: () => void;
     closeIcon?: SuiIcons;
-    setShowModal: (showModal: boolean) => void;
+    setShowModal?: (showModal: boolean) => void;
 };
 
 function Overlay({
@@ -30,7 +30,7 @@ function Overlay({
     const closeModal = useCallback(
         (e: React.MouseEvent<HTMLElement>) => {
             closeOverlay && closeOverlay();
-            setShowModal(false);
+            setShowModal && setShowModal(false);
         },
         [closeOverlay, setShowModal]
     );

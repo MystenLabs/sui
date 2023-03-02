@@ -62,6 +62,7 @@ export function CustomRPCInput() {
                     type="text"
                     name="rpcInput"
                     min={MIN_CHAR}
+                    actionDisabled="auto"
                     placeholder={placeholder}
                     actionText="Save"
                 />
