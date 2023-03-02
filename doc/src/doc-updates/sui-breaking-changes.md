@@ -14,6 +14,8 @@ The next release of Sui, release 0.28, includes the breaking changes described i
 
 This release changes the field value type in `TransactionData` from `gas_payment: ObjectRef` to `gas_payment: Vec<ObjectRef>`, where `Vec<ObjectRef>` is a non-empty vector of owned SUI objects. This combines all of the coins into a single coin, using the `ObjectID` of the first coin in the vector as the coin containing the merge.
 
+**[Breaking change]** - `ecdsa_k1::ecrecover` and `ecdsa_k1::secp256k1_verify` now require you to input the raw message instead of a hashed message. You must also include the u8 that represents  the hash function. See [PR 7773](https://github.com/MystenLabs/sui/pull/7773) for more details.
+
 **[Breaking change]** The `ValidatorMetadata` function now includes a p2p_address field. The value for the field is the address the validator used for p2p activities, such as state sync. To learn more, see [PR 8636](https://github.com/MystenLabs/sui/pull/8636).
 
 **[Transaction Format breaking change]** - Adds a new expiration field to `TransactionData` to allow for users to specify a time that a transaction should expire, meaning it is no longer eligible to sign and execute by validators. In this release, the only supported value for the expiration field is epoch`. If not provided, no expiration is set for the associated transaction.
