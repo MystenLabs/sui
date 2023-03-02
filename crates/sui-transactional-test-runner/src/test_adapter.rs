@@ -594,7 +594,6 @@ impl<'a> SuiTestAdapter<'a> {
             inner,
             TransactionEffects {
                 status,
-                events,
                 created,
                 mutated,
                 unwrapped,
@@ -662,7 +661,7 @@ impl<'a> SuiTestAdapter<'a> {
                 created: created_ids,
                 written: written_ids,
                 deleted: deleted_ids,
-                events,
+                events: inner.events.data,
             }),
             ExecutionStatus::Failure { error, .. } => {
                 Err(anyhow::anyhow!(self.stabilize_str(format!(

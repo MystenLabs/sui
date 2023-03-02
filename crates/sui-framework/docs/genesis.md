@@ -157,8 +157,8 @@ all the information we need in the system.
             p2p_address,
             consensus_address,
             worker_address,
-            // TODO Figure out <b>if</b> we want <b>to</b> instead initialize validators <b>with</b> 0 <a href="stake.md#0x2_stake">stake</a>.
-            // Initialize all validators <b>with</b> 1 Mist <a href="stake.md#0x2_stake">stake</a>.
+            // TODO Figure out <b>if</b> we want <b>to</b> instead initialize validators <b>with</b> 0 stake.
+            // Initialize all validators <b>with</b> 1 Mist stake.
             <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> sui_supply, 1),
             <a href="_none">option::none</a>(),
             gas_price,

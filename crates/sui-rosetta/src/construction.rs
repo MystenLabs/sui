@@ -193,7 +193,7 @@ pub async fn metadata(
     let gas_price = context
         .client
         .governance_api()
-        .get_current_epoch_static_info()
+        .get_sui_system_state()
         .await?
         .reference_gas_price;
 
@@ -271,7 +271,7 @@ pub async fn metadata(
         })?;
     let dry_run = context.client.read_api().dry_run_transaction(data).await?;
 
-    let budget = dry_run.gas_used.computation_cost + dry_run.gas_used.storage_cost;
+    let budget = dry_run.effects.gas_used.computation_cost + dry_run.effects.gas_used.storage_cost;
 
     Ok(ConstructionMetadataResponse {
         metadata: ConstructionMetadata {

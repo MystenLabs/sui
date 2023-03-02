@@ -23,6 +23,7 @@ import {
   SuiAddress,
   SuiJsonValue,
   TransactionDigest,
+  TransactionEventDigest,
 } from './common';
 
 // TODO: support u64
@@ -212,11 +213,20 @@ export const TransactionEffects = object({
    */
   gasObject: OwnedObjectRef,
   /** The events emitted during execution. Note that only successful transactions emit events */
-  events: optional(array(SuiEvent)),
+  eventsDigest: optional(TransactionEventDigest),
   /** The set of transaction digests this transaction depends on */
   dependencies: optional(array(TransactionDigest)),
 });
 export type TransactionEffects = Infer<typeof TransactionEffects>;
+
+export const TransactionEvents = array(SuiEvent);
+export type TransactionEvents = Infer<typeof TransactionEvents>;
+
+export const DryRunTransactionResponse = object({
+  effects: TransactionEffects,
+  events: TransactionEvents,
+});
+export type DryRunTransactionResponse = Infer<typeof DryRunTransactionResponse>;
 
 const ReturnValueType = tuple([array(number()), string()]);
 const MutableReferenceOutputType = tuple([number(), array(number()), string()]);
@@ -233,6 +243,7 @@ const DevInspectResultsType = union([
 
 export const DevInspectResults = object({
   effects: TransactionEffects,
+  events: TransactionEvents,
   results: DevInspectResultsType,
 });
 export type DevInspectResults = Infer<typeof DevInspectResults>;
@@ -348,6 +359,7 @@ export const SuiTransactionResponse = object({
   // TODO: Remove after devnet 0.28.0
   certificate: optional(CertifiedTransaction),
   effects: TransactionEffects,
+  events: TransactionEvents,
   // TODO: Remove after devnet 0.28.0
   timestamp_ms: optional(union([number(), literal(null)])),
   // TODO: Remove optional after devnet 0.28.0
@@ -620,7 +632,10 @@ export function getTransactionEffects(
 export function getEvents(
   data: SuiExecuteTransactionResponse | SuiTransactionResponse,
 ): SuiEvent[] | undefined {
-  return getTransactionEffects(data)?.events;
+  if ('events' in data) {
+    return data.events;
+  }
+  return undefined;
 }
 
 export function getCreatedObjects(

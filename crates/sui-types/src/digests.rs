@@ -468,6 +468,30 @@ impl fmt::UpperHex for TransactionEffectsDigest {
     }
 }
 
+#[serde_as]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
+pub struct TransactionEventsDigest(Sha3Digest);
+
+impl TransactionEventsDigest {
+    pub const ZERO: Self = Self(Sha3Digest::ZERO);
+
+    pub const fn new(digest: [u8; 32]) -> Self {
+        Self(Sha3Digest::new(digest))
+    }
+
+    pub fn random() -> Self {
+        Self(Sha3Digest::random())
+    }
+}
+
+impl fmt::Debug for TransactionEventsDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("TransactionEventsDigest")
+            .field(&self.0)
+            .finish()
+    }
+}
+
 // Each object has a unique digest
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct ObjectDigest(Sha3Digest);

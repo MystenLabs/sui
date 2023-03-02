@@ -116,10 +116,6 @@ export const Contents = object({
   fields: ContentsFields,
 });
 
-export const PendingWithdawFields = object({
-  contents: ContentsFieldsWithdraw,
-});
-
 export const DelegationStakingPoolFields = object({
   exchange_rates: object({
     id: string(),
@@ -127,7 +123,8 @@ export const DelegationStakingPoolFields = object({
   }),
   id: string(),
   pending_delegation: number(),
-  pending_withdraws: PendingWithdawFields,
+  pending_pool_token_withdraw: number(),
+  pending_total_sui_withdraw: number(),
   pool_token_balance: number(),
   rewards_pool: object({ value: number() }),
   starting_epoch: number(),
@@ -156,14 +153,10 @@ export const SystemParameters = object({
 export const Validator = object({
   metadata: ValidatorMetaData,
   voting_power: number(),
-  stake_amount: number(),
-  pending_stake: number(),
-  pending_withdraw: number(),
   gas_price: number(),
-  delegation_staking_pool: DelegationStakingPoolFields,
+  staking_pool: DelegationStakingPoolFields,
   commission_rate: number(),
   next_epoch_stake: number(),
-  next_epoch_delegation: number(),
   next_epoch_gas_price: number(),
   next_epoch_commission_rate: number(),
 });
@@ -175,8 +168,7 @@ export const ValidatorPair = object({
 });
 
 export const ValidatorSet = object({
-  validator_stake: number(),
-  delegation_stake: number(),
+  total_stake: number(),
   active_validators: array(Validator),
   pending_validators: object({
     contents: object({
@@ -196,7 +188,6 @@ export const ValidatorSet = object({
 });
 
 export const SuiSystemState = object({
-  info: object({ id: string() }),
   epoch: number(),
   // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
   protocol_version: optional(number()),

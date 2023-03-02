@@ -84,13 +84,13 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
 
     let SuiTransactionResponse { effects, .. } = tx_response;
     assert_eq!(
-        dryrun_response.transaction_digest,
+        dryrun_response.effects.transaction_digest,
         effects.transaction_digest
     );
     Ok(())
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
@@ -134,10 +134,14 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
         .await?;
 
     let SuiTransactionResponse { effects, .. } = tx_response;
+    let events = http_client
+        .get_transaction(effects.transaction_digest)
+        .await?
+        .events;
     assert_eq!(SuiExecutionStatus::Success, effects.status);
 
-    let package_id = effects
-        .events
+    let package_id = events
+        .data
         .iter()
         .find_map(|e| {
             if let SuiEvent::Publish { package_id, .. } = e {
@@ -172,15 +176,17 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
         .submit_transaction(
             tx_bytes,
             signatures,
-            ExecuteTransactionRequestType::WaitForEffectsCert,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
 
-    let SuiTransactionResponse { effects, .. } = tx_response;
+    let SuiTransactionResponse {
+        effects, events, ..
+    } = tx_response;
     assert_eq!(SuiExecutionStatus::Success, effects.status);
 
-    let randomness_object_id = effects
-        .events
+    let randomness_object_id = events
+        .data
         .iter()
         .find_map(|e| {
             if let SuiEvent::NewObject { object_id, .. } = e {
@@ -427,10 +433,10 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let SuiTransactionResponse { effects, .. } = tx_response;
+    let SuiTransactionResponse { events, .. } = tx_response;
 
-    let package_id = effects
-        .events
+    let package_id = events
+        .data
         .iter()
         .find_map(|e| {
             if let SuiEvent::Publish { package_id, .. } = e {
@@ -485,10 +491,10 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let SuiTransactionResponse { effects, .. } = tx_response;
+    let SuiTransactionResponse { events, .. } = tx_response;
 
-    let package_id = effects
-        .events
+    let package_id = events
+        .data
         .iter()
         .find_map(|e| {
             if let SuiEvent::Publish { package_id, .. } = e {
@@ -505,8 +511,8 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
 
     assert_eq!(0, result.value);
 
-    let treasury_cap = effects
-        .events
+    let treasury_cap = events
+        .data
         .iter()
         .find_map(|e| {
             if let SuiEvent::NewObject {
@@ -849,8 +855,8 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         )
         .await
         .unwrap();
-    // 17 events created by this test + 43 Genesis event
-    assert_eq!(60, page2.data.len());
+    // 17 events created by this test + 44 Genesis event
+    assert_eq!(61, page2.data.len());
     assert_eq!(None, page2.next_cursor);
 
     // test get sender events

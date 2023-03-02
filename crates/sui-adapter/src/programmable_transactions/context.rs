@@ -325,21 +325,6 @@ where
         Ok(())
     }
 
-    /// Taint a value showing it has been used in a non-entry Move call. This is important as it
-    /// means the value no longer behaves as if it was used in a series of independent transactions.
-    /// Particularly this is important for private entry functions, which assume this independent
-    /// behavior.
-    pub fn mark_used_in_non_entry_move_call(&mut self, arg: Argument) {
-        if let Ok((_, Some(val))) = self.borrow_mut_impl(arg, /* do not update usage */ None) {
-            match val {
-                Value::Object(obj) => obj.used_in_non_entry_move_call = true,
-                // nothing to do for raw, either it is pure bytes from input and there is nothing
-                // to change, or it is a Move value and it is never not tainted
-                Value::Raw(_, _) => (),
-            }
-        }
-    }
-
     /// Transfer the object to a new owner
     pub fn transfer_object(
         &mut self,
@@ -434,9 +419,11 @@ where
                 } = result_value;
                 match value {
                     None => (),
-                    Some(Value::Object(_)) => panic!("unused value without drop {i} {j}"),
-                    Some(Value::Raw(ValueType::Any, _)) => (),
-                    Some(Value::Raw(ValueType::Loaded { abilities, .. }, _)) => {
+                    Some(Value::Object(_)) => {
+                        panic!("unused value without drop {i} {j}")
+                    }
+                    Some(Value::Raw(RawValueType::Any, _)) => (),
+                    Some(Value::Raw(RawValueType::Loaded { abilities, .. }, _)) => {
                         // - nothing to check for drop
                         // - if it does not have drop, but has copy,
                         //   the last usage must be a take/clone in order to "lie" and say that the
@@ -707,7 +694,7 @@ fn load_call_arg<S: Storage>(
     call_arg: CallArg,
 ) -> Result<InputValue, ExecutionError> {
     Ok(match call_arg {
-        CallArg::Pure(bytes) => InputValue::new_raw(ValueType::Any, bytes),
+        CallArg::Pure(bytes) => InputValue::new_raw(RawValueType::Any, bytes),
         CallArg::Object(obj_arg) => load_object_arg(state_view, object_owner_map, obj_arg)?,
         CallArg::ObjVec(_) => {
             // protected by transaction input checker

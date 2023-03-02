@@ -17,8 +17,8 @@ use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::messages::{
-    ConsensusTransaction, ConsensusTransactionKey, VerifiedExecutableTransaction,
-    VerifiedTransaction,
+    ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
+    VerifiedExecutableTransaction, VerifiedTransaction,
 };
 use sui_types::storage::ParentSync;
 use tracing::{debug, error, instrument};
@@ -136,6 +136,10 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                             continue;
                         }
                     };
+                    self.metrics
+                        .consensus_handler_processed
+                        .with_label_values(&[classify(&transaction)])
+                        .inc();
                     let transaction = SequencedConsensusTransactionKind::External(transaction);
                     transactions.push((serialized_transaction, transaction, output_cert.clone()));
                 }
@@ -223,6 +227,21 @@ impl<T> ConsensusHandler<T> {
 
     fn epoch(&self) -> EpochId {
         self.epoch_store.epoch()
+    }
+}
+
+fn classify(transaction: &ConsensusTransaction) -> &'static str {
+    match &transaction.kind {
+        ConsensusTransactionKind::UserTransaction(certificate) => {
+            if certificate.contains_shared_object() {
+                "shared_certificate"
+            } else {
+                "owned_certificate"
+            }
+        }
+        ConsensusTransactionKind::CheckpointSignature(_) => "checkpoint_signature",
+        ConsensusTransactionKind::EndOfPublish(_) => "end_of_publish",
+        ConsensusTransactionKind::CapabilityNotification(_) => "capability_notification",
     }
 }
 

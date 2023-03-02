@@ -13,8 +13,7 @@ use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, HeaderBuilder, HeaderDigest, Metadata,
-    ReconfigureNotification, WorkerOthersBatchMessage, WorkerOurBatchMessage,
-    WorkerReconfigureMessage, WorkerSynchronizeMessage,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerSynchronizeMessage,
 };
 
 fn get_registry() -> Result<Registry> {
@@ -125,13 +124,9 @@ fn get_registry() -> Result<Registry> {
         target: pk,
     };
 
-    let shutdown = WorkerReconfigureMessage {
-        message: ReconfigureNotification::Shutdown,
-    };
     tracer.trace_value(&mut samples, &our_batch)?;
     tracer.trace_value(&mut samples, &others_batch)?;
     tracer.trace_value(&mut samples, &sync)?;
-    tracer.trace_value(&mut samples, &shutdown)?;
 
     // 2. Trace the main entry point(s) + every enum separately.
     tracer.trace_type::<Batch>(&samples)?;

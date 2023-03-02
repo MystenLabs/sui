@@ -61,12 +61,7 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
     async fn run(&mut self, quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>) {
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-            match self
-                .fullnode_client
-                .read_api()
-                .get_current_epoch_static_info()
-                .await
-            {
+            match self.fullnode_client.read_api().get_sui_system_state().await {
                 Ok(sui_system_state) => {
                     let epoch_id = sui_system_state.epoch;
                     if epoch_id > quorum_driver.current_epoch() {

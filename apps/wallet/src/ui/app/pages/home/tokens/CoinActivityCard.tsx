@@ -24,7 +24,7 @@ export function CoinActivitiesCard({ coinType }: { coinType: string }) {
     const txnByCoinType = useMemo(() => {
         if (!txns || !activeAddress) return null;
         return txns?.filter((txn) => {
-            const { coins } = getEventsSummary(txn.effects, activeAddress);
+            const { coins } = getEventsSummary(txn.events, activeAddress);
             // find txn with coinType from eventsSummary
             return !!coins.find(
                 ({ coinType: summaryCoinType }) => summaryCoinType === coinType

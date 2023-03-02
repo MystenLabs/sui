@@ -9,7 +9,7 @@ const APY_DECIMALS = 4;
 
 export function calculateAPY(validator: Validator, epoch: number) {
     const { sui_balance, starting_epoch, pool_token_balance } =
-        validator.delegation_staking_pool;
+        validator.staking_pool;
 
     const num_epochs_participated = +epoch - +starting_epoch;
     const apy =

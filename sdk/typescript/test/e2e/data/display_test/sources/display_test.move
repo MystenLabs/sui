@@ -6,7 +6,7 @@ module display_test::boars {
     use std::option::{Self, Option};
     use sui::tx_context::{TxContext, sender};
     use sui::transfer::transfer;
-    use sui::publisher;
+    use sui::package;
     use sui::url::{Self, Url};
     use sui::display;
     use std::string::{utf8, String};
@@ -36,7 +36,7 @@ module display_test::boars {
     fun init(otw: BOARS, ctx: &mut TxContext) {
         assert!(sui::types::is_one_time_witness(&otw), ENotOneTimeWitness);
 
-        let pub = publisher::claim(otw, ctx);
+        let pub = package::claim(otw, ctx);
         let display = display::new<Boar>(&pub, ctx);
 
         display::add_multiple(&mut display, vector[

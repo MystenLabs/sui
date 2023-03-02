@@ -5,18 +5,22 @@ use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::collection_types::{VecMap, VecSet};
 use crate::committee::{Committee, CommitteeWithNetAddresses, ProtocolVersion, StakeUnit};
 use crate::crypto::AuthorityPublicKeyBytes;
+use crate::dynamic_field::{derive_dynamic_field_id, Field};
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
 use crate::{balance::Balance, id::UID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
-
+use anemo::PeerId;
 use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;
+use move_core_types::language_storage::TypeTag;
+use move_core_types::value::MoveTypeLayout;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
+use move_vm_types::values::Value;
 use multiaddr::Multiaddr;
 use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
@@ -156,14 +160,10 @@ impl ValidatorMetadata {
 pub struct Validator {
     pub metadata: ValidatorMetadata,
     pub voting_power: u64,
-    pub stake_amount: u64,
-    pub pending_stake: u64,
-    pub pending_withdraw: u64,
     pub gas_price: u64,
-    pub delegation_staking_pool: StakingPool,
+    pub staking_pool: StakingPool,
     pub commission_rate: u64,
     pub next_epoch_stake: u64,
-    pub next_epoch_delegation: u64,
     pub next_epoch_gas_price: u64,
     pub next_epoch_commission_rate: u64,
 }
@@ -179,6 +179,11 @@ impl Validator {
             self.voting_power,
             self.metadata.net_address.clone(),
         )
+    }
+
+    pub fn authority_name(&self) -> AuthorityName {
+        AuthorityPublicKeyBytes::from_bytes(self.metadata.pubkey_bytes.as_ref())
+            .expect("Validity of public key bytes should be verified on-chain")
     }
 }
 
@@ -264,7 +269,8 @@ pub struct StakingPool {
     pub pool_token_balance: u64,
     pub exchange_rates: Table,
     pub pending_delegation: u64,
-    pub pending_withdraws: TableVec,
+    pub pending_total_sui_withdraw: u64,
+    pub pending_pool_token_withdraw: u64,
 }
 
 /// Rust version of the Move sui::validator_set::ValidatorPair type
@@ -277,8 +283,7 @@ pub struct ValidatorPair {
 /// Rust version of the Move sui::validator_set::ValidatorSet type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct ValidatorSet {
-    pub validator_stake: u64,
-    pub delegation_stake: u64,
+    pub total_stake: u64,
     pub active_validators: Vec<Validator>,
     pub pending_validators: TableVec,
     pub pending_removals: Vec<u64>,
@@ -289,7 +294,6 @@ pub struct ValidatorSet {
 /// We want to keep it named as SuiSystemState in Rust since this is the primary interface type.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct SuiSystemState {
-    pub info: UID,
     pub epoch: u64,
     pub protocol_version: u64,
     pub validators: ValidatorSet,
@@ -306,9 +310,8 @@ pub struct SuiSystemState {
 /// Rust version of the Move sui::sui_system::SuiSystemState type
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SuiSystemStateWrapper {
-    pub info: UID,
+    pub id: UID,
     pub version: u64,
-    pub system_state: SuiSystemState,
 }
 
 impl SuiSystemStateWrapper {
@@ -378,6 +381,29 @@ impl SuiSystemState {
         }
     }
 
+    pub fn get_current_epoch_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId> {
+        let mut result = HashMap::new();
+        let _: () = self
+            .validators
+            .active_validators
+            .iter()
+            .map(|validator| {
+                let name = validator.authority_name();
+
+                let network_key = narwhal_crypto::NetworkPublicKey::from_bytes(
+                    &validator.metadata.network_pubkey_bytes,
+                )
+                .expect("Can't get narwhal network key");
+
+                let peer_id = PeerId(network_key.0.to_bytes());
+
+                result.insert(name, peer_id);
+            })
+            .collect();
+
+        result
+    }
+
     #[allow(clippy::mutable_key_type)]
     pub fn get_current_epoch_narwhal_worker_cache(
         &self,
@@ -418,15 +444,13 @@ impl SuiSystemState {
 impl Default for SuiSystemState {
     fn default() -> Self {
         let validator_set = ValidatorSet {
-            validator_stake: 1,
-            delegation_stake: 1,
+            total_stake: 2,
             active_validators: vec![],
             pending_validators: TableVec::default(),
             pending_removals: vec![],
             staking_pool_mappings: Table::default(),
         };
         SuiSystemState {
-            info: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),
             epoch: 0,
             protocol_version: ProtocolVersion::MIN.as_u64(),
             validators: validator_set,
@@ -448,7 +472,7 @@ impl Default for SuiSystemState {
     }
 }
 
-pub fn get_sui_system_state_wrapper<S>(object_store: S) -> Result<SuiSystemStateWrapper, SuiError>
+pub fn get_sui_system_state_wrapper<S>(object_store: &S) -> Result<SuiSystemStateWrapper, SuiError>
 where
     S: ObjectStore,
 {
@@ -468,6 +492,22 @@ pub fn get_sui_system_state<S>(object_store: S) -> Result<SuiSystemState, SuiErr
 where
     S: ObjectStore,
 {
-    let wrapper = get_sui_system_state_wrapper(object_store)?;
-    Ok(wrapper.system_state)
+    let wrapper = get_sui_system_state_wrapper(&object_store)?;
+    let inner_id = derive_dynamic_field_id(
+        wrapper.id.id.bytes,
+        &TypeTag::U64,
+        &MoveTypeLayout::U64,
+        &Value::u64(wrapper.version),
+    )
+    .expect("Sui System State object must exist");
+    let inner = object_store
+        .get_object(&inner_id)?
+        .ok_or(SuiError::SuiSystemStateNotFound)?;
+    let move_object = inner
+        .data
+        .try_as_move()
+        .ok_or(SuiError::SuiSystemStateNotFound)?;
+    let result = bcs::from_bytes::<Field<u64, SuiSystemState>>(move_object.contents())
+        .expect("Sui System State object deserialization cannot fail");
+    Ok(result.value)
 }

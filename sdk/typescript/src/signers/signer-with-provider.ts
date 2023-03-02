@@ -15,9 +15,9 @@ import {
   getTotalGasUsedUpperBound,
   SuiAddress,
   SuiExecuteTransactionResponse,
-  TransactionEffects,
   DevInspectResults,
   bcsForVersion,
+  DryRunTransactionResponse,
 } from '../types';
 import { IntentScope, messageWithIntent } from '../utils/intent';
 import { Signer } from './signer';
@@ -198,7 +198,7 @@ export abstract class SignerWithProvider implements Signer {
    */
   async dryRunTransaction(
     tx: SignableTransaction | string | Uint8Array,
-  ): Promise<TransactionEffects> {
+  ): Promise<DryRunTransactionResponse> {
     const address = await this.getAddress();
     let dryRunTxBytes: Uint8Array;
     if (typeof tx === 'string') {

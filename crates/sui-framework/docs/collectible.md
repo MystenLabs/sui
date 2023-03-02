@@ -30,7 +30,7 @@ require additional work on the creator side to set up metadata creation methods.
 <b>use</b> <a href="">0x1::string</a>;
 <b>use</b> <a href="display.md#0x2_display">0x2::display</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
-<b>use</b> <a href="publisher.md#0x2_publisher">0x2::publisher</a>;
+<b>use</b> <a href="package.md#0x2_package">0x2::package</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="types.md#0x2_types">0x2::types</a>;
 </code></pre>
@@ -231,7 +231,7 @@ Type parameter <code>T</code> is phantom; so we constrain it via <code>Publisher
 defined in the same module as the OTW. Aborts otherwise.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="collectible.md#0x2_collectible_create_collection">create_collection</a>&lt;OTW: drop, T: store&gt;(otw: OTW, max_supply: <a href="_Option">option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>, <a href="display.md#0x2_display_Display">display::Display</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">collectible::Collectible</a>&lt;T&gt;&gt;, <a href="collectible.md#0x2_collectible_CollectionCreatorCap">collectible::CollectionCreatorCap</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="collectible.md#0x2_collectible_create_collection">create_collection</a>&lt;OTW: drop, T: store&gt;(otw: OTW, max_supply: <a href="_Option">option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="package.md#0x2_package_Publisher">package::Publisher</a>, <a href="display.md#0x2_display_Display">display::Display</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">collectible::Collectible</a>&lt;T&gt;&gt;, <a href="collectible.md#0x2_collectible_CollectionCreatorCap">collectible::CollectionCreatorCap</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -249,8 +249,8 @@ defined in the same module as the OTW. Aborts otherwise.
 ) {
     <b>assert</b>!(sui::types::is_one_time_witness(&otw), <a href="collectible.md#0x2_collectible_ENotOneTimeWitness">ENotOneTimeWitness</a>);
 
-    <b>let</b> pub = <a href="publisher.md#0x2_publisher_claim">publisher::claim</a>(otw, ctx);
-    <b>assert</b>!(<a href="publisher.md#0x2_publisher_is_module">publisher::is_module</a>&lt;T&gt;(&pub), <a href="collectible.md#0x2_collectible_EModuleDoesNotContainT">EModuleDoesNotContainT</a>);
+    <b>let</b> pub = <a href="package.md#0x2_package_claim">package::claim</a>(otw, ctx);
+    <b>assert</b>!(<a href="package.md#0x2_package_from_module">package::from_module</a>&lt;T&gt;(&pub), <a href="collectible.md#0x2_collectible_EModuleDoesNotContainT">EModuleDoesNotContainT</a>);
 
     (
         pub,

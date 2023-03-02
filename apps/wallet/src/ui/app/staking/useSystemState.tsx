@@ -7,5 +7,5 @@ import { useRpc } from '../hooks';
 
 export function useSystemState() {
     const rpc = useRpc();
-    return useQuery(['system', 'state'], () => rpc.getCurrentEpochStaticInfo());
+    return useQuery(['system', 'state'], () => rpc.getSuiSystemState());
 }

@@ -16,7 +16,7 @@ use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
 use sui_sdk::rpc_types::{
     OwnedObjectRef, SuiData, SuiEvent, SuiExecutionStatus, SuiTransactionEffects,
-    SuiTransactionResponse,
+    SuiTransactionEvents, SuiTransactionResponse,
 };
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
@@ -136,11 +136,12 @@ async fn test_publish_and_move_call() {
     });
     let response =
         test_transaction(&client, keystore, vec![], sender, tx, None, 10000, false).await;
+    let events = response.events;
 
     // Test move call (reuse published module from above test)
     let effect = response.effects;
-    let package = effect
-        .events
+    let package = events
+        .data
         .iter()
         .find_map(|event| {
             if let SuiEvent::Publish { package_id, .. } = event {
@@ -152,7 +153,7 @@ async fn test_publish_and_move_call() {
         .unwrap();
 
     // TODO: Improve tx response to make it easier to find objects.
-    let treasury = find_module_object(&effect, "managed", "TreasuryCap");
+    let treasury = find_module_object(&effect, &events, "managed", "TreasuryCap");
     let treasury = treasury.clone().reference.to_object_ref();
     let recipient = *network.accounts.choose(&mut OsRng::default()).unwrap();
     let tx = SingleTransactionKind::Call(MoveCall {
@@ -482,11 +483,12 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
 
 fn find_module_object(
     effects: &SuiTransactionEffects,
+    events: &SuiTransactionEvents,
     module: &str,
     object_type_name: &str,
 ) -> OwnedObjectRef {
-    let mut results: Vec<_> = effects
-        .events
+    let mut results: Vec<_> = events
+        .data
         .iter()
         .filter_map(|event| {
             if let SuiEvent::NewObject {

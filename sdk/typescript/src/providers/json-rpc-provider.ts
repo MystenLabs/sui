@@ -34,7 +34,6 @@ import {
   PaginatedEvents,
   FaucetResponse,
   Order,
-  TransactionEffects,
   DevInspectResults,
   CoinMetadata,
   isValidTransactionDigest,
@@ -57,6 +56,7 @@ import {
   Checkpoint,
   CheckPointContentsDigest,
   CommitteeInfo,
+  DryRunTransactionResponse,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -763,17 +763,17 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getCurrentEpochStaticInfo(): Promise<SuiSystemState> {
+  async getSuiSystemState(): Promise<SuiSystemState> {
     try {
       const resp = await this.client.requestWithType(
-        'sui_getCurrentEpochStaticInfo',
+        'sui_getSuiSystemState',
         [],
         SuiSystemState,
         this.options.skipDataValidation,
       );
       return resp;
     } catch (err) {
-      throw new Error(`Error in getCurrentEpochStaticInfo: ${err}`);
+      throw new Error(`Error in getSuiSystemState: ${err}`);
     }
   }
 
@@ -844,12 +844,14 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async dryRunTransaction(txBytes: Uint8Array): Promise<TransactionEffects> {
+  async dryRunTransaction(
+    txBytes: Uint8Array,
+  ): Promise<DryRunTransactionResponse> {
     try {
       const resp = await this.client.requestWithType(
         'sui_dryRunTransaction',
         [toB64(txBytes)],
-        TransactionEffects,
+        DryRunTransactionResponse,
         this.options.skipDataValidation,
       );
       return resp;

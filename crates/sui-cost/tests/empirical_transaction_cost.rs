@@ -210,7 +210,7 @@ async fn create_txes(
         package_id,
         /* arguments */ Vec::default(),
     );
-    let effects =
+    let (effects, _) =
         submit_single_owner_transaction(transaction.clone(), &configs.validator_set()).await;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created[0];
@@ -275,11 +275,13 @@ async fn run_actual_costs(
             submit_shared_object_transaction(tx, &configs.validator_set())
                 .await
                 .unwrap()
+                .0
                 .gas_cost_summary()
                 .clone()
         } else {
             submit_single_owner_transaction(tx, &configs.validator_set())
                 .await
+                .0
                 .gas_cost_summary()
                 .clone()
         };

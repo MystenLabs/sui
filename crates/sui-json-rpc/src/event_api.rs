@@ -81,7 +81,7 @@ impl EventReadApiServer for EventReadApi {
         // Retrieve 1 extra item for next cursor
         let mut data = self
             .state
-            .get_events(query, cursor, limit + 1, descending)
+            .query_events(query, cursor, limit + 1, descending)
             .await?;
         let next_cursor = data.get(limit).map(|(id, _)| id.clone());
         data.truncate(limit);
