@@ -324,6 +324,13 @@ pub struct GenesisChainParameters {
     /// initial stake.
     #[serde(default = "GenesisChainParameters::test_initial_validator_stake_mist")]
     pub initial_validator_stake_mist: u64,
+
+    /// The starting epoch in which various on-chain governance features take effect. E.g.
+    /// - stake subsidies are paid out
+    /// - validators with stake less than a 'validator_stake_threshold' are
+    ///   kicked from the validator set
+    #[serde(default)]
+    pub governance_start_epoch: u64,
     // Most other parameters (e.g. initial gas schedule) should be derived from protocol_version.
 }
 
@@ -335,6 +342,7 @@ impl GenesisChainParameters {
             allow_insertion_of_extra_objects: true,
             initial_sui_custody_account_address: SuiAddress::default(),
             initial_validator_stake_mist: Self::test_initial_validator_stake_mist(),
+            governance_start_epoch: 0,
         }
     }
 
@@ -1028,6 +1036,7 @@ pub fn generate_genesis_system_object(
         vec![
             CallArg::Pure(bcs::to_bytes(&parameters.initial_sui_custody_account_address).unwrap()),
             CallArg::Pure(bcs::to_bytes(&parameters.initial_validator_stake_mist).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&parameters.governance_start_epoch).unwrap()),
             CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
             CallArg::Pure(bcs::to_bytes(&network_pubkeys).unwrap()),
             CallArg::Pure(bcs::to_bytes(&worker_pubkeys).unwrap()),

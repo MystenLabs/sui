@@ -32,6 +32,7 @@ module sui::genesis {
     fun create(
         initial_sui_custody_account_address: address,
         initial_validator_stake_mist: u64,
+        governance_start_epoch: u64,
         validator_pubkeys: vector<vector<u8>>,
         validator_network_pubkeys: vector<vector<u8>>,
         validator_worker_pubkeys: vector<vector<u8>>,
@@ -119,7 +120,7 @@ module sui::genesis {
             storage_fund,
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
-            0,
+            governance_start_epoch,
             INIT_STAKE_SUBSIDY_AMOUNT,
             protocol_version,
             system_state_version,
