@@ -524,9 +524,13 @@ impl<C> Testbed<C> {
         let instances = self.select_instances(parameters)?;
 
         // Deploy the committee.
-        let command = |i: usize| -> String {
+        let listen_addresses = Config::new(&instances).listen_addresses;
+        let command = move |i: usize| -> String {
             let path = format!("~/.sui/sui_config/validator-config-{i}.yaml");
-            let run = format!("cargo run --release --bin sui-node -- --config-path {path}");
+            let address = listen_addresses[i].clone();
+            let run = format!(
+                "cargo run --release --bin sui-node -- --config-path {path} --listen_address {address}"
+            );
             ["source $HOME/.cargo/env", &run].join(" && ")
         };
 

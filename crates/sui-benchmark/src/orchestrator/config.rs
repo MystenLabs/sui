@@ -1,6 +1,7 @@
 use std::{fs, path::PathBuf};
 
 use move_core_types::account_address::AccountAddress;
+use multiaddr::Multiaddr;
 use rand::{rngs::StdRng, SeedableRng};
 use sui_config::{
     genesis::GenesisChainParameters,
@@ -19,10 +20,10 @@ use super::client::Instance;
 pub struct Config {
     genesis_config: GenesisConfig,
     keystore: FileBasedKeystore,
+    pub listen_addresses: Vec<Multiaddr>,
 }
 
 impl Config {
-    // pub const GAS_OBJECT_ID_OFFSET: &'static str = "0x59931dcac57ba20d75321acaf55e8eb5a2c47e9f";
     pub const GENESIS_CONFIG_FILE: &'static str = "benchmark-genesis.yml";
     pub const GAS_KEYSTORE_FILE: &'static str = "gas.keystore";
 
@@ -32,6 +33,7 @@ impl Config {
         let gas_key = SuiKeyPair::Ed25519(NetworkKeyPair::generate(&mut rng));
         let gas_address = SuiAddress::from(&gas_key.public());
         let genesis_config = Self::make_genesis_config(instances, gas_address);
+        let listen_addresses = Self::parse_listen_address(&genesis_config);
 
         let mut keystore = FileBasedKeystore::default();
         keystore.add_key(gas_key).unwrap();
@@ -39,6 +41,7 @@ impl Config {
         Self {
             genesis_config,
             keystore,
+            listen_addresses,
         }
     }
 
@@ -120,5 +123,31 @@ impl Config {
             grpc_concurrency_limit: None,
             accounts: vec![account_config],
         }
+    }
+
+    fn parse_listen_address(genesis_config: &GenesisConfig) -> Vec<Multiaddr> {
+        let mut addresses = Vec::new();
+        if let Some(validator_configs) = genesis_config.validator_config_info.as_ref() {
+            for validator_info in validator_configs {
+                let address = &validator_info.genesis_info.network_address;
+                addresses.push(Self::zero_ip_multi_address(address));
+            }
+        }
+        addresses
+    }
+
+    /// Set the ip address to `0.0.0.0`. For instance, it converts the following address
+    /// `/ip4/155.138.174.208/tcp/1500/http` into `/ip4/0.0.0.0/tcp/1500/http`.
+    fn zero_ip_multi_address(address: &Multiaddr) -> Multiaddr {
+        let mut new_address = Multiaddr::empty();
+        for component in address {
+            match component {
+                multiaddr::Protocol::Ip4(_) => new_address.push(multiaddr::Protocol::Ip4(
+                    std::net::Ipv4Addr::new(0, 0, 0, 0),
+                )),
+                c => new_address.push(c),
+            }
+        }
+        new_address
     }
 }
