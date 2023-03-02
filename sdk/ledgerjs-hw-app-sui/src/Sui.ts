@@ -26,10 +26,10 @@ export default class Sui extends Common {
     }
 
     /**
-    * Retrieves the public key associated with a particular BIP32 path from the ledger app.
-    *
-    * @param path - the path to retrieve.
-    */
+     * Retrieves the public key associated with a particular BIP32 path from the ledger app.
+     *
+     * @param path - the path to retrieve.
+     */
     override async getPublicKey(path: string): Promise<GetPublicKeyResult> {
         const { publicKey, address } = await super.getPublicKey(path);
         if (address == null) {
