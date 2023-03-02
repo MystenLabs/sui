@@ -22,7 +22,7 @@ pub struct Orchestrator<C: Client> {
     testbed: Testbed<C>,
     skip_testbed_update: bool,
     skip_testbed_reconfiguration: bool,
-    ignore_logs: bool,
+    skip_logs_analysis: bool,
 }
 
 impl<C: Client> Orchestrator<C> {
@@ -31,22 +31,22 @@ impl<C: Client> Orchestrator<C> {
             testbed,
             skip_testbed_update: false,
             skip_testbed_reconfiguration: false,
-            ignore_logs: false,
+            skip_logs_analysis: false,
         }
     }
 
-    pub fn with_testbed_update(mut self, skip_testbed_update: bool) -> Self {
+    pub fn skip_testbed_updates(mut self, skip_testbed_update: bool) -> Self {
         self.skip_testbed_update = skip_testbed_update;
         self
     }
 
-    pub fn with_testbed_reconfiguration(mut self, skip_testbed_reconfiguration: bool) -> Self {
+    pub fn skip_testbed_reconfiguration(mut self, skip_testbed_reconfiguration: bool) -> Self {
         self.skip_testbed_reconfiguration = skip_testbed_reconfiguration;
         self
     }
 
-    pub fn with_logs_analysis(mut self, ignore_logs: bool) -> Self {
-        self.ignore_logs = ignore_logs;
+    pub fn skip_logs_analysis(mut self, skip_logs_analysis: bool) -> Self {
+        self.skip_logs_analysis = skip_logs_analysis;
         self
     }
 
@@ -162,7 +162,7 @@ impl<C: Client> Orchestrator<C> {
             self.testbed.cleanup(false).await?;
 
             // Download the log files.
-            if !self.ignore_logs {
+            if !self.skip_logs_analysis {
                 let error_counter = self.testbed.download_logs(&parameters).await?;
                 error_counter.print_summary();
             }

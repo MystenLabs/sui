@@ -29,6 +29,10 @@ impl Instance {
         !self.is_active()
     }
 
+    pub fn is_terminated(&self) -> bool {
+        self.power_status.to_lowercase() == "terminated"
+    }
+
     pub fn ssh_address(&self) -> SocketAddr {
         format!("{}:22", self.main_ip).parse().unwrap()
     }
@@ -59,7 +63,7 @@ pub trait Client: Display {
 
     /// Delete a specific instance. Calling this function ensures we are no longer billed for
     /// the specified instance.
-    async fn delete_instance(&self, instance_id: String) -> CloudProviderResult<()>;
+    async fn delete_instance(&self, instance: Instance) -> CloudProviderResult<()>;
 
     /// Authorize the provided ssh public key to access machines.
     async fn register_ssh_public_key(&self, public_key: String) -> CloudProviderResult<()>;
@@ -137,9 +141,9 @@ pub mod test_client {
             Ok(instance)
         }
 
-        async fn delete_instance(&self, instance_id: String) -> CloudProviderResult<()> {
+        async fn delete_instance(&self, instance: Instance) -> CloudProviderResult<()> {
             let mut guard = self.instances.lock().unwrap();
-            guard.retain(|x| x.id != instance_id);
+            guard.retain(|x| x.id != instance.id);
             Ok(())
         }
 

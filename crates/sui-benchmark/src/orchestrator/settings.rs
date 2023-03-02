@@ -21,7 +21,17 @@ where
     D: Deserializer<'de>,
 {
     let s: &str = Deserialize::deserialize(deserializer)?;
-    Url::parse(&s).map_err(D::Error::custom)
+    let url = Url::parse(&s).map_err(D::Error::custom)?;
+
+    match url
+        .path_segments()
+        .map(|x| x.collect::<Vec<_>>().len() >= 2)
+    {
+        None | Some(false) => Err(D::Error::custom(SettingsError::InvalidRepositoryUrl(
+            url.clone(),
+        ))),
+        _ => Ok(url),
+    }
 }
 
 #[derive(Deserialize, Clone)]
@@ -61,30 +71,19 @@ impl Settings {
             Ok(settings)
         };
 
-        let settings = reader().map_err(|e| SettingsError::InvalidSettings {
+        reader().map_err(|e| SettingsError::InvalidSettings {
             file: path.to_string(),
             message: e.to_string(),
-        })?;
-
-        settings
-            .repository
-            .url
-            .path_segments()
-            .map(|mut x| x.next())
-            .flatten()
-            .ok_or_else(|| SettingsError::InvalidRepositoryUrl(settings.repository.url.clone()))?;
-
-        Ok(settings)
+        })
     }
 
     pub fn repository_name(&self) -> String {
         self.repository
             .url
             .path_segments()
-            .map(|mut x| x.next())
-            .flatten()
-            .unwrap() // Already checked upon creating the settings
-            .into()
+            .expect("Url should already be checked when loading settings")
+            .collect::<Vec<_>>()[1]
+            .to_string()
     }
 
     pub fn load_token(&self) -> SettingsResult<String> {

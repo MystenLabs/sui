@@ -182,7 +182,7 @@ impl<C: Client> Testbed<C> {
                 let connect = format!("ssh -i {private_key_file} {username}@{ip}");
                 if instance.is_active() {
                     table.add_row(row![bFg->format!("{j}"), connect]);
-                } else {
+                } else if !instance.is_terminated() {
                     table.add_row(row![bFr->format!("{j}"), connect]);
                 }
             }
@@ -226,7 +226,7 @@ impl<C: Client> Testbed<C> {
         try_join_all(
             self.instances
                 .drain(..)
-                .map(|instance| self.client.delete_instance(instance.id))
+                .map(|instance| self.client.delete_instance(instance))
                 .collect::<Vec<_>>(),
         )
         .await

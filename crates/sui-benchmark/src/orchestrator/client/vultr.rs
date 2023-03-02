@@ -238,10 +238,10 @@ impl Client for VultrClient {
         serde_json::from_value::<Instance>(content).map_err(CloudProviderError::from)
     }
 
-    async fn delete_instance(&self, instance_id: String) -> CloudProviderResult<()> {
+    async fn delete_instance(&self, instance: Instance) -> CloudProviderResult<()> {
         let url = self
             .base_url
-            .join(&format!("instances/{}", instance_id))
+            .join(&format!("instances/{}", &instance.id))
             .unwrap();
 
         let response = self

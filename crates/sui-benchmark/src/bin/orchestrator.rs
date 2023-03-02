@@ -47,6 +47,12 @@ async fn execute<C: Client>(settings: Settings, client: C, opts: Opts) -> Result
             .await
             .wrap_err("Failed to stop testbed")?,
 
+        // Destroy the testbed and terminal all instances.
+        Operation::Destroy => orchestrator
+            .destroy_testbed()
+            .await
+            .wrap_err("Failed to destroy testbed")?,
+
         // Run benchmarks.
         Operation::Benchmark {
             nodes,
@@ -62,7 +68,7 @@ async fn execute<C: Client>(settings: Settings, client: C, opts: Opts) -> Result
                 .with_faults(faults);
 
             orchestrator
-                .with_testbed_update(skip_testbed_update)
+                .skip_testbed_updates(skip_testbed_update)
                 .run_benchmarks(generator)
                 .await
                 .wrap_err("Failed to run benchmarks")?;
@@ -142,6 +148,9 @@ pub enum Operation {
 
     /// Stop an existing testbed.
     Stop,
+
+    /// Destroy the testbed and terminal all instances.
+    Destroy,
 
     /// Run a benchmark on the specified testbed.
     Benchmark {

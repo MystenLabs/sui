@@ -5,7 +5,10 @@ use std::{
 
 use aws_config::profile::profile_file::{ProfileFileKind, ProfileFiles};
 use aws_sdk_ec2::{
-    model::{filter, tag, tag_specification, ResourceType},
+    model::{
+        block_device_mapping, ebs_block_device, filter, tag, tag_specification, ResourceType,
+        VolumeType,
+    },
     types::{Blob, SdkError},
 };
 use serde::Serialize;
@@ -252,13 +255,24 @@ impl Client for AwsClient {
 
         // Create a new instance.
         let tags = tag_specification::Builder::default()
+            .resource_type(ResourceType::Instance)
             .tags(
                 tag::Builder::default()
                     .key("Name")
                     .value(testbed_id)
                     .build(),
             )
-            .resource_type(ResourceType::Instance)
+            .build();
+
+        let storage = block_device_mapping::Builder::default()
+            .device_name("/dev/sda1")
+            .ebs(
+                ebs_block_device::Builder::default()
+                    .delete_on_termination(true)
+                    .volume_size(500)
+                    .volume_type(VolumeType::Gp2)
+                    .build(),
+            )
             .build();
 
         let request = client
@@ -269,6 +283,7 @@ impl Client for AwsClient {
             .min_count(1)
             .max_count(1)
             .security_groups(&self.settings.testbed_id)
+            .block_device_mappings(storage)
             .tag_specifications(tags);
 
         let response = request.send().await?;
@@ -281,14 +296,17 @@ impl Client for AwsClient {
         Ok(self.into_instance(region, instance))
     }
 
-    async fn delete_instance(&self, instance_id: String) -> CloudProviderResult<()> {
-        for client in self.clients.values() {
-            client
-                .terminate_instances()
-                .instance_ids(instance_id.clone())
-                .send()
-                .await?;
-        }
+    async fn delete_instance(&self, instance: Instance) -> CloudProviderResult<()> {
+        let client = self.clients.get(&instance.region).ok_or_else(|| {
+            CloudProviderError::RequestError(format!("Undefined region {:?}", instance.region))
+        })?;
+
+        client
+            .terminate_instances()
+            .set_instance_ids(Some(vec![instance.id.clone()]))
+            .send()
+            .await?;
+
         Ok(())
     }
 
