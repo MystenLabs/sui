@@ -6272,10 +6272,16 @@
         "description": "Rust version of the Move sui::sui_system::SystemParameters type",
         "type": "object",
         "required": [
+          "governance_start_epoch",
           "max_validator_candidate_count",
           "min_validator_stake"
         ],
         "properties": {
+          "governance_start_epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
           "max_validator_candidate_count": {
             "type": "integer",
             "format": "uint64",

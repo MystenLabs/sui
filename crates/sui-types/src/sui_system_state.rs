@@ -44,6 +44,7 @@ const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 pub struct SystemParameters {
     pub min_validator_stake: u64,
     pub max_validator_candidate_count: u64,
+    pub governance_start_epoch: u64,
 }
 
 /// Rust version of the Move std::option::Option type.
@@ -537,6 +538,7 @@ impl Default for SuiSystemState {
             parameters: SystemParameters {
                 min_validator_stake: 1,
                 max_validator_candidate_count: 100,
+                governance_start_epoch: 0,
             },
             reference_gas_price: 1,
             validator_report_records: VecMap { contents: vec![] },

@@ -119,6 +119,7 @@ module sui::genesis {
             storage_fund,
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
+            0,
             INIT_STAKE_SUBSIDY_AMOUNT,
             protocol_version,
             system_state_version,
