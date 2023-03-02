@@ -26,7 +26,7 @@ use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tracing::{error_span, info, Instrument};
 
-use crate::consensus_adapter::ConnectionMonitorStatusForTests;
+use crate::consensus_adapter::{ConnectionMonitorStatusForTests, ReputationScoreStatusForTests};
 use crate::{
     authority::{AuthorityState, MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
@@ -88,6 +88,7 @@ impl AuthorityServer {
             consensus_client,
             state.name,
             Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
+            Box::new(ReputationScoreStatusForTests {}),
             ConsensusAdapterMetrics::new_test(),
         );
 

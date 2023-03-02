@@ -15,6 +15,7 @@ use anemo_tower::trace::TraceLayer;
 use anyhow::anyhow;
 use anyhow::Result;
 use arc_swap::ArcSwap;
+use dashmap::DashMap;
 use futures::TryFutureExt;
 use prometheus::Registry;
 use tap::tap::TapFallible;
@@ -47,6 +48,7 @@ use sui_core::checkpoints::{
 };
 use sui_core::consensus_adapter::{
     CheckConnection, ConnectionMonitorStatus, ConsensusAdapter, ConsensusAdapterMetrics,
+    ReputationScoreStatus,
 };
 use sui_core::consensus_handler::ConsensusHandler;
 use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
@@ -623,11 +625,21 @@ impl SuiNode {
             checkpoint_metrics.clone(),
         );
 
+        // create a new map that gets injected into both the consensus handler and the consensus adapter
+        // the consensus handler will write values forwarded from consensus, and the consensus adapter
+        // will read the values to make decisions about which validator submits a transaction to consensus
+        let scores_per_authority = Arc::new(DashMap::new());
+
+        consensus_adapter
+            .reputation_score_status
+            .update_mapping_for_epoch(scores_per_authority.clone());
+
         let consensus_handler = Arc::new(ConsensusHandler::new(
             epoch_store.clone(),
             checkpoint_service.clone(),
             state.transaction_manager().clone(),
             state.db(),
+            scores_per_authority,
             state.metrics.clone(),
         ));
 
@@ -754,6 +766,10 @@ impl SuiNode {
                 .expect("Failed to connect to consensus"),
         );
 
+        let reputation_score_status = ReputationScoreStatus {
+            scores_per_authority: ArcSwap::from_pointee(Arc::new(DashMap::new())),
+        };
+
         let ca_metrics = ConsensusAdapterMetrics::new(prometheus_registry);
         // The consensus adapter allows the authority to send user certificates through consensus.
 
@@ -761,6 +777,7 @@ impl SuiNode {
             Box::new(consensus_client),
             authority,
             Box::new(connection_monitor_status),
+            Box::new(reputation_score_status),
             ca_metrics,
         )
     }
