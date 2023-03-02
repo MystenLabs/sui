@@ -11,11 +11,11 @@ use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::usize;
+use std::{collections::BTreeMap, net::Ipv4Addr};
 use sui_keys::keypair_file::{read_authority_keypair_from_file, read_keypair_from_file};
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::base_types::SuiAddress;
@@ -102,30 +102,15 @@ pub struct NodeConfig {
 }
 
 impl NodeConfig {
-    /// Zero the ip address to ensure we bind to `0.0.0.0`.
-    pub fn zero_ip_address(&mut self) {
-        // Set the p2p2 listen address to `0.0.0.0`.
-        self.p2p_config
-            .listen_address
-            .set_ip("0.0.0.0".parse().unwrap());
-
-        // Set the ip network address to `0.0.0.0`.
-        self.network_address = Self::zero_ip_multi_address(&self.network_address);
-    }
-
-    /// Set the ip address to `0.0.0.0`. For instance, it converts the following address
-    /// `/ip4/155.138.174.208/tcp/1500/http` into `/ip4/0.0.0.0/tcp/1500/http`.
-    fn zero_ip_multi_address(address: &Multiaddr) -> Multiaddr {
-        let mut new_address = Multiaddr::empty();
+    /// Find the ip address embedded in a multiaddr. For instance, on input
+    /// `/ip4/155.138.174.208/tcp/1500/http` the function returns `155.138.174.208`.
+    pub fn find_ip_of_multiaddr(address: &Multiaddr) -> Option<Ipv4Addr> {
         for component in address {
-            match component {
-                multiaddr::Protocol::Ip4(_) => new_address.push(multiaddr::Protocol::Ip4(
-                    std::net::Ipv4Addr::new(0, 0, 0, 0),
-                )),
-                c => new_address.push(c),
+            if let multiaddr::Protocol::Ip4(ip) = component {
+                return Some(ip);
             }
         }
-        new_address
+        None
     }
 }
 
@@ -150,7 +135,7 @@ fn default_key_pair() -> KeyPairWithPath {
 }
 
 fn default_metrics_address() -> SocketAddr {
-    use std::net::{IpAddr, Ipv4Addr};
+    use std::net::IpAddr;
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9184)
 }
 
@@ -159,12 +144,12 @@ pub fn default_admin_interface_port() -> u16 {
 }
 
 pub fn default_json_rpc_address() -> SocketAddr {
-    use std::net::{IpAddr, Ipv4Addr};
+    use std::net::IpAddr;
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9000)
 }
 
 pub fn default_websocket_address() -> Option<SocketAddr> {
-    use std::net::{IpAddr, Ipv4Addr};
+    use std::net::IpAddr;
     Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9001))
 }
 

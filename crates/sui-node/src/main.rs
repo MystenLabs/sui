@@ -56,7 +56,6 @@ async fn main() -> Result<()> {
         "supported_protocol_versions cannot be read from the config file"
     );
     config.supported_protocol_versions = Some(SupportedProtocolVersions::SYSTEM_DEFAULT);
-    // config.zero_ip_address();
 
     let registry_service = metrics::start_prometheus_server(config.metrics_address);
     let prometheus_registry = registry_service.default_registry();
@@ -84,7 +83,13 @@ async fn main() -> Result<()> {
     metrics::start_metrics_push_task(&config, registry_service.clone());
 
     if let Some(listen_address) = args.listen_address {
+        let ip = NodeConfig::find_ip_of_multiaddr(&listen_address)
+            .expect(&format!("Multiaddr {listen_address:?} does not contain ip"));
         config.network_address = listen_address;
+        config
+            .p2p_config
+            .listen_address
+            .set_ip(std::net::IpAddr::V4(ip));
     }
 
     let is_validator = config.consensus_config().is_some();
