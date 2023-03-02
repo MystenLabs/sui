@@ -112,8 +112,8 @@ function GasBudgetEstimation({
 }
 
 // Set the initial gasEstimation from initial amount
-// base on the input amount feild update the gasEstimation value
-// Seperating the gasEstimation from the formik context to access the input amount value and update the gasEstimation value
+// base on the input amount field update the gasEstimation value
+// Separating the gasEstimation from the formik context to access the input amount value and update the gasEstimation value
 export function SendTokenForm({
     coinType,
     onSubmit,
@@ -138,7 +138,7 @@ export function SendTokenForm({
 
     const gasAggregateBalance = aggregateBalances[SUI_TYPE_ARG] || BigInt(0);
     const coinSymbol = (coinType && CoinAPI.getCoinSymbol(coinType)) || '';
-    const [coinDecimals] = useCoinDecimals(coinType);
+    const [coinDecimals, coinDecimalsQueryResult] = useCoinDecimals(coinType);
     const [gasDecimals, gasQueryResult] = useCoinDecimals(SUI_TYPE_ARG);
     const maxSuiSingleCoinBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
 
@@ -177,7 +177,7 @@ export function SendTokenForm({
     const initAmountBig = parseAmount(initialAmount, coinDecimals);
 
     return (
-        <Loading loading={queryResult.isLoading || gasQueryResult.isLoading}>
+        <Loading loading={queryResult.isLoading || gasQueryResult.isLoading || coinDecimalsQueryResult.isLoading}>
             <Formik
                 initialValues={{
                     amount: initialAmount,
@@ -311,7 +311,7 @@ export function SendTokenForm({
                                     loading={isSubmitting}
                                     disabled={!isValid || isSubmitting}
                                     size="tall"
-                                    text={'Review'}
+                                    text="Review"
                                     after={<ArrowRight16 />}
                                 />
                             </Menu>

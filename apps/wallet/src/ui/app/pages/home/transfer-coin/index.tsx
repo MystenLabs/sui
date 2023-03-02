@@ -126,7 +126,7 @@ function TransferCoinPage() {
                                 type="button"
                                 variant="secondary"
                                 onClick={() => setShowTransactionPreview(false)}
-                                text={'Back'}
+                                text="Back"
                                 before={<ArrowLeft16 />}
                             />
 
@@ -135,7 +135,7 @@ function TransferCoinPage() {
                                 variant="primary"
                                 onClick={() => executeTransfer.mutateAsync()}
                                 size="tall"
-                                text={'Send Now'}
+                                text="Send Now"
                                 disabled={coinType === null}
                                 after={<ArrowRight16 />}
                                 loading={executeTransfer.isLoading}
