@@ -363,6 +363,17 @@ pub struct SuiTransactionResponse {
     pub checkpoint: Option<CheckpointSequenceNumber>,
 }
 
+/// We are specifically ignoring events for now until events become more stable.
+impl PartialEq for SuiTransactionResponse {
+    fn eq(&self, other: &Self) -> bool {
+        self.transaction == other.transaction
+            && self.effects == other.effects
+            && self.timestamp_ms == other.timestamp_ms
+            && self.confirmed_local_execution == other.confirmed_local_execution
+            && self.checkpoint == other.checkpoint
+    }
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum SuiTBlsSignObjectCommitmentType {
@@ -1376,7 +1387,7 @@ impl From<PayAllSui> for SuiPayAllSui {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq, Eq)]
 #[serde(rename = "GasData", rename_all = "camelCase")]
 pub struct SuiGasData {
     pub payment: SuiObjectRef,
@@ -1385,7 +1396,7 @@ pub struct SuiGasData {
     pub budget: u64,
 }
 
-#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq, Eq)]
 #[serde(rename = "TransactionData", rename_all = "camelCase")]
 pub struct SuiTransactionData {
     pub transactions: Vec<SuiTransactionKind>,
@@ -1452,7 +1463,7 @@ impl TryFrom<TransactionData> for SuiTransactionData {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq, Eq)]
 #[serde(rename = "Transaction", rename_all = "camelCase")]
 pub struct SuiTransaction {
     pub data: SuiTransactionData,
@@ -1479,19 +1490,19 @@ impl Display for SuiTransaction {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct SuiGenesisTransaction {
     pub objects: Vec<ObjectID>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct SuiConsensusCommitPrologue {
     pub epoch: u64,
     pub round: u64,
     pub commit_timestamp_ms: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename = "TransactionKind")]
 pub enum SuiTransactionKind {
     /// Initiate an object transfer between addresses
@@ -1686,7 +1697,7 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename = "MoveCall", rename_all = "camelCase")]
 pub struct SuiMoveCall {
     pub package: ObjectID,
@@ -1698,7 +1709,7 @@ pub struct SuiMoveCall {
     pub arguments: Vec<SuiJsonValue>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct SuiChangeEpoch {
     pub epoch: EpochId,
     pub storage_charge: u64,
