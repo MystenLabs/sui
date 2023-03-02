@@ -809,8 +809,12 @@ impl ProgrammableTransaction {
                     initial_shared_version: *initial_shared_version,
                     mutable: *mutable,
                 }]),
-                // Not supported in programmable transactions
-                CallArg::ObjVec(_) => None,
+                CallArg::ObjVec(_) => {
+                    panic!(
+                        "not supported in programmable transactions, \
+                        should be unreachable if the input checker was run"
+                    )
+                }
             })
             .flatten()
     }

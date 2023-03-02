@@ -4,6 +4,7 @@
 //! Utility for generating programmable transactions, either by specifying a command or for
 //! migrating legacy transactions
 
+use anyhow::Context;
 use indexmap::IndexSet;
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
 use serde::Serialize;
@@ -65,18 +66,35 @@ impl ProgrammableTransactionBuilder {
     }
 
     pub fn pure<T: Serialize>(&mut self, value: T) -> anyhow::Result<Argument> {
-        Ok(self.input(CallArg::Pure(bcs::to_bytes(&value).map_err(|e| {
-            anyhow::anyhow!("Unable to serialize pure argument. Got error: {e}")
-        })?)))
+        Ok(self
+            .input(CallArg::Pure(
+                bcs::to_bytes(&value).context("Searlizing pure argument.")?,
+            ))
+            .unwrap())
     }
 
     pub fn obj(&mut self, obj_arg: ObjectArg) -> Argument {
-        self.input(CallArg::Object(obj_arg))
+        self.input(CallArg::Object(obj_arg)).unwrap()
     }
 
-    pub fn input(&mut self, call_arg: CallArg) -> Argument {
-        assert!(!matches!(call_arg, CallArg::ObjVec(_)));
-        Argument::Input(self.inputs.insert_full(call_arg).0 as u16)
+    pub fn input(&mut self, call_arg: CallArg) -> anyhow::Result<Argument> {
+        match call_arg {
+            call_arg @ (CallArg::Pure(_) | CallArg::Object(_)) => {
+                Ok(Argument::Input(self.inputs.insert_full(call_arg).0 as u16))
+            }
+            CallArg::ObjVec(objs) if objs.is_empty() => {
+                anyhow::bail!(
+                    "Empty ObjVec is not supported in programmable transactions \
+                        without a type annotation"
+                )
+            }
+            CallArg::ObjVec(objs) => Ok(self.make_obj_vec(objs)),
+        }
+    }
+
+    pub fn make_obj_vec(&mut self, objs: impl IntoIterator<Item = ObjectArg>) -> Argument {
+        let make_vec_args = objs.into_iter().map(|obj| self.obj(obj)).collect();
+        self.command(Command::MakeMoveVec(None, make_vec_args))
     }
 
     pub fn command(&mut self, command: Command) -> Argument {
@@ -134,23 +152,10 @@ impl ProgrammableTransactionBuilder {
         type_arguments: Vec<TypeTag>,
         call_args: Vec<CallArg>,
     ) -> anyhow::Result<()> {
-        let mut arguments = vec![];
-        for call_arg in call_args {
-            let arg = match call_arg {
-                call_arg @ (CallArg::Pure(_) | CallArg::Object(_)) => self.input(call_arg),
-                CallArg::ObjVec(objs) if objs.is_empty() => {
-                    anyhow::bail!(
-                        "Empty ObjVec is not supported in programmable transactions \
-                        without a type annotation"
-                    )
-                }
-                CallArg::ObjVec(objs) => {
-                    let make_vec_args = objs.into_iter().map(|obj| self.obj(obj)).collect();
-                    self.command(Command::MakeMoveVec(None, make_vec_args))
-                }
-            };
-            arguments.push(arg)
-        }
+        let arguments = call_args
+            .into_iter()
+            .map(|a| self.input(a))
+            .collect::<Result<_, _>>()?;
         self.command(Command::MoveCall(Box::new(ProgrammableMoveCall {
             package,
             module,
