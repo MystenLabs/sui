@@ -103,8 +103,8 @@ module sui::validator_set {
     /// processed at the end of epoch.
     public(friend) fun request_add_validator(self: &mut ValidatorSet, validator: Validator) {
         assert!(
-            !is_currently_active_validator(self, &validator)
-                && !is_currently_pending_validator(self, &validator),
+            !is_duplicate_with_active_validator(self, &validator)
+                && !is_duplicate_with_pending_validator(self, &validator),
             EDuplicateValidator
         );
         table_vec::push_back(&mut self.pending_validators, validator);
@@ -377,10 +377,10 @@ module sui::validator_set {
 
     // ==== private helpers ====
 
-    /// Checks whether `new_validator` is already in currently active validator list.
+    /// Checks whether `new_validator` is duplicate with any currently active validators.
     /// It differs from `is_active_validator_by_sui_address` in that the former checks
     /// only the sui address but this function looks at more metadata.
-    fun is_currently_active_validator(self: &ValidatorSet, new_validator: &Validator): bool {
+    fun is_duplicate_with_active_validator(self: &ValidatorSet, new_validator: &Validator): bool {
         let len = vector::length(&self.active_validators);
         let i = 0;
         while (i < len) {
@@ -393,8 +393,8 @@ module sui::validator_set {
         false
     }
 
-    /// Checks whether `new_validator` is already in currently pending validator list.
-    fun is_currently_pending_validator(self: &ValidatorSet, new_validator: &Validator): bool {
+    /// Checks whether `new_validator` is duplicate with any currently pending validators.
+    fun is_duplicate_with_pending_validator(self: &ValidatorSet, new_validator: &Validator): bool {
         let len = table_vec::length(&self.pending_validators);
         let i = 0;
         while (i < len) {

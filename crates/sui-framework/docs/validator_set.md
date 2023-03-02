@@ -26,8 +26,8 @@
 -  [Function `staking_pool_mappings`](#0x2_validator_set_staking_pool_mappings)
 -  [Function `next_epoch_validator_count`](#0x2_validator_set_next_epoch_validator_count)
 -  [Function `is_active_validator_by_sui_address`](#0x2_validator_set_is_active_validator_by_sui_address)
--  [Function `is_currently_active_validator`](#0x2_validator_set_is_currently_active_validator)
--  [Function `is_currently_pending_validator`](#0x2_validator_set_is_currently_pending_validator)
+-  [Function `is_duplicate_with_active_validator`](#0x2_validator_set_is_duplicate_with_active_validator)
+-  [Function `is_duplicate_with_pending_validator`](#0x2_validator_set_is_duplicate_with_pending_validator)
 -  [Function `find_validator`](#0x2_validator_set_find_validator)
 -  [Function `find_validator_from_table_vec`](#0x2_validator_set_find_validator_from_table_vec)
 -  [Function `get_validator_indices`](#0x2_validator_set_get_validator_indices)
@@ -349,8 +349,8 @@ processed at the end of epoch.
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, <a href="validator.md#0x2_validator">validator</a>: Validator) {
     <b>assert</b>!(
-        !<a href="validator_set.md#0x2_validator_set_is_currently_active_validator">is_currently_active_validator</a>(self, &<a href="validator.md#0x2_validator">validator</a>)
-            && !<a href="validator_set.md#0x2_validator_set_is_currently_pending_validator">is_currently_pending_validator</a>(self, &<a href="validator.md#0x2_validator">validator</a>),
+        !<a href="validator_set.md#0x2_validator_set_is_duplicate_with_active_validator">is_duplicate_with_active_validator</a>(self, &<a href="validator.md#0x2_validator">validator</a>)
+            && !<a href="validator_set.md#0x2_validator_set_is_duplicate_with_pending_validator">is_duplicate_with_pending_validator</a>(self, &<a href="validator.md#0x2_validator">validator</a>),
         <a href="validator_set.md#0x2_validator_set_EDuplicateValidator">EDuplicateValidator</a>
     );
     <a href="table_vec.md#0x2_table_vec_push_back">table_vec::push_back</a>(&<b>mut</b> self.pending_validators, <a href="validator.md#0x2_validator">validator</a>);
@@ -916,16 +916,16 @@ Returns true iff the address exists in active validators.
 
 </details>
 
-<a name="0x2_validator_set_is_currently_active_validator"></a>
+<a name="0x2_validator_set_is_duplicate_with_active_validator"></a>
 
-## Function `is_currently_active_validator`
+## Function `is_duplicate_with_active_validator`
 
-Checks whether <code>new_validator</code> is already in currently active validator list.
+Checks whether <code>new_validator</code> is duplicate with any currently active validators.
 It differs from <code>is_active_validator_by_sui_address</code> in that the former checks
 only the sui address but this function looks at more metadata.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_is_currently_active_validator">is_currently_active_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, new_validator: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): bool
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_is_duplicate_with_active_validator">is_duplicate_with_active_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, new_validator: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): bool
 </code></pre>
 
 
@@ -934,7 +934,7 @@ only the sui address but this function looks at more metadata.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_is_currently_active_validator">is_currently_active_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, new_validator: &Validator): bool {
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_is_duplicate_with_active_validator">is_duplicate_with_active_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, new_validator: &Validator): bool {
     <b>let</b> len = <a href="_length">vector::length</a>(&self.active_validators);
     <b>let</b> i = 0;
     <b>while</b> (i &lt; len) {
@@ -952,14 +952,14 @@ only the sui address but this function looks at more metadata.
 
 </details>
 
-<a name="0x2_validator_set_is_currently_pending_validator"></a>
+<a name="0x2_validator_set_is_duplicate_with_pending_validator"></a>
 
-## Function `is_currently_pending_validator`
+## Function `is_duplicate_with_pending_validator`
 
-Checks whether <code>new_validator</code> is already in currently pending validator list.
+Checks whether <code>new_validator</code> is duplicate with any currently pending validators.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_is_currently_pending_validator">is_currently_pending_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, new_validator: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): bool
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_is_duplicate_with_pending_validator">is_duplicate_with_pending_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, new_validator: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): bool
 </code></pre>
 
 
@@ -968,7 +968,7 @@ Checks whether <code>new_validator</code> is already in currently pending valida
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_is_currently_pending_validator">is_currently_pending_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, new_validator: &Validator): bool {
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_is_duplicate_with_pending_validator">is_duplicate_with_pending_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, new_validator: &Validator): bool {
     <b>let</b> len = <a href="table_vec.md#0x2_table_vec_length">table_vec::length</a>(&self.pending_validators);
     <b>let</b> i = 0;
     <b>while</b> (i &lt; len) {

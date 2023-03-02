@@ -493,6 +493,10 @@ The amount of stake in the <code><a href="validator.md#0x2_validator">validator<
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
+    <b>assert</b>!(
+        <a href="validator_set.md#0x2_validator_set_next_epoch_validator_count">validator_set::next_epoch_validator_count</a>(&self.validators) &lt; self.parameters.max_validator_candidate_count,
+        <a href="sui_system.md#0x2_sui_system_ELimitExceeded">ELimitExceeded</a>,
+    );
     <b>let</b> stake_amount = <a href="coin.md#0x2_coin_value">coin::value</a>(&stake);
     <b>assert</b>!(
         stake_amount &gt;= self.parameters.min_validator_stake,

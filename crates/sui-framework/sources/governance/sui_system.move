@@ -179,6 +179,10 @@ module sui::sui_system {
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
+        assert!(
+            validator_set::next_epoch_validator_count(&self.validators) < self.parameters.max_validator_candidate_count,
+            ELimitExceeded,
+        );
         let stake_amount = coin::value(&stake);
         assert!(
             stake_amount >= self.parameters.min_validator_stake,
