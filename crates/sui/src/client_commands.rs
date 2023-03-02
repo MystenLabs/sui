@@ -26,7 +26,9 @@ use prettytable::{row, table};
 use serde::Serialize;
 use serde_json::{json, Value};
 use sui_framework::build_move_package;
-use sui_move::build::resolve_lock_file_path;
+use sui_move::build::{
+    resolve_lock_file_path, resolve_manifest_lookup, PUBLISHED_AT_MANIFEST_FIELD,
+};
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 use sui_types::error::SuiError;
 
@@ -469,6 +471,13 @@ impl SuiClientCommands {
 
                 let build_config =
                     resolve_lock_file_path(build_config, Some(package_path.clone()))?;
+
+                let lookup = resolve_manifest_lookup(Some(package_path.clone()))?;
+                let _published_at = if let Some(_addr) = lookup.get(PUBLISHED_AT_MANIFEST_FIELD) {
+                    // TODO parse
+                } else {
+                    // TODO decide how to handle / fail when there is no `published-at` field.
+                };
 
                 let compiled_package = build_move_package(
                     &package_path,

@@ -10,6 +10,7 @@ use anyhow::{anyhow, bail};
 use clap::*;
 use fastcrypto::traits::KeyPair;
 use move_package::BuildConfig;
+use sui_move::build::SuiPackageHooks;
 use tracing::info;
 
 use sui_config::{builder::ConfigBuilder, NetworkConfig, SUI_KEYSTORE_FILENAME};
@@ -112,6 +113,7 @@ pub enum SuiCommand {
 
 impl SuiCommand {
     pub async fn execute(self) -> Result<(), anyhow::Error> {
+        move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
         match self {
             SuiCommand::Start {
                 config,

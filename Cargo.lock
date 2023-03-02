@@ -8888,6 +8888,7 @@ dependencies = [
  "move-prover",
  "move-prover-boogie-backend",
  "move-stackless-bytecode",
+ "move-symbol-pool",
  "move-unit-test",
  "mysten-metrics",
  "prometheus",

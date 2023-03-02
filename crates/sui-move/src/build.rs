@@ -3,9 +3,14 @@
 
 use clap::Parser;
 use move_cli::base::{self, build};
-use move_package::BuildConfig as MoveBuildConfig;
+use move_package::{package_hooks::PackageHooks, source_package::parsed_manifest::CustomDepInfo};
+use move_package::{
+    source_package::{layout, manifest_parser},
+    BuildConfig as MoveBuildConfig,
+};
 use serde_json::json;
 use std::{
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
 };
@@ -41,7 +46,14 @@ impl Build {
         build_config: MoveBuildConfig,
     ) -> anyhow::Result<()> {
         let rerooted_path = base::reroot_path(path.clone())?;
-        let build_config = resolve_lock_file_path(build_config, path)?;
+        let build_config = resolve_lock_file_path(build_config, path.clone())?;
+        let lookup = resolve_manifest_lookup(path)?;
+        let _published_at = if let Some(_addr) = lookup.get(PUBLISHED_AT_MANIFEST_FIELD) {
+            // TODO parse
+        } else {
+            // TODO decide how to handle / fail when there is no `published-at` field.
+        };
+
         Self::execute_internal(
             &rerooted_path,
             build_config,
@@ -95,4 +107,43 @@ pub fn resolve_lock_file_path(
     let mut build_config = build_config;
     build_config.lock_file = Some(lock_file_path);
     Ok(build_config)
+}
+
+pub const PUBLISHED_AT_MANIFEST_FIELD: &str = "published-at";
+
+pub struct SuiPackageHooks {}
+
+impl PackageHooks for SuiPackageHooks {
+    fn custom_package_info_fields(&self) -> Vec<String> {
+        vec![PUBLISHED_AT_MANIFEST_FIELD.to_string()]
+    }
+
+    fn custom_dependency_key(&self) -> Option<String> {
+        None
+    }
+
+    fn resolve_custom_dependency(
+        &self,
+        _dep_name: move_symbol_pool::Symbol,
+        _info: &CustomDepInfo,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+pub fn resolve_manifest_lookup(
+    package_path: Option<PathBuf>,
+) -> anyhow::Result<BTreeMap<String, String>> {
+    let package_root = base::reroot_path(package_path)?;
+    let manifest_string =
+        std::fs::read_to_string(package_root.join(layout::SourcePackageLayout::Manifest.path()))?;
+    let toml_manifest = manifest_parser::parse_move_manifest_string(manifest_string)?;
+    let manifest = manifest_parser::parse_source_manifest(toml_manifest)?;
+    let lookup: BTreeMap<String, String> = manifest
+        .package
+        .custom_properties
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+    Ok(lookup)
 }
