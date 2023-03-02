@@ -48,7 +48,6 @@ use sui_core::checkpoints::{
 };
 use sui_core::consensus_adapter::{
     CheckConnection, ConnectionMonitorStatus, ConsensusAdapter, ConsensusAdapterMetrics,
-    ReputationScoreStatus,
 };
 use sui_core::consensus_handler::ConsensusHandler;
 use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
@@ -202,7 +201,7 @@ impl SuiNode {
 
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
-            committee,
+            committee.clone(),
             &config.db_path().join("store"),
             None,
             EpochMetrics::new(&registry_service.default_registry()),
@@ -370,6 +369,7 @@ impl SuiNode {
             let components = Self::construct_validator_components(
                 &config,
                 state.clone(),
+                committee.clone(),
                 epoch_store.clone(),
                 checkpoint_store.clone(),
                 state_sync_handle.clone(),
@@ -545,6 +545,7 @@ impl SuiNode {
     async fn construct_validator_components(
         config: &NodeConfig,
         state: Arc<AuthorityState>,
+        committee: Committee,
         epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_store: Arc<CheckpointStore>,
         state_sync_handle: state_sync::Handle,
@@ -593,6 +594,7 @@ impl SuiNode {
             narwhal_manager,
             narwhal_epoch_data_remover,
             validator_server_handle,
+            committee,
             accumulator,
             checkpoint_metrics,
             sui_tx_validator_metrics,
@@ -610,6 +612,7 @@ impl SuiNode {
         narwhal_manager: NarwhalManager,
         narwhal_epoch_data_remover: EpochDataRemover,
         validator_server_handle: JoinHandle<Result<()>>,
+        committee: Committee,
         accumulator: Arc<StateAccumulator>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
@@ -638,6 +641,7 @@ impl SuiNode {
             state.transaction_manager().clone(),
             state.db(),
             scores_per_authority,
+            committee,
             state.metrics.clone(),
         ));
 
@@ -763,10 +767,6 @@ impl SuiNode {
                 .connect_lazy(&consensus_address)
                 .expect("Failed to connect to consensus"),
         );
-
-        let reputation_score_status = ReputationScoreStatus {
-            low_scoring_authorities: ArcSwap::from_pointee(Arc::new(DashMap::new())),
-        };
 
         let ca_metrics = ConsensusAdapterMetrics::new(prometheus_registry);
         // The consensus adapter allows the authority to send user certificates through consensus.
@@ -966,6 +966,7 @@ impl SuiNode {
                             narwhal_manager,
                             narwhal_epoch_data_remover,
                             validator_server_handle,
+                            next_epoch_committee,
                             self.accumulator.clone(),
                             checkpoint_metrics,
                             sui_tx_validator_metrics,
@@ -992,6 +993,7 @@ impl SuiNode {
                         Self::construct_validator_components(
                             &self.config,
                             self.state.clone(),
+                            next_epoch_committee,
                             new_epoch_store.clone(),
                             self.checkpoint_store.clone(),
                             self.state_sync.clone(),

@@ -16,12 +16,11 @@ use narwhal_types::{ConsensusOutput, ReputationScores};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
-use sui_types::crypto::PublicKey;
+use sui_types::committee::Committee;
 use sui_types::messages::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
     VerifiedExecutableTransaction, VerifiedTransaction,
@@ -40,6 +39,8 @@ pub struct ConsensusHandler<T> {
     parent_sync_store: T,
     /// Reputation scores used by consensus adapter that we update, forwarded from consensus
     low_scoring_authorities: Arc<DashMap<AuthorityName, u64>>,
+    /// The committee used to do stake computations for deciding set of low scoring authorities
+    committee: Committee,
     // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
     // a new metrics type here if we want to.
     metrics: Arc<AuthorityMetrics>,
@@ -57,6 +58,7 @@ impl<T> ConsensusHandler<T> {
         transaction_manager: Arc<TransactionManager>,
         parent_sync_store: T,
         scores_per_authority: Arc<DashMap<AuthorityName, u64>>,
+        committee: Committee,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         let last_seen = Mutex::new(Default::default());
@@ -68,6 +70,7 @@ impl<T> ConsensusHandler<T> {
             checkpoint_service,
             parent_sync_store,
             low_scoring_authorities: scores_per_authority,
+            committee,
             metrics,
             processed_cache: Mutex::new(LruCache::new(
                 NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap(),
@@ -81,7 +84,10 @@ impl<T> ConsensusHandler<T> {
     /// We want to ensure that the remaining set of validators once we exclude the low scoring authorities
     /// is including enough stake for a quorum, at the very least. It is also possible that no authorities
     /// are particularly low scoring, in which case this will result in storing an empty list.
-    fn update_low_scoring_authorities(&self, _reputation_scores: HashMap<PublicKey, u64>) {
+    fn update_low_scoring_authorities(&self, _reputation_scores: ReputationScores) {
+        if !_reputation_scores.final_of_schedule {
+            return;
+        }
         todo!();
     }
 }
@@ -138,15 +144,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             Arc::new(consensus_output.sub_dag.leader.clone()),
         ));
 
-        if consensus_output.sub_dag.reputation_score.final_of_schedule {
-            self.update_low_scoring_authorities(
-                consensus_output
-                    .sub_dag
-                    .reputation_score
-                    .scores_per_authority
-                    .clone(),
-            );
-        }
+        self.update_low_scoring_authorities(consensus_output.sub_dag.reputation_score.clone());
 
         for (cert, batches) in consensus_output.batches {
             let author = cert.header.author.clone();
