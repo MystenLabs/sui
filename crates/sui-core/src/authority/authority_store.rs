@@ -175,6 +175,13 @@ impl AuthorityStore {
             })
     }
 
+    pub fn multi_get_events(
+        &self,
+        event_digests: &[TransactionEventsDigest],
+    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
+        Ok(self.perpetual_tables.events.multi_get(event_digests)?)
+    }
+
     pub fn multi_get_effects<'a>(
         &self,
         effects_digests: impl Iterator<Item = &'a TransactionEffectsDigest>,

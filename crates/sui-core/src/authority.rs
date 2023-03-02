@@ -159,6 +159,7 @@ pub type ReconfigConsensusMessage = (
 
 pub type VerifiedTransactionBatch = Vec<(
     (VerifiedTransaction, TransactionEffects),
+    TransactionEvents,
     Option<(EpochId, CheckpointSequenceNumber)>,
 )>;
 
@@ -2151,13 +2152,26 @@ impl AuthorityState {
         let effects = self.database.multi_get_executed_effects(digests)?;
         let checkpoints = self.database.multi_get_transaction_checkpoint(digests)?;
 
+        let mut events_digests: Vec<TransactionEventsDigest> = vec![];
+
+        for effect in effects.iter() {
+            match effect {
+                Some(eff) => events_digests.push(eff.events_digest.unwrap()),
+                _ => continue,
+            }
+        }
+
+        let events = self.database.multi_get_events(events_digests.as_slice())?;
+
         let mut missed_digests = vec![];
         let mut response: VerifiedTransactionBatch = vec![];
 
-        for data in izip!(digests, transactions, effects, checkpoints) {
+        for data in izip!(digests, transactions, effects, events, checkpoints) {
             match data {
-                (_, Some(tx), Some(effect), cp) => response.push(((tx, effect), cp)),
-                (digest, _, _, _) => missed_digests.push(*digest),
+                (_, Some(tx), Some(effect), Some(event), cp) => {
+                    response.push(((tx, effect), event, cp))
+                }
+                (digest, _, _, _, _) => missed_digests.push(*digest),
             }
         }
 

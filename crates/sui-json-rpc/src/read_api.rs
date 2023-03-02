@@ -214,12 +214,19 @@ impl ReadApiServer for ReadApi {
             .multi_get_transactions(&tx_digests)
             .await
             .tap_err(|err| debug!(txs_digests=?tx_digests, "Failed to get batch: {:?}", err))?;
+
         let mut responses: Vec<SuiTransactionResponse> = Vec::new();
         for (txn, digest) in txn_batch.iter().zip(tx_digests.iter()) {
             responses.push(SuiTransactionResponse {
                 transaction: txn.clone().0 .0.into_message().try_into()?,
-                effects: SuiTransactionEffects::try_from(
-                    txn.0.clone().1,
+                effects: txn.0.clone().1.into(),
+                events: SuiTransactionEvents::try_from(
+                    txn.1.clone(),
+                    // threading the epoch_store through this API does not
+                    // seem possible, so we just read it from the state and fetch
+                    // the module cache out of it.
+                    // Notice that no matter what module cache we get things
+                    // should work
                     self.state
                         .load_epoch_store_one_call_per_task()
                         .module_cache()
@@ -227,7 +234,7 @@ impl ReadApiServer for ReadApi {
                 )?,
                 timestamp_ms: self.state.get_timestamp_ms(digest).await?,
                 confirmed_local_execution: None,
-                checkpoint: txn.1.map(|(_epoch, checkpoint)| checkpoint),
+                checkpoint: txn.2.map(|(_epoch, checkpoint)| checkpoint),
             })
         }
         Ok(responses)
