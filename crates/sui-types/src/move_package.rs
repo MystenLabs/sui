@@ -126,6 +126,10 @@ impl MovePackage {
         self.version
     }
 
+    pub fn increment_version(&mut self) {
+        self.version.increment();
+    }
+
     /// Approximate size of the package in bytes. This is used for gas metering.
     pub fn object_size_for_gas_metering(&self) -> usize {
         // + 8 for version

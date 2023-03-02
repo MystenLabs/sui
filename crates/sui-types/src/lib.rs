@@ -95,6 +95,10 @@ pub fn parse_sui_type_tag(s: &str) -> anyhow::Result<TypeTag> {
     ParsedType::parse(s)?.into_type_tag(&resolve_address)
 }
 
+pub fn is_system_package(id: ObjectID) -> bool {
+    matches!(id, MOVE_STDLIB_OBJECT_ID | SUI_FRAMEWORK_OBJECT_ID)
+}
+
 fn resolve_address(addr: &str) -> Option<AccountAddress> {
     match addr {
         "std" => Some(MOVE_STDLIB_ADDRESS),

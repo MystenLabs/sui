@@ -4683,3 +4683,149 @@ async fn test_tallying_rule_score_updates() {
     assert_eq!(get_auth_score_metric(&auth_2_name), 2);
     assert_eq!(get_auth_score_metric(&auth_3_name), 1);
 }
+
+#[test]
+fn test_choose_next_system_packages() {
+    telemetry_subscribers::init_for_testing();
+    let o1 = random_object_ref();
+    let o2 = random_object_ref();
+    let o3 = random_object_ref();
+
+    fn sort(mut v: Vec<ObjectRef>) -> Vec<ObjectRef> {
+        v.sort();
+        v
+    }
+
+    fn ver(v: u64) -> ProtocolVersion {
+        ProtocolVersion::new(v)
+    }
+
+    macro_rules! make_capabilities {
+        ($v: expr, $name: expr, $packages: expr) => {
+            AuthorityCapabilities::new(
+                $name,
+                SupportedProtocolVersions::new_for_testing(1, $v),
+                $packages,
+            )
+        };
+    }
+
+    let committee = Committee::new_simple_test_committee().0;
+    let v = &committee.voting_rights;
+    let mut protocol_config = ProtocolConfig::get_for_max_version();
+
+    // all validators agree on new system packages, but without a new protocol version, so no
+    // upgrade.
+    let capabilities = vec![
+        make_capabilities!(1, v[0].0, vec![o1, o2]),
+        make_capabilities!(1, v[1].0, vec![o1, o2]),
+        make_capabilities!(1, v[2].0, vec![o1, o2]),
+        make_capabilities!(1, v[3].0, vec![o1, o2]),
+    ];
+
+    assert_eq!(
+        (ver(1), vec![]),
+        AuthorityState::choose_protocol_version_and_system_packages(
+            &committee,
+            &protocol_config,
+            capabilities
+        )
+    );
+
+    // one validator disagrees, stake buffer means no upgrade
+    let capabilities = vec![
+        make_capabilities!(2, v[0].0, vec![o1, o2]),
+        make_capabilities!(2, v[1].0, vec![o1, o2]),
+        make_capabilities!(2, v[2].0, vec![o1, o2]),
+        make_capabilities!(2, v[3].0, vec![o1, o3]),
+    ];
+
+    assert_eq!(
+        (ver(1), vec![]),
+        AuthorityState::choose_protocol_version_and_system_packages(
+            &committee,
+            &protocol_config,
+            capabilities.clone(),
+        )
+    );
+
+    // Now 2f+1 is enough to upgrade
+    protocol_config.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
+
+    assert_eq!(
+        (ver(2), sort(vec![o1, o2])),
+        AuthorityState::choose_protocol_version_and_system_packages(
+            &committee,
+            &protocol_config,
+            capabilities
+        )
+    );
+
+    // committee is split, can't upgrade even with 0 stake buffer
+    let capabilities = vec![
+        make_capabilities!(2, v[0].0, vec![o1, o2]),
+        make_capabilities!(2, v[1].0, vec![o1, o2]),
+        make_capabilities!(2, v[2].0, vec![o1, o3]),
+        make_capabilities!(2, v[3].0, vec![o1, o3]),
+    ];
+
+    assert_eq!(
+        (ver(1), vec![]),
+        AuthorityState::choose_protocol_version_and_system_packages(
+            &committee,
+            &protocol_config,
+            capabilities,
+        )
+    );
+
+    // all validators agree on packages, and a proto upgrade
+    let capabilities = vec![
+        make_capabilities!(2, v[0].0, vec![o1, o2]),
+        make_capabilities!(2, v[1].0, vec![o1, o2]),
+        make_capabilities!(2, v[2].0, vec![o1, o2]),
+        make_capabilities!(2, v[3].0, vec![o1, o2]),
+    ];
+
+    assert_eq!(
+        (ver(2), sort(vec![o1, o2])),
+        AuthorityState::choose_protocol_version_and_system_packages(
+            &committee,
+            &protocol_config,
+            capabilities
+        )
+    );
+
+    // all validators agree on packages, but not protocol version.
+    let capabilities = vec![
+        make_capabilities!(1, v[0].0, vec![o1, o2]),
+        make_capabilities!(1, v[1].0, vec![o1, o2]),
+        make_capabilities!(2, v[2].0, vec![o1, o2]),
+        make_capabilities!(2, v[3].0, vec![o1, o2]),
+    ];
+
+    assert_eq!(
+        (ver(1), vec![]),
+        AuthorityState::choose_protocol_version_and_system_packages(
+            &committee,
+            &protocol_config,
+            capabilities
+        )
+    );
+
+    // one validator is having a problem with packages, so its vote does not count.
+    let capabilities = vec![
+        make_capabilities!(2, v[0].0, vec![]),
+        make_capabilities!(1, v[1].0, vec![o1, o2]),
+        make_capabilities!(2, v[2].0, vec![o1, o2]),
+        make_capabilities!(2, v[3].0, vec![o1, o2]),
+    ];
+
+    assert_eq!(
+        (ver(1), vec![]),
+        AuthorityState::choose_protocol_version_and_system_packages(
+            &committee,
+            &protocol_config,
+            capabilities
+        )
+    );
+}

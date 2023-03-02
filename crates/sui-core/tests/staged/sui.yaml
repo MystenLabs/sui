@@ -53,6 +53,12 @@ ChangeEpoch:
     - computation_charge: U64
     - storage_rebate: U64
     - epoch_start_timestamp_ms: U64
+    - system_packages:
+        SEQ:
+          TUPLE:
+            - TYPENAME: SequenceNumber
+            - SEQ:
+                SEQ: U8
 CircularObjectOwnership:
   STRUCT:
     - object:
@@ -92,6 +98,39 @@ Command:
               TYPENAME: TypeTag
           - SEQ:
               TYPENAME: Argument
+CommandArgumentError:
+  ENUM:
+    0:
+      TypeMismatch: UNIT
+    1:
+      InvalidBCSBytes: UNIT
+    2:
+      InvalidUsageOfPureArg: UNIT
+    3:
+      InvalidArgumentToPrivateEntryFunction: UNIT
+    4:
+      IndexOutOfBounds:
+        STRUCT:
+          - idx: U16
+    5:
+      SecondaryIndexOutOfBounds:
+        STRUCT:
+          - result_idx: U16
+          - secondary_idx: U16
+    6:
+      InvalidResultArity:
+        STRUCT:
+          - result_idx: U16
+    7:
+      InvalidGasCoinUsage: UNIT
+    8:
+      InvalidUsageOfBorrowedValue: UNIT
+    9:
+      InvalidUsageOfTakenValue: UNIT
+    10:
+      InvalidObjectByValue: UNIT
+    11:
+      InvalidObjectByMutRef: UNIT
 ConsensusCommitPrologue:
   STRUCT:
     - epoch: U64
@@ -259,6 +298,23 @@ ExecutionFailureStatus:
       TotalPaymentAmountOverflow: UNIT
     36:
       TotalCoinBalanceOverflow: UNIT
+    37:
+      CommandArgumentError:
+        STRUCT:
+          - arg_idx: U16
+          - kind:
+              TYPENAME: CommandArgumentError
+    38:
+      UnusedValueWithoutDrop:
+        STRUCT:
+          - result_idx: U16
+          - secondary_idx: U16
+    39:
+      InvalidPublicFunctionReturnType:
+        STRUCT:
+          - idx: U16
+    40:
+      ArityMismatch: UNIT
 ExecutionStatus:
   ENUM:
     0:

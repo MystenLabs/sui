@@ -13,10 +13,10 @@ use move_core_types::ident_str;
 use once_cell::sync::Lazy;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::gas_coin::GasCoin;
+use sui_types::is_system_package;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{base_types::dbg_addr, crypto::get_key_pair, gas::SuiGasStatus};
-use sui_types::{MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID};
 
 static MAX_GAS_BUDGET: Lazy<u64> = Lazy::new(|| SuiCostTable::new_for_testing().max_gas_budget);
 static MIN_GAS_BUDGET: Lazy<u64> =
@@ -318,13 +318,8 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         genesis_objects
             .iter()
             // do not charge for loads of the Sui Framework
-            .filter_map(|o| {
-                if o.id() != SUI_FRAMEWORK_OBJECT_ID && o.id() != MOVE_STDLIB_OBJECT_ID {
-                    Some(o.object_size_for_gas_metering())
-                } else {
-                    None
-                }
-            })
+            .filter(|o| !is_system_package(o.id()))
+            .map(|o| o.object_size_for_gas_metering())
             .sum(),
     )?;
     gas_status.charge_storage_read(gas_object.object_size_for_gas_metering())?;
