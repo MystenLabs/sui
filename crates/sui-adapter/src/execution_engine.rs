@@ -432,11 +432,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             .map(|m| CompiledModule::deserialize(&m).unwrap())
             .collect();
 
-        let new_package = Object::new_system_package(
-            modules,
-            version,
-            tx_ctx.digest(),
-        )?;
+        let new_package = Object::new_system_package(modules, version, tx_ctx.digest())?;
 
         info!(
             "upgraded system object {:?}",
