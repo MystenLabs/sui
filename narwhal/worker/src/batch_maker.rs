@@ -5,11 +5,11 @@ use crate::metrics::WorkerMetrics;
 #[cfg(feature = "trace_transaction")]
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::hash::Hash;
-use futures::stream::FuturesOrdered;
+use futures::stream::{FuturesOrdered, FuturesUnordered};
 use store::Store;
 
 use config::WorkerId;
-use tracing::error;
+use tracing::{error, debug};
 
 #[cfg(feature = "benchmark")]
 use std::convert::TryInto;
@@ -30,7 +30,7 @@ use types::{
 };
 
 // The number of batches to store / transmit in parallel.
-pub const MAX_PARALLEL_BATCH: usize = 25;
+pub const MAX_PARALLEL_BATCH: usize = 100;
 
 #[cfg(test)]
 #[path = "tests/batch_maker_tests.rs"]
@@ -41,7 +41,7 @@ pub struct BatchMaker {
     // Our worker's id.
     id: WorkerId,
     /// The preferred batch size (in bytes).
-    batch_size: usize,
+    batch_size_limit: usize,
     /// The maximum delay after which to seal the batch.
     max_batch_delay: Duration,
     /// Receiver for shutdown.
@@ -65,7 +65,7 @@ impl BatchMaker {
     #[must_use]
     pub fn spawn(
         id: WorkerId,
-        batch_size: usize,
+        batch_size_limit: usize,
         max_batch_delay: Duration,
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_batch_maker: Receiver<(Transaction, TxResponse)>,
@@ -78,7 +78,7 @@ impl BatchMaker {
             async move {
                 Self {
                     id,
-                    batch_size,
+                    batch_size_limit,
                     max_batch_delay,
                     rx_shutdown,
                     rx_batch_maker,
@@ -104,7 +104,7 @@ impl BatchMaker {
         let mut current_responses = Vec::new();
         let mut current_batch_size = 0;
 
-        let mut batch_pipeline = FuturesOrdered::new();
+        let mut batch_pipeline = FuturesUnordered::new();
 
         loop {
             tokio::select! {
@@ -116,9 +116,9 @@ impl BatchMaker {
                     current_batch_size += transaction.len();
                     current_batch.transactions.push(transaction);
                     current_responses.push(response_sender);
-                    if current_batch_size >= self.batch_size {
+                    if current_batch_size >= self.batch_size_limit {
                         if let Some(seal) = self.seal(false, current_batch, current_batch_size, current_responses).await{
-                            batch_pipeline.push_back(seal);
+                            batch_pipeline.push(seal);
                         }
                         self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
 
@@ -135,7 +135,7 @@ impl BatchMaker {
                 () = &mut timer => {
                     if !current_batch.transactions.is_empty() {
                         if let Some(seal) = self.seal(true, current_batch, current_batch_size, current_responses).await {
-                            batch_pipeline.push_back(seal);
+                            batch_pipeline.push(seal);
                         }
                         self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
 
@@ -297,8 +297,8 @@ impl BatchMaker {
                 .await
                 .is_err()
             {
-                tracing::debug!("{}", DagError::ShuttingDown);
-                return; // Error is fatal.
+                debug!("Failed to send created batch to primary. Shutting down.");
+                return;
             };
 
             // Wait for a primary response
