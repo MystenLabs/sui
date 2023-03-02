@@ -100,9 +100,7 @@ module sui::genesis {
                 p2p_address,
                 consensus_address,
                 worker_address,
-                // TODO Figure out if we want to instead initialize validators with 0 stake.
-                // Initialize all validators with 1 Mist stake.
-                balance::split(&mut sui_supply, 1),
+                balance::zero(),
                 option::none(),
                 gas_price,
                 commission_rate,
