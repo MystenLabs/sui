@@ -21,11 +21,11 @@ use crate::{
         error::{TestbedError, TestbedResult},
         settings::Settings,
         ssh::SshConnection,
-        state::Instance,
     },
 };
 
 use super::{
+    client::Instance,
     config::Config,
     metrics::MetricsCollector,
     parameters::BenchmarkParameters,
@@ -114,6 +114,9 @@ pub struct Testbed<C> {
 impl<C: Client> Testbed<C> {
     /// Create a new testbed instance with the specified settings and client.
     pub async fn new(settings: Settings, client: C) -> TestbedResult<Self> {
+        let public_key = settings.load_ssh_public_key()?;
+        client.register_ssh_public_key(public_key).await?;
+
         let instances = client.list_instances().await?;
         let private_key_file = settings.ssh_private_key_file.clone().into();
         let ssh_manager = SshConnectionManager::new(C::USERNAME.into(), private_key_file);
@@ -709,87 +712,9 @@ impl<C> Testbed<C> {
 
 #[cfg(test)]
 mod test {
-    use std::{fmt::Display, sync::Mutex};
-
-    use serde::Serialize;
-
     use crate::orchestrator::{
-        client::Client, error::CloudProviderResult, settings::Settings, state::Instance,
-        testbed::Testbed,
+        client::test_client::TestClient, settings::Settings, testbed::Testbed,
     };
-
-    #[derive(Default)]
-    pub struct TestClient {
-        instances: Mutex<Vec<Instance>>,
-    }
-
-    impl Display for TestClient {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "TestClient")
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl Client for TestClient {
-        const USERNAME: &'static str = "root";
-
-        async fn list_instances(&self) -> CloudProviderResult<Vec<Instance>> {
-            let guard = self.instances.lock().unwrap();
-            Ok(guard.clone())
-        }
-
-        async fn start_instances<'a, I>(&self, instances: I) -> CloudProviderResult<()>
-        where
-            I: Iterator<Item = &'a Instance> + Send,
-        {
-            let instance_ids: Vec<_> = instances.map(|x| x.id.clone()).collect();
-            let mut guard = self.instances.lock().unwrap();
-            for instance in guard.iter_mut().filter(|x| instance_ids.contains(&x.id)) {
-                instance.power_status = "running".into();
-            }
-            Ok(())
-        }
-
-        async fn stop_instances<'a, I>(&self, instances: I) -> CloudProviderResult<()>
-        where
-            I: Iterator<Item = &'a Instance> + Send,
-        {
-            let instance_ids: Vec<_> = instances.map(|x| x.id.clone()).collect();
-            let mut guard = self.instances.lock().unwrap();
-            for instance in guard.iter_mut().filter(|x| instance_ids.contains(&x.id)) {
-                instance.power_status = "stopped".into();
-            }
-            Ok(())
-        }
-
-        async fn create_instance<S>(&self, region: S) -> CloudProviderResult<Instance>
-        where
-            S: Into<String> + Serialize + Send,
-        {
-            let mut guard = self.instances.lock().unwrap();
-            let id = guard.len();
-            let instance = Instance {
-                id: id.to_string(),
-                region: region.into(),
-                main_ip: format!("0.0.0.{id}").parse().unwrap(),
-                tags: Vec::new(),
-                plan: "".into(),
-                power_status: "running".into(),
-            };
-            guard.push(instance.clone());
-            Ok(instance)
-        }
-
-        async fn delete_instance(&self, instance_id: String) -> CloudProviderResult<()> {
-            let mut guard = self.instances.lock().unwrap();
-            guard.retain(|x| x.id != instance_id);
-            Ok(())
-        }
-
-        async fn register_ssh_public_key(&self, public_key: String) -> CloudProviderResult<()> {
-            Ok(())
-        }
-    }
 
     #[tokio::test]
     async fn populate() {

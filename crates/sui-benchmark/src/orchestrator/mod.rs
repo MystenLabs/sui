@@ -16,7 +16,6 @@ pub mod metrics;
 pub mod parameters;
 pub mod settings;
 pub mod ssh;
-pub mod state;
 pub mod testbed;
 
 pub struct Orchestrator<C: Client> {

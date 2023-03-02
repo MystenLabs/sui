@@ -14,7 +14,7 @@ use crate::{
     orchestrator::error::{SshError, SshResult},
 };
 
-use super::state::Instance;
+use super::client::Instance;
 
 #[derive(Clone)]
 pub struct SshCommand<C: Fn(usize) -> String> {

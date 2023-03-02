@@ -88,13 +88,6 @@ async fn main() -> Result<()> {
                 .wrap_err("Failed to load cloud provider's token")?;
             let client = VultrClient::new(token, settings.clone());
 
-            // Try to register our ssh public with the cloud provider.
-            let public_key = settings.load_ssh_public_key()?;
-            client
-                .upload_key(public_key)
-                .await
-                .wrap_err("Failed to upload ssh key to cloud provider")?;
-
             // Execute the command.
             execute(settings, client, opts).await
         }

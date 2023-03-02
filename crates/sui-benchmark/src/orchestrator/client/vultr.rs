@@ -1,16 +1,15 @@
-use std::fmt::Display;
+use std::{fmt::Display, net::Ipv4Addr};
 
 use reqwest::{Client as NetworkClient, Response, Url};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::orchestrator::{
     error::{CloudProviderError, CloudProviderResult},
     settings::Settings,
-    state::{Instance, SshKey},
 };
 
-use super::Client;
+use super::{Client, Instance};
 
 impl From<reqwest::Error> for CloudProviderError {
     fn from(e: reqwest::Error) -> Self {
@@ -21,6 +20,43 @@ impl From<reqwest::Error> for CloudProviderError {
 impl From<serde_json::Error> for CloudProviderError {
     fn from(e: serde_json::Error) -> Self {
         Self::UnexpectedResponse(e.to_string())
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SshKey {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct VultrInstance {
+    pub id: String,
+    pub region: String,
+    pub main_ip: Ipv4Addr,
+    pub tags: Vec<String>,
+    pub plan: String,
+    pub power_status: String,
+}
+
+impl From<VultrInstance> for Instance {
+    fn from(instance: VultrInstance) -> Self {
+        Self {
+            id: instance.id,
+            region: instance.region,
+            main_ip: instance.main_ip,
+            tags: instance.tags,
+            plan: instance.plan,
+            power_status: instance.power_status,
+        }
+    }
+}
+
+impl VultrInstance {
+    pub fn filter(&self, settings: &Settings) -> bool {
+        settings.regions.contains(&self.region)
+            && self.tags.contains(&settings.testbed)
+            && self.plan == settings.specs
     }
 }
 
@@ -115,11 +151,12 @@ impl Client for VultrClient {
         let json: Value = response.json().await?;
         Self::check_response(&json)?;
         let content = json["instances"].clone();
-        let instances: Vec<Instance> = serde_json::from_value(content)?;
+        let instances: Vec<VultrInstance> = serde_json::from_value(content)?;
 
         let filtered = instances
             .into_iter()
             .filter(|x| x.filter(&self.settings))
+            .map(|x| x.into())
             .collect();
 
         Ok(filtered)

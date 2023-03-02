@@ -14,7 +14,7 @@ use sui_types::{
     crypto::{AuthorityKeyPair, KeypairTraits, NetworkKeyPair, SuiKeyPair},
 };
 
-use super::state::Instance;
+use super::client::Instance;
 
 pub struct Config {
     genesis_config: GenesisConfig,

@@ -13,10 +13,9 @@ use serde::Serialize;
 use crate::orchestrator::{
     error::{CloudProviderError, CloudProviderResult},
     settings::Settings,
-    state::Instance,
 };
 
-use super::Client;
+use super::{Client, Instance};
 
 impl<T> From<SdkError<T>> for CloudProviderError
 where
