@@ -1393,6 +1393,18 @@ pub struct SuiTransactionData {
     pub gas_data: SuiGasData,
 }
 
+impl SuiTransactionData {
+    pub fn move_calls(&self) -> Vec<&SuiMoveCall> {
+        self.transactions
+            .iter()
+            .filter_map(|tx| match tx {
+                SuiTransactionKind::Call(call) => Some(call),
+                _ => None,
+            })
+            .collect()
+    }
+}
+
 impl Display for SuiTransactionData {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut writer = String::new();
