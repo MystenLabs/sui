@@ -19,8 +19,13 @@ function Search() {
     const navigate = useNavigateWithQuery();
     const handleSelectResult = useCallback(
         (result: SearchResult) => {
-            navigate(`/${result.type}/${encodeURIComponent(result.id)}`, {});
-            setQuery('');
+            if (result) {
+                navigate(
+                    `/${result?.type}/${encodeURIComponent(result?.id)}`,
+                    {}
+                );
+                setQuery('');
+            }
         },
         [navigate]
     );
