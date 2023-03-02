@@ -42,15 +42,15 @@ jobs:
     - name: Install nexttest
       uses: taiki-e/install-action@nextest
 
-    # - name: Build simtest
-    #   run: |
-    #     export RUST_LOG=off
-    #     ./scripts/simtest/cargo-simtest simtest build
+    - name: Build simtest
+      run: |
+        export RUST_LOG=off
+        ./scripts/simtest/cargo-simtest simtest build
 
-    # - name: Run simtest
-    #   run: |
-    #     export RUST_LOG=off
-    #     ./scripts/simtest/simtest-run.sh
+    - name: Run simtest
+      run: |
+        export RUST_LOG=off
+        ./scripts/simtest/simtest-run.sh
 
   notify:
     name: Notify
@@ -68,7 +68,6 @@ jobs:
       run: |
         export sui_sha=$(git rev-parse HEAD)
         echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
-
 
     - name: Post to slack
       uses: slackapi/slack-github-action@936158bbe252e9a6062e793ea4609642c966e302 # pin@v1.21.0
