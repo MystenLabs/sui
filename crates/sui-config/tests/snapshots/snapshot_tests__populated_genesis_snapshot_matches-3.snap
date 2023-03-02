@@ -9,7 +9,7 @@ validators:
   active_validators:
     - metadata:
         sui_address: "0x21b60aa9a8cb189ccbe20461dbfad2202fdef55b9418f30ac2c5fe632f6e1cb7"
-        pubkey_bytes:
+        protocol_pubkey_bytes:
           - 153
           - 242
           - 94
@@ -229,6 +229,14 @@ validators:
         p2p_address: []
         consensus_address: []
         worker_address: []
+        next_epoch_protocol_pubkey_bytes: ~
+        next_epoch_proof_of_possession: ~
+        next_epoch_network_pubkey_bytes: ~
+        next_epoch_worker_pubkey_bytes: ~
+        next_epoch_net_address: ~
+        next_epoch_p2p_address: ~
+        next_epoch_consensus_address: ~
+        next_epoch_worker_address: ~
       voting_power: 10000
       gas_price: 1
       staking_pool:
