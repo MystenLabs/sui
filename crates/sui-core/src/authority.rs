@@ -2679,7 +2679,8 @@ impl AuthorityState {
             } else {
                 info!(
                     "validator {:?} does not support {:?}",
-                    authority, next_protocol_version
+                    authority.concise(),
+                    next_protocol_version
                 );
             }
         }
