@@ -156,6 +156,7 @@ function TransferCoinPage() {
                             coinType={coinType}
                             initialAmount={formData?.amount || ''}
                             initialTo={formData?.to || ''}
+                            initialGasEstimation={formData?.gasBudget || 0}
                         />
                     </>
                 )}

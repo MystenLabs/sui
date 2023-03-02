@@ -59,6 +59,7 @@ export type SendTokenFormProps = {
     onSubmit: (values: SubmitProps) => void;
     initialAmount: string;
     initialTo: string;
+    initialGasEstimation: number;
 };
 
 function GasBudgetEstimation({
@@ -69,7 +70,6 @@ function GasBudgetEstimation({
     suiCoins: SuiMoveObject[];
 }) {
     const { values, setFieldValue } = useFormikContext<FormValues>();
-
     const gasBudgetEstimationUnits = useMemo(
         () =>
             Coin.computeGasBudgetForPay(
@@ -89,7 +89,7 @@ function GasBudgetEstimation({
 
     // gasBudgetEstimation should change when the amount above changes
     useEffect(() => {
-        setFieldValue('gasInputBudgetEst', gasBudgetEstimation);
+        setFieldValue('gasInputBudgetEst', gasBudgetEstimation, true);
     }, [gasBudgetEstimation, setFieldValue, values.amount]);
 
     return (
@@ -119,6 +119,7 @@ export function SendTokenForm({
     onSubmit,
     initialAmount = '',
     initialTo = '',
+    initialGasEstimation = 0,
 }: SendTokenFormProps) {
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
     const coinBalance = useMemo(
@@ -136,12 +137,9 @@ export function SendTokenForm({
     );
 
     const gasAggregateBalance = aggregateBalances[SUI_TYPE_ARG] || BigInt(0);
-
     const coinSymbol = (coinType && CoinAPI.getCoinSymbol(coinType)) || '';
-
     const [coinDecimals] = useCoinDecimals(coinType);
-    const [gasDecimals] = useCoinDecimals(SUI_TYPE_ARG);
-
+    const [gasDecimals, gasQueryResult] = useCoinDecimals(SUI_TYPE_ARG);
     const maxSuiSingleCoinBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
 
     const validationSchemaStepOne = useMemo(
@@ -153,16 +151,17 @@ export function SendTokenForm({
                 gasAggregateBalance,
                 coinDecimals,
                 gasDecimals,
-                0,
+                initialGasEstimation,
                 maxSuiSingleCoinBalance
             ),
         [
             coinType,
             coinBalance,
             coinSymbol,
+            gasAggregateBalance,
             coinDecimals,
             gasDecimals,
-            gasAggregateBalance,
+            initialGasEstimation,
             maxSuiSingleCoinBalance,
         ]
     );
@@ -174,17 +173,21 @@ export function SendTokenForm({
     );
 
     // remove the comma from the token balance
-    const maxToken = tokenBalance.replace(/,/g, '');
+    const formattedTokenBalance = tokenBalance.replace(/,/g, '');
+    const maxToken = parseAmount(formattedTokenBalance, coinDecimals);
+    const initAmountBig = parseAmount(initialAmount, coinDecimals);
 
     return (
-        <Loading loading={queryResult.isLoading}>
+        <Loading loading={queryResult.isLoading || gasQueryResult.isLoading}>
             <Formik
                 initialValues={{
                     amount: initialAmount,
                     to: initialTo,
                     isPayAllSui:
-                        initialAmount === maxToken && coinType === SUI_TYPE_ARG,
-                    gasInputBudgetEst: 0,
+                        !!initAmountBig &&
+                        initAmountBig === maxToken &&
+                        coinType === SUI_TYPE_ARG,
+                    gasInputBudgetEst: initialGasEstimation,
                 }}
                 validationSchema={validationSchemaStepOne}
                 enableReinitialize
@@ -219,8 +222,8 @@ export function SendTokenForm({
                     submitForm,
                 }) => {
                     const newPaySuiAll =
-                        values.amount === maxToken && coinType === SUI_TYPE_ARG;
-
+                        parseAmount(values.amount, coinDecimals) === maxToken &&
+                        coinType === SUI_TYPE_ARG;
                     if (values.isPayAllSui !== newPaySuiAll) {
                         setFieldValue('isPayAllSui', newPaySuiAll);
                     }
@@ -258,7 +261,7 @@ export function SendTokenForm({
                                                 // useFormat coin
                                                 setFieldValue(
                                                     'amount',
-                                                    maxToken,
+                                                    formattedTokenBalance,
                                                     true
                                                 )
                                             }
@@ -266,7 +269,7 @@ export function SendTokenForm({
                                                 parseAmount(
                                                     values?.amount,
                                                     coinDecimals
-                                                ) === coinBalance ||
+                                                ) === maxToken ||
                                                 queryResult.isLoading ||
                                                 !maxToken ||
                                                 !values.gasInputBudgetEst
