@@ -133,13 +133,15 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
             <ReceiptCardBg status={isSuccessful}>
                 <div className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col pt-3.5 first:pt-0">
                     {error && (
-                        <Text
-                            variant="body"
-                            weight="medium"
-                            color="steel-darker"
-                        >
-                            {error}
-                        </Text>
+                        <div className="py-3.5 first:pt-0">
+                            <Text
+                                variant="body"
+                                weight="medium"
+                                color="steel-darker"
+                            >
+                                {error}
+                            </Text>
+                        </div>
                     )}
 
                     {isStakeTxn ? (
