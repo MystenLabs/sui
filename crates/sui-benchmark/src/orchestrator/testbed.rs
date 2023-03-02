@@ -172,7 +172,8 @@ impl<C: Client> Testbed<C> {
         table.set_titles(row![bH2->format!("Instances ({})",self.instances.len())]);
         for (i, (region, instances)) in sorted.iter().enumerate() {
             table.add_row(row![bH2->region.to_uppercase()]);
-            for (j, instance) in instances.iter().enumerate() {
+            let mut j = 0;
+            for instance in instances {
                 if (j + 1) % 5 == 0 {
                     table.add_row(row![]);
                 }
@@ -180,10 +181,13 @@ impl<C: Client> Testbed<C> {
                 let username = C::USERNAME;
                 let ip = instance.main_ip;
                 let connect = format!("ssh -i {private_key_file} {username}@{ip}");
-                if instance.is_active() {
-                    table.add_row(row![bFg->format!("{j}"), connect]);
-                } else if !instance.is_terminated() {
-                    table.add_row(row![bFr->format!("{j}"), connect]);
+                if !instance.is_terminated() {
+                    if instance.is_active() {
+                        table.add_row(row![bFg->format!("{j}"), connect]);
+                    } else {
+                        table.add_row(row![bFr->format!("{j}"), connect]);
+                    }
+                    j += 1;
                 }
             }
             if i != sorted.len() - 1 {
@@ -302,7 +306,7 @@ impl<C: Client> Testbed<C> {
             let instances = self.client.list_instances().await?;
             if try_join_all(instances.iter().map(|instance| {
                 let private_key_file = self.settings.ssh_private_key_file.clone();
-                SshConnection::new(instance.ssh_address(), "root", private_key_file)
+                SshConnection::new(instance.ssh_address(), C::USERNAME, private_key_file)
             }))
             .await
             .is_ok()
@@ -328,6 +332,7 @@ impl<C> Testbed<C> {
         let instances: Vec<_> = self
             .instances
             .iter()
+            .filter(|x| x.is_active())
             .cloned()
             .take(parameters.nodes)
             .collect();
@@ -340,16 +345,18 @@ impl<C> Testbed<C> {
         Ok(instances)
     }
 
-    pub async fn wait_for_command(
-        &self,
-        instances: &[Instance],
-        command_id: &str,
-    ) -> TestbedResult<()> {
+    pub async fn wait_for_command<'a, I>(&self, instances: I, command_id: &str) -> TestbedResult<()>
+    where
+        I: Iterator<Item = &'a Instance> + Clone,
+    {
         loop {
             sleep(Duration::from_secs(5)).await;
 
             let ssh_command = SshCommand::new(move |_| "(tmux ls || true)".into());
-            let result = self.ssh_manager.execute(instances, ssh_command).await?;
+            let result = self
+                .ssh_manager
+                .execute(instances.clone(), ssh_command)
+                .await?;
 
             if result
                 .iter()
@@ -393,10 +400,9 @@ impl<C> Testbed<C> {
         ]
         .join(" && ");
 
+        let instances = self.instances.iter().filter(|x| x.is_active());
         let ssh_command = SshCommand::new(move |_| command.clone());
-        self.ssh_manager
-            .execute(&self.instances, ssh_command)
-            .await?;
+        self.ssh_manager.execute(instances, ssh_command).await?;
 
         println!(" [{}]", "Ok".green());
         Ok(())
@@ -422,16 +428,17 @@ impl<C> Testbed<C> {
         ]
         .join(" && ");
 
+        let instances = self.instances.iter().filter(|x| x.is_active());
         let id = "update";
         let repo_name = self.settings.repository_name();
         let ssh_command = SshCommand::new(move |_| command.clone())
             .run_background(id.into())
             .with_execute_from_path(repo_name.into());
         self.ssh_manager
-            .execute(&self.instances, ssh_command)
+            .execute(self.instances.iter(), ssh_command)
             .await?;
 
-        self.wait_for_command(&self.instances, "update").await?;
+        self.wait_for_command(instances, "update").await?;
 
         println!(" [{}]", "Ok".green());
         Ok(())
@@ -510,7 +517,7 @@ impl<C> Testbed<C> {
         // Execute the deletion on all machines.
         let ssh_command = SshCommand::new(move |_| command.clone());
         self.ssh_manager
-            .execute(&self.instances, ssh_command)
+            .execute(self.instances.iter(), ssh_command)
             .await?;
 
         println!(" [{}]", "Ok".green());
@@ -539,7 +546,9 @@ impl<C> Testbed<C> {
             .run_background("node".into())
             .with_log_file("~/node.log".into())
             .with_execute_from_path(repo.into());
-        self.ssh_manager.execute(&instances, ssh_command).await?;
+        self.ssh_manager
+            .execute(instances.iter(), ssh_command)
+            .await?;
 
         println!(" [{}]", "Ok".green());
         Ok(())
@@ -578,7 +587,9 @@ impl<C> Testbed<C> {
             .run_background("client".into())
             .with_log_file("~/client.log".into())
             .with_execute_from_path(repo.into());
-        self.ssh_manager.execute(&instances, ssh_command).await?;
+        self.ssh_manager
+            .execute(instances.iter(), ssh_command)
+            .await?;
 
         println!(" [{}]", "Ok".green());
         Ok(())
@@ -613,7 +624,7 @@ impl<C> Testbed<C> {
             let now = interval.tick().await;
             match self
                 .ssh_manager
-                .execute(&instances, ssh_command.clone())
+                .execute(instances.iter(), ssh_command.clone())
                 .await
             {
                 Ok(stdio) => {

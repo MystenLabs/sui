@@ -103,16 +103,16 @@ impl SshConnectionManager {
     }
 
     /// Execute the specified ssh command on all provided instances.
-    pub async fn execute<C>(
+    pub async fn execute<'a, I, C>(
         &self,
-        instances: &[Instance],
+        instances: I,
         command: SshCommand<C>,
     ) -> SshResult<Vec<(String, String)>>
     where
+        I: Iterator<Item = &'a Instance>,
         C: Fn(usize) -> String + Clone + Send + 'static,
     {
         let handles = instances
-            .iter()
             .cloned()
             .enumerate()
             .map(|(i, instance)| {

@@ -3,7 +3,7 @@
     "cloud_provider": "aws",
     "token_file": "/Users/alberto/.aws/credentials",
     "ssh_private_key_file": "/Users/alberto/.ssh/aws",
-    "regions": ["ca-central-1", "eu-central-1", "ap-northeast-1"],
+    "regions": ["us-east-1", "us-west-2", "ca-central-1", "eu-central-1", "ap-northeast-1"],
     "specs": "g5.8xlarge",
     "repository": {
         "name": "sui",
