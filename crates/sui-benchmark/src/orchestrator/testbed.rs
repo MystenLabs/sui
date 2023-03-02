@@ -435,7 +435,7 @@ impl<C> Testbed<C> {
             .run_background(id.into())
             .with_execute_from_path(repo_name.into());
         self.ssh_manager
-            .execute(self.instances.iter(), ssh_command)
+            .execute(instances.clone(), ssh_command)
             .await?;
 
         self.wait_for_command(instances, "update").await?;

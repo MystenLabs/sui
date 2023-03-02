@@ -130,6 +130,7 @@ impl SshConnectionManager {
                             }
                         }
                         .with_timeout(&command.timeout);
+                        println!("connected to {:?}", instance.main_ip);
 
                         match connection.execute(command.stringify(i)) {
                             r @ Ok(..) => return r,
@@ -151,6 +152,7 @@ impl SshConnectionManager {
 
 pub struct SshConnection {
     session: Session,
+    address: SocketAddr,
 }
 
 impl SshConnection {
@@ -163,7 +165,9 @@ impl SshConnection {
         username: &str,
         private_key_file: P,
     ) -> SshResult<Self> {
-        let tcp = TcpStream::connect(address).await?;
+        let tcp = TcpStream::connect(address)
+            .await
+            .map_err(|error| SshError::ConnectionError { ip: address, error })?;
 
         let mut session = Session::new()?;
         session.set_timeout(Self::DEFAULT_TIMEOUT.as_millis() as u32);
@@ -171,7 +175,7 @@ impl SshConnection {
         session.handshake()?;
         session.userauth_pubkey_file(username, None, private_key_file.as_ref(), None)?;
 
-        Ok(Self { session })
+        Ok(Self { session, address })
     }
 
     /// Set a new timeout for the ssh connection. If no timeouts are specified, reset it to the
@@ -185,10 +189,17 @@ impl SshConnection {
         self
     }
 
+    fn make_connection_error(&self, error: std::io::Error) -> SshError {
+        SshError::ConnectionError {
+            ip: self.address.clone(),
+            error,
+        }
+    }
+
     /// Execute a ssh command on the remote machine.
     pub fn execute(&self, command: String) -> SshResult<(String, String)> {
         let channel = self.session.channel_session()?;
-        Self::execute_impl(channel, command)
+        self.execute_impl(channel, command)
     }
 
     /// Execute a ssh command from a given path.
@@ -200,18 +211,23 @@ impl SshConnection {
     ) -> SshResult<(String, String)> {
         let channel = self.session.channel_session()?;
         let command = format!("(cd {} && {command})", path.as_ref().display().to_string());
-        Self::execute_impl(channel, command)
+        self.execute_impl(channel, command)
     }
 
     /// Execute an ssh command on the remote machine and return both stdout and stderr.
-    fn execute_impl(mut channel: Channel, command: String) -> SshResult<(String, String)> {
+    fn execute_impl(&self, mut channel: Channel, command: String) -> SshResult<(String, String)> {
         channel.exec(&command)?;
 
         let mut stdout = String::new();
-        channel.read_to_string(&mut stdout)?;
+        channel
+            .read_to_string(&mut stdout)
+            .map_err(|e| self.make_connection_error(e))?;
 
         let mut stderr = String::new();
-        channel.stderr().read_to_string(&mut stderr)?;
+        channel
+            .stderr()
+            .read_to_string(&mut stderr)
+            .map_err(|e| self.make_connection_error(e))?;
 
         channel.close()?;
         channel.wait_close()?;
@@ -229,7 +245,9 @@ impl SshConnection {
     pub fn upload<P: AsRef<Path>>(&self, path: P, content: &[u8]) -> SshResult<()> {
         let size = content.len() as u64;
         let mut channel = self.session.scp_send(path.as_ref(), 0o644, size, None)?;
-        channel.write_all(content)?;
+        channel
+            .write_all(content)
+            .map_err(|e| self.make_connection_error(e))?;
         Ok(())
     }
 
@@ -237,7 +255,9 @@ impl SshConnection {
     pub fn download<P: AsRef<Path>>(&self, path: P) -> SshResult<String> {
         let (mut channel, _stats) = self.session.scp_recv(path.as_ref())?;
         let mut content = String::new();
-        channel.read_to_string(&mut content)?;
+        channel
+            .read_to_string(&mut content)
+            .map_err(|e| self.make_connection_error(e))?;
         Ok(content)
     }
 }

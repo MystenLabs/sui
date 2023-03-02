@@ -20,38 +20,40 @@ async fn execute<C: Client>(settings: Settings, client: C, opts: Opts) -> Result
     let mut orchestrator = Orchestrator::new(testbed);
 
     match opts.operation {
-        // Display the current status of the testbed.
-        Operation::Info => orchestrator.print_testbed_status(),
+        Operation::Testbed { action } => match action {
+            // Display the current status of the testbed.
+            TestbedAction::Status => orchestrator.print_testbed_status(),
 
-        // Deploy the specified number of instances on the testbed.
-        Operation::Deploy { instances } => orchestrator
-            .deploy_testbed(instances)
-            .await
-            .wrap_err("Failed to deploy testbed")?,
+            // Deploy the specified number of instances on the testbed.
+            TestbedAction::Deploy { instances } => orchestrator
+                .deploy_testbed(instances)
+                .await
+                .wrap_err("Failed to deploy testbed")?,
 
-        // Install the codebase and all dependencies on all instances.
-        Operation::Terraform => orchestrator
-            .terraform_testbed()
-            .await
-            .wrap_err("Failed to terraform testbed")?,
+            // Install the codebase and all dependencies on all instances.
+            TestbedAction::Terraform => orchestrator
+                .terraform_testbed()
+                .await
+                .wrap_err("Failed to terraform testbed")?,
 
-        // Start the specified number of instances on an existing testbed.
-        Operation::Start { instances } => orchestrator
-            .start_testbed(instances)
-            .await
-            .wrap_err("Failed to start testbed")?,
+            // Start the specified number of instances on an existing testbed.
+            TestbedAction::Start { instances } => orchestrator
+                .start_testbed(instances)
+                .await
+                .wrap_err("Failed to start testbed")?,
 
-        // Stop an existing testbed.
-        Operation::Stop => orchestrator
-            .stop_testbed()
-            .await
-            .wrap_err("Failed to stop testbed")?,
+            // Stop an existing testbed.
+            TestbedAction::Stop => orchestrator
+                .stop_testbed()
+                .await
+                .wrap_err("Failed to stop testbed")?,
 
-        // Destroy the testbed and terminal all instances.
-        Operation::Destroy => orchestrator
-            .destroy_testbed()
-            .await
-            .wrap_err("Failed to destroy testbed")?,
+            // Destroy the testbed and terminal all instances.
+            TestbedAction::Destroy => orchestrator
+                .destroy_testbed()
+                .await
+                .wrap_err("Failed to destroy testbed")?,
+        },
 
         // Run benchmarks.
         Operation::Benchmark {
@@ -126,31 +128,10 @@ pub struct Opts {
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
 pub enum Operation {
-    /// Display the testbed status.
-    Info,
-
-    /// Create and configure a new testbed.
-    Deploy {
-        /// Number of instances to deploy.
-        #[clap(long)]
-        instances: usize,
+    Testbed {
+        #[clap(subcommand)]
+        action: TestbedAction,
     },
-
-    /// Install the codebase and all dependencies on all instances.
-    Terraform,
-
-    // Start the specified number of instances on an existing testbed.
-    Start {
-        /// Number of instances to deploy.
-        #[clap(long)]
-        instances: usize,
-    },
-
-    /// Stop an existing testbed.
-    Stop,
-
-    /// Destroy the testbed and terminal all instances.
-    Destroy,
 
     /// Run a benchmark on the specified testbed.
     Benchmark {
@@ -179,6 +160,36 @@ pub enum Operation {
         #[clap(long, action, default_value = "false")]
         skip_testbed_update: bool,
     },
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub enum TestbedAction {
+    /// Display the testbed status.
+    Status,
+
+    /// Create and configure a new testbed.
+    Deploy {
+        /// Number of instances to deploy.
+        #[clap(long)]
+        instances: usize,
+    },
+
+    /// Install the codebase and all dependencies on all instances.
+    Terraform,
+
+    // Start the specified number of instances on an existing testbed.
+    Start {
+        /// Number of instances to deploy.
+        #[clap(long)]
+        instances: usize,
+    },
+
+    /// Stop an existing testbed.
+    Stop,
+
+    /// Destroy the testbed and terminal all instances.
+    Destroy,
 }
 
 fn parse_duration(arg: &str) -> Result<Duration, std::num::ParseIntError> {
