@@ -205,8 +205,8 @@ export function SendTokenForm({
                     gasInputBudgetEst,
                 }: FormValues) => {
                     if (!gasInputBudgetEst || !coins || !suiCoins) return;
-                    const coinsIDs = coins
-                        .sort((a, b) => b.fields.balance - a.fields.balance)
+                    const coinsIDs = CoinAPI.sortByBalance(coins)
+                        .reverse()
                         .map((coin) => CoinAPI.getID(coin));
 
                     const data = {
