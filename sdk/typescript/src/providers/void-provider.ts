@@ -31,7 +31,6 @@ import {
   RpcApiVersion,
   FaucetResponse,
   Order,
-  TransactionEffects,
   CoinMetadata,
   DevInspectResults,
   SuiSystemState,
@@ -46,6 +45,7 @@ import {
   CheckPointContentsDigest,
   CommitteeInfo,
   Checkpoint,
+  DryRunTransactionResponse,
 } from '../types';
 import { Provider } from './provider';
 
@@ -63,8 +63,8 @@ export class VoidProvider extends Provider {
     throw this.newError('getReferenceGasPrice');
   }
 
-  async getCurrentEpochStaticInfo(): Promise<SuiSystemState> {
-    throw this.newError('getCurrentEpochStaticInfo');
+  async getSuiSystemState(): Promise<SuiSystemState> {
+    throw this.newError('getSuiSystemState');
   }
 
   async getDelegatedStakes(_address: SuiAddress): Promise<DelegatedStake[]> {
@@ -199,7 +199,7 @@ export class VoidProvider extends Provider {
     throw this.newError('devInspectTransaction');
   }
 
-  dryRunTransaction(_txBytes: Uint8Array): Promise<TransactionEffects> {
+  dryRunTransaction(_txBytes: Uint8Array): Promise<DryRunTransactionResponse> {
     throw this.newError('dryRunTransaction');
   }
 

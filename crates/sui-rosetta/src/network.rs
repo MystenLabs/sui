@@ -41,11 +41,7 @@ pub async fn status(
 ) -> Result<NetworkStatusResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
-    let system_state = context
-        .client
-        .read_api()
-        .get_current_epoch_static_info()
-        .await?;
+    let system_state = context.client.read_api().get_sui_system_state().await?;
 
     let peers = system_state
         .validators
@@ -55,7 +51,7 @@ pub async fn status(
             peer_id: ObjectID::from(v.metadata.sui_address).into(),
             metadata: Some(json!({
                 "public_key": Hex::from_bytes(&v.metadata.pubkey_bytes),
-                "stake_amount": v.stake_amount
+                "stake_amount": v.staking_pool.sui_balance,
             })),
         })
         .collect();

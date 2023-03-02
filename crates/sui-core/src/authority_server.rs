@@ -18,6 +18,7 @@ use sui_network::{
 };
 use sui_types::{error::*, messages::*};
 use sui_types::{
+    fp_ensure,
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
     sui_system_state::SuiSystemState,
 };
@@ -25,6 +26,7 @@ use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tracing::{error_span, info, Instrument};
 
+use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::{
     authority::{AuthorityState, MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
@@ -85,9 +87,11 @@ impl AuthorityServer {
             mysten_network::client::connect_lazy(&consensus_address)
                 .expect("Failed to connect to consensus"),
         ));
+
         let consensus_adapter = ConsensusAdapter::new(
             consensus_client,
             state.name,
+            Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
             ConsensusAdapterMetrics::new_test(),
         );
 
@@ -245,6 +249,18 @@ impl ValidatorService {
         metrics: Arc<ValidatorServiceMetrics>,
     ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
         let transaction = request.into_inner();
+        let epoch_store = state.load_epoch_store_one_call_per_task();
+
+        // Enforce overall transaction size limit.
+        let tx_size = bcs::serialized_size(&transaction)
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+        let max_tx_size = epoch_store.protocol_config().max_tx_size();
+        fp_ensure!(
+            tx_size <= max_tx_size,
+            tonic::Status::resource_exhausted(format!(
+                "serialized transaction size ({tx_size}) exceeded maximum of {max_tx_size}"
+            ))
+        );
 
         let _metrics_guard = metrics.handle_transaction_latency.start_timer();
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
@@ -260,7 +276,7 @@ impl ValidatorService {
         let span = error_span!("validator_state_process_tx", ?tx_digest);
 
         let info = state
-            .handle_transaction(transaction)
+            .handle_transaction(&epoch_store, transaction)
             .instrument(span)
             .await
             .tap_err(|e| {
@@ -297,8 +313,15 @@ impl ValidatorService {
         if let Some(signed_effects) =
             state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store)?
         {
+            let events = if let Some(digest) = signed_effects.events_digest {
+                state.get_transaction_events(digest).await?
+            } else {
+                TransactionEvents::default()
+            };
+
             return Ok(tonic::Response::new(HandleCertificateResponse {
                 signed_effects: signed_effects.into_inner(),
+                events,
             }));
         }
 
@@ -383,9 +406,17 @@ impl ValidatorService {
         // the execution results if it contains shared objects.
         let res = state.execute_certificate(&certificate, &epoch_store).await;
         match res {
-            Ok(effects) => Ok(tonic::Response::new(HandleCertificateResponse {
-                signed_effects: effects.into_inner(),
-            })),
+            Ok(effects) => {
+                let events = if let Some(event_digest) = effects.events_digest {
+                    state.get_transaction_events(event_digest).await?
+                } else {
+                    TransactionEvents::default()
+                };
+                Ok(tonic::Response::new(HandleCertificateResponse {
+                    signed_effects: effects.into_inner(),
+                    events,
+                }))
+            }
             Err(e) => Err(tonic::Status::from(e)),
         }
     }
@@ -471,9 +502,9 @@ impl Validator for ValidatorService {
         return Ok(tonic::Response::new(response));
     }
 
-    async fn current_epoch_static_info(
+    async fn get_system_state_object(
         &self,
-        _request: tonic::Request<CurrentEpochStaticInfoRequest>,
+        _request: tonic::Request<SystemStateRequest>,
     ) -> Result<tonic::Response<SuiSystemState>, tonic::Status> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let response = epoch_store.system_state_object().clone();

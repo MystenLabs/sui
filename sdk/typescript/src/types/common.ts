@@ -20,6 +20,9 @@ export type TransactionDigest = Infer<typeof TransactionDigest>;
 export const TransactionEffectsDigest = string();
 export type TransactionEffectsDigest = Infer<typeof TransactionEffectsDigest>;
 
+export const TransactionEventDigest = string();
+export type TransactionEventDigest = Infer<typeof TransactionEventDigest>;
+
 export const ObjectId = string();
 export type ObjectId = Infer<typeof ObjectId>;
 

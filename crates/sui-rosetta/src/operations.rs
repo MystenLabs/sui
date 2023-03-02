@@ -334,7 +334,7 @@ impl TryFrom<SuiTransactionResponse> for Operations {
 
         // Extract coin change operations from events
         let coin_change_operations = Self::get_balance_operation_from_events(
-            &response.effects.events,
+            &response.events.data,
             status,
             accounted_balances,
         );

@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use rand::seq::IteratorRandom;
 use std::sync::Arc;
 use sui_core::test_utils::make_transfer_sui_transaction;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::messages::VerifiedTransaction;
 use test_utils::messages::make_delegation_transaction;
@@ -50,19 +50,14 @@ impl Payload for DelegationTestPayload {
         }
     }
 
-    fn make_new_payload(
-        self: Box<Self>,
-        _: ObjectRef,
-        new_gas: ObjectRef,
-        effects: &ExecutionEffects,
-    ) -> Box<dyn Payload> {
+    fn make_new_payload(self: Box<Self>, effects: &ExecutionEffects) -> Box<dyn Payload> {
         let coin = match self.coin {
             None => Some(effects.created().get(0).unwrap().0),
             Some(_) => None,
         };
         Box::new(DelegationTestPayload {
             coin,
-            gas: new_gas,
+            gas: effects.gas_object().0,
             validator: self.validator,
             sender: self.sender,
             keypair: self.keypair,
@@ -70,16 +65,8 @@ impl Payload for DelegationTestPayload {
         })
     }
 
-    fn get_object_id(&self) -> ObjectID {
-        self.gas.0
-    }
-
     fn get_workload_type(&self) -> WorkloadType {
         WorkloadType::Delegation
-    }
-
-    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self as &DelegationTestPayload)
     }
 }
 

@@ -209,7 +209,7 @@ where
                 }
                 tx_data = Some(data);
             }
-            Ok(VerifiedTransactionInfoResponse::ExecutedWithCert(cert, _)) => {
+            Ok(VerifiedTransactionInfoResponse::ExecutedWithCert(cert, _, _)) => {
                 return cert.into_inner();
             }
             _ => {}
@@ -721,6 +721,7 @@ async fn test_handle_transaction_response() {
         status: TransactionStatus::Executed(
             Some(cert_epoch_0.auth_sig().clone()),
             sign_tx_effects(effects, 0, *name_0, key_0),
+            TransactionEvents { data: vec![] },
         ),
     };
     clients
@@ -914,6 +915,7 @@ fn set_tx_info_response_with_cert_and_effects<'a>(
             status: TransactionStatus::Executed(
                 Some(cert.auth_sig().clone()),
                 SignedTransactionEffects::new(epoch, effects.clone(), key, *name),
+                TransactionEvents { data: vec![] },
             ),
         };
         clients.get_mut(name).unwrap().set_tx_info_response(resp);

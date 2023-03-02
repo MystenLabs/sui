@@ -39,6 +39,7 @@ pub fn test_gas_objects() -> Vec<Object> {
 
 /// Fixture: a few test certificates containing a shared object.
 pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTransaction> {
+    let epoch_store = authority.load_epoch_store_one_call_per_task();
     let (sender, keypair) = deterministic_random_account_key();
 
     let mut certificates = Vec::new();
@@ -73,7 +74,7 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
 
         // Submit the transaction and assemble a certificate.
         let response = authority
-            .handle_transaction(transaction.clone())
+            .handle_transaction(&epoch_store, transaction.clone())
             .await
             .unwrap();
         let vote = response.status.into_signed_for_testing();
@@ -120,8 +121,12 @@ async fn submit_transaction_to_consensus_adapter() {
         }
     }
     // Make a new consensus adapter instance.
-    let adapter =
-        ConsensusAdapter::new(Box::new(SubmitDirectly(state.clone())), state.name, metrics);
+    let adapter = ConsensusAdapter::new(
+        Box::new(SubmitDirectly(state.clone())),
+        state.name,
+        Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
+        metrics,
+    );
 
     // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).

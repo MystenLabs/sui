@@ -191,8 +191,8 @@ Anything beyond the threshold is added to the remaining_power, which is also ret
     <b>let</b> result = <a href="">vector</a>[];
     <b>while</b> (i &lt; len) {
         <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_borrow">vector::borrow</a>(validators, i);
-        <b>let</b> <a href="stake.md#0x2_stake">stake</a> = <a href="validator.md#0x2_validator_total_stake">validator::total_stake</a>(<a href="validator.md#0x2_validator">validator</a>);
-        <b>let</b> adjusted_stake = (<a href="stake.md#0x2_stake">stake</a> <b>as</b> u128) * (<a href="voting_power.md#0x2_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a> <b>as</b> u128) / (total_stake <b>as</b> u128);
+        <b>let</b> stake = <a href="validator.md#0x2_validator_total_stake">validator::total_stake</a>(<a href="validator.md#0x2_validator">validator</a>);
+        <b>let</b> adjusted_stake = (stake <b>as</b> u128) * (<a href="voting_power.md#0x2_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a> <b>as</b> u128) / (total_stake <b>as</b> u128);
         <b>let</b> <a href="voting_power.md#0x2_voting_power">voting_power</a> = <a href="math.md#0x2_math_min">math::min</a>((adjusted_stake <b>as</b> u64), threshold);
         <b>let</b> info = <a href="voting_power.md#0x2_voting_power_VotingPowerInfo">VotingPowerInfo</a> {
             validator_index: i,
@@ -374,8 +374,8 @@ Check a few invariants that must hold after setting the voting power.
     };
     <b>assert</b>!(total == <a href="voting_power.md#0x2_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a>, <a href="voting_power.md#0x2_voting_power_ETotalPowerMismatch">ETotalPowerMismatch</a>);
 
-    // Second check that <b>if</b> <a href="validator.md#0x2_validator">validator</a> A's <a href="stake.md#0x2_stake">stake</a> is larger than B's <a href="stake.md#0x2_stake">stake</a>, A's voting power must be no less
-    // than B's voting power; similarly, <b>if</b> A's <a href="stake.md#0x2_stake">stake</a> is less than B's <a href="stake.md#0x2_stake">stake</a>, A's voting power must be no larger
+    // Second check that <b>if</b> <a href="validator.md#0x2_validator">validator</a> A's stake is larger than B's stake, A's voting power must be no less
+    // than B's voting power; similarly, <b>if</b> A's stake is less than B's stake, A's voting power must be no larger
     // than B's voting power.
     <b>let</b> i = 0;
     <b>while</b> (i &lt; len) {

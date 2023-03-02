@@ -1,9 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use arc_swap::ArcSwap;
 use bytes::Bytes;
-use futures::future::select;
-use futures::future::Either;
+use dashmap::try_result::TryResult;
+use dashmap::DashMap;
+use futures::future::{select, Either};
 use futures::FutureExt;
 use itertools::Itertools;
 use narwhal_types::TransactionProto;
@@ -18,6 +20,7 @@ use prometheus::{register_histogram_vec_with_registry, register_int_gauge_with_r
 use prometheus::{HistogramVec, IntCounter};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use std::collections::HashMap;
 use std::future::Future;
 use std::ops::Deref;
 use std::sync::atomic::AtomicU64;
@@ -35,7 +38,11 @@ use tap::prelude::*;
 use tokio::task::JoinHandle;
 use tokio::time;
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
 use mysten_metrics::spawn_monitored_task;
+use sui_simulator::anemo::PeerId;
+use sui_simulator::narwhal_network::connectivity::ConnectionStatus;
 use sui_types::base_types::AuthorityName;
 use sui_types::messages::ConsensusTransactionKind;
 use tokio::time::Duration;
@@ -77,25 +84,25 @@ impl ConsensusAdapterMetrics {
                 "Counts the number of certificates the validator attempts to sequence.",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             sequencing_certificate_success: register_int_counter_with_registry!(
                 "sequencing_certificate_success",
                 "Counts the number of successfully sequenced certificates.",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             sequencing_certificate_failures: register_int_counter_with_registry!(
                 "sequencing_certificate_failures",
                 "Counts the number of sequenced certificates that failed other than by timeout.",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             sequencing_certificate_inflight: register_int_gauge_with_registry!(
                 "sequencing_certificate_inflight",
                 "The inflight requests to sequence certificates.",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             sequencing_acknowledge_latency: register_histogram_vec_with_registry!(
                 "sequencing_acknowledge_latency",
                 "The latency for acknowledgement from sequencing engine. The overall sequencing latency is measured by the sequencing_certificate_latency metric",
@@ -103,7 +110,7 @@ impl ConsensusAdapterMetrics {
                 SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             sequencing_certificate_latency: register_histogram_vec_with_registry!(
                 "sequencing_certificate_latency",
                 "The latency for sequencing a certificate.",
@@ -111,7 +118,7 @@ impl ConsensusAdapterMetrics {
                 SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             sequencing_certificate_authority_position: register_histogram_with_registry!(
                 "sequencing_certificate_authority_position",
                 "The position of the authority when submitted a certificate to consensus.",
@@ -124,18 +131,6 @@ impl ConsensusAdapterMetrics {
     pub fn new_test() -> OptArcConsensusAdapterMetrics {
         None
     }
-}
-
-/// Submit Sui certificates to the consensus.
-pub struct ConsensusAdapter {
-    /// The network client connecting to the consensus node of this authority.
-    consensus_client: Box<dyn SubmitToConsensus>,
-    /// Authority pubkey.
-    authority: AuthorityName,
-    /// Number of submitted transactions still inflight at this node.
-    num_inflight_transactions: AtomicU64,
-    /// A structure to register metrics
-    opt_metrics: OptArcConsensusAdapterMetrics,
 }
 
 #[async_trait::async_trait]
@@ -170,11 +165,45 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
     }
 }
 
+/// Submit Sui certificates to the consensus.
+#[allow(unused)]
+pub struct ConsensusAdapter {
+    /// The network client connecting to the consensus node of this authority.
+    consensus_client: Box<dyn SubmitToConsensus>,
+    /// Authority pubkey.
+    authority: AuthorityName,
+    /// Number of submitted transactions still inflight at this node.
+    num_inflight_transactions: AtomicU64,
+    /// A structure to check the connection statuses populated by the Connection Monitor Listener
+    connection_monitor_status: Box<Arc<dyn CheckConnection>>,
+    /// A structure to register metrics
+    opt_metrics: OptArcConsensusAdapterMetrics,
+}
+
+pub trait CheckConnection: Send + Sync {
+    fn check_connection(
+        &self,
+        ourself: &AuthorityName,
+        authority: &AuthorityName,
+    ) -> Option<ConnectionStatus>;
+    fn update_mapping_for_epoch(&self, authority_names_to_peer_ids: HashMap<AuthorityName, PeerId>);
+}
+
+pub struct ConnectionMonitorStatus {
+    /// Current connection statuses forwarded from the connection monitor
+    pub connection_statuses: Arc<DashMap<PeerId, ConnectionStatus>>,
+    /// A map from authority name to peer id
+    pub authority_names_to_peer_ids: ArcSwap<HashMap<AuthorityName, PeerId>>,
+}
+
+pub struct ConnectionMonitorStatusForTests {}
+
 impl ConsensusAdapter {
     /// Make a new Consensus adapter instance.
     pub fn new(
         consensus_client: Box<dyn SubmitToConsensus>,
         authority: AuthorityName,
+        connection_monitor_status: Box<Arc<dyn CheckConnection>>,
         opt_metrics: OptArcConsensusAdapterMetrics,
     ) -> Arc<Self> {
         let num_inflight_transactions = Default::default();
@@ -182,6 +211,7 @@ impl ConsensusAdapter {
             consensus_client,
             authority,
             num_inflight_transactions,
+            connection_monitor_status,
             opt_metrics,
         })
     }
@@ -226,48 +256,73 @@ impl ConsensusAdapter {
     }
 
     fn await_submit_delay(
+        &self,
         committee: &Committee,
-        ourselves: &AuthorityName,
         transaction: &ConsensusTransaction,
     ) -> (impl Future<Output = ()>, usize) {
-        let (duration, position) = Self::submit_delay(committee, ourselves, transaction);
+        let (duration, position) = match &transaction.kind {
+            ConsensusTransactionKind::UserTransaction(certificate) => {
+                let tx_digest = certificate.digest();
+                let position = self.submission_position(committee, tx_digest);
+                // DELAY_STEP is chosen as 1.5 * mean consensus delay
+                const DELAY_STEP: Duration = Duration::from_secs(7);
+                const MAX_DELAY_MUL: usize = 10;
+                (
+                    DELAY_STEP * std::cmp::min(position, MAX_DELAY_MUL) as u32,
+                    position,
+                )
+            }
+            _ => (Duration::ZERO, 0),
+        };
         (tokio::time::sleep(duration), position)
-    }
-
-    fn submit_delay(
-        committee: &Committee,
-        ourselves: &AuthorityName,
-        transaction: &ConsensusTransaction,
-    ) -> (Duration, usize) {
-        if let ConsensusTransactionKind::UserTransaction(certificate) = &transaction.kind {
-            Self::submit_delay_certificate(committee, ourselves, certificate.digest())
-        } else {
-            (Duration::ZERO, 0)
-        }
     }
 
     /// Check when this authority should submit the certificate to consensus.
     /// This sorts all authorities based on pseudo-random distribution derived from transaction hash.
-    /// Authorities higher in the list wait less time.
     ///
-    /// The function targets having only 1 consensus transaction submitted per user transaction
+    /// The function targets having 1 consensus transaction submitted per user transaction
     /// when system operates normally.
     ///
-    /// The function returns the delay to wait and the position of authority in the list.
-    fn submit_delay_certificate(
-        committee: &Committee,
-        ourselves: &AuthorityName,
-        tx_digest: &TransactionDigest,
-    ) -> (Duration, usize) {
-        let position = position_submit_certificate(committee, ourselves, tx_digest);
-        const MAX_DELAY_MUL: usize = 10;
-        // DELAY_STEP is chosen as 1.5 * mean consensus delay
-        // In the future we can actually use information about consensus rounds instead of this delay
-        const DELAY_STEP: Duration = Duration::from_secs(7);
-        (
-            DELAY_STEP * std::cmp::min(position, MAX_DELAY_MUL) as u32,
-            position,
-        )
+    /// The function returns the position of this authority when it is their turn to submit the transaction to consensus.
+    fn submission_position(&self, committee: &Committee, tx_digest: &TransactionDigest) -> usize {
+        let positions = order_validators_for_submission(committee, tx_digest);
+
+        self.check_submission_wrt_connectivity(positions)
+    }
+
+    /// This function runs the following algorithm to decide whether or not to submit a transaction
+    /// to consensus.
+    ///
+    /// It takes in a deterministic list that represents positions of all the authorities.
+    /// The authority in the first position will be responsible for submitting to consensus, and
+    /// so we check if we are this validator, and if so, return true.
+    ///
+    /// If we are not in that position, we check our connectivity to the authority in that position.
+    /// If we are connected to them, we can assume that they are operational and will submit the transaction.
+    /// If we are not connected to them, we assume that they are not operational and we will not rely
+    /// on that authority to submit the transaction. So we shift them out of the first position, and
+    /// run this algorithm again on the new set of positions.
+    ///
+    /// This can possibly result in a transaction being submitted twice if an authority sees a false
+    /// negative in connectivity to another, such as in the case of a network partition.
+    ///
+    /// Recursively, if the authority further ahead of us in the positions is a low performing authority, we will
+    /// move our positions up one, and submit at the same time. This allows low performing
+    /// node a chance to participate in consensus and redeem their scores while maintaining performance.
+    fn check_submission_wrt_connectivity(&self, positions: Vec<AuthorityName>) -> usize {
+        let filtered_positions = positions
+            .into_iter()
+            .filter(|authority| {
+                self.authority == *authority
+                    || self
+                        .connection_monitor_status
+                        .check_connection(&self.authority, authority)
+                        .unwrap_or(ConnectionStatus::Disconnected)
+                        == ConnectionStatus::Connected
+            })
+            .collect();
+
+        get_position_in_list(self.authority, filtered_positions)
     }
 
     /// This method blocks until transaction is persisted in local database
@@ -334,13 +389,13 @@ impl ConsensusAdapter {
             epoch_store.record_epoch_pending_certs_process_time_metric();
         }
 
+        let transaction_key = SequencedConsensusTransactionKey::External(transaction.key());
         let processed_waiter = epoch_store
-            .consensus_message_processed_notify(SequencedConsensusTransactionKey::External(
-                transaction.key(),
-            ))
+            .consensus_message_processed_notify(transaction_key)
             .boxed();
+
         let (await_submit, position) =
-            Self::await_submit_delay(epoch_store.committee(), &self.authority, &transaction);
+            self.await_submit_delay(epoch_store.committee(), &transaction);
         let mut guard = InflightDropGuard::acquire(&self);
 
         // We need to wait for some delay until we submit transaction to the consensus
@@ -456,23 +511,83 @@ impl ConsensusAdapter {
     }
 }
 
-/// Returns a position of the current validator in ordered list of validator to submit transaction
-pub fn position_submit_certificate(
-    committee: &Committee,
-    ourselves: &AuthorityName,
-    tx_digest: &TransactionDigest,
+impl CheckConnection for ConnectionMonitorStatus {
+    fn check_connection(
+        &self,
+        ourself: &AuthorityName,
+        authority: &AuthorityName,
+    ) -> Option<ConnectionStatus> {
+        if ourself == authority {
+            return Some(ConnectionStatus::Connected);
+        }
+
+        let mapping = self.authority_names_to_peer_ids.load_full();
+        let peer_id = match mapping.get(authority) {
+            Some(p) => p,
+            None => {
+                warn!(
+                    "failed to find peer {:?} in connection monitor listener",
+                    authority
+                );
+                return None;
+            }
+        };
+
+        let res = match self.connection_statuses.try_get(peer_id) {
+            TryResult::Present(c) => Some(c.value().clone()),
+            TryResult::Absent => None,
+            TryResult::Locked => {
+                // update is in progress, assume the status is still or becoming disconnected
+                Some(ConnectionStatus::Disconnected)
+            }
+        };
+        res
+    }
+    fn update_mapping_for_epoch(
+        &self,
+        authority_names_to_peer_ids: HashMap<AuthorityName, PeerId>,
+    ) {
+        self.authority_names_to_peer_ids
+            .swap(Arc::new(authority_names_to_peer_ids));
+    }
+}
+
+impl CheckConnection for ConnectionMonitorStatusForTests {
+    fn check_connection(
+        &self,
+        _ourself: &AuthorityName,
+        _authority: &AuthorityName,
+    ) -> Option<ConnectionStatus> {
+        Some(ConnectionStatus::Connected)
+    }
+    fn update_mapping_for_epoch(
+        &self,
+        _authority_names_to_peer_ids: HashMap<AuthorityName, PeerId>,
+    ) {
+    }
+}
+
+pub fn get_position_in_list(
+    search_authority: AuthorityName,
+    positions: Vec<AuthorityName>,
 ) -> usize {
+    positions
+        .into_iter()
+        .find_position(|authority| *authority == search_authority)
+        .expect("Couldn't find ourselves in shuffled committee")
+        .0
+}
+
+pub fn order_validators_for_submission(
+    committee: &Committee,
+    tx_digest: &TransactionDigest,
+) -> Vec<AuthorityName> {
     // the 32 is as requirement of the default StdRng::from_seed choice
     let digest_bytes = tx_digest.into_inner();
 
     // permute the validators deterministically, based on the digest
     let mut rng = StdRng::from_seed(digest_bytes);
-    let validators = committee.shuffle_by_stake_with_rng(None, None, &mut rng);
-    let (position, _) = validators
-        .into_iter()
-        .find_position(|a| a == ourselves)
-        .expect("Could not find ourselves in shuffled committee");
-    position
+    committee.shuffle_by_stake_with_rng(None, None, &mut rng)
 }
 
 impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
@@ -571,9 +686,7 @@ impl<'a> Drop for InflightDropGuard<'a> {
     }
 }
 
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::SequencedConsensusTransactionKey;
-use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
 
 #[async_trait::async_trait]
 impl SubmitToConsensus for Arc<ConsensusAdapter> {
@@ -585,6 +698,15 @@ impl SubmitToConsensus for Arc<ConsensusAdapter> {
         self.submit(transaction.clone(), None, epoch_store)
             .map(|_| ())
     }
+}
+
+pub fn position_submit_certificate(
+    committee: &Committee,
+    ourselves: &AuthorityName,
+    tx_digest: &TransactionDigest,
+) -> usize {
+    let validators = order_validators_for_submission(committee, tx_digest);
+    get_position_in_list(*ourselves, validators)
 }
 
 #[cfg(test)]

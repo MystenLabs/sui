@@ -31,7 +31,6 @@ pub mod crypto;
 pub mod digests;
 pub mod display;
 pub mod dynamic_field;
-pub mod epoch_static_info;
 pub mod event;
 pub mod filter;
 pub mod gas;

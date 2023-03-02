@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 anemo.workspace = true
 anemo-tower.workspace = true
+dashmap = "5.4.0"
 arc-swap = "1.5.1"
 axum = "0.6.2"
 anyhow = { version = "1.0.64", features = ["backtrace"] }

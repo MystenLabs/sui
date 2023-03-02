@@ -15,6 +15,7 @@ use std::path::Path;
 use std::sync::Arc;
 use sui_storage::mutex_table::{LockGuard, MutexTable};
 use sui_types::accumulator::Accumulator;
+use sui_types::digests::TransactionEventsDigest;
 use sui_types::error::UserInputError;
 use sui_types::message_envelope::Message;
 use sui_types::object::Owner;
@@ -131,6 +132,12 @@ impl AuthorityStore {
                 .unwrap();
             // We don't insert the effects to executed_effects yet because the genesis tx hasn't but will be executed.
             // This is important for fullnodes to be able to generate indexing data right now.
+
+            store
+                .perpetual_tables
+                .events
+                .insert(&genesis.events().digest(), genesis.events())
+                .unwrap();
         }
 
         Ok(store)
@@ -153,6 +160,18 @@ impl AuthorityStore {
             .effects
             .contains_key(effects_digest)
             .map_err(|e| e.into())
+    }
+
+    pub(crate) fn get_events(
+        &self,
+        event_digest: &TransactionEventsDigest,
+    ) -> SuiResult<TransactionEvents> {
+        self.perpetual_tables
+            .events
+            .get(event_digest)?
+            .ok_or(SuiError::TransactionEventsNotFound {
+                digest: *event_digest,
+            })
     }
 
     pub fn multi_get_effects<'a>(
@@ -632,6 +651,7 @@ impl AuthorityStore {
             mutable_inputs: active_inputs,
             written,
             deleted,
+            events,
         } = inner_temporary_store;
         trace!(written =? written.values().map(|((obj_id, ver, _), _, _)| (obj_id, ver)).collect::<Vec<_>>(),
                "batch_update_objects: temp store written");
@@ -677,6 +697,9 @@ impl AuthorityStore {
                 (ObjectKey::from(obj_ref), new_object)
             }),
         )?;
+
+        write_batch =
+            write_batch.insert_batch(&self.perpetual_tables.events, [(events.digest(), events)])?;
 
         let new_locks_to_init: Vec<_> = written
             .iter()
@@ -1130,6 +1153,8 @@ impl AuthorityStore {
     }
 
     // TODO: Transaction Orchestrator also calls this, which is not ideal.
+    // Instead of this function use AuthorityEpochStore::epoch_start_configuration() to access this object everywhere
+    // besides when we are reading fields for the current epoch
     pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
         get_sui_system_state(self.perpetual_tables.as_ref())
     }

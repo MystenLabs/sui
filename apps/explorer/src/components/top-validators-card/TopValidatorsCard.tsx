@@ -7,7 +7,7 @@ import { useMemo } from 'react';
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import { StakeColumn } from './StakeColumn';
 
-import { useGetCurrentEpochStaticInfo } from '~/hooks/useGetObject';
+import { useGetSystemObject } from '~/hooks/useGetObject';
 import { Banner } from '~/ui/Banner';
 import { ImageIcon } from '~/ui/ImageIcon';
 import { ValidatorLink } from '~/ui/InternalLink';
@@ -19,17 +19,12 @@ import { Text } from '~/ui/Text';
 const NUMBER_OF_VALIDATORS = 10;
 
 export function processValidators(set: Validator[]) {
-    return set.map((av) => {
-        const delegatedStake = +av.delegation_staking_pool.sui_balance;
-        const selfStake = +av.stake_amount;
-        const totalValidatorStake = selfStake + delegatedStake;
-        return {
-            name: av.metadata.name,
-            address: av.metadata.sui_address,
-            stake: totalValidatorStake,
-            logo: av.metadata.image_url,
-        };
-    });
+    return set.map((av) => ({
+        name: av.metadata.name,
+        address: av.metadata.sui_address,
+        stake: av.staking_pool.sui_balance,
+        logo: av.metadata.image_url,
+    }));
 }
 
 const validatorsTable = (
@@ -93,8 +88,7 @@ type TopValidatorsCardProps = {
 };
 
 export function TopValidatorsCard({ limit, showIcon }: TopValidatorsCardProps) {
-    const { data, isLoading, isSuccess, isError } =
-        useGetCurrentEpochStaticInfo();
+    const { data, isLoading, isSuccess, isError } = useGetSystemObject();
 
     const tableData = useMemo(
         () =>

@@ -6,7 +6,7 @@ import { useParams } from 'react-router-dom';
 
 import { ValidatorMeta } from '~/components/validator/ValidatorMeta';
 import { ValidatorStats } from '~/components/validator/ValidatorStats';
-import { useGetCurrentEpochStaticInfo } from '~/hooks/useGetObject';
+import { useGetSystemObject } from '~/hooks/useGetObject';
 import { useGetValidatorsEvents } from '~/hooks/useGetValidatorsEvents';
 import { Banner } from '~/ui/Banner';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
@@ -15,7 +15,7 @@ import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
 function ValidatorDetails() {
     const { id } = useParams();
     // TODO: Use `getValidators` once that API returns more data:
-    const { data, isLoading } = useGetCurrentEpochStaticInfo();
+    const { data, isLoading } = useGetSystemObject();
 
     const validatorData = useMemo(() => {
         if (!data) return null;
