@@ -137,7 +137,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                             <Text
                                 variant="body"
                                 weight="medium"
-                                color="steel-darker"
+                                color="issue-dark"
                             >
                                 {error}
                             </Text>
