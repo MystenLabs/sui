@@ -89,7 +89,11 @@ impl Client for VultrClient {
         Ok(filtered)
     }
 
-    async fn start_instances(&self, instance_ids: Vec<String>) -> CloudProviderResult<()> {
+    async fn start_instances<'a, I>(&self, instances: I) -> CloudProviderResult<()>
+    where
+        I: Iterator<Item = &'a Instance> + Send,
+    {
+        let instance_ids: Vec<_> = instances.map(|x| x.id.clone()).collect();
         let url = self.base_url.join("instances/start").unwrap();
         let parameters = json!({ "instance_ids": instance_ids });
 
@@ -105,7 +109,11 @@ impl Client for VultrClient {
         Ok(())
     }
 
-    async fn halt_instances(&self, instance_ids: Vec<String>) -> CloudProviderResult<()> {
+    async fn stop_instances<'a, I>(&self, instances: I) -> CloudProviderResult<()>
+    where
+        I: Iterator<Item = &'a Instance> + Send,
+    {
+        let instance_ids: Vec<_> = instances.map(|x| x.id.clone()).collect();
         let url = self.base_url.join("instances/halt").unwrap();
         let parameters = json!({ "instance_ids": instance_ids });
 

@@ -16,10 +16,14 @@ pub trait Client: Display {
     async fn list_instances(&self) -> CloudProviderResult<Vec<Instance>>;
 
     /// Start the specified instances.
-    async fn start_instances(&self, instance_ids: Vec<String>) -> CloudProviderResult<()>;
+    async fn start_instances<'a, I>(&self, instances: I) -> CloudProviderResult<()>
+    where
+        I: Iterator<Item = &'a Instance> + Send;
 
     /// Halt/Stop the specified instances. We may still be billed for stopped instances.
-    async fn halt_instances(&self, instance_ids: Vec<String>) -> CloudProviderResult<()>;
+    async fn stop_instances<'a, I>(&self, instance_ids: I) -> CloudProviderResult<()>
+    where
+        I: Iterator<Item = &'a Instance> + Send;
 
     /// Create an instance in a specific region.
     async fn create_instance<S>(&self, region: S) -> CloudProviderResult<Instance>

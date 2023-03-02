@@ -149,26 +149,44 @@ impl Client for AwsClient {
         Ok(list)
     }
 
-    async fn start_instances(&self, instance_ids: Vec<String>) -> CloudProviderResult<()> {
-        // TODO: need to change the interface to provide the entire instance rather than ids
-        // (because we need to know the region).
-        for client in self.clients.values() {
+    async fn start_instances<'a, I>(&self, instances: I) -> CloudProviderResult<()>
+    where
+        I: Iterator<Item = &'a Instance> + Send,
+    {
+        let mut instance_ids = HashMap::new();
+        for instance in instances {
+            instance_ids
+                .entry(&instance.region)
+                .or_insert_with(Vec::new)
+                .push(instance.id.clone());
+        }
+
+        for (region, client) in &self.clients {
             client
                 .start_instances()
-                .set_instance_ids(Some(instance_ids.clone()))
-                .dry_run(true) // TODO
+                .set_instance_ids(instance_ids.remove(&region.to_string()))
                 .send()
                 .await?;
         }
         Ok(())
     }
 
-    async fn halt_instances(&self, instance_ids: Vec<String>) -> CloudProviderResult<()> {
-        for client in self.clients.values() {
+    async fn stop_instances<'a, I>(&self, instances: I) -> CloudProviderResult<()>
+    where
+        I: Iterator<Item = &'a Instance> + Send,
+    {
+        let mut instance_ids = HashMap::new();
+        for instance in instances {
+            instance_ids
+                .entry(&instance.region)
+                .or_insert_with(Vec::new)
+                .push(instance.id.clone());
+        }
+
+        for (region, client) in &self.clients {
             client
                 .stop_instances()
-                .set_instance_ids(Some(instance_ids.clone()))
-                .dry_run(true) // TODO
+                .set_instance_ids(instance_ids.remove(&region.to_string()))
                 .send()
                 .await?;
         }

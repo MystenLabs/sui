@@ -239,17 +239,16 @@ impl<C: Client> Testbed<C> {
         let mut missing = Vec::new();
 
         for region in &self.settings.regions {
-            let ids: Vec<_> = self
+            let filtered: Vec<_> = self
                 .instances
                 .iter()
                 .filter(|x| x.is_inactive() && &x.region == region)
                 .take(quantity)
-                .map(|x| x.id.clone())
                 .collect();
-            if ids.len() < quantity {
-                missing.push((region.clone(), quantity - ids.len()))
+            if filtered.len() < quantity {
+                missing.push((region.clone(), quantity - filtered.len()))
             } else {
-                available.extend(ids);
+                available.extend(filtered);
             }
         }
 
@@ -259,7 +258,7 @@ impl<C: Client> Testbed<C> {
         );
 
         // Start instances.
-        self.client.start_instances(available).await?;
+        self.client.start_instances(available.into_iter()).await?;
 
         // Wait until the instances are started.
         self.ready().await?;
@@ -270,8 +269,7 @@ impl<C: Client> Testbed<C> {
     /// Stop all instances of the testbed.
     pub async fn stop(&mut self) -> TestbedResult<()> {
         // Stop all instances.
-        let instance_ids: Vec<_> = self.instances.iter().map(|x| x.id.clone()).collect();
-        self.client.halt_instances(instance_ids).await?;
+        self.client.stop_instances(self.instances.iter()).await?;
 
         // Wait until the instances are stopped.
         loop {
@@ -740,7 +738,11 @@ mod test {
             Ok(guard.clone())
         }
 
-        async fn start_instances(&self, instance_ids: Vec<String>) -> CloudProviderResult<()> {
+        async fn start_instances<'a, I>(&self, instances: I) -> CloudProviderResult<()>
+        where
+            I: Iterator<Item = &'a Instance> + Send,
+        {
+            let instance_ids: Vec<_> = instances.map(|x| x.id.clone()).collect();
             let mut guard = self.instances.lock().unwrap();
             for instance in guard.iter_mut().filter(|x| instance_ids.contains(&x.id)) {
                 instance.power_status = "running".into();
@@ -748,7 +750,11 @@ mod test {
             Ok(())
         }
 
-        async fn halt_instances(&self, instance_ids: Vec<String>) -> CloudProviderResult<()> {
+        async fn stop_instances<'a, I>(&self, instances: I) -> CloudProviderResult<()>
+        where
+            I: Iterator<Item = &'a Instance> + Send,
+        {
+            let instance_ids: Vec<_> = instances.map(|x| x.id.clone()).collect();
             let mut guard = self.instances.lock().unwrap();
             for instance in guard.iter_mut().filter(|x| instance_ids.contains(&x.id)) {
                 instance.power_status = "stopped".into();
