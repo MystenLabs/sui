@@ -24,5 +24,16 @@ retries = 2
 # Mark tests as slow after 25mins, kill them after 50
 slow-timeout = { period = "1500s", terminate-after = 1 }
 
+[profile.simtestnightly]
+# Print out output for failing tests as soon as they fail, and also at the end
+# of the run (for easy scrollability).
+failure-output = "immediate-final"
+# Show skipped tests in the CI output.
+status-level = "skip"
+# Do not cancel the test run on the first failure.
+fail-fast = false
+# Mark tests as slow after 20m, terminate after 1h
+slow-timeout = { period = "20m", terminate-after = 3 }
+
 [profile.ci.junit]
 path = "junit.xml"
