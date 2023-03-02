@@ -229,9 +229,6 @@ importers:
       '@growthbook/growthbook': ^0.20.1
       '@growthbook/growthbook-react': ^0.10.1
       '@headlessui/react': ^1.7.7
-      '@ledgerhq/hw-transport': ^6.27.10
-      '@ledgerhq/hw-transport-webhid': ^6.27.11
-      '@ledgerhq/hw-transport-webusb': ^6.27.11
       '@metamask/browser-passworder': ^4.0.2
       '@mysten/core': workspace:*
       '@mysten/icons': workspace:*
@@ -342,9 +339,6 @@ importers:
       '@growthbook/growthbook': 0.20.1
       '@growthbook/growthbook-react': 0.10.1_react@18.2.0
       '@headlessui/react': 1.7.7_biqbaboplfbrettd7655fr4n2y
-      '@ledgerhq/hw-transport': 6.28.1
-      '@ledgerhq/hw-transport-webhid': 6.27.12
-      '@ledgerhq/hw-transport-webusb': 6.27.12
       '@metamask/browser-passworder': 4.0.2
       '@mysten/core': link:../core
       '@mysten/icons': link:../icons
@@ -4634,24 +4628,6 @@ packages:
 
   /@ledgerhq/errors/6.12.3:
     resolution: {integrity: sha512-djiMSgB/7hnK3aLR/c5ZMMivxjcI7o2+y3VKcsZZpydPoVf9+FXqeJPRfOwmJ0JxbQ//LinUfWpIfHew8LkaVw==}
-    dev: false
-
-  /@ledgerhq/hw-transport-webhid/6.27.12:
-    resolution: {integrity: sha512-Yhy5dOKeJIU24Dh9xQjrStc++NviPjRSGHsbc1PeyEjgPEGc8q8wtvm7WFBDzmymBwMhIA5eoNj3fGLk/voXQQ==}
-    dependencies:
-      '@ledgerhq/devices': 8.0.0
-      '@ledgerhq/errors': 6.12.3
-      '@ledgerhq/hw-transport': 6.28.1
-      '@ledgerhq/logs': 6.10.1
-    dev: false
-
-  /@ledgerhq/hw-transport-webusb/6.27.12:
-    resolution: {integrity: sha512-U96UWLZIurD9ifHlm77PAgBbvDCe99DAJk64O2SdR41WRF3WaRq/pjrzCq2UvvammdCd1p7nS4zbhlse0wZplg==}
-    dependencies:
-      '@ledgerhq/devices': 8.0.0
-      '@ledgerhq/errors': 6.12.3
-      '@ledgerhq/hw-transport': 6.28.1
-      '@ledgerhq/logs': 6.10.1
     dev: false
 
   /@ledgerhq/hw-transport/6.28.1:
