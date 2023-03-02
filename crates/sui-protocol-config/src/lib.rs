@@ -64,7 +64,7 @@ impl std::ops::Add<u64> for ProtocolVersion {
 /// Models the set of protocol versions supported by a validator.
 /// The `sui-node` binary will always use the SYSTEM_DEFAULT constant, but for testing we need
 /// to be able to inject arbitrary versions into SuiNode.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct SupportedProtocolVersions {
     min: ProtocolVersion,
     max: ProtocolVersion,
@@ -75,6 +75,14 @@ impl SupportedProtocolVersions {
         min: ProtocolVersion::MIN,
         max: ProtocolVersion::MAX,
     };
+
+    /// Use by VersionedProtocolMessage implementors to describe in which range of versions a
+    /// message variant is supported.
+    pub fn new_for_message(min: u64, max: u64) -> Self {
+        let min = ProtocolVersion::new(min);
+        let max = ProtocolVersion::new(max);
+        Self { min, max }
+    }
 
     pub fn new_for_testing(min: u64, max: u64) -> Self {
         let min = ProtocolVersion::new(min);
@@ -106,6 +114,8 @@ impl SupportedProtocolVersions {
 /// result in forking if not prevented here).
 #[derive(Clone)]
 pub struct ProtocolConfig {
+    pub version: ProtocolVersion,
+
     // ==== Transaction input limits ====
     /// Maximum serialized size of a transaction (in bytes).
     max_tx_size: Option<usize>,
@@ -521,7 +531,8 @@ impl ProtocolConfig {
         assert!(version.0 >= ProtocolVersion::MIN.0, "{:?}", version);
         assert!(version.0 <= ProtocolVersion::MAX_ALLOWED.0, "{:?}", version);
 
-        let ret = Self::get_for_version_impl(version);
+        let mut ret = Self::get_for_version_impl(version);
+        ret.version = version;
 
         CONFIG_OVERRIDE.with(|ovr| {
             if let Some(override_fn) = &*ovr.borrow() {
@@ -588,6 +599,7 @@ impl ProtocolConfig {
         // To change the values here you must create a new protocol version with the new values!
         match version.0 {
             1 => Self {
+                version, // will be overwitten before being returned
                 max_tx_size: Some(64 * 1024),
                 max_tx_in_batch: Some(10),
                 max_modules_in_publish: Some(128),
