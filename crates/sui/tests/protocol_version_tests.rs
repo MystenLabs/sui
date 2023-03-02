@@ -55,16 +55,21 @@ fn test_protocol_overrides_2() {
 mod sim_only_tests {
 
     use super::*;
+    use fastcrypto::encoding::Base64;
     use move_binary_format::CompiledModule;
+    use move_core_types::ident_str;
     use std::path::PathBuf;
     use std::sync::Arc;
     use sui_core::authority::sui_framework_injection;
     use sui_framework_build::compiled_package::BuildConfig;
+    use sui_json_rpc::api::WriteApiClient;
     use sui_macros::*;
     use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
     use sui_types::{
         digests::TransactionDigest,
+        messages::{MoveCall, SingleTransactionKind, TransactionKind},
         object::{Object, OBJECT_START_VERSION},
+        SUI_FRAMEWORK_OBJECT_ID,
     };
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use tokio::time::{sleep, timeout, Duration};
@@ -157,42 +162,54 @@ mod sim_only_tests {
         // - Promote a non-public function to public.
         // - Promote a non-entry function to entry.
         let cluster = run_framework_upgrade("base", "compatible").await;
+        assert_eq!(call_canary(&cluster).await, 42);
         expect_upgrade_succeeded(&cluster).await;
+        assert_eq!(call_canary(&cluster).await, 43);
     }
 
     #[sim_test]
     async fn test_framework_incompatible_struct_layout() {
         // Upgrade attempts to change an existing struct layout
         let cluster = run_framework_upgrade("base", "change_struct_layout").await;
+        assert_eq!(call_canary(&cluster).await, 42);
         expect_upgrade_failed(&cluster).await;
+        assert_eq!(call_canary(&cluster).await, 42);
     }
 
     #[sim_test]
     async fn test_framework_incompatible_struct_ability() {
         // Upgrade attempts to remove an ability from a struct
         let cluster = run_framework_upgrade("base", "change_struct_ability").await;
+        assert_eq!(call_canary(&cluster).await, 42);
         expect_upgrade_failed(&cluster).await;
+        assert_eq!(call_canary(&cluster).await, 42);
     }
 
     #[sim_test]
     async fn test_framework_incompatible_type_constraint() {
         // Upgrade attempts to add a new type constraint to a generic type parameter
         let cluster = run_framework_upgrade("base", "change_type_constraint").await;
+        assert_eq!(call_canary(&cluster).await, 42);
         expect_upgrade_failed(&cluster).await;
+        assert_eq!(call_canary(&cluster).await, 42);
     }
 
     #[sim_test]
     async fn test_framework_incompatible_public_function_signature() {
         // Upgrade attempts to change the signature of a public function
         let cluster = run_framework_upgrade("base", "change_public_function_signature").await;
+        assert_eq!(call_canary(&cluster).await, 42);
         expect_upgrade_failed(&cluster).await;
+        assert_eq!(call_canary(&cluster).await, 42);
     }
 
     #[sim_test]
     async fn test_framework_incompatible_entry_function_signature() {
         // Upgrade attempts to change the signature of an entry function
         let cluster = run_framework_upgrade("base", "change_entry_function_signature").await;
+        assert_eq!(call_canary(&cluster).await, 42);
         expect_upgrade_failed(&cluster).await;
+        assert_eq!(call_canary(&cluster).await, 42);
     }
 
     async fn run_framework_upgrade(from: &str, to: &str) -> TestCluster {
@@ -206,6 +223,34 @@ mod sim_only_tests {
             .build()
             .await
             .unwrap()
+    }
+
+    async fn call_canary(cluster: &TestCluster) -> u64 {
+        let client = cluster.rpc_client();
+        let sender = cluster.accounts.first().cloned().unwrap();
+
+        let txn = TransactionKind::Single(SingleTransactionKind::Call(MoveCall {
+            package: SUI_FRAMEWORK_OBJECT_ID,
+            module: ident_str!("msim_extra_1").to_owned(),
+            function: ident_str!("canary").to_owned(),
+            type_arguments: vec![],
+            arguments: vec![],
+        }));
+
+        let response = client
+            .dev_inspect_transaction(
+                sender,
+                Base64::from_bytes(&bcs::to_bytes(&txn).unwrap()),
+                /* gas_price */ None,
+                /* epoch_id */ None,
+            )
+            .await
+            .unwrap();
+
+        let results = response.results.unwrap();
+        let return_ = &results.first().unwrap().1.return_values.first().unwrap().0;
+
+        bcs::from_bytes(&return_).unwrap()
     }
 
     async fn expect_upgrade_failed(cluster: &TestCluster) {
