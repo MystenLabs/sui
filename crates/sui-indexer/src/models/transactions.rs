@@ -17,38 +17,11 @@ use crate::errors::IndexerError;
 use crate::schema::transactions::transaction_digest;
 use crate::PgPoolConnection;
 
-#[derive(Clone, Debug, Queryable)]
-pub struct Transaction {
-    pub id: i64,
-    pub transaction_digest: String,
-    pub sender: String,
-    pub recipients: Vec<Option<String>>,
-    pub checkpoint_sequence_number: i64,
-    pub transaction_time: Option<NaiveDateTime>,
-    pub transaction_kinds: Vec<Option<String>>,
-    pub created: Vec<Option<String>>,
-    pub mutated: Vec<Option<String>>,
-    pub deleted: Vec<Option<String>>,
-    pub unwrapped: Vec<Option<String>>,
-    pub wrapped: Vec<Option<String>>,
-    pub move_calls: Vec<Option<String>>,
-    pub gas_object_id: String,
-    pub gas_object_sequence: i64,
-    pub gas_object_digest: String,
-    pub gas_budget: i64,
-    pub total_gas_cost: i64,
-    pub computation_cost: i64,
-    pub storage_cost: i64,
-    pub storage_rebate: i64,
-    pub gas_price: i64,
-    pub transaction_content: String,
-    pub transaction_effects_content: String,
-    pub confirmed_local_execution: Option<bool>,
-}
-
-#[derive(Clone, Debug, Insertable)]
+#[derive(Clone, Debug, Queryable, Insertable)]
 #[diesel(table_name = transactions)]
-pub struct NewTransaction {
+pub struct Transaction {
+    #[diesel(deserialize_as = i64)]
+    pub id: Option<i64>,
     pub transaction_digest: String,
     pub sender: String,
     pub recipients: Vec<Option<String>>,
@@ -79,10 +52,10 @@ pub fn commit_transactions(
     pg_pool_conn: &mut PgPoolConnection,
     tx_resps: Vec<SuiTransactionResponse>,
 ) -> Result<usize, IndexerError> {
-    let new_txn_iter = tx_resps.into_iter().map(NewTransaction::try_from);
+    let new_txn_iter = tx_resps.into_iter().map(|tx| tx.try_into());
 
     let mut errors = vec![];
-    let new_txns: Vec<NewTransaction> = new_txn_iter
+    let new_txns: Vec<Transaction> = new_txn_iter
         .filter_map(|r| r.map_err(|e| errors.push(e)).ok())
         .collect();
     log_errors_to_pg(pg_pool_conn, errors);
@@ -106,7 +79,7 @@ pub fn commit_transactions(
     })
 }
 
-impl TryFrom<SuiTransactionResponse> for NewTransaction {
+impl TryFrom<SuiTransactionResponse> for Transaction {
     type Error = IndexerError;
 
     fn try_from(tx_resp: SuiTransactionResponse) -> Result<Self, Self::Error> {
@@ -212,7 +185,8 @@ impl TryFrom<SuiTransactionResponse> for NewTransaction {
         let storage_cost = gas_summary.storage_cost;
         let storage_rebate = gas_summary.storage_rebate;
 
-        Ok(NewTransaction {
+        Ok(Transaction {
+            id: None,
             transaction_digest: tx_digest,
             sender,
             recipients: vec_string_to_vec_opt_string(recipients),

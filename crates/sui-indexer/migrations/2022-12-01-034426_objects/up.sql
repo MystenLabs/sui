@@ -1,10 +1,12 @@
+CREATE TYPE owner_type AS ENUM ('address_owner', 'object_owner', 'shared', 'immutable');
+
 CREATE TABLE objects (
     id BIGSERIAL PRIMARY KEY,
-    object_id VARCHAR(255) NOT NULL UNIQUE,
+    object_id VARCHAR(255) NOT NULL,
     version BIGINT NOT NULL,
 
     -- owner related
-    owner_type VARCHAR(255) NOT NULL,
+    owner_type owner_type NOT NULL,
     -- only non-null for objects with an owner,
     -- the owner can be an account or an object. 
     owner_address VARCHAR(255),

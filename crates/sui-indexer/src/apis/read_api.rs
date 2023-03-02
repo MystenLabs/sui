@@ -15,7 +15,6 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
 use std::collections::BTreeMap;
-use std::sync::Arc;
 use sui_json_rpc::api::{cap_page_limit, ReadApiClient, ReadApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
@@ -33,16 +32,16 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::query::TransactionQuery;
 
-pub(crate) struct ReadApi {
+pub(crate) struct ReadApi<S> {
     fullnode: HttpClient,
-    pg_connection_pool: Arc<PgConnectionPool>,
+    state: S,
     method_to_be_forwarded: Vec<String>,
 }
 
-impl ReadApi {
-    pub fn new(pg_connection_pool: Arc<PgConnectionPool>, fullnode_client: HttpClient) -> Self {
+impl<S: IndexerStore> ReadApi<S> {
+    pub fn new(state: S, fullnode_client: HttpClient) -> Self {
         Self {
-            pg_connection_pool,
+            state,
             fullnode: fullnode_client,
             // TODO: read from config or env file
             method_to_be_forwarded: vec![],
@@ -163,7 +162,10 @@ impl ReadApi {
 }
 
 #[async_trait]
-impl ReadApiServer for ReadApi {
+impl<S> ReadApiServer for ReadApi<S>
+where
+    S: IndexerStore + Sync + Send + 'static,
+{
     async fn get_objects_owned_by_address(
         &self,
         address: SuiAddress,
@@ -203,7 +205,7 @@ impl ReadApiServer for ReadApi {
         {
             return self.fullnode.get_total_transaction_number().await;
         }
-        self.get_total_transaction_number().await
+        self.fullnode.get_total_transaction_number().await
     }
 
     async fn get_transactions(
@@ -244,7 +246,7 @@ impl ReadApiServer for ReadApi {
         {
             return self.fullnode.get_transaction(digest).await;
         }
-        self.get_transaction(digest).await
+        self.fullnode.get_transaction(digest).await
     }
 
     async fn get_normalized_move_modules_by_package(
@@ -314,7 +316,7 @@ impl ReadApiServer for ReadApi {
         {
             return self.fullnode.get_latest_checkpoint_sequence_number().await;
         }
-        Ok(self.get_latest_checkpoint_sequence_number().await? as u64)
+        Ok(self.state.get_latest_checkpoint_sequence_number()? as u64)
     }
 
     async fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
@@ -324,7 +326,7 @@ impl ReadApiServer for ReadApi {
         {
             return self.fullnode.get_checkpoint(id).await;
         }
-        Ok(self.get_checkpoint(id).await?)
+        Ok(self.fullnode.get_checkpoint(id).await?)
     }
 
     // NOTE: checkpoint APIs below will be deprecated,
@@ -371,7 +373,10 @@ impl ReadApiServer for ReadApi {
     }
 }
 
-impl SuiRpcModule for ReadApi {
+impl<S> SuiRpcModule for ReadApi<S>
+where
+    S: IndexerStore + Sync + Send + 'static,
+{
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

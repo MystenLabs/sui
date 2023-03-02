@@ -1,72 +1,74 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use chrono::NaiveDateTime;
+use futures::future::join_all;
+use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
-use std::sync::Arc;
 use sui_sdk::SuiClient;
-use tracing::{error, info};
+use tokio::task::JoinHandle;
+use tracing::{info, warn};
 
-use sui_indexer::errors::IndexerError;
-use sui_indexer::metrics::IndexerCheckpointHandlerMetrics;
-use sui_indexer::models::checkpoints::{
-    commit_checkpoint, create_checkpoint, get_checkpoint, get_latest_checkpoint_sequence_number,
-    Checkpoint,
-};
-use sui_indexer::{get_pg_pool_connection, PgConnectionPool};
-use sui_json_rpc_types::CheckpointId;
+use crate::errors::IndexerError;
+use crate::metrics::IndexerCheckpointHandlerMetrics;
+use crate::models::checkpoints::Checkpoint;
+use crate::models::events::Event;
+use crate::models::transactions::Transaction;
+use crate::store::{CheckpointData, IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore};
+use sui_sdk::error::Error;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
-pub struct CheckpointHandler {
+const HANDLER_RETRY_INTERVAL_IN_SECS: u64 = 10;
+
+pub struct CheckpointHandler<S> {
+    state: S,
     rpc_client: SuiClient,
-    pg_connection_pool: Arc<PgConnectionPool>,
-    pub checkpoint_handler_metrics: IndexerCheckpointHandlerMetrics,
+    metrics: IndexerCheckpointHandlerMetrics,
 }
 
-impl CheckpointHandler {
-    pub fn new(
-        rpc_client: SuiClient,
-        pg_connection_pool: Arc<PgConnectionPool>,
-        prometheus_registry: &Registry,
-    ) -> Self {
+impl<S> CheckpointHandler<S>
+where
+    S: IndexerStore + Sync + Send + 'static,
+{
+    pub fn new(state: S, rpc_client: SuiClient, prometheus_registry: &Registry) -> Self {
         Self {
+            state,
             rpc_client,
-            pg_connection_pool,
-            checkpoint_handler_metrics: IndexerCheckpointHandlerMetrics::new(prometheus_registry),
+            metrics: IndexerCheckpointHandlerMetrics::new(prometheus_registry),
         }
     }
 
-    pub async fn start(&self) -> Result<(), IndexerError> {
-        info!("Indexer checkpoint handler started...");
-        let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
-        let mut next_cursor_sequence_number =
-            get_latest_checkpoint_sequence_number(&mut pg_pool_conn)? + 1;
-        let mut previous_checkpoint = Checkpoint::default();
-        if next_cursor_sequence_number > 0 {
-            let temp_checkpoint =
-                get_checkpoint(&mut pg_pool_conn, next_cursor_sequence_number - 1);
-            match temp_checkpoint {
-                Ok(checkpoint) => previous_checkpoint = checkpoint,
-                Err(err) => {
-                    error!("{}", err)
-                }
+    pub fn spawn(self) -> JoinHandle<()> {
+        spawn_monitored_task!(async move {
+            let mut checkpoint_handler_exec_res = self.start().await;
+            while let Err(e) = &checkpoint_handler_exec_res {
+                warn!(
+                    "Indexer checkpoint handler failed with error: {:?}, retrying after {:?} secs...",
+                    e, HANDLER_RETRY_INTERVAL_IN_SECS
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(
+                    HANDLER_RETRY_INTERVAL_IN_SECS,
+                ))
+                .await;
+                checkpoint_handler_exec_res = self.start().await;
             }
+        })
+    }
+
+    async fn start(&self) -> Result<(), IndexerError> {
+        info!("Indexer checkpoint handler started...");
+        let mut next_cursor_sequence_number = self.state.get_latest_checkpoint_sequence_number()?;
+        if next_cursor_sequence_number > 0 {
+            info!("Resuming from checkpoint {next_cursor_sequence_number}");
         }
+        next_cursor_sequence_number += 1;
 
         loop {
-            self.checkpoint_handler_metrics
-                .total_checkpoint_requested
-                .inc();
+            self.metrics.total_checkpoint_requested.inc();
+            let request_guard = self.metrics.full_node_read_request_latency.start_timer();
 
-            let request_guard = self
-                .checkpoint_handler_metrics
-                .full_node_read_request_latency
-                .start_timer();
-
-            let next_cursor_checkpoint_id =
-                CheckpointId::SequenceNumber(next_cursor_sequence_number as u64);
             let mut checkpoint = self
-                .rpc_client
-                .read_api()
-                .get_checkpoint(next_cursor_checkpoint_id.clone())
+                .download_checkpoint_data(next_cursor_sequence_number as u64)
                 .await;
             // this happens very often b/c checkpoint indexing is faster than checkpoint
             // generation. Ideally we will want to differentiate between a real error and
@@ -74,31 +76,172 @@ impl CheckpointHandler {
             while checkpoint.is_err() {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 checkpoint = self
-                    .rpc_client
-                    .read_api()
-                    .get_checkpoint(next_cursor_checkpoint_id.clone())
-                    .await;
+                    .download_checkpoint_data(next_cursor_sequence_number as u64)
+                    .await
             }
-            request_guard.stop_and_record();
-
-            self.checkpoint_handler_metrics
-                .total_checkpoint_received
-                .inc();
-
-            let db_guard = self
-                .checkpoint_handler_metrics
-                .db_write_request_latency
-                .start_timer();
             // unwrap here is safe because we checked for error above
-            let new_checkpoint = create_checkpoint(checkpoint.unwrap(), previous_checkpoint)?;
-            commit_checkpoint(&mut pg_pool_conn, new_checkpoint.clone())?;
-            info!("Checkpoint {} committed", next_cursor_sequence_number);
-            self.checkpoint_handler_metrics
-                .total_checkpoint_processed
-                .inc();
+            let checkpoint = checkpoint.unwrap();
+            request_guard.stop_and_record();
+            self.metrics.total_checkpoint_received.inc();
+
+            // Index checkpoint data
+            // TODO: Metrics
+            let (indexed_checkpoint, indexed_epoch) = self.index_checkpoint(checkpoint)?;
+
+            // Write to DB
+            let db_guard = self.metrics.db_write_request_latency.start_timer();
+            let tx_count = indexed_checkpoint.transactions.len();
+            let object_count = indexed_checkpoint.objects.len();
+
+            self.state.persist_checkpoint(&indexed_checkpoint)?;
+            info!(
+                "Checkpoint {} committed with {tx_count} transactions and {object_count} objects.",
+                next_cursor_sequence_number
+            );
+            self.metrics.total_checkpoint_processed.inc();
             db_guard.stop_and_record();
-            previous_checkpoint = Checkpoint::from(new_checkpoint.clone());
+
+            if let Some(indexed_epoch) = indexed_epoch {
+                self.state.persist_epoch(&indexed_epoch)?;
+            }
             next_cursor_sequence_number += 1;
         }
+    }
+
+    /// Download all the data we need for one checkpoint.
+    async fn download_checkpoint_data(
+        &self,
+        seq: CheckpointSequenceNumber,
+    ) -> Result<CheckpointData, Error> {
+        let checkpoint = self
+            .rpc_client
+            .read_api()
+            .get_checkpoint(seq.into())
+            .await?;
+
+        let transactions = join_all(
+            checkpoint
+                .transactions
+                .iter()
+                .map(|tx_digest| self.rpc_client.read_api().get_transaction(*tx_digest)),
+        )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
+
+        let all_mutated = transactions
+            .iter()
+            .flat_map(|tx| {
+                tx.effects
+                    .created
+                    .clone()
+                    .into_iter()
+                    .chain(tx.effects.mutated.clone().into_iter())
+                    .chain(tx.effects.unwrapped.clone().into_iter())
+            })
+            .map(|o| (o.reference.object_id, o.reference.version));
+
+        // TODO: Use multi get objects
+        // TODO: Error handling.
+        let new_objects = join_all(all_mutated.map(|(id, version)| {
+            self.rpc_client
+                .read_api()
+                .try_get_parsed_past_object(id, version)
+        }))
+        .await
+        .into_iter()
+        .flatten()
+        .flat_map(|o| o.into_object())
+        .collect();
+
+        Ok(CheckpointData {
+            checkpoint,
+            transactions,
+            objects: new_objects,
+        })
+    }
+
+    fn index_checkpoint(
+        &self,
+        data: CheckpointData,
+    ) -> Result<(TemporaryCheckpointStore, Option<TemporaryEpochStore>), IndexerError> {
+        let CheckpointData {
+            checkpoint,
+            transactions,
+            objects,
+        } = data;
+
+        let previous_cp = if checkpoint.sequence_number == 0 {
+            Checkpoint::default()
+        } else {
+            self.state
+                .get_checkpoint(checkpoint.sequence_number as i64 - 1)?
+        };
+
+        // Index transaction
+        let db_transactions = transactions
+            .iter()
+            .map(|tx| tx.clone().try_into())
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Index events
+        let events = transactions
+            .iter()
+            .flat_map(|tx| {
+                let mut event_sequence = 0;
+                tx.events.data.iter().map(move |event| {
+                    // TODO: we should rethink how we store the raw event in DB
+                    let event_content = serde_json::to_string(event).map_err(|err| {
+                        IndexerError::InsertableParsingError(format!(
+                            "Failed converting event to JSON with error: {:?}",
+                            err
+                        ))
+                    })?;
+                    let event = Event {
+                        id: None,
+                        transaction_digest: tx.effects.transaction_digest.to_string(),
+                        event_sequence,
+                        event_time: tx
+                            .timestamp_ms
+                            .and_then(|t| NaiveDateTime::from_timestamp_millis(t as i64)),
+                        event_type: event.get_event_type(),
+                        event_content,
+                    };
+                    event_sequence += 1;
+                    Ok::<_, IndexerError>(event)
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Index objects
+        let objects = objects.into_iter().map(|o| o.into()).collect::<Vec<_>>();
+
+        // Index addresses
+        let addresses = db_transactions
+            .iter()
+            .map(|tx: &Transaction| tx.into())
+            .collect();
+
+        // Index epoch
+        // TODO: Aggregate all object owner changes into owner index at epoch change.
+        let epoch_index =
+            checkpoint
+                .end_of_epoch_data
+                .as_ref()
+                .map(|_epoch_change| TemporaryEpochStore {
+                    owner_index: vec![],
+                });
+
+        Ok((
+            TemporaryCheckpointStore {
+                checkpoint: Checkpoint::from(&checkpoint, &previous_cp)?,
+                transactions: db_transactions,
+                events,
+                objects,
+                owner_changes: vec![],
+                addresses,
+            },
+            epoch_index,
+        ))
     }
 }

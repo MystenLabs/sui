@@ -836,6 +836,7 @@ derive_more = { version = "0.99" }
 determinator = { version = "0.10", default-features = false }
 deunicode = { version = "0.4", default-features = false }
 diesel = { version = "2", features = ["chrono", "postgres", "r2d2", "serde_json"] }
+diesel-derive-enum = { version = "2", default-features = false, features = ["postgres"] }
 diesel_derives = { version = "2", features = ["32-column-tables", "postgres", "with-deprecated"] }
 diff = { version = "0.1", default-features = false }
 difference = { version = "2" }
