@@ -5538,7 +5538,8 @@
           "exchange_rates",
           "id",
           "pending_delegation",
-          "pending_withdraws",
+          "pending_pool_token_withdraw",
+          "pending_total_sui_withdraw",
           "pool_token_balance",
           "rewards_pool",
           "starting_epoch",
@@ -5556,8 +5557,15 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "pending_withdraws": {
-            "$ref": "#/components/schemas/TableVec"
+          "pending_pool_token_withdraw": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "pending_total_sui_withdraw": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           },
           "pool_token_balance": {
             "type": "integer",
@@ -6069,7 +6077,6 @@
         "required": [
           "epoch",
           "epoch_start_timestamp_ms",
-          "info",
           "parameters",
           "protocol_version",
           "reference_gas_price",
@@ -6089,9 +6096,6 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
-          },
-          "info": {
-            "$ref": "#/components/schemas/UID"
           },
           "parameters": {
             "$ref": "#/components/schemas/SystemParameters"
@@ -6786,7 +6790,6 @@
           "gas_price",
           "metadata",
           "next_epoch_commission_rate",
-          "next_epoch_delegation",
           "next_epoch_gas_price",
           "next_epoch_stake",
           "staking_pool",
@@ -6807,11 +6810,6 @@
             "$ref": "#/components/schemas/ValidatorMetadata"
           },
           "next_epoch_commission_rate": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "next_epoch_delegation": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -6848,7 +6846,7 @@
           "p2p_address",
           "project_url",
           "proof_of_possession_bytes",
-          "pubkey_bytes",
+          "protocol_pubkey_bytes",
           "sui_address",
           "worker_address",
           "worker_pubkey_bytes"
@@ -6887,6 +6885,94 @@
               "minimum": 0.0
             }
           },
+          "next_epoch_consensus_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_net_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_network_pubkey_bytes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_p2p_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_proof_of_possession": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_protocol_pubkey_bytes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_worker_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_worker_pubkey_bytes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
           "p2p_address": {
             "type": "array",
             "items": {
@@ -6906,7 +6992,7 @@
               "minimum": 0.0
             }
           },
-          "pubkey_bytes": {
+          "protocol_pubkey_bytes": {
             "type": "array",
             "items": {
               "type": "integer",

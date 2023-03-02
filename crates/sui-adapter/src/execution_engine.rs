@@ -386,7 +386,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         vec![
             system_object_arg.clone(),
             CallArg::Pure(bcs::to_bytes(&change_epoch.epoch).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&change_epoch.protocol_version).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.protocol_version.as_u64()).unwrap()),
             CallArg::Pure(bcs::to_bytes(&change_epoch.storage_charge).unwrap()),
             CallArg::Pure(bcs::to_bytes(&change_epoch.computation_charge).unwrap()),
             CallArg::Pure(bcs::to_bytes(&change_epoch.storage_rebate).unwrap()),
@@ -713,7 +713,7 @@ fn pay_all_sui<S>(
     recipient: SuiAddress,
 ) -> Result<(), ExecutionError> {
     let (mut coins, _coin_type) = check_coins(coin_objects, Some(GasCoin::type_()))?;
-    // overflow is not possible b/c total SUI supply is 10B SUI or 10^19 MISTs, and 10^19 < u64::MAX
+    // overflow is not possible b/c total SUI supply is 10B SUI or 10^19 MIST, and 10^19 < u64::MAX
     let total_coins = coins.iter().fold(0, |acc, c| acc + c.value());
 
     let mut merged_coin = coins.swap_remove(0);

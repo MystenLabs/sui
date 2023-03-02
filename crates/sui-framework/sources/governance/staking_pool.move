@@ -11,7 +11,6 @@ module sui::staking_pool {
     use sui::object::{Self, ID, UID};
     use sui::locked_coin;
     use sui::coin;
-    use sui::table_vec::{Self, TableVec};
     use sui::math;
     use sui::table::{Self, Table};
 
@@ -48,9 +47,11 @@ module sui::staking_pool {
         exchange_rates: Table<u64, PoolTokenExchangeRate>,
         /// Pending delegation amount for this epoch.
         pending_delegation: u64,
-        /// Delegation withdraws requested during the current epoch. Similar to new delegation, the withdraws are processed
-        /// at epoch boundaries. Rewards are withdrawn and distributed after the rewards for the current epoch have come in.
-        pending_withdraws: TableVec<PendingWithdrawEntry>,
+        /// Pending delegation withdrawn during the current epoch, emptied at epoch boundaries.
+        /// This includes both the principal and rewards SUI withdrawn.
+        pending_total_sui_withdraw: u64,
+        /// Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
+        pending_pool_token_withdraw: u64,
     }
 
     /// Struct representing the exchange rate of the delegation pool token to SUI.
@@ -64,13 +65,6 @@ module sui::staking_pool {
     struct InactiveStakingPool has key {
         id: UID, // TODO: inherit an ID from active staking pool?
         pool: StakingPool,
-    }
-
-    /// Struct representing a pending delegation withdraw.
-    struct PendingWithdrawEntry has store {
-        delegator: address,
-        principal_withdraw_amount: u64,
-        pool_token_withdraw_amount: u64,
     }
 
     /// A self-custodial object holding the staked SUI tokens.
@@ -107,7 +101,8 @@ module sui::staking_pool {
             pool_token_balance: 0,
             exchange_rates,
             pending_delegation: 0,
-            pending_withdraws: table_vec::empty(ctx),
+            pending_total_sui_withdraw: 0,
+            pending_pool_token_withdraw: 0,
         }
     }
 
@@ -138,10 +133,8 @@ module sui::staking_pool {
     }
 
     /// Request to withdraw `principal_withdraw_amount` of stake plus rewards from a staking pool.
-    /// This amount of principal in SUI is withdrawn and transferred to the delegator. A proportional amount
-    /// of pool tokens will be later burnt.
-    /// The rewards portion will be withdrawn at the end of the epoch, after the rewards have come in so we
-    /// can use the new exchange rate to calculate the rewards.
+    /// This amount of principal and corresponding rewards in SUI are withdrawn and transferred to the delegator.
+    /// A proportional amount of pool tokens is burnt.
     public(friend) fun request_withdraw_delegation(
         pool: &mut StakingPool,
         staked_sui: StakedSui,
@@ -151,17 +144,28 @@ module sui::staking_pool {
             withdraw_from_principal(pool, staked_sui);
         let delegator = tx_context::sender(ctx);
         let principal_withdraw_amount = balance::value(&principal_withdraw);
-        table_vec::push_back(&mut pool.pending_withdraws, PendingWithdrawEntry {
-            delegator, principal_withdraw_amount, pool_token_withdraw_amount });
+
+        let rewards_withdraw = withdraw_rewards_and_burn_pool_tokens(
+            pool, principal_withdraw_amount, pool_token_withdraw_amount, tx_context::epoch(ctx)
+        );
+        let total_sui_withdraw_amount = principal_withdraw_amount + balance::value(&rewards_withdraw);
+        pool.pending_total_sui_withdraw = pool.pending_total_sui_withdraw + total_sui_withdraw_amount;
+        pool.pending_pool_token_withdraw = pool.pending_pool_token_withdraw + pool_token_withdraw_amount;
 
         // TODO: implement withdraw bonding period here.
         if (option::is_some(&time_lock)) {
             locked_coin::new_from_balance(principal_withdraw, option::destroy_some(time_lock), delegator, ctx);
+            if (balance::value(&rewards_withdraw) > 0) {
+                transfer::transfer(coin::from_balance(rewards_withdraw, ctx), delegator);
+            } else {
+                balance::destroy_zero(rewards_withdraw);
+            }
         } else {
+            balance::join(&mut principal_withdraw, rewards_withdraw);
             transfer::transfer(coin::from_balance(principal_withdraw, ctx), delegator);
             option::destroy_none(time_lock);
         };
-        principal_withdraw_amount
+        total_sui_withdraw_amount
     }
 
     /// Withdraw the principal SUI stored in the StakedSui object, and calculate the corresponding amount of pool
@@ -203,42 +207,39 @@ module sui::staking_pool {
     // ==== functions called at epoch boundaries ===
 
     /// Called at epoch advancement times to add rewards (in SUI) to the staking pool.
-    public(friend) fun deposit_rewards(pool: &mut StakingPool, rewards: Balance<SUI>, new_epoch: u64) {
+    public(friend) fun deposit_rewards(pool: &mut StakingPool, rewards: Balance<SUI>) {
         pool.sui_balance = pool.sui_balance + balance::value(&rewards);
         balance::join(&mut pool.rewards_pool, rewards);
+    }
+
+    public(friend) fun process_pending_delegations_and_withdraws(pool: &mut StakingPool, ctx: &mut TxContext) {
+        let new_epoch = tx_context::epoch(ctx) + 1;
+        process_pending_delegation_withdraw(pool);
+        process_pending_delegation(pool);
         table::add(
             &mut pool.exchange_rates,
             new_epoch,
             PoolTokenExchangeRate { sui_amount: pool.sui_balance, pool_token_amount: pool.pool_token_balance },
         );
+        check_balance_invariants(pool, new_epoch);
     }
 
     /// Called at epoch boundaries to process pending delegation withdraws requested during the epoch.
-    /// For each pending withdraw entry, we withdraw the rewards from the pool at the new exchange rate and burn the pool
-    /// tokens.
-    public(friend) fun process_pending_delegation_withdraws(pool: &mut StakingPool, ctx: &mut TxContext) : u64 {
-        let total_reward_withdraw = 0;
-        let new_epoch = tx_context::epoch(ctx) + 1;
-
-        while (!table_vec::is_empty(&pool.pending_withdraws)) {
-            let PendingWithdrawEntry {
-                delegator, principal_withdraw_amount, pool_token_withdraw_amount
-            } = table_vec::pop_back(&mut pool.pending_withdraws);
-            let reward_withdraw = withdraw_rewards_and_burn_pool_tokens(
-                pool, principal_withdraw_amount, pool_token_withdraw_amount, new_epoch);
-            total_reward_withdraw = total_reward_withdraw + balance::value(&reward_withdraw);
-            transfer::transfer(coin::from_balance(reward_withdraw, ctx), delegator);
-        };
-        total_reward_withdraw
+    fun process_pending_delegation_withdraw(pool: &mut StakingPool) {
+        pool.sui_balance = pool.sui_balance - pool.pending_total_sui_withdraw;
+        pool.pool_token_balance = pool.pool_token_balance - pool.pending_pool_token_withdraw;
+        pool.pending_total_sui_withdraw = 0;
+        pool.pending_pool_token_withdraw = 0;
     }
 
     /// Called at epoch boundaries to process the pending delegation.
-    public(friend) fun process_pending_delegation(pool: &mut StakingPool, new_epoch: u64) {
-        let new_epoch_exchange_rate = pool_token_exchange_rate_at_epoch(pool, new_epoch);
+    public(friend) fun process_pending_delegation(pool: &mut StakingPool) {
+        // Use the most up to date exchange rate with the rewards deposited and withdraws effectuated.
+        let latest_exchange_rate =
+            PoolTokenExchangeRate { sui_amount: pool.sui_balance, pool_token_amount: pool.pool_token_balance };
         pool.sui_balance = pool.sui_balance + pool.pending_delegation;
-        pool.pool_token_balance = get_token_amount(&new_epoch_exchange_rate, pool.sui_balance);
+        pool.pool_token_balance = get_token_amount(&latest_exchange_rate, pool.sui_balance);
         pool.pending_delegation = 0;
-        check_balance_invariants(pool, new_epoch);
     }
 
     /// This function does the following:
@@ -247,18 +248,16 @@ module sui::staking_pool {
     ///     2. Using the above number and the given `principal_withdraw_amount`, calculates the rewards portion of the
     ///        delegation we should withdraw.
     ///     3. Withdraws the rewards portion from the rewards pool at the current exchange rate. We only withdraw the rewards
-    ///        portion because the principal portion was already taken out of the delegator's self custodied StakedSui at request
-    ///        time in `request_withdraw_stake`.
+    ///        portion because the principal portion was already taken out of the delegator's self custodied StakedSui.
     ///     4. Since SUI tokens are withdrawn, we need to burn the corresponding pool tokens to keep the exchange rate the same.
-    ///     5. Updates the SUI balance amount of the pool.
     fun withdraw_rewards_and_burn_pool_tokens(
         pool: &mut StakingPool,
         principal_withdraw_amount: u64,
         pool_token_withdraw_amount: u64,
-        new_epoch: u64,
+        epoch: u64,
     ) : Balance<SUI> {
-        let new_epoch_exchange_rate = pool_token_exchange_rate_at_epoch(pool, new_epoch);
-        let total_sui_withdraw_amount = get_sui_amount(&new_epoch_exchange_rate, pool_token_withdraw_amount);
+        let exchange_rate = pool_token_exchange_rate_at_epoch(pool, epoch);
+        let total_sui_withdraw_amount = get_sui_amount(&exchange_rate, pool_token_withdraw_amount);
         let reward_withdraw_amount =
             if (total_sui_withdraw_amount >= principal_withdraw_amount)
                 total_sui_withdraw_amount - principal_withdraw_amount
@@ -267,8 +266,6 @@ module sui::staking_pool {
         // the rewards pool balance may be less than reward_withdraw_amount.
         // TODO: FIGURE OUT EXACTLY WHY THIS CAN HAPPEN.
         reward_withdraw_amount = math::min(reward_withdraw_amount, balance::value(&pool.rewards_pool));
-        pool.sui_balance = pool.sui_balance - (principal_withdraw_amount + reward_withdraw_amount);
-        pool.pool_token_balance = pool.pool_token_balance - pool_token_withdraw_amount;
         balance::split(&mut pool.rewards_pool, reward_withdraw_amount)
     }
 
@@ -302,30 +299,15 @@ module sui::staking_pool {
         staking_pool.pending_delegation
     }
 
-    /// Calculate the current the total withdrawal requests (in terms of principal) for the staking pool
-    public fun pending_principal_withdrawal_amounts(staking_pool: &StakingPool): u64 {
-        let sum = 0;
-        let len = table_vec::length(&staking_pool.pending_withdraws);
-        let i = 0;
-        while (i < len) {
-            let pending_withdraw = table_vec::borrow(&staking_pool.pending_withdraws, i);
-            sum = sum + pending_withdraw.principal_withdraw_amount;
-            i = i + 1;
-        };
-        sum
-    }
-
-    /// Create a new pending withdraw entry.
-    public(friend) fun new_pending_withdraw_entry(
-        delegator: address,
-        principal_withdraw_amount: u64,
-        pool_token_withdraw_amount: u64,
-    ) : PendingWithdrawEntry {
-        PendingWithdrawEntry { delegator, principal_withdraw_amount, pool_token_withdraw_amount }
+    /// Calculate the current the total withdrawal from the staking pool this epoch.
+    public fun pending_stake_withdraw_amount(staking_pool: &StakingPool): u64 {
+        staking_pool.pending_total_sui_withdraw
     }
 
     fun get_sui_amount(exchange_rate: &PoolTokenExchangeRate, token_amount: u64): u64 {
-        if (exchange_rate.pool_token_amount == 0) {
+        // When either amount is 0, that means we have no delegations with this pool.
+        // The other amount might be non-zero when there's dust left in the pool.
+        if (exchange_rate.sui_amount == 0 || exchange_rate.pool_token_amount == 0) {
             return token_amount
         };
         let res = (exchange_rate.sui_amount as u128)
@@ -335,7 +317,9 @@ module sui::staking_pool {
     }
 
     fun get_token_amount(exchange_rate: &PoolTokenExchangeRate, sui_amount: u64): u64 {
-        if (exchange_rate.sui_amount == 0) {
+        // When either amount is 0, that means we have no delegations with this pool.
+        // The other amount might be non-zero when there's dust left in the pool.
+        if (exchange_rate.sui_amount == 0 || exchange_rate.pool_token_amount == 0) {
             return sui_amount
         };
         let res = (exchange_rate.pool_token_amount as u128)

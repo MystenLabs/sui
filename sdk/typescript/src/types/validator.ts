@@ -10,6 +10,7 @@ import {
   string,
   union,
   Infer,
+  nullable,
   tuple,
   optional,
 } from 'superstruct';
@@ -20,7 +21,7 @@ import { AuthorityName } from './transactions';
 
 export const ValidatorMetaData = object({
   sui_address: SuiAddress,
-  pubkey_bytes: array(number()),
+  protocol_pubkey_bytes: array(number()),
   network_pubkey_bytes: array(number()),
   worker_pubkey_bytes: array(number()),
   proof_of_possession_bytes: array(number()),
@@ -32,6 +33,14 @@ export const ValidatorMetaData = object({
   net_address: array(number()),
   consensus_address: array(number()),
   worker_address: array(number()),
+  next_epoch_protocol_pubkey_bytes: nullable(array(number())),
+  next_epoch_proof_of_possession: nullable(array(number())),
+  next_epoch_network_pubkey_bytes: nullable(array(number())),
+  next_epoch_worker_pubkey_bytes: nullable(array(number())),
+  next_epoch_net_address: nullable(array(number())),
+  next_epoch_p2p_address: nullable(array(number())),
+  next_epoch_consensus_address: nullable(array(number())),
+  next_epoch_worker_address: nullable(array(number())),
 });
 
 export type DelegatedStake = Infer<typeof DelegatedStake>;
@@ -116,10 +125,6 @@ export const Contents = object({
   fields: ContentsFields,
 });
 
-export const PendingWithdawFields = object({
-  contents: ContentsFieldsWithdraw,
-});
-
 export const DelegationStakingPoolFields = object({
   exchange_rates: object({
     id: string(),
@@ -127,7 +132,8 @@ export const DelegationStakingPoolFields = object({
   }),
   id: string(),
   pending_delegation: number(),
-  pending_withdraws: PendingWithdawFields,
+  pending_pool_token_withdraw: number(),
+  pending_total_sui_withdraw: number(),
   pool_token_balance: number(),
   rewards_pool: object({ value: number() }),
   starting_epoch: number(),
@@ -160,7 +166,6 @@ export const Validator = object({
   staking_pool: DelegationStakingPoolFields,
   commission_rate: number(),
   next_epoch_stake: number(),
-  next_epoch_delegation: number(),
   next_epoch_gas_price: number(),
   next_epoch_commission_rate: number(),
 });
@@ -192,7 +197,6 @@ export const ValidatorSet = object({
 });
 
 export const SuiSystemState = object({
-  info: object({ id: string() }),
   epoch: number(),
   // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
   protocol_version: optional(number()),

@@ -876,6 +876,7 @@ async fn test_handle_transfer_transaction_with_max_sequence_number() {
         (sender, gas_object_id, SequenceNumber::new()),
     ])
     .await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
     let object = authority_state
         .get_object(&object_id)
         .await
@@ -894,7 +895,7 @@ async fn test_handle_transfer_transaction_with_max_sequence_number() {
         gas_object.compute_object_reference(),
     );
     let res = authority_state
-        .handle_transaction(transfer_transaction)
+        .handle_transaction(&epoch_store, transfer_transaction)
         .await;
 
     assert_eq!(
@@ -907,8 +908,11 @@ async fn test_handle_transfer_transaction_with_max_sequence_number() {
 async fn test_handle_shared_object_with_max_sequence_number() {
     let (authority, _fullnode, transaction, _, _) =
         construct_shared_object_transaction_with_sequence_number(Some(SequenceNumber::MAX)).await;
+    let epoch_store = authority.load_epoch_store_one_call_per_task();
     // Submit the transaction and assemble a certificate.
-    let response = authority.handle_transaction(transaction.clone()).await;
+    let response = authority
+        .handle_transaction(&epoch_store, transaction.clone())
+        .await;
     assert_eq!(
         UserInputError::try_from(response.unwrap_err()).unwrap(),
         UserInputError::InvalidSequenceNumber,
@@ -924,6 +928,7 @@ async fn test_handle_transfer_transaction_unknown_sender() {
     let recipient = dbg_addr(2);
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
     let object = authority_state
         .get_object(&object_id)
         .await
@@ -944,7 +949,7 @@ async fn test_handle_transfer_transaction_unknown_sender() {
     );
 
     assert!(authority_state
-        .handle_transaction(unknown_sender_transfer_transaction)
+        .handle_transaction(&epoch_store, unknown_sender_transfer_transaction)
         .await
         .is_err());
 
@@ -1008,6 +1013,7 @@ async fn test_handle_transfer_transaction_ok() {
     let gas_object_id = ObjectID::random();
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
 
     let object = authority_state
         .get_object(&object_id)
@@ -1052,7 +1058,7 @@ async fn test_handle_transfer_transaction_ok() {
         .is_err());
 
     let account_info = authority_state
-        .handle_transaction(transfer_transaction.clone())
+        .handle_transaction(&epoch_store, transfer_transaction.clone())
         .await
         .unwrap();
 
@@ -1093,6 +1099,7 @@ async fn test_handle_sponsored_transaction() {
     let gas_object_id = ObjectID::random();
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sponsor, gas_object_id)]).await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
 
     let object = authority_state
         .get_object(&object_id)
@@ -1124,7 +1131,7 @@ async fn test_handle_sponsored_transaction() {
         to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &sponsor_key]);
 
     authority_state
-        .handle_transaction(dual_signed_tx.clone())
+        .handle_transaction(&epoch_store, dual_signed_tx.clone())
         .await
         .unwrap();
 
@@ -1143,7 +1150,7 @@ async fn test_handle_sponsored_transaction() {
         to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &sponsor_key]);
 
     let error = authority_state
-        .handle_transaction(dual_signed_tx.clone())
+        .handle_transaction(&epoch_store, dual_signed_tx.clone())
         .await
         .unwrap_err();
 
@@ -1170,7 +1177,7 @@ async fn test_handle_sponsored_transaction() {
     let dual_signed_tx =
         to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &sponsor_key]);
     let error = authority_state
-        .handle_transaction(dual_signed_tx.clone())
+        .handle_transaction(&epoch_store, dual_signed_tx.clone())
         .await
         .unwrap_err();
 
@@ -1198,7 +1205,7 @@ async fn test_handle_sponsored_transaction() {
     let dual_signed_tx =
         to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &third_party_key]);
     let error = authority_state
-        .handle_transaction(dual_signed_tx.clone())
+        .handle_transaction(&epoch_store, dual_signed_tx.clone())
         .await
         .unwrap_err();
 
@@ -1218,6 +1225,7 @@ async fn test_transfer_package() {
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
     let gas_object = authority_state
         .get_object(&object_id)
         .await
@@ -1233,7 +1241,7 @@ async fn test_transfer_package() {
         gas_object.compute_object_reference(),
     );
     authority_state
-        .handle_transaction(transfer_transaction.clone())
+        .handle_transaction(&epoch_store, transfer_transaction.clone())
         .await
         .unwrap_err();
 }
@@ -1246,6 +1254,7 @@ async fn test_immutable_gas() {
     let recipient = dbg_addr(2);
     let mut_object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, mut_object_id)]).await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
     let imm_object_id = ObjectID::random();
     let imm_object = Object::immutable_with_id_for_testing(imm_object_id);
     authority_state
@@ -1264,7 +1273,7 @@ async fn test_immutable_gas() {
         imm_object.compute_object_reference(),
     );
     let result = authority_state
-        .handle_transaction(transfer_transaction.clone())
+        .handle_transaction(&epoch_store, transfer_transaction.clone())
         .await;
     assert!(matches!(
         UserInputError::try_from(result.unwrap_err()).unwrap(),
@@ -1280,6 +1289,7 @@ async fn test_objected_owned_gas() {
     let recipient = dbg_addr(2);
     let parent_object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, parent_object_id)]).await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
     let child_object_id = ObjectID::random();
     let child_object = Object::with_object_owner_for_testing(child_object_id, parent_object_id);
     authority_state
@@ -1294,7 +1304,9 @@ async fn test_objected_owned_gas() {
     );
 
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let result = authority_state.handle_transaction(transaction).await;
+    let result = authority_state
+        .handle_transaction(&epoch_store, transaction)
+        .await;
     assert!(matches!(
         UserInputError::try_from(result.unwrap_err()).unwrap(),
         UserInputError::GasObjectNotOwnedObject { .. }
@@ -1321,7 +1333,10 @@ pub async fn send_and_confirm_transaction_(
     with_shared: bool, // transaction includes shared objects
 ) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
     // Make the initial request
-    let response = authority.handle_transaction(transaction.clone()).await?;
+    let epoch_store = authority.load_epoch_store_one_call_per_task();
+    let response = authority
+        .handle_transaction(&epoch_store, transaction.clone())
+        .await?;
     let vote = response.status.into_signed_for_testing();
 
     // Collect signatures from a quorum of authorities
@@ -1473,6 +1488,7 @@ async fn test_publish_non_existing_dependent_module() {
         bytes
     };
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
+    let epoch_store = authority.load_epoch_store_one_call_per_task();
 
     let data = TransactionData::new_module_with_dummy_gas_price(
         sender,
@@ -1481,7 +1497,9 @@ async fn test_publish_non_existing_dependent_module() {
         MAX_GAS,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let response = authority.handle_transaction(transaction).await;
+    let response = authority
+        .handle_transaction(&epoch_store, transaction)
+        .await;
     assert!(std::string::ToString::to_string(&response.unwrap_err())
         .contains("DependentPackageNotFound"));
     // Check that gas was not charged.
@@ -1511,7 +1529,8 @@ async fn test_package_size_limit() {
     while package_size <= max_move_package_size {
         let mut module = file_format::empty_module();
         // generate unique name
-        module.identifiers[0] = Identifier::new(format!("TestModule{:?}", package_size)).unwrap();
+        module.identifiers[0] =
+            Identifier::new(format!("TestModule{:0>21000?}", package_size)).unwrap();
         let module_bytes = {
             let mut bytes = Vec::new();
             module.serialize(&mut bytes).unwrap();
@@ -1585,6 +1604,7 @@ async fn test_conflicting_transactions() {
     let gas_object_id = ObjectID::random();
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
     let object = authority_state
         .get_object(&object_id)
         .await
@@ -1619,8 +1639,8 @@ async fn test_conflicting_transactions() {
     // acquire_transaction_locks() and then add a sleep after we read the locks.
     for _ in 0..100 {
         let mut futures = FuturesUnordered::new();
-        futures.push(authority_state.handle_transaction(tx1.clone()));
-        futures.push(authority_state.handle_transaction(tx2.clone()));
+        futures.push(authority_state.handle_transaction(&epoch_store, tx1.clone()));
+        futures.push(authority_state.handle_transaction(&epoch_store, tx2.clone()));
 
         let first = futures.next().await.unwrap();
         let second = futures.next().await.unwrap();
@@ -1687,6 +1707,7 @@ async fn test_handle_transfer_transaction_double_spend() {
     let gas_object_id = ObjectID::random();
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
     let object = authority_state
         .get_object(&object_id)
         .await
@@ -1706,12 +1727,12 @@ async fn test_handle_transfer_transaction_double_spend() {
     );
 
     let signed_transaction = authority_state
-        .handle_transaction(transfer_transaction.clone())
+        .handle_transaction(&epoch_store, transfer_transaction.clone())
         .await
         .unwrap();
     // calls to handlers are idempotent -- returns the same.
     let double_spend_signed_transaction = authority_state
-        .handle_transaction(transfer_transaction)
+        .handle_transaction(&epoch_store, transfer_transaction)
         .await
         .unwrap();
     // this is valid because our test authority should not change its certified transaction
@@ -1724,6 +1745,7 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
     let object = authority_state
         .get_object(&object_id)
         .await
@@ -1737,7 +1759,9 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
         200,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let result = authority_state.handle_transaction(transaction).await;
+    let result = authority_state
+        .handle_transaction(&epoch_store, transaction)
+        .await;
 
     assert!(matches!(
         UserInputError::try_from(result.unwrap_err()).unwrap(),
@@ -1789,11 +1813,12 @@ async fn test_transaction_expiration() {
     );
 
     // Expired transaction returns an error
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
     let mut expired_data = data.clone();
     expired_data.expiration = TransactionExpiration::Epoch(0);
     let expired_transaction = to_sender_signed_transaction(expired_data, &sender_key);
     let result = authority_state
-        .handle_transaction(expired_transaction)
+        .handle_transaction(&epoch_store, expired_transaction)
         .await;
 
     assert!(matches!(result.unwrap_err(), SuiError::TransactionExpired));
@@ -1802,7 +1827,7 @@ async fn test_transaction_expiration() {
     data.expiration = TransactionExpiration::Epoch(10);
     let transaction = to_sender_signed_transaction(data, &sender_key);
     authority_state
-        .handle_transaction(transaction)
+        .handle_transaction(&epoch_store, transaction)
         .await
         .unwrap();
 }
@@ -1813,6 +1838,7 @@ async fn test_missing_package() {
     let gas_object_id = ObjectID::random();
     let (authority_state, _object_basics) =
         init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
     let gas_object = authority_state
         .get_object(&gas_object_id)
         .await
@@ -1831,7 +1857,9 @@ async fn test_missing_package() {
         MAX_GAS,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let result = authority_state.handle_transaction(transaction).await;
+    let result = authority_state
+        .handle_transaction(&epoch_store, transaction)
+        .await;
     assert!(matches!(
         UserInputError::try_from(result.unwrap_err()).unwrap(),
         UserInputError::DependentPackageNotFound { .. }
@@ -1848,6 +1876,7 @@ async fn test_type_argument_dependencies() {
     let gas3 = ObjectID::random();
     let (authority_state, (object_basics, _, _)) =
         init_state_with_ids_and_object_basics(vec![(s1, gas1), (s2, gas2), (s3, gas3)]).await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
     let gas1 = {
         let o = authority_state.get_object(&gas1).await.unwrap().unwrap();
         o.compute_object_reference()
@@ -1873,7 +1902,7 @@ async fn test_type_argument_dependencies() {
     );
     let transaction = to_sender_signed_transaction(data, &s1_key);
     authority_state
-        .handle_transaction(transaction)
+        .handle_transaction(&epoch_store, transaction)
         .await
         .unwrap()
         .status
@@ -1896,7 +1925,7 @@ async fn test_type_argument_dependencies() {
     );
     let transaction = to_sender_signed_transaction(data, &s2_key);
     authority_state
-        .handle_transaction(transaction)
+        .handle_transaction(&epoch_store, transaction)
         .await
         .unwrap()
         .status
@@ -1918,7 +1947,9 @@ async fn test_type_argument_dependencies() {
         MAX_GAS,
     );
     let transaction = to_sender_signed_transaction(data, &s3_key);
-    let result = authority_state.handle_transaction(transaction).await;
+    let result = authority_state
+        .handle_transaction(&epoch_store, transaction)
+        .await;
 
     assert!(matches!(
         UserInputError::try_from(result.unwrap_err()).unwrap(),
@@ -2735,6 +2766,7 @@ async fn test_authority_persist() {
             &AuthorityStorePruningConfig::default(),
             &[], // no genesis objects
             10000,
+            &StateSnapshotConfig::default(),
         )
         .await
     }
@@ -2801,6 +2833,7 @@ async fn test_idempotent_reversed_confirmation() {
     let gas_object = Object::with_owner_for_testing(sender);
     let gas_object_ref = gas_object.compute_object_reference();
     let authority_state = init_state_with_objects([object, gas_object]).await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
 
     let certified_transfer_transaction = init_certified_transfer_transaction(
         sender,
@@ -2818,7 +2851,7 @@ async fn test_idempotent_reversed_confirmation() {
         .await;
     assert!(result1.is_ok());
     let result2 = authority_state
-        .handle_transaction(certified_transfer_transaction.into_unsigned())
+        .handle_transaction(&epoch_store, certified_transfer_transaction.into_unsigned())
         .await;
     assert!(result2.is_ok());
     assert_eq!(
@@ -2838,6 +2871,7 @@ async fn test_refusal_to_sign_consensus_commit_prologue() {
     let gas_object_id = ObjectID::random();
     let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
     let authority_state = init_state_with_objects(vec![gas_object.clone()]).await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
 
     let gas_ref = gas_object.compute_object_reference();
     let tx_data = TransactionData::new_with_dummy_gas_price(
@@ -2858,7 +2892,9 @@ async fn test_refusal_to_sign_consensus_commit_prologue() {
 
     // But the authority should refuse to handle it.
     assert!(matches!(
-        authority_state.handle_transaction(transaction).await,
+        authority_state
+            .handle_transaction(&epoch_store, transaction)
+            .await,
         Err(SuiError::InvalidSystemTransaction),
     ));
 }
@@ -2871,6 +2907,7 @@ async fn test_invalid_mutable_clock_parameter() {
     let gas_object_id = ObjectID::random();
     let (authority_state, package_object_ref) =
         init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
     let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
     let gas_ref = gas_object.compute_object_reference();
 
@@ -2891,7 +2928,7 @@ async fn test_invalid_mutable_clock_parameter() {
 
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
 
-    let Err(e) = authority_state.handle_transaction(transaction).await else {
+    let Err(e) = authority_state.handle_transaction(&epoch_store, transaction).await else {
         panic!("Expected handling transaction to fail");
     };
 
@@ -2910,6 +2947,7 @@ async fn test_valid_immutable_clock_parameter() {
     let gas_object_id = ObjectID::random();
     let (authority_state, package_object_ref) =
         init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
     let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
     let gas_ref = gas_object.compute_object_reference();
 
@@ -2930,7 +2968,7 @@ async fn test_valid_immutable_clock_parameter() {
 
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
     authority_state
-        .handle_transaction(transaction)
+        .handle_transaction(&epoch_store, transaction)
         .await
         .unwrap();
 }
@@ -2940,16 +2978,24 @@ async fn test_genesis_sui_system_state_object() {
     // This test verifies that we can read the genesis SuiSystemState object.
     // And its Move layout matches the definition in Rust (so that we can deserialize it).
     let authority_state = init_state().await;
-    let sui_system_object = authority_state
+    let wrapper = authority_state
         .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(sui_system_object.version(), SequenceNumber::from(1));
-    let move_object = sui_system_object.data.try_as_move().unwrap();
+    assert_eq!(wrapper.version(), SequenceNumber::from(1));
+    let move_object = wrapper.data.try_as_move().unwrap();
     let _sui_system_state =
         bcs::from_bytes::<SuiSystemStateWrapper>(move_object.contents()).unwrap();
     assert_eq!(move_object.type_, SuiSystemStateWrapper::type_());
+    let sui_system_state = authority_state
+        .database
+        .get_sui_system_state_object()
+        .unwrap();
+    assert_eq!(
+        &sui_system_state.get_current_epoch_committee().committee,
+        authority_state.epoch_store_for_testing().committee()
+    );
 }
 
 #[tokio::test]
@@ -2960,6 +3006,7 @@ async fn test_transfer_sui_no_amount() {
     let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
     let init_balance = sui_types::gas::get_gas_balance(&gas_object).unwrap();
     let authority_state = init_state_with_objects(vec![gas_object.clone()]).await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
 
     let gas_ref = gas_object.compute_object_reference();
     let tx_data = TransactionData::new_transfer_sui_with_dummy_gas_price(
@@ -2969,7 +3016,7 @@ async fn test_transfer_sui_no_amount() {
     // Make sure transaction handling works as usual.
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
     authority_state
-        .handle_transaction(transaction.clone())
+        .handle_transaction(&epoch_store, transaction.clone())
         .await
         .unwrap();
 
@@ -4276,8 +4323,9 @@ async fn make_test_transaction(
     let mut sigs = vec![];
 
     for authority in authorities {
+        let epoch_store = authority.load_epoch_store_one_call_per_task();
         let response = authority
-            .handle_transaction(transaction.clone())
+            .handle_transaction(&epoch_store, transaction.clone())
             .await
             .unwrap();
         let vote = response.status.into_signed_for_testing();

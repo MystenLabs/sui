@@ -5,18 +5,22 @@ use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::collection_types::{VecMap, VecSet};
 use crate::committee::{Committee, CommitteeWithNetAddresses, ProtocolVersion, StakeUnit};
 use crate::crypto::AuthorityPublicKeyBytes;
+use crate::dynamic_field::{derive_dynamic_field_id, Field};
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
 use crate::{balance::Balance, id::UID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
-
+use anemo::PeerId;
 use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;
+use move_core_types::language_storage::TypeTag;
+use move_core_types::value::MoveTypeLayout;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
+use move_vm_types::values::Value;
 use multiaddr::Multiaddr;
 use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
@@ -50,7 +54,7 @@ pub struct MoveOption<T> {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct ValidatorMetadata {
     pub sui_address: SuiAddress,
-    pub pubkey_bytes: Vec<u8>,
+    pub protocol_pubkey_bytes: Vec<u8>,
     pub network_pubkey_bytes: Vec<u8>,
     pub worker_pubkey_bytes: Vec<u8>,
     pub proof_of_possession_bytes: Vec<u8>,
@@ -62,12 +66,20 @@ pub struct ValidatorMetadata {
     pub p2p_address: Vec<u8>,
     pub consensus_address: Vec<u8>,
     pub worker_address: Vec<u8>,
+    pub next_epoch_protocol_pubkey_bytes: Option<Vec<u8>>,
+    pub next_epoch_proof_of_possession: Option<Vec<u8>>,
+    pub next_epoch_network_pubkey_bytes: Option<Vec<u8>>,
+    pub next_epoch_worker_pubkey_bytes: Option<Vec<u8>>,
+    pub next_epoch_net_address: Option<Vec<u8>>,
+    pub next_epoch_p2p_address: Option<Vec<u8>>,
+    pub next_epoch_consensus_address: Option<Vec<u8>>,
+    pub next_epoch_worker_address: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct VerifiedValidatorMetadata {
     pub sui_address: SuiAddress,
-    pub pubkey: narwhal_crypto::PublicKey,
+    pub protocol_pubkey: narwhal_crypto::PublicKey,
     pub network_pubkey: narwhal_crypto::NetworkPublicKey,
     pub worker_pubkey: narwhal_crypto::NetworkPublicKey,
     pub proof_of_possession_bytes: Vec<u8>,
@@ -79,13 +91,24 @@ pub struct VerifiedValidatorMetadata {
     pub p2p_address: Multiaddr,
     pub consensus_address: Multiaddr,
     pub worker_address: Multiaddr,
+    pub next_epoch_protocol_pubkey: Option<narwhal_crypto::PublicKey>,
+    pub next_epoch_proof_of_possession: Option<Vec<u8>>,
+    pub next_epoch_network_pubkey: Option<narwhal_crypto::NetworkPublicKey>,
+    pub next_epoch_worker_pubkey: Option<narwhal_crypto::NetworkPublicKey>,
+    pub next_epoch_net_address: Option<Multiaddr>,
+    pub next_epoch_p2p_address: Option<Multiaddr>,
+    pub next_epoch_consensus_address: Option<Multiaddr>,
+    pub next_epoch_worker_address: Option<Multiaddr>,
 }
 
 impl ValidatorMetadata {
     /// Verify validator metadata and return a verified version (on success) or error code (on failure)
     pub fn verify(&self) -> Result<VerifiedValidatorMetadata, u64> {
-        let pubkey = narwhal_crypto::PublicKey::from_bytes(self.pubkey_bytes.as_ref())
-            .map_err(|_| E_METADATA_INVALID_PUBKEY)?;
+        // TODO: move the proof of possession verification here
+
+        let protocol_pubkey =
+            narwhal_crypto::PublicKey::from_bytes(self.protocol_pubkey_bytes.as_ref())
+                .map_err(|_| E_METADATA_INVALID_PUBKEY)?;
         let network_pubkey =
             narwhal_crypto::NetworkPublicKey::from_bytes(self.network_pubkey_bytes.as_ref())
                 .map_err(|_| E_METADATA_INVALID_NET_PUBKEY)?;
@@ -100,9 +123,63 @@ impl ValidatorMetadata {
             .map_err(|_| E_METADATA_INVALID_CONSENSUS_ADDR)?;
         let worker_address = Multiaddr::try_from(self.worker_address.clone())
             .map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?;
+
+        let next_epoch_protocol_pubkey = match self.next_epoch_protocol_pubkey_bytes.clone() {
+            None => Ok::<Option<narwhal_crypto::PublicKey>, u64>(None),
+            Some(bytes) => Ok(Some(
+                narwhal_crypto::PublicKey::from_bytes(bytes.as_ref())
+                    .map_err(|_| E_METADATA_INVALID_PUBKEY)?,
+            )),
+        }?;
+
+        let next_epoch_network_pubkey = match self.next_epoch_network_pubkey_bytes.clone() {
+            None => Ok::<Option<narwhal_crypto::NetworkPublicKey>, u64>(None),
+            Some(bytes) => Ok(Some(
+                narwhal_crypto::NetworkPublicKey::from_bytes(bytes.as_ref())
+                    .map_err(|_| E_METADATA_INVALID_NET_PUBKEY)?,
+            )),
+        }?;
+
+        let next_epoch_worker_pubkey: Option<narwhal_crypto::NetworkPublicKey> =
+            match self.next_epoch_worker_pubkey_bytes.clone() {
+                None => Ok::<Option<narwhal_crypto::NetworkPublicKey>, u64>(None),
+                Some(bytes) => Ok(Some(
+                    narwhal_crypto::NetworkPublicKey::from_bytes(bytes.as_ref())
+                        .map_err(|_| E_METADATA_INVALID_WORKER_PUBKEY)?,
+                )),
+            }?;
+
+        let next_epoch_net_address = match self.next_epoch_net_address.clone() {
+            None => Ok::<Option<Multiaddr>, u64>(None),
+            Some(address) => Ok(Some(
+                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_NET_ADDR)?,
+            )),
+        }?;
+
+        let next_epoch_p2p_address = match self.next_epoch_p2p_address.clone() {
+            None => Ok::<Option<Multiaddr>, u64>(None),
+            Some(address) => Ok(Some(
+                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_P2P_ADDR)?,
+            )),
+        }?;
+
+        let next_epoch_consensus_address = match self.next_epoch_consensus_address.clone() {
+            None => Ok::<Option<Multiaddr>, u64>(None),
+            Some(address) => Ok(Some(
+                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_CONSENSUS_ADDR)?,
+            )),
+        }?;
+
+        let next_epoch_worker_address = match self.next_epoch_worker_address.clone() {
+            None => Ok::<Option<Multiaddr>, u64>(None),
+            Some(address) => Ok(Some(
+                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?,
+            )),
+        }?;
+
         Ok(VerifiedValidatorMetadata {
             sui_address: self.sui_address,
-            pubkey,
+            protocol_pubkey,
             network_pubkey,
             worker_pubkey,
             proof_of_possession_bytes: self.proof_of_possession_bytes.clone(),
@@ -114,6 +191,14 @@ impl ValidatorMetadata {
             p2p_address,
             consensus_address,
             worker_address,
+            next_epoch_protocol_pubkey,
+            next_epoch_proof_of_possession: self.next_epoch_proof_of_possession.clone(),
+            next_epoch_network_pubkey,
+            next_epoch_worker_pubkey,
+            next_epoch_net_address,
+            next_epoch_p2p_address,
+            next_epoch_consensus_address,
+            next_epoch_worker_address,
         })
     }
 }
@@ -136,7 +221,7 @@ impl ValidatorMetadata {
     }
 
     pub fn protocol_key(&self) -> AuthorityPublicKeyBytes {
-        AuthorityPublicKeyBytes::from_bytes(self.pubkey_bytes.as_ref())
+        AuthorityPublicKeyBytes::from_bytes(self.protocol_pubkey_bytes.as_ref())
             .expect("Validity of public key bytes should be verified on-chain")
     }
 
@@ -160,7 +245,6 @@ pub struct Validator {
     pub staking_pool: StakingPool,
     pub commission_rate: u64,
     pub next_epoch_stake: u64,
-    pub next_epoch_delegation: u64,
     pub next_epoch_gas_price: u64,
     pub next_epoch_commission_rate: u64,
 }
@@ -171,11 +255,16 @@ impl Validator {
     ) -> (AuthorityName, StakeUnit, Vec<u8>) {
         (
             // TODO: Make sure we are actually verifying this on-chain.
-            AuthorityPublicKeyBytes::from_bytes(self.metadata.pubkey_bytes.as_ref())
+            AuthorityPublicKeyBytes::from_bytes(self.metadata.protocol_pubkey_bytes.as_ref())
                 .expect("Validity of public key bytes should be verified on-chain"),
             self.voting_power,
             self.metadata.net_address.clone(),
         )
+    }
+
+    pub fn authority_name(&self) -> AuthorityName {
+        AuthorityPublicKeyBytes::from_bytes(self.metadata.protocol_pubkey_bytes.as_ref())
+            .expect("Validity of public key bytes should be verified on-chain")
     }
 }
 
@@ -261,7 +350,8 @@ pub struct StakingPool {
     pub pool_token_balance: u64,
     pub exchange_rates: Table,
     pub pending_delegation: u64,
-    pub pending_withdraws: TableVec,
+    pub pending_total_sui_withdraw: u64,
+    pub pending_pool_token_withdraw: u64,
 }
 
 /// Rust version of the Move sui::validator_set::ValidatorPair type
@@ -285,7 +375,6 @@ pub struct ValidatorSet {
 /// We want to keep it named as SuiSystemState in Rust since this is the primary interface type.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct SuiSystemState {
-    pub info: UID,
     pub epoch: u64,
     pub protocol_version: u64,
     pub validators: ValidatorSet,
@@ -302,9 +391,8 @@ pub struct SuiSystemState {
 /// Rust version of the Move sui::sui_system::SuiSystemState type
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SuiSystemStateWrapper {
-    pub info: UID,
+    pub id: UID,
     pub version: u64,
-    pub system_state: SuiSystemState,
 }
 
 impl SuiSystemStateWrapper {
@@ -364,7 +452,7 @@ impl SuiSystemState {
                     primary_address: verified_metadata.consensus_address,
                     network_key: verified_metadata.network_pubkey,
                 };
-                (verified_metadata.pubkey, authority)
+                (verified_metadata.protocol_pubkey, authority)
             })
             .collect();
 
@@ -372,6 +460,29 @@ impl SuiSystemState {
             authorities: narwhal_committee,
             epoch: self.epoch as narwhal_config::Epoch,
         }
+    }
+
+    pub fn get_current_epoch_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId> {
+        let mut result = HashMap::new();
+        let _: () = self
+            .validators
+            .active_validators
+            .iter()
+            .map(|validator| {
+                let name = validator.authority_name();
+
+                let network_key = narwhal_crypto::NetworkPublicKey::from_bytes(
+                    &validator.metadata.network_pubkey_bytes,
+                )
+                .expect("Can't get narwhal network key");
+
+                let peer_id = PeerId(network_key.0.to_bytes());
+
+                result.insert(name, peer_id);
+            })
+            .collect();
+
+        result
     }
 
     #[allow(clippy::mutable_key_type)]
@@ -400,7 +511,7 @@ impl SuiSystemState {
                 .collect();
                 let worker_index = WorkerIndex(workers);
 
-                (verified_metadata.pubkey, worker_index)
+                (verified_metadata.protocol_pubkey, worker_index)
             })
             .collect();
         WorkerCache {
@@ -421,7 +532,6 @@ impl Default for SuiSystemState {
             staking_pool_mappings: Table::default(),
         };
         SuiSystemState {
-            info: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),
             epoch: 0,
             protocol_version: ProtocolVersion::MIN.as_u64(),
             validators: validator_set,
@@ -443,7 +553,7 @@ impl Default for SuiSystemState {
     }
 }
 
-pub fn get_sui_system_state_wrapper<S>(object_store: S) -> Result<SuiSystemStateWrapper, SuiError>
+pub fn get_sui_system_state_wrapper<S>(object_store: &S) -> Result<SuiSystemStateWrapper, SuiError>
 where
     S: ObjectStore,
 {
@@ -463,6 +573,22 @@ pub fn get_sui_system_state<S>(object_store: S) -> Result<SuiSystemState, SuiErr
 where
     S: ObjectStore,
 {
-    let wrapper = get_sui_system_state_wrapper(object_store)?;
-    Ok(wrapper.system_state)
+    let wrapper = get_sui_system_state_wrapper(&object_store)?;
+    let inner_id = derive_dynamic_field_id(
+        wrapper.id.id.bytes,
+        &TypeTag::U64,
+        &MoveTypeLayout::U64,
+        &Value::u64(wrapper.version),
+    )
+    .expect("Sui System State object must exist");
+    let inner = object_store
+        .get_object(&inner_id)?
+        .ok_or(SuiError::SuiSystemStateNotFound)?;
+    let move_object = inner
+        .data
+        .try_as_move()
+        .ok_or(SuiError::SuiSystemStateNotFound)?;
+    let result = bcs::from_bytes::<Field<u64, SuiSystemState>>(move_object.contents())
+        .expect("Sui System State object deserialization cannot fail");
+    Ok(result.value)
 }

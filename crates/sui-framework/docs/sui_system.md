@@ -6,7 +6,7 @@
 
 
 -  [Struct `SystemParameters`](#0x2_sui_system_SystemParameters)
--  [Resource `SuiSystemStateInner`](#0x2_sui_system_SuiSystemStateInner)
+-  [Struct `SuiSystemStateInner`](#0x2_sui_system_SuiSystemStateInner)
 -  [Resource `SuiSystemState`](#0x2_sui_system_SuiSystemState)
 -  [Struct `SystemEpochInfo`](#0x2_sui_system_SystemEpochInfo)
 -  [Constants](#@Constants_0)
@@ -22,26 +22,42 @@
 -  [Function `request_withdraw_delegation`](#0x2_sui_system_request_withdraw_delegation)
 -  [Function `report_validator`](#0x2_sui_system_report_validator)
 -  [Function `undo_report_validator`](#0x2_sui_system_undo_report_validator)
+-  [Function `update_validator_name`](#0x2_sui_system_update_validator_name)
+-  [Function `update_validator_description`](#0x2_sui_system_update_validator_description)
+-  [Function `update_validator_image_url`](#0x2_sui_system_update_validator_image_url)
+-  [Function `update_validator_project_url`](#0x2_sui_system_update_validator_project_url)
+-  [Function `update_validator_next_epoch_network_address`](#0x2_sui_system_update_validator_next_epoch_network_address)
+-  [Function `update_validator_next_epoch_p2p_address`](#0x2_sui_system_update_validator_next_epoch_p2p_address)
+-  [Function `update_validator_next_epoch_consensus_address`](#0x2_sui_system_update_validator_next_epoch_consensus_address)
+-  [Function `update_validator_next_epoch_worker_address`](#0x2_sui_system_update_validator_next_epoch_worker_address)
+-  [Function `update_validator_next_epoch_protocol_pubkey`](#0x2_sui_system_update_validator_next_epoch_protocol_pubkey)
+-  [Function `update_validator_next_epoch_worker_pubkey`](#0x2_sui_system_update_validator_next_epoch_worker_pubkey)
+-  [Function `update_validator_next_epoch_network_pubkey`](#0x2_sui_system_update_validator_next_epoch_network_pubkey)
 -  [Function `advance_epoch`](#0x2_sui_system_advance_epoch)
 -  [Function `advance_epoch_safe_mode`](#0x2_sui_system_advance_epoch_safe_mode)
 -  [Function `consensus_commit_prologue`](#0x2_sui_system_consensus_commit_prologue)
--  [Function `load_system_state`](#0x2_sui_system_load_system_state)
--  [Function `load_system_state_mut`](#0x2_sui_system_load_system_state_mut)
 -  [Function `epoch`](#0x2_sui_system_epoch)
 -  [Function `epoch_start_timestamp_ms`](#0x2_sui_system_epoch_start_timestamp_ms)
 -  [Function `validator_stake_amount`](#0x2_sui_system_validator_stake_amount)
 -  [Function `validator_staking_pool_id`](#0x2_sui_system_validator_staking_pool_id)
 -  [Function `validator_staking_pool_mappings`](#0x2_sui_system_validator_staking_pool_mappings)
 -  [Function `get_reporters_of`](#0x2_sui_system_get_reporters_of)
+-  [Function `load_system_state`](#0x2_sui_system_load_system_state)
+-  [Function `load_system_state_mut`](#0x2_sui_system_load_system_state_mut)
 -  [Function `extract_coin_balance`](#0x2_sui_system_extract_coin_balance)
 -  [Function `extract_locked_coin_balance`](#0x2_sui_system_extract_locked_coin_balance)
 -  [Function `validators`](#0x2_sui_system_validators)
+-  [Function `active_validator_by_address`](#0x2_sui_system_active_validator_by_address)
+-  [Function `pending_validator_by_address`](#0x2_sui_system_pending_validator_by_address)
 
 
-<pre><code><b>use</b> <a href="">0x1::option</a>;
+<pre><code><b>use</b> <a href="">0x1::ascii</a>;
+<b>use</b> <a href="">0x1::option</a>;
+<b>use</b> <a href="">0x1::string</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="clock.md#0x2_clock">0x2::clock</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
+<b>use</b> <a href="dynamic_field.md#0x2_dynamic_field">0x2::dynamic_field</a>;
 <b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="locked_coin.md#0x2_locked_coin">0x2::locked_coin</a>;
@@ -53,6 +69,7 @@
 <b>use</b> <a href="table.md#0x2_table">0x2::table</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
+<b>use</b> <a href="url.md#0x2_url">0x2::url</a>;
 <b>use</b> <a href="validator.md#0x2_validator">0x2::validator</a>;
 <b>use</b> <a href="validator_set.md#0x2_validator_set">0x2::validator_set</a>;
 <b>use</b> <a href="vec_map.md#0x2_vec_map">0x2::vec_map</a>;
@@ -98,12 +115,12 @@ A list of system config parameters.
 
 <a name="0x2_sui_system_SuiSystemStateInner"></a>
 
-## Resource `SuiSystemStateInner`
+## Struct `SuiSystemStateInner`
 
 The top-level object containing all information of the Sui system.
 
 
-<pre><code><b>struct</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> <b>has</b> store, key
+<pre><code><b>struct</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> <b>has</b> store
 </code></pre>
 
 
@@ -113,12 +130,6 @@ The top-level object containing all information of the Sui system.
 
 
 <dl>
-<dt>
-<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
-</dt>
-<dd>
-
-</dd>
 <dt>
 <code>epoch: u64</code>
 </dt>
@@ -216,12 +227,6 @@ The top-level object containing all information of the Sui system.
 </dd>
 <dt>
 <code>version: u64</code>
-</dt>
-<dd>
-
-</dd>
-<dt>
-<code>system_state: <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">sui_system::SuiSystemStateInner</a></code>
 </dt>
 <dd>
 
@@ -422,7 +427,6 @@ This function will be called only once in genesis.
     <b>let</b> validators = <a href="validator_set.md#0x2_validator_set_new">validator_set::new</a>(validators, ctx);
     <b>let</b> reference_gas_price = <a href="validator_set.md#0x2_validator_set_derive_reference_gas_price">validator_set::derive_reference_gas_price</a>(&validators);
     <b>let</b> system_state = <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> {
-        id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
         epoch: 0,
         protocol_version,
         validators,
@@ -441,9 +445,8 @@ This function will be called only once in genesis.
         // Use a hardcoded ID.
         id: <a href="object.md#0x2_object_sui_system_state">object::sui_system_state</a>(),
         version: protocol_version,
-        system_state,
     };
-    // <a href="dynamic_object_field.md#0x2_dynamic_object_field_add">dynamic_object_field::add</a>(&<b>mut</b> self.id, self.version, system_state);
+    <a href="dynamic_field.md#0x2_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> self.id, protocol_version, system_state);
     <a href="transfer.md#0x2_transfer_share_object">transfer::share_object</a>(self);
 }
 </code></pre>
@@ -800,6 +803,7 @@ Withdraw some portion of a delegation from a validator's staking pool.
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
+    <b>assert</b>!(delegation_activation_epoch(&staked_sui) &lt;= <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx), 0);
     <a href="validator_set.md#0x2_validator_set_request_withdraw_delegation">validator_set::request_withdraw_delegation</a>(
         &<b>mut</b> self.validators, staked_sui, ctx,
     );
@@ -836,8 +840,8 @@ and they are not the same address. This function is idempotent within an epoch.
     <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
     <b>let</b> sender = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
     // Both the reporter and the reported have <b>to</b> be validators.
-    <b>assert</b>!(<a href="validator_set.md#0x2_validator_set_is_active_validator">validator_set::is_active_validator</a>(&self.validators, sender), <a href="sui_system.md#0x2_sui_system_ENotValidator">ENotValidator</a>);
-    <b>assert</b>!(<a href="validator_set.md#0x2_validator_set_is_active_validator">validator_set::is_active_validator</a>(&self.validators, validator_addr), <a href="sui_system.md#0x2_sui_system_ENotValidator">ENotValidator</a>);
+    <b>assert</b>!(<a href="validator_set.md#0x2_validator_set_is_active_validator_by_sui_address">validator_set::is_active_validator_by_sui_address</a>(&self.validators, sender), <a href="sui_system.md#0x2_sui_system_ENotValidator">ENotValidator</a>);
+    <b>assert</b>!(<a href="validator_set.md#0x2_validator_set_is_active_validator_by_sui_address">validator_set::is_active_validator_by_sui_address</a>(&self.validators, validator_addr), <a href="sui_system.md#0x2_sui_system_ENotValidator">ENotValidator</a>);
     <b>assert</b>!(sender != validator_addr, <a href="sui_system.md#0x2_sui_system_ECannotReportOneself">ECannotReportOneself</a>);
 
     <b>if</b> (!<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.validator_report_records, &validator_addr)) {
@@ -884,6 +888,355 @@ Undo a <code>report_validator</code> action. Aborts if the sender has not report
     <b>let</b> reporters = <a href="vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.validator_report_records, &validator_addr);
     <b>assert</b>!(<a href="vec_set.md#0x2_vec_set_contains">vec_set::contains</a>(reporters, &sender), <a href="sui_system.md#0x2_sui_system_EReportRecordNotFound">EReportRecordNotFound</a>);
     <a href="vec_set.md#0x2_vec_set_remove">vec_set::remove</a>(reporters, &sender);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_update_validator_name"></a>
+
+## Function `update_validator_name`
+
+Update a validator's name.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_name">update_validator_name</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, name: <a href="">vector</a>&lt;u8&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_name">update_validator_name</a>(
+    self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
+    name: <a href="">vector</a>&lt;u8&gt;,
+    ctx: &TxContext,
+) {
+    <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self);
+    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_mut">validator_set::get_active_or_pending_validator_mut</a>(&<b>mut</b> self.validators, ctx);
+    <a href="validator.md#0x2_validator_update_name">validator::update_name</a>(<a href="validator.md#0x2_validator">validator</a>, <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(name)));
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_update_validator_description"></a>
+
+## Function `update_validator_description`
+
+Update a validator's description
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_description">update_validator_description</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, description: <a href="">vector</a>&lt;u8&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_description">update_validator_description</a>(
+    self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
+    description: <a href="">vector</a>&lt;u8&gt;,
+    ctx: &TxContext,
+) {
+    <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self);
+    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_mut">validator_set::get_active_or_pending_validator_mut</a>(&<b>mut</b> self.validators, ctx);
+    <a href="validator.md#0x2_validator_update_description">validator::update_description</a>(<a href="validator.md#0x2_validator">validator</a>, <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(description)));
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_update_validator_image_url"></a>
+
+## Function `update_validator_image_url`
+
+Update a validator's image url
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_image_url">update_validator_image_url</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, image_url: <a href="">vector</a>&lt;u8&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_image_url">update_validator_image_url</a>(
+    self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
+    image_url: <a href="">vector</a>&lt;u8&gt;,
+    ctx: &TxContext,
+) {
+    <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self);
+    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_mut">validator_set::get_active_or_pending_validator_mut</a>(&<b>mut</b> self.validators, ctx);
+    <a href="validator.md#0x2_validator_update_image_url">validator::update_image_url</a>(<a href="validator.md#0x2_validator">validator</a>, <a href="url.md#0x2_url_new_unsafe_from_bytes">url::new_unsafe_from_bytes</a>(image_url));
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_update_validator_project_url"></a>
+
+## Function `update_validator_project_url`
+
+Update a validator's project url
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_project_url">update_validator_project_url</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, project_url: <a href="">vector</a>&lt;u8&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_project_url">update_validator_project_url</a>(
+    self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
+    project_url: <a href="">vector</a>&lt;u8&gt;,
+    ctx: &TxContext,
+) {
+    <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self);
+    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_mut">validator_set::get_active_or_pending_validator_mut</a>(&<b>mut</b> self.validators, ctx);
+    <a href="validator.md#0x2_validator_update_project_url">validator::update_project_url</a>(<a href="validator.md#0x2_validator">validator</a>, <a href="url.md#0x2_url_new_unsafe_from_bytes">url::new_unsafe_from_bytes</a>(project_url));
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_update_validator_next_epoch_network_address"></a>
+
+## Function `update_validator_next_epoch_network_address`
+
+Update a validator's network address.
+The change will only take effects starting from the next epoch.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_network_address">update_validator_next_epoch_network_address</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, network_address: <a href="">vector</a>&lt;u8&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_network_address">update_validator_next_epoch_network_address</a>(
+    self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
+    network_address: <a href="">vector</a>&lt;u8&gt;,
+    ctx: &TxContext,
+) {
+    <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self);
+    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_mut">validator_set::get_active_or_pending_validator_mut</a>(&<b>mut</b> self.validators, ctx);
+    <a href="validator.md#0x2_validator_update_next_epoch_network_address">validator::update_next_epoch_network_address</a>(<a href="validator.md#0x2_validator">validator</a>, network_address);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_update_validator_next_epoch_p2p_address"></a>
+
+## Function `update_validator_next_epoch_p2p_address`
+
+Update a validator's p2p address.
+The change will only take effects starting from the next epoch.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_p2p_address">update_validator_next_epoch_p2p_address</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, p2p_address: <a href="">vector</a>&lt;u8&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_p2p_address">update_validator_next_epoch_p2p_address</a>(
+    self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
+    p2p_address: <a href="">vector</a>&lt;u8&gt;,
+    ctx: &TxContext,
+) {
+    <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self);
+    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_mut">validator_set::get_active_or_pending_validator_mut</a>(&<b>mut</b> self.validators, ctx);
+    <a href="validator.md#0x2_validator_update_next_epoch_p2p_address">validator::update_next_epoch_p2p_address</a>(<a href="validator.md#0x2_validator">validator</a>, p2p_address);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_update_validator_next_epoch_consensus_address"></a>
+
+## Function `update_validator_next_epoch_consensus_address`
+
+Update a validator's consensus address.
+The change will only take effects starting from the next epoch.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_consensus_address">update_validator_next_epoch_consensus_address</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, consensus_address: <a href="">vector</a>&lt;u8&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_consensus_address">update_validator_next_epoch_consensus_address</a>(
+    self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
+    consensus_address: <a href="">vector</a>&lt;u8&gt;,
+    ctx: &TxContext,
+) {
+    <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self);
+    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_mut">validator_set::get_active_or_pending_validator_mut</a>(&<b>mut</b> self.validators, ctx);
+    <a href="validator.md#0x2_validator_update_next_epoch_consensus_address">validator::update_next_epoch_consensus_address</a>(<a href="validator.md#0x2_validator">validator</a>, consensus_address);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_update_validator_next_epoch_worker_address"></a>
+
+## Function `update_validator_next_epoch_worker_address`
+
+Update a validator's worker address.
+The change will only take effects starting from the next epoch.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_worker_address">update_validator_next_epoch_worker_address</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, worker_address: <a href="">vector</a>&lt;u8&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_worker_address">update_validator_next_epoch_worker_address</a>(
+    self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
+    worker_address: <a href="">vector</a>&lt;u8&gt;,
+    ctx: &TxContext,
+) {
+    <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self);
+    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_mut">validator_set::get_active_or_pending_validator_mut</a>(&<b>mut</b> self.validators, ctx);
+    <a href="validator.md#0x2_validator_update_next_epoch_worker_address">validator::update_next_epoch_worker_address</a>(<a href="validator.md#0x2_validator">validator</a>, worker_address);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_update_validator_next_epoch_protocol_pubkey"></a>
+
+## Function `update_validator_next_epoch_protocol_pubkey`
+
+Update a validator's public key of protocol key and proof of possession.
+The change will only take effects starting from the next epoch.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_protocol_pubkey">update_validator_next_epoch_protocol_pubkey</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, protocol_pubkey: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_protocol_pubkey">update_validator_next_epoch_protocol_pubkey</a>(
+    self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
+    protocol_pubkey: <a href="">vector</a>&lt;u8&gt;,
+    proof_of_possession: <a href="">vector</a>&lt;u8&gt;,
+    ctx: &TxContext,
+) {
+    <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self);
+    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_mut">validator_set::get_active_or_pending_validator_mut</a>(&<b>mut</b> self.validators, ctx);
+    <a href="validator.md#0x2_validator_update_next_epoch_protocol_pubkey">validator::update_next_epoch_protocol_pubkey</a>(<a href="validator.md#0x2_validator">validator</a>, protocol_pubkey, proof_of_possession);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_update_validator_next_epoch_worker_pubkey"></a>
+
+## Function `update_validator_next_epoch_worker_pubkey`
+
+Update a validator's public key of worker key.
+The change will only take effects starting from the next epoch.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_worker_pubkey">update_validator_next_epoch_worker_pubkey</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, worker_pubkey: <a href="">vector</a>&lt;u8&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_worker_pubkey">update_validator_next_epoch_worker_pubkey</a>(
+    self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
+    worker_pubkey: <a href="">vector</a>&lt;u8&gt;,
+    ctx: &TxContext,
+) {
+    <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self);
+    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_mut">validator_set::get_active_or_pending_validator_mut</a>(&<b>mut</b> self.validators, ctx);
+    <a href="validator.md#0x2_validator_update_next_epoch_worker_pubkey">validator::update_next_epoch_worker_pubkey</a>(<a href="validator.md#0x2_validator">validator</a>, worker_pubkey);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_update_validator_next_epoch_network_pubkey"></a>
+
+## Function `update_validator_next_epoch_network_pubkey`
+
+Update a validator's public key of network key.
+The change will only take effects starting from the next epoch.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_network_pubkey">update_validator_next_epoch_network_pubkey</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, network_pubkey: <a href="">vector</a>&lt;u8&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_network_pubkey">update_validator_next_epoch_network_pubkey</a>(
+    self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
+    network_pubkey: <a href="">vector</a>&lt;u8&gt;,
+    ctx: &TxContext,
+) {
+    <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self);
+    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_mut">validator_set::get_active_or_pending_validator_mut</a>(&<b>mut</b> self.validators, ctx);
+    <a href="validator.md#0x2_validator_update_next_epoch_network_pubkey">validator::update_next_epoch_network_pubkey</a>(<a href="validator.md#0x2_validator">validator</a>, network_pubkey);
 }
 </code></pre>
 
@@ -1097,56 +1450,6 @@ version
 
 </details>
 
-<a name="0x2_sui_system_load_system_state"></a>
-
-## Function `load_system_state`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state">load_system_state</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">sui_system::SuiSystemStateInner</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state">load_system_state</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &<a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> {
-    &self.system_state
-    // <a href="dynamic_object_field.md#0x2_dynamic_object_field_borrow">dynamic_object_field::borrow</a>(&self.id, self.version)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_sui_system_load_system_state_mut"></a>
-
-## Function `load_system_state_mut`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">sui_system::SuiSystemStateInner</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> {
-    &<b>mut</b> self.system_state
-    // <a href="dynamic_object_field.md#0x2_dynamic_object_field_borrow_mut">dynamic_object_field::borrow_mut</a>(&<b>mut</b> self.id, self.version)
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_sui_system_epoch"></a>
 
 ## Function `epoch`
@@ -1310,6 +1613,54 @@ Returns all the validators who have reported <code>addr</code> this epoch.
 
 </details>
 
+<a name="0x2_sui_system_load_system_state"></a>
+
+## Function `load_system_state`
+
+
+
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state">load_system_state</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">sui_system::SuiSystemStateInner</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state">load_system_state</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &<a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> {
+    <a href="dynamic_field.md#0x2_dynamic_field_borrow">dynamic_field::borrow</a>(&self.id, self.version)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_load_system_state_mut"></a>
+
+## Function `load_system_state_mut`
+
+
+
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">sui_system::SuiSystemStateInner</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> {
+    <a href="dynamic_field.md#0x2_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, self.version)
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_sui_system_extract_coin_balance"></a>
 
 ## Function `extract_coin_balance`
@@ -1424,6 +1775,56 @@ Return the current validator set
 <pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_validators">validators</a>(wrapper: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &ValidatorSet {
     <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state">load_system_state</a>(wrapper);
     &self.validators
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_active_validator_by_address"></a>
+
+## Function `active_validator_by_address`
+
+Return the currently active validator by address
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_active_validator_by_address">active_validator_by_address</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, validator_address: <b>address</b>): &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_active_validator_by_address">active_validator_by_address</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>, validator_address: <b>address</b>): &Validator {
+    <a href="validator_set.md#0x2_validator_set_get_active_validator_ref">validator_set::get_active_validator_ref</a>(<a href="sui_system.md#0x2_sui_system_validators">validators</a>(self), validator_address)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_pending_validator_by_address"></a>
+
+## Function `pending_validator_by_address`
+
+Return the currently pending validator by address
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_pending_validator_by_address">pending_validator_by_address</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, validator_address: <b>address</b>): &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_pending_validator_by_address">pending_validator_by_address</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>, validator_address: <b>address</b>): &Validator {
+    <a href="validator_set.md#0x2_validator_set_get_pending_validator_ref">validator_set::get_pending_validator_ref</a>(<a href="sui_system.md#0x2_sui_system_validators">validators</a>(self), validator_address)
 }
 </code></pre>
 

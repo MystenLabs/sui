@@ -8,7 +8,6 @@ use crate::{
         object_runtime::{object_store::ObjectResult, ObjectRuntime},
     },
 };
-use fastcrypto::hash::{HashFunction, Sha3_256};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
@@ -25,7 +24,7 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::dynamic_field::derive_dynamic_field_id;
 
 const E_KEY_DOES_NOT_EXIST: u64 = 1;
 const E_FIELD_TYPE_MISMATCH: u64 = 2;
@@ -55,22 +54,12 @@ pub fn hash_type_and_key(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    assert!(ty_args.len() == 1);
-    assert!(args.len() == 2);
+    assert_eq!(ty_args.len(), 1);
+    assert_eq!(args.len(), 2);
     let k_ty = ty_args.pop().unwrap();
     let k: Value = args.pop_back().unwrap();
-    let parent: SuiAddress = pop_arg!(args, AccountAddress).into();
+    let parent = pop_arg!(args, AccountAddress);
     let k_tag = context.type_to_type_tag(&k_ty)?;
-    // build bytes
-    let k_tag_bytes = match bcs::to_bytes(&k_tag) {
-        Ok(bytes) => bytes,
-        Err(_) => {
-            return Ok(NativeResult::err(
-                legacy_emit_cost(),
-                E_BCS_SERIALIZATION_FAILURE,
-            ));
-        }
-    };
     let k_layout = match context.type_to_type_layout(&k_ty) {
         Ok(Some(layout)) => layout,
         _ => {
@@ -80,26 +69,12 @@ pub fn hash_type_and_key(
             ))
         }
     };
-    let k_bytes = match k.simple_serialize(&k_layout) {
-        Some(bytes) => bytes,
-        None => {
-            return Ok(NativeResult::err(
-                legacy_emit_cost(),
-                E_BCS_SERIALIZATION_FAILURE,
-            ))
-        }
+    let Some(id) = derive_dynamic_field_id(parent, &k_tag, &k_layout, &k) else {
+        return Ok(NativeResult::err(
+            legacy_emit_cost(),
+            E_BCS_SERIALIZATION_FAILURE,
+        ));
     };
-    // hash(parent || k || K)
-    let mut hasher = Sha3_256::default();
-    hasher.update(parent);
-    hasher.update(k_bytes.len().to_le_bytes());
-    hasher.update(k_bytes);
-    hasher.update(k_tag_bytes);
-    let hash = hasher.finalize();
-
-    // truncate into an ObjectID and return
-    // OK to access slice because Sha3_256 should never be shorter than ObjectID::LENGTH.
-    let id = ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap();
 
     Ok(NativeResult::ok(
         legacy_emit_cost(),
