@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowRight16, ArrowLeft16 } from '@mysten/icons';
-import { getTransactionDigest, SUI_TYPE_ARG } from '@mysten/sui.js';
+import { getTransactionDigest, SUI_TYPE_ARG, Coin } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -60,15 +60,15 @@ function TransferCoinPage() {
 
                 const bigIntAmount = parseAmount(formData.amount, coinDecimals);
 
-                return signer.signAndExecuteTransaction({
-                    kind: coinType === SUI_TYPE_ARG ? 'paySui' : 'pay',
-                    data: {
-                        inputCoins: formData.coinIds,
-                        recipients: [formData.to],
-                        amounts: [Number(bigIntAmount)],
-                        gasBudget: Number(formData.gasBudget),
-                    },
-                });
+                return signer.signAndExecuteTransaction(
+                    await Coin.newPayTransaction(
+                        formData.coins,
+                        coinType,
+                        bigIntAmount,
+                        formData.to,
+                        formData.gasBudget
+                    )
+                );
             } catch (error) {
                 transaction.setTag('failure', true);
                 throw error;

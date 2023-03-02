@@ -52,6 +52,7 @@ export type SubmitProps = {
     isPayAllSui: boolean;
     coinIds: string[];
     gasBudget: number;
+    coins: SuiMoveObject[];
 };
 
 export type SendTokenFormProps = {
@@ -213,6 +214,7 @@ export function SendTokenForm({
                         to,
                         amount,
                         isPayAllSui,
+                        coins,
                         coinIds: coinsIDs,
                         gasBudget: gasInputBudgetEst,
                     };
