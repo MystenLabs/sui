@@ -22,7 +22,7 @@ use sui_core::{
         QuorumDriver, QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics,
     },
 };
-use sui_json_rpc_types::{SuiObjectReadDeprecated, SuiTransactionEffects};
+use sui_json_rpc_types::{SuiObjectContentOptions, SuiObjectWithStatus, SuiTransactionEffects};
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::messages::TransactionEvents;
@@ -519,8 +519,13 @@ impl FullNodeProxy {
 #[async_trait]
 impl ValidatorProxy for FullNodeProxy {
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
-        match self.sui_client.read_api().get_object(object_id).await? {
-            SuiObjectReadDeprecated::Exists(sui_object) => sui_object.try_into(),
+        match self
+            .sui_client
+            .read_api()
+            .get_object_with_options(object_id, Some(SuiObjectContentOptions::bcs_lossless()))
+            .await?
+        {
+            SuiObjectWithStatus::Exists(sui_object) => sui_object.try_into(),
             _ => bail!("Object {:?} not found", object_id),
         }
     }

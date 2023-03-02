@@ -116,22 +116,8 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
     assert_eq!(sender, sender_);
     assert_eq!(sponsor, receiver);
     let context: &WalletContext = &test_cluster.wallet;
-    let object_ref: ObjectRef = context
-        .get_object_ref(object_ref.0)
-        .await
-        .unwrap()
-        .into_object()
-        .unwrap()
-        .reference
-        .to_object_ref();
-    let gas_obj: ObjectRef = context
-        .get_object_ref(sent_coin)
-        .await
-        .unwrap()
-        .into_object()
-        .unwrap()
-        .reference
-        .to_object_ref();
+    let object_ref = context.get_object_ref(object_ref.0).await?;
+    let gas_obj = context.get_object_ref(sent_coin).await?;
     info!("updated obj ref: {:?}", object_ref);
     info!("updated gas ref: {:?}", gas_obj);
 
@@ -161,18 +147,7 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
 
     context.execute_transaction(tx).await.unwrap();
 
-    assert_eq!(
-        sponsor,
-        context
-            .get_object_ref(sent_coin)
-            .await
-            .unwrap()
-            .into_object()
-            .unwrap()
-            .owner
-            .get_owner_address()
-            .unwrap(),
-    );
+    assert_eq!(sponsor, context.get_object_owner(&sent_coin).await.unwrap(),);
     Ok(())
 }
 

@@ -78,7 +78,7 @@ impl TestCaseImpl for SharedCounterTest {
             .await;
 
         assert_eq!(
-            counter_object.reference.version, counter_version,
+            counter_object.version, counter_version,
             "Expect sequence number to be 2"
         );
 

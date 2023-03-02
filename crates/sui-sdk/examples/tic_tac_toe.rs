@@ -13,6 +13,7 @@ use clap::Parser;
 use clap::Subcommand;
 use serde::Deserialize;
 
+use sui_json_rpc_types::SuiObjectContentOptions;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
     json::SuiJsonValue,
@@ -239,10 +240,16 @@ impl TicTacToe {
     // Retrieve the latest game state from the server.
     async fn fetch_game_state(&self, game_id: ObjectID) -> Result<TicTacToeState, anyhow::Error> {
         // Get the raw BCS serialised move object data
-        let current_game = self.client.read_api().get_object(game_id).await?;
+        let current_game = self
+            .client
+            .read_api()
+            .get_object_with_options(game_id, Some(SuiObjectContentOptions::bcs_only()))
+            .await?;
         current_game
             .object()?
-            .data
+            .bcs
+            .as_ref()
+            .unwrap()
             .try_as_move()
             .unwrap()
             .deserialize()

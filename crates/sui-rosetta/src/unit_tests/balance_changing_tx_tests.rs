@@ -15,8 +15,8 @@ use sui_framework_build::compiled_package::BuildConfig;
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
 use sui_sdk::rpc_types::{
-    OwnedObjectRef, SuiData, SuiEvent, SuiExecutionStatus, SuiTransactionEffects,
-    SuiTransactionEvents, SuiTransactionResponse,
+    OwnedObjectRef, SuiData, SuiEvent, SuiExecutionStatus, SuiObjectContentOptions,
+    SuiTransactionEffects, SuiTransactionEvents, SuiTransactionResponse,
 };
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
@@ -643,11 +643,16 @@ async fn get_balance(client: &SuiClient, address: SuiAddress) -> u64 {
     let mut balance = 0u64;
     for coin in coins {
         if coin.type_ == GasCoin::type_().to_string() {
-            let object = client.read_api().get_object(coin.object_id).await.unwrap();
+            let object = client
+                .read_api()
+                .get_object_with_options(coin.object_id, Some(SuiObjectContentOptions::bcs_only()))
+                .await
+                .unwrap();
             let coin: GasCoin = object
                 .into_object()
                 .unwrap()
-                .data
+                .bcs
+                .unwrap()
                 .try_as_move()
                 .unwrap()
                 .deserialize()

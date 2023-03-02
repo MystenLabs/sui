@@ -6,9 +6,9 @@ use jsonrpsee_proc_macros::rpc;
 use std::collections::BTreeMap;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
-    GetRawObjectDataResponse, MoveFunctionArgType, SuiMoveNormalizedFunction,
-    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectContentOptions, SuiObjectInfo,
-    SuiObjectWithStatus, SuiTransactionResponse, TransactionsPage,
+    MoveFunctionArgType, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
+    SuiMoveNormalizedStruct, SuiObjectContentOptions, SuiObjectInfo, SuiObjectWithStatus,
+    SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{
@@ -209,14 +209,6 @@ pub trait ReadApi {
         &self,
         digest: CheckpointContentsDigest,
     ) -> RpcResult<CheckpointContents>;
-
-    /// Return the raw BCS serialized move object bytes for a specified object.
-    #[method(name = "getRawObject")]
-    async fn get_raw_object(
-        &self,
-        /// the id of the object
-        object_id: ObjectID,
-    ) -> RpcResult<GetRawObjectDataResponse>;
 
     // TODO: this will be replaced by the new queryObjects API
     /// Return the Display string of a object

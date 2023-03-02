@@ -13,8 +13,8 @@ use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
     MoveFunctionArgType, Page, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
-    SuiMoveNormalizedStruct, SuiObjectInfo, SuiObjectWithStatus, SuiTransactionResponse,
-    TransactionsPage,
+    SuiMoveNormalizedStruct, SuiObjectContentOptions, SuiObjectInfo, SuiObjectWithStatus,
+    SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TxSequenceNumber};
@@ -367,10 +367,6 @@ where
         sequence_number: CheckpointSequenceNumber,
     ) -> RpcResult<CheckpointContents> {
         self.fullnode.get_checkpoint_contents(sequence_number).await
-    }
-
-    async fn get_raw_object(&self, object_id: ObjectID) -> RpcResult<GetRawObjectDataResponse> {
-        self.fullnode.get_raw_object(object_id).await
     }
 
     async fn get_display_deprecated(

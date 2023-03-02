@@ -22,14 +22,14 @@ use jsonrpsee::RpcModule;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
-    GetRawObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page, SuiData, SuiEvent,
-    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct,
-    SuiMoveValue, SuiObjectContentOptions, SuiObjectData, SuiObjectInfo, SuiObjectWithStatus,
-    SuiParsedData, SuiRawData, SuiTransactionEvents, SuiTransactionResponse, TransactionsPage,
+    MoveFunctionArgType, ObjectValueKind, Page, SuiEvent, SuiMoveNormalizedFunction,
+    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct, SuiMoveValue,
+    SuiObjectContentOptions, SuiObjectInfo, SuiObjectWithStatus, SuiTransactionEvents,
+    SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{
-    ObjectID, ObjectType, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
+    ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
 };
 use sui_types::crypto::sha3_hash;
 use sui_types::messages::TransactionData;
@@ -132,83 +132,7 @@ impl ReadApiServer for ReadApi {
             anyhow!("{e}")
         })?;
 
-        // TODO: cleanup the
-        let options = options.unwrap_or_default();
-        let default_options = SuiObjectContentOptions::default();
-        // It is safe to unwrap because default value are all Some(bool)
-        let show_type = options
-            .show_type
-            .unwrap_or(default_options.show_type.unwrap());
-        let show_owner = options
-            .show_owner
-            .unwrap_or(default_options.show_owner.unwrap());
-        let show_previous_transaction = options
-            .show_previous_transaction
-            .unwrap_or(default_options.show_previous_transaction.unwrap());
-        let show_content = options
-            .show_content
-            .unwrap_or(default_options.show_content.unwrap());
-        let show_bcs = options
-            .show_bcs
-            .unwrap_or(default_options.show_bcs.unwrap());
-
-        match object_read {
-            ObjectRead::NotExists(id) => Ok(SuiObjectWithStatus::NotExists(id)),
-            ObjectRead::Exists(object_ref, o, layout) => {
-                let (object_id, version, digest) = object_ref;
-                let type_ = if show_type {
-                    Some(Into::<ObjectType>::into(&o).to_string())
-                } else {
-                    None
-                };
-
-                let bcs: Option<SuiRawData> = if show_bcs {
-                    let data = match o.data.clone() {
-                        Data::Move(m) => {
-                            let layout = layout.clone().ok_or_else(|| {
-                                anyhow!("Layout is required to convert Move object to json")
-                            })?;
-                            SuiRawData::try_from_object(m, layout)?
-                        }
-                        Data::Package(p) => SuiRawData::try_from_package(p)?,
-                    };
-                    Some(data)
-                } else {
-                    None
-                };
-
-                let content: Option<SuiParsedData> = if show_content {
-                    let data = match o.data {
-                        Data::Move(m) => {
-                            let layout = layout.ok_or_else(|| {
-                                anyhow!("Layout is required to convert Move object to json")
-                            })?;
-                            SuiParsedData::try_from_object(m, layout)?
-                        }
-                        Data::Package(p) => SuiParsedData::try_from_package(p)?,
-                    };
-                    Some(data)
-                } else {
-                    None
-                };
-
-                Ok(SuiObjectWithStatus::Exists(SuiObjectData {
-                    object_id,
-                    version,
-                    digest,
-                    type_,
-                    owner: if show_owner { Some(o.owner) } else { None },
-                    previous_transaction: if show_previous_transaction {
-                        Some(o.previous_transaction)
-                    } else {
-                        None
-                    },
-                    content,
-                    bcs,
-                }))
-            }
-            ObjectRead::Deleted(oref) => Ok(SuiObjectWithStatus::Deleted(oref.into())),
-        }
+        Ok((object_read, options).try_into()?)
     }
 
     async fn get_dynamic_field_object(
@@ -536,15 +460,6 @@ impl ReadApiServer for ReadApi {
             .state
             .get_checkpoint_contents_by_sequence_number(sequence_number)
             .map_err(|e| anyhow!("Checkpoint contents based on seq number: {sequence_number} were not found with error: {e}"))?)
-    }
-
-    async fn get_raw_object(&self, object_id: ObjectID) -> RpcResult<GetRawObjectDataResponse> {
-        Ok(self
-            .state
-            .get_object_read(&object_id)
-            .await
-            .map_err(|e| anyhow!("{e}"))?
-            .try_into()?)
     }
 
     async fn get_display_deprecated(

@@ -1,9 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// This file contain response types used by RPC, most of the types mirrors it's internal type counterparts.
-/// These mirrored types allow us to optimise the JSON serde without impacting the internal types, which are optimise for storage.
-///
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::fmt::Write;
@@ -28,10 +25,9 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use serde_with::serde_as;
 use sui_json::SuiJsonValue;
-use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{
-    ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
-    TransactionEffectsDigest,
+    ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
+    TransactionDigest, TransactionEffectsDigest,
 };
 use sui_types::coin::CoinMetadata;
 use sui_types::committee::EpochId;
@@ -65,6 +61,9 @@ use tracing::warn;
 #[cfg(test)]
 #[path = "unit_tests/rpc_types_tests.rs"]
 mod rpc_types_tests;
+
+mod sui_object;
+pub use sui_object::*;
 
 pub type SuiMoveTypeParameterIndex = u16;
 pub type TransactionsPage = Page<TransactionDigest, TransactionDigest>;
@@ -429,7 +428,6 @@ impl TryFrom<Object> for SuiCoinMetadata {
     }
 }
 
-pub type SuiRawObject = SuiObject<SuiRawData>;
 pub type SuiParsedObject = SuiObject<SuiParsedData>;
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
@@ -446,107 +444,6 @@ pub struct SuiObject<T: SuiData> {
     /// the present storage gas price.
     pub storage_rebate: u64,
     pub reference: SuiObjectRef,
-}
-
-#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
-#[serde(tag = "status", content = "details", rename = "ObjectRead")]
-pub enum SuiObjectWithStatus {
-    Exists(SuiObjectData),
-    NotExists(ObjectID),
-    Deleted(SuiObjectRef),
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
-#[serde(rename_all = "camelCase", rename = "ObjectData")]
-pub struct SuiObjectData {
-    pub object_id: ObjectID,
-    /// Object version.
-    pub version: SequenceNumber,
-    /// Base64 string representing the object digest
-    pub digest: ObjectDigest,
-    /// The type of the object. Default to be Some(T) unless SuiObjectContentOptions.showType is set to False
-    #[serde(rename = "type")]
-    pub type_: Option<String>,
-    // Default to be None because otherwise it will be repeated for the getObjectsOwnedByAddress endpoint
-    /// The owner of this object. Default to be None unless SuiObjectContentOptions.showOwner is set
-    pub owner: Option<Owner>,
-    /// The digest of the transaction that created or last mutated this object. Default to be None unless
-    /// SuiObjectContentOptions.showPreviousTransaction is set
-    pub previous_transaction: Option<TransactionDigest>,
-    // TODO: uncomment the following in the next PR
-    // /// The Display metadata for frontend UI rendering
-    // pub display: Option<BTreeMap<String, String>>,
-    /// Move object content or package content, default to be None unless SuiObjectContentOptions.showContent is set
-    pub content: Option<SuiParsedData>,
-    /// Move object content or package content in BCS, default to be None unless SuiObjectContentOptions.showContent is set
-    pub bcs: Option<SuiRawData>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
-#[serde(rename_all = "camelCase", rename = "ObjectContentOptions")]
-pub struct SuiObjectContentOptions {
-    /// Whether to show the type of the object. Default to be True
-    pub show_type: Option<bool>,
-    /// Whether to show the owner of the object. Default to be False
-    pub show_owner: Option<bool>,
-    /// Whether to show the previous transaction digest of the object. Default to be False
-    pub show_previous_transaction: Option<bool>,
-    // uncomment the following in the next PR
-    // /// Whether to show the Display metadata of the object for frontend rendering. Default to be False
-    // pub show_display: Option<bool>,
-    /// Whether to show the content(i.e., package content or Move struct content) of the object.
-    /// Default to be False
-    pub show_content: Option<bool>,
-    /// Whether to show the content in BCS format. Default to be False
-    pub show_bcs: Option<bool>,
-}
-
-impl Default for SuiObjectContentOptions {
-    fn default() -> Self {
-        Self {
-            show_type: Some(true),
-            show_owner: Some(false),
-            show_previous_transaction: Some(false),
-            // uncomment the following in the next PR
-            // show_display: Some(false),
-            show_content: Some(false),
-            show_bcs: Some(false),
-        }
-    }
-}
-
-impl TryInto<Object> for SuiObject<SuiRawData> {
-    type Error = anyhow::Error;
-
-    fn try_into(self) -> Result<Object, Self::Error> {
-        let protocol_config = ProtocolConfig::get_for_min_version();
-        let data = match self.data {
-            SuiRawData::MoveObject(o) => {
-                let struct_tag = parse_sui_struct_tag(o.type_())?;
-                Data::Move(unsafe {
-                    MoveObject::new_from_execution(
-                        struct_tag,
-                        o.has_public_transfer,
-                        o.version,
-                        o.bcs_bytes,
-                        &protocol_config,
-                    )?
-                })
-            }
-            SuiRawData::Package(p) => Data::Package(MovePackage::new(
-                p.id,
-                self.reference.version,
-                &p.module_map,
-                protocol_config.max_move_package_size(),
-            )?),
-        };
-        Ok(Object {
-            data,
-            owner: self.owner,
-            previous_transaction: self.previous_transaction,
-            storage_rebate: self.storage_rebate,
-        })
-    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq, Ord, PartialOrd)]
@@ -958,7 +855,6 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
 }
 
 pub type GetObjectDataResponse = SuiObjectReadDeprecated<SuiParsedData>;
-pub type GetRawObjectDataResponse = SuiObjectReadDeprecated<SuiRawData>;
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
 #[serde(tag = "status", content = "details", rename = "ObjectReadDeprecated")]

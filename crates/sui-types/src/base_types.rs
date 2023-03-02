@@ -16,6 +16,7 @@ use crate::gas_coin::GasCoin;
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
+use crate::parse_sui_struct_tag;
 use crate::signature::GenericSignature;
 use crate::sui_serde::HexAccountAddress;
 use crate::sui_serde::Readable;
@@ -104,6 +105,19 @@ impl From<&Object> for ObjectType {
             .type_()
             .map(|tag| ObjectType::Struct(tag.clone()))
             .unwrap_or(ObjectType::Package)
+    }
+}
+
+impl FromStr for ObjectType {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "Package" {
+            Ok(ObjectType::Package)
+        } else {
+            let tag = parse_sui_struct_tag(s)?;
+            Ok(ObjectType::Struct(tag))
+        }
     }
 }
 

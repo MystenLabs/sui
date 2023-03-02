@@ -32,12 +32,12 @@ use sui_types::error::SuiError;
 
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
-use sui_json_rpc_types::SuiExecutionStatus;
 use sui_json_rpc_types::{
     DynamicFieldPage, GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiRawData,
     SuiTransactionResponse,
 };
-use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
+use sui_json_rpc_types::{SuiData, SuiObjectWithStatus};
+use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectContentOptions};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::SuiClient;
 use sui_types::crypto::SignatureScheme;
@@ -45,7 +45,7 @@ use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::intent::Intent;
 use sui_types::signature::GenericSignature;
 use sui_types::{
-    base_types::{ObjectID, SuiAddress},
+    base_types::{ObjectID, ObjectRef, SuiAddress},
     gas_coin::GasCoin,
     messages::{Transaction, VerifiedTransaction},
     object::Owner,
@@ -536,7 +536,11 @@ impl SuiClientCommands {
                     let object_read = client.read_api().get_parsed_object(id).await?;
                     SuiClientCommandResult::Object(object_read)
                 } else {
-                    let raw_object_read = client.read_api().get_object(id).await?;
+                    // TODO: combine with the above
+                    let raw_object_read = client
+                        .read_api()
+                        .get_object_with_options(id, Some(SuiObjectContentOptions::bcs_lossless()))
+                        .await?;
                     SuiClientCommandResult::RawObject(raw_object_read)
                 }
             }
@@ -1115,12 +1119,14 @@ impl WalletContext {
     }
 
     /// Get the latest object reference given a object id
-    pub async fn get_object_ref(
-        &self,
-        object_id: ObjectID,
-    ) -> Result<GetRawObjectDataResponse, anyhow::Error> {
+    pub async fn get_object_ref(&self, object_id: ObjectID) -> Result<ObjectRef, anyhow::Error> {
         let client = self.get_client().await?;
-        Ok(client.read_api().get_object(object_id).await?)
+        Ok(client
+            .read_api()
+            .get_object_with_options(object_id, None)
+            .await?
+            .into_object()?
+            .object_ref())
     }
 
     /// Get all the gas objects (and conveniently, gas amounts) for the address
@@ -1155,8 +1161,21 @@ impl WalletContext {
 
     pub async fn get_object_owner(&self, id: &ObjectID) -> Result<SuiAddress, anyhow::Error> {
         let client = self.get_client().await?;
-        let object = client.read_api().get_object(*id).await?.into_object()?;
-        Ok(object.owner.get_owner_address()?)
+        let object = client
+            .read_api()
+            .get_object_with_options(
+                *id,
+                Some(SuiObjectContentOptions {
+                    show_owner: Some(true),
+                    ..Default::default()
+                }),
+            )
+            .await?
+            .into_object()?;
+        Ok(object
+            .owner
+            .ok_or_else(|| anyhow!("Owner field is None"))?
+            .get_owner_address()?)
     }
 
     pub async fn try_get_object_owner(
@@ -1215,11 +1234,11 @@ impl Display for SuiClientCommandResult {
             }
             SuiClientCommandResult::RawObject(raw_object_read) => {
                 let raw_object = match raw_object_read.object() {
-                    Ok(v) => match &v.data {
-                        SuiRawData::MoveObject(o) => {
+                    Ok(v) => match &v.bcs {
+                        Some(SuiRawData::MoveObject(o)) => {
                             format!("{:?}\nNumber of bytes: {}", o.bcs_bytes, o.bcs_bytes.len())
                         }
-                        SuiRawData::Package(p) => {
+                        Some(SuiRawData::Package(p)) => {
                             let mut temp = String::new();
                             let mut bcs_bytes = 0usize;
                             for m in &p.module_map {
@@ -1228,6 +1247,7 @@ impl Display for SuiClientCommandResult {
                             }
                             format!("{}Number of bytes: {}", temp, bcs_bytes)
                         }
+                        None => "Bcs field is None".to_string().red().to_string(),
                     },
                     Err(err) => format!("{err}").red().to_string(),
                 };
@@ -1515,7 +1535,7 @@ pub enum SuiClientCommandResult {
     Publish(SuiTransactionResponse),
     VerifySource,
     Object(GetObjectDataResponse),
-    RawObject(GetRawObjectDataResponse),
+    RawObject(SuiObjectWithStatus),
     Call(SuiTransactionResponse),
     Transfer(
         // Skipping serialisation for elapsed time.

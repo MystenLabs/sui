@@ -129,7 +129,7 @@ impl TestCaseImpl for CallContractTest {
             .await;
 
         assert_eq!(
-            object.reference.version, new_object_version,
+            object.version, new_object_version,
             "Expect sequence number to be 1"
         );
 
