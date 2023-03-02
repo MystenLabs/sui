@@ -24,6 +24,9 @@ module sui::sui_system {
     use sui::event;
     use sui::table::Table;
     use sui::dynamic_field;
+    use sui::url;
+    use std::string;
+    use std::ascii;
 
     friend sui::genesis;
 
@@ -176,10 +179,6 @@ module sui::sui_system {
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
-        assert!(
-            validator_set::next_epoch_validator_count(&self.validators) < self.parameters.max_validator_candidate_count,
-            ELimitExceeded,
-        );
         let stake_amount = coin::value(&stake);
         assert!(
             stake_amount >= self.parameters.min_validator_stake,
@@ -343,8 +342,8 @@ module sui::sui_system {
         let self = load_system_state_mut(wrapper);
         let sender = tx_context::sender(ctx);
         // Both the reporter and the reported have to be validators.
-        assert!(validator_set::is_active_validator(&self.validators, sender), ENotValidator);
-        assert!(validator_set::is_active_validator(&self.validators, validator_addr), ENotValidator);
+        assert!(validator_set::is_active_validator_by_sui_address(&self.validators, sender), ENotValidator);
+        assert!(validator_set::is_active_validator_by_sui_address(&self.validators, validator_addr), ENotValidator);
         assert!(sender != validator_addr, ECannotReportOneself);
 
         if (!vec_map::contains(&self.validator_report_records, &validator_addr)) {
@@ -371,6 +370,137 @@ module sui::sui_system {
         let reporters = vec_map::get_mut(&mut self.validator_report_records, &validator_addr);
         assert!(vec_set::contains(reporters, &sender), EReportRecordNotFound);
         vec_set::remove(reporters, &sender);
+    }
+
+    // ==== validator metadata management functions ====
+
+    /// Update a validator's name.
+    public entry fun update_validator_name(
+        self: &mut SuiSystemState,
+        name: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        validator::update_name(validator, string::from_ascii(ascii::string(name)));
+    }
+
+    /// Update a validator's description
+    public entry fun update_validator_description(
+        self: &mut SuiSystemState,
+        description: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        validator::update_description(validator, string::from_ascii(ascii::string(description)));
+    }
+
+    /// Update a validator's image url
+    public entry fun update_validator_image_url(
+        self: &mut SuiSystemState,
+        image_url: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        validator::update_image_url(validator, url::new_unsafe_from_bytes(image_url));
+    }
+
+    /// Update a validator's project url
+    public entry fun update_validator_project_url(
+        self: &mut SuiSystemState,
+        project_url: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        validator::update_project_url(validator, url::new_unsafe_from_bytes(project_url));
+    }
+
+    /// Update a validator's network address.
+    /// The change will only take effects starting from the next epoch.
+    public entry fun update_validator_next_epoch_network_address(
+        self: &mut SuiSystemState,
+        network_address: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        validator::update_next_epoch_network_address(validator, network_address);
+    }
+
+    /// Update a validator's p2p address.
+    /// The change will only take effects starting from the next epoch.
+    public entry fun update_validator_next_epoch_p2p_address(
+        self: &mut SuiSystemState,
+        p2p_address: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        validator::update_next_epoch_p2p_address(validator, p2p_address);
+    }
+
+    /// Update a validator's consensus address.
+    /// The change will only take effects starting from the next epoch.
+    public entry fun update_validator_next_epoch_consensus_address(
+        self: &mut SuiSystemState,
+        consensus_address: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        validator::update_next_epoch_consensus_address(validator, consensus_address);
+    }
+
+    /// Update a validator's worker address.
+    /// The change will only take effects starting from the next epoch.
+    public entry fun update_validator_next_epoch_worker_address(
+        self: &mut SuiSystemState,
+        worker_address: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        validator::update_next_epoch_worker_address(validator, worker_address);
+    }
+
+    /// Update a validator's public key of protocol key and proof of possession.
+    /// The change will only take effects starting from the next epoch.
+    public entry fun update_validator_next_epoch_protocol_pubkey(
+        self: &mut SuiSystemState,
+        protocol_pubkey: vector<u8>,
+        proof_of_possession: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        validator::update_next_epoch_protocol_pubkey(validator, protocol_pubkey, proof_of_possession);
+    }
+
+    /// Update a validator's public key of worker key.
+    /// The change will only take effects starting from the next epoch.
+    public entry fun update_validator_next_epoch_worker_pubkey(
+        self: &mut SuiSystemState,
+        worker_pubkey: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        validator::update_next_epoch_worker_pubkey(validator, worker_pubkey);
+    }
+
+    /// Update a validator's public key of network key.
+    /// The change will only take effects starting from the next epoch.
+    public entry fun update_validator_next_epoch_network_pubkey(
+        self: &mut SuiSystemState,
+        network_pubkey: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        validator::update_next_epoch_network_pubkey(validator, network_pubkey);
     }
 
     /// This function should be called at the end of an epoch, and advances the system to the next epoch.
@@ -629,6 +759,16 @@ module sui::sui_system {
     public fun validators(wrapper: &SuiSystemState): &ValidatorSet {
         let self = load_system_state(wrapper);
         &self.validators
+    }
+
+    /// Return the currently active validator by address
+    public fun active_validator_by_address(self: &SuiSystemState, validator_address: address): &Validator {
+        validator_set::get_active_validator_ref(validators(self), validator_address)
+    }
+
+    /// Return the currently pending validator by address
+    public fun pending_validator_by_address(self: &SuiSystemState, validator_address: address): &Validator {
+        validator_set::get_pending_validator_ref(validators(self), validator_address)
     }
 
     #[test_only]

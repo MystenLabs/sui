@@ -288,6 +288,23 @@ module sui::validator_set {
         self.total_stake = calculate_total_stakes(&self.active_validators);
 
         voting_power::set_voting_power(&mut self.active_validators);
+
+        // At this point, self.active_validators are updated for next epoch.
+        // Now we process the staged validator metadata.
+        effectuate_staged_metadata(self);
+    }
+
+    /// Effectutate pending next epoch metadata if they are staged.
+    fun effectuate_staged_metadata(
+        self: &mut ValidatorSet,
+    ) {
+        let num_validators = vector::length(&self.active_validators);
+        let i = 0;
+        while (i < num_validators) {
+            let validator = vector::borrow_mut(&mut self.active_validators, i);
+            validator::effectuate_staged_metadata(validator);
+            i = i + 1;
+        }
     }
 
     /// Called by `sui_system` to derive reference gas price for the new epoch.
@@ -350,19 +367,19 @@ module sui::validator_set {
         vector::length(&self.active_validators) - vector::length(&self.pending_removals) + table_vec::length(&self.pending_validators)
     }
 
-    /// Returns true iff `validator_address` is a member of the active validators.
-    public(friend) fun is_active_validator(
+    /// Returns true iff the address exists in active validators.
+    public(friend) fun is_active_validator_by_sui_address(
         self: &ValidatorSet,
         validator_address: address,
     ): bool {
         option::is_some(&find_validator(&self.active_validators, validator_address))
     }
 
-
     // ==== private helpers ====
 
     /// Checks whether `new_validator` is already in currently active validator list.
-    /// Two validators are identical if they share the same sui_address or same IP or same name.
+    /// It differs from `is_active_validator_by_sui_address` in that the former checks
+    /// only the sui address but this function looks at more metadata.
     fun is_currently_active_validator(self: &ValidatorSet, new_validator: &Validator): bool {
         let len = vector::length(&self.active_validators);
         let i = 0;
@@ -377,7 +394,6 @@ module sui::validator_set {
     }
 
     /// Checks whether `new_validator` is already in currently pending validator list.
-    /// Two validators are identical if they share the same sui_address or same IP or same name.
     fun is_currently_pending_validator(self: &ValidatorSet, new_validator: &Validator): bool {
         let len = table_vec::length(&self.pending_validators);
         let i = 0;
@@ -407,6 +423,23 @@ module sui::validator_set {
         option::none()
     }
 
+    /// Find validator by `validator_address`, in `validators`.
+    /// Returns (true, index) if the validator is found, and the index is its index in the list.
+    /// If not found, returns (false, 0).
+    fun find_validator_from_table_vec(validators: &TableVec<Validator>, validator_address: address): Option<u64> {
+        let length = table_vec::length(validators);
+        let i = 0;
+        while (i < length) {
+            let v = table_vec::borrow(validators, i);
+            if (validator::sui_address(v) == validator_address) {
+                return option::some(i)
+            };
+            i = i + 1;
+        };
+        option::none()
+    }
+
+
     /// Given a vector of validator addresses, return their indices in the validator set.
     /// Aborts if any address isn't in the given validator set.
     fun get_validator_indices(validators: &vector<Validator>, validator_addresses: &vector<address>): vector<u64> {
@@ -433,6 +466,22 @@ module sui::validator_set {
         vector::borrow_mut(validators, validator_index)
     }
 
+    public(friend) fun get_active_or_pending_validator_mut(
+        self: &mut ValidatorSet,
+        ctx: &TxContext,
+    ): &mut Validator {
+        let validator_address = tx_context::sender(ctx);
+
+        let validator_index_opt = find_validator(&self.active_validators, validator_address);
+        if (option::is_some(&validator_index_opt)) {
+            let validator_index = option::extract(&mut validator_index_opt);
+            return vector::borrow_mut(&mut self.active_validators, validator_index)
+        };
+        let validator_index_opt = find_validator_from_table_vec(&self.pending_validators, validator_address);
+        let validator_index = option::extract(&mut validator_index_opt);
+        return table_vec::borrow_mut(&mut self.pending_validators, validator_index)
+    }
+
     fun get_validator_ref(
         validators: &vector<Validator>,
         validator_address: address,
@@ -443,12 +492,24 @@ module sui::validator_set {
         vector::borrow(validators, validator_index)
     }
 
-    #[test_only]
-    public fun get_validator_ref_test(
-        validators: &ValidatorSet,
+    public fun get_active_validator_ref(
+        self: &ValidatorSet,
         validator_address: address,
     ): &Validator {
-        get_validator_ref(&validators.active_validators, validator_address)
+        let validator_index_opt = find_validator(&self.active_validators, validator_address);
+        assert!(option::is_some(&validator_index_opt), 0);
+        let validator_index = option::extract(&mut validator_index_opt);
+        vector::borrow(&self.active_validators, validator_index)
+    }
+
+    public fun get_pending_validator_ref(
+        self: &ValidatorSet,
+        validator_address: address,
+    ): &Validator {
+        let validator_index_opt = find_validator_from_table_vec(&self.pending_validators, validator_address);
+        assert!(option::is_some(&validator_index_opt), 0);
+        let validator_index = option::extract(&mut validator_index_opt);
+        table_vec::borrow(&self.pending_validators, validator_index)
     }
 
     /// Process the pending withdraw requests. For each pending request, the validator
@@ -591,7 +652,7 @@ module sui::validator_set {
         while (!vec_map::is_empty(&validator_report_records)) {
             let (validator_address, reporters) = vec_map::pop(&mut validator_report_records);
             assert!(
-                is_active_validator(self, validator_address),
+                is_active_validator_by_sui_address(self, validator_address),
                 ENonValidatorInReportRecords,
             );
             // Sum up the voting power of validators that have reported this validator and check if it has

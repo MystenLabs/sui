@@ -236,7 +236,7 @@ module sui::governance_test_utils {
 
     /// Return the rewards for the validator at `addr` in terms of SUI.
     public fun stake_plus_current_rewards_for_validator(addr: address, system_state: &SuiSystemState, scenario: &mut Scenario): u64 {
-        let validator_ref = validator_set::get_validator_ref_test(sui_system::validators(system_state), addr);
+        let validator_ref = validator_set::get_active_validator_ref(sui_system::validators(system_state), addr);
         let amount = stake_plus_current_rewards(addr, validator::get_staking_pool_ref(validator_ref), scenario);
         amount
     }

@@ -17,6 +17,7 @@
 -  [Function `request_set_gas_price`](#0x2_validator_set_request_set_gas_price)
 -  [Function `request_set_commission_rate`](#0x2_validator_set_request_set_commission_rate)
 -  [Function `advance_epoch`](#0x2_validator_set_advance_epoch)
+-  [Function `effectuate_staged_metadata`](#0x2_validator_set_effectuate_staged_metadata)
 -  [Function `derive_reference_gas_price`](#0x2_validator_set_derive_reference_gas_price)
 -  [Function `total_stake`](#0x2_validator_set_total_stake)
 -  [Function `validator_total_stake_amount`](#0x2_validator_set_validator_total_stake_amount)
@@ -24,13 +25,17 @@
 -  [Function `validator_staking_pool_id`](#0x2_validator_set_validator_staking_pool_id)
 -  [Function `staking_pool_mappings`](#0x2_validator_set_staking_pool_mappings)
 -  [Function `next_epoch_validator_count`](#0x2_validator_set_next_epoch_validator_count)
--  [Function `is_active_validator`](#0x2_validator_set_is_active_validator)
+-  [Function `is_active_validator_by_sui_address`](#0x2_validator_set_is_active_validator_by_sui_address)
 -  [Function `is_currently_active_validator`](#0x2_validator_set_is_currently_active_validator)
 -  [Function `is_currently_pending_validator`](#0x2_validator_set_is_currently_pending_validator)
 -  [Function `find_validator`](#0x2_validator_set_find_validator)
+-  [Function `find_validator_from_table_vec`](#0x2_validator_set_find_validator_from_table_vec)
 -  [Function `get_validator_indices`](#0x2_validator_set_get_validator_indices)
 -  [Function `get_validator_mut`](#0x2_validator_set_get_validator_mut)
+-  [Function `get_active_or_pending_validator_mut`](#0x2_validator_set_get_active_or_pending_validator_mut)
 -  [Function `get_validator_ref`](#0x2_validator_set_get_validator_ref)
+-  [Function `get_active_validator_ref`](#0x2_validator_set_get_active_validator_ref)
+-  [Function `get_pending_validator_ref`](#0x2_validator_set_get_pending_validator_ref)
 -  [Function `process_pending_removals`](#0x2_validator_set_process_pending_removals)
 -  [Function `process_pending_validators`](#0x2_validator_set_process_pending_validators)
 -  [Function `sort_removal_list`](#0x2_validator_set_sort_removal_list)
@@ -641,6 +646,43 @@ It does the following things:
     self.total_stake = <a href="validator_set.md#0x2_validator_set_calculate_total_stakes">calculate_total_stakes</a>(&self.active_validators);
 
     <a href="voting_power.md#0x2_voting_power_set_voting_power">voting_power::set_voting_power</a>(&<b>mut</b> self.active_validators);
+
+    // At this point, self.active_validators are updated for next epoch.
+    // Now we process the staged <a href="validator.md#0x2_validator">validator</a> metadata.
+    <a href="validator_set.md#0x2_validator_set_effectuate_staged_metadata">effectuate_staged_metadata</a>(self);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_effectuate_staged_metadata"></a>
+
+## Function `effectuate_staged_metadata`
+
+Effectutate pending next epoch metadata if they are staged.
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_effectuate_staged_metadata">effectuate_staged_metadata</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_effectuate_staged_metadata">effectuate_staged_metadata</a>(
+    self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
+) {
+    <b>let</b> num_validators = <a href="_length">vector::length</a>(&self.active_validators);
+    <b>let</b> i = 0;
+    <b>while</b> (i &lt; num_validators) {
+        <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_borrow_mut">vector::borrow_mut</a>(&<b>mut</b> self.active_validators, i);
+        <a href="validator.md#0x2_validator_effectuate_staged_metadata">validator::effectuate_staged_metadata</a>(<a href="validator.md#0x2_validator">validator</a>);
+        i = i + 1;
+    }
 }
 </code></pre>
 
@@ -846,14 +888,14 @@ Get the total number of validators in the next epoch.
 
 </details>
 
-<a name="0x2_validator_set_is_active_validator"></a>
+<a name="0x2_validator_set_is_active_validator_by_sui_address"></a>
 
-## Function `is_active_validator`
+## Function `is_active_validator_by_sui_address`
 
-Returns true iff <code>validator_address</code> is a member of the active validators.
+Returns true iff the address exists in active validators.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_is_active_validator">is_active_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): bool
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_is_active_validator_by_sui_address">is_active_validator_by_sui_address</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): bool
 </code></pre>
 
 
@@ -862,7 +904,7 @@ Returns true iff <code>validator_address</code> is a member of the active valida
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_is_active_validator">is_active_validator</a>(
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_is_active_validator_by_sui_address">is_active_validator_by_sui_address</a>(
     self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
     validator_address: <b>address</b>,
 ): bool {
@@ -879,7 +921,8 @@ Returns true iff <code>validator_address</code> is a member of the active valida
 ## Function `is_currently_active_validator`
 
 Checks whether <code>new_validator</code> is already in currently active validator list.
-Two validators are identical if they share the same sui_address or same IP or same name.
+It differs from <code>is_active_validator_by_sui_address</code> in that the former checks
+only the sui address but this function looks at more metadata.
 
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_is_currently_active_validator">is_currently_active_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, new_validator: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): bool
@@ -914,7 +957,6 @@ Two validators are identical if they share the same sui_address or same IP or sa
 ## Function `is_currently_pending_validator`
 
 Checks whether <code>new_validator</code> is already in currently pending validator list.
-Two validators are identical if they share the same sui_address or same IP or same name.
 
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_is_currently_pending_validator">is_currently_pending_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, new_validator: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): bool
@@ -967,6 +1009,42 @@ If not found, returns (false, 0).
     <b>let</b> i = 0;
     <b>while</b> (i &lt; length) {
         <b>let</b> v = <a href="_borrow">vector::borrow</a>(validators, i);
+        <b>if</b> (<a href="validator.md#0x2_validator_sui_address">validator::sui_address</a>(v) == validator_address) {
+            <b>return</b> <a href="_some">option::some</a>(i)
+        };
+        i = i + 1;
+    };
+    <a href="_none">option::none</a>()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_find_validator_from_table_vec"></a>
+
+## Function `find_validator_from_table_vec`
+
+Find validator by <code>validator_address</code>, in <code>validators</code>.
+Returns (true, index) if the validator is found, and the index is its index in the list.
+If not found, returns (false, 0).
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(validators: &<a href="table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, validator_address: <b>address</b>): <a href="_Option">option::Option</a>&lt;u64&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(validators: &TableVec&lt;Validator&gt;, validator_address: <b>address</b>): Option&lt;u64&gt; {
+    <b>let</b> length = <a href="table_vec.md#0x2_table_vec_length">table_vec::length</a>(validators);
+    <b>let</b> i = 0;
+    <b>while</b> (i &lt; length) {
+        <b>let</b> v = <a href="table_vec.md#0x2_table_vec_borrow">table_vec::borrow</a>(validators, i);
         <b>if</b> (<a href="validator.md#0x2_validator_sui_address">validator::sui_address</a>(v) == validator_address) {
             <b>return</b> <a href="_some">option::some</a>(i)
         };
@@ -1046,6 +1124,42 @@ Aborts if any address isn't in the given validator set.
 
 </details>
 
+<a name="0x2_validator_set_get_active_or_pending_validator_mut"></a>
+
+## Function `get_active_or_pending_validator_mut`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_mut">get_active_or_pending_validator_mut</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_mut">get_active_or_pending_validator_mut</a>(
+    self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
+    ctx: &TxContext,
+): &<b>mut</b> Validator {
+    <b>let</b> validator_address = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
+
+    <b>let</b> validator_index_opt = <a href="validator_set.md#0x2_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address);
+    <b>if</b> (<a href="_is_some">option::is_some</a>(&validator_index_opt)) {
+        <b>let</b> validator_index = <a href="_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
+        <b>return</b> <a href="_borrow_mut">vector::borrow_mut</a>(&<b>mut</b> self.active_validators, validator_index)
+    };
+    <b>let</b> validator_index_opt = <a href="validator_set.md#0x2_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(&self.pending_validators, validator_address);
+    <b>let</b> validator_index = <a href="_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
+    <b>return</b> <a href="table_vec.md#0x2_table_vec_borrow_mut">table_vec::borrow_mut</a>(&<b>mut</b> self.pending_validators, validator_index)
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_validator_set_get_validator_ref"></a>
 
 ## Function `get_validator_ref`
@@ -1069,6 +1183,66 @@ Aborts if any address isn't in the given validator set.
     <b>assert</b>!(<a href="_is_some">option::is_some</a>(&validator_index_opt), 0);
     <b>let</b> validator_index = <a href="_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
     <a href="_borrow">vector::borrow</a>(validators, validator_index)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_get_active_validator_ref"></a>
+
+## Function `get_active_validator_ref`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_active_validator_ref">get_active_validator_ref</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_active_validator_ref">get_active_validator_ref</a>(
+    self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
+    validator_address: <b>address</b>,
+): &Validator {
+    <b>let</b> validator_index_opt = <a href="validator_set.md#0x2_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address);
+    <b>assert</b>!(<a href="_is_some">option::is_some</a>(&validator_index_opt), 0);
+    <b>let</b> validator_index = <a href="_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
+    <a href="_borrow">vector::borrow</a>(&self.active_validators, validator_index)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_get_pending_validator_ref"></a>
+
+## Function `get_pending_validator_ref`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_pending_validator_ref">get_pending_validator_ref</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_pending_validator_ref">get_pending_validator_ref</a>(
+    self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
+    validator_address: <b>address</b>,
+): &Validator {
+    <b>let</b> validator_index_opt = <a href="validator_set.md#0x2_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(&self.pending_validators, validator_address);
+    <b>assert</b>!(<a href="_is_some">option::is_some</a>(&validator_index_opt), 0);
+    <b>let</b> validator_index = <a href="_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
+    <a href="table_vec.md#0x2_table_vec_borrow">table_vec::borrow</a>(&self.pending_validators, validator_index)
 }
 </code></pre>
 
@@ -1371,7 +1545,7 @@ non-performant validators according to the input threshold.
     <b>while</b> (!<a href="vec_map.md#0x2_vec_map_is_empty">vec_map::is_empty</a>(&validator_report_records)) {
         <b>let</b> (validator_address, reporters) = <a href="vec_map.md#0x2_vec_map_pop">vec_map::pop</a>(&<b>mut</b> validator_report_records);
         <b>assert</b>!(
-            <a href="validator_set.md#0x2_validator_set_is_active_validator">is_active_validator</a>(self, validator_address),
+            <a href="validator_set.md#0x2_validator_set_is_active_validator_by_sui_address">is_active_validator_by_sui_address</a>(self, validator_address),
             <a href="validator_set.md#0x2_validator_set_ENonValidatorInReportRecords">ENonValidatorInReportRecords</a>,
         );
         // Sum up the voting power of validators that have reported this <a href="validator.md#0x2_validator">validator</a> and check <b>if</b> it <b>has</b>
