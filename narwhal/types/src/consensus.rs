@@ -33,6 +33,8 @@ pub struct CommittedSubDag {
     pub leader: Certificate,
     /// The index associated with this CommittedSubDag
     pub sub_dag_index: SequenceNumber,
+    /// The so far calculated reputation score for nodes
+    pub reputation_score: ReputationScores,
 }
 
 impl CommittedSubDag {
@@ -63,6 +65,32 @@ impl CommittedSubDag {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct ReputationScores {
+    /// Holds the score for every authority. If an authority is not amongst
+    /// the records of the map then we assume that its score is zero.
+    pub scores_per_authority: HashMap<PublicKey, u64>,
+    /// When true it notifies us that those scores will be the last updated scores of the
+    /// current schedule before they get reset for the next schedule and start
+    /// scoring from the beginning. In practice we can leverage this information to
+    /// use the scores during the next schedule until the next final ones are calculated.
+    pub final_of_schedule: bool,
+}
+
+impl ReputationScores {
+    /// Adds the provided `score` to the existing score for the provided `authority`
+    pub fn add_score(&mut self, authority: PublicKey, score: u64) {
+        self.scores_per_authority
+            .entry(authority)
+            .and_modify(|value| *value += score)
+            .or_insert(score);
+    }
+
+    pub fn total_authorities(&self) -> u64 {
+        self.scores_per_authority.len() as u64
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CommittedSubDagShell {
     /// The sequence of committed certificates' digests.
@@ -71,6 +99,8 @@ pub struct CommittedSubDagShell {
     pub leader: CertificateDigest,
     /// Sequence number of the CommittedSubDag
     pub sub_dag_index: SequenceNumber,
+    /// The so far calculated reputation score for nodes
+    pub reputation_score: ReputationScores,
 }
 
 impl CommittedSubDagShell {
@@ -79,6 +109,7 @@ impl CommittedSubDagShell {
             certificates: sub_dag.certificates.iter().map(|x| x.digest()).collect(),
             leader: sub_dag.leader.digest(),
             sub_dag_index: sub_dag.sub_dag_index,
+            reputation_score: sub_dag.reputation_score.clone(),
         }
     }
 }
@@ -148,6 +179,16 @@ impl ConsensusStore {
             .map(|(seq, _)| seq)
             .unwrap_or_default();
         s
+    }
+
+    /// Returns thet latest subdag committed. If none is committed yet, then
+    /// None is returned instead.
+    pub fn get_latest_sub_dag(&self) -> Option<CommittedSubDagShell> {
+        self.committed_sub_dags_by_index
+            .iter()
+            .skip_to_last()
+            .next()
+            .map(|(_, subdag)| subdag)
     }
 
     /// Load all the sub dags committed with sequence number of at least `from`.

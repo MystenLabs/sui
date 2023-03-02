@@ -203,7 +203,6 @@ export function TransactionCard({
                                         </Text>
                                     )}
                                 </div>
-
                                 {transferAmountComponent}
                             </div>
                             <div className="flex flex-col w-full gap-1.5">

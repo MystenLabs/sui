@@ -54,7 +54,7 @@ pub struct MoveOption<T> {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct ValidatorMetadata {
     pub sui_address: SuiAddress,
-    pub pubkey_bytes: Vec<u8>,
+    pub protocol_pubkey_bytes: Vec<u8>,
     pub network_pubkey_bytes: Vec<u8>,
     pub worker_pubkey_bytes: Vec<u8>,
     pub proof_of_possession_bytes: Vec<u8>,
@@ -66,12 +66,20 @@ pub struct ValidatorMetadata {
     pub p2p_address: Vec<u8>,
     pub consensus_address: Vec<u8>,
     pub worker_address: Vec<u8>,
+    pub next_epoch_protocol_pubkey_bytes: Option<Vec<u8>>,
+    pub next_epoch_proof_of_possession: Option<Vec<u8>>,
+    pub next_epoch_network_pubkey_bytes: Option<Vec<u8>>,
+    pub next_epoch_worker_pubkey_bytes: Option<Vec<u8>>,
+    pub next_epoch_net_address: Option<Vec<u8>>,
+    pub next_epoch_p2p_address: Option<Vec<u8>>,
+    pub next_epoch_consensus_address: Option<Vec<u8>>,
+    pub next_epoch_worker_address: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct VerifiedValidatorMetadata {
     pub sui_address: SuiAddress,
-    pub pubkey: narwhal_crypto::PublicKey,
+    pub protocol_pubkey: narwhal_crypto::PublicKey,
     pub network_pubkey: narwhal_crypto::NetworkPublicKey,
     pub worker_pubkey: narwhal_crypto::NetworkPublicKey,
     pub proof_of_possession_bytes: Vec<u8>,
@@ -83,13 +91,24 @@ pub struct VerifiedValidatorMetadata {
     pub p2p_address: Multiaddr,
     pub consensus_address: Multiaddr,
     pub worker_address: Multiaddr,
+    pub next_epoch_protocol_pubkey: Option<narwhal_crypto::PublicKey>,
+    pub next_epoch_proof_of_possession: Option<Vec<u8>>,
+    pub next_epoch_network_pubkey: Option<narwhal_crypto::NetworkPublicKey>,
+    pub next_epoch_worker_pubkey: Option<narwhal_crypto::NetworkPublicKey>,
+    pub next_epoch_net_address: Option<Multiaddr>,
+    pub next_epoch_p2p_address: Option<Multiaddr>,
+    pub next_epoch_consensus_address: Option<Multiaddr>,
+    pub next_epoch_worker_address: Option<Multiaddr>,
 }
 
 impl ValidatorMetadata {
     /// Verify validator metadata and return a verified version (on success) or error code (on failure)
     pub fn verify(&self) -> Result<VerifiedValidatorMetadata, u64> {
-        let pubkey = narwhal_crypto::PublicKey::from_bytes(self.pubkey_bytes.as_ref())
-            .map_err(|_| E_METADATA_INVALID_PUBKEY)?;
+        // TODO: move the proof of possession verification here
+
+        let protocol_pubkey =
+            narwhal_crypto::PublicKey::from_bytes(self.protocol_pubkey_bytes.as_ref())
+                .map_err(|_| E_METADATA_INVALID_PUBKEY)?;
         let network_pubkey =
             narwhal_crypto::NetworkPublicKey::from_bytes(self.network_pubkey_bytes.as_ref())
                 .map_err(|_| E_METADATA_INVALID_NET_PUBKEY)?;
@@ -104,9 +123,63 @@ impl ValidatorMetadata {
             .map_err(|_| E_METADATA_INVALID_CONSENSUS_ADDR)?;
         let worker_address = Multiaddr::try_from(self.worker_address.clone())
             .map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?;
+
+        let next_epoch_protocol_pubkey = match self.next_epoch_protocol_pubkey_bytes.clone() {
+            None => Ok::<Option<narwhal_crypto::PublicKey>, u64>(None),
+            Some(bytes) => Ok(Some(
+                narwhal_crypto::PublicKey::from_bytes(bytes.as_ref())
+                    .map_err(|_| E_METADATA_INVALID_PUBKEY)?,
+            )),
+        }?;
+
+        let next_epoch_network_pubkey = match self.next_epoch_network_pubkey_bytes.clone() {
+            None => Ok::<Option<narwhal_crypto::NetworkPublicKey>, u64>(None),
+            Some(bytes) => Ok(Some(
+                narwhal_crypto::NetworkPublicKey::from_bytes(bytes.as_ref())
+                    .map_err(|_| E_METADATA_INVALID_NET_PUBKEY)?,
+            )),
+        }?;
+
+        let next_epoch_worker_pubkey: Option<narwhal_crypto::NetworkPublicKey> =
+            match self.next_epoch_worker_pubkey_bytes.clone() {
+                None => Ok::<Option<narwhal_crypto::NetworkPublicKey>, u64>(None),
+                Some(bytes) => Ok(Some(
+                    narwhal_crypto::NetworkPublicKey::from_bytes(bytes.as_ref())
+                        .map_err(|_| E_METADATA_INVALID_WORKER_PUBKEY)?,
+                )),
+            }?;
+
+        let next_epoch_net_address = match self.next_epoch_net_address.clone() {
+            None => Ok::<Option<Multiaddr>, u64>(None),
+            Some(address) => Ok(Some(
+                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_NET_ADDR)?,
+            )),
+        }?;
+
+        let next_epoch_p2p_address = match self.next_epoch_p2p_address.clone() {
+            None => Ok::<Option<Multiaddr>, u64>(None),
+            Some(address) => Ok(Some(
+                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_P2P_ADDR)?,
+            )),
+        }?;
+
+        let next_epoch_consensus_address = match self.next_epoch_consensus_address.clone() {
+            None => Ok::<Option<Multiaddr>, u64>(None),
+            Some(address) => Ok(Some(
+                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_CONSENSUS_ADDR)?,
+            )),
+        }?;
+
+        let next_epoch_worker_address = match self.next_epoch_worker_address.clone() {
+            None => Ok::<Option<Multiaddr>, u64>(None),
+            Some(address) => Ok(Some(
+                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?,
+            )),
+        }?;
+
         Ok(VerifiedValidatorMetadata {
             sui_address: self.sui_address,
-            pubkey,
+            protocol_pubkey,
             network_pubkey,
             worker_pubkey,
             proof_of_possession_bytes: self.proof_of_possession_bytes.clone(),
@@ -118,6 +191,14 @@ impl ValidatorMetadata {
             p2p_address,
             consensus_address,
             worker_address,
+            next_epoch_protocol_pubkey,
+            next_epoch_proof_of_possession: self.next_epoch_proof_of_possession.clone(),
+            next_epoch_network_pubkey,
+            next_epoch_worker_pubkey,
+            next_epoch_net_address,
+            next_epoch_p2p_address,
+            next_epoch_consensus_address,
+            next_epoch_worker_address,
         })
     }
 }
@@ -140,7 +221,7 @@ impl ValidatorMetadata {
     }
 
     pub fn protocol_key(&self) -> AuthorityPublicKeyBytes {
-        AuthorityPublicKeyBytes::from_bytes(self.pubkey_bytes.as_ref())
+        AuthorityPublicKeyBytes::from_bytes(self.protocol_pubkey_bytes.as_ref())
             .expect("Validity of public key bytes should be verified on-chain")
     }
 
@@ -174,7 +255,7 @@ impl Validator {
     ) -> (AuthorityName, StakeUnit, Vec<u8>) {
         (
             // TODO: Make sure we are actually verifying this on-chain.
-            AuthorityPublicKeyBytes::from_bytes(self.metadata.pubkey_bytes.as_ref())
+            AuthorityPublicKeyBytes::from_bytes(self.metadata.protocol_pubkey_bytes.as_ref())
                 .expect("Validity of public key bytes should be verified on-chain"),
             self.voting_power,
             self.metadata.net_address.clone(),
@@ -182,7 +263,7 @@ impl Validator {
     }
 
     pub fn authority_name(&self) -> AuthorityName {
-        AuthorityPublicKeyBytes::from_bytes(self.metadata.pubkey_bytes.as_ref())
+        AuthorityPublicKeyBytes::from_bytes(self.metadata.protocol_pubkey_bytes.as_ref())
             .expect("Validity of public key bytes should be verified on-chain")
     }
 }
@@ -371,7 +452,7 @@ impl SuiSystemState {
                     primary_address: verified_metadata.consensus_address,
                     network_key: verified_metadata.network_pubkey,
                 };
-                (verified_metadata.pubkey, authority)
+                (verified_metadata.protocol_pubkey, authority)
             })
             .collect();
 
@@ -430,7 +511,7 @@ impl SuiSystemState {
                 .collect();
                 let worker_index = WorkerIndex(workers);
 
-                (verified_metadata.pubkey, worker_index)
+                (verified_metadata.protocol_pubkey, worker_index)
             })
             .collect();
         WorkerCache {

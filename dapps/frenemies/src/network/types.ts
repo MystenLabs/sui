@@ -235,6 +235,23 @@ export type ValidatorMetadata = {
   nextEpochGasPrice: bigint;
   /** The commission rate of the validator starting the next epoch, in basis point.  */
   nextEpochCommissionRate: bigint;
+
+  /** Next epoch's protocol public key of the validator */
+  nextEpochProtocolPubkeyBytes: number[];
+  /** Next epoch's protocol key proof of posesssion of the validator */
+  nextEpochProofOfPossession: number[];
+  /** Next epoch's network public key of the validator */
+  nextEpochNetworkPubkeyBytes: number[];
+  /** Next epoch's worker public key of the validator */
+  nextEpochWorkerPubkeyBytes: number[];
+  /** Next epoch's network address of the validator */
+  nextEpochNetAddress: number[];
+  /** Next epoch's p2p address of the validator*/
+  nextEpochP2pAddress: number[];
+  /** Next epoch's consensus address of the validator*/
+  nextEpochConsensusAddress: number[];
+  /** Next epoch's worker address of the validator*/
+  nextEpochWorkerAddress: number[];
 };
 
 export type StakingPool = {

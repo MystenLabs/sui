@@ -190,7 +190,7 @@ pub fn make_network_authority_client_sets_from_system_state(
             .connect_lazy(&address)
             .map_err(|err| anyhow!(err.to_string()))?;
         let client = NetworkAuthorityClient::new(channel);
-        let name: &[u8] = &validator.metadata.pubkey_bytes;
+        let name: &[u8] = &validator.metadata.protocol_pubkey_bytes;
         let public_key_bytes = AuthorityName::from_bytes(name)?;
         authority_clients.insert(public_key_bytes, client);
     }
