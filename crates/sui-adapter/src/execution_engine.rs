@@ -432,18 +432,12 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             .map(|m| CompiledModule::deserialize(&m).unwrap())
             .collect();
 
-        let new_package = Object::new_package(
+        let new_package = Object::new_system_package(
             modules,
             version,
             tx_ctx.digest(),
-            // Package limit does not apply to system packages.
-            u64::MAX,
         )?;
 
-        assert!(
-            is_system_package(new_package.id()),
-            "Can only set system packages this way."
-        );
         info!(
             "upgraded system object {:?}",
             new_package.compute_object_reference()
