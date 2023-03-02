@@ -10,7 +10,7 @@ import {
   ObjectId,
   SuiAddress,
   SUI_TYPE_ARG,
-  Transaction,
+  SingleTransactionKind,
   TransactionData,
   TransactionKind,
   TypeTag,
@@ -101,7 +101,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     signerAddress: string,
     unserializedTxn: UnserializedSignableTransaction,
   ): Promise<[TransactionKind, ObjectId | undefined]> {
-    let tx: Transaction;
+    let tx: SingleTransactionKind;
     let gasPayment: ObjectId | undefined;
     switch (unserializedTxn.kind) {
       case 'transferObject':
@@ -433,7 +433,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   }
 
   public async transformTransactionToSignableTransaction(
-    tx: Transaction,
+    tx: SingleTransactionKind,
     gasData: GasData,
   ): Promise<UnserializedSignableTransaction> {
     if ('Pay' in tx) {
