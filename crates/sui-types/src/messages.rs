@@ -988,6 +988,7 @@ impl SingleTransactionKind {
         }
     }
 
+    /// Actively being replaced by programmable transactions
     pub fn legacy_move_call(&self) -> Option<&MoveCall> {
         match &self {
             Self::Call(call @ MoveCall { .. }) => Some(call),
@@ -1620,6 +1621,7 @@ impl TransactionData {
         self.kind.shared_input_objects()
     }
 
+    /// Actively being replaced by programmable transactions
     pub fn legacy_move_calls(&self) -> Vec<&MoveCall> {
         self.kind
             .single_transactions()
