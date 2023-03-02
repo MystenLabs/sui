@@ -17,7 +17,8 @@ Version: 2
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}}
 
 task 4 'transfer-object'. lines 28-28:
-Error: Attempt to transfer object 0x082da293d12d8186c1f1ff6ceee9e1ab0ccc9a298d8fa6c3975312671c259cc9 that does not have public transfer. Object transfer must be done instead using a distinct Move function call.
+Error: Transaction Effects Status: Invalid command argument at 0. Immutable and shared objects cannot be passed by-value.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByValue }, source: None, command: Some(0) } }
 
 task 5 'view-object'. lines 30-30:
 Owner: Immutable

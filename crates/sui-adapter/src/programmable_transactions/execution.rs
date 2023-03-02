@@ -5,6 +5,7 @@ use std::{collections::BTreeMap, fmt};
 
 use move_binary_format::{
     access::ModuleAccess,
+    errors::{Location, PartialVMResult, VMResult},
     file_format::{AbilitySet, LocalIndex, Visibility},
     CompiledModule,
 };
@@ -38,6 +39,7 @@ use sui_verifier::{
     entry_points_verifier::{
         TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID, RESOLVED_UTF8_STR,
     },
+    private_generics::{EVENT_MODULE, TRANSFER_MODULE},
     INIT_FN_NAME,
 };
 
@@ -533,6 +535,18 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>>(
             .load_type(ty)
             .map_err(|e| convert_type_argument_error(idx, e, context.vm, context.state_view))?;
     }
+    if from_init {
+        // the session is weird and does not load the module on publishing. This is a temporary
+        // work around, since loading the function through the session will cause the module
+        // to be loaded through the sessions data store.
+        let result = context
+            .session
+            .load_function(module_id, function, type_arguments);
+        assert_invariant!(
+            result.is_ok(),
+            "The modules init should be able to be loaded"
+        );
+    }
     let function_kind = {
         let module = context
             .vm
@@ -574,6 +588,7 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>>(
         .session
         .load_function(module_id, function, type_arguments)
         .map_err(|e| context.convert_vm_error(e))?;
+    let signature = subst_signature(signature).map_err(|e| context.convert_vm_error(e))?;
     let return_value_kinds = match function_kind {
         FunctionKind::PrivateEntry | FunctionKind::PublicEntry | FunctionKind::Init => {
             assert_invariant!(
@@ -586,7 +601,34 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>>(
             check_non_entry_signature(context, module_id, function, &signature)?
         }
     };
+    check_private_generics(context, module_id, function, &signature.type_arguments)?;
     Ok((function_kind, signature, return_value_kinds))
+}
+
+/// substitutes the type arguments into the parameter and return types
+fn subst_signature(
+    signature: LoadedFunctionInstantiation,
+) -> VMResult<LoadedFunctionInstantiation> {
+    let LoadedFunctionInstantiation {
+        type_arguments,
+        parameters,
+        return_,
+    } = signature;
+    let parameters = parameters
+        .into_iter()
+        .map(|ty| ty.subst(&type_arguments))
+        .collect::<PartialVMResult<Vec<_>>>()
+        .map_err(|err| err.finish(Location::Undefined))?;
+    let return_ = return_
+        .into_iter()
+        .map(|ty| ty.subst(&type_arguments))
+        .collect::<PartialVMResult<Vec<_>>>()
+        .map_err(|err| err.finish(Location::Undefined))?;
+    Ok(LoadedFunctionInstantiation {
+        type_arguments,
+        parameters,
+        return_,
+    })
 }
 
 /// Checks that the non-entry function does not return references. And marks the return values
@@ -642,6 +684,40 @@ fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>>(
             })
         })
         .collect()
+}
+
+fn check_private_generics<E: fmt::Debug, S: StorageView<E>>(
+    context: &mut ExecutionContext<E, S>,
+    module_id: &ModuleId,
+    function: &IdentStr,
+    type_arguments: &[Type],
+) -> Result<(), ExecutionError> {
+    let ident = (module_id.address(), module_id.name());
+    if ident == (&SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::NonEntryFunctionInvoked,
+            format!("Cannot directly call functions in sui::{}", EVENT_MODULE),
+        ));
+    }
+    if ident == (&SUI_FRAMEWORK_ADDRESS, TRANSFER_MODULE) {
+        for ty in type_arguments {
+            let abilities = context
+                .session
+                .get_type_abilities(&ty)
+                .map_err(|e| context.convert_vm_error(e))?;
+            if !abilities.has_store() {
+                let msg = format!(
+                    "Cannot directly call sui::{}::{} unless the object type has the store ability",
+                    TRANSFER_MODULE, function
+                );
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::NonEntryFunctionInvoked,
+                    msg,
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 type ArgInfo = (

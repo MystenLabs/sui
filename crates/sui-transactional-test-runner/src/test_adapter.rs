@@ -59,6 +59,8 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 use sui_types::{clock::Clock, object::OBJECT_START_VERSION};
+use sui_types::{clock::Clock, programmable_transaction_builder::ProgrammableTransactionBuilder};
+use sui_types::{epoch_data::EpochData, messages::Command};
 use sui_types::{gas::SuiGasStatus, temporary_store::TemporaryStore};
 
 pub(crate) type FakeID = u64;
@@ -307,13 +309,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             buf
         };
         let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
-        let data = |sender, gas_payment| {
-            TransactionData::new_module_with_dummy_gas_price(
-                sender,
-                gas_payment,
-                vec![module_bytes],
-                gas_budget,
-            )
+        let data = |sender, gas| {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.command(Command::Publish(vec![module_bytes]));
+            let pt = builder.finish();
+            TransactionData::new_programmable_with_dummy_gas_price(sender, gas, pt, gas_budget)
         };
         let transaction = self.sign_txn(sender, data);
         let summary = self.execute_txn(transaction, gas_budget)?;
@@ -383,17 +383,19 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let package_id = ObjectID::from(*module_id.address());
 
         let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
-        let data = |sender, gas_payment| {
-            TransactionData::new_move_call_with_dummy_gas_price(
-                sender,
-                package_id,
-                module_id.name().to_owned(),
-                function.to_owned(),
-                type_args,
-                gas_payment,
-                arguments,
-                gas_budget,
-            )
+        let data = |sender, gas| {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder
+                .move_call(
+                    package_id,
+                    module_id.name().to_owned(),
+                    function.to_owned(),
+                    type_args,
+                    arguments,
+                )
+                .unwrap();
+            let pt = builder.finish();
+            TransactionData::new_programmable_with_dummy_gas_price(sender, gas, pt, gas_budget)
         };
         let transaction = self.sign_txn(sender, data);
         let summary = self.execute_txn(transaction, gas_budget)?;
@@ -498,16 +500,23 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 sender,
                 gas_budget,
             }) => {
-                let obj = get_obj!(fake_id);
-                let obj_ref = obj.compute_object_reference();
+                let obj_arg = SuiValue::Object(fake_id).into_call_args(&self)?;
                 let recipient = match self.accounts.get(&recipient) {
                     Some((recipient, _)) => *recipient,
                     None => panic!("Unbound account {}", recipient),
                 };
                 let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
                 let transaction = self.sign_txn(sender, |sender, gas| {
-                    TransactionData::new_transfer_with_dummy_gas_price(
-                        recipient, obj_ref, sender, gas, gas_budget,
+                    let mut builder = ProgrammableTransactionBuilder::new();
+                    let rec_arg = builder.pure(recipient).unwrap();
+                    let obj_arg = builder.input(obj_arg).unwrap();
+                    builder.command(sui_types::messages::Command::TransferObjects(
+                        vec![obj_arg],
+                        rec_arg,
+                    ));
+                    let pt = builder.finish();
+                    TransactionData::new_programmable_with_dummy_gas_price(
+                        sender, gas, pt, gas_budget,
                     )
                 });
                 let summary = self.execute_txn(transaction, gas_budget)?;

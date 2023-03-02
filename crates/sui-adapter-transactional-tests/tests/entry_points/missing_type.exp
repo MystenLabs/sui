@@ -9,20 +9,20 @@ written: object(104)
 
 task 2 'run'. lines 17-17:
 Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: LINKER_ERROR, sub_status: None, message: Some("Cannot find ModuleId { address: test, name: Identifier(\"x\") } in data cache"), exec_state: None, location: Undefined, indices: [], offsets: [] }), command: None } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: LINKER_ERROR, sub_status: None, message: Some("Cannot find ModuleId { address: test, name: Identifier(\"x\") } in data cache"), exec_state: None, location: Undefined, indices: [], offsets: [] }), command: Some(0) } }
 
 task 3 'run'. lines 19-19:
 Error: Transaction Effects Status: Entry Type Argument Error. Error for type argument at index 0: A type was not found in the module specified
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryTypeArgumentError(EntryTypeArgumentError { argument_idx: 0, kind: TypeNotFound }), source: None, command: None } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryTypeArgumentError(EntryTypeArgumentError { argument_idx: 0, kind: TypeNotFound }), source: None, command: Some(0) } }
 
 task 4 'run'. lines 21-21:
 Error: Transaction Effects Status: Entry Type Argument Error. Error for type argument at index 0: Mismatch between the number of actual versus expected type arguments.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryTypeArgumentError(EntryTypeArgumentError { argument_idx: 0, kind: ArityMismatch }), source: None, command: None } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryTypeArgumentError(EntryTypeArgumentError { argument_idx: 0, kind: ArityMismatch }), source: None, command: Some(0) } }
 
 task 5 'run'. lines 23-23:
 Error: Transaction Effects Status: Entry Type Argument Error. Error for type argument at index 0: Mismatch between the number of actual versus expected type arguments.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryTypeArgumentError(EntryTypeArgumentError { argument_idx: 0, kind: ArityMismatch }), source: None, command: None } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryTypeArgumentError(EntryTypeArgumentError { argument_idx: 0, kind: ArityMismatch }), source: None, command: Some(0) } }
 
 task 6 'run'. lines 25-25:
 Error: Transaction Effects Status: Entry Type Argument Error. Error for type argument at index 0: A type provided did not match the specified constraints.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryTypeArgumentError(EntryTypeArgumentError { argument_idx: 0, kind: ConstraintNotSatisfied }), source: None, command: None } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryTypeArgumentError(EntryTypeArgumentError { argument_idx: 0, kind: ConstraintNotSatisfied }), source: None, command: Some(0) } }

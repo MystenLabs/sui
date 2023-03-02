@@ -797,11 +797,6 @@ impl ProgrammableTransaction {
     }
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
-        if !cfg!(test) {
-            return Err(UserInputError::Unsupported(
-                "Programmable transactions are not yet available".to_owned(),
-            ));
-        }
         fp_ensure!(
             self.commands.len() < config.max_programmable_tx_commands() as usize,
             UserInputError::SizeLimitExceeded {
@@ -1747,6 +1742,26 @@ impl TransactionData {
         let kind = TransactionKind::Single(SingleTransactionKind::Publish(MoveModulePublish {
             modules,
         }));
+        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+    }
+
+    pub fn new_programmable_with_dummy_gas_price(
+        sender: SuiAddress,
+        gas_payment: ObjectRef,
+        pt: ProgrammableTransaction,
+        gas_budget: u64,
+    ) -> Self {
+        Self::new_programmable(sender, gas_payment, pt, gas_budget, DUMMY_GAS_PRICE)
+    }
+
+    pub fn new_programmable(
+        sender: SuiAddress,
+        gas_payment: ObjectRef,
+        pt: ProgrammableTransaction,
+        gas_budget: u64,
+        gas_price: u64,
+    ) -> Self {
+        let kind = TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt));
         Self::new(kind, sender, gas_payment, gas_budget, gas_price)
     }
 
