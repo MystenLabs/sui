@@ -69,13 +69,10 @@ export function createTokenValidation(
                     return true;
                 }
 
-                if (!gasBudgetInput) {
-                    return ctx.createError({
-                        message: `Insufficient ${GAS_SYMBOL}, there is no individual coin with enough balance to cover for the gas Fee`,
-                    });
-                }
-
-                if (maxSuiSingleCoinBalance >= gasBudgetInput) {
+                if (
+                    !!gasBudgetInput &&
+                    maxSuiSingleCoinBalance >= gasBudgetInput
+                ) {
                     return true;
                 }
 
@@ -96,7 +93,9 @@ export function createTokenValidation(
                     return true;
                 }
 
-                // check updated gas balance base on gasInputBudgetEst
+                const gasBudgetInput = (ctx.parent?.gasInputBudgetEst ||
+                    gasBudget ||
+                    0) as number;
                 try {
                     let availableGas = gasBalance;
                     if (coinType === GAS_TYPE_ARG) {
@@ -104,26 +103,19 @@ export function createTokenValidation(
                             amount?.shiftedBy(decimals).toString() || '0'
                         );
                     }
-                    if (
-                        availableGas >=
-                        (ctx.parent?.gasInputBudgetEst || gasBudget)
-                    ) {
+                    if (availableGas >= gasBudgetInput) {
                         return true;
                     }
-                    return ctx.createError({
-                        message: `Insufficient ${GAS_SYMBOL} balance to cover gas fee (${formatBalance(
-                            ctx.parent?.gasInputBudgetEst || gasBudget,
-                            gasDecimals
-                        )} ${GAS_SYMBOL})`,
-                    });
                 } catch (e) {
-                    return ctx.createError({
-                        message: `Insufficient ${GAS_SYMBOL} balance to cover gas fee (${formatBalance(
-                            ctx.parent?.gasInputBudgetEst || gasBudget,
-                            gasDecimals
-                        )} ${GAS_SYMBOL})`,
-                    });
+                    // ignore error
                 }
+
+                return ctx.createError({
+                    message: `Insufficient ${GAS_SYMBOL} balance to cover gas fee (${formatBalance(
+                        gasBudgetInput,
+                        gasDecimals
+                    )} ${GAS_SYMBOL})`,
+                });
             },
         })
 
