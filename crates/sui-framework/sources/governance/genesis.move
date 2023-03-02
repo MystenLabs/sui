@@ -42,7 +42,7 @@ module sui::genesis {
         validator_project_urls: vector<vector<u8>>,
         validator_net_addresses: vector<vector<u8>>,
         validator_p2p_addresses: vector<vector<u8>>,
-        validator_consensus_addresses: vector<vector<u8>>,
+        validator_primary_addresses: vector<vector<u8>>,
         validator_worker_addresses: vector<vector<u8>>,
         validator_gas_prices: vector<u64>,
         validator_commission_rates: vector<u64>,
@@ -63,7 +63,7 @@ module sui::genesis {
                 && vector::length(&validator_project_urls) == count
                 && vector::length(&validator_net_addresses) == count
                 && vector::length(&validator_p2p_addresses) == count
-                && vector::length(&validator_consensus_addresses) == count
+                && vector::length(&validator_primary_addresses) == count
                 && vector::length(&validator_worker_addresses) == count
                 && vector::length(&validator_gas_prices) == count
                 && vector::length(&validator_commission_rates) == count,
@@ -82,7 +82,7 @@ module sui::genesis {
             let project_url = *vector::borrow(&validator_project_urls, i);
             let net_address = *vector::borrow(&validator_net_addresses, i);
             let p2p_address = *vector::borrow(&validator_p2p_addresses, i);
-            let consensus_address = *vector::borrow(&validator_consensus_addresses, i);
+            let primary_address = *vector::borrow(&validator_primary_addresses, i);
             let worker_address = *vector::borrow(&validator_worker_addresses, i);
             let gas_price = *vector::borrow(&validator_gas_prices, i);
             let commission_rate = *vector::borrow(&validator_commission_rates, i);
@@ -98,7 +98,7 @@ module sui::genesis {
                 project_url,
                 net_address,
                 p2p_address,
-                consensus_address,
+                primary_address,
                 worker_address,
                 // TODO Figure out if we want to instead initialize validators with 0 stake.
                 // Initialize all validators with 1 Mist stake.

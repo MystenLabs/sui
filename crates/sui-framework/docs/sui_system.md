@@ -28,7 +28,7 @@
 -  [Function `update_validator_project_url`](#0x2_sui_system_update_validator_project_url)
 -  [Function `update_validator_next_epoch_network_address`](#0x2_sui_system_update_validator_next_epoch_network_address)
 -  [Function `update_validator_next_epoch_p2p_address`](#0x2_sui_system_update_validator_next_epoch_p2p_address)
--  [Function `update_validator_next_epoch_consensus_address`](#0x2_sui_system_update_validator_next_epoch_consensus_address)
+-  [Function `update_validator_next_epoch_primary_address`](#0x2_sui_system_update_validator_next_epoch_primary_address)
 -  [Function `update_validator_next_epoch_worker_address`](#0x2_sui_system_update_validator_next_epoch_worker_address)
 -  [Function `update_validator_next_epoch_protocol_pubkey`](#0x2_sui_system_update_validator_next_epoch_protocol_pubkey)
 -  [Function `update_validator_next_epoch_worker_pubkey`](#0x2_sui_system_update_validator_next_epoch_worker_pubkey)
@@ -464,7 +464,7 @@ The <code><a href="validator.md#0x2_validator">validator</a></code> object needs
 The amount of stake in the <code><a href="validator.md#0x2_validator">validator</a></code> object must meet the requirements.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_validator">request_add_validator</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, description: <a href="">vector</a>&lt;u8&gt;, image_url: <a href="">vector</a>&lt;u8&gt;, project_url: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, p2p_address: <a href="">vector</a>&lt;u8&gt;, consensus_address: <a href="">vector</a>&lt;u8&gt;, worker_address: <a href="">vector</a>&lt;u8&gt;, stake: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, gas_price: u64, commission_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_validator">request_add_validator</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, description: <a href="">vector</a>&lt;u8&gt;, image_url: <a href="">vector</a>&lt;u8&gt;, project_url: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, p2p_address: <a href="">vector</a>&lt;u8&gt;, primary_address: <a href="">vector</a>&lt;u8&gt;, worker_address: <a href="">vector</a>&lt;u8&gt;, stake: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, gas_price: u64, commission_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -485,7 +485,7 @@ The amount of stake in the <code><a href="validator.md#0x2_validator">validator<
     project_url: <a href="">vector</a>&lt;u8&gt;,
     net_address: <a href="">vector</a>&lt;u8&gt;,
     p2p_address: <a href="">vector</a>&lt;u8&gt;,
-    consensus_address: <a href="">vector</a>&lt;u8&gt;,
+    primary_address: <a href="">vector</a>&lt;u8&gt;,
     worker_address: <a href="">vector</a>&lt;u8&gt;,
     stake: Coin&lt;SUI&gt;,
     gas_price: u64,
@@ -514,7 +514,7 @@ The amount of stake in the <code><a href="validator.md#0x2_validator">validator<
         project_url,
         net_address,
         p2p_address,
-        consensus_address,
+        primary_address,
         worker_address,
         <a href="coin.md#0x2_coin_into_balance">coin::into_balance</a>(stake),
         <a href="_none">option::none</a>(),
@@ -1083,15 +1083,15 @@ The change will only take effects starting from the next epoch.
 
 </details>
 
-<a name="0x2_sui_system_update_validator_next_epoch_consensus_address"></a>
+<a name="0x2_sui_system_update_validator_next_epoch_primary_address"></a>
 
-## Function `update_validator_next_epoch_consensus_address`
+## Function `update_validator_next_epoch_primary_address`
 
-Update a validator's consensus address.
+Update a validator's narwhal primary address.
 The change will only take effects starting from the next epoch.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_consensus_address">update_validator_next_epoch_consensus_address</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, consensus_address: <a href="">vector</a>&lt;u8&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_primary_address">update_validator_next_epoch_primary_address</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, primary_address: <a href="">vector</a>&lt;u8&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1100,14 +1100,14 @@ The change will only take effects starting from the next epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_consensus_address">update_validator_next_epoch_consensus_address</a>(
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_primary_address">update_validator_next_epoch_primary_address</a>(
     self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
-    consensus_address: <a href="">vector</a>&lt;u8&gt;,
+    primary_address: <a href="">vector</a>&lt;u8&gt;,
     ctx: &TxContext,
 ) {
     <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self);
     <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_mut">validator_set::get_active_or_pending_validator_mut</a>(&<b>mut</b> self.validators, ctx);
-    <a href="validator.md#0x2_validator_update_next_epoch_consensus_address">validator::update_next_epoch_consensus_address</a>(<a href="validator.md#0x2_validator">validator</a>, consensus_address);
+    <a href="validator.md#0x2_validator_update_next_epoch_primary_address">validator::update_next_epoch_primary_address</a>(<a href="validator.md#0x2_validator">validator</a>, primary_address);
 }
 </code></pre>
 
@@ -1119,7 +1119,7 @@ The change will only take effects starting from the next epoch.
 
 ## Function `update_validator_next_epoch_worker_address`
 
-Update a validator's worker address.
+Update a validator's narwhal worker address.
 The change will only take effects starting from the next epoch.
 
 
