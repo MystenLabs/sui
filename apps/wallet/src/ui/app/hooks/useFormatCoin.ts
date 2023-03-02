@@ -15,6 +15,11 @@ type FormattedCoin = [
     queryResult: UseQueryResult
 ];
 
+export enum CoinFormat {
+    ROUNDED = 'ROUNDED',
+    FULL = 'FULL',
+}
+
 /**
  * Formats a coin balance based on our standard coin display logic.
  * If the balance is less than 1, it will be displayed in its full decimal form.
@@ -22,10 +27,15 @@ type FormattedCoin = [
  */
 export function formatBalance(
     balance: bigint | number | string,
-    decimals: number
+    decimals: number,
+    format: CoinFormat = CoinFormat.ROUNDED
 ) {
     let postfix = '';
     let bn = new BigNumber(balance.toString()).shiftedBy(-1 * decimals);
+
+    if (format === CoinFormat.FULL) {
+        return bn.toFormat();
+    }
 
     if (bn.gte(1_000_000_000)) {
         bn = bn.shiftedBy(-9);
@@ -76,7 +86,8 @@ export function useCoinDecimals(coinType?: string | null) {
 // today, but it really shouldn't in a perfect world.
 export function useFormatCoin(
     balance?: bigint | number | string | null,
-    coinType?: string | null
+    coinType?: string | null,
+    format: CoinFormat = CoinFormat.ROUNDED
 ): FormattedCoin {
     const intl = useIntl();
     const symbol = useMemo(
@@ -98,8 +109,8 @@ export function useFormatCoin(
 
         if (!isFetched) return '...';
 
-        return formatBalance(balance, decimals);
-    }, [decimals, isError, isFetched, intl, balance]);
+        return formatBalance(balance, decimals, format);
+    }, [balance, isError, isFetched, decimals, format, intl]);
 
     return [formatted, symbol, queryResult];
 }
