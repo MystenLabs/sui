@@ -127,20 +127,12 @@ export function SendTokenForm({
     );
 
     const allCoins = useAppSelector(accountCoinsSelector);
-    const coins = useMemo(
-        () =>
-            allCoins.filter(
-                ({ type }) => CoinAPI.getCoinType(type) === coinType
-            ),
-        [allCoins, coinType]
+    const coins = allCoins.filter(
+        ({ type }) => CoinAPI.getCoinType(type) === coinType
     );
 
-    const suiCoins = useMemo(
-        () =>
-            allCoins.filter(
-                ({ type }) => CoinAPI.getCoinType(type) === SUI_TYPE_ARG
-            ),
-        [allCoins]
+    const suiCoins = allCoins.filter(
+        ({ type }) => CoinAPI.getCoinType(type) === SUI_TYPE_ARG
     );
 
     const gasAggregateBalance = aggregateBalances[SUI_TYPE_ARG] || BigInt(0);
@@ -181,10 +173,9 @@ export function SendTokenForm({
         CoinFormat.FULL
     );
 
-    // Max token depending on coin response could be '...' base on the query result
+
     // remove the comma from the token balance
-    const maxToken =
-        tokenBalance !== '...' ? tokenBalance.replace(/,/g, '') : null;
+    const maxToken = tokenBalance.replace(/,/g, '');
 
     return (
         <Loading loading={queryResult.isLoading}>
@@ -208,7 +199,7 @@ export function SendTokenForm({
                 }: FormValues) => {
                     if (!gasInputBudgetEst || !coins || !suiCoins) return;
                     const coinsIDs = coins
-                        .sort((a, b) => a.fields.balance - b.fields.balance)
+                        .sort((a, b) => b.fields.balance - a.fields.balance)
                         .map(({ fields }) => fields.coinObjectId);
                     const suiCoinsIds = suiCoins.map(
                         ({ fields }) => fields.id.id
