@@ -96,10 +96,12 @@ pub struct AuthAggMetrics {
     pub total_tx_certificates_created: IntCounter,
     pub num_signatures: Histogram,
     pub num_good_stake: Histogram,
-    pub num_bad_stake: Histogram,
+    pub non_retryable_stake: Histogram,
     pub total_quorum_once_timeout: IntCounter,
     pub process_tx_errors: IntCounterVec,
     pub process_cert_errors: IntCounterVec,
+    pub total_equivocation_detected: IntCounter,
+    pub total_aggregated_non_recoverable_err: IntCounterVec,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -132,9 +134,9 @@ impl AuthAggMetrics {
                 registry,
             )
             .unwrap(),
-            num_bad_stake: register_histogram_with_registry!(
-                "num_bad_stake_per_tx",
-                "Amount of bad stake collected per transaction",
+            non_retryable_stake: register_histogram_with_registry!(
+                "non_retryable_stake_per_tx",
+                "Amount of non-retryable stake collected per transaction",
                 POSITIVE_INT_BUCKETS.to_vec(),
                 registry,
             )
@@ -159,6 +161,19 @@ impl AuthAggMetrics {
                 registry,
             )
             .unwrap(),
+            total_equivocation_detected: register_int_counter_with_registry!(
+                "total_equivocation_detected",
+                "Total number of equivocations that are detected",
+                registry,
+            )
+            .unwrap(),
+            total_aggregated_non_recoverable_err: register_int_counter_vec_with_registry!(
+                "total_aggregated_non_recoverable_err",
+                "Total number of errors returned from validators per transaction, grouped by error type",
+                &["error", "tx_recoverable"],
+                registry,
+            )
+            .unwrap(),
         }
     }
 
@@ -168,28 +183,66 @@ impl AuthAggMetrics {
     }
 }
 
-#[derive(Error, Debug)]
-#[error(
-    "Failed to execute certificate on a quorum of validators. Validator errors: {:?}",
-    errors
-)]
-pub struct QuorumExecuteCertificateError {
-    pub total_stake: StakeUnit,
-    pub errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+#[derive(Error, Debug, Eq, PartialEq)]
+pub enum AggregatorProcessTransactionError {
+    #[error(
+        "Failed to execute transaction on a quorum of validators due to non-retryable errors. Validator errors: {:?}",
+        errors,
+    )]
+    FatalTransaction {
+        errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+    },
+
+    #[error(
+        "Failed to execute transaction on a quorum of validators but state is still retryable. Validator errors: {:?}",
+        errors
+    )]
+    RetryableTransaction {
+        errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+    },
+
+    #[error(
+        "Failed to execute transaction on a quorum of validators due to conflicting transactions. Locked objects: {:?}. Validator errors: {:?}",
+        conflicting_tx_digests,
+        errors,
+    )]
+    FatalConflictingTransaction {
+        errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+        conflicting_tx_digests:
+            BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
+    },
+
+    #[error(
+        "Validators returned conflicting transactions but it is potentially recoverable. Locked objects: {:?}. Validator errors: {:?}",
+        conflicting_tx_digests,
+        errors,
+    )]
+    RetryableConflictingTransaction {
+        // Conflicting transaction with >= f+1 stake, if it exists.
+        tx_digest_to_retry: Option<TransactionDigest>,
+        errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+        conflicting_tx_digests:
+            BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
+    },
 }
 
 #[derive(Error, Debug)]
-#[error(
-    "Failed to execute transaction on a quorum of validators to form a transaction certificate. Locked objects: {:?}. Validator errors: {:?}",
-    conflicting_tx_digests,
-    errors,
-)]
-pub struct QuorumSignTransactionError {
-    pub total_stake: StakeUnit,
-    pub good_stake: StakeUnit,
-    pub errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
-    pub conflicting_tx_digests:
-        BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
+pub enum AggregatorProcessCertificateError {
+    #[error(
+        "Failed to execute certificate on a quorum of validators. Non-retryable errors: {:?}",
+        non_retryable_errors
+    )]
+    FatalExecuteCertificate {
+        non_retryable_errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+    },
+
+    #[error(
+        "Failed to execute certificate on a quorum of validators but state is still retryable. Retryable errors: {:?}",
+        retryable_errors
+    )]
+    RetryableExecuteCertificate {
+        retryable_errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+    },
 }
 
 struct ProcessTransactionState {
@@ -198,15 +251,46 @@ struct ProcessTransactionState {
     effects_map: MultiStakeAggregator<TransactionEffectsDigest, TransactionEffects, true>,
     // The list of errors gathered at any point
     errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
-    bad_stake: StakeUnit,
+    // This is exclusively non-retryable stake.
+    non_retryable_stake: StakeUnit,
+    // This includes both object and package not found sui errors.
+    object_or_package_not_found_stake: StakeUnit,
     // If there are conflicting transactions, we note them down and may attempt to retry
     conflicting_tx_digests:
         BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
+    // As long as none of the exit criteria are met we consider the state retryable
+    // 1) >= 2f+1 signatures
+    // 2) >= f+1 non-retryable errors
+    // 3) >= 2f+1 object not found errors
+    // Note: For conflicting transactions we wait till we receive all responses to make
+    // a determination on whether to retry or not.
+    retryable: bool,
 }
 
 impl ProcessTransactionState {
     pub fn good_stake(&self) -> StakeUnit {
         self.tx_signatures.total_votes() + self.effects_map.total_votes()
+    }
+
+    #[allow(clippy::type_complexity)]
+    pub fn conflicting_tx_digest_with_most_stake(
+        &self,
+    ) -> Option<(
+        TransactionDigest,
+        &Vec<(AuthorityName, ObjectRef)>,
+        StakeUnit,
+    )> {
+        self.conflicting_tx_digests
+            .iter()
+            .max_by_key(|(_, (_, stake))| *stake)
+            .map(|(digest, (validators, stake))| (*digest, validators, *stake))
+    }
+
+    pub fn conflicting_tx_digests_total_stake(&self) -> StakeUnit {
+        self.conflicting_tx_digests
+            .iter()
+            .map(|(_, (_, stake))| *stake)
+            .sum()
     }
 }
 
@@ -216,8 +300,13 @@ struct ProcessCertificateState {
     // The map here allows us to count the stake for each unique effect.
     effects_map:
         MultiStakeAggregator<(EpochId, TransactionEffectsDigest), TransactionEffects, true>,
-    bad_stake: StakeUnit,
-    errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+    non_retryable_stake: StakeUnit,
+    non_retryable_errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+    retryable_errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+    // As long as none of the exit criteria are met we consider the state retryable
+    // 1) >= 2f+1 signatures
+    // 2) >= f+1 non-retryable errors
+    retryable: bool,
 }
 
 #[derive(Debug)]
@@ -899,7 +988,7 @@ where
     pub async fn process_transaction(
         &self,
         transaction: VerifiedTransaction,
-    ) -> Result<ProcessTransactionResult, QuorumSignTransactionError> {
+    ) -> Result<ProcessTransactionResult, AggregatorProcessTransactionError> {
         // Now broadcast the transaction to all authorities.
         let tx_digest = transaction.digest();
         debug!(
@@ -916,12 +1005,15 @@ where
             tx_signatures: StakeAggregator::new(committee.clone()),
             effects_map: MultiStakeAggregator::new(committee.clone()),
             errors: vec![],
-            bad_stake: 0,
+            object_or_package_not_found_stake: 0,
+            non_retryable_stake: 0,
+            retryable: true,
             conflicting_tx_digests: Default::default(),
         };
 
         let transaction_ref = &transaction;
         let validity_threshold = committee.validity_threshold();
+        let quorum_threshold = committee.quorum_threshold();
         let result = self
             .quorum_map_then_reduce_with_timeout(
                 state,
@@ -946,10 +1038,29 @@ where
                                     .process_tx_errors
                                     .with_label_values(&[&name.concise().to_string(), err.as_ref()])
                                     .inc();
-                                state.bad_stake += weight;
+                                let (retryable, categorized) = err.is_retryable();
+                                if err.is_object_or_package_not_found() {
+                                    // Special case for object not found because we can
+                                    // retry if we have < 2f+1 object not found errors. 
+                                    // However once we reach >= 2f+1 object not found errors
+                                    // we cannot retry.
+                                    state.object_or_package_not_found_stake += weight;
+                                }
+                                else if !retryable && !self.record_conflicting_transaction_if_any(&mut state, name, weight, &err) {
+                                    if !categorized {
+                                        // we should minimize possible uncategorized errors here
+                                        // use ERROR for now to make them easier to spot.
+                                        error!(?tx_digest, "uncategorized tx error: {err}");
+                                    }
+                                    // Error is neither retryable or a potentially retryable conflicting transaction.
+                                    state.non_retryable_stake += weight;
+                                }
                                 state.errors.push((err, vec![name], weight));
 
-                                if state.bad_stake > validity_threshold {
+                                if state.non_retryable_stake >= validity_threshold || state.object_or_package_not_found_stake >= quorum_threshold{
+                                    // We have hit an exit condition, f+1 non-retryable err or 2f+1 object not found,
+                                    // so we no longer consider the transaction state as retryable.
+                                    state.retryable = false;
                                     ReduceOutput::Failed(state)
                                 } else {
                                     ReduceOutput::Continue(state)
@@ -968,12 +1079,87 @@ where
             Err(state) => {
                 self.record_process_transaction_metrics(tx_digest, &state);
                 let state = Self::record_non_quorum_effects_maybe(tx_digest, state);
-                Err(QuorumSignTransactionError {
-                    total_stake: self.committee.total_votes,
-                    good_stake: state.good_stake(),
+                Err(self.handle_process_transaction_error(tx_digest, state))
+            }
+        }
+    }
+
+    // TODO make sure this is epoch-boundary-safe
+    fn handle_process_transaction_error(
+        &self,
+        original_tx_digest: &TransactionDigest,
+        state: ProcessTransactionState,
+    ) -> AggregatorProcessTransactionError {
+        let validity_threshold = self.committee.validity_threshold();
+
+        if state.retryable {
+            if !state.conflicting_tx_digests.is_empty() {
+                if let Some((conflicting_tx, validators, conflicting_stake)) =
+                    state.conflicting_tx_digest_with_most_stake()
+                {
+                    let good_stake = state.good_stake();
+                    if good_stake >= validity_threshold && conflicting_stake >= validity_threshold {
+                        warn!(
+                            ?conflicting_tx,
+                            ?original_tx_digest,
+                            original_tx_stake = good_stake,
+                            tx_stake = conflicting_stake,
+                            "Equivocation detected: {:?}",
+                            validators
+                        );
+                        self.metrics.total_equivocation_detected.inc();
+                        return AggregatorProcessTransactionError::FatalConflictingTransaction {
+                            errors: state.errors,
+                            conflicting_tx_digests: state.conflicting_tx_digests,
+                        };
+                    } else if good_stake >= validity_threshold {
+                        // We have >= f+1 good stake on the current transaction so we will retry that,
+                        // no point in retrying conflicting ones.
+                        return AggregatorProcessTransactionError::RetryableConflictingTransaction {
+                            errors: state.errors,
+                            tx_digest_to_retry: None,
+                            conflicting_tx_digests: state.conflicting_tx_digests,
+                        };
+                    } else if conflicting_stake >= validity_threshold {
+                        // To be more conservative and try not to actually cause full equivocation,
+                        // we only retry a transaction when at least f+1 validators claims this tx locks objects
+                        return AggregatorProcessTransactionError::RetryableConflictingTransaction {
+                            errors: state.errors,
+                            tx_digest_to_retry: Some(conflicting_tx),
+                            conflicting_tx_digests: state.conflicting_tx_digests,
+                        };
+                    } else if state.conflicting_tx_digests_total_stake() + state.non_retryable_stake
+                        < validity_threshold
+                    {
+                        // State is still retryable and we have < f+1 total conflicting stake
+                        // and non-retryable stake so we can retry the original tx.
+                        return AggregatorProcessTransactionError::RetryableConflictingTransaction {
+                            errors: state.errors,
+                            tx_digest_to_retry: None,
+                            conflicting_tx_digests: state.conflicting_tx_digests,
+                        };
+                    }
+                    // TODO: There is one more potentially retryable case where we
+                    // have multiple conflicting txs of which none are >= f+1. In this
+                    // case we could examine the subset of locked objects between the
+                    // tx to make a decision.
+                }
+
+                info!("Did not find a valid retryable scenario for Tx {original_tx_digest} with conflicting txs: {:?}", state.conflicting_tx_digests);
+                AggregatorProcessTransactionError::FatalConflictingTransaction {
                     errors: state.errors,
                     conflicting_tx_digests: state.conflicting_tx_digests,
-                })
+                }
+            } else {
+                // No conflicting transaction and transaction state is still retryable.
+                AggregatorProcessTransactionError::RetryableTransaction {
+                    errors: state.errors,
+                }
+            }
+        } else {
+            // Transaction state is not retryable.
+            AggregatorProcessTransactionError::FatalTransaction {
+                errors: state.errors,
             }
         }
     }
@@ -988,13 +1174,15 @@ where
         self.metrics.num_signatures.observe(num_signatures as f64);
         let good_stake = state.good_stake();
         self.metrics.num_good_stake.observe(good_stake as f64);
-        self.metrics.num_bad_stake.observe(state.bad_stake as f64);
+        self.metrics
+            .non_retryable_stake
+            .observe(state.non_retryable_stake as f64);
         debug!(
             ?tx_digest,
             num_errors = state.errors.iter().map(|e| e.1.len()).sum::<usize>(),
             num_unique_errors = state.errors.len(),
             ?good_stake,
-            bad_stake = state.bad_stake,
+            non_retryable_stake = state.non_retryable_stake,
             ?num_signatures,
             "Received signatures response from validators handle_transaction"
         );
@@ -1024,21 +1212,17 @@ where
                 debug!(?tx_digest, name=?name.concise(), weight, "Received prev effects from validator handle_transaction");
                 self.handle_transaction_response_with_executed(state, None, effects, events)
             }
-            Err(err) => {
-                self.record_conflicting_transaction_if_any(state, name, weight, &err);
-                Err(err)
-            }
+            Err(err) => Err(err),
         }
     }
 
-    // TODO: This should really be done at higher level such as quorum driver, not here.
     fn record_conflicting_transaction_if_any(
         &self,
         state: &mut ProcessTransactionState,
         name: AuthorityName,
         weight: StakeUnit,
         err: &SuiError,
-    ) {
+    ) -> bool {
         if let SuiError::ObjectLockConflict {
             obj_ref,
             pending_transaction,
@@ -1050,7 +1234,9 @@ where
                 .or_insert((Vec::new(), 0));
             lock_records.push((name, *obj_ref));
             *total_stake += weight;
+            return true;
         }
+        false
     }
 
     fn handle_transaction_response_with_signed(
@@ -1133,22 +1319,24 @@ where
                 involved_validators,
                 total_stake,
             ));
+            state.retryable = false;
         }
         state
     }
 
-    /// Process a certificate
     pub async fn process_certificate(
         &self,
         certificate: CertifiedTransaction,
     ) -> Result<
         (VerifiedCertifiedTransactionEffects, TransactionEvents),
-        QuorumExecuteCertificateError,
+        AggregatorProcessCertificateError,
     > {
         let state = ProcessCertificateState {
             effects_map: MultiStakeAggregator::new(Arc::new(self.committee.clone())),
-            bad_stake: 0,
-            errors: vec![],
+            non_retryable_stake: 0,
+            non_retryable_errors: vec![],
+            retryable_errors: vec![],
+            retryable: true,
         };
 
         let tx_digest = *certificate.digest();
@@ -1192,9 +1380,20 @@ where
                                 .process_cert_errors
                                 .with_label_values(&[&concise_name.to_string(), err.as_ref()])
                                 .inc();
-                            state.errors.push((err, vec![name], weight));
-                            state.bad_stake += weight;
-                            if state.bad_stake > validity {
+                            let (retryable, categorized) = err.is_retryable();
+                            if !retryable {
+                                if !categorized {
+                                    // we should minimize possible uncategorized errors here
+                                    // use ERROR for now to make them easier to spot.
+                                    error!(?tx_digest, "uncategorized tx error: {err}");
+                                }
+                                state.non_retryable_stake += weight;
+                                state.non_retryable_errors.push((err, vec![name], weight));
+                            } else {
+                                state.retryable_errors.push((err, vec![name], weight));
+                            }
+                            if state.non_retryable_stake >= validity {
+                                state.retryable = false;
                                 ReduceOutput::Failed(state)
                             } else {
                                 ReduceOutput::Continue(state)
@@ -1211,12 +1410,34 @@ where
             debug!(
                 ?tx_digest,
                 num_unique_effects = state.effects_map.unique_key_count(),
-                bad_stake = state.bad_stake,
+                non_retryable_stake = state.non_retryable_stake,
                 "Received effects responses from validators"
             );
-            QuorumExecuteCertificateError {
-                total_stake: self.committee.total_votes,
-                errors: state.errors,
+
+            // record non-retryable errors
+            for (sui_err, _, _) in state.retryable_errors.iter() {
+                self
+                    .metrics
+                    .total_aggregated_non_recoverable_err
+                    .with_label_values(&[
+                        sui_err.as_ref(),
+                        if state.retryable {
+                            "recoverable"
+                        } else {
+                            "non-recoverable"
+                        },
+                    ])
+                    .inc();
+            }
+
+            if state.retryable {
+                AggregatorProcessCertificateError::RetryableExecuteCertificate {
+                    retryable_errors: state.retryable_errors,
+                }
+            } else {
+                AggregatorProcessCertificateError::FatalExecuteCertificate {
+                    non_retryable_errors: state.non_retryable_errors,
+                }
             }
         })
     }

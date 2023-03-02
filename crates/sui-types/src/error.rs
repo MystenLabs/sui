@@ -582,6 +582,19 @@ impl SuiError {
             _ => (false, false),
         }
     }
+
+    pub fn is_object_or_package_not_found(&self) -> bool {
+        match self {
+            SuiError::UserInputError { error } => {
+                matches!(
+                    error,
+                    UserInputError::ObjectNotFound { .. }
+                        | UserInputError::DependentPackageNotFound { .. }
+                )
+            }
+            _ => false,
+        }
+    }
 }
 
 type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;

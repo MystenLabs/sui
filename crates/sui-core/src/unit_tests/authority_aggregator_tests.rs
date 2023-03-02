@@ -342,7 +342,7 @@ async fn test_quorum_map_and_reduce_timeout() {
     assert!(certified_effects.is_err());
     assert!(matches!(
         certified_effects,
-        Err(QuorumExecuteCertificateError { .. })
+        Err(AggregatorProcessCertificateError::RetryableExecuteCertificate { .. })
     ));
     tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
     let tx_info = TransactionInfoRequest {
@@ -467,7 +467,7 @@ async fn test_map_reducer() {
 
 #[sim_test]
 async fn test_process_transaction_fault_success() {
-    // This test exercises the 4 different possible fauling case when one authority is faulty.
+    // This test exercises the 4 different possible failing case when one authority is faulty.
     // A transaction is sent to all authories, however one of them will error out either before or after processing the transaction.
     // A cert should still be created, and sent out to all authorities again. This time
     // a different authority errors out either before or after processing the cert.
@@ -536,7 +536,7 @@ async fn test_quorum_once_with_timeout() {
 
     let count = Arc::new(Mutex::new(0));
     let (authorities, _authorities_vec, clients) = get_authorities(count.clone(), 30);
-    let agg = get_agg(authorities, clients, 0);
+    let agg = get_genesis_agg(authorities, clients);
 
     let case = |agg: AuthorityAggregator<MockAuthorityApi>, authority_request_timeout: u64| async move {
         let log = Arc::new(Mutex::new(Vec::new()));
@@ -621,12 +621,11 @@ fn get_authorities(
     (authorities, authorities_vec, clients)
 }
 
-fn get_agg<A>(
+fn get_genesis_agg<A>(
     authorities: BTreeMap<AuthorityName, StakeUnit>,
     clients: BTreeMap<AuthorityName, A>,
-    epoch: EpochId,
 ) -> AuthorityAggregator<A> {
-    let committee = Committee::new(epoch, authorities).unwrap();
+    let committee = Committee::new(0, authorities).unwrap();
     let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
 
     AuthorityAggregator::new_with_timeouts(
@@ -639,6 +638,23 @@ fn get_agg<A>(
             ..Default::default()
         },
     )
+}
+
+fn get_agg_at_epoch<A>(
+    authorities: BTreeMap<AuthorityName, StakeUnit>,
+    clients: BTreeMap<AuthorityName, A>,
+    epoch: EpochId,
+) -> AuthorityAggregator<A>
+where
+    A: Clone,
+{
+    let mut agg = get_genesis_agg(authorities.clone(), clients);
+    let committee = Committee::new(epoch, authorities).unwrap();
+    agg.committee_store
+        .insert_new_committee(&committee)
+        .unwrap();
+    agg.committee = committee;
+    agg
 }
 
 fn sign_tx(
@@ -661,8 +677,6 @@ fn sign_tx_effects(
 
 #[tokio::test]
 async fn test_handle_transaction_response() {
-    telemetry_subscribers::init_for_testing();
-
     let mut authorities = BTreeMap::new();
     let mut clients = BTreeMap::new();
     let mut authority_keys = Vec::new();
@@ -675,32 +689,57 @@ async fn test_handle_transaction_response() {
     }
 
     let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
+    let gas_object = random_object_ref();
     let tx = make_transfer_sui_transaction(
-        random_object_ref(),
+        gas_object,
         SuiAddress::default(),
         None,
         sender,
         &sender_kp,
         None,
     );
-    // Case 0
+    let package_not_found_error = SuiError::UserInputError {
+        error: UserInputError::DependentPackageNotFound {
+            package_id: gas_object.0,
+        },
+    };
+    let object_not_found_error = SuiError::UserInputError {
+        error: UserInputError::ObjectNotFound {
+            object_id: gas_object.0,
+            version: Some(gas_object.1),
+        },
+    };
+
+    println!("Case 0 - Non-retryable Transaction (Unknown Error)");
     // Validators give invalid response because of the initial value set for their responses.
-    let agg = get_agg(authorities.clone(), clients.clone(), 0);
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
 
-    assert_resp_err(&agg, tx.clone(), |e| matches!(e, SuiError::Unknown(..))).await;
+    assert_resp_err(
+        &agg,
+        tx.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::FatalTransaction { .. }
+            )
+        },
+        |e| matches!(e, SuiError::Unknown(..)),
+    )
+    .await;
 
-    // Case 1
+    println!("Case 1 - Successful Signed Transaction");
     // All Validators gives signed-tx
     set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx, 0);
+
     // Validators now gives valid signed tx and we get TxCert
-    let mut agg = get_agg(authorities.clone(), clients.clone(), 0);
+    let mut agg = get_genesis_agg(authorities.clone(), clients.clone());
     let cert_epoch_0 = agg
         .process_transaction(tx.clone())
         .await
         .unwrap()
         .into_cert_for_testing();
 
-    // Case 2
+    println!("Case 2 - Retryable Transaction (WrongEpoch Error)");
     // Validators return signed-tx with epoch 0, client expects 1
     // Update client to epoch 1
     let committee_1 = Committee::new(1, authorities.clone()).unwrap();
@@ -709,11 +748,11 @@ async fn test_handle_transaction_response() {
         .unwrap();
     agg.committee = committee_1;
 
-    assert_resp_err(&agg, tx.clone(),
+    assert_resp_err(&agg, tx.clone(), |e| matches!(e, AggregatorProcessTransactionError::RetryableTransaction { .. }),
         |e| matches!(e, SuiError::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 1 && *actual_epoch == 0)
     ).await;
 
-    // Case 3
+    println!("Case 3 - Successful Cert Transaction");
     // Val-0 returns tx-cert
     let effects = effects_with_tx(*cert_epoch_0.digest());
     let (name_0, key_0) = &authority_keys[0];
@@ -734,19 +773,25 @@ async fn test_handle_transaction_response() {
     for (name, _) in authority_keys.iter().skip(3) {
         clients.get_mut(name).unwrap().reset_tx_info_response();
     }
-    let agg = get_agg(authorities.clone(), clients.clone(), 0);
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
     // We have a valid cert because val-0 has it. Note we can't form a cert based on what val-1 and val-2 give
     agg.process_transaction(tx.clone()).await.unwrap();
 
-    // Case 4
+    println!("Case 4 - Retryable Transaction (MissingCommitteeAtEpoch Error)");
     // Validators return signed-tx with epoch 1, client expects 0
     set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx, 1);
 
-    let mut agg = get_agg(authorities.clone(), clients.clone(), 0);
+    let mut agg = get_genesis_agg(authorities.clone(), clients.clone());
 
     assert_resp_err(
         &agg,
         tx.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::RetryableTransaction { .. }
+            )
+        },
         |e| matches!(e, SuiError::MissingCommitteeAtEpoch(e) if *e == 1),
     )
     .await;
@@ -756,13 +801,14 @@ async fn test_handle_transaction_response() {
         .insert_new_committee(&committee_1)
         .unwrap();
     agg.committee = committee_1.clone();
+
     let cert_epoch_1 = agg
         .process_transaction(tx.clone())
         .await
         .unwrap()
         .into_cert_for_testing();
 
-    // Case 5
+    println!("Case 5 - Retryable Transaction (WrongEpoch Error)");
     // Validators return tx-cert with epoch 0, client expects 1
     let effects = effects_with_tx(*cert_epoch_0.digest());
     set_tx_info_response_with_cert_and_effects(
@@ -774,13 +820,10 @@ async fn test_handle_transaction_response() {
     );
 
     // Update client to epoch 1
-    let mut agg = get_agg(authorities.clone(), clients.clone(), 0);
-    agg.committee_store
-        .insert_new_committee(&committee_1)
-        .unwrap();
-    agg.committee = committee_1.clone();
+    let agg = get_agg_at_epoch(authorities.clone(), clients.clone(), 1);
+
     // Err because either cert or signed effects is in epoch 0
-    assert_resp_err(&agg, tx.clone(),
+    assert_resp_err(&agg, tx.clone(), |e| matches!(e, AggregatorProcessTransactionError::RetryableTransaction { .. }),
         |e| matches!(e, SuiError::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 1 && *actual_epoch == 0)
     ).await;
 
@@ -791,15 +834,11 @@ async fn test_handle_transaction_response() {
         effects,
         1,
     );
-    let mut agg = get_agg(authorities.clone(), clients.clone(), 0);
-    agg.committee_store
-        .insert_new_committee(&committee_1)
-        .unwrap();
-    agg.committee = committee_1.clone();
+    let agg = get_agg_at_epoch(authorities.clone(), clients.clone(), 1);
     // We have 2f+1 signed effects on epoch 1, so we are good.
     agg.process_transaction(tx.clone()).await.unwrap();
 
-    // Case 6
+    println!("Case 6 - Nonretryable Transaction (QuorumFailedToGetEffectsQuorumWhenProcessingTransaction Error)");
     // Validators 2 and 3 returns tx-cert with epoch 1, but different signed effects from 0 and 1
     let mut effects = effects_with_tx(*cert_epoch_0.digest());
     *effects.status_mut_for_testing() = ExecutionStatus::Failure {
@@ -814,21 +853,27 @@ async fn test_handle_transaction_response() {
         1,
     );
 
-    let mut agg = get_agg(authorities.clone(), clients.clone(), 0);
-    agg.committee_store
-        .insert_new_committee(&committee_1)
-        .unwrap();
-    agg.committee = committee_1.clone();
+    let agg = get_agg_at_epoch(authorities.clone(), clients.clone(), 1);
 
-    assert_resp_err(&agg, tx.clone(), |e| {
-        matches!(
-            e,
-            SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. }
-        )
-    })
+    assert_resp_err(
+        &agg,
+        tx.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::FatalTransaction { .. }
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. }
+            )
+        },
+    )
     .await;
 
-    // Case 7
+    println!("Case 7 - Retryable Transaction (MissingCommitteeAtEpoch Error)");
     // Validators return tx-cert with epoch 1, client expects 0
     let effects = effects_with_tx(*cert_epoch_1.digest());
     set_tx_info_response_with_cert_and_effects(
@@ -838,58 +883,581 @@ async fn test_handle_transaction_response() {
         effects,
         1,
     );
-    let agg = get_agg(authorities.clone(), clients.clone(), 0);
+    let mut agg = get_genesis_agg(authorities.clone(), clients.clone());
 
     assert_resp_err(
         &agg,
         tx.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::RetryableTransaction { .. }
+            )
+        },
         |e| matches!(e, SuiError::MissingCommitteeAtEpoch(e) if *e == 1),
     )
     .await;
 
-    // Update committee store, now SafeClinet will pass
+    println!("Case 7.1 - Retryable Transaction (WrongEpoch Error)");
+    // Update committee store, now SafeClient will pass
+    let committee_1 = Committee::new(1, authorities.clone()).unwrap();
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
+    assert_resp_err(
+        &agg,
+        tx.clone(),|e| matches!(e, AggregatorProcessTransactionError::RetryableTransaction { .. }),
+        |e| matches!(e, SuiError::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 0 && *actual_epoch == 1)
+    )
+    .await;
 
+    println!("Case 7.2 - Successful Cert Transaction");
+    // Update aggregator committee, and transaction will succeed.
+    agg.committee = committee_1;
+    agg.process_transaction(tx.clone()).await.unwrap();
+
+    println!("Case 8 - Retryable Transaction (ObjectNotFound Error)");
+    // < 2f+1 object not found errors
+    set_retryable_tx_info_response_error(&mut clients, &authority_keys);
+    for (name, _) in authority_keys.iter().skip(2) {
+        clients
+            .get_mut(name)
+            .unwrap()
+            .set_tx_info_response_error(object_not_found_error.clone());
+    }
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
     assert_resp_err(
         &agg,
         tx.clone(),
-        |e| matches!(e, SuiError::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 0 && *actual_epoch == 1)
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::RetryableTransaction { .. }
+            )
+        },
+        |e| matches!(e, SuiError::UserInputError { .. } | SuiError::RpcError(..)),
+    )
+    .await;
+
+    // TODO: change to use a move transaction which makes package error more realistic
+    println!("Case 8.1 - Retryable Transaction (PackageNotFound Error)");
+    // < 2f+1 package not found errors
+    for (name, _) in authority_keys.iter().skip(2) {
+        clients
+            .get_mut(name)
+            .unwrap()
+            .set_tx_info_response_error(package_not_found_error.clone());
+    }
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    assert_resp_err(
+        &agg,
+        tx.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::RetryableTransaction { .. }
+            )
+        },
+        |e| matches!(e, SuiError::UserInputError { .. } | SuiError::RpcError(..)),
+    )
+    .await;
+
+    println!("Case 8.2 - Retryable Transaction (ObjectNotFound & PackageNotFound Error)");
+    // < 2f+1 object + package not found errors
+    clients
+        .get_mut(&authority_keys[2].0)
+        .unwrap()
+        .set_tx_info_response_error(package_not_found_error.clone());
+    clients
+        .get_mut(&authority_keys[3].0)
+        .unwrap()
+        .set_tx_info_response_error(object_not_found_error.clone());
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    assert_resp_err(
+        &agg,
+        tx.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::RetryableTransaction { .. }
+            )
+        },
+        |e| matches!(e, SuiError::UserInputError { .. } | SuiError::RpcError(..)),
+    )
+    .await;
+
+    println!("Case 9 - Non-Retryable Transaction (>=2f+1 ObjectNotFound Error)");
+    // >= 2f+1 object not found errors
+    set_retryable_tx_info_response_error(&mut clients, &authority_keys);
+    for (name, _) in authority_keys.iter().skip(1) {
+        clients
+            .get_mut(name)
+            .unwrap()
+            .set_tx_info_response_error(object_not_found_error.clone());
+    }
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    assert_resp_err(
+        &agg,
+        tx.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::FatalTransaction { .. }
+            )
+        },
+        |e| matches!(e, SuiError::UserInputError { .. } | SuiError::RpcError(..)),
+    )
+    .await;
+
+    println!("Case 9.1 - Non-Retryable Transaction (>=2f+1 PackageNotFound Error)");
+    // >= 2f+1 package not found errors
+    set_retryable_tx_info_response_error(&mut clients, &authority_keys);
+    for (name, _) in authority_keys.iter().skip(1) {
+        clients
+            .get_mut(name)
+            .unwrap()
+            .set_tx_info_response_error(package_not_found_error.clone());
+    }
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    assert_resp_err(
+        &agg,
+        tx.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::FatalTransaction { .. }
+            )
+        },
+        |e| matches!(e, SuiError::UserInputError { .. } | SuiError::RpcError(..)),
+    )
+    .await;
+
+    println!("Case 9.2 - Non-Retryable Transaction (>=2f+1 ObjectNotFound+PackageNotFound Error)");
+    // < 2f+1 object + package not found errors
+    clients
+        .get_mut(&authority_keys[1].0)
+        .unwrap()
+        .set_tx_info_response_error(object_not_found_error.clone());
+    clients
+        .get_mut(&authority_keys[2].0)
+        .unwrap()
+        .set_tx_info_response_error(package_not_found_error.clone());
+    clients
+        .get_mut(&authority_keys[3].0)
+        .unwrap()
+        .set_tx_info_response_error(object_not_found_error.clone());
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    assert_resp_err(
+        &agg,
+        tx.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::FatalTransaction { .. }
+            )
+        },
+        |e| matches!(e, SuiError::UserInputError { .. } | SuiError::RpcError(..)),
     )
     .await;
 }
 
-async fn assert_resp_err<F>(
+#[tokio::test]
+async fn test_handle_conflicting_transaction_response() {
+    let mut authorities = BTreeMap::new();
+    let mut clients = BTreeMap::new();
+    let mut authority_keys = Vec::new();
+    for _ in 0..4 {
+        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let name: AuthorityName = sec.public().into();
+        authorities.insert(name, 1);
+        authority_keys.push((name, sec));
+        clients.insert(name, HandleTransactionTestAuthorityClient::new());
+    }
+
+    let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
+    let conflicting_object = random_object_ref();
+    let tx1 = make_transfer_sui_transaction(
+        conflicting_object,
+        SuiAddress::default(),
+        Some(1),
+        sender,
+        &sender_kp,
+        None,
+    );
+    let conflicting_tx2 = make_transfer_sui_transaction(
+        conflicting_object,
+        SuiAddress::default(),
+        Some(2),
+        sender,
+        &sender_kp,
+        None,
+    );
+    let conflicting_error = SuiError::ObjectLockConflict {
+        obj_ref: conflicting_object,
+        pending_transaction: *conflicting_tx2.digest(),
+    };
+    let retryable_error = SuiError::RpcError("RPC".into(), "Error".into());
+    let non_retryable_error = SuiError::ByzantineAuthoritySuspicion {
+        authority: authority_keys[0].0,
+        reason: "Faulty".into(),
+    };
+    let object_not_found_error = SuiError::UserInputError {
+        error: UserInputError::ObjectNotFound {
+            object_id: conflicting_object.0,
+            version: Some(conflicting_object.1),
+        },
+    };
+
+    println!("Case 0 - Retryable Transaction, >= f+1 good stake so ignore conflicting transaction");
+    // >= f+1 good stake returned by other validators.
+    set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx1, 0);
+    // Val 0 returns conflicting Tx2
+    clients
+        .get_mut(&authority_keys[0].0)
+        .unwrap()
+        .set_tx_info_response_error(conflicting_error.clone());
+    // Val 1 returns retryable error.
+    clients
+        .get_mut(&authority_keys[1].0)
+        .unwrap()
+        .set_tx_info_response_error(retryable_error.clone());
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    assert_resp_err(
+        &agg,
+        tx1.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::RetryableConflictingTransaction {
+                    tx_digest_to_retry,
+                    ..
+                } if tx_digest_to_retry.is_none()
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::ObjectLockConflict { .. } | SuiError::RpcError(..)
+            )
+        },
+    )
+    .await;
+
+    println!(
+        "Case 1 - Retryable Transaction, state is still retryable so ignore conflicting transaction"
+    );
+    // Only Val 3 returns conflicting Tx2 and Tx1 is still in retryable state.
+    set_retryable_tx_info_response_error(&mut clients, &authority_keys);
+    for (name, _) in authority_keys.iter().skip(3) {
+        clients
+            .get_mut(name)
+            .unwrap()
+            .set_tx_info_response_error(conflicting_error.clone());
+    }
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    assert_resp_err(
+        &agg,
+        tx1.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::RetryableConflictingTransaction {
+                    tx_digest_to_retry,
+                    ..
+                } if tx_digest_to_retry.is_none()
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::ObjectLockConflict { .. } | SuiError::RpcError(..)
+            )
+        },
+    )
+    .await;
+
+    println!("Case 2 - Non-retryable Tx but Retryable Conflicting Transaction");
+    // Validators return >= f+1 conflicting Tx2
+    set_retryable_tx_info_response_error(&mut clients, &authority_keys);
+    for (name, _) in authority_keys.iter().skip(1) {
+        clients
+            .get_mut(name)
+            .unwrap()
+            .set_tx_info_response_error(conflicting_error.clone());
+    }
+
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    assert_resp_err(
+        &agg,
+        tx1.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::RetryableConflictingTransaction {
+                    tx_digest_to_retry,
+                    ..
+                } if *tx_digest_to_retry == Some(*conflicting_tx2.digest())
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::ObjectLockConflict { .. } | SuiError::RpcError(..)
+            )
+        },
+    )
+    .await;
+
+    println!("Case 3 - Non-retryable Tx due to equivocation");
+    // Validators return >= f+1 conflicting Tx2 & >= f+1 good stake for Tx1
+    set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx1, 0);
+    for (name, _) in authority_keys.iter().skip(2) {
+        clients
+            .get_mut(name)
+            .unwrap()
+            .set_tx_info_response_error(conflicting_error.clone());
+    }
+
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    assert_resp_err(
+        &agg,
+        tx1.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::FatalConflictingTransaction { .. }
+            )
+        },
+        |e| matches!(e, SuiError::ObjectLockConflict { .. }),
+    )
+    .await;
+
+    println!("Case 3 - Non-retryable Tx (Mixed Response - 2 conflicts, 1 signed, 1 non-retryable)");
+    // Validator 1 returns a signed tx1
+    set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx1, 0);
+    // Validator 2 returns a conflicting tx2
+    clients
+        .get_mut(&authority_keys[1].0)
+        .unwrap()
+        .set_tx_info_response_error(conflicting_error.clone());
+    // Validator 3 returns a conflicting tx3
+    let conflicting_tx3 = make_transfer_sui_transaction(
+        conflicting_object,
+        SuiAddress::default(),
+        Some(3),
+        sender,
+        &sender_kp,
+        None,
+    );
+    let conflicting_error_2 = SuiError::ObjectLockConflict {
+        obj_ref: conflicting_object,
+        pending_transaction: *conflicting_tx3.digest(),
+    };
+    clients
+        .get_mut(&authority_keys[2].0)
+        .unwrap()
+        .set_tx_info_response_error(conflicting_error_2.clone());
+    // Validator 4 returns a nonretryable error
+    clients
+        .get_mut(&authority_keys[3].0)
+        .unwrap()
+        .set_tx_info_response_error(non_retryable_error.clone());
+
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    assert_resp_err(
+        &agg,
+        tx1.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::FatalConflictingTransaction { .. }
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::ObjectLockConflict { .. } | SuiError::ByzantineAuthoritySuspicion { .. }
+            )
+        },
+    )
+    .await;
+
+    println!("Case 3.1 - Non-retryable Tx (Mixed Response - 1 conflict, 1 signed, 1 non-retryable, 1 retryable)");
+    // Validator 1 returns a signed tx1
+    set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx1, 0);
+    // Validator 2 returns a conflicting tx2
+    clients
+        .get_mut(&authority_keys[1].0)
+        .unwrap()
+        .set_tx_info_response_error(conflicting_error.clone());
+    // Validator 3 returns a conflicting tx3
+    let conflicting_tx3 = make_transfer_sui_transaction(
+        conflicting_object,
+        SuiAddress::default(),
+        Some(3),
+        sender,
+        &sender_kp,
+        None,
+    );
+    let conflicting_error_2 = SuiError::ObjectLockConflict {
+        obj_ref: conflicting_object,
+        pending_transaction: *conflicting_tx3.digest(),
+    };
+    clients
+        .get_mut(&authority_keys[2].0)
+        .unwrap()
+        .set_tx_info_response_error(conflicting_error_2.clone());
+    // Validator 4 returns a ObjectNotFound error
+    clients
+        .get_mut(&authority_keys[3].0)
+        .unwrap()
+        .set_tx_info_response_error(object_not_found_error.clone());
+
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    assert_resp_err(
+        &agg,
+        tx1.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::FatalConflictingTransaction { .. }
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::ObjectLockConflict { .. } | SuiError::UserInputError { .. }
+            )
+        },
+    )
+    .await;
+
+    println!(
+        "Case 3.2 - Non-retryable Tx (Mixed Response - 1 conflict, 1 signed, 1 non-retryable, 1 ObjectNotFoundError)"
+    );
+    // Validator 1 returns a signed tx1
+    set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx1, 0);
+    // Validator 2 returns a conflicting tx2
+    clients
+        .get_mut(&authority_keys[1].0)
+        .unwrap()
+        .set_tx_info_response_error(conflicting_error.clone());
+    // Validator 3 returns a nonretryable error
+    clients
+        .get_mut(&authority_keys[2].0)
+        .unwrap()
+        .set_tx_info_response_error(non_retryable_error.clone());
+    // Validator 4 returns a ObjectNotFound error
+    clients
+        .get_mut(&authority_keys[3].0)
+        .unwrap()
+        .set_tx_info_response_error(object_not_found_error.clone());
+
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    assert_resp_err(
+        &agg,
+        tx1.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::FatalConflictingTransaction { .. }
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::ObjectLockConflict { .. }
+                    | SuiError::UserInputError { .. }
+                    | SuiError::ByzantineAuthoritySuspicion { .. }
+            )
+        },
+    )
+    .await;
+
+    println!("Case 4 - Successful Conflicting Transaction with Cert");
+    // All Validators gives signed-tx
+    set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx1, 0);
+
+    // Validators now gives valid signed tx and we get TxCert
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    let cert_epoch_0 = agg
+        .process_transaction(tx1.clone())
+        .await
+        .unwrap()
+        .into_cert_for_testing();
+
+    // Val-1 returns conflicting tx2; Val2-3 returns retryable error
+    set_retryable_tx_info_response_error(&mut clients, &authority_keys);
+    let (name_1, _) = &authority_keys[1];
+    clients
+        .get_mut(name_1)
+        .unwrap()
+        .set_tx_info_response_error(conflicting_error.clone());
+
+    // Val-0 returns cert
+    let (name_0, key_0) = &authority_keys[0];
+    let effects = TransactionEffects {
+        transaction_digest: *cert_epoch_0.digest(),
+        ..Default::default()
+    };
+    let resp = HandleTransactionResponse {
+        status: TransactionStatus::Executed(
+            Some(cert_epoch_0.auth_sig().clone()),
+            sign_tx_effects(effects.clone(), 0, *name_0, key_0),
+            TransactionEvents { data: vec![] },
+        ),
+    };
+    clients.get_mut(name_0).unwrap().set_tx_info_response(resp);
+
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    // We have a valid cert because val-0 has it
+    agg.process_transaction(tx1.clone()).await.unwrap();
+}
+
+async fn assert_resp_err<E, F>(
     agg: &AuthorityAggregator<HandleTransactionTestAuthorityClient>,
     tx: VerifiedTransaction,
-    checker: F,
+    agg_err_checker: E,
+    sui_err_checker: F,
 ) where
+    E: Fn(&AggregatorProcessTransactionError) -> bool,
     F: Fn(&SuiError) -> bool,
 {
     match agg.process_transaction(tx).await {
-        Err(QuorumSignTransactionError {
-            total_stake,
-            good_stake: _,
-            errors,
-            conflicting_tx_digests,
-        }) => {
-            println!("{:?}", errors);
-            assert_eq!(total_stake, 4);
-            // TODO: good_stake no longer always makes sense.
-            // Specifically, when we have non-quorum signed effects, it's difficult to say
-            // what good state should be. Right now, good_stake is only used for conflicting
-            // transaction processing. We should refactor this when we refactor conflicting
-            // transaction processing.
-            //assert_eq!(good_stake, 0);
-            assert!(conflicting_tx_digests.is_empty());
-            assert!(errors.iter().map(|e| &e.0).all(checker));
-        }
-        other => {
-            panic!(
-                "Expect QuorumFailedToProcessTransaction but got {:?}",
-                other
+        Err(received_agg_err) if agg_err_checker(&received_agg_err) => match received_agg_err {
+            AggregatorProcessTransactionError::RetryableConflictingTransaction {
+                errors,
+                tx_digest_to_retry: _tx_digest_to_retry,
+                conflicting_tx_digests,
+            } => {
+                assert!(!conflicting_tx_digests.is_empty());
+                assert!(errors.iter().map(|e| &e.0).all(sui_err_checker));
+            }
+
+            AggregatorProcessTransactionError::FatalConflictingTransaction {
+                errors,
+                conflicting_tx_digests,
+            } => {
+                assert!(!conflicting_tx_digests.is_empty());
+                assert!(errors.iter().map(|e| &e.0).all(sui_err_checker));
+            }
+
+            AggregatorProcessTransactionError::RetryableTransaction { errors } => {
+                assert!(errors.iter().map(|e| &e.0).all(sui_err_checker));
+            }
+
+            AggregatorProcessTransactionError::FatalTransaction { errors } => {
+                assert!(errors.iter().map(|e| &e.0).all(sui_err_checker));
+            }
+        },
+        Err(received_agg_err) => {
+            assert!(
+                agg_err_checker(&received_agg_err),
+                "Unexpected AggregatorProcessTransactionError: {received_agg_err:?}"
             );
+        }
+        Ok(_) => {
+            panic!("Expected AggregatorProcessTransactionError but got Ok");
         }
     }
 }
@@ -926,5 +1494,18 @@ fn set_tx_info_response_with_signed_tx(
             status: TransactionStatus::Signed(signed_tx.into_sig()),
         };
         clients.get_mut(name).unwrap().set_tx_info_response(resp);
+    }
+}
+
+fn set_retryable_tx_info_response_error(
+    clients: &mut BTreeMap<AuthorityName, HandleTransactionTestAuthorityClient>,
+    authority_keys: &Vec<(AuthorityName, AuthorityKeyPair)>,
+) {
+    for (name, _) in authority_keys {
+        let error = SuiError::RpcError("RPC".into(), "Error".into());
+        clients
+            .get_mut(name)
+            .unwrap()
+            .set_tx_info_response_error(error);
     }
 }
