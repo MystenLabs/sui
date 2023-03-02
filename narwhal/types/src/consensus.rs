@@ -80,12 +80,10 @@ pub struct ReputationScores {
 impl ReputationScores {
     /// Adds the provided `score` to the existing score for the provided `authority`
     pub fn add_score(&mut self, authority: PublicKey, score: u64) {
-        let total_score = self
-            .scores_per_authority
-            .get(&authority)
-            .map(|value| value + score)
-            .unwrap_or(score);
-        self.scores_per_authority.insert(authority, total_score);
+        self.scores_per_authority
+            .entry(authority)
+            .and_modify(|value| *value += score)
+            .or_insert(score);
     }
 
     pub fn total_authorities(&self) -> u64 {
