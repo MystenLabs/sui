@@ -72,6 +72,7 @@ pub type OptArcConsensusAdapterMetrics = Option<Arc<ConsensusAdapterMetrics>>;
 
 impl ConsensusAdapterMetrics {
     pub fn new(registry: &Registry) -> OptArcConsensusAdapterMetrics {
+        warn!("TESTING -- About to register ConsensusAdapterMetrics");
         let authority_position_buckets = &[
             linear_buckets(0.0, 1.0, 19).unwrap().as_slice(),
             linear_buckets(20.0, 5.0, 10).unwrap().as_slice(),
@@ -177,7 +178,7 @@ pub struct ConsensusAdapter {
     /// A structure to check the connection statuses populated by the Connection Monitor Listener
     connection_monitor_status: Box<Arc<dyn CheckConnection>>,
     /// A structure to register metrics
-    opt_metrics: OptArcConsensusAdapterMetrics,
+    pub opt_metrics: OptArcConsensusAdapterMetrics,
 }
 
 pub trait CheckConnection: Send + Sync {

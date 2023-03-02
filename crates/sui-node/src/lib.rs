@@ -725,6 +725,10 @@ impl SuiNode {
                 .expect("Failed to connect to consensus"),
         );
 
+        warn!(
+            "TESTING -- Registering ConsensusAdapterMetrics for authority {:?}",
+            authority.concise()
+        );
         let ca_metrics = ConsensusAdapterMetrics::new(prometheus_registry);
         // The consensus adapter allows the authority to send user certificates through consensus.
 
@@ -927,7 +931,6 @@ impl SuiNode {
                         .await?,
                     )
                 } else {
-                    info!("This node is no longer a validator after reconfiguration");
                     None
                 }
             } else {
@@ -941,6 +944,10 @@ impl SuiNode {
 
                 if self.state.is_validator(&new_epoch_store) {
                     info!("Promoting the node from fullnode to validator, starting grpc server");
+                    warn!(
+                        "TESTING -- Promoting {:?} from fullnode to validator",
+                        self.state().name.concise()
+                    );
 
                     Some(
                         Self::construct_validator_components(
