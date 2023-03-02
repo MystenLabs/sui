@@ -785,6 +785,10 @@ mod test {
             guard.retain(|x| x.id != instance_id);
             Ok(())
         }
+
+        async fn register_ssh_public_key(&self, public_key: String) -> CloudProviderResult<()> {
+            Ok(())
+        }
     }
 
     #[tokio::test]

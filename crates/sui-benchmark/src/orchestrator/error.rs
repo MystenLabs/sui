@@ -36,7 +36,7 @@ pub enum CloudProviderError {
     RequestError(String),
 
     #[error("Unexpected response: {0}")]
-    UnexpectedResponse(#[from] serde_json::Error),
+    UnexpectedResponse(String),
 
     #[error("Received error status code ({0}): {1}")]
     FailureResponseCode(String, String),

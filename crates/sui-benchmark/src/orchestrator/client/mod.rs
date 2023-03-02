@@ -33,4 +33,7 @@ pub trait Client: Display {
     /// Delete a specific instance. Calling this function ensures we are no longer billed for
     /// the specified instance.
     async fn delete_instance(&self, instance_id: String) -> CloudProviderResult<()>;
+
+    /// Authorize the provided ssh public key to access machines.
+    async fn register_ssh_public_key(&self, public_key: String) -> CloudProviderResult<()>;
 }

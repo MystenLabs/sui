@@ -7,7 +7,6 @@ use aws_config::profile::profile_file::{ProfileFileKind, ProfileFiles};
 use aws_sdk_ec2::{
     model::{filter, tag, tag_specification, ResourceType},
     types::{Blob, SdkError},
-    Region,
 };
 use serde::Serialize;
 
@@ -30,7 +29,7 @@ where
 
 pub struct AwsClient {
     settings: Settings,
-    clients: HashMap<Region, aws_sdk_ec2::Client>,
+    clients: HashMap<String, aws_sdk_ec2::Client>,
 }
 
 impl Display for AwsClient {
@@ -40,20 +39,19 @@ impl Display for AwsClient {
 }
 
 impl AwsClient {
+    const OS_IMAGE: &'static str =
+        "Canonical, Ubuntu, 22.04 LTS, amd64 jammy image build on 2023-02-16";
+
     pub async fn new(settings: Settings) -> Self {
         let profile_files = ProfileFiles::builder()
             .with_file(ProfileFileKind::Credentials, &settings.token_file)
-            .with_contents(
-                ProfileFileKind::Config,
-                "[default]\nregion=us-west-2\noutput=json",
-            )
+            .with_contents(ProfileFileKind::Config, "[default]\noutput=json")
             .build();
 
         let mut clients = HashMap::new();
-        for region_name in settings.regions.clone() {
-            let region = Region::new(region_name);
+        for region in settings.regions.clone() {
             let sdk_config = aws_config::from_env()
-                .region(region.clone())
+                .region(aws_sdk_ec2::Region::new(region.clone()))
                 .profile_files(profile_files.clone())
                 .load()
                 .await;
@@ -66,82 +64,73 @@ impl AwsClient {
 
     fn format_instance(
         &self,
-        region: &Region,
+        region: String,
         aws_instance: &aws_sdk_ec2::model::Instance,
     ) -> Instance {
         Instance {
-            id: aws_instance.instance_id().unwrap().into(),
-            region: region.to_string(),
+            id: aws_instance
+                .instance_id()
+                .expect("AWS instance should have an id")
+                .into(),
+            region,
             main_ip: aws_instance
                 .public_ip_address()
                 .unwrap_or_else(|| "0.0.0.0") // Stopped instances do not have an ip address.
                 .parse()
-                .unwrap(),
+                .expect("AWS instance should have a valid ip"),
             tags: vec![self.settings.testbed.clone()],
-            plan: format!("{:?}", aws_instance.instance_type().unwrap()),
-            power_status: format!("{:?}", aws_instance.state().unwrap().name().unwrap()),
+            plan: format!(
+                "{:?}",
+                aws_instance
+                    .instance_type()
+                    .expect("AWS instance should have a type")
+            ),
+            power_status: format!(
+                "{:?}",
+                aws_instance
+                    .state()
+                    .expect("AWS instance should have a state")
+                    .name()
+                    .expect("AWS status should have a name")
+            ),
         }
     }
 
+    /// Query the image id determining the os of the instances.
+    /// NOTE: The image id changes depending on the region.
     async fn find_image_id(&self, client: &aws_sdk_ec2::Client) -> CloudProviderResult<String> {
-        let response = client
-            .describe_images()
-            .filters(
-                filter::Builder::default()
-                    .name("description")
-                    .values("Canonical, Ubuntu, 22.04 LTS, amd64 jammy image build on 2023-02-16")
-                    .build(),
-            )
-            .send()
-            .await?;
+        // Query all images that match the description.
+        let request = client.describe_images().filters(
+            filter::Builder::default()
+                .name("description")
+                .values(Self::OS_IMAGE)
+                .build(),
+        );
+        let response = request.send().await?;
 
+        // Parse the response to select the first returned image id.
         response
             .images()
-            .ok_or_else(|| CloudProviderError::RequestError("Cannot find image id".into()))?
-            .first()
+            .map(|images| images.first())
+            .flatten()
             .ok_or_else(|| CloudProviderError::RequestError("Cannot find image id".into()))?
             .image_id
             .clone()
             .ok_or_else(|| {
-                CloudProviderError::RequestError("Received image description without id".into())
+                CloudProviderError::UnexpectedResponse(
+                    "Received image description without id".into(),
+                )
             })
     }
 
-    async fn register_ssh_key(&self, client: &aws_sdk_ec2::Client) -> CloudProviderResult<()> {
-        let public_key = self.settings.load_ssh_public_key().unwrap();
-
+    async fn create_security_group(&self, client: &aws_sdk_ec2::Client) -> CloudProviderResult<()> {
+        // Create a security group (if it doesn't already exist).
         let request = client
-            .import_key_pair()
-            .key_name(&self.settings.testbed)
-            .public_key_material(Blob::new::<String>(public_key.into()));
-
-        match request.send().await {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                let error_message = format!("{e:?}");
-                if error_message.to_lowercase().contains("duplicate") {
-                    Ok(())
-                } else {
-                    Err(e.into())
-                }
-            }
-        }
-    }
-
-    async fn create_security_group(&self, region: &Region) -> CloudProviderResult<()> {
-        let client = self.clients.get(&region).ok_or_else(|| {
-            CloudProviderError::RequestError(format!("Undefined region {region:?}"))
-        })?;
-
-        //
-        let response = match client
             .create_security_group()
             .group_name(&self.settings.testbed)
-            .description("Allow all traffic (used for benchmarks).")
-            // .dry_run(true) // TODO: Disable this
-            .send()
-            .await
-        {
+            .description("Allow all traffic (used for benchmarks).");
+
+        let response = match request.send().await {
             Ok(response) => response,
             Err(e) => {
                 let error_message = format!("{e:?}");
@@ -153,21 +142,22 @@ impl AwsClient {
             }
         };
 
-        let group_id = response.group_id().unwrap();
+        // Extract the group id.
+        let group_id = response
+            .group_id()
+            .expect("AWS security group should have an id");
 
-        //
-        client
+        // Authorize all traffic on the security group.
+        let request = client
             .authorize_security_group_ingress()
             .group_id(group_id)
             .ip_protocol("tcp")
             .ip_protocol("udp")
             .cidr_ip("0.0.0.0/0")
             .from_port(0)
-            .to_port(65535)
-            // .dry_run(true) // TODO: Disable this
-            .send()
-            .await?;
+            .to_port(65535);
 
+        request.send().await?;
         Ok(())
     }
 }
@@ -182,26 +172,21 @@ impl Client for AwsClient {
             .values(self.settings.testbed.clone())
             .build();
 
-        let mut list = Vec::new();
+        let mut instances = Vec::new();
         for (region, client) in &self.clients {
-            if let Some(reservations) = client
-                .describe_instances()
-                .filters(filter.clone())
-                .send()
-                .await?
-                .reservations()
-            {
+            let request = client.describe_instances().filters(filter.clone());
+            if let Some(reservations) = request.send().await?.reservations() {
                 for reservation in reservations {
-                    if let Some(instances) = reservation.instances() {
-                        for instance in instances {
-                            list.push(self.format_instance(&region, instance));
+                    if let Some(aws_instances) = reservation.instances() {
+                        for instance in aws_instances {
+                            instances.push(self.format_instance(region.clone(), instance));
                         }
                     }
                 }
             }
         }
 
-        Ok(list)
+        Ok(instances)
     }
 
     async fn start_instances<'a, I>(&self, instances: I) -> CloudProviderResult<()>
@@ -252,9 +237,20 @@ impl Client for AwsClient {
     where
         S: Into<String> + Serialize + Send,
     {
+        let region = region.into();
         let testbed_id = &self.settings.testbed;
-        let region = Region::new(region.into());
 
+        let client = self.clients.get(&region).ok_or_else(|| {
+            CloudProviderError::RequestError(format!("Undefined region {region:?}"))
+        })?;
+
+        // Create a security group (if needed).
+        self.create_security_group(&client).await?;
+
+        // Query the image id.
+        let image_id = self.find_image_id(&client).await?;
+
+        // Create a new instance.
         let tags = tag_specification::Builder::default()
             .tags(
                 tag::Builder::default()
@@ -265,16 +261,6 @@ impl Client for AwsClient {
             .resource_type(ResourceType::Instance)
             .build();
 
-        let client = self.clients.get(&region).ok_or_else(|| {
-            CloudProviderError::RequestError(format!("Undefined region {region:?}"))
-        })?;
-
-        self.register_ssh_key(&client).await?;
-
-        let image_id = self.find_image_id(&client).await?;
-
-        self.create_security_group(&region).await?;
-
         let request = client
             .run_instances()
             .image_id(image_id)
@@ -283,12 +269,16 @@ impl Client for AwsClient {
             .min_count(1)
             .max_count(1)
             .security_groups(&self.settings.testbed)
-            // .dry_run(true) // TODO: Disable this
             .tag_specifications(tags);
 
         let response = request.send().await?;
-        let instance = &response.instances().unwrap()[0];
-        Ok(self.format_instance(&region, instance))
+        let instance = &response
+            .instances()
+            .map(|x| x.first())
+            .flatten()
+            .expect("AWS instances list should contain instances");
+
+        Ok(self.format_instance(region, instance))
     }
 
     async fn delete_instance(&self, instance_id: String) -> CloudProviderResult<()> {
@@ -301,23 +291,21 @@ impl Client for AwsClient {
         }
         Ok(())
     }
+
+    async fn register_ssh_public_key(&self, public_key: String) -> CloudProviderResult<()> {
+        for client in self.clients.values() {
+            let request = client
+                .import_key_pair()
+                .key_name(&self.settings.testbed)
+                .public_key_material(Blob::new::<String>(public_key.clone()));
+
+            if let Err(e) = request.send().await {
+                let error_message = format!("{e:?}");
+                if !error_message.to_lowercase().contains("duplicate") {
+                    return Err(e.into());
+                }
+            }
+        }
+        Ok(())
+    }
 }
-
-// #[cfg(test)]
-// mod test {
-//     use crate::orchestrator::{
-//         client::{aws::AwsClient, Client},
-//         settings::Settings,
-//     };
-
-//     #[tokio::test]
-//     async fn aws() {
-//         let mut settings = Settings::new_for_test();
-//         settings.testbed = "alberto-sui".into();
-//         settings.token_file = "/Users/alberto/.aws/credentials".into();
-//         settings.regions = vec!["us-east-1".into(), "us-west-2".into()];
-//         // g5.8xlarge
-//         let client = AwsClient::new(settings).await;
-//         client.list_instances().await.unwrap();
-//     }
-// }

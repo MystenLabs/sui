@@ -18,6 +18,12 @@ impl From<reqwest::Error> for CloudProviderError {
     }
 }
 
+impl From<serde_json::Error> for CloudProviderError {
+    fn from(e: serde_json::Error) -> Self {
+        Self::UnexpectedResponse(e.to_string())
+    }
+}
+
 pub struct VultrClient {
     token: String,
     settings: Settings,
@@ -65,6 +71,37 @@ impl VultrClient {
             },
         )
     }
+
+    /// Retrieve the ssh key associated with the current testbed.
+    pub async fn get_key(&self) -> CloudProviderResult<Option<SshKey>> {
+        let url = self.base_url.join("ssh-keys").unwrap();
+        let response = self.client.get(url).bearer_auth(&self.token).send().await?;
+
+        let json: Value = response.json().await?;
+        Self::check_response(&json)?;
+        let content = json["ssh_keys"].clone();
+        let keys: Vec<SshKey> = serde_json::from_value(content)?;
+
+        Ok(keys.into_iter().find(|x| x.name == self.settings.testbed))
+    }
+
+    /// Delete all copies of the public key.
+    pub async fn remove_key(&self) -> CloudProviderResult<()> {
+        while let Some(key) = self.get_key().await? {
+            let url = self.base_url.join(&format!("ssh-keys/{}", key.id)).unwrap();
+
+            let response = self
+                .client
+                .delete(url)
+                .bearer_auth(&self.token)
+                .send()
+                .await?;
+
+            let json: Value = response.json().await?;
+            Self::check_response(&json)?;
+        }
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -78,7 +115,6 @@ impl Client for VultrClient {
         let json: Value = response.json().await?;
         Self::check_response(&json)?;
         let content = json["instances"].clone();
-        // println!("{content:?}");
         let instances: Vec<Instance> = serde_json::from_value(content)?;
 
         let filtered = instances
@@ -180,27 +216,11 @@ impl Client for VultrClient {
         Self::check_status_code(&response)?;
         Ok(())
     }
-}
 
-impl VultrClient {
-    /// Retrieve the ssh key associated with the current testbed.
-    pub async fn get_key(&self) -> CloudProviderResult<Option<SshKey>> {
-        let url = self.base_url.join("ssh-keys").unwrap();
-        let response = self.client.get(url).bearer_auth(&self.token).send().await?;
-
-        let json: Value = response.json().await?;
-        Self::check_response(&json)?;
-        let content = json["ssh_keys"].clone();
-        let keys: Vec<SshKey> = serde_json::from_value(content)?;
-
-        Ok(keys.into_iter().find(|x| x.name == self.settings.testbed))
-    }
-
-    /// Upload an ssh public key if there isn't already one.
-    pub async fn upload_key(&self, public_key: String) -> CloudProviderResult<SshKey> {
+    async fn register_ssh_public_key(&self, public_key: String) -> CloudProviderResult<()> {
         // Do not upload the key if it already exists.
-        if let Some(key) = self.get_key().await? {
-            return Ok(key);
+        if self.get_key().await?.is_some() {
+            return Ok(());
         }
 
         let url = self.base_url.join("ssh-keys").unwrap();
@@ -219,25 +239,6 @@ impl VultrClient {
 
         let json: Value = response.json().await?;
         Self::check_response(&json)?;
-        let content = json["ssh_key"].clone();
-        serde_json::from_value::<SshKey>(content).map_err(CloudProviderError::from)
-    }
-
-    /// Delete all copies of the public key.
-    pub async fn remove_key(&self) -> CloudProviderResult<()> {
-        while let Some(key) = self.get_key().await? {
-            let url = self.base_url.join(&format!("ssh-keys/{}", key.id)).unwrap();
-
-            let response = self
-                .client
-                .delete(url)
-                .bearer_auth(&self.token)
-                .send()
-                .await?;
-
-            let json: Value = response.json().await?;
-            Self::check_response(&json)?;
-        }
         Ok(())
     }
 }
