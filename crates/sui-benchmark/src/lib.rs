@@ -7,7 +7,7 @@ use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use futures::{stream::FuturesUnordered, StreamExt};
 use prometheus::Registry;
 use roaring::RoaringBitmap;
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use sui_config::genesis::Genesis;
 use sui_config::NetworkConfig;
 use sui_core::{
@@ -42,6 +42,7 @@ use sui_types::{
     messages::ExecuteTransactionRequestType, object::Owner,
 };
 use sui_types::{error::SuiError, sui_system_state::SuiSystemState};
+use tokio::time::timeout;
 use tracing::{error, info};
 
 pub mod benchmark_setup;
@@ -416,14 +417,19 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                 Err(e) => tracing::warn!("Failed to submit certificate: {e}"),
             }
 
-            // TODO: We can't stop sending transactions after receiving a quorum of replies otherwise
-            // some validators may not be able to process the next transactions. However this is a
-            // problem because: (i) it biases latency which should be computed upon receiving a quorum
-            // of certificate, and (ii) it prevents us from running benchmarks under (crash-)faults.
-            // if total_stake >= self.committee.quorum_threshold() {
-            //     break;
-            // }
+            if total_stake >= self.committee.quorum_threshold() {
+                break;
+            }
         }
+
+        // TODO: We can't stop sending transactions after receiving a quorum of replies otherwise
+        // some validators may not be able to process the next transactions. However this is a
+        // problem because it biases latency which should be computed upon receiving a quorum
+        // of certificate.
+        let _ = timeout(Duration::from_secs(2), async move {
+            while futures.next().await.is_some() {}
+        })
+        .await;
 
         // Abort if we failed to submit the certificate to enough validators. This typically
         // happens when the validators are overloaded and the requests timed out.
