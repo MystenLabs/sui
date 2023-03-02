@@ -15,7 +15,7 @@ export function useGetTransactionsByAddress(address: SuiAddress | null) {
         ['transactions-by-address', address],
         async () => {
             // combine from and to transactions
-            const [txnIdDs, fromTxnIds] = await Promise.all([
+            const [txnIds, fromTxnIds] = await Promise.all([
                 rpc.getTransactions({
                     ToAddress: address!,
                 }),
@@ -24,7 +24,7 @@ export function useGetTransactionsByAddress(address: SuiAddress | null) {
                 }),
             ]);
             const resp = await rpc.getTransactionWithEffectsBatch(
-                dedupe([...txnIdDs.data, ...fromTxnIds.data])
+                dedupe([...txnIds.data, ...fromTxnIds.data])
             );
 
             return resp.sort(
