@@ -96,7 +96,7 @@ The Lamport timestamp-based versioning schemes helps to ensure that the version 
   - or is new and has an equal version.
 - After a later transaction unwrapping `I` out of `O`, we know that 
   - `O`'s input version is greater than equal to it's version after `W` because it is a later transaction, so the version can only have increased.
-  - `I`'s version in the utput must be strictly greater than `O`'s input version.
+  - `I`'s version in the output must be strictly greater than `O`'s input version.
   
 This leads to the following chain of inequalities:
 
