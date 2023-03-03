@@ -136,8 +136,7 @@
           },
           {
             "name": "Sui Breaking Changes",
-            "url": "/doc-updates/sui-breaking-changes",
-            "external": true
+            "url": "/doc-updates/sui-breaking-changes"
           },
           {
             "name": "Sui Announcements (Discord)",

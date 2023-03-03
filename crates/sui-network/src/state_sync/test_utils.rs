@@ -6,7 +6,7 @@ use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::intent::{Intent, IntentMessage, IntentScope};
 use sui_types::{
     base_types::AuthorityName,
-    committee::{Committee, EpochId, ProtocolVersion, StakeUnit},
+    committee::{Committee, EpochId, StakeUnit},
     crypto::{
         AuthorityKeyPair, AuthoritySignInfo, AuthoritySignature, KeypairTraits,
         SuiAuthoritySignature,
@@ -36,7 +36,6 @@ impl CommitteeFixture {
 
         let committee = Committee::new(
             epoch,
-            ProtocolVersion::MIN,
             validators
                 .iter()
                 .map(|(name, (_, stake))| (*name, *stake))

@@ -12,10 +12,10 @@ use indicatif::ProgressStyle;
 use prometheus::HistogramVec;
 use prometheus::IntCounterVec;
 use prometheus::Registry;
-use prometheus::{register_counter_vec_with_registry, GaugeVec};
-use prometheus::{register_gauge_vec_with_registry, IntCounter};
+use prometheus::{register_counter_vec_with_registry, register_gauge_vec_with_registry};
 use prometheus::{register_histogram_vec_with_registry, register_int_counter_with_registry};
 use prometheus::{register_int_counter_vec_with_registry, CounterVec};
+use prometheus::{GaugeVec, IntCounter};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::OnceCell;
 use tokio_util::sync::CancellationToken;
@@ -372,10 +372,16 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                         match res {
                                             Ok(effects) => {
                                                 let latency = start.elapsed();
+                                                let time_from_start = start_time.elapsed();
+
+                                                if let Some(delta) = time_from_start.as_secs().checked_sub(metrics_cloned.benchmark_duration.get()) {
+                                                    metrics_cloned.benchmark_duration.inc_by(delta);
+                                                }
+
                                                 let square_latency_ms = latency.as_secs_f64().powf(2.0);
                                                 metrics_cloned.latency_s.with_label_values(&[&b.1.get_workload_type().to_string()]).observe(latency.as_secs_f64());
                                                 metrics_cloned.latency_squared_s.with_label_values(&[&b.1.get_workload_type().to_string()]).inc_by(square_latency_ms);
-                                                metrics_cloned.benchmark_duration.inc_by(start_time.elapsed().as_secs() - metrics_cloned.benchmark_duration.get());
+
                                                 metrics_cloned.num_success.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
                                                 metrics_cloned.num_in_flight.with_label_values(&[&b.1.get_workload_type().to_string()]).dec();
                                                 // let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
@@ -420,15 +426,23 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                     match res {
                                         Ok(effects) => {
                                             let latency = start.elapsed();
+                                            let time_from_start = start_time.elapsed();
+
+                                            if let Some(delta) = time_from_start.as_secs().checked_sub(metrics_cloned.benchmark_duration.get()) {
+                                                metrics_cloned.benchmark_duration.inc_by(delta);
+                                            }
+
                                             let square_latency_ms = latency.as_secs_f64().powf(2.0);
                                             metrics_cloned.latency_s.with_label_values(&[&payload.get_workload_type().to_string()]).observe(latency.as_secs_f64());
                                             metrics_cloned.latency_squared_s.with_label_values(&[&payload.get_workload_type().to_string()]).inc_by(square_latency_ms);
-                                            metrics_cloned.benchmark_duration.inc_by(start_time.elapsed().as_secs() - metrics_cloned.benchmark_duration.get());
+
                                             metrics_cloned.num_success.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
                                             metrics_cloned.num_in_flight.with_label_values(&[&payload.get_workload_type().to_string()]).dec();
                                             // let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
                                             // auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
-                                            if let Some(sig_info) = effects.quorum_sig() { sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc()) }
+                                            if let Some(sig_info) = effects.quorum_sig() {
+                                                sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc())
+                                            }
                                             NextOp::Response(Some((
                                                 latency,
                                                 payload.make_new_payload(&effects),
