@@ -11,7 +11,7 @@ function getCoinSetWithCombinedBalanceGreaterThanOrEqual(
     coins: CoinStruct[],
     amount: bigint
 ) {
-    // Sort coin by balance in an ascending order
+    // Sort coin by balance in an descending order
     const sortedCoins = coins
         .filter(({ lockedUntilEpoch }) => !lockedUntilEpoch)
         .sort((a, b) => b.balance - a.balance);
@@ -19,7 +19,7 @@ function getCoinSetWithCombinedBalanceGreaterThanOrEqual(
     // calculate total balance
     const total = sortedCoins.reduce(
         (acc, { balance }) => acc + BigInt(balance),
-        0n
+        BigInt(0)
     );
 
     if (total < amount) {
@@ -45,7 +45,7 @@ function getCoinSetWithCombinedBalanceGreaterThanOrEqual(
         ret.push(coinWithLargestBalance);
         sum += BigInt(coinWithLargestBalance.balance);
     }
-    // sort coins by balance in ascending order
+    // sort coins by balance in descending order
     return ret.sort((a, b) => a.balance - b.balance);
 }
 
