@@ -9,6 +9,9 @@ use super::measurement::MeasurementsCollection;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BenchmarkParameters {
+    /// Percentage of shared vs owned objects; 0 means only owned objects and 100 means
+    /// only shared objects.
+    pub shared_objects_ratio: u16,
     /// The committee size.
     pub nodes: usize,
     /// The number of (crash-)faults.
@@ -22,6 +25,7 @@ pub struct BenchmarkParameters {
 impl Default for BenchmarkParameters {
     fn default() -> Self {
         Self {
+            shared_objects_ratio: 0,
             nodes: 4,
             faults: 0,
             load: 500,
@@ -32,7 +36,11 @@ impl Default for BenchmarkParameters {
 
 impl Debug for BenchmarkParameters {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}-{}-{}", self.faults, self.nodes, self.load)
+        write!(
+            f,
+            "{}-{}-{}-{}",
+            self.shared_objects_ratio, self.faults, self.nodes, self.load
+        )
     }
 }
 
@@ -47,8 +55,15 @@ impl Display for BenchmarkParameters {
 }
 
 impl BenchmarkParameters {
-    pub fn new(nodes: usize, faults: usize, load: usize, duration: Duration) -> Self {
+    pub fn new(
+        shared_objects_ratio: u16,
+        nodes: usize,
+        faults: usize,
+        load: usize,
+        duration: Duration,
+    ) -> Self {
         Self {
+            shared_objects_ratio,
             nodes,
             faults,
             load,
@@ -67,6 +82,7 @@ pub enum LoadType {
 }
 
 pub struct BenchmarkParametersGenerator {
+    shared_objects_ration: u16,
     pub nodes: usize,
     load_type: LoadType,
     pub faults: usize,
@@ -81,7 +97,7 @@ pub struct BenchmarkParametersGenerator {
 impl BenchmarkParametersGenerator {
     const DEFAULT_DURATION: Duration = Duration::from_secs(180);
 
-    pub fn new(nodes: usize, mut load_type: LoadType) -> Self {
+    pub fn new(shared_objects_ration: u16, nodes: usize, mut load_type: LoadType) -> Self {
         let next_load = match &mut load_type {
             LoadType::Fixed(loads) => {
                 if loads.is_empty() {
@@ -93,6 +109,7 @@ impl BenchmarkParametersGenerator {
             LoadType::Search { starting_load, .. } => Some(*starting_load),
         };
         Self {
+            shared_objects_ration,
             nodes,
             load_type,
             faults: 0,
@@ -171,7 +188,13 @@ impl BenchmarkParametersGenerator {
 
     pub fn next_parameters(&mut self) -> Option<BenchmarkParameters> {
         self.next_load.map(|load| {
-            BenchmarkParameters::new(self.nodes, self.faults, load, self.duration.clone())
+            BenchmarkParameters::new(
+                self.shared_objects_ration,
+                self.nodes,
+                self.faults,
+                load,
+                self.duration.clone(),
+            )
         })
     }
 }

@@ -47,6 +47,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
 
         // Run benchmarks.
         Operation::Benchmark {
+            shared_objects_ratio,
             nodes,
             faults,
             duration,
@@ -65,11 +66,16 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
             let instances = testbed.instances();
             let orchestrator = Orchestrator::new(settings, instances, ssh_manager);
 
+            let shared_objects_ratio = shared_objects_ratio.max(100);
             let loads = if loads.is_empty() { vec![200] } else { loads };
 
-            let generator = BenchmarkParametersGenerator::new(nodes, LoadType::Fixed(loads))
-                .with_custom_duration(duration)
-                .with_faults(faults);
+            let generator = BenchmarkParametersGenerator::new(
+                shared_objects_ratio,
+                nodes,
+                LoadType::Fixed(loads),
+            )
+            .with_custom_duration(duration)
+            .with_faults(faults);
 
             orchestrator
                 .skip_testbed_updates(skip_testbed_update)
@@ -145,6 +151,11 @@ pub enum Operation {
 
     /// Run a benchmark on the specified testbed.
     Benchmark {
+        /// Percentage of shared vs owned objects; 0 means only owned objects and 100 means
+        /// only shared objects.
+        #[clap(long, value_name = "INT", default_value = "0")]
+        shared_objects_ratio: u16,
+
         /// Number of nodes to deploy.
         #[clap(long, value_name = "INT")]
         nodes: usize,

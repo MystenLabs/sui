@@ -176,12 +176,14 @@ impl Orchestrator {
             "sudo apt-get -y autoremove",
             // Disable "pending kernel upgrade" message.
             "sudo apt -y remove needrestart",
-            // Install typical dependencies
-            "sudo apt-get -y install curl git-all clang cmake gcc libssl-dev pkg-config libclang-dev",
             // The following dependencies prevent the error: [error: linker `cc` not found].
             "sudo apt-get -y install build-essential",
+            // Install typical sui dependencies.
+            "sudo apt-get -y install curl git-all clang cmake gcc libssl-dev pkg-config libclang-dev",
             // This dependency is missing from the Sui docs.
             "sudo apt-get -y install libpq-dev",
+            // Install plotter dependencies.
+            "sudo apt-get -y install libfontconfig libfontconfig1-dev",
             // Install rust (non-interactive).
             "curl --proto \"=https\" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y",
             "source $HOME/.cargo/env",
@@ -358,6 +360,8 @@ impl Orchestrator {
         // Deploy the load generators.
         let committee_size = instances.len();
         let load_share = parameters.load.clone() / committee_size;
+        let shared_counter = parameters.shared_objects_ratio;
+        let transfer_objects = 100 - shared_counter;
         let command = move |i: usize| -> String {
             let gas_id = Config::gas_object_id_offsets(committee_size)[i].clone();
             let genesis = "~/.sui/sui_config/genesis.blob";
@@ -369,8 +373,8 @@ impl Orchestrator {
                 &format!("--genesis-blob-path {genesis} --keystore-path {keystore}"),
                 &format!("--primary-gas-id {gas_id}"),
                 "bench",
-                &format!("--num-workers 100 --target-qps {load_share}"),
-                "--shared-counter 0 --in-flight-ratio 50 --transfer-object 100",
+                &format!("--num-workers 100 --in-flight-ratio 50 --target-qps {load_share}"),
+                &format!("--shared-counter {shared_counter} --transfer-object {transfer_objects}"),
                 &format!("--client-metric-port {}", Self::CLIENT_METRIC_PORT),
             ]
             .join(" ");
