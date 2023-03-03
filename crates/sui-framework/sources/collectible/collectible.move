@@ -8,13 +8,14 @@
 /// Custom metadata can be created and passed into the `Collectible` but that would
 /// require additional work on the creator side to set up metadata creation methods.
 module sui::collectible {
-    use sui::object::{Self, UID};
-    use sui::package::{Self, Publisher};
-    use sui::tx_context::{TxContext};
-    use sui::display::{Self, Display};
     use std::option::{Self, Option};
     use std::string::String;
     use std::vector as vec;
+    use sui::object::{Self, UID};
+    use sui::tx_context::TxContext;
+    use sui::display::{Self, Display};
+    use sui::package::{Self, Publisher};
+    use sui::kiosk::{Self, TransferPolicyCap};
 
     /// For when a witness type passed is not an OTW.
     const ENotOneTimeWitness: u64 = 0;
@@ -69,7 +70,8 @@ module sui::collectible {
     ): (
         Publisher,
         Display<Collectible<T>>,
-        CollectionCreatorCap<T>
+        TransferPolicyCap<Collectible<T>>,
+        CollectionCreatorCap<T>,
     ) {
         assert!(sui::types::is_one_time_witness(&otw), ENotOneTimeWitness);
 
@@ -79,6 +81,7 @@ module sui::collectible {
         (
             pub,
             display::new_protected<Collectible<T>>(ctx),
+            kiosk::new_transfer_policy_cap_protected<Collectible<T>>(ctx),
             CollectionCreatorCap<T> {
                 id: object::new(ctx),
                 minted: 0,

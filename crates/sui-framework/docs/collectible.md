@@ -29,6 +29,7 @@ require additional work on the creator side to set up metadata creation methods.
 <pre><code><b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::string</a>;
 <b>use</b> <a href="display.md#0x2_display">0x2::display</a>;
+<b>use</b> <a href="kiosk.md#0x2_kiosk">0x2::kiosk</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="package.md#0x2_package">0x2::package</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
@@ -231,7 +232,7 @@ Type parameter <code>T</code> is phantom; so we constrain it via <code>Publisher
 defined in the same module as the OTW. Aborts otherwise.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="collectible.md#0x2_collectible_create_collection">create_collection</a>&lt;OTW: drop, T: store&gt;(otw: OTW, max_supply: <a href="_Option">option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="package.md#0x2_package_Publisher">package::Publisher</a>, <a href="display.md#0x2_display_Display">display::Display</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">collectible::Collectible</a>&lt;T&gt;&gt;, <a href="collectible.md#0x2_collectible_CollectionCreatorCap">collectible::CollectionCreatorCap</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="collectible.md#0x2_collectible_create_collection">create_collection</a>&lt;OTW: drop, T: store&gt;(otw: OTW, max_supply: <a href="_Option">option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="package.md#0x2_package_Publisher">package::Publisher</a>, <a href="display.md#0x2_display_Display">display::Display</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">collectible::Collectible</a>&lt;T&gt;&gt;, <a href="kiosk.md#0x2_kiosk_TransferPolicyCap">kiosk::TransferPolicyCap</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">collectible::Collectible</a>&lt;T&gt;&gt;, <a href="collectible.md#0x2_collectible_CollectionCreatorCap">collectible::CollectionCreatorCap</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -245,7 +246,8 @@ defined in the same module as the OTW. Aborts otherwise.
 ): (
     Publisher,
     Display&lt;<a href="collectible.md#0x2_collectible_Collectible">Collectible</a>&lt;T&gt;&gt;,
-    <a href="collectible.md#0x2_collectible_CollectionCreatorCap">CollectionCreatorCap</a>&lt;T&gt;
+    TransferPolicyCap&lt;<a href="collectible.md#0x2_collectible_Collectible">Collectible</a>&lt;T&gt;&gt;,
+    <a href="collectible.md#0x2_collectible_CollectionCreatorCap">CollectionCreatorCap</a>&lt;T&gt;,
 ) {
     <b>assert</b>!(sui::types::is_one_time_witness(&otw), <a href="collectible.md#0x2_collectible_ENotOneTimeWitness">ENotOneTimeWitness</a>);
 
@@ -255,6 +257,7 @@ defined in the same module as the OTW. Aborts otherwise.
     (
         pub,
         <a href="display.md#0x2_display_new_protected">display::new_protected</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">Collectible</a>&lt;T&gt;&gt;(ctx),
+        <a href="kiosk.md#0x2_kiosk_new_transfer_policy_cap_protected">kiosk::new_transfer_policy_cap_protected</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">Collectible</a>&lt;T&gt;&gt;(ctx),
         <a href="collectible.md#0x2_collectible_CollectionCreatorCap">CollectionCreatorCap</a>&lt;T&gt; {
             id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
             minted: 0,

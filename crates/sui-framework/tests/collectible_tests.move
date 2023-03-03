@@ -23,7 +23,7 @@ module sui::boars {
     struct Boar has store {}
 
     fun init(otw: BOARS, ctx: &mut TxContext) {
-        let (pub, display, creator_cap) = collectible::create_collection<BOARS, Boar>(
+        let (pub, display, type_owner_cap, creator_cap) = collectible::create_collection<BOARS, Boar>(
             otw, option::some(CAP), ctx
         );
 
@@ -42,6 +42,7 @@ module sui::boars {
         ]);
 
         display::update_version(&mut display);
+        transfer(type_owner_cap, sender(ctx));
         transfer(creator_cap, sender(ctx));
         transfer(display, sender(ctx));
         transfer(pub, sender(ctx))
