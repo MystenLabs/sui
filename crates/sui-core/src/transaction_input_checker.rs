@@ -78,6 +78,7 @@ pub(crate) async fn check_dev_inspect_input(
     for k in kind.single_transactions() {
         match k {
             SingleTransactionKind::TransferObject(_)
+            | SingleTransactionKind::TransferObjectExtended(_)
             | SingleTransactionKind::Call(_)
             | SingleTransactionKind::TransferSui(_)
             | SingleTransactionKind::Pay(_)

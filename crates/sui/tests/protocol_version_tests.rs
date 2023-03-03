@@ -63,11 +63,17 @@ mod sim_only_tests {
     use sui_core::authority::sui_framework_injection;
     use sui_framework_build::compiled_package::BuildConfig;
     use sui_json_rpc::api::WriteApiClient;
+    use sui_keys::keystore::AccountKeystore;
     use sui_macros::*;
     use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
     use sui_types::{
         digests::TransactionDigest,
-        messages::{MoveCall, SingleTransactionKind, TransactionKind},
+        error::SuiError,
+        intent::Intent,
+        messages::{
+            MoveCall, SingleTransactionKind, Transaction, TransactionData, TransactionKind,
+            TransferObject,
+        },
         object::{Object, OBJECT_START_VERSION},
         SUI_FRAMEWORK_OBJECT_ID,
     };
@@ -92,6 +98,76 @@ mod sim_only_tests {
             .unwrap();
 
         monitor_version_change(&test_cluster, FINISH /* expected proto version */).await;
+    }
+
+    #[sim_test]
+    async fn test_protocol_version_upgrade_new_message() {
+        ProtocolConfig::poison_get_for_min_version();
+
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(10000)
+            .with_protocol_version(1.into())
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(1, 2))
+            .build()
+            .await
+            .unwrap();
+
+        let context = &test_cluster.wallet;
+        let client = context.get_client().await.unwrap();
+        let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
+        let recipient = context.config.keystore.addresses().get(1).cloned().unwrap();
+
+        let object_refs: Vec<_> = client
+            .read_api()
+            .get_objects_owned_by_address(sender)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|o| o.to_object_ref())
+            .collect();
+
+        let gas = *object_refs.get(0).unwrap();
+        let object_ref = *object_refs.get(1).unwrap();
+
+        let kind = TransactionKind::Single(SingleTransactionKind::TransferObjectExtended(
+            TransferObject {
+                recipient,
+                object_ref,
+            },
+        ));
+
+        let txn = TransactionData::new(kind, sender, gas, 1000, 1);
+
+        let signature = context
+            .config
+            .keystore
+            .sign_secure(&sender, &txn, Intent::default())
+            .unwrap();
+
+        let signed_txn = Transaction::from_data(txn, Intent::default(), vec![signature])
+            .verify()
+            .unwrap();
+
+        let err = client
+            .quorum_driver()
+            .execute_transaction(
+                signed_txn.clone(),
+                Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
+            )
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("WrongMessageVersion"));
+
+        monitor_version_change(&test_cluster, 2 /* expected proto version */).await;
+
+        client
+            .quorum_driver()
+            .execute_transaction(
+                signed_txn,
+                Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
+            )
+            .await
+            .expect("should work after version upgrade");
     }
 
     #[sim_test]

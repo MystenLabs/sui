@@ -1639,7 +1639,8 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
 
     fn try_from(tx: SingleTransactionKind) -> Result<Self, Self::Error> {
         Ok(match tx {
-            SingleTransactionKind::TransferObject(t) => Self::TransferObject(SuiTransferObject {
+            SingleTransactionKind::TransferObjectExtended(t)
+            | SingleTransactionKind::TransferObject(t) => Self::TransferObject(SuiTransferObject {
                 recipient: t.recipient,
                 object_ref: t.object_ref.into(),
             }),

@@ -9,7 +9,12 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 pub const MIN_PROTOCOL_VERSION: u64 = 1;
-pub const MAX_PROTOCOL_VERSION: u64 = 1;
+pub const MAX_PROTOCOL_VERSION: u64 = 2;
+
+// Record history of protocol version allocations here:
+//
+// Version 1: Original version.
+// Version 2: Adds support for TransferObjectExtended.
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
@@ -101,6 +106,14 @@ impl SupportedProtocolVersions {
     }
 }
 
+pub struct Error(pub String);
+
+/// Records on/off feature flags that may vary at each protocol version.
+#[derive(Default, Clone)]
+struct FeatureFlags {
+    transfer_object_extended: bool,
+}
+
 /// Constants that change the behavior of the protocol.
 ///
 /// The value of each constant here must be fixed for a given protocol version. To change the value
@@ -121,6 +134,8 @@ impl SupportedProtocolVersions {
 #[derive(Clone)]
 pub struct ProtocolConfig {
     pub version: ProtocolVersion,
+
+    feature_flags: FeatureFlags,
 
     // ==== Transaction input limits ====
     /// Maximum serialized size of a transaction (in bytes).
@@ -298,6 +313,20 @@ pub struct ProtocolConfig {
 }
 
 const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protocol version";
+
+// feature flags
+impl ProtocolConfig {
+    pub fn check_transfer_object_extended_supported(&self) -> Result<(), Error> {
+        if self.feature_flags.transfer_object_extended {
+            Ok(())
+        } else {
+            Err(Error(format!(
+                "TransferObjectV2 is not supported at {:?}",
+                self.version
+            )))
+        }
+    }
+}
 
 // getters
 impl ProtocolConfig {
@@ -545,7 +574,12 @@ impl ProtocolConfig {
         // To change the values here you must create a new protocol version with the new values!
         match version.0 {
             1 => Self {
-                version, // will be overwitten before being returned
+                // will be overwitten before being returned
+                version,
+
+                // All flags are disabled in V1
+                feature_flags: Default::default(),
+
                 max_tx_size: Some(64 * 1024),
                 max_tx_in_batch: Some(10),
                 max_modules_in_publish: Some(128),
@@ -599,6 +633,12 @@ impl ProtocolConfig {
                 // new_constant: None,
             },
 
+            2 => {
+                let mut ret = Self::get_for_version_impl(version - 1);
+                ret.feature_flags.transfer_object_extended = true;
+                ret
+            }
+
             // Use this template when making changes:
             //
             // NEW_VERSION => Self {
@@ -613,7 +653,7 @@ impl ProtocolConfig {
             //
             //     // Pull in everything else from the previous version to avoid unintentional
             //     // changes.
-            //     ..get_for_version_impl(version - 1)
+            //     ..Self::get_for_version_impl(version - 1)
             // },
             _ => panic!("unsupported version {:?}", version),
         }

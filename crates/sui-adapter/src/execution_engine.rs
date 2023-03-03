@@ -200,7 +200,11 @@ fn execution_loop<
     // once across single tx, we should be able to run them in parallel.
     for (idx, single_tx) in transaction_kind.into_single_transactions().enumerate() {
         match single_tx {
-            SingleTransactionKind::TransferObject(TransferObject {
+            SingleTransactionKind::TransferObjectExtended(TransferObject {
+                recipient,
+                object_ref,
+            })
+            | SingleTransactionKind::TransferObject(TransferObject {
                 recipient,
                 object_ref,
             }) => {

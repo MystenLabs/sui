@@ -413,6 +413,9 @@ pub enum SingleTransactionKind {
     ConsensusCommitPrologue(ConsensusCommitPrologue),
     /// A transaction that allows the interleaving of native commands and Move calls
     ProgrammableTransaction(ProgrammableTransaction),
+
+    /// New for TransactionDataV2
+    TransferObjectExtended(TransferObject),
     // .. more transaction types go here
 }
 
@@ -435,6 +438,10 @@ impl VersionedProtocolMessage for SingleTransactionKind {
             | SingleTransactionKind::Genesis(_)
             | SingleTransactionKind::ConsensusCommitPrologue(_)
             | SingleTransactionKind::ProgrammableTransaction(_) => Ok(()),
+
+            SingleTransactionKind::TransferObjectExtended(_) => protocol_config
+                .check_transfer_object_extended_supported()
+                .map_err(SuiError::from),
         }
     }
 }
@@ -998,7 +1005,8 @@ impl SingleTransactionKind {
     /// TODO: use an iterator over references here instead of a Vec to avoid allocations.
     pub fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>> {
         let input_objects = match &self {
-            Self::TransferObject(TransferObject { object_ref, .. }) => {
+            Self::TransferObjectExtended(TransferObject { object_ref, .. })
+            | Self::TransferObject(TransferObject { object_ref, .. }) => {
                 vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
             }
             Self::Call(move_call) => move_call.input_objects(),
@@ -1065,7 +1073,8 @@ impl SingleTransactionKind {
             SingleTransactionKind::PaySui(p) => p.validity_check(config, gas_payment)?,
             SingleTransactionKind::PayAllSui(pa) => pa.validity_check(config, gas_payment)?,
             SingleTransactionKind::ProgrammableTransaction(p) => p.validity_check(config)?,
-            SingleTransactionKind::TransferObject(_)
+            SingleTransactionKind::TransferObjectExtended(_)
+            | SingleTransactionKind::TransferObject(_)
             | SingleTransactionKind::TransferSui(_)
             | SingleTransactionKind::ChangeEpoch(_)
             | SingleTransactionKind::Genesis(_)
@@ -1079,7 +1088,7 @@ impl Display for SingleTransactionKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
         match &self {
-            Self::TransferObject(t) => {
+            Self::TransferObjectExtended(t) | Self::TransferObject(t) => {
                 writeln!(writer, "Transaction Kind : Transfer Object")?;
                 writeln!(writer, "Recipient : {}", t.recipient)?;
                 let (object_id, seq, digest) = t.object_ref;
@@ -1302,6 +1311,7 @@ impl TransactionKind {
                 let valid = b.iter().all(|s| match s {
                     SingleTransactionKind::Call(_)
                     | SingleTransactionKind::TransferObject(_)
+                    | SingleTransactionKind::TransferObjectExtended(_)
                     | SingleTransactionKind::Pay(_) => true,
                     SingleTransactionKind::TransferSui(_)
                     | SingleTransactionKind::PaySui(_)
@@ -1832,6 +1842,7 @@ impl TransactionDataAPI for TransactionDataV1 {
             TransactionKind::Single(s) => match s {
                 SingleTransactionKind::Call(_)
                 | SingleTransactionKind::TransferObject(_)
+                | SingleTransactionKind::TransferObjectExtended(_)
                 | SingleTransactionKind::Pay(_)
                 | SingleTransactionKind::Publish(_) => true,
                 SingleTransactionKind::TransferSui(_)
