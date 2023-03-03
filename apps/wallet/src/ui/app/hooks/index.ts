@@ -25,7 +25,6 @@ export { useGetAllBalances } from './useGetAllBalances';
 export { useObjectsOwnedByAddress } from './useObjectsOwnedByAddress';
 export { useOwnedNFT } from './useOwnedNFT';
 export { useGetCoins } from './useGetCoins';
-export { useGasBudgetEstimationUnits } from './useGasBudgetEstimationUnits';
 export * from './useSigner';
 export * from './useIndividualCoinMaxBalance';
 export * from './useOriginbyteNft';

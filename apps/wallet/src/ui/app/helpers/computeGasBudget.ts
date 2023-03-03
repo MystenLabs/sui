@@ -7,6 +7,7 @@ import { DEFAULT_GAS_BUDGET_FOR_PAY } from '_redux/slices/sui-objects/Coin';
 
 // This is a helper function to get a set of gas coins that can cover a given amount
 // It is from Coins.selectCoinSetWithCombinedBalanceGreaterThanOrEqual from sui.js
+// TODO: move this to sui.js
 function getCoinSetWithCombinedBalanceGreaterThanOrEqual(
     coins: CoinStruct[],
     amount: bigint
@@ -49,10 +50,7 @@ function getCoinSetWithCombinedBalanceGreaterThanOrEqual(
     return ret.sort((a, b) => a.balance - b.balance);
 }
 
-export function useGasBudgetEstimationUnits(
-    coins: CoinStruct[] | null,
-    amount: bigint
-) {
+export function computeGasBudget(coins: CoinStruct[] | null, amount: bigint) {
     if (!coins) {
         return 0;
     }
