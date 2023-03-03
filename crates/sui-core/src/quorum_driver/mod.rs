@@ -289,10 +289,7 @@ where
                         .attempt_conflicting_transaction(
                             &conflicting_tx_digest,
                             &tx_digest,
-                            validators
-                                .iter()
-                                .map(|(pub_key, _)| pub_key.clone())
-                                .collect(),
+                            validators.iter().map(|(pub_key, _)| *pub_key).collect(),
                         )
                         .await;
 

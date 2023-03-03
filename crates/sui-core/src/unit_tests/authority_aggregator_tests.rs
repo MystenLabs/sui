@@ -814,7 +814,7 @@ async fn test_handle_transaction_response() {
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter(),
-        cert_epoch_0.inner(),
+        Some(cert_epoch_0.inner()),
         effects.clone(),
         0,
     );
@@ -830,7 +830,7 @@ async fn test_handle_transaction_response() {
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter(),
-        cert_epoch_0.inner(),
+        Some(cert_epoch_0.inner()),
         effects,
         1,
     );
@@ -848,7 +848,7 @@ async fn test_handle_transaction_response() {
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter().skip(2),
-        cert_epoch_0.inner(),
+        Some(cert_epoch_0.inner()),
         effects,
         1,
     );
@@ -879,7 +879,7 @@ async fn test_handle_transaction_response() {
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter(),
-        cert_epoch_1.inner(),
+        Some(cert_epoch_1.inner()),
         effects,
         1,
     );
@@ -1412,6 +1412,92 @@ async fn test_handle_conflicting_transaction_response() {
     let agg = get_genesis_agg(authorities.clone(), clients.clone());
     // We have a valid cert because val-0 has it
     agg.process_transaction(tx1.clone()).await.unwrap();
+
+    println!("Case 5 - Retryable Transaction (MissingCommitteeAtEpoch Error)");
+    // Validators return signed-tx with epoch 1
+    set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx1, 1);
+
+    // Val-1 sends conflicting tx2
+    let (name_1, _) = &authority_keys[1];
+    clients
+        .get_mut(name_1)
+        .unwrap()
+        .set_tx_info_response_error(conflicting_error.clone());
+
+    let agg = get_agg_at_epoch(authorities.clone(), clients.clone(), 1);
+    let cert_epoch_1 = agg
+        .process_transaction(tx1.clone())
+        .await
+        .unwrap()
+        .into_cert_for_testing();
+
+    // Validators have moved to epoch 2 and return tx-effects with epoch 2, client expects 1
+    let effects = TransactionEffects {
+        transaction_digest: *cert_epoch_1.digest(),
+        ..Default::default()
+    };
+    set_tx_info_response_with_cert_and_effects(
+        &mut clients,
+        authority_keys.iter(),
+        None,
+        effects,
+        2,
+    );
+
+    // Val-1 sends conflicting tx2
+    let (name_1, _) = &authority_keys[1];
+    clients
+        .get_mut(name_1)
+        .unwrap()
+        .set_tx_info_response_error(conflicting_error.clone());
+
+    let mut agg = get_agg_at_epoch(authorities.clone(), clients.clone(), 1);
+    assert_resp_err(
+        &agg,
+        tx1.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::RetryableConflictingTransaction { .. }
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::MissingCommitteeAtEpoch(..) | SuiError::ObjectLockConflict { .. }
+            )
+        },
+    )
+    .await;
+
+    println!("Case 5.1 - Retryable Transaction (WrongEpoch Error)");
+    // Update committee store to epoch 2, now SafeClient will pass
+    let committee_2 = Committee::new(2, ProtocolVersion::MIN, authorities.clone()).unwrap();
+    agg.committee_store
+        .insert_new_committee(&committee_2)
+        .unwrap();
+    assert_resp_err(
+        &agg,
+        tx1.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::RetryableConflictingTransaction { .. }
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::WrongEpoch { .. } | SuiError::ObjectLockConflict { .. }
+            )
+        },
+    )
+    .await;
+
+    println!("Case 5.2 - Successful Cert Transaction");
+    // Update aggregator committee to epoch 2, and transaction will succeed.
+    agg.committee = committee_2;
+    agg.process_transaction(tx1.clone()).await.unwrap();
 }
 
 async fn assert_resp_err<E, F>(
@@ -1465,14 +1551,14 @@ async fn assert_resp_err<E, F>(
 fn set_tx_info_response_with_cert_and_effects<'a>(
     clients: &mut BTreeMap<AuthorityName, HandleTransactionTestAuthorityClient>,
     authority_keys: impl Iterator<Item = &'a (AuthorityName, AuthorityKeyPair)>,
-    cert: &CertifiedTransaction,
+    cert: Option<&CertifiedTransaction>,
     effects: TransactionEffects,
     epoch: EpochId,
 ) {
     for (name, key) in authority_keys {
         let resp = HandleTransactionResponse {
             status: TransactionStatus::Executed(
-                Some(cert.auth_sig().clone()),
+                cert.map(|c| c.auth_sig().clone()),
                 SignedTransactionEffects::new(epoch, effects.clone(), key, *name),
                 TransactionEvents { data: vec![] },
             ),

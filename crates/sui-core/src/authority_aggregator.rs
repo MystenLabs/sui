@@ -100,7 +100,7 @@ pub struct AuthAggMetrics {
     pub total_quorum_once_timeout: IntCounter,
     pub process_tx_errors: IntCounterVec,
     pub process_cert_errors: IntCounterVec,
-    pub total_equivocation_detected: IntCounter,
+    pub total_client_double_spend_attempts_detected: IntCounter,
     pub total_aggregated_non_recoverable_err: IntCounterVec,
 }
 
@@ -161,9 +161,9 @@ impl AuthAggMetrics {
                 registry,
             )
             .unwrap(),
-            total_equivocation_detected: register_int_counter_with_registry!(
-                "total_equivocation_detected",
-                "Total number of equivocations that are detected",
+            total_client_double_spend_attempts_detected: register_int_counter_with_registry!(
+                "total_client_double_spend_attempts_detected",
+                "Total number of client double spend attempts that are detected",
                 registry,
             )
             .unwrap(),
@@ -1048,7 +1048,7 @@ where
                                 }
                                 else if !retryable && !self.record_conflicting_transaction_if_any(&mut state, name, weight, &err) {
                                     if !categorized {
-                                        // we should minimize possible uncategorized errors here
+                                        // TODO: Should minimize possible uncategorized errors here
                                         // use ERROR for now to make them easier to spot.
                                         error!(?tx_digest, "uncategorized tx error: {err}");
                                     }
@@ -1104,10 +1104,12 @@ where
                             ?original_tx_digest,
                             original_tx_stake = good_stake,
                             tx_stake = conflicting_stake,
-                            "Equivocation detected: {:?}",
+                            "Client double spend attempt detected: {:?}",
                             validators
                         );
-                        self.metrics.total_equivocation_detected.inc();
+                        self.metrics
+                            .total_client_double_spend_attempts_detected
+                            .inc();
                         return AggregatorProcessTransactionError::FatalConflictingTransaction {
                             errors: state.errors,
                             conflicting_tx_digests: state.conflicting_tx_digests,
@@ -1121,7 +1123,7 @@ where
                             conflicting_tx_digests: state.conflicting_tx_digests,
                         };
                     } else if conflicting_stake >= validity_threshold {
-                        // To be more conservative and try not to actually cause full equivocation,
+                        // To be more conservative and try and avoid objects getting locked due to client double-spends
                         // we only retry a transaction when at least f+1 validators claims this tx locks objects
                         return AggregatorProcessTransactionError::RetryableConflictingTransaction {
                             errors: state.errors,
@@ -1383,7 +1385,7 @@ where
                             let (retryable, categorized) = err.is_retryable();
                             if !retryable {
                                 if !categorized {
-                                    // we should minimize possible uncategorized errors here
+                                    // TODO: Should minimize possible uncategorized errors here
                                     // use ERROR for now to make them easier to spot.
                                     error!(?tx_digest, "uncategorized tx error: {err}");
                                 }
