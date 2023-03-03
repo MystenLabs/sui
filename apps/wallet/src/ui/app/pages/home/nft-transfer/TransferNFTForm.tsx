@@ -36,7 +36,7 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
     const navigate = useNavigate();
     const transferNFT = useMutation({
         mutationFn: (to: string) => {
-            if (!to || !signer) {
+            if (!to || !signer || isInsufficientGas) {
                 throw new Error('Missing data');
             }
             return signer.transferObject({
@@ -46,10 +46,9 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
             });
         },
         onSuccess: (response) => {
-            const txDigest = getTransactionDigest(response);
             return navigate(
                 `/receipt?${new URLSearchParams({
-                    txdigest: txDigest,
+                    txdigest: getTransactionDigest(response),
                     from: 'nfts',
                 }).toString()}`
             );
@@ -82,7 +81,7 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
                 validationSchema={validationSchema}
                 onSubmit={({ to }) => transferNFT.mutateAsync(to)}
             >
-                {({ isSubmitting, isValid }) => (
+                {({ isValid }) => (
                     <Form autoComplete="off" className="h-full">
                         <BottomMenuLayout className="h-full">
                             <Content>
