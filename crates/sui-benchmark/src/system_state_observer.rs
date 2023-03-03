@@ -4,6 +4,7 @@
 use crate::ValidatorProxy;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_types::sui_system_state::SuiSystemStateTrait;
 use tokio::sync::oneshot::Sender;
 use tokio::sync::watch;
 use tokio::sync::watch::Receiver;

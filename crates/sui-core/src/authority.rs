@@ -36,6 +36,7 @@ use sui_types::intent::Intent;
 use sui_types::intent::IntentScope;
 use sui_types::message_envelope::Message;
 use sui_types::parse_sui_struct_tag;
+use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::MOVE_STDLIB_OBJECT_ID;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use tap::TapFallible;

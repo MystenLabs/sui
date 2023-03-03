@@ -9,6 +9,7 @@ use strum::IntoEnumIterator;
 
 use fastcrypto::encoding::Hex;
 use sui_types::base_types::ObjectID;
+use sui_types::sui_system_state::SuiSystemStateTrait;
 
 use crate::errors::{Error, ErrorType};
 use crate::types::{
