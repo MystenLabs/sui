@@ -29,6 +29,8 @@ pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance
 pub const CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME: &IdentStr =
     ident_str!("consensus_commit_prologue");
 
+pub const INIT_SYSTEM_STATE_VERSION: u64 = 1;
+
 const E_METADATA_INVALID_PUBKEY: u64 = 1;
 const E_METADATA_INVALID_NET_PUBKEY: u64 = 2;
 const E_METADATA_INVALID_WORKER_PUBKEY: u64 = 3;
@@ -565,11 +567,11 @@ where
     Ok(result)
 }
 
-pub fn get_sui_system_state<S>(object_store: S) -> Result<SuiSystemState, SuiError>
+pub fn get_sui_system_state<S>(object_store: &S) -> Result<SuiSystemState, SuiError>
 where
     S: ObjectStore,
 {
-    let wrapper = get_sui_system_state_wrapper(&object_store)?;
+    let wrapper = get_sui_system_state_wrapper(object_store)?;
     let inner_id = derive_dynamic_field_id(
         wrapper.id.id.bytes,
         &TypeTag::U64,
@@ -587,4 +589,8 @@ where
     let result = bcs::from_bytes::<Field<u64, SuiSystemState>>(move_object.contents())
         .expect("Sui System State object deserialization cannot fail");
     Ok(result.value)
+}
+
+pub fn get_sui_system_state_version(_protocol_version: ProtocolVersion) -> u64 {
+    INIT_SYSTEM_STATE_VERSION
 }
