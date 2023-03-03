@@ -503,6 +503,7 @@ importers:
       '@scure/bip39': ^1.1.1
       '@size-limit/preset-small-lib': ^8.2.4
       '@suchipi/femver': ^1.0.0
+      cross-env: ^7.0.3
       cross-fetch: ^3.1.5
       eslint: ^8.35.0
       eslint-config-prettier: ^8.6.0
@@ -541,6 +542,7 @@ importers:
       tweetnacl: 1.0.3
     devDependencies:
       '@size-limit/preset-small-lib': 8.2.4_size-limit@8.2.4
+      cross-env: 7.0.3
       eslint: 8.35.0
       eslint-config-prettier: 8.6.0_eslint@8.35.0
       eslint-config-react-app: 7.0.1_ycpbpc6yetojsgtrx3mwntkhsu
