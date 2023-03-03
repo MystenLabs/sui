@@ -7,7 +7,7 @@ use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use futures::{stream::FuturesUnordered, StreamExt};
 use prometheus::Registry;
 use roaring::RoaringBitmap;
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, sync::Arc};
 use sui_config::genesis::Genesis;
 use sui_config::NetworkConfig;
 use sui_core::{
@@ -42,7 +42,6 @@ use sui_types::{
     messages::ExecuteTransactionRequestType, object::Owner,
 };
 use sui_types::{error::SuiError, sui_system_state::SuiSystemState};
-use tokio::time::timeout;
 use tracing::{error, info};
 
 pub mod benchmark_setup;
@@ -419,7 +418,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
             if total_stake >= self.committee.quorum_threshold() {
                 // Do not wait on executions at all validators. Instead, rely on Narwhal to keep
-                // validators in sync. 
+                // validators in sync.
                 break;
             }
         }
