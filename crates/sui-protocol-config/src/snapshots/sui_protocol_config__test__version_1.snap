@@ -3,6 +3,7 @@ source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur)"
 ---
 version: 1
+feature_flags: {}
 max_tx_size: 65536
 max_tx_in_batch: 10
 max_modules_in_publish: 128
