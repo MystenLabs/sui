@@ -431,8 +431,8 @@ impl Orchestrator {
                         stdout(),
                         MoveToColumn(0),
                         Print(format!(
-                            "[{:?}] Scraping metrics...",
-                            now.duration_since(start)
+                            "[{:?}s] Scraping metrics...",
+                            now.duration_since(start).as_secs()
                         ))
                     )
                     .unwrap();
