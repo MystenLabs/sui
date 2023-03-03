@@ -137,6 +137,7 @@ export const DelegationStakingPoolFields = object({
   pool_token_balance: number(),
   rewards_pool: object({ value: number() }),
   starting_epoch: number(),
+  deactivation_epoch: object({ vec: array() }),
   sui_balance: number(),
 });
 
@@ -192,6 +193,10 @@ export const ValidatorSet = object({
     object({ contents: array(ValidatorPair) }),
   ),
   staking_pool_mappings: object({
+    id: string(),
+    size: number(),
+  }),
+  inactive_pools: object({
     id: string(),
     size: number(),
   }),

@@ -219,9 +219,6 @@ module sui::sui_system {
             ctx
         );
 
-        // TODO: We need to verify the validator metadata.
-        // https://github.com/MystenLabs/sui/issues/7323
-
         validator_set::request_add_validator(&mut self.validators, validator);
     }
 

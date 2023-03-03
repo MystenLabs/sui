@@ -537,9 +537,6 @@ The amount of stake in the <code><a href="validator.md#0x2_validator">validator<
         ctx
     );
 
-    // TODO: We need <b>to</b> verify the <a href="validator.md#0x2_validator">validator</a> metadata.
-    // https://github.com/MystenLabs/<a href="sui.md#0x2_sui">sui</a>/issues/7323
-
     <a href="validator_set.md#0x2_validator_set_request_add_validator">validator_set::request_add_validator</a>(&<b>mut</b> self.validators, <a href="validator.md#0x2_validator">validator</a>);
 }
 </code></pre>
