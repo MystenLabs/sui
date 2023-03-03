@@ -265,11 +265,11 @@ pub struct CheckpointExecutorConfig {
 }
 
 fn default_checkpoint_execution_max_concurrency() -> usize {
-    2_000
+    200
 }
 
 fn default_local_execution_timeout_sec() -> u64 {
-    30
+    10
 }
 
 impl Default for CheckpointExecutorConfig {
