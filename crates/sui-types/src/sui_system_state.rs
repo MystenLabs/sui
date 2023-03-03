@@ -685,6 +685,9 @@ where
     Ok(result)
 }
 
+// This version is used to support authority_tests::test_sui_system_state_nop_upgrade.
+pub const SUI_SYSTEM_STATE_TESTING_VERSION1: u64 = u64::MAX;
+
 pub fn get_sui_system_state<S>(object_store: &S) -> Result<SuiSystemState, SuiError>
 where
     S: ObjectStore,
@@ -706,6 +709,14 @@ where
         .ok_or(SuiError::SuiSystemStateNotFound)?;
     match wrapper.version {
         1 => {
+            let result =
+                bcs::from_bytes::<Field<u64, SuiSystemStateInnerV1>>(move_object.contents())
+                    .expect("Sui System State object deserialization cannot fail");
+            Ok(SuiSystemState::V1(result.value))
+        }
+        // The following case is for sim_test only to support authority_tests::test_sui_system_state_nop_upgrade.
+        #[cfg(msim)]
+        SUI_SYSTEM_STATE_TESTING_VERSION1 => {
             let result =
                 bcs::from_bytes::<Field<u64, SuiSystemStateInnerV1>>(move_object.contents())
                     .expect("Sui System State object deserialization cannot fail");

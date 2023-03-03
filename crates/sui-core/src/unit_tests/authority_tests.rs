@@ -51,7 +51,7 @@ use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::epoch_data::EpochData;
 use sui_types::object::Data;
-use sui_types::sui_system_state::{SuiSystemStateWrapper, INIT_SYSTEM_STATE_VERSION};
+use sui_types::sui_system_state::{SuiSystemStateWrapper, SUI_SYSTEM_STATE_TESTING_VERSION1};
 use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, Signature},
@@ -2998,7 +2998,7 @@ async fn test_genesis_sui_system_state_object() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_sui_system_state_nop_upgrade() {
     let authority_state = init_state().await;
 
@@ -3030,7 +3030,7 @@ async fn test_sui_system_state_nop_upgrade() {
         mutable: true,
     });
     let new_protocol_version = ProtocolVersion::MIN.as_u64() + 1;
-    let new_system_state_version = INIT_SYSTEM_STATE_VERSION + 1;
+    let new_system_state_version = SUI_SYSTEM_STATE_TESTING_VERSION1;
 
     adapter::execute::<execution_mode::Normal, _, _>(
         &move_vm,
@@ -3065,8 +3065,7 @@ async fn test_sui_system_state_nop_upgrade() {
         inner.get_sui_system_state_wrapper_object().unwrap().version,
         new_system_state_version
     );
-    // TODO: Figure out a proper way to test this.
-    // inner.get_sui_system_state_object().unwrap();
+    inner.get_sui_system_state_object().unwrap();
 }
 
 #[tokio::test]
