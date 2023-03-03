@@ -7,7 +7,11 @@ use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use futures::{stream::FuturesUnordered, StreamExt};
 use prometheus::Registry;
 use roaring::RoaringBitmap;
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use sui_config::genesis::Genesis;
 use sui_config::NetworkConfig;
 use sui_core::{
@@ -42,6 +46,7 @@ use sui_types::{
     messages::ExecuteTransactionRequestType, object::Owner,
 };
 use sui_types::{error::SuiError, sui_system_state::SuiSystemState};
+use tokio::{task::JoinSet, time::timeout};
 use tracing::{error, info};
 
 pub mod benchmark_setup;
@@ -139,6 +144,7 @@ pub struct LocalValidatorAggregatorProxy {
     qd: Arc<QuorumDriver<NetworkAuthorityClient>>,
     committee: Committee,
     clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
+    requests: Mutex<JoinSet<()>>,
 }
 
 impl LocalValidatorAggregatorProxy {
@@ -246,6 +252,7 @@ impl LocalValidatorAggregatorProxy {
             qd,
             clients,
             committee,
+            requests: Mutex::new(JoinSet::new()),
         }
     }
 }
@@ -393,8 +400,9 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         let mut transaction_effects = None;
         let mut transaction_events = None;
         for client in self.clients.values() {
-            let fut = client.handle_certificate(certified_transaction.clone());
-            futures.push(fut);
+            let client = client.clone();
+            let certificate = certified_transaction.clone();
+            futures.push(async move { client.handle_certificate(certificate).await });
         }
 
         // Wait for the replies from a quorum of validators.
@@ -416,19 +424,23 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                 Err(e) => tracing::warn!("Failed to submit certificate: {e}"),
             }
 
-            // TODO: We can't stop sending transactions after receiving a quorum of replies otherwise
-            // some validators may not be able to process the next transactions. However this is a
-            // problem because: (i) it biases latency which should be computed upon receiving a quorum
-            // of certificate, and (ii) it prevents us from running benchmarks under (crash-)faults.
-            // if total_stake >= self.committee.quorum_threshold() {
-            //     break;
-            // }
+            if total_stake >= self.committee.quorum_threshold() {
+                break;
+            }
         }
 
         // Abort if we failed to submit the certificate to enough validators. This typically
         // happens when the validators are overloaded and the requests timed out.
         if transaction_effects.is_none() || total_stake < self.committee.quorum_threshold() {
             bail!("Failed to submit certificate to quorum of validators");
+        }
+
+        // Wait for 10 more seconds on remaining requests asynchronously.
+        {
+            let mut requests = self.requests.lock().unwrap();
+            requests.spawn(async move {
+                let _ = timeout(Duration::from_secs(10), futures.collect::<Vec<_>>()).await;
+            });
         }
 
         // Package the certificate and effects to return.
@@ -456,6 +468,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             qd,
             clients: self.clients.clone(),
             committee: self.committee.clone(),
+            requests: Mutex::new(JoinSet::new()),
         })
     }
 
