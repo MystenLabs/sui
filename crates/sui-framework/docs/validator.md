@@ -315,6 +315,16 @@
 ## Constants
 
 
+<a name="0x2_validator_ECommissionRateTooHigh"></a>
+
+Commission rate set by the validator is higher than the threshold
+
+
+<pre><code><b>const</b> <a href="validator.md#0x2_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>: u64 = 8;
+</code></pre>
+
+
+
 <a name="0x2_validator_EInvalidProofOfPossession"></a>
 
 
@@ -390,6 +400,15 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
 
 
 <pre><code><b>const</b> <a href="validator.md#0x2_validator_EMetadataInvalidWorkerPubKey">EMetadataInvalidWorkerPubKey</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="0x2_validator_MAX_COMMISSION_RATE"></a>
+
+
+
+<pre><code><b>const</b> <a href="validator.md#0x2_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>: u64 = 10000;
 </code></pre>
 
 
@@ -546,6 +565,7 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
             && <a href="_length">vector::length</a>(&protocol_pubkey_bytes) &lt;= 128,
         0
     );
+    <b>assert</b>!(<a href="validator.md#0x2_validator_commission_rate">commission_rate</a> &lt;= <a href="validator.md#0x2_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>, <a href="validator.md#0x2_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>);
     <a href="validator.md#0x2_validator_verify_proof_of_possession">verify_proof_of_possession</a>(
         proof_of_possession,
         sui_address,
@@ -746,6 +766,7 @@ Request to set new gas price for the next epoch.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_request_set_commission_rate">request_set_commission_rate</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, new_commission_rate: u64) {
+    <b>assert</b>!(new_commission_rate &lt;= <a href="validator.md#0x2_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>, <a href="validator.md#0x2_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>);
     self.next_epoch_commission_rate = new_commission_rate;
 }
 </code></pre>
