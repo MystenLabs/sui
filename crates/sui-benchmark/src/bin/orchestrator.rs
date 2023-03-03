@@ -178,7 +178,7 @@ pub enum TestbedAction {
     /// Install the codebase and all dependencies on all instances.
     Terraform,
 
-    // Start the specified number of instances on an existing testbed.
+    /// Start the specified number of instances on an existing testbed.
     Start {
         /// Number of instances to deploy.
         #[clap(long)]
@@ -188,7 +188,7 @@ pub enum TestbedAction {
     /// Stop an existing testbed.
     Stop,
 
-    /// Destroy the testbed and terminal all instances.
+    /// Destroy the testbed and terminate all instances.
     Destroy,
 }
 

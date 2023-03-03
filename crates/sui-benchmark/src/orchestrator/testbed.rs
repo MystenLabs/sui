@@ -1,5 +1,6 @@
 use std::{
     cmp::max,
+    collections::{HashMap, VecDeque},
     fs::{self, File},
     io::{stdout, Read},
     path::PathBuf,
@@ -328,20 +329,32 @@ impl<C> Testbed<C> {
         &self,
         parameters: &BenchmarkParameters,
     ) -> TestbedResult<Vec<Instance>> {
-        // TODO: Select an equal number of instances per region.
-        let instances: Vec<_> = self
-            .instances
-            .iter()
-            .filter(|x| x.is_active())
-            .cloned()
-            .take(parameters.nodes)
-            .collect();
+        let mut instances_by_regions = HashMap::new();
+        for instance in &self.instances {
+            if instance.is_active() {
+                instances_by_regions
+                    .entry(&instance.region)
+                    .or_insert_with(VecDeque::new)
+                    .push_back(instance);
+            }
+        }
+
+        let mut instances = Vec::new();
+        for region in self.settings.regions.iter().cycle() {
+            if instances.len() == parameters.nodes {
+                break;
+            }
+            if let Some(regional_instances) = instances_by_regions.get_mut(region) {
+                if let Some(instance) = regional_instances.pop_front() {
+                    instances.push(instance.clone());
+                }
+            }
+        }
 
         ensure!(
             instances.len() == parameters.nodes,
             TestbedError::InsufficientCapacity(format!("{}", parameters.nodes - instances.len()))
         );
-
         Ok(instances)
     }
 
@@ -515,10 +528,9 @@ impl<C> Testbed<C> {
         let command = command.join(" ; ");
 
         // Execute the deletion on all machines.
+        let instances = self.instances.iter().filter(|x| x.is_active());
         let ssh_command = SshCommand::new(move |_| command.clone());
-        self.ssh_manager
-            .execute(self.instances.iter(), ssh_command)
-            .await?;
+        self.ssh_manager.execute(instances, ssh_command).await?;
 
         println!(" [{}]", "Ok".green());
         Ok(())
