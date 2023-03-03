@@ -8,7 +8,9 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ObjectRef;
 use sui_types::error::{UserInputError, UserInputResult};
 use sui_types::gas::SuiCostTable;
-use sui_types::messages::{TransactionKind, VerifiedExecutableTransaction};
+use sui_types::messages::{
+    TransactionKind, VerifiedExecutableTransaction, VersionedProtocolMessage,
+};
 use sui_types::{
     base_types::{SequenceNumber, SuiAddress},
     error::SuiResult,
@@ -68,6 +70,7 @@ pub async fn check_transaction_input(
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
+    transaction.check_version_supported(epoch_store.protocol_version())?;
     transaction.validity_check(epoch_store.protocol_config())?;
     let input_objects = transaction.input_objects()?;
     let objects = store.check_input_objects(&input_objects)?;
@@ -128,6 +131,19 @@ pub async fn check_certificate_input(
     epoch_store: &AuthorityPerEpochStore,
     cert: &VerifiedExecutableTransaction,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
+    let protocol_version = epoch_store.protocol_version();
+
+    // This should not happen - validators should not have signed the txn in the first place.
+    assert!(
+        cert.data()
+            .transaction_data()
+            .check_version_supported(protocol_version)
+            .is_ok(),
+        "Certificate formed with unsupported message version {:?} for protocol version {:?}",
+        cert.message_version(),
+        protocol_version
+    );
+
     let tx_data = &cert.data().intent_message.value;
     let input_object_kinds = tx_data.input_objects()?;
     let input_object_data = if tx_data.is_change_epoch_tx() {
