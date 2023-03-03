@@ -5,6 +5,7 @@ use color_eyre::eyre::{Context, Result};
 use sui_orchestrator::{
     benchmark::{BenchmarkParametersGenerator, LoadType},
     client::{aws::AwsClient, vultr::VultrClient, ServerProviderClient},
+    plot::Plotter,
     settings::{CloudProvider, Settings},
     ssh::SshConnectionManager,
     testbed::Testbed,
@@ -75,6 +76,14 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
                 .run_benchmarks(generator)
                 .await
                 .wrap_err("Failed to run benchmarks")?;
+        }
+
+        // Print L-graphs from the collected data.
+        Operation::Plot => {
+            Plotter::new(settings)
+                .collect_measurements()
+                .plot_latency_throughput()
+                .unwrap();
         }
     }
     Ok(())
@@ -170,6 +179,9 @@ pub enum Operation {
         #[clap(long, value_name = "INT", default_value = "5")]
         retries: usize,
     },
+
+    /// Print L-graphs from the collected data.
+    Plot,
 }
 
 #[derive(Parser)]

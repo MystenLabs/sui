@@ -30,6 +30,7 @@ mod config;
 mod error;
 mod logs;
 mod measurement;
+pub mod plot;
 pub mod settings;
 pub mod ssh;
 pub mod testbed;
@@ -392,7 +393,7 @@ impl Orchestrator {
     pub async fn collect_metrics(
         &self,
         parameters: &BenchmarkParameters,
-    ) -> TestbedResult<MeasurementsCollection<usize>> {
+    ) -> TestbedResult<MeasurementsCollection> {
         crossterm::execute!(
             stdout(),
             Print(format!(
@@ -409,7 +410,7 @@ impl Orchestrator {
         let command = format!("curl 127.0.0.1:{}/metrics", Self::CLIENT_METRIC_PORT);
         let ssh_command = SshCommand::new(move |_| command.clone());
 
-        let mut aggregator = MeasurementsCollection::new(parameters.clone());
+        let mut aggregator = MeasurementsCollection::new(&self.settings, parameters.clone());
         let mut interval = time::interval(Self::SCRAPE_INTERVAL);
         interval.tick().await; // The first tick returns immediately.
 

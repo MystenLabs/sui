@@ -24,6 +24,8 @@ multiaddr = "0.17.0"
 rand = "0.8.5"
 futures = "0.3.23"
 clap = { version = "3.1.17", features = ["derive"] }
+plotters = "0.3.4"
+glob = "0.3.1"
 
 prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db" }
 
