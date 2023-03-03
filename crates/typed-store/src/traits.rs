@@ -20,7 +20,7 @@ where
     /// Returns the value for the given key from the map, if it exists.
     fn get(&self, key: &K) -> Result<Option<V>, Self::Error>;
 
-    /// Returns the raw value (bincode serialized bytes) for the given key from the map, if it exists.
+    /// Returns the raw value (serialized bytes) for the given key from the map, if it exists.
     fn get_raw_bytes(&self, key: &K) -> Result<Option<Vec<u8>>, Self::Error>;
 
     /// Returns the value for the given key from the map, if it exists
@@ -113,7 +113,7 @@ where
     /// Returns the value for the given key from the map, if it exists.
     async fn get(&self, key: &K) -> Result<Option<V>, Self::Error>;
 
-    /// Returns the raw value (bincode serialized bytes) for the given key from the map, if it exists.
+    /// Returns the raw value (serialized bytes) for the given key from the map, if it exists.
     async fn get_raw_bytes(&self, key: &K) -> Result<Option<Vec<u8>>, Self::Error>;
 
     /// Returns true if the map is empty, otherwise false.

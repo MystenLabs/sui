@@ -465,7 +465,7 @@ impl From<VMError> for SuiError {
 
 impl From<Status> for SuiError {
     fn from(status: Status) -> Self {
-        let result = bincode::deserialize::<SuiError>(status.details());
+        let result = bcs::from_bytes::<SuiError>(status.details());
         if let Ok(sui_error) = result {
             sui_error
         } else {
@@ -479,7 +479,7 @@ impl From<Status> for SuiError {
 
 impl From<SuiError> for Status {
     fn from(error: SuiError) -> Self {
-        let bytes = bincode::serialize(&error).unwrap();
+        let bytes = bcs::to_bytes(&error).unwrap();
         Status::with_details(tonic::Code::Internal, error.to_string(), bytes.into())
     }
 }

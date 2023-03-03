@@ -5128,13 +5128,15 @@ dependencies = [
 name = "mysten-network"
 version = "0.2.0"
 dependencies = [
- "bincode",
+ "anemo",
+ "bcs",
  "bytes",
  "eyre",
  "futures",
  "http",
  "multiaddr",
  "serde 1.0.152",
+ "snap",
  "tokio",
  "tokio-stream",
  "tonic",
@@ -5316,6 +5318,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "backoff",
+ "bcs",
  "bincode",
  "bytes",
  "fastcrypto",
@@ -5449,6 +5452,7 @@ dependencies = [
  "async-trait",
  "backoff",
  "base64",
+ "bcs",
  "bincode",
  "bytes",
  "dashmap",
@@ -5568,6 +5572,7 @@ dependencies = [
  "anemo-build",
  "async-trait",
  "base64",
+ "bcs",
  "bincode",
  "bytes",
  "criterion",
@@ -5577,6 +5582,7 @@ dependencies = [
  "futures",
  "indexmap",
  "mockall",
+ "mysten-network",
  "mysten-util-mem",
  "narwhal-config",
  "narwhal-crypto",
@@ -8013,6 +8019,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f67ad224767faa3c7d8b6d91985b78e70a1324408abcb1cfcc2be4c06bc06043"
 
 [[package]]
+name = "snap"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e9f0ab6ef7eb7353d9119c170a436d1bf248eea575ac42d19d12f4e34130831"
+
+[[package]]
 name = "socket2"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10354,6 +10366,7 @@ name = "typed-store"
 version = "0.4.0"
 dependencies = [
  "async-trait",
+ "bcs",
  "bincode",
  "collectable",
  "eyre",
@@ -11589,6 +11602,7 @@ dependencies = [
  "slug",
  "smallvec",
  "smawk",
+ "snap",
  "socket2",
  "soketto",
  "spin 0.5.2",

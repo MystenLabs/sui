@@ -1240,7 +1240,7 @@ async fn test_process_payload_availability_when_failures() {
             .expect("Couldn't serialise key");
 
         // Just serialise the "false" value
-        let dummy_value = bincode::serialize(false.borrow()).expect("Couldn't serialise value");
+        let dummy_value = bcs::to_bytes(false.borrow()).expect("Couldn't serialise value");
 
         rocksdb
             .put_cf(

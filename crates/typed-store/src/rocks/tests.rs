@@ -110,10 +110,7 @@ async fn test_get_raw(#[values(true, false)] is_transactional: bool) {
         .expect("Failed to get_raw_bytes")
         .unwrap();
 
-    assert_eq!(
-        bincode::serialize(&"123456789".to_string()).unwrap(),
-        val_bytes
-    );
+    assert_eq!(bcs::to_bytes(&"123456789".to_string()).unwrap(), val_bytes);
     assert_eq!(
         None,
         db.get_raw_bytes(&000000000)

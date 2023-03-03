@@ -489,9 +489,9 @@ fn test_digest_caching() {
     // digest is cached
     assert_eq!(initial_digest, *signed_tx.digest());
 
-    let serialized_tx = bincode::serialize(&signed_tx).unwrap();
+    let serialized_tx = bcs::to_bytes(&signed_tx).unwrap();
 
-    let deserialized_tx: SignedTransaction = bincode::deserialize(&serialized_tx).unwrap();
+    let deserialized_tx: SignedTransaction = bcs::from_bytes(&serialized_tx).unwrap();
 
     // cached digest was not serialized/deserialized
     assert_ne!(initial_digest, *deserialized_tx.digest());
@@ -518,10 +518,10 @@ fn test_digest_caching() {
     // digest is cached
     assert_eq!(initial_effects_digest, *signed_effects.digest());
 
-    let serialized_effects = bincode::serialize(&signed_effects).unwrap();
+    let serialized_effects = bcs::to_bytes(&signed_effects).unwrap();
 
     let deserialized_effects: SignedTransactionEffects =
-        bincode::deserialize(&serialized_effects).unwrap();
+        bcs::from_bytes(&serialized_effects).unwrap();
 
     // cached digest was not serialized/deserialized
     assert_ne!(initial_effects_digest, *deserialized_effects.digest());
