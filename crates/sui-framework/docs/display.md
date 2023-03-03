@@ -15,6 +15,7 @@ More entry functions might be added in the future depending on the use cases.
 
 
 -  [Resource `Display`](#0x2_display_Display)
+-  [Resource `DisplayEditorCap`](#0x2_display_DisplayEditorCap)
 -  [Struct `DisplayCreated`](#0x2_display_DisplayCreated)
 -  [Struct `VersionUpdated`](#0x2_display_VersionUpdated)
 -  [Constants](#@Constants_0)
@@ -100,6 +101,42 @@ the property names have a priority over their types.
 </dt>
 <dd>
  Version that can only be updated manually by the Publisher.
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_display_DisplayEditorCap"></a>
+
+## Resource `DisplayEditorCap`
+
+A capability granted to the <code><a href="display.md#0x2_display_Display">Display</a></code> creator which allows the owner
+to perform add/edit/remove operations over the <code><a href="display.md#0x2_display_Display">Display</a></code> as well as
+publish new versions via <code>update_display</code>.
+
+
+<pre><code><b>struct</b> <a href="display.md#0x2_display_DisplayEditorCap">DisplayEditorCap</a>&lt;T: key&gt; <b>has</b> store, key
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>for: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
 </dd>
 </dl>
 
