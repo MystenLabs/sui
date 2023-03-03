@@ -10,13 +10,15 @@ import {
     getTransactionSender,
     getTransactions,
     SUI_TYPE_ARG,
+    CoinBalanceChangeEvent,
+    is,
 } from '@mysten/sui.js';
 
 import type {
     SuiTransactionKind,
     TransactionEffects,
     SuiTransactionResponse,
-    SuiEvent,
+ 
 } from '@mysten/sui.js';
 
 const getCoinType = (
@@ -24,26 +26,23 @@ const getCoinType = (
     address: string
 ): string | null => {
     if (!txEffects) return null;
-
+    
     const events = txEffects?.events || [];
-    const coinType = events
-        ?.map((event: SuiEvent) => {
-            const data = Object.values(event).find((itm) => {
-                if (
-                    itm?.changeType &&
-                    ['Receive', 'Pay'].includes(itm?.changeType) &&
-                    itm?.transactionModule !== 'gas'
-                ) {
-                    const { owner, sender } = itm;
-                    const { AddressOwner } = owner as { AddressOwner: string };
-                    return AddressOwner === address || address === sender;
-                }
-                return false;
-            });
-            return data?.coinType;
-        })
-        .filter(Boolean);
-    return coinType?.[0] ? coinType[0] : null;
+    const coinEvent = events.find((event) => {
+        if (
+            'coinBalanceChange' in event &&
+            is(event.coinBalanceChange, CoinBalanceChangeEvent) &&
+            ['Receive', 'Pay'].includes(event.coinBalanceChange.changeType) &&
+            event.coinBalanceChange.transactionModule !== 'gas'
+        ) {
+            const { owner, sender } = event.coinBalanceChange;
+            const { AddressOwner } = owner as { AddressOwner: string };
+            return AddressOwner === address || address === sender;
+        }
+        return false;
+    }) as { coinBalanceChange: CoinBalanceChangeEvent } | undefined;
+
+    return coinEvent?.coinBalanceChange.coinType || null;
 };
 
 type FormattedBalance = {
