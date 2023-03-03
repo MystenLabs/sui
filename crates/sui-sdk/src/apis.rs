@@ -14,9 +14,9 @@ use std::time::{Duration, Instant};
 use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DryRunTransactionResponse, DynamicFieldPage,
-    EventPage, GetObjectDataResponse, GetPastObjectDataResponse, SuiCoinMetadata, SuiEventEnvelope,
-    SuiEventFilter, SuiMoveNormalizedModule, SuiObjectContentOptions, SuiObjectInfo,
-    SuiObjectWithStatus, SuiTransactionResponse, TransactionsPage,
+    EventPage, GetPastObjectDataResponse, SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter,
+    SuiMoveNormalizedModule, SuiObjectContentOptions, SuiObjectInfo, SuiObjectWithStatus,
+    SuiTransactionResponse, TransactionsPage,
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{
@@ -64,13 +64,6 @@ impl ReadApi {
             .http
             .get_dynamic_fields(object_id, cursor, limit)
             .await?)
-    }
-
-    pub async fn get_parsed_object(
-        &self,
-        object_id: ObjectID,
-    ) -> SuiRpcResult<GetObjectDataResponse> {
-        Ok(self.api.http.get_object(object_id).await?)
     }
 
     pub async fn try_get_parsed_past_object(

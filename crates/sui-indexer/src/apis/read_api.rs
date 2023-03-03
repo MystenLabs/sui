@@ -11,10 +11,10 @@ use std::collections::BTreeMap;
 use sui_json_rpc::api::{cap_page_limit, ReadApiClient, ReadApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
-    MoveFunctionArgType, Page, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
-    SuiMoveNormalizedStruct, SuiObjectContentOptions, SuiObjectInfo, SuiObjectWithStatus,
-    SuiTransactionResponse, TransactionsPage,
+    Checkpoint, CheckpointId, DynamicFieldPage, GetPastObjectDataResponse, MoveFunctionArgType,
+    Page, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
+    SuiObjectContentOptions, SuiObjectInfo, SuiObjectWithStatus, SuiTransactionResponse,
+    TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TxSequenceNumber};
@@ -169,10 +169,6 @@ where
             .await
     }
 
-    async fn get_object(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
-        self.fullnode.get_object(object_id).await
-    }
-
     async fn get_object_with_options(
         &self,
         object_id: ObjectID,
@@ -187,7 +183,7 @@ where
         &self,
         parent_object_id: ObjectID,
         name: DynamicFieldName,
-    ) -> RpcResult<GetObjectDataResponse> {
+    ) -> RpcResult<SuiObjectWithStatus> {
         self.fullnode
             .get_dynamic_field_object(parent_object_id, name)
             .await

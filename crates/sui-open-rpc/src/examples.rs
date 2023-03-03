@@ -17,8 +17,8 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, EventPage, MoveCallParams, OwnedObjectRef,
     RPCTransactionRequestParams, SuiData, SuiEvent, SuiEventEnvelope, SuiExecutionStatus,
-    SuiGasCostSummary, SuiObject, SuiObjectInfo, SuiObjectReadDeprecated, SuiObjectRef,
-    SuiParsedData, SuiPastObjectRead, SuiTransaction,
+    SuiGasCostSummary, SuiObject, SuiObjectContentOptions, SuiObjectData, SuiObjectInfo,
+    SuiObjectRef, SuiObjectWithStatus, SuiParsedData, SuiPastObjectRead, SuiTransaction,
     SuiTransactionData, SuiTransactionEffects, SuiTransactionEvents, SuiTransactionResponse,
     TransactionBytes, TransactionsPage, TransferObjectParams,
 };
@@ -212,27 +212,34 @@ impl RpcExampleProvider {
 
         let coin = GasCoin::new(object_id, 10000);
 
-        let result = SuiObjectReadDeprecated::Exists(SuiObject {
-            data: SuiParsedData::try_from_object(
-                coin.to_object(SequenceNumber::from_u64(1)),
-                GasCoin::layout(),
-            )
-            .unwrap(),
-            owner: Owner::AddressOwner(SuiAddress::from(ObjectID::new(self.rng.gen()))),
-            previous_transaction: TransactionDigest::new(self.rng.gen()),
-            storage_rebate: 100,
-            reference: SuiObjectRef::from((
-                object_id,
-                SequenceNumber::from_u64(1),
-                ObjectDigest::new(self.rng.gen()),
-            )),
+        let result = SuiObjectWithStatus::Exists(SuiObjectData {
+            content: Some(
+                SuiParsedData::try_from_object(
+                    coin.to_object(SequenceNumber::from_u64(1)),
+                    GasCoin::layout(),
+                )
+                .unwrap(),
+            ),
+            owner: Some(Owner::AddressOwner(SuiAddress::from(ObjectID::new(
+                self.rng.gen(),
+            )))),
+            previous_transaction: Some(TransactionDigest::new(self.rng.gen())),
+            storage_rebate: Some(100),
+            object_id,
+            version: SequenceNumber::from_u64(1),
+            digest: ObjectDigest::new(self.rng.gen()),
+            type_: Some(GasCoin::type_().to_string()),
+            bcs: None,
         });
 
         Examples::new(
             "sui_getObject",
             vec![ExamplePairing::new(
                 "Get Object data",
-                vec![("object_id", json!(object_id))],
+                vec![
+                    ("object_id", json!(object_id)),
+                    ("options", json!(SuiObjectContentOptions::full_content())),
+                ],
                 json!(result),
             )],
         )

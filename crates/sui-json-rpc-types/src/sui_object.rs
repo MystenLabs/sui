@@ -2,23 +2,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
+use colored::Colorize;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
+use std::fmt;
+use std::fmt::Write;
+use std::fmt::{Display, Formatter};
 
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{
-    ObjectDigest, ObjectID, ObjectRef, ObjectType, SequenceNumber,
-    TransactionDigest,
+    ObjectDigest, ObjectID, ObjectRef, ObjectType, SequenceNumber, TransactionDigest,
 };
 use sui_types::error::{UserInputError, UserInputResult};
+use sui_types::gas_coin::GasCoin;
 use sui_types::move_package::MovePackage;
-use sui_types::object::{
-    Data, MoveObject, Object, ObjectRead, Owner,
-};
+use sui_types::object::{Data, MoveObject, Object, ObjectRead, Owner};
 use sui_types::parse_sui_struct_tag;
 
-use crate::{SuiData, SuiMoveObject, SuiObject, SuiParsedData, SuiRawData};
+use crate::{
+    SuiData, SuiMoveObject, SuiMoveStruct, SuiMoveValue, SuiObject, SuiParsedData, SuiRawData,
+};
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
 #[serde(tag = "status", content = "details", rename = "ObjectRead")]
@@ -71,6 +75,93 @@ impl SuiObjectData {
     }
 }
 
+impl Display for SuiObjectData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let type_ = self.type_.clone().unwrap_or_default();
+        let mut writer = String::new();
+        writeln!(
+            writer,
+            "{}",
+            format!("----- {type_} ({}[{}]) -----", self.object_id, self.version).bold()
+        )?;
+        if let Some(owner) = self.owner {
+            writeln!(writer, "{}: {}", "Owner".bold().bright_black(), owner)?;
+        }
+
+        writeln!(
+            writer,
+            "{}: {}",
+            "Version".bold().bright_black(),
+            self.version
+        )?;
+        if let Some(storage_rebate) = self.storage_rebate {
+            writeln!(
+                writer,
+                "{}: {}",
+                "Storage Rebate".bold().bright_black(),
+                storage_rebate
+            )?;
+        }
+
+        if let Some(previous_transaction) = self.previous_transaction {
+            writeln!(
+                writer,
+                "{}: {:?}",
+                "Previous Transaction".bold().bright_black(),
+                previous_transaction
+            )?;
+        }
+        if let Some(content) = self.content.as_ref() {
+            writeln!(writer, "{}", "----- Data -----".bold())?;
+            write!(writer, "{}", content)?;
+        }
+
+        write!(f, "{}", writer)
+    }
+}
+
+impl TryFrom<&SuiObjectData> for GasCoin {
+    type Error = anyhow::Error;
+    fn try_from(object: &SuiObjectData) -> Result<Self, Self::Error> {
+        match &object
+            .content
+            .as_ref()
+            .ok_or_else(|| anyhow!("Expect object content to not be empty"))?
+        {
+            SuiParsedData::MoveObject(o) => {
+                if GasCoin::type_().to_string() == o.type_ {
+                    return GasCoin::try_from(&o.fields);
+                }
+            }
+            SuiParsedData::Package(_) => {}
+        }
+
+        Err(anyhow!(
+            "Gas object type is not a gas coin: {:?}",
+            object.type_
+        ))
+    }
+}
+
+impl TryFrom<&SuiMoveStruct> for GasCoin {
+    type Error = anyhow::Error;
+    fn try_from(move_struct: &SuiMoveStruct) -> Result<Self, Self::Error> {
+        match move_struct {
+            SuiMoveStruct::WithFields(fields) | SuiMoveStruct::WithTypes { type_: _, fields } => {
+                if let Some(SuiMoveValue::String(balance)) = fields.get("balance") {
+                    if let Ok(balance) = balance.parse::<u64>() {
+                        if let Some(SuiMoveValue::UID { id }) = fields.get("id") {
+                            return Ok(GasCoin::new(*id, balance));
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        Err(anyhow!("Struct is not a gas coin: {move_struct:?}"))
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", rename = "ObjectContentOptions")]
 pub struct SuiObjectContentOptions {
@@ -106,7 +197,7 @@ impl SuiObjectContentOptions {
         }
     }
 
-    /// return BCS data and other metadata such as storage rebate
+    /// return BCS data and all other metadata such as storage rebate
     pub fn bcs_lossless() -> Self {
         Self {
             show_bcs: Some(true),
@@ -117,6 +208,21 @@ impl SuiObjectContentOptions {
             // uncomment the following in the next PR
             // show_display: Some(false),
             show_content: Some(false),
+            show_storage_rebate: Some(true),
+        }
+    }
+
+    /// return full content except bcs
+    pub fn full_content() -> Self {
+        Self {
+            show_bcs: Some(false),
+            // Skip because this is inside the SuiRawData
+            show_type: Some(true),
+            show_owner: Some(true),
+            show_previous_transaction: Some(true),
+            // uncomment the following in the next PR
+            // show_display: Some(false),
+            show_content: Some(true),
             show_storage_rebate: Some(true),
         }
     }
@@ -148,22 +254,22 @@ impl TryFrom<(ObjectRead, Option<SuiObjectContentOptions>)> for SuiObjectWithSta
         // It is safe to unwrap because default value are all Some(bool)
         let show_type = options
             .show_type
-            .unwrap_or(default_options.show_type.unwrap());
+            .unwrap_or_else(|| default_options.show_type.unwrap());
         let show_owner = options
             .show_owner
-            .unwrap_or(default_options.show_owner.unwrap());
+            .unwrap_or_else(|| default_options.show_owner.unwrap());
         let show_previous_transaction = options
             .show_previous_transaction
-            .unwrap_or(default_options.show_previous_transaction.unwrap());
+            .unwrap_or_else(|| default_options.show_previous_transaction.unwrap());
         let show_content = options
             .show_content
-            .unwrap_or(default_options.show_content.unwrap());
+            .unwrap_or_else(|| default_options.show_content.unwrap());
         let show_bcs = options
             .show_bcs
-            .unwrap_or(default_options.show_bcs.unwrap());
+            .unwrap_or_else(|| default_options.show_bcs.unwrap());
         let show_storage_rebate = options
             .show_storage_rebate
-            .unwrap_or(default_options.show_storage_rebate.unwrap());
+            .unwrap_or_else(|| default_options.show_storage_rebate.unwrap());
 
         match object_read {
             ObjectRead::NotExists(id) => Ok(Self::NotExists(id)),
@@ -225,7 +331,7 @@ impl TryFrom<(ObjectRead, Option<SuiObjectContentOptions>)> for SuiObjectWithSta
                     bcs,
                 }))
             }
-            ObjectRead::Deleted(oref) => Ok(Self::Deleted(oref.into())),
+            ObjectRead::Deleted(oref) => Ok(Self::Deleted(oref)),
         }
     }
 }
@@ -235,9 +341,7 @@ impl SuiObjectWithStatus {
     /// the object does not exist or is deleted.
     pub fn object(&self) -> UserInputResult<&SuiObjectData> {
         match &self {
-            Self::Deleted(oref) => Err(UserInputError::ObjectDeleted {
-                object_ref: oref.clone(),
-            }),
+            Self::Deleted(oref) => Err(UserInputError::ObjectDeleted { object_ref: *oref }),
             Self::NotExists(id) => Err(UserInputError::ObjectNotFound {
                 object_id: *id,
                 version: None,
@@ -250,9 +354,7 @@ impl SuiObjectWithStatus {
     /// the object does not exist or is deleted.
     pub fn into_object(self) -> UserInputResult<SuiObjectData> {
         match self {
-            Self::Deleted(oref) => Err(UserInputError::ObjectDeleted {
-                object_ref: oref.clone(),
-            }),
+            Self::Deleted(oref) => Err(UserInputError::ObjectDeleted { object_ref: oref }),
             Self::NotExists(id) => Err(UserInputError::ObjectNotFound {
                 object_id: id,
                 version: None,

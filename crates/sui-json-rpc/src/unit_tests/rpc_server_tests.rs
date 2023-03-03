@@ -13,11 +13,11 @@ use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 
-use sui_json_rpc_types::SuiObjectInfo;
 use sui_json_rpc_types::{
-    Balance, CoinPage, GetObjectDataResponse, SuiCoinMetadata, SuiEvent, SuiExecutionStatus,
+    Balance, CoinPage, SuiCoinMetadata, SuiEvent, SuiExecutionStatus, SuiObjectWithStatus,
     SuiTBlsSignObjectCommitmentType, SuiTransactionResponse, TransactionBytes,
 };
+use sui_json_rpc_types::{SuiObjectContentOptions, SuiObjectInfo};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::balance::Supply;
 use sui_types::base_types::ObjectID;
@@ -337,9 +337,17 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
     let objects = http_client.get_objects_owned_by_address(*address).await?;
 
     for oref in objects {
-        let result: GetObjectDataResponse = http_client.get_object(oref.object_id).await?;
+        let result = http_client
+            .get_object_with_options(
+                oref.object_id,
+                Some(SuiObjectContentOptions {
+                    show_owner: Some(true),
+                    ..Default::default()
+                }),
+            )
+            .await?;
         assert!(
-            matches!(result, GetObjectDataResponse::Exists(object) if oref.object_id == object.id() && &object.owner.get_owner_address()? == address)
+            matches!(result, SuiObjectWithStatus::Exists(object) if oref.object_id == object.object_id && &object.owner.unwrap().get_owner_address()? == address)
         );
     }
     Ok(())

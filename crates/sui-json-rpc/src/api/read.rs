@@ -5,10 +5,10 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use std::collections::BTreeMap;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
-    MoveFunctionArgType, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
-    SuiMoveNormalizedStruct, SuiObjectContentOptions, SuiObjectInfo, SuiObjectWithStatus,
-    SuiTransactionResponse, TransactionsPage,
+    Checkpoint, CheckpointId, DynamicFieldPage, GetPastObjectDataResponse, MoveFunctionArgType,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
+    SuiObjectContentOptions, SuiObjectInfo, SuiObjectWithStatus, SuiTransactionResponse,
+    TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{
@@ -68,14 +68,6 @@ pub trait ReadApi {
 
     /// Return the object information for a specified object
     #[method(name = "getObject")]
-    async fn get_object(
-        &self,
-        /// the ID of the queried object
-        object_id: ObjectID,
-    ) -> RpcResult<GetObjectDataResponse>;
-
-    /// Return the object information for a specified object
-    #[method(name = "getObjectWithOptions")]
     async fn get_object_with_options(
         &self,
         /// the ID of the queried object
@@ -92,7 +84,7 @@ pub trait ReadApi {
         parent_object_id: ObjectID,
         /// The Name of the dynamic field
         name: DynamicFieldName,
-    ) -> RpcResult<GetObjectDataResponse>;
+    ) -> RpcResult<SuiObjectWithStatus>;
 
     /// Return the argument types of a Move function,
     /// based on normalized Type.

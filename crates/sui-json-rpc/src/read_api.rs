@@ -21,11 +21,10 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::RpcModule;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
-    MoveFunctionArgType, ObjectValueKind, Page, SuiEvent, SuiMoveNormalizedFunction,
-    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct, SuiMoveValue,
-    SuiObjectContentOptions, SuiObjectInfo, SuiObjectWithStatus, SuiTransactionEvents,
-    SuiTransactionResponse, TransactionsPage,
+    Checkpoint, CheckpointId, DynamicFieldPage, GetPastObjectDataResponse, MoveFunctionArgType,
+    ObjectValueKind, Page, SuiEvent, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
+    SuiMoveNormalizedStruct, SuiMoveStruct, SuiMoveValue, SuiObjectContentOptions, SuiObjectInfo,
+    SuiObjectWithStatus, SuiTransactionEvents, SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{
@@ -110,18 +109,6 @@ impl ReadApiServer for ReadApi {
         Ok(DynamicFieldPage { data, next_cursor })
     }
 
-    async fn get_object(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
-        Ok(self
-            .state
-            .get_object_read(&object_id)
-            .await
-            .map_err(|e| {
-                debug!(?object_id, "Failed to get object: {:?}", e);
-                anyhow!("{e}")
-            })?
-            .try_into()?)
-    }
-
     async fn get_object_with_options(
         &self,
         object_id: ObjectID,
@@ -139,7 +126,7 @@ impl ReadApiServer for ReadApi {
         &self,
         parent_object_id: ObjectID,
         name: DynamicFieldName,
-    ) -> RpcResult<GetObjectDataResponse> {
+    ) -> RpcResult<SuiObjectWithStatus> {
         let id = self
             .state
             .get_dynamic_field_object_id(parent_object_id, &name)
@@ -147,7 +134,9 @@ impl ReadApiServer for ReadApi {
             .ok_or_else(|| {
                 anyhow!("Cannot find dynamic field [{name:?}] for object [{parent_object_id}].")
             })?;
-        self.get_object(id).await
+        // TODO(chris): add options to `get_dynamic_field_object` API as well
+        self.get_object_with_options(id, Some(SuiObjectContentOptions::full_content()))
+            .await
     }
 
     async fn get_total_transaction_number(&self) -> RpcResult<u64> {

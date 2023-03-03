@@ -33,10 +33,9 @@ use sui_types::error::SuiError;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    DynamicFieldPage, GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiRawData,
+    DynamicFieldPage, SuiObjectData, SuiObjectInfo, SuiObjectWithStatus, SuiRawData,
     SuiTransactionResponse,
 };
-use sui_json_rpc_types::{SuiData, SuiObjectWithStatus};
 use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectContentOptions};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::SuiClient;
@@ -533,10 +532,12 @@ impl SuiClientCommands {
                 // Fetch the object ref
                 let client = context.get_client().await?;
                 if !bcs {
-                    let object_read = client.read_api().get_parsed_object(id).await?;
+                    let object_read = client
+                        .read_api()
+                        .get_object_with_options(id, Some(SuiObjectContentOptions::full_content()))
+                        .await?;
                     SuiClientCommandResult::Object(object_read)
                 } else {
-                    // TODO: combine with the above
                     let raw_object_read = client
                         .read_api()
                         .get_object_with_options(id, Some(SuiObjectContentOptions::bcs_lossless()))
@@ -928,7 +929,10 @@ impl SuiClientCommands {
                     .reference
                     .object_id;
                 let client = context.get_client().await?;
-                let object_read = client.read_api().get_parsed_object(nft_id).await?;
+                let object_read = client
+                    .read_api()
+                    .get_object_with_options(nft_id, Some(SuiObjectContentOptions::full_content()))
+                    .await?;
                 SuiClientCommandResult::CreateExampleNFT(object_read)
             }
 
@@ -1133,7 +1137,7 @@ impl WalletContext {
     pub async fn gas_objects(
         &self,
         address: SuiAddress,
-    ) -> Result<Vec<(u64, SuiParsedObject, SuiObjectInfo)>, anyhow::Error> {
+    ) -> Result<Vec<(u64, SuiObjectData, SuiObjectInfo)>, anyhow::Error> {
         let client = self.get_client().await?;
         let object_refs = client
             .read_api()
@@ -1141,12 +1145,19 @@ impl WalletContext {
             .await?;
 
         // TODO: We should ideally fetch the objects from local cache
+        // TODO: replace with multi-get
         let mut values_objects = Vec::new();
         for oref in object_refs {
-            let response = client.read_api().get_parsed_object(oref.object_id).await?;
+            let response = client
+                .read_api()
+                .get_object_with_options(
+                    oref.object_id,
+                    Some(SuiObjectContentOptions::full_content()),
+                )
+                .await?;
             match response {
-                GetObjectDataResponse::Exists(o) => {
-                    if matches!( o.data.type_(), Some(v)  if *v == GasCoin::type_().to_string()) {
+                SuiObjectWithStatus::Exists(o) => {
+                    if matches!( o.type_.clone(), Some(v)  if *v == GasCoin::type_().to_string()) {
                         // Okay to unwrap() since we already checked type
                         let gas_coin = GasCoin::try_from(&o)?;
                         values_objects.push((gas_coin.value(), o, oref));
@@ -1195,9 +1206,9 @@ impl WalletContext {
         address: SuiAddress,
         budget: u64,
         forbidden_gas_objects: BTreeSet<ObjectID>,
-    ) -> Result<(u64, SuiParsedObject), anyhow::Error> {
+    ) -> Result<(u64, SuiObjectData), anyhow::Error> {
         for o in self.gas_objects(address).await.unwrap() {
-            if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.id()) {
+            if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.object_id) {
                 return Ok((o.0, o.1));
             }
         }
@@ -1534,7 +1545,7 @@ impl SuiClientCommandResult {
 pub enum SuiClientCommandResult {
     Publish(SuiTransactionResponse),
     VerifySource,
-    Object(GetObjectDataResponse),
+    Object(SuiObjectWithStatus),
     RawObject(SuiObjectWithStatus),
     Call(SuiTransactionResponse),
     Transfer(
@@ -1558,7 +1569,7 @@ pub enum SuiClientCommandResult {
     ActiveAddress(Option<SuiAddress>),
     ActiveEnv(Option<String>),
     Envs(Vec<SuiEnv>, Option<String>),
-    CreateExampleNFT(GetObjectDataResponse),
+    CreateExampleNFT(SuiObjectWithStatus),
     SerializeTransferSui(String),
     ExecuteSignedTx(SuiTransactionResponse),
     NewEnv(SuiEnv),

@@ -20,9 +20,7 @@ use sui_config::{
     SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
 };
 use sui_json::SuiJsonValue;
-use sui_json_rpc_types::{
-    GetObjectDataResponse, SuiData, SuiObject, SuiParsedData, SuiParsedObject,
-};
+use sui_json_rpc_types::{SuiObjectContentOptions, SuiObjectData, SuiObjectWithStatus};
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
 use sui_types::base_types::SuiAddress;
@@ -200,10 +198,10 @@ async fn test_create_example_nft_command() {
     .unwrap();
 
     match result {
-        SuiClientCommandResult::CreateExampleNFT(GetObjectDataResponse::Exists(obj)) => {
-            assert_eq!(obj.owner, address);
+        SuiClientCommandResult::CreateExampleNFT(SuiObjectWithStatus::Exists(obj)) => {
+            assert_eq!(obj.owner.unwrap().get_owner_address().unwrap(), address);
             assert_eq!(
-                obj.data.type_().unwrap(),
+                obj.type_.clone().unwrap(),
                 sui_framework_address_concat_string("::devnet_nft::DevNetNFT")
             );
             Ok(obj)
@@ -587,12 +585,12 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    let mut_obj1 =
-        if let SuiClientCommandResult::Object(GetObjectDataResponse::Exists(object)) = resp {
-            object
-        } else {
-            panic!()
-        };
+    let mut_obj1 = if let SuiClientCommandResult::Object(SuiObjectWithStatus::Exists(object)) = resp
+    {
+        object
+    } else {
+        panic!()
+    };
 
     let resp = SuiClientCommands::Object {
         id: mut_obj2,
@@ -600,21 +598,21 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    let mut_obj2 =
-        if let SuiClientCommandResult::Object(GetObjectDataResponse::Exists(object)) = resp {
-            object
-        } else {
-            panic!()
-        };
+    let mut_obj2 = if let SuiClientCommandResult::Object(SuiObjectWithStatus::Exists(object)) = resp
+    {
+        object
+    } else {
+        panic!()
+    };
 
-    let (gas, obj) = if mut_obj1.owner.get_owner_address().unwrap() == address {
+    let (gas, obj) = if mut_obj1.owner.unwrap().get_owner_address().unwrap() == address {
         (mut_obj1, mut_obj2)
     } else {
         (mut_obj2, mut_obj1)
     };
 
-    assert_eq!(gas.owner.get_owner_address().unwrap(), address);
-    assert_eq!(obj.owner.get_owner_address().unwrap(), recipient);
+    assert_eq!(gas.owner.unwrap().get_owner_address().unwrap(), address);
+    assert_eq!(obj.owner.unwrap().get_owner_address().unwrap(), recipient);
 
     let object_refs = client
         .read_api()
@@ -652,7 +650,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
 #[test]
 // Test for issue https://github.com/MystenLabs/sui/issues/1078
 fn test_bug_1078() {
-    let read = SuiClientCommandResult::Object(GetObjectDataResponse::NotExists(ObjectID::random()));
+    let read = SuiClientCommandResult::Object(SuiObjectWithStatus::NotExists(ObjectID::random()));
     let mut writer = String::new();
     // fmt ObjectRead should not fail.
     write!(writer, "{}", read).unwrap();
@@ -825,14 +823,18 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-fn get_gas_value(o: &SuiParsedObject) -> u64 {
+fn get_gas_value(o: &SuiObjectData) -> u64 {
     GasCoin::try_from(o).unwrap().value()
 }
 
-async fn get_object(id: ObjectID, context: &WalletContext) -> Option<SuiParsedObject> {
+async fn get_object(id: ObjectID, context: &WalletContext) -> Option<SuiObjectData> {
     let client = context.get_client().await.unwrap();
-    let response = client.read_api().get_parsed_object(id).await.unwrap();
-    if let GetObjectDataResponse::Exists(o) = response {
+    let response = client
+        .read_api()
+        .get_object_with_options(id, Some(SuiObjectContentOptions::full_content()))
+        .await
+        .unwrap();
+    if let SuiObjectWithStatus::Exists(o) = response {
         Some(o)
     } else {
         None
@@ -842,7 +844,7 @@ async fn get_object(id: ObjectID, context: &WalletContext) -> Option<SuiParsedOb
 async fn get_parsed_object_assert_existence(
     object_id: ObjectID,
     context: &WalletContext,
-) -> SuiObject<SuiParsedData> {
+) -> SuiObjectData {
     get_object(object_id, context)
         .await
         .expect("Object {object_id} does not exist.")

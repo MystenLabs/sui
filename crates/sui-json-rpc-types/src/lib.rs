@@ -26,8 +26,8 @@ use serde_json::{json, Value};
 use serde_with::serde_as;
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
-    ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
-    TransactionDigest, TransactionEffectsDigest,
+    ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
+    TransactionEffectsDigest,
 };
 use sui_types::coin::CoinMetadata;
 use sui_types::committee::EpochId;
@@ -39,7 +39,6 @@ use sui_types::event::{BalanceChangeType, Event, EventID};
 use sui_types::event::{EventEnvelope, EventType};
 use sui_types::filter::EventFilter;
 use sui_types::gas::GasCostSummary;
-use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, EffectsFinalityInfo, ExecutionStatus, GenesisObject, InputObjectKind,
     MoveModulePublish, ObjectArg, Pay, PayAllSui, PaySui, SenderSignedData, SingleTransactionKind,
@@ -50,9 +49,7 @@ use sui_types::messages_checkpoint::{
     CheckpointTimestamp, EndOfEpochData,
 };
 use sui_types::move_package::{disassemble_modules, MovePackage};
-use sui_types::object::{
-    Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner, PastObjectRead,
-};
+use sui_types::object::{Data, MoveObject, Object, ObjectFormatOptions, Owner, PastObjectRead};
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateInnerV1};
 use sui_types::{parse_sui_struct_tag, parse_sui_type_tag};
@@ -428,8 +425,6 @@ impl TryFrom<Object> for SuiCoinMetadata {
     }
 }
 
-pub type SuiParsedObject = SuiObject<SuiParsedData>;
-
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", rename = "Object")]
 pub struct SuiObject<T: SuiData> {
@@ -480,49 +475,6 @@ impl From<ObjectRef> for SuiObjectRef {
             version: oref.1,
             digest: oref.2,
         }
-    }
-}
-
-impl Display for SuiParsedObject {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let type_ = if self.data.type_().is_some() {
-            "Move Object"
-        } else {
-            "Move Package"
-        };
-        let mut writer = String::new();
-        writeln!(
-            writer,
-            "{}",
-            format!(
-                "----- {type_} ({}[{}]) -----",
-                self.id(),
-                self.version().value()
-            )
-            .bold()
-        )?;
-        writeln!(writer, "{}: {}", "Owner".bold().bright_black(), self.owner)?;
-        writeln!(
-            writer,
-            "{}: {}",
-            "Version".bold().bright_black(),
-            self.version().value()
-        )?;
-        writeln!(
-            writer,
-            "{}: {}",
-            "Storage Rebate".bold().bright_black(),
-            self.storage_rebate
-        )?;
-        writeln!(
-            writer,
-            "{}: {:?}",
-            "Previous Transaction".bold().bright_black(),
-            self.previous_transaction
-        )?;
-        writeln!(writer, "{}", "----- Data -----".bold())?;
-        write!(writer, "{}", &self.data)?;
-        write!(f, "{}", writer)
     }
 }
 
@@ -808,104 +760,6 @@ impl From<MovePackage> for SuiRawMovePackage {
         Self {
             id: p.id(),
             module_map: p.serialized_module_map().clone(),
-        }
-    }
-}
-
-impl TryFrom<&SuiParsedObject> for GasCoin {
-    type Error = SuiError;
-    fn try_from(object: &SuiParsedObject) -> Result<Self, Self::Error> {
-        match &object.data {
-            SuiParsedData::MoveObject(o) => {
-                if GasCoin::type_().to_string() == o.type_ {
-                    return GasCoin::try_from(&o.fields);
-                }
-            }
-            SuiParsedData::Package(_) => {}
-        }
-
-        Err(SuiError::TypeError {
-            error: format!(
-                "Gas object type is not a gas coin: {:?}",
-                object.data.type_()
-            ),
-        })
-    }
-}
-
-impl TryFrom<&SuiMoveStruct> for GasCoin {
-    type Error = SuiError;
-    fn try_from(move_struct: &SuiMoveStruct) -> Result<Self, Self::Error> {
-        match move_struct {
-            SuiMoveStruct::WithFields(fields) | SuiMoveStruct::WithTypes { type_: _, fields } => {
-                if let Some(SuiMoveValue::String(balance)) = fields.get("balance") {
-                    if let Ok(balance) = balance.parse::<u64>() {
-                        if let Some(SuiMoveValue::UID { id }) = fields.get("id") {
-                            return Ok(GasCoin::new(*id, balance));
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-        Err(SuiError::TypeError {
-            error: format!("Struct is not a gas coin: {move_struct:?}"),
-        })
-    }
-}
-
-pub type GetObjectDataResponse = SuiObjectReadDeprecated<SuiParsedData>;
-
-#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
-#[serde(tag = "status", content = "details", rename = "ObjectReadDeprecated")]
-pub enum SuiObjectReadDeprecated<T: SuiData> {
-    Exists(SuiObject<T>),
-    NotExists(ObjectID),
-    Deleted(SuiObjectRef),
-}
-
-impl<T: SuiData> SuiObjectReadDeprecated<T> {
-    /// Returns a reference to the object if there is any, otherwise an Err if
-    /// the object does not exist or is deleted.
-    pub fn object(&self) -> UserInputResult<&SuiObject<T>> {
-        match &self {
-            Self::Deleted(oref) => Err(UserInputError::ObjectDeleted {
-                object_ref: oref.to_object_ref(),
-            }),
-            Self::NotExists(id) => Err(UserInputError::ObjectNotFound {
-                object_id: *id,
-                version: None,
-            }),
-            Self::Exists(o) => Ok(o),
-        }
-    }
-
-    /// Returns the object value if there is any, otherwise an Err if
-    /// the object does not exist or is deleted.
-    pub fn into_object(self) -> UserInputResult<SuiObject<T>> {
-        match self {
-            Self::Deleted(oref) => Err(UserInputError::ObjectDeleted {
-                object_ref: oref.to_object_ref(),
-            }),
-            Self::NotExists(id) => Err(UserInputError::ObjectNotFound {
-                object_id: id,
-                version: None,
-            }),
-            Self::Exists(o) => Ok(o),
-        }
-    }
-}
-
-impl<T: SuiData> TryFrom<ObjectRead> for SuiObjectReadDeprecated<T> {
-    type Error = anyhow::Error;
-
-    fn try_from(value: ObjectRead) -> Result<Self, Self::Error> {
-        match value {
-            ObjectRead::NotExists(id) => Ok(SuiObjectReadDeprecated::NotExists(id)),
-            ObjectRead::Exists(_, o, layout) => Ok(SuiObjectReadDeprecated::Exists(
-                SuiObject::try_from(o, layout)?,
-            )),
-            ObjectRead::Deleted(oref) => Ok(SuiObjectReadDeprecated::Deleted(oref.into())),
         }
     }
 }
