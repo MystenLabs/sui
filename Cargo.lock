@@ -123,7 +123,7 @@ dependencies = [
 [[package]]
 name = "anemo"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff#d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=2ea2db8e96a6b647619e156ae7c0f21a7dd0cc85#2ea2db8e96a6b647619e156ae7c0f21a7dd0cc85"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -155,7 +155,7 @@ dependencies = [
 [[package]]
 name = "anemo-build"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff#d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=2ea2db8e96a6b647619e156ae7c0f21a7dd0cc85#2ea2db8e96a6b647619e156ae7c0f21a7dd0cc85"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.51",
@@ -166,7 +166,7 @@ dependencies = [
 [[package]]
 name = "anemo-cli"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff#d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=2ea2db8e96a6b647619e156ae7c0f21a7dd0cc85#2ea2db8e96a6b647619e156ae7c0f21a7dd0cc85"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -182,7 +182,7 @@ dependencies = [
 [[package]]
 name = "anemo-tower"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff#d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=2ea2db8e96a6b647619e156ae7c0f21a7dd0cc85#2ea2db8e96a6b647619e156ae7c0f21a7dd0cc85"
 dependencies = [
  "anemo",
  "bytes",
