@@ -2161,7 +2161,7 @@ impl AuthorityState {
 
         for effect in effects.iter() {
             match effect {
-                Some(eff) => events_digests.push(eff.events_digest.unwrap()),
+                Some(eff) => events_digests.push(*eff.events_digest().unwrap()),
                 _ => continue,
             }
         }
