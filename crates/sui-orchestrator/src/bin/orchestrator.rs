@@ -53,6 +53,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
             duration,
             loads,
             skip_testbed_update,
+            skip_logs_analysis,
             timeout,
             retries,
         } => {
@@ -79,14 +80,17 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
 
             orchestrator
                 .skip_testbed_updates(skip_testbed_update)
+                .skip_logs_analysis(skip_logs_analysis)
                 .run_benchmarks(generator)
                 .await
                 .wrap_err("Failed to run benchmarks")?;
         }
 
-        // Print L-graphs from the collected data.
-        Operation::Plot => {
+        // Plot L-graphs from the collected data.
+        Operation::Plot { x_lim, y_lim } => {
             Plotter::new(settings)
+                .with_x_lim(x_lim)
+                .with_y_lim(y_lim)
                 .collect_measurements()
                 .plot_latency_throughput()
                 .unwrap();
@@ -174,13 +178,17 @@ pub enum Operation {
         #[clap(long, value_name = "INT", default_value = "0")]
         faults: usize,
 
-        /// The duration of the benchmark in seconds.
+        /// The minimum duration of the benchmark in seconds.
         #[clap(long, value_parser = parse_duration, default_value = "180")]
         duration: Duration,
 
         /// Whether to skip testbed updates before running benchmarks.
         #[clap(long, action, default_value = "false")]
         skip_testbed_update: bool,
+
+        /// Whether to skip downloading and analyzing log files.
+        #[clap(long, action, default_value = "false")]
+        skip_logs_analysis: bool,
 
         /// The timeout duration for ssh commands.
         #[clap(long, action, value_parser = parse_duration, default_value = "30")]
@@ -192,7 +200,15 @@ pub enum Operation {
     },
 
     /// Print L-graphs from the collected data.
-    Plot,
+    Plot {
+        /// The limit of the x-axis.
+        #[clap(long, value_name = "FLOAT")]
+        x_lim: Option<f32>,
+
+        /// The limit of the y-axis.
+        #[clap(long, value_name = "FLOAT")]
+        y_lim: Option<f32>,
+    },
 }
 
 #[derive(Parser)]

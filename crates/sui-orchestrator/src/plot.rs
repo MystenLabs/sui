@@ -9,24 +9,9 @@ use plotters::{
 
 use crate::{measurement::MeasurementsCollection, settings::Settings};
 
-pub struct MeasurementsCollectionSummary {
-    average_tps: u64,
-    average_latency: Duration,
-    stdev_latency: Duration,
-}
-
-impl From<&MeasurementsCollection> for MeasurementsCollectionSummary {
-    fn from(collection: &MeasurementsCollection) -> Self {
-        Self {
-            average_tps: collection.aggregate_tps(),
-            average_latency: collection.aggregate_average_latency(),
-            stdev_latency: collection.aggregate_stdev_latency(),
-        }
-    }
-}
-
 #[derive(Hash, PartialEq, Eq)]
 pub struct MeasurementsCollectionId {
+    shared_objects_ratio: u16,
     nodes: usize,
     faults: usize,
     duration: Duration,
@@ -37,7 +22,8 @@ impl Debug for MeasurementsCollectionId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}-{}-{}",
+            "{}-{}-{}-{}",
+            self.shared_objects_ratio,
             self.faults,
             self.nodes,
             self.duration.as_secs()
@@ -48,6 +34,7 @@ impl Debug for MeasurementsCollectionId {
 impl From<MeasurementsCollection> for MeasurementsCollectionId {
     fn from(collection: MeasurementsCollection) -> Self {
         Self {
+            shared_objects_ratio: collection.parameters.shared_objects_ratio,
             nodes: collection.parameters.nodes,
             faults: collection.parameters.faults,
             duration: collection.parameters.duration,
@@ -59,6 +46,8 @@ impl From<MeasurementsCollection> for MeasurementsCollectionId {
 pub struct Plotter {
     settings: Settings,
     measurements: HashMap<MeasurementsCollectionId, Vec<MeasurementsCollection>>,
+    x_lim: Option<f32>,
+    y_lim: Option<f32>,
 }
 
 impl Plotter {
@@ -66,7 +55,19 @@ impl Plotter {
         Self {
             settings,
             measurements: HashMap::new(),
+            x_lim: None,
+            y_lim: None,
         }
+    }
+
+    pub fn with_x_lim(mut self, x_lim: Option<f32>) -> Self {
+        self.x_lim = x_lim;
+        self
+    }
+
+    pub fn with_y_lim(mut self, y_lim: Option<f32>) -> Self {
+        self.y_lim = y_lim;
+        self
     }
 
     pub fn collect_measurements(mut self) -> Self {
@@ -79,9 +80,9 @@ impl Plotter {
                 if let Ok(file) = file {
                     match MeasurementsCollection::load(&file) {
                         Ok(measurement) => {
-                            let setup = measurement.clone().into();
+                            let id = measurement.clone().into();
                             self.measurements
-                                .entry(setup)
+                                .entry(id)
                                 .or_insert_with(Vec::new)
                                 .push(measurement);
                         }
@@ -94,35 +95,34 @@ impl Plotter {
     }
 
     pub fn plot_latency_throughput(&self) -> Result<(), Box<dyn std::error::Error>> {
-        for (setup, collections) in &self.measurements {
+        for (id, collections) in &self.measurements {
             let mut sorted = collections.clone();
             sorted.sort_by(|a, b| a.parameters.load.cmp(&b.parameters.load));
 
             let data_points = sorted
                 .iter()
                 .map(|collection| {
-                    let summary: MeasurementsCollectionSummary = collection.into();
                     (
-                        summary.average_tps as f32,
-                        summary.average_latency.as_secs_f64() as f32,
-                        summary.stdev_latency.as_secs_f64() as f32,
+                        collection.aggregate_tps() as f32,
+                        collection.aggregate_average_latency().as_secs_f64() as f32,
+                        collection.aggregate_stdev_latency().as_secs_f64() as f32,
                     )
                 })
                 .collect();
 
-            self.plot_impl(setup, data_points)?;
+            self.plot_impl(id, data_points)?;
         }
         Ok(())
     }
 
     fn plot_impl(
         &self,
-        setup: &MeasurementsCollectionId,
+        id: &MeasurementsCollectionId,
         data_points: Vec<(f32, f32, f32)>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut filename = PathBuf::new();
         filename.push(&self.settings.results_directory);
-        filename.push(format!("latency-{setup:?}"));
+        filename.push(format!("latency-{id:?}"));
         // filename.set_extension("svg");
         filename.set_extension("png");
 
@@ -131,10 +131,26 @@ impl Plotter {
         root.fill(&WHITE)?;
         let root = root.margin(10, 10, 10, 10);
 
+        let x_lim = self.x_lim.unwrap_or_else(|| {
+            (data_points
+                .iter()
+                .map(|x| (x.0 * 100.0) as u64)
+                .max()
+                .unwrap_or_default()
+                / 100) as f32
+        });
+        let y_lim = self.y_lim.unwrap_or_else(|| {
+            (data_points
+                .iter()
+                .map(|x| (x.1 * 100.0) as u64)
+                .max()
+                .unwrap_or_default()
+                / 100) as f32
+        });
         let mut chart = ChartBuilder::on(&root)
             .x_label_area_size(20)
             .y_label_area_size(20)
-            .build_cartesian_2d(0.0..1_500f32, 0.0..1.5f32)?;
+            .build_cartesian_2d(0.0..x_lim, 0.0..y_lim)?;
 
         chart
             .configure_mesh()
