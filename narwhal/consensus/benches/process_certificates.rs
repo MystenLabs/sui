@@ -60,7 +60,7 @@ pub fn process_certificates(c: &mut Criterion) {
             last_successful_leader_election_timestamp: Instant::now(),
             last_leader_election: Default::default(),
             max_inserted_certificate_round: 0,
-            num_sub_dags_per_schedule: 100
+            num_sub_dags_per_schedule: 100,
         };
         consensus_group.bench_with_input(
             BenchmarkId::new("batched", certificates.len()),
