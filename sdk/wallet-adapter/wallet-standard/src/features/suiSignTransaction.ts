@@ -30,7 +30,9 @@ export type SuiSignTransactionMethod = (
 
 /** Input for signing transactions. */
 export interface SuiSignTransactionInput {
-  transaction: Transaction | SignableTransaction;
+  // TODO: Support Transaction builder:
+  // transaction: Transaction | SignableTransaction;
+  transaction: SignableTransaction;
   options?: SuiSignTransactionOptions;
   account: WalletAccount;
   chain: IdentifierString;

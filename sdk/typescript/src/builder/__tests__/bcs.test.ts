@@ -1,18 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { BcsReader, fromHEX, toB58, toHEX, TypeName } from '@mysten/bcs';
+import { toB58 } from '@mysten/bcs';
 import { it, expect } from 'vitest';
 import {
   builder,
   PROGRAMMABLE_CALL,
   MoveCallCommand,
-  ENUM_KIND,
   COMMAND,
   TransferObjectsCommand,
-  CALL_ARG,
 } from '..';
-import { normalizeSuiAddress, SuiObjectRef } from '../../types';
+import { normalizeSuiAddress } from '../../types';
 
 // Oooh-weeee we nailed it!
 it('can serialize simplified programmable call struct', () => {
@@ -75,89 +73,91 @@ function ref(): { objectId: string; version: bigint; digest: string } {
 it('can serialize transaction data with a programmable transaction', () => {
   let sui = normalizeSuiAddress('0x2').replace('0x', '');
   let txData = {
-    sender: normalizeSuiAddress('0xBAD').replace('0x', ''),
-    expiration: { None: true },
-    gasData: {
-      payment: ref(),
-      owner: sui,
-      price: 1n,
-      budget: 1000000n,
-    },
-    kind: {
-      Single: {
-        ProgrammableTransaction: {
-          inputs: [
-            // first argument is the publisher object
-            { Object: { ImmOrOwned: ref() } },
-            // second argument is a vector of names
-            {
-              Pure: Array.from(
-                builder
-                  .ser('vector<string>', ['name', 'description', 'img_url'])
-                  .toBytes(),
-              ),
-            },
-            // third argument is a vector of values
-            {
-              Pure: Array.from(
-                builder
-                  .ser('vector<string>', [
-                    'Capy {name}',
-                    'A cute little creature',
-                    'https://api.capy.art/{id}/svg',
-                  ])
-                  .toBytes(),
-              ),
-            },
-            // 4th and last argument is the account address to send display to
-            {
-              Pure: Array.from(
-                builder.ser('address', ref().objectId).toBytes(),
-              ),
-            },
-          ],
-          commands: [
-            {
-              kind: 'MoveCall',
-              target: `${sui}::display::new`,
-              typeArguments: [`${sui}::capy::Capy`],
-              arguments: [
-                // publisher object
-                { kind: 'Input', index: 0 },
-              ],
-            },
-            {
-              kind: 'MoveCall',
-              target: `${sui}::display::add_multiple`,
-              typeArguments: [`${sui}::capy::Capy`],
-              arguments: [
-                // result of the first command
-                { kind: 'Result', index: 0 },
-                // second argument - vector of names
-                { kind: 'Input', index: 1 },
-                // third argument - vector of values
-                { kind: 'Input', index: 2 },
-              ],
-            },
-            {
-              kind: 'MoveCall',
-              target: `${sui}::display::update_version`,
-              typeArguments: [`${sui}::capy::Capy`],
-              arguments: [
-                // result of the first command again
-                { kind: 'Result', index: 0 },
-              ],
-            },
-            {
-              kind: 'TransferObjects',
-              objects: [
-                // the display object
-                { kind: 'Result', index: 0 },
-              ],
-              // address is also an input
-              address: { kind: 'Input', index: 3 },
-            },
-          ],
+    V1: {
+      sender: normalizeSuiAddress('0xBAD').replace('0x', ''),
+      expiration: { None: true },
+      gasData: {
+        payment: [ref()],
+        owner: sui,
+        price: 1n,
+        budget: 1000000n,
+      },
+      kind: {
+        Single: {
+          ProgrammableTransaction: {
+            inputs: [
+              // first argument is the publisher object
+              { Object: { ImmOrOwned: ref() } },
+              // second argument is a vector of names
+              {
+                Pure: Array.from(
+                  builder
+                    .ser('vector<string>', ['name', 'description', 'img_url'])
+                    .toBytes(),
+                ),
+              },
+              // third argument is a vector of values
+              {
+                Pure: Array.from(
+                  builder
+                    .ser('vector<string>', [
+                      'Capy {name}',
+                      'A cute little creature',
+                      'https://api.capy.art/{id}/svg',
+                    ])
+                    .toBytes(),
+                ),
+              },
+              // 4th and last argument is the account address to send display to
+              {
+                Pure: Array.from(
+                  builder.ser('address', ref().objectId).toBytes(),
+                ),
+              },
+            ],
+            commands: [
+              {
+                kind: 'MoveCall',
+                target: `${sui}::display::new`,
+                typeArguments: [`${sui}::capy::Capy`],
+                arguments: [
+                  // publisher object
+                  { kind: 'Input', index: 0 },
+                ],
+              },
+              {
+                kind: 'MoveCall',
+                target: `${sui}::display::add_multiple`,
+                typeArguments: [`${sui}::capy::Capy`],
+                arguments: [
+                  // result of the first command
+                  { kind: 'Result', index: 0 },
+                  // second argument - vector of names
+                  { kind: 'Input', index: 1 },
+                  // third argument - vector of values
+                  { kind: 'Input', index: 2 },
+                ],
+              },
+              {
+                kind: 'MoveCall',
+                target: `${sui}::display::update_version`,
+                typeArguments: [`${sui}::capy::Capy`],
+                arguments: [
+                  // result of the first command again
+                  { kind: 'Result', index: 0 },
+                ],
+              },
+              {
+                kind: 'TransferObjects',
+                objects: [
+                  // the display object
+                  { kind: 'Result', index: 0 },
+                ],
+                // address is also an input
+                address: { kind: 'Input', index: 3 },
+              },
+            ],
+          },
         },
       },
     },

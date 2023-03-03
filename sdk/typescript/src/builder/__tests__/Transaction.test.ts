@@ -4,8 +4,6 @@
 import { toB58 } from '@mysten/bcs';
 import { describe, it, expect } from 'vitest';
 import { Transaction, Commands } from '..';
-import { JsonRpcProvider } from '../../providers/json-rpc-provider';
-import { localnetConnection } from '../../rpc/connection';
 import { Inputs } from '../Inputs';
 
 it('can construct and serialize an empty tranaction', () => {
@@ -91,24 +89,24 @@ describe('offline build', () => {
   });
 });
 
-describe('online building (TODO: move to e2e)', () => {
-  it('builds', async () => {
-    const tx = setup();
-    const provider = new JsonRpcProvider(localnetConnection);
-    const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(100)));
-    tx.add(
-      Commands.MergeCoins(tx.gas, [coin, tx.input(Inputs.ObjectRef(ref()))]),
-    );
-    tx.add(
-      Commands.MoveCall({
-        target: '0x2::devnet_nft::mint',
-        typeArguments: [],
-        arguments: [tx.input('foo'), tx.input('bar'), tx.input('baz')],
-      }),
-    );
-    await tx.build({ provider });
-  });
-});
+// describe('online building (TODO: move to e2e)', () => {
+//   it('builds', async () => {
+//     const tx = setup();
+//     const provider = new JsonRpcProvider(localnetConnection);
+//     const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(100)));
+//     tx.add(
+//       Commands.MergeCoins(tx.gas, [coin, tx.input(Inputs.ObjectRef(ref()))]),
+//     );
+//     tx.add(
+//       Commands.MoveCall({
+//         target: '0x2::devnet_nft::mint',
+//         typeArguments: [],
+//         arguments: [tx.input('foo'), tx.input('bar'), tx.input('baz')],
+//       }),
+//     );
+//     await tx.build({ provider });
+//   });
+// });
 
 function ref(): { objectId: string; version: bigint; digest: string } {
   return {
@@ -127,5 +125,6 @@ function setup() {
   tx.setSender('0x2');
   tx.setGasPrice(1);
   tx.setGasBudget(1);
+  tx.setGasPayment([ref()]);
   return tx;
 }

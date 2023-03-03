@@ -113,6 +113,7 @@ export abstract class SignerWithProvider implements Signer {
     let transactionBytes;
 
     if (Transaction.is(transaction)) {
+      transaction.setSender(await this.getAddress());
       transactionBytes = await transaction.build({ provider: this.provider });
     } else if (
       transaction instanceof Uint8Array ||
@@ -166,6 +167,7 @@ export abstract class SignerWithProvider implements Signer {
   ): Promise<string> {
     let txBytes: Uint8Array;
     if (Transaction.is(tx)) {
+      tx.setSender(await this.getAddress());
       txBytes = await tx.build({ provider: this.provider });
     } else if (tx instanceof Uint8Array || tx.kind === 'bytes') {
       txBytes = tx instanceof Uint8Array ? tx : tx.data;
@@ -216,9 +218,9 @@ export abstract class SignerWithProvider implements Signer {
   async dryRunTransaction(
     tx: Transaction | SignableTransaction | string | Uint8Array,
   ): Promise<DryRunTransactionResponse> {
-    const address = await this.getAddress();
     let dryRunTxBytes: Uint8Array;
     if (Transaction.is(tx)) {
+      tx.setSender(await this.getAddress());
       dryRunTxBytes = await tx.build({ provider: this.provider });
     } else if (typeof tx === 'string') {
       dryRunTxBytes = fromB64(tx);
@@ -234,7 +236,7 @@ export abstract class SignerWithProvider implements Signer {
           //   provider: this.provider,
           // });
           dryRunTxBytes = await this.serializer.serializeToBytes(
-            address,
+            await this.getAddress(),
             tx,
             'Commit',
           );

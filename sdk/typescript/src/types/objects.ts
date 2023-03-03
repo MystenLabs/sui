@@ -241,7 +241,7 @@ export function getObjectId(data: SuiObjectResponse | SuiObjectRef): ObjectId {
 
 export function getObjectVersion(
   data: SuiObjectResponse | SuiObjectRef | SuiObjectData,
-): number | undefined {
+): bigint | number | undefined {
   if ('version' in data) {
     return data.version;
   }

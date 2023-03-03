@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toB58 } from '@mysten/bcs';
 import {
   is,
   assert,
@@ -11,7 +10,6 @@ import {
   array,
   optional,
   define,
-  any,
   string,
   nullable,
   integer,
@@ -22,6 +20,7 @@ import {
   getObjectReference,
   getSharedObjectInitialVersion,
   normalizeSuiObjectId,
+  SuiObjectRef,
 } from '../types';
 import { builder } from './bcs';
 import {
@@ -32,7 +31,7 @@ import {
   getTransactionCommandType,
   MoveCallCommand,
 } from './Commands';
-import { CallArg, Inputs } from './Inputs';
+import { BuilderCallArg, Inputs } from './Inputs';
 import { getPureSerializationType, isTxContext } from './serializer';
 import { COMMAND_TYPE, create, WellKnownEncoding } from './utils';
 
@@ -101,8 +100,7 @@ type SuiAddress = Infer<typeof SuiAddress>;
 const GasConfig = object({
   budget: optional(StringEncodedBigint),
   price: optional(StringEncodedBigint),
-  // TODO: Define types for gas payment:
-  payment: optional(any()),
+  payment: optional(array(SuiObjectRef)),
   owner: optional(SuiAddress),
 });
 type GasConfig = Infer<typeof GasConfig>;
@@ -207,7 +205,7 @@ export class Transaction {
   setGasBudget(budget: number | bigint) {
     this.#gasConfig.budget = String(budget);
   }
-  setGasPayment(payment: unknown) {
+  setGasPayment(payment: SuiObjectRef[]) {
     this.#gasConfig.payment = payment;
   }
 
@@ -288,6 +286,11 @@ export class Transaction {
       throw new Error('Missing gas budget');
     }
 
+    // TODO: Automatic gas object selection.
+    if (!this.#gasConfig.payment) {
+      throw new Error('Missing gas payment');
+    }
+
     if (!this.#sender) {
       throw new Error('Missing transaction sender');
     }
@@ -312,7 +315,8 @@ export class Transaction {
         // - If they do, then we need to fetch the normalized move module.
         const needsResolution = command.arguments.some(
           (arg) =>
-            arg.kind === 'Input' && !is(this.#inputs[arg.index].value, CallArg),
+            arg.kind === 'Input' &&
+            !is(this.#inputs[arg.index].value, BuilderCallArg),
         );
 
         if (needsResolution) {
@@ -345,7 +349,7 @@ export class Transaction {
           }
 
           // Input is fully resolved:
-          if (is(input.value, CallArg)) return;
+          if (is(input.value, BuilderCallArg)) return;
           if (
             wellKnownEncoding.kind === 'object' &&
             typeof input.value === 'string'
@@ -404,7 +408,7 @@ export class Transaction {
           params.forEach((param, i) => {
             const arg = moveCall.arguments[i];
             if (arg.kind !== 'Input') return;
-            if (is(this.#inputs[arg.index], CallArg)) return;
+            if (is(this.#inputs[arg.index], BuilderCallArg)) return;
             const input = this.#inputs[arg.index];
             const inputValue = input.value;
 
@@ -447,9 +451,9 @@ export class Transaction {
 
     if (objectsToResolve.length) {
       // TODO: Use multi-get objects when that API exists instead of batch:
-      // TODO: Avoid fetching object contents when an API exists for that.
       const objects = await expectProvider(provider).getObjectBatch(
         objectsToResolve.map(({ id }) => id),
+        { showOwner: true },
       );
 
       objects.forEach((object, i) => {
@@ -471,7 +475,7 @@ export class Transaction {
 
     // Resolve inputs down to values:
     const inputs = this.#inputs.map((input) => {
-      assert(input.value, CallArg);
+      assert(input.value, BuilderCallArg);
       return input.value;
     });
 
@@ -479,15 +483,7 @@ export class Transaction {
       sender: this.#sender,
       expiration: this.#expiration ? this.#expiration : { None: true },
       gasData: {
-        payment: {
-          objectId: (Math.random() * 100000).toFixed(0).padEnd(64, '0'),
-          version: BigInt((Math.random() * 10000).toFixed(0)),
-          digest: toB58(
-            new Uint8Array([
-              0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
-            ]),
-          ),
-        },
+        payment: this.#gasConfig.payment,
         owner: this.#gasConfig.owner ?? this.#sender,
         price: this.#gasConfig.price,
         budget: this.#gasConfig.budget,
@@ -502,7 +498,7 @@ export class Transaction {
       },
     };
 
-    return builder.ser('TransactionData', transactionData).toBytes();
+    return builder.ser('TransactionData', { V1: transactionData }).toBytes();
   }
 
   /**

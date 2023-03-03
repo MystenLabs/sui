@@ -45,6 +45,7 @@ import {
   Checkpoint,
   DryRunTransactionResponse,
   SuiTransactionResponse,
+  SuiObjectDataOptions,
 } from '../types';
 import { Provider } from './provider';
 
@@ -167,7 +168,8 @@ export class VoidProvider extends Provider {
 
   async getObjectBatch(
     _objectIds: ObjectId[],
-  ): Promise<GetObjectDataResponse[]> {
+    _options?: SuiObjectDataOptions,
+  ): Promise<SuiObjectResponse[]> {
     throw this.newError('getObjectBatch');
   }
 

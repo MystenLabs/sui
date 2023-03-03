@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Commands, Transaction } from '../builder';
+import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
   normalizeSuiAddress,
   ObjectId,
@@ -37,25 +37,47 @@ export class SuiSystemStateUtil {
     coins: ObjectId[],
     amount: bigint,
     validatorAddress: SuiAddress,
-  ): Promise<Transaction> {
+    gasBudget?: number,
+    gasPayment?: ObjectId,
+    gasPrice?: number,
+  ): Promise<UnserializedSignableTransaction> {
     // TODO: validate coin types and handle locked coins
-    // TODO: Use split from gas to construct staking coin.
-    const tx = new Transaction();
-    tx.add(
-      Commands.MoveCall({
-        package: SUI_FRAMEWORK_ADDRESS,
+    return {
+      kind: 'moveCall',
+      data: {
+        packageObjectId: SUI_FRAMEWORK_ADDRESS,
         module: SUI_SYSTEM_MODULE_NAME,
         function: ADD_DELEGATION_MUL_COIN_FUN_NAME,
         typeArguments: [],
         arguments: [
-          tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
-          tx.input(coins),
-          tx.input([String(amount)]),
-          tx.input(validatorAddress),
+          SUI_SYSTEM_STATE_OBJECT_ID,
+          coins,
+          [String(amount)],
+          validatorAddress,
         ],
-      }),
-    );
-    return tx;
+        gasBudget,
+        gasPayment,
+        gasPrice,
+      },
+    };
+    // // TODO: validate coin types and handle locked coins
+    // // TODO: Use split from gas to construct staking coin.
+    // const tx = new Transaction();
+    // tx.add(
+    //   Commands.MoveCall({
+    //     package: SUI_FRAMEWORK_ADDRESS,
+    //     module: SUI_SYSTEM_MODULE_NAME,
+    //     function: ADD_DELEGATION_MUL_COIN_FUN_NAME,
+    //     typeArguments: [],
+    //     arguments: [
+    //       tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
+    //       tx.input(coins),
+    //       tx.input([String(amount)]),
+    //       tx.input(validatorAddress),
+    //     ],
+    //   }),
+    // );
+    // return tx;
   }
 
   /**
@@ -69,21 +91,37 @@ export class SuiSystemStateUtil {
   public static async newRequestWithdrawlDelegationTxn(
     delegation: ObjectId,
     stakedCoinId: ObjectId,
-  ): Promise<Transaction> {
-    const tx = new Transaction();
-    tx.add(
-      Commands.MoveCall({
-        package: SUI_FRAMEWORK_ADDRESS,
+    gasBudget?: number,
+    gasPayment?: ObjectId,
+    gasPrice?: number,
+  ): Promise<UnserializedSignableTransaction> {
+    return {
+      kind: 'moveCall',
+      data: {
+        packageObjectId: SUI_FRAMEWORK_ADDRESS,
         module: SUI_SYSTEM_MODULE_NAME,
         function: WITHDRAW_DELEGATION_FUN_NAME,
         typeArguments: [],
-        arguments: [
-          tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
-          tx.input(delegation),
-          tx.input(stakedCoinId),
-        ],
-      }),
-    );
-    return tx;
+        arguments: [SUI_SYSTEM_STATE_OBJECT_ID, delegation, stakedCoinId],
+        gasBudget,
+        gasPayment,
+        gasPrice,
+      },
+    };
+    // const tx = new Transaction();
+    // tx.add(
+    //   Commands.MoveCall({
+    //     package: SUI_FRAMEWORK_ADDRESS,
+    //     module: SUI_SYSTEM_MODULE_NAME,
+    //     function: WITHDRAW_DELEGATION_FUN_NAME,
+    //     typeArguments: [],
+    //     arguments: [
+    //       tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
+    //       tx.input(delegation),
+    //       tx.input(stakedCoinId),
+    //     ],
+    //   }),
+    // );
+    // return tx;
   }
 }

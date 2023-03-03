@@ -142,7 +142,7 @@ builder.registerType(
     return { kind, ...data[kind] };
   },
   (data: { kind: string }) => {
-    if (typeof data !== 'object' && 'kind' in data == false) {
+    if (typeof data !== 'object' && !('kind' in data)) {
       throw new Error(
         `EnumKind: Missing property "kind" in the input ${JSON.stringify(
           data,

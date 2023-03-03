@@ -205,7 +205,8 @@ export abstract class Provider {
 
   abstract getObjectBatch(
     objectIds: ObjectId[],
-  ): Promise<GetObjectDataResponse[]>;
+    options?: SuiObjectDataOptions,
+  ): Promise<SuiObjectResponse[]>;
 
   // Transactions
   /**

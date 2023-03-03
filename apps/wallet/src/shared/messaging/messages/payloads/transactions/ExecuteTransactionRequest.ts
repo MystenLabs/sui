@@ -19,7 +19,9 @@ export type TransactionDataType =
     | {
           type: 'v2';
           justSign?: boolean;
-          data: SignableTransaction | string;
+          //   TODO: Support transaciton builder string
+          //   data: SignableTransaction | string;
+          data: SignableTransaction;
           options?: SuiSignAndExecuteTransactionOptions;
           account: SuiAddress;
       }
@@ -43,7 +45,9 @@ export type SuiSignTransactionSerialized = Omit<
     SuiSignTransactionInput,
     'transaction' | 'account'
 > & {
-    transaction: SignableTransaction | string;
+    // TODO: Enable string for serialized `Transaction`
+    // transaction: SignableTransaction | string;
+    transaction: SignableTransaction;
     account: SuiAddress;
 };
 

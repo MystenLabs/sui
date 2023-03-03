@@ -39,7 +39,7 @@ class Transactions {
             | { tx: TransactionDataType; sign?: undefined }
             | {
                   tx?: undefined;
-                  sign: SuiSignTransactionSerialized['transaction'];
+                  sign: SuiSignTransactionSerialized;
               },
         connection: ContentScriptConnection
     ): Promise<SuiTransactionResponse | SignedTransaction> {

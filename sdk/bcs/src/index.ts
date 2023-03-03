@@ -63,7 +63,7 @@ export type TypeName = string | [string, ...(TypeName | string)[]];
  * let reader = new BcsReader("647f1a060001ffffe7890423c78a050102030405");
  * let field1 = reader.read8();
  * let field2 = reader.read32();
- * let field3 = reader.read8() == '1'; // bool
+ * let field3 = reader.read8() === '1'; // bool
  * let field4 = reader.read64();
  * // ....
  *
@@ -609,7 +609,7 @@ export class BCS {
     data: any,
     size: number = 1024
   ): BcsWriter {
-    if (typeof type === "string" || type instanceof Array) {
+    if (typeof type === "string" || Array.isArray(type)) {
       const { name, params } = this.parseTypeName(type);
       return this.getTypeInterface(name).encode(
         this,
@@ -620,7 +620,7 @@ export class BCS {
     }
 
     // Quick serialization without registering the type in the main struct.
-    if (typeof type == "object") {
+    if (typeof type === "object") {
       const key = this.tempKey();
       const temp = new BCS(this);
       return temp.registerStructType(key, type).ser(key, data, size);
@@ -651,7 +651,7 @@ export class BCS {
     data: Uint8Array | string,
     encoding?: Encoding
   ): any {
-    if (typeof data == "string") {
+    if (typeof data === "string") {
       if (encoding) {
         data = decodeStr(data, encoding);
       } else {
@@ -660,13 +660,13 @@ export class BCS {
     }
 
     // In case the type specified is already registered.
-    if (typeof type == "string" || type instanceof Array) {
+    if (typeof type === "string" || Array.isArray(type)) {
       const { name, params } = this.parseTypeName(type);
       return this.getTypeInterface(name).decode(this, data, params as string[]);
     }
 
     // Deserialize without registering a type using a temporary clone.
-    if (typeof type == "object") {
+    if (typeof type === "object") {
       const temp = new BCS(this);
       const key = this.tempKey();
       return temp.registerStructType(key, type).de(key, data, encoding);
@@ -771,7 +771,12 @@ export class BCS {
           {}
         );
 
-        return this._decodeRaw.call(self, new BcsReader(data), typeParams, typeMap);
+        return this._decodeRaw.call(
+          self,
+          new BcsReader(data),
+          typeParams,
+          typeMap
+        );
       },
 
       // these methods should always be used with caution as they require pre-defined
@@ -885,7 +890,7 @@ export class BCS {
             );
           }
 
-          if (name in typeMap == false) {
+          if (!(name in typeMap)) {
             throw new Error(
               `Unable to find a matching type definition for ${name} in vector; make sure you passed a generic`
             );
@@ -923,7 +928,7 @@ export class BCS {
             );
           }
 
-          if (name in typeMap == false) {
+          if (!(name in typeMap)) {
             throw new Error(
               `Unable to find a matching type definition for ${name} in vector; make sure you passed a generic`
             );
@@ -998,7 +1003,7 @@ export class BCS {
       let value = fields[key];
 
       // TODO: add a type guard here?
-      if (value instanceof Array == false && typeof value !== "string") {
+      if (!Array.isArray(value) && typeof value !== "string") {
         fields[key] = internalName;
         this.registerStructType(internalName, value as StructTypeDefinition);
       }
@@ -1040,7 +1045,7 @@ export class BCS {
 
         // follow the canonical order when serializing
         for (let key of canonicalOrder) {
-          if (key in data == false) {
+          if (!(key in data)) {
             throw new Error(
               `Struct ${structName} requires field ${key}:${struct[key]}`
             );
@@ -1080,7 +1085,7 @@ export class BCS {
             }
 
             // Alternatively, if it's a global generic parameter...
-            if (name in typeMap == false) {
+            if (!(name in typeMap)) {
               throw new Error(
                 `Unable to find a matching type definition for ${name} in ${structName}; make sure you passed a generic`
               );
@@ -1137,7 +1142,7 @@ export class BCS {
               continue;
             }
 
-            if (name in typeMap == false) {
+            if (!(name in typeMap)) {
               throw new Error(
                 `Unable to find a matching type definition for ${name} in ${structName}; make sure you passed a generic`
               );
@@ -1193,7 +1198,7 @@ export class BCS {
 
       if (
         value !== null &&
-        value instanceof Array == false &&
+        !Array.isArray(value) &&
         typeof value !== "string"
       ) {
         variants[key] = internalName;
@@ -1219,21 +1224,31 @@ export class BCS {
         typeMap
       ) {
         if (!data) {
-          throw new Error(`Unable to write enum "${name}", missing data.\nReceived: "${data}"`);
+          throw new Error(
+            `Unable to write enum "${name}", missing data.\nReceived: "${data}"`
+          );
         }
-        if (data instanceof Object == false) {
-          throw new Error(`Incorrect data passed into enum "${name}", expected object with properties: "${canonicalOrder.join(" | ")}".\nReceived: "${JSON.stringify(data)}" (${data.constructor.name})`)
+        if (typeof data !== "object") {
+          throw new Error(
+            `Incorrect data passed into enum "${name}", expected object with properties: "${canonicalOrder.join(
+              " | "
+            )}".\nReceived: "${JSON.stringify(data)}"`
+          );
         }
 
         let key = Object.keys(data)[0];
         if (key === undefined) {
-          throw new Error(`Empty object passed as invariant of the enum "${name}"`);
+          throw new Error(
+            `Empty object passed as invariant of the enum "${name}"`
+          );
         }
 
         let orderByte = canonicalOrder.indexOf(key);
         if (orderByte === -1) {
           throw new Error(
-            `Unknown invariant of the enum "${name}", allowed values: "${canonicalOrder.join(' | ')}"; received "${key}"`
+            `Unknown invariant of the enum "${name}", allowed values: "${canonicalOrder.join(
+              " | "
+            )}"; received "${key}"`
           );
         }
         let invariant = canonicalOrder[orderByte];
@@ -1308,7 +1323,7 @@ export class BCS {
 
     // Special case - string means an alias.
     // Goes through the alias chain and tracks recursion.
-    if (typeof typeInterface == "string") {
+    if (typeof typeInterface === "string") {
       let chain: string[] = [];
       while (typeof typeInterface === "string") {
         if (chain.includes(typeInterface)) {
@@ -1344,7 +1359,7 @@ export class BCS {
     name: string;
     params: TypeName[];
   } {
-    if (name instanceof Array) {
+    if (Array.isArray(name)) {
       let [typeName, ...params] = name;
       return { name: typeName, params };
     }

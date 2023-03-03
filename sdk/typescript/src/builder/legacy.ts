@@ -1,5 +1,11 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { fromB64 } from '@mysten/bcs';
+import { Provider } from '../providers/provider';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
+import { TypeTagSerializer } from '../signers/txn-data-serializers/type-tag-serializer';
+import { getObjectReference } from '../types';
 import { Transaction, Commands } from './';
 
 /**
@@ -9,10 +15,10 @@ import { Transaction, Commands } from './';
  *
  * @deprecated Use native `Transaction` instead, do not continue use of legacy transaction APIs.
  */
-export function convertToTransactionBuilder({
-  kind,
-  data,
-}: UnserializedSignableTransaction): Transaction {
+export async function convertToTransactionBuilder(
+  { kind, data }: UnserializedSignableTransaction,
+  provider: Provider,
+): Promise<Transaction> {
   const tx = new Transaction();
   switch (kind) {
     case 'mergeCoin':
@@ -22,14 +28,18 @@ export function convertToTransactionBuilder({
         ]),
       );
       break;
-    case 'paySui':
+    case 'paySui': {
       data.recipients.forEach((recipient, index) => {
         const amount = data.amounts[index];
         const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(amount)));
         tx.add(Commands.TransferObjects(coin, tx.input(recipient)));
       });
-      tx.setGasPayment(data.inputCoins);
+      const objects = await provider.getObjectBatch(data.inputCoins, {
+        showOwner: true,
+      });
+      tx.setGasPayment(objects.map((obj) => getObjectReference(obj)!));
       break;
+    }
     case 'transferObject':
       tx.add(
         Commands.TransferObjects(
@@ -40,7 +50,10 @@ export function convertToTransactionBuilder({
       break;
     case 'payAllSui':
       tx.add(Commands.TransferObjects([tx.gas], tx.input(data.recipient)));
-      tx.setGasPayment(data.inputCoins);
+      const objects = await provider.getObjectBatch(data.inputCoins, {
+        showOwner: true,
+      });
+      tx.setGasPayment(objects.map((obj) => getObjectReference(obj)!));
       break;
     case 'splitCoin':
       data.splitAmounts.forEach((amount) => {
@@ -56,7 +69,9 @@ export function convertToTransactionBuilder({
           module: data.module,
           function: data.function,
           arguments: data.arguments.map((arg) => tx.input(arg)),
-          typeArguments: data.typeArguments,
+          typeArguments: data.typeArguments.map((arg) =>
+            typeof arg === 'string' ? arg : TypeTagSerializer.tagToString(arg),
+          ),
         }),
       );
       break;
@@ -89,15 +104,17 @@ export function convertToTransactionBuilder({
     case 'transferSui': {
       const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(data.amount)));
       tx.add(Commands.TransferObjects(coin, tx.input(data.recipient)));
-      tx.setGasPayment(data.suiObjectId);
+      const object = await provider.getObject(data.suiObjectId);
+      tx.setGasPayment([getObjectReference(object)!]);
       break;
     }
     default:
       throw new Error(`Unknown transaction kind: "${kind}"`);
   }
 
-  if ('gasPayment' in data) {
-    tx.setGasPayment(data.gasPayment);
+  if ('gasPayment' in data && data.gasPayment) {
+    const object = await provider.getObject(data.gasPayment);
+    tx.setGasPayment([getObjectReference(object)!]);
   }
   if (data.gasBudget) {
     tx.setGasBudget(data.gasBudget);

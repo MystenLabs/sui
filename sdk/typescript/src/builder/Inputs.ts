@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import {
   array,
   boolean,
@@ -21,20 +24,20 @@ const ObjectArg = union([
   }),
 ]);
 
-export const CallArg = union([
+export const BuilderCallArg = union([
   object({ Pure: array(integer()) }),
   object({ Object: ObjectArg }),
 ]);
-export type CallArg = Infer<typeof CallArg>;
+export type BuilderCallArg = Infer<typeof BuilderCallArg>;
 
 export const Inputs = {
-  Pure(type: string, data: unknown): CallArg {
+  Pure(type: string, data: unknown): BuilderCallArg {
     return { Pure: Array.from(builder.ser(type, data).toBytes()) };
   },
-  ObjectRef(ref: SuiObjectRef): CallArg {
+  ObjectRef(ref: SuiObjectRef): BuilderCallArg {
     return { Object: { ImmOrOwned: ref } };
   },
-  SharedObjectRef(ref: SharedObjectRef): CallArg {
+  SharedObjectRef(ref: SharedObjectRef): BuilderCallArg {
     return { Object: { Shared: ref } };
   },
 };
