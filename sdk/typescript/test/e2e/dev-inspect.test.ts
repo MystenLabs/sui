@@ -63,7 +63,7 @@ describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
           data: {
             inputCoins: splitCoins,
             recipients: [DEFAULT_RECIPIENT],
-            amounts: [4000],
+            amounts: ['4000'],
             gasBudget: gasBudget,
           },
         },
