@@ -298,7 +298,6 @@ impl ValidatorService {
         let epoch_store = state.load_epoch_store_one_call_per_task();
 
         let certificate = request.into_inner();
-        certificate.check_version_supported(epoch_store.protocol_version())?;
 
         let shared_object_tx = certificate.contains_shared_object();
 

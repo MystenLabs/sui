@@ -1373,12 +1373,21 @@ pub enum TransactionData {
 }
 
 impl VersionedProtocolMessage for TransactionData {
+    fn message_version(&self) -> Option<u64> {
+        Some(match self {
+            Self::V1(_) => 1,
+        })
+    }
+
     fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult {
         let (message_version, supported) = match self {
             Self::V1(_) => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
             // Suppose we add V2 at protocol version 7, then we must change this to:
-            // Self::V1 => (1, SupportedProtocolVersions::new_for_message(1, 6)),
+            // Self::V1 => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
             // Self::V2 => (2, SupportedProtocolVersions::new_for_message(7, u64::MAX)),
+            //
+            // Suppose we remove support for V1 after protocol version 12: we can do it like so:
+            // Self::V1 => (1, SupportedProtocolVersions::new_for_message(1, 12)),
         };
 
         if supported.is_version_supported(current_protocol_version) {
@@ -1917,6 +1926,10 @@ impl SenderSignedData {
 }
 
 impl VersionedProtocolMessage for SenderSignedData {
+    fn message_version(&self) -> Option<u64> {
+        self.transaction_data().message_version()
+    }
+
     fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult {
         self.transaction_data()
             .check_version_supported(current_protocol_version)?;
@@ -3039,6 +3052,12 @@ impl From<InvalidSharedByValue> for ExecutionFailureStatus {
 }
 
 pub trait VersionedProtocolMessage {
+    /// Return version of message. Some messages depend on their enclosing messages to know the
+    /// version number, so not every implementor implements this.
+    fn message_version(&self) -> Option<u64> {
+        None
+    }
+
     /// Check that the version of the message is the correct one to use at this protocol version.
     fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult;
 }
@@ -3051,12 +3070,18 @@ pub enum TransactionEffects {
 }
 
 impl VersionedProtocolMessage for TransactionEffects {
+    fn message_version(&self) -> Option<u64> {
+        Some(match self {
+            Self::V1(_) => 1,
+        })
+    }
+
     fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult {
         let (message_version, supported) = match self {
             Self::V1(_) => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
             // Suppose we add V2 at protocol version 7, then we must change this to:
-            // Self::V1 => (1, SupportedProtocolVersions::new_for_message(1, 6)),
-            // Self::V2 => (1, SupportedProtocolVersions::new_for_message(7, u64::MAX)),
+            // Self::V1 => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
+            // Self::V2 => (2, SupportedProtocolVersions::new_for_message(7, u64::MAX)),
         };
 
         if supported.is_version_supported(current_protocol_version) {
