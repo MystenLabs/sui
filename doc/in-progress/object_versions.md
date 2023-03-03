@@ -14,7 +14,7 @@ Versions are strictly increasing and (ID, version) pairs are never re-used so no
 
 ## Move Objects
 
-Move Object versions are calculated using a variant of [Lamport timestamps](https://en.wikipedia.org/wiki/Lamport_timestamp) that guarantees that versions never get re-used in all cases:  The new version for objects touched by a transaction is one greater than the max version among all input objects to the transaction.  For example, a transaction transfering an object `O` at version `5` using a gas object `G` at version `3` updates both `O` and `G`'s version to `1 + max(5, 3) = 6`.
+Move Object versions are calculated using a variant of [Lamport timestamps](https://en.wikipedia.org/wiki/Lamport_timestamp) that guarantees that versions never get re-used in all cases:  The new version for objects touched by a transaction is one greater than the max version among all input objects to the transaction.  For example, a transaction transferring an object `O` at version `5` using a gas object `G` at version `3` updates both `O` and `G`'s version to `1 + max(5, 3) = 6`.
 
 The relevance of versions for accessing an object as a transaction input changes depending on that object's ownership:
 
