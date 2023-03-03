@@ -299,8 +299,6 @@ impl Bullshark {
         // yet (see issue #10), repeated calls to this function should still pick from the whole roster of leaders.
         let leader = Self::leader_authority(committee, round);
 
-        println!("Leader for round {}: {:?}", round, leader);
-
         // Return its certificate and the certificate's digest.
         dag.get(&round).and_then(|x| x.get(&leader))
     }

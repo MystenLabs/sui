@@ -100,17 +100,21 @@ async fn commit_one() {
     assert!(committed_sub_dag.reputation_score.all_zero());
 }
 
-// Run for 8 dag rounds with one dead node node (that is not a leader). We should commit the leaders of
-// rounds 2, 4, and 6.
+// Run for 11 dag rounds with one dead node node (that is not a leader). We should commit the leaders of
+// rounds 2, 4, 6 and 10. The leader of round 8 will be missing, but eventually the leader 10 will get committed.
 #[tokio::test]
 async fn dead_node() {
     const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     // Make the certificates.
     let fixture = CommitteeFixture::builder().build();
-    let committee = fixture.committee();
-    let mut keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
-    keys.sort(); // Ensure we don't remove one of the leaders.
+    let committee: Committee = fixture.committee();
+    let mut keys: Vec<_> = committee
+        .authorities()
+        .map(|(key, _)| key.clone())
+        .collect();
+
+    // remove the last authority - 4
     let dead_node = keys.pop().unwrap();
 
     let genesis = Certificate::genesis(&committee)
@@ -119,7 +123,7 @@ async fn dead_node() {
         .collect::<BTreeSet<_>>();
 
     let (mut certificates, _) =
-        test_utils::make_optimal_certificates(&committee, 1..=9, &genesis, &keys);
+        test_utils::make_optimal_certificates(&committee, 1..=11, &genesis, &keys);
 
     // Spawn the consensus engine and sink the primary channel.
     let (tx_new_certificates, rx_new_certificates) = test_utils::test_channel!(1);
@@ -163,7 +167,7 @@ async fn dead_node() {
         }
     });
 
-    // We should commit 4 leaders (rounds 2, 4, 6, and 8).
+    // We should commit 3 leaders (rounds 2, 4 and 6).
     let mut committed = Vec::new();
     let mut committed_sub_dags: Vec<CommittedSubDag> = Vec::new();
     for _commit_rounds in 1..=4 {
@@ -173,13 +177,13 @@ async fn dead_node() {
     }
 
     let mut sequence = committed.into_iter();
-    for i in 1..=21 {
+    for i in 1..=27 {
         let output = sequence.next().unwrap();
         let expected = ((i - 1) / keys.len() as u64) + 1;
         assert_eq!(output.round(), expected);
     }
     let output = sequence.next().unwrap();
-    assert_eq!(output.round(), 8);
+    assert_eq!(output.round(), 10);
 
     // AND check that the consensus scores are the expected ones
     for (index, sub_dag) in committed_sub_dags.iter().enumerate() {
@@ -886,7 +890,7 @@ async fn garbage_collection_basic() {
     let store = make_consensus_store(&test_utils::temp_dir());
 
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let mut state = ConsensusState::new(metrics.clone());
+    let mut state = ConsensusState::new(metrics.clone(), &committee);
     let mut bullshark = Bullshark::new(
         committee,
         store,
@@ -1013,7 +1017,7 @@ async fn slow_node() {
     // Create Bullshark consensus engine
     let store = make_consensus_store(&test_utils::temp_dir());
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let mut state = ConsensusState::new(metrics.clone());
+    let mut state = ConsensusState::new(metrics.clone(), &committee);
     let mut bullshark = Bullshark::new(
         committee.clone(),
         store,
