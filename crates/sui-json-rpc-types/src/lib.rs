@@ -92,6 +92,12 @@ impl From<u64> for BigInt {
     }
 }
 
+impl Display for BigInt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Balance {
@@ -1565,7 +1571,7 @@ impl Display for SuiTransactionKind {
                 }
                 writeln!(writer, "Amounts:")?;
                 for amount in &p.amounts {
-                    writeln!(writer, "{:?}", amount)?
+                    writeln!(writer, "{}", amount)?
                 }
             }
             Self::PaySui(p) => {
@@ -1580,7 +1586,7 @@ impl Display for SuiTransactionKind {
                 }
                 writeln!(writer, "Amounts:")?;
                 for amount in &p.amounts {
-                    writeln!(writer, "{:?}", amount)?
+                    writeln!(writer, "{}", amount)?
                 }
             }
             Self::PayAllSui(p) => {
