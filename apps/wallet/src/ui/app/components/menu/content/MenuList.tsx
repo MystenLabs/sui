@@ -138,7 +138,6 @@ function MenuList() {
                 confirmText="Logout"
                 confirmStyle="outlineWarning"
                 title="Are you sure you want to Logout?"
-                hint="You will need the 12-word Recovery Passphrase that was created when you first set up the wallet to log back in."
                 onResponse={async (confirmed) => {
                     setIsLogoutDialogOpen(false);
                     if (confirmed) {
@@ -151,7 +150,14 @@ function MenuList() {
                         }
                     }
                 }}
-            />
+            >
+                <div className="break-words text-center">
+                    <Text variant="p2" color="steel-dark" weight="normal">
+                        You will need the 12-word Recovery Passphrase that was
+                        created when you first set up the wallet to log back in.
+                    </Text>
+                </div>
+            </ConfirmationModal>
         </>
     );
 }

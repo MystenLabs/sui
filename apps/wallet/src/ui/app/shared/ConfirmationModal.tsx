@@ -3,12 +3,12 @@
 
 import { Button, type ButtonProps } from './ButtonUI';
 import { ModalDialog } from './ModalDialog';
-import { Text } from './text';
 
 export type ConfirmationModalProps = {
     isOpen: boolean;
     title?: string;
     hint?: string;
+    children?: React.ReactNode;
     confirmText?: string;
     confirmStyle?: ButtonProps['variant'];
     cancelText?: string;
@@ -18,7 +18,7 @@ export type ConfirmationModalProps = {
 export function ConfirmationModal({
     isOpen,
     title = 'Are you sure?',
-    hint,
+    children,
     confirmText = 'Confirm',
     confirmStyle = 'primary',
     cancelText = 'Cancel',
@@ -28,15 +28,7 @@ export function ConfirmationModal({
         <ModalDialog
             isOpen={isOpen}
             title={title}
-            body={
-                hint ? (
-                    <div className="break-words text-center">
-                        <Text variant="p2" color="steel-dark" weight="normal">
-                            {hint}
-                        </Text>
-                    </div>
-                ) : null
-            }
+            body={children}
             onClose={() => {
                 onResponse(false);
             }}
