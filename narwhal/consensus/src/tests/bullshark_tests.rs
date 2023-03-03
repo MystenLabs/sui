@@ -919,16 +919,19 @@ async fn garbage_collection_basic() {
                     state
                         .dag
                         .iter()
-                        .filter(|(round, _)| **round <= 1_u64)
+                        .filter(|(round, _)| **round <= 2_u64)
                         .count(),
                     0,
-                    "Didn't expect to still have certificates from round 1"
+                    "Didn't expect to still have certificates from round 1 and 2"
                 );
             }
 
-            // When we do commit for authorities, we keep all the certificates and only the
-            // <= gc_round ones are discarded.
-            for (_, certificates) in state
+            // When we do commit for authorities, we always keep the certificates up to their latest
+            // commit round + 1. Since we always commit for authorities 1 to 3 we expect to see no
+            // certificates for them, but only for the slow authority 4 for which we never commit.
+            // In this case the highest commit round for the authorities should be the leader.round() - 1,
+            // except for the latest leader which should be leader.round().
+            for (_round, certificates) in state
                 .dag
                 .iter()
                 .filter(|(round, _)| **round <= sub_dag.leader.round())
