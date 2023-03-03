@@ -84,14 +84,6 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                 className="flex flex-col h-full flex-1 flex-grow items-center"
                 data-testid="coin-page"
             >
-                {isError || errorUpdateCount > 0 ? (
-                    <Alert>
-                        <div>
-                            <strong>Error updating balance</strong>
-                        </div>
-                    </Alert>
-                ) : null}
-
                 {!coinType && <AccountSelector />}
                 <div className="mt-1.5">
                     <CoinBalance
@@ -100,7 +92,14 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                         mode="standalone"
                     />
                 </div>
-                <div className="flex flex-nowrap gap-2  justify-center w-full  mt-5">
+                {isError || errorUpdateCount > 0 ? (
+                    <Alert>
+                        <div>
+                            <strong>Error updating balance</strong>
+                        </div>
+                    </Alert>
+                ) : null}
+                <div className="flex flex-nowrap gap-2 justify-center w-full mt-5">
                     <IconLink
                         icon={SuiIcons.Buy}
                         to="/"
