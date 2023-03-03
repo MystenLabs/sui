@@ -250,7 +250,7 @@ impl SuiNode {
             event_store,
             checkpoint_store.clone(),
             &prometheus_registry,
-            &config.authority_store_pruning_config,
+            config.authority_store_pruning_config,
             genesis.objects(),
             config.epoch_duration_ms,
             &config.state_snapshot_config,

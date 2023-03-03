@@ -1544,7 +1544,7 @@ impl AuthorityState {
         event_store: Option<Arc<EventStoreType>>,
         checkpoint_store: Arc<CheckpointStore>,
         prometheus_registry: &Registry,
-        pruning_config: &AuthorityStorePruningConfig,
+        pruning_config: AuthorityStorePruningConfig,
         genesis_objects: &[Object],
         epoch_duration_ms: u64,
         state_snapshot_config: &StateSnapshotConfig,
@@ -1566,14 +1566,14 @@ impl AuthorityState {
         ));
         let (tx_execution_shutdown, rx_execution_shutdown) = oneshot::channel();
 
+        let _authority_per_epoch_pruner =
+            AuthorityPerEpochStorePruner::new(epoch_store.get_parent_path(), &pruning_config);
         let _objects_pruner = AuthorityStorePruner::new(
             store.perpetual_tables.clone(),
             checkpoint_store.clone(),
             pruning_config,
             epoch_duration_ms,
         );
-        let _authority_per_epoch_pruner =
-            AuthorityPerEpochStorePruner::new(epoch_store.get_parent_path(), pruning_config);
 
         let state = Arc::new(AuthorityState {
             name,
@@ -1677,7 +1677,7 @@ impl AuthorityState {
             None,
             checkpoint_store,
             &registry,
-            &AuthorityStorePruningConfig::default(),
+            AuthorityStorePruningConfig::default(),
             genesis.objects(),
             10000,
             &StateSnapshotConfig::default(),
