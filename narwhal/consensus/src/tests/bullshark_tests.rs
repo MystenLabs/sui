@@ -854,6 +854,7 @@ async fn restart_with_new_committee() {
 #[tokio::test]
 async fn garbage_collection_basic() {
     const GC_DEPTH: Round = 4;
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     let fixture = CommitteeFixture::builder().build();
     let committee: Committee = fixture.committee();
@@ -886,7 +887,13 @@ async fn garbage_collection_basic() {
 
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let mut state = ConsensusState::new(metrics.clone());
-    let mut bullshark = Bullshark::new(committee, store, GC_DEPTH, metrics);
+    let mut bullshark = Bullshark::new(
+        committee,
+        store,
+        GC_DEPTH,
+        metrics,
+        NUM_SUB_DAGS_PER_SCHEDULE,
+    );
 
     // Now start feeding the certificates per round
     for c in certificates {
@@ -962,6 +969,7 @@ async fn garbage_collection_basic() {
 #[tokio::test]
 async fn slow_node() {
     const GC_DEPTH: Round = 4;
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     let fixture = CommitteeFixture::builder().build();
     let committee: Committee = fixture.committee();
@@ -1006,7 +1014,13 @@ async fn slow_node() {
     let store = make_consensus_store(&test_utils::temp_dir());
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let mut state = ConsensusState::new(metrics.clone());
-    let mut bullshark = Bullshark::new(committee.clone(), store, GC_DEPTH, metrics);
+    let mut bullshark = Bullshark::new(
+        committee.clone(),
+        store,
+        GC_DEPTH,
+        metrics,
+        NUM_SUB_DAGS_PER_SCHEDULE,
+    );
 
     // Now start feeding the certificates per round up to 8. We expect to have
     // triggered a commit up to round 6 and gc round 1.
