@@ -11,11 +11,11 @@ use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::usize;
-use std::{collections::BTreeMap, net::Ipv4Addr};
 use sui_keys::keypair_file::{read_authority_keypair_from_file, read_keypair_from_file};
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::base_types::SuiAddress;
@@ -124,7 +124,7 @@ fn default_key_pair() -> KeyPairWithPath {
 }
 
 fn default_metrics_address() -> SocketAddr {
-    use std::net::IpAddr;
+    use std::net::{IpAddr, Ipv4Addr};
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9184)
 }
 
@@ -133,12 +133,12 @@ pub fn default_admin_interface_port() -> u16 {
 }
 
 pub fn default_json_rpc_address() -> SocketAddr {
-    use std::net::IpAddr;
+    use std::net::{IpAddr, Ipv4Addr};
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9000)
 }
 
 pub fn default_websocket_address() -> Option<SocketAddr> {
-    use std::net::IpAddr;
+    use std::net::{IpAddr, Ipv4Addr};
     Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9001))
 }
 
