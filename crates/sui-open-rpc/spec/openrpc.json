@@ -294,6 +294,7 @@
             "value": {
               "transaction": {
                 "data": {
+                  "messageVersion": 1,
                   "transactions": [
                     {
                       "TransferObject": {
@@ -325,6 +326,7 @@
                 ]
               },
               "effects": {
+                "messageVersion": 1,
                 "status": {
                   "status": "success"
                 },
@@ -1584,6 +1586,7 @@
             "value": {
               "transaction": {
                 "data": {
+                  "messageVersion": 1,
                   "transactions": [
                     {
                       "TransferObject": {
@@ -1615,6 +1618,7 @@
                 ]
               },
               "effects": {
+                "messageVersion": 1,
                 "status": {
                   "status": "success"
                 },
@@ -2591,6 +2595,7 @@
             "value": {
               "transaction": {
                 "data": {
+                  "messageVersion": 1,
                   "transactions": [
                     {
                       "TransferObject": {
@@ -2622,6 +2627,7 @@
                 ]
               },
               "effects": {
+                "messageVersion": 1,
                 "status": {
                   "status": "success"
                 },
@@ -6417,12 +6423,18 @@
         "type": "object",
         "required": [
           "gasData",
+          "messageVersion",
           "sender",
           "transactions"
         ],
         "properties": {
           "gasData": {
             "$ref": "#/components/schemas/GasData"
+          },
+          "messageVersion": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           },
           "sender": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -6450,6 +6462,7 @@
           "executedEpoch",
           "gasObject",
           "gasUsed",
+          "messageVersion",
           "status",
           "transactionDigest"
         ],
@@ -6502,6 +6515,11 @@
           },
           "gasUsed": {
             "$ref": "#/components/schemas/GasCostSummary"
+          },
+          "messageVersion": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           },
           "mutated": {
             "description": "ObjectRef and owner of mutated objects, including gas object.",
