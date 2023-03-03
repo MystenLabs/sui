@@ -28,14 +28,14 @@ const nftDisplayCardStyles = cva('flex flex-nowrap items-center h-full', {
 
 export interface NFTsProps extends VariantProps<typeof nftDisplayCardStyles> {
     objectId: string;
-    showlabel?: boolean;
+    showLabel?: boolean;
     size: NftImageProps['size'];
     borderRadius?: NftImageProps['borderRadius'];
 }
 
 export function NFTDisplayCard({
     objectId,
-    showlabel,
+    showLabel,
     size,
     wideView,
     animateHover,
@@ -45,13 +45,12 @@ export function NFTDisplayCard({
     const { data: originByteNft, isLoading: originByteLoading } =
         useOriginbyteNft(objectId);
     const nftName = nftMeta?.name;
-    // display title is the either originByteNft feild name or default nft name or fall back to it the object id
+
+    // display title is the either originByteNft field name or default nft name or fall back to it the object id
     const displayTitle =
         originByteNft?.fields.name || nftName || formatAddress(objectId);
-
     const nftUrl = nftMeta?.url || null;
     const fileExtensionType = useFileExtensionType(nftUrl!);
-
     return (
         <div className={nftDisplayCardStyles({ animateHover, wideView })}>
             <Loading loading={isLoading || originByteLoading}>
@@ -68,7 +67,6 @@ export function NFTDisplayCard({
                     borderRadius={borderRadius}
                     size={size}
                 />
-
                 {wideView ? (
                     <div className="flex flex-col gap-1 flex-1 min-w-0 ml-1">
                         <Heading variant="heading6" color="gray-90" truncate>
@@ -85,7 +83,7 @@ export function NFTDisplayCard({
                             )}
                         </div>
                     </div>
-                ) : showlabel ? (
+                ) : showLabel ? (
                     <div
                         className={cx(
                             'flex-1 mt-2 text-steel-dark truncate overflow-hidden max-w-full',
