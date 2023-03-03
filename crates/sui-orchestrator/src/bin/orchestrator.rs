@@ -68,7 +68,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
             let instances = testbed.instances();
             let orchestrator = Orchestrator::new(settings, instances, ssh_manager);
 
-            let shared_objects_ratio = shared_objects_ratio.max(100);
+            let shared_objects_ratio = shared_objects_ratio.min(100);
             let loads = if loads.is_empty() { vec![200] } else { loads };
 
             let generator = BenchmarkParametersGenerator::new(
