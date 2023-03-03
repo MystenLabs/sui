@@ -2,24 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Coin } from '@mysten/sui.js';
-import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
+import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import Alert from '_components/alert';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import { NFTDisplayCard } from '_components/nft-display';
-import { useAppSelector, useObjectsOwnedByAddress } from '_hooks';
+import { useObjectsOwnedByAddress } from '_hooks';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
 function NftsPage() {
-    const accountAddress = useAppSelector(({ account }) => account.address);
+    const accountAddress = useActiveAddress();
     const { data, isLoading, error, isError } =
         useObjectsOwnedByAddress(accountAddress);
-    const nfts = useMemo(
-        () => data?.filter((obj) => !Coin.isCoin(obj)),
-        [data]
-    );
+    const nfts = data?.filter((obj) => !Coin.isCoin(obj));
 
     return (
         <div className="flex flex-col flex-nowrap items-center gap-4 flex-1">
@@ -34,7 +31,7 @@ function NftsPage() {
                     </Alert>
                 ) : null}
 
-                {nfts ? (
+                {nfts?.length ? (
                     <div className="grid grid-cols-2 gap-x-3.5 gap-y-4 w-full h-full">
                         {nfts.map(({ objectId }) => (
                             <Link

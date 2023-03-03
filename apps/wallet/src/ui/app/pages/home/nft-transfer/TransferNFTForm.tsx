@@ -3,12 +3,13 @@
 
 import { ArrowRight16 } from '@mysten/icons';
 import { getTransactionDigest, SUI_TYPE_ARG } from '@mysten/sui.js';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Form, Field, Formik } from 'formik';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import { createValidationSchema } from './validation';
+import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, {
     Content,
@@ -18,12 +19,12 @@ import { Text } from '_app/shared/text';
 import { AddressInput } from '_components/address-input';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
-import { useAppSelector, useGetCoinBalance, useSigner } from '_hooks';
+import { useGetCoinBalance, useSigner } from '_hooks';
 import { DEFAULT_NFT_TRANSFER_GAS_FEE } from '_redux/slices/sui-objects/Coin';
 import { useGasBudgetInMist } from '_src/ui/app/hooks/useGasBudgetInMist';
 
 export function TransferNFTForm({ objectId }: { objectId: string }) {
-    const activeAddress = useAppSelector(({ account }) => account.address);
+    const activeAddress = useActiveAddress();
     const validationSchema = createValidationSchema(
         activeAddress || '',
         objectId
@@ -33,6 +34,7 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
         activeAddress
     );
     const signer = useSigner();
+    const queryClient = useQueryClient();
     const navigate = useNavigate();
     const transferNFT = useMutation({
         mutationFn: (to: string) => {
@@ -45,6 +47,7 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
                 gasBudget: DEFAULT_NFT_TRANSFER_GAS_FEE,
             });
         },
+
         onSuccess: (response) => {
             return navigate(
                 `/receipt?${new URLSearchParams({
@@ -64,6 +67,11 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
                 </div>
             );
         },
+        onSettled: () =>
+            Promise.all([
+                queryClient.invalidateQueries(['object', objectId]),
+                queryClient.invalidateQueries(['objects-owned']),
+            ]),
     });
 
     const maxGasCoinBalance = coinBalance?.totalBalance || BigInt(0);
