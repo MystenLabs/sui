@@ -536,7 +536,7 @@ impl<C> Testbed<C> {
             let path = format!("~/.sui/sui_config/validator-config-{i}.yaml");
             let address = listen_addresses[i].clone();
             let run = format!(
-                "cargo run --release --bin sui-node -- --config-path {path} --listen_address {address}"
+                "cargo run --release --bin sui-node -- --config-path {path} --listen-address {address}"
             );
             ["source $HOME/.cargo/env", &run].join(" && ")
         };
