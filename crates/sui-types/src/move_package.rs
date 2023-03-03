@@ -4,12 +4,19 @@
 use crate::{
     base_types::{ObjectID, SequenceNumber},
     error::{ExecutionError, ExecutionErrorKind, SuiError, SuiResult},
+    id::{ID, UID},
+    SUI_FRAMEWORK_ADDRESS,
 };
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::CompiledModule;
 use move_binary_format::normalized;
-use move_core_types::{account_address::AccountAddress, identifier::Identifier};
+use move_core_types::{
+    account_address::AccountAddress,
+    ident_str,
+    identifier::{IdentStr, Identifier},
+    language_storage::StructTag,
+};
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
 use serde::{Deserialize, Serialize};
@@ -22,6 +29,9 @@ use std::collections::BTreeMap;
 // #[cfg(test)]
 // #[path = "unit_tests/move_package.rs"]
 // mod base_types_tests;
+
+pub const PACKAGE_MODULE_NAME: &IdentStr = ident_str!("package");
+pub const UPGRADECAP_STRUCT_NAME: &IdentStr = ident_str!("UpgradeCap");
 
 #[derive(Clone, Debug)]
 /// Additional information about a function
@@ -59,6 +69,23 @@ pub struct MovePackage {
     // TODO use session cache
     #[serde_as(as = "BTreeMap<_, Bytes>")]
     module_map: BTreeMap<String, Vec<u8>>,
+}
+
+/// Rust representation of upgrade policy constants in `sui::package`.
+#[allow(dead_code)]
+const UPGRADE_POLICY_COMPATIBLE: u8 = 0;
+#[allow(dead_code)]
+const UPGRADE_POLICY_ADDITIVE: u8 = 128;
+#[allow(dead_code)]
+const UPGRADE_POLICY_DEP_ONLY: u8 = 192;
+
+/// Rust representation of `sui::package::UpgradeCap`.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpgradeCap {
+    pub id: UID,
+    pub package: ID,
+    pub version: u64,
+    pub policy: u8,
 }
 
 impl MovePackage {
@@ -162,6 +189,28 @@ impl MovePackage {
 
     pub fn normalize(&self) -> SuiResult<BTreeMap<String, normalized::Module>> {
         normalize_modules(self.module_map.values())
+    }
+}
+
+impl UpgradeCap {
+    pub fn type_() -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            module: PACKAGE_MODULE_NAME.to_owned(),
+            name: UPGRADECAP_STRUCT_NAME.to_owned(),
+            type_params: vec![],
+        }
+    }
+
+    /// Create an UpgradeCap for the newly published package at `package_id`, and associate it with
+    /// the fresh `uid.
+    pub fn new(uid: ObjectID, package_id: ObjectID) -> Self {
+        UpgradeCap {
+            id: UID::new(uid),
+            package: ID { bytes: package_id },
+            version: 1,
+            policy: UPGRADE_POLICY_COMPATIBLE,
+        }
     }
 }
 

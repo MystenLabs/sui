@@ -28,9 +28,9 @@ module sui::package {
     const COMPATIBLE: u8 = 0;
     /// Add new functions or types, or change dependencies, existing
     /// functions can't change.
-    const ADDITIVE: u8 = 1;
+    const ADDITIVE: u8 = 128;
     /// Only be able to change dependencies.
-    const DEP_ONLY: u8 = 2;
+    const DEP_ONLY: u8 = 192;
 
     /// This type can only be created in the transaction that
     /// generates a module, by consuming its one-time witness, so it
