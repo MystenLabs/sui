@@ -33,6 +33,7 @@ use sui_types::{
         Argument, Command, CommandArgumentError, EntryArgumentErrorKind, ProgrammableMoveCall,
         ProgrammableTransaction,
     },
+    move_package::UpgradeCap,
     SUI_FRAMEWORK_ADDRESS,
 };
 use sui_verifier::{
@@ -256,8 +257,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
             )?
         }
         Command::Publish(modules) => {
-            execute_move_publish(context, modules)?;
-            vec![]
+            vec![execute_move_publish(context, modules)?]
         }
     };
     context.push_command_results(results)?;
@@ -355,11 +355,12 @@ fn make_value(
     })
 }
 
-/// Publish Move modules and call the init functions
+/// Publish Move modules and call the init functions.  Returns an `UpgradeCap` for the newly
+/// published package on success.
 fn execute_move_publish<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     module_bytes: Vec<Vec<u8>>,
-) -> Result<(), ExecutionError> {
+) -> Result<Value, ExecutionError> {
     assert_invariant!(
         !module_bytes.is_empty(),
         "empty package is checked in transaction input checker"
@@ -379,7 +380,7 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>>(
         })
         .collect::<Vec<_>>();
 
-    context.new_package(modules)?;
+    let package_id = context.new_package(modules)?;
     for module_id in &modules_to_init {
         let return_values = execute_move_call(
             context,
@@ -394,7 +395,13 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>>(
             "init should not have return values"
         )
     }
-    Ok(())
+
+    Ok(Value::Object(ObjectValue::new(
+        UpgradeCap::type_(),
+        /* has_public_transfer */ true,
+        /* used_in_non_entry_move_call */ false,
+        &bcs::to_bytes(&UpgradeCap::new(context.fresh_id()?, package_id)).unwrap(),
+    )?))
 }
 
 /***************************************************************************************************

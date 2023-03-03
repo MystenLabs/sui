@@ -336,7 +336,7 @@ where
     pub fn new_package(
         &mut self,
         modules: Vec<move_binary_format::CompiledModule>,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<ObjectID, ExecutionError> {
         // wrap the modules in an object, write it to the store
         let package_object = Object::new_package(
             modules,
@@ -344,8 +344,9 @@ where
             self.tx_context.digest(),
             self.protocol_config.max_move_package_size(),
         )?;
+        let id = package_object.id();
         self.new_packages.push(package_object);
-        Ok(())
+        Ok(id)
     }
 
     /// Finish a command: clearing the borrows and adding the results to the result vector
