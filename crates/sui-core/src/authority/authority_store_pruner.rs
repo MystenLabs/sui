@@ -61,13 +61,13 @@ impl AuthorityStorePruner {
             DeletionMethod::RangeDelete => {
                 let mut updates: HashMap<ObjectID, (VersionNumber, VersionNumber)> = HashMap::new();
                 for effects in transaction_effects {
-                    for (object_id, seq_number) in effects.modified_at_versions {
+                    for (object_id, seq_number) in effects.modified_at_versions() {
                         updates
-                            .entry(object_id)
+                            .entry(*object_id)
                             .and_modify(|range| {
-                                *range = (min(range.0, seq_number), max(range.1, seq_number))
+                                *range = (min(range.0, *seq_number), max(range.1, *seq_number))
                             })
-                            .or_insert((seq_number, seq_number));
+                            .or_insert((*seq_number, *seq_number));
                     }
                 }
                 for (object_id, (min_version, max_version)) in updates {
@@ -311,10 +311,9 @@ mod tests {
                 objects.insert(&ObjectKey(id, SequenceNumber::from(i)), &obj)?;
             }
         }
-        Ok(TransactionEffects {
-            modified_at_versions: to_delete,
-            ..Default::default()
-        })
+        let mut ret = TransactionEffects::default();
+        *ret.modified_at_versions_mut_for_testing() = to_delete;
+        Ok(ret)
     }
 
     fn read_keys(
@@ -467,10 +466,8 @@ mod tests {
         perpetual_db.objects.rocksdb.flush()?;
         let before_compaction_size = get_size(primary_path.clone()).unwrap();
 
-        let effects = TransactionEffects {
-            modified_at_versions: to_delete,
-            ..Default::default()
-        };
+        let mut effects = TransactionEffects::default();
+        *effects.modified_at_versions_mut_for_testing() = to_delete;
         let total_pruned = AuthorityStorePruner::prune_effects(
             vec![effects],
             &perpetual_db,
