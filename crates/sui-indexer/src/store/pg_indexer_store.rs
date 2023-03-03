@@ -98,89 +98,6 @@ impl IndexerStore for PgIndexerStore {
             })
     }
 
-    fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError> {
-        let TemporaryCheckpointStore {
-            checkpoint,
-            transactions,
-            events,
-            objects,
-            owner_changes,
-            addresses,
-            packages,
-            // TODO: store raw object
-        } = data;
-
-        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
-
-        // Commit indexed checkpoint in one transaction
-        pg_pool_conn
-            .build_transaction()
-            .serializable()
-            .read_write()
-            .run(|conn| {
-                diesel::insert_into(checkpoints_table)
-                    .values(checkpoint)
-                    .execute(conn)?;
-
-                diesel::insert_into(transactions::table)
-                    .values(transactions)
-                    .execute(conn)?;
-
-                diesel::insert_into(events::table)
-                    .values(events)
-                    .execute(conn)?;
-
-                diesel::insert_into(objects::table)
-                    .values(objects)
-                    .execute(conn)?;
-
-                diesel::insert_into(owner_changes::table)
-                    .values(owner_changes)
-                    .execute(conn)?;
-
-                // Only insert once for address, skip if conflict
-                diesel::insert_into(addresses::table)
-                    .values(addresses)
-                    .on_conflict(account_address)
-                    .do_nothing()
-                    .execute(conn)?;
-
-                diesel::insert_into(packages::table)
-                    .values(packages)
-                    .on_conflict(package_id)
-                    .do_update()
-                    .set((
-                        author.eq(excluded(author)),
-                        module_names.eq(excluded(module_names)),
-                        package_content.eq(excluded(package_content)),
-                    ))
-                    .execute(conn)
-
-            })
-            .map_err(|e| {
-                IndexerError::PostgresWriteError(format!(
-                    "Failed writing transactions to PostgresDB with transactions {:?} and error: {:?}",
-                    transactions, e
-                ))
-            })
-    }
-
-    fn persist_epoch(&self, _data: &TemporaryEpochStore) -> Result<usize, IndexerError> {
-        // TODO: create new partition on epoch change
-        self.partition_manager.advance_epoch(1)
-    }
-
-    fn log_errors(&self, errors: Vec<IndexerError>) -> Result<(), IndexerError> {
-        if !errors.is_empty() {
-            let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
-            let new_error_logs = errors.into_iter().map(|e| e.into()).collect();
-            if let Err(e) = commit_error_logs(&mut pg_pool_conn, new_error_logs) {
-                error!("Failed writing error logs with error {:?}", e);
-            }
-        }
-        Ok(())
-    }
-
     fn get_total_transaction_number(&self) -> Result<i64, IndexerError> {
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
         pg_pool_conn
@@ -433,6 +350,89 @@ impl IndexerStore for PgIndexerStore {
                     last_processed_id, e
                 ))
             })
+    }
+
+    fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError> {
+        let TemporaryCheckpointStore {
+            checkpoint,
+            transactions,
+            events,
+            objects,
+            owner_changes,
+            addresses,
+            packages,
+            // TODO: store raw object
+        } = data;
+
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+
+        // Commit indexed checkpoint in one transaction
+        pg_pool_conn
+            .build_transaction()
+            .serializable()
+            .read_write()
+            .run(|conn| {
+                diesel::insert_into(checkpoints_table)
+                    .values(checkpoint)
+                    .execute(conn)?;
+
+                diesel::insert_into(transactions::table)
+                    .values(transactions)
+                    .execute(conn)?;
+
+                diesel::insert_into(events::table)
+                    .values(events)
+                    .execute(conn)?;
+
+                diesel::insert_into(objects::table)
+                    .values(objects)
+                    .execute(conn)?;
+
+                diesel::insert_into(owner_changes::table)
+                    .values(owner_changes)
+                    .execute(conn)?;
+
+                // Only insert once for address, skip if conflict
+                diesel::insert_into(addresses::table)
+                    .values(addresses)
+                    .on_conflict(account_address)
+                    .do_nothing()
+                    .execute(conn)?;
+
+                diesel::insert_into(packages::table)
+                    .values(packages)
+                    .on_conflict(package_id)
+                    .do_update()
+                    .set((
+                        author.eq(excluded(author)),
+                        module_names.eq(excluded(module_names)),
+                        package_content.eq(excluded(package_content)),
+                    ))
+                    .execute(conn)
+
+            })
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed writing checkpoint to PostgresDB with transactions {:?} and error: {:?}",
+                    transactions, e
+                ))
+            })
+    }
+
+    fn persist_epoch(&self, _data: &TemporaryEpochStore) -> Result<usize, IndexerError> {
+        // TODO: create new partition on epoch change
+        self.partition_manager.advance_epoch(1)
+    }
+
+    fn log_errors(&self, errors: Vec<IndexerError>) -> Result<(), IndexerError> {
+        if !errors.is_empty() {
+            let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+            let new_error_logs = errors.into_iter().map(|e| e.into()).collect();
+            if let Err(e) = commit_error_logs(&mut pg_pool_conn, new_error_logs) {
+                error!("Failed writing error logs with error {:?}", e);
+            }
+        }
+        Ok(())
     }
 }
 
