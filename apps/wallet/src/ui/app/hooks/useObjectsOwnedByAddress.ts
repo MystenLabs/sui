@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useQuery } from '@tanstack/react-query';
+import { toast } from 'react-hot-toast';
 
 import { useRpc } from '_hooks';
 
@@ -12,6 +13,11 @@ export function useObjectsOwnedByAddress(address?: SuiAddress | null) {
     return useQuery(
         ['objects-owned', address],
         () => rpc.getObjectsOwnedByAddress(address!),
-        { enabled: !!address }
+        {
+            enabled: !!address,
+            onError: (error) => {
+                toast.error((error as Error).message);
+            },
+        }
     );
 }

@@ -96,7 +96,7 @@ function NftTransferPage() {
             showModal={true}
             setShowModal={setShowModal}
             title="Send NFT"
-            closeOverlay={() => navigate('/')}
+            closeOverlay={() => navigate('/nfts')}
         >
             <div className="flex w-full flex-col h-full">
                 <Loading loading={isLoading}>
