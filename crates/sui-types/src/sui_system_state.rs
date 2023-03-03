@@ -626,7 +626,11 @@ pub enum SuiSystemState {
     V1(SuiSystemStateInnerV1),
 }
 
+/// This is the fixed type used by genesis.
 pub type SuiSystemStateInnerGenesis = SuiSystemStateInnerV1;
+
+/// This is the fixed type used by benchmarking.
+pub type SuiSystemStateInnerBenchmark = SuiSystemStateInnerV1;
 
 impl SuiSystemState {
     pub fn new_genesis(inner: SuiSystemStateInnerGenesis) -> Self {
@@ -639,6 +643,16 @@ impl SuiSystemState {
         match self {
             SuiSystemState::V1(inner) => inner,
         }
+    }
+
+    pub fn into_benchmark_version(self) -> SuiSystemStateInnerBenchmark {
+        match self {
+            SuiSystemState::V1(inner) => inner,
+        }
+    }
+
+    pub fn new_for_benchmarking(inner: SuiSystemStateInnerBenchmark) -> Self {
+        Self::V1(inner)
     }
 
     pub fn new_for_testing(epoch: EpochId) -> Self {
