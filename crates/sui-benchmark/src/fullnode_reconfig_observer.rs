@@ -13,7 +13,7 @@ use sui_core::{
     safe_client::SafeClientMetricsBase,
 };
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::committee::Committee;
+use sui_types::{committee::Committee, sui_system_state::SuiSystemStateTrait};
 use tracing::{debug, error, trace};
 
 /// A ReconfigObserver that polls FullNode periodically

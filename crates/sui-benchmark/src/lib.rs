@@ -26,7 +26,6 @@ use sui_core::{
 use sui_json_rpc_types::{SuiObjectRead, SuiTransactionEffects};
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::messages::TransactionEvents;
 use sui_types::{
     base_types::ObjectID,
@@ -45,6 +44,10 @@ use sui_types::{
 use sui_types::{
     base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo,
     messages::ExecuteTransactionRequestType, object::Owner,
+};
+use sui_types::{
+    base_types::{AuthorityName, SuiAddress},
+    sui_system_state::SuiSystemStateTrait,
 };
 use sui_types::{error::SuiError, sui_system_state::SuiSystemState};
 use tokio::{task::JoinSet, time::timeout};

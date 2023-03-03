@@ -11,6 +11,7 @@ use crate::storage::ObjectStore;
 use crate::{balance::Balance, id::UID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
 use anemo::PeerId;
 use anyhow::Result;
+use enum_dispatch::enum_dispatch;
 use fastcrypto::traits::ToFromBytes;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::value::MoveTypeLayout;
@@ -417,8 +418,26 @@ pub struct StakeSubsidy {
     pub current_epoch_amount: u64,
 }
 
-impl SuiSystemStateInnerV1 {
-    pub fn get_current_epoch_committee(&self) -> CommitteeWithNetAddresses {
+#[enum_dispatch]
+pub trait SuiSystemStateTrait {
+    fn epoch(&self) -> u64;
+    fn reference_gas_price(&self) -> u64;
+    fn protocol_version(&self) -> u64;
+    fn epoch_start_timestamp_ms(&self) -> u64;
+    fn safe_mode(&self) -> bool;
+    fn get_current_epoch_committee(&self) -> CommitteeWithNetAddresses;
+    fn get_current_epoch_narwhal_committee(&self) -> NarwhalCommittee;
+    fn get_current_epoch_narwhal_worker_cache(
+        &self,
+        transactions_address: &Multiaddr,
+    ) -> WorkerCache;
+    fn get_validator_metadata_vec(&self) -> Vec<ValidatorMetadata>;
+    fn get_current_epoch_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId>;
+    fn get_staking_pool_info(&self) -> BTreeMap<SuiAddress, (Vec<u8>, u64)>;
+}
+
+impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
+    fn get_current_epoch_committee(&self) -> CommitteeWithNetAddresses {
         let mut voting_rights = BTreeMap::new();
         let mut net_addresses = BTreeMap::new();
         for validator in &self.validators.active_validators {
@@ -437,7 +456,7 @@ impl SuiSystemStateInnerV1 {
     }
 
     #[allow(clippy::mutable_key_type)]
-    pub fn get_current_epoch_narwhal_committee(&self) -> NarwhalCommittee {
+    fn get_current_epoch_narwhal_committee(&self) -> NarwhalCommittee {
         let narwhal_committee = self
             .validators
             .active_validators
@@ -462,7 +481,7 @@ impl SuiSystemStateInnerV1 {
         }
     }
 
-    pub fn get_current_epoch_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId> {
+    fn get_current_epoch_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId> {
         let mut result = HashMap::new();
         let _: () = self
             .validators
@@ -486,7 +505,7 @@ impl SuiSystemStateInnerV1 {
     }
 
     #[allow(clippy::mutable_key_type)]
-    pub fn get_current_epoch_narwhal_worker_cache(
+    fn get_current_epoch_narwhal_worker_cache(
         &self,
         transactions_address: &Multiaddr,
     ) -> WorkerCache {
@@ -520,7 +539,7 @@ impl SuiSystemStateInnerV1 {
         }
     }
 
-    pub fn get_validator_metadata_vec(&self) -> Vec<ValidatorMetadata> {
+    fn get_validator_metadata_vec(&self) -> Vec<ValidatorMetadata> {
         self.validators
             .active_validators
             .iter()
@@ -530,7 +549,7 @@ impl SuiSystemStateInnerV1 {
 
     /// Maps from validator Sui address to (public key bytes, staking pool sui balance).
     /// TODO: Might be useful to return a more organized data structure.
-    pub fn get_staking_pool_info(&self) -> BTreeMap<SuiAddress, (Vec<u8>, u64)> {
+    fn get_staking_pool_info(&self) -> BTreeMap<SuiAddress, (Vec<u8>, u64)> {
         self.validators
             .active_validators
             .iter()
@@ -544,6 +563,26 @@ impl SuiSystemStateInnerV1 {
                 )
             })
             .collect()
+    }
+
+    fn epoch(&self) -> u64 {
+        self.epoch
+    }
+
+    fn reference_gas_price(&self) -> u64 {
+        self.reference_gas_price
+    }
+
+    fn protocol_version(&self) -> u64 {
+        self.protocol_version
+    }
+
+    fn epoch_start_timestamp_ms(&self) -> u64 {
+        self.epoch_start_timestamp_ms
+    }
+
+    fn safe_mode(&self) -> bool {
+        self.safe_mode
     }
 }
 
@@ -582,6 +621,7 @@ impl Default for SuiSystemStateInnerV1 {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 #[serde(untagged)]
+#[enum_dispatch(SuiSystemStateTrait)]
 pub enum SuiSystemState {
     V1(SuiSystemStateInnerV1),
 }
@@ -598,71 +638,6 @@ impl SuiSystemState {
     pub fn into_genesis_version(self) -> SuiSystemStateInnerGenesis {
         match self {
             SuiSystemState::V1(inner) => inner,
-        }
-    }
-
-    pub fn epoch(&self) -> u64 {
-        match self {
-            SuiSystemState::V1(inner) => inner.epoch,
-        }
-    }
-
-    pub fn reference_gas_price(&self) -> u64 {
-        match self {
-            SuiSystemState::V1(inner) => inner.reference_gas_price,
-        }
-    }
-
-    pub fn epoch_start_timestamp_ms(&self) -> u64 {
-        match self {
-            SuiSystemState::V1(inner) => inner.epoch_start_timestamp_ms,
-        }
-    }
-
-    pub fn safe_mode(&self) -> bool {
-        match self {
-            SuiSystemState::V1(inner) => inner.safe_mode,
-        }
-    }
-
-    pub fn get_current_epoch_committee(&self) -> CommitteeWithNetAddresses {
-        match self {
-            SuiSystemState::V1(inner) => inner.get_current_epoch_committee(),
-        }
-    }
-
-    pub fn get_current_epoch_narwhal_committee(&self) -> NarwhalCommittee {
-        match self {
-            SuiSystemState::V1(inner) => inner.get_current_epoch_narwhal_committee(),
-        }
-    }
-
-    pub fn get_current_epoch_narwhal_worker_cache(
-        &self,
-        transactions_address: &Multiaddr,
-    ) -> WorkerCache {
-        match self {
-            SuiSystemState::V1(inner) => {
-                inner.get_current_epoch_narwhal_worker_cache(transactions_address)
-            }
-        }
-    }
-
-    pub fn get_validator_metadata_vec(&self) -> Vec<ValidatorMetadata> {
-        match self {
-            SuiSystemState::V1(inner) => inner.get_validator_metadata_vec(),
-        }
-    }
-
-    pub fn get_current_epoch_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId> {
-        match self {
-            SuiSystemState::V1(inner) => inner.get_current_epoch_authority_names_to_peer_ids(),
-        }
-    }
-
-    pub fn get_staking_pool_info(&self) -> BTreeMap<SuiAddress, (Vec<u8>, u64)> {
-        match self {
-            SuiSystemState::V1(inner) => inner.get_staking_pool_info(),
         }
     }
 

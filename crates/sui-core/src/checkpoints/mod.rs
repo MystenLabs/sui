@@ -44,7 +44,7 @@ use sui_types::messages_checkpoint::{
     VerifiedCheckpoint,
 };
 use sui_types::signature::GenericSignature;
-use sui_types::sui_system_state::SuiSystemState;
+use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use tokio::{
     sync::{watch, Notify},
     time::timeout,
@@ -691,7 +691,7 @@ impl CheckpointBuilder {
                 Some(EndOfEpochData {
                     next_epoch_committee: committee.voting_rights,
                     next_epoch_protocol_version: ProtocolVersion::new(
-                        system_state_obj.protocol_version,
+                        system_state_obj.protocol_version(),
                     ),
                     root_state_digest: Accumulator::default().digest(),
                 })

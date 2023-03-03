@@ -16,7 +16,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::committee::EpochId;
 use sui_types::governance::{DelegatedStake, Delegation, DelegationStatus, StakedSui};
 use sui_types::messages::{CommitteeInfoRequest, CommitteeInfoResponse};
-use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
+use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait, ValidatorMetadata};
 
 pub struct GovernanceReadApi {
     state: Arc<AuthorityState>,
