@@ -242,10 +242,11 @@ impl ReadApiServer for ReadApi {
             }
             Ok(responses)
         } else {
-            Ok(Err(anyhow!(UserInputError::SizeLimitExceeded {
+            let error = anyhow!(UserInputError::SizeLimitExceeded {
                 limit: "input limit".to_string(),
                 value: QUERY_MAX_RESULT_LIMIT.to_string()
-            })))
+            });
+            panic!("Error: {}", error);
         }
     }
 
