@@ -6,8 +6,12 @@ import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { Form, Field, useFormikContext } from 'formik';
 import { useEffect, useRef, memo } from 'react';
 
-import { Content } from '_app/shared/bottom-menu-layout';
-import Button from '_app/shared/button';
+import { Button } from '_app/shared/ButtonUI';
+import BottomMenuLayout, {
+    Content,
+    Menu,
+} from '_app/shared/bottom-menu-layout';
+import { Text } from '_app/shared/text';
 import { AddressInput } from '_components/address-input';
 import Alert from '_components/alert';
 import { useAppSelector, useGetCoinBalance } from '_hooks';
