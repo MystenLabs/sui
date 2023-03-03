@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { cva } from 'class-variance-authority';
-import cl from 'classnames';
+import { formatAddress } from '@mysten/sui.js';
+import { cva, cx } from 'class-variance-authority';
 
 import { Heading } from '_app/shared/heading';
 import Loading from '_components/loading';
@@ -46,7 +46,8 @@ export function NFTDisplayCard({
         useOriginbyteNft(objectId);
     const nftName = nftMeta?.name;
     // display title is the either originByteNft feild name or default nft name or fall back to it the object id
-    const displayTitle = originByteNft?.fields.name || nftName || objectId;
+    const displayTitle =
+        originByteNft?.fields.name || nftName || formatAddress(objectId);
 
     const nftUrl = nftMeta?.url || null;
     const fileExtensionType = useFileExtensionType(nftUrl!);
@@ -86,10 +87,11 @@ export function NFTDisplayCard({
                     </div>
                 ) : showlabel ? (
                     <div
-                        className={cl(
+                        className={cx(
                             'flex-1 mt-2 text-steel-dark truncate overflow-hidden max-w-full',
-                            animateHover &&
-                                'group-hover:text-black duration-200 ease-ease-in-out-cubic'
+                            animateHover
+                                ? 'group-hover:text-black duration-200 ease-ease-in-out-cubic'
+                                : ''
                         )}
                     >
                         {displayTitle}

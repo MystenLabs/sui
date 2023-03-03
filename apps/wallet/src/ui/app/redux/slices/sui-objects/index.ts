@@ -2,12 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    getExecutionStatusType,
-    getSuiObjectData,
+    getObjectExistsResponse,
     getObjectId,
-    getTimestampFromTransactionResponse,
-    getTotalGasUsed,
-    getTransactionDigest,
     getObjectVersion,
     SUI_SYSTEM_STATE_OBJECT_ID,
 } from '@mysten/sui.js';
@@ -20,7 +16,7 @@ import {
 import { activeAccountSelector } from '../account';
 import { ExampleNFT } from './NFT';
 
-import type { SuiObjectData, SuiAddress, ObjectId } from '@mysten/sui.js';
+import type { SuiObject, ObjectId } from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
@@ -113,39 +109,6 @@ export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
     }
 );
 
-type NFTTxResponse = {
-    timestampMs?: number;
-    status?: string;
-    gasFee?: number;
-    txId?: string;
-};
-
-export const transferNFT = createAsyncThunk<
-    NFTTxResponse,
-    { objectId: ObjectId; recipient: SuiAddress; gasBudget: number },
-    AppThunkConfig
->(
-    'transferNFT',
-    async (data, { extra: { api, background }, dispatch, getState }) => {
-        const activeAddress = activeAccountSelector(getState());
-        if (!activeAddress) {
-            throw new Error('Error, active address is not defined');
-        }
-        const signer = api.getSignerInstance(activeAddress, background);
-        const txn = await signer.signAndExecuteTransaction({
-            kind: 'transferObject',
-            data,
-        });
-        await dispatch(fetchAllOwnedAndRequiredObjects());
-        const txnResp = {
-            timestampMs: getTimestampFromTransactionResponse(txn),
-            status: getExecutionStatusType(txn),
-            gasFee: txn ? getTotalGasUsed(txn) : 0,
-            txId: getTransactionDigest(txn),
-        };
-        return txnResp as NFTTxResponse;
-    }
-);
 interface SuiObjectsManualState {
     loading: boolean;
     error: false | { code?: string; message?: string; name?: string };
