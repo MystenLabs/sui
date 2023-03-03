@@ -11347,7 +11347,6 @@ dependencies = [
  "move-stdlib",
  "move-symbol-pool",
  "move-vm-runtime",
- "move-vm-test-utils",
  "move-vm-types",
  "multiaddr",
  "multibase",
