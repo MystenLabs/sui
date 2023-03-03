@@ -11,7 +11,6 @@ use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
-use sui_types::messages::TransactionEvents;
 use sui_types::{
     committee::Committee,
     crypto::AuthorityKeyPair,
@@ -22,9 +21,9 @@ use sui_types::{
         Transaction, TransactionInfoRequest, TransactionInfoResponse,
     },
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
-    sui_system_state::SuiSystemState,
 };
 use sui_types::{error::SuiResult, messages::HandleCertificateResponse};
+use sui_types::{messages::TransactionEvents, sui_system_state::SuiSystemStateInnerBenchmark};
 
 #[derive(Clone, Copy, Default)]
 pub struct LocalAuthorityClientFaultConfig {
@@ -116,9 +115,12 @@ impl AuthorityAPI for LocalAuthorityClient {
     async fn handle_system_state_object(
         &self,
         _request: SystemStateRequest,
-    ) -> Result<SuiSystemState, SuiError> {
+    ) -> Result<SuiSystemStateInnerBenchmark, SuiError> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        Ok(epoch_store.system_state_object().clone())
+        Ok(epoch_store
+            .system_state_object()
+            .clone()
+            .into_benchmark_version())
     }
 }
 
@@ -273,7 +275,7 @@ impl AuthorityAPI for MockAuthorityApi {
     async fn handle_system_state_object(
         &self,
         _request: SystemStateRequest,
-    ) -> Result<SuiSystemState, SuiError> {
+    ) -> Result<SuiSystemStateInnerBenchmark, SuiError> {
         unimplemented!();
     }
 }
@@ -330,7 +332,7 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
     async fn handle_system_state_object(
         &self,
         _request: SystemStateRequest,
-    ) -> Result<SuiSystemState, SuiError> {
+    ) -> Result<SuiSystemStateInnerBenchmark, SuiError> {
         unimplemented!()
     }
 }

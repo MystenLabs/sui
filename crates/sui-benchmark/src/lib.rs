@@ -264,7 +264,10 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
     async fn get_latest_system_state_object(&self) -> Result<SuiSystemState, anyhow::Error> {
         let auth_agg = self.qd.authority_aggregator().load();
-        auth_agg.get_latest_system_state_object_for_testing().await
+        auth_agg
+            .get_latest_system_state_object_for_testing()
+            .await
+            .map(SuiSystemState::new_for_benchmarking)
     }
 
     async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {

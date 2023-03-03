@@ -16,11 +16,10 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-use sui_types::{error::*, messages::*};
+use sui_types::{error::*, messages::*, sui_system_state::SuiSystemStateInnerBenchmark};
 use sui_types::{
     fp_ensure,
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
-    sui_system_state::SuiSystemState,
 };
 use tap::TapFallible;
 use tokio::task::JoinHandle;
@@ -505,9 +504,12 @@ impl Validator for ValidatorService {
     async fn get_system_state_object(
         &self,
         _request: tonic::Request<SystemStateRequest>,
-    ) -> Result<tonic::Response<SuiSystemState>, tonic::Status> {
+    ) -> Result<tonic::Response<SuiSystemStateInnerBenchmark>, tonic::Status> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        let response = epoch_store.system_state_object().clone();
+        let response = epoch_store
+            .system_state_object()
+            .clone()
+            .into_benchmark_version();
 
         return Ok(tonic::Response::new(response));
     }

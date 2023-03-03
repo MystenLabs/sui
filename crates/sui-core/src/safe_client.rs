@@ -12,7 +12,7 @@ use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
-use sui_types::sui_system_state::SuiSystemState;
+use sui_types::sui_system_state::SuiSystemStateInnerBenchmark;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 use sui_types::{
     error::{SuiError, SuiResult},
@@ -488,7 +488,9 @@ where
         Ok(resp)
     }
 
-    pub async fn handle_system_state_object(&self) -> Result<SuiSystemState, SuiError> {
+    pub async fn handle_system_state_object(
+        &self,
+    ) -> Result<SuiSystemStateInnerBenchmark, SuiError> {
         self.authority_client
             .handle_system_state_object(SystemStateRequest { _unused: false })
             .await
