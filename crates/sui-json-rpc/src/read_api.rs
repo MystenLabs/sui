@@ -203,49 +203,50 @@ impl ReadApiServer for ReadApi {
         &self,
         digests: Vec<TransactionDigest>,
     ) -> RpcResult<Vec<SuiTransactionResponse>> {
-        if digests.len() > QUERY_MAX_RESULT_LIMIT {
-            anyhow!(UserInputError::SizeLimitExceeded {
+        if digests.len() <= QUERY_MAX_RESULT_LIMIT {
+            let mut tx_digests: Vec<TransactionDigest> = digests
+                .iter()
+                .take(QUERY_MAX_RESULT_LIMIT)
+                .copied()
+                .collect();
+            tx_digests.dedup();
+
+            let txn_batch = self
+                .state
+                .multi_get_transactions(&tx_digests)
+                .await
+                .tap_err(|err| debug!(txs_digests=?tx_digests, "Failed to get batch: {:?}", err))?;
+
+            let mut responses: Vec<SuiTransactionResponse> = Vec::new();
+            for (txn, digest) in txn_batch.into_iter().zip(tx_digests.iter()) {
+                let (transaction, effects, events, checkpoint) = txn;
+                responses.push(SuiTransactionResponse {
+                    transaction: transaction.into_message().try_into()?,
+                    effects: effects.into(),
+                    events: SuiTransactionEvents::try_from(
+                        events,
+                        // threading the epoch_store through this API does not
+                        // seem possible, so we just read it from the state and fetch
+                        // the module cache out of it.
+                        // Notice that no matter what module cache we get things
+                        // should work
+                        self.state
+                            .load_epoch_store_one_call_per_task()
+                            .module_cache()
+                            .as_ref(),
+                    )?,
+                    timestamp_ms: self.state.get_timestamp_ms(digest).await?,
+                    confirmed_local_execution: None,
+                    checkpoint: checkpoint.map(|(_epoch, checkpoint)| checkpoint),
+                })
+            }
+            Ok(responses)
+        } else {
+            Ok(Err(anyhow!(UserInputError::SizeLimitExceeded {
                 limit: "input limit".to_string(),
                 value: QUERY_MAX_RESULT_LIMIT.to_string()
-            });
+            })))
         }
-        let mut tx_digests: Vec<TransactionDigest> = digests
-            .iter()
-            .take(QUERY_MAX_RESULT_LIMIT)
-            .copied()
-            .collect();
-        tx_digests.dedup();
-
-        let txn_batch = self
-            .state
-            .multi_get_transactions(&tx_digests)
-            .await
-            .tap_err(|err| debug!(txs_digests=?tx_digests, "Failed to get batch: {:?}", err))?;
-
-        let mut responses: Vec<SuiTransactionResponse> = Vec::new();
-        for (txn, digest) in txn_batch.into_iter().zip(tx_digests.iter()) {
-            let (transaction, effects, events, checkpoint) = txn;
-            responses.push(SuiTransactionResponse {
-                transaction: transaction.into_message().try_into()?,
-                effects: effects.into(),
-                events: SuiTransactionEvents::try_from(
-                    events,
-                    // threading the epoch_store through this API does not
-                    // seem possible, so we just read it from the state and fetch
-                    // the module cache out of it.
-                    // Notice that no matter what module cache we get things
-                    // should work
-                    self.state
-                        .load_epoch_store_one_call_per_task()
-                        .module_cache()
-                        .as_ref(),
-                )?,
-                timestamp_ms: self.state.get_timestamp_ms(digest).await?,
-                confirmed_local_execution: None,
-                checkpoint: checkpoint.map(|(_epoch, checkpoint)| checkpoint),
-            })
-        }
-        Ok(responses)
     }
 
     async fn get_normalized_move_modules_by_package(
