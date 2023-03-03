@@ -48,7 +48,7 @@ function NftsPage() {
                                     <NFTDisplayCard
                                         objectId={objectId}
                                         size="md"
-                                        showlabel
+                                        showLabel
                                         animateHover
                                         borderRadius="xl"
                                     />
