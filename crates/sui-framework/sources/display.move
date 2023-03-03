@@ -60,6 +60,14 @@ module sui::display {
         version: u16
     }
 
+    /// A capability granted to the `Display` creator which allows the owner
+    /// to perform add/edit/remove operations over the `Display` as well as
+    /// publish new versions via `update_display`.
+    struct DisplayEditorCap<phantom T: key> has key, store {
+        id: UID,
+        for: ID
+    }
+
     /// Event: emitted when a new Display object has been created for type T.
     /// Type signature of the event corresponds to the type while id serves for
     /// the discovery.
