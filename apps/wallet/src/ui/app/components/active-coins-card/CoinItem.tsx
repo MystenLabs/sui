@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFormatCoin } from '@mysten/core';
+
 import { Text } from '_app/shared/text';
 import { CoinIcon } from '_components/coin-icon';
-import { useFormatCoin } from '_hooks';
 
 type CoinItemProps = {
     coinType: string;
