@@ -3,6 +3,7 @@
 mod errors;
 pub(crate) mod iter;
 pub(crate) mod keys;
+pub mod util;
 pub(crate) mod values;
 
 use crate::{
@@ -21,7 +22,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::{
     borrow::Borrow,
     collections::BTreeMap,
-    env,
+    env, fs,
     marker::PhantomData,
     path::{Path, PathBuf},
     sync::Arc,
@@ -166,12 +167,14 @@ macro_rules! retry_transaction_forever {
 pub struct DBWithThreadModeWrapper {
     pub underlying: rocksdb::DBWithThreadMode<MultiThreaded>,
     pub metric_conf: MetricConf,
+    pub db_path: PathBuf,
 }
 
 #[derive(Debug)]
 pub struct OptimisticTransactionDBWrapper {
     pub underlying: rocksdb::OptimisticTransactionDB<MultiThreaded>,
     pub metric_conf: MetricConf,
+    pub db_path: PathBuf,
 }
 
 /// Thin wrapper to unify interface across different db types
@@ -378,18 +381,25 @@ impl RocksDB {
         delegate_call!(self.flush())
     }
 
-    pub fn checkpoint(&self, path: &Path) -> Result<(), rocksdb::Error> {
-        match self {
-            Self::DBWithThreadMode(d) => {
-                let checkpoint = Checkpoint::new(&d.underlying)?;
-                checkpoint.create_checkpoint(path)?;
-            }
+    pub fn checkpoint(&self, path: &Path) -> Result<PathBuf, TypedStoreError> {
+        let (checkpoint, path) = match self {
+            Self::DBWithThreadMode(d) => (Checkpoint::new(&d.underlying)?, d.db_path.join(path)),
             Self::OptimisticTransactionDB(d) => {
-                let checkpoint = Checkpoint::new(&d.underlying)?;
-                checkpoint.create_checkpoint(path)?;
+                (Checkpoint::new(&d.underlying)?, d.db_path.join(path))
             }
+        };
+        if path.exists() {
+            fs::remove_dir_all(path.clone()).map_err(|e| {
+                TypedStoreError::RocksDBError(format!(
+                    "Failed to delete existing checkpoint dir: {:?}",
+                    e.to_string()
+                ))
+            })?;
         }
-        Ok(())
+        checkpoint
+            .create_checkpoint(&path)
+            .map_err(|e| TypedStoreError::RocksDBError(e.to_string()))?;
+        Ok(path)
     }
 
     pub fn flush_cf(&self, cf: &impl AsColumnFamilyRef) -> Result<(), rocksdb::Error> {
@@ -487,6 +497,14 @@ impl RocksDBBatch {
         delegate_batch_call!(self.put_cf(cf, key, value))
     }
 
+    pub fn merge_cf<K, V>(&mut self, cf: &impl AsColumnFamilyRef, key: K, value: V)
+    where
+        K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
+    {
+        delegate_batch_call!(self.merge_cf(cf, key, value))
+    }
+
     pub fn delete_range_cf<K: AsRef<[u8]>>(
         &mut self,
         cf: &impl AsColumnFamilyRef,
@@ -544,7 +562,7 @@ pub struct DBMap<K, V> {
     _phantom: PhantomData<fn(K) -> V>,
     // the rocksDB ColumnFamily under which the map is stored
     cf: String,
-    opts: ReadWriteOptions,
+    pub opts: ReadWriteOptions,
     db_metrics: Arc<DBMetrics>,
     read_sample_interval: SamplingInterval,
     write_sample_interval: SamplingInterval,
@@ -1129,6 +1147,46 @@ impl DBBatch {
                 let k_buf = be_fix_int_ser(k.borrow())?;
                 let v_buf = bincode::serialize(v.borrow())?;
                 self.batch.put_cf(&db.cf(), k_buf, v_buf);
+                Ok(())
+            })?;
+        Ok(self)
+    }
+
+    /// merges a range of (key, value) pairs given as an iterator
+    pub fn merge_batch<J: Borrow<K>, K: Serialize, U: Borrow<V>, V: Serialize>(
+        mut self,
+        db: &DBMap<K, V>,
+        new_vals: impl IntoIterator<Item = (J, U)>,
+    ) -> Result<Self, TypedStoreError> {
+        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
+            return Err(TypedStoreError::CrossDBBatch);
+        }
+
+        new_vals
+            .into_iter()
+            .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
+                let k_buf = be_fix_int_ser(k.borrow())?;
+                let v_buf = bincode::serialize(v.borrow())?;
+                self.batch.merge_cf(&db.cf(), k_buf, v_buf);
+                Ok(())
+            })?;
+        Ok(self)
+    }
+
+    /// similar to `merge_batch` but allows merge with partial values
+    pub fn partial_merge_batch<J: Borrow<K>, K: Serialize, V: Serialize, B: AsRef<[u8]>>(
+        mut self,
+        db: &DBMap<K, V>,
+        new_vals: impl IntoIterator<Item = (J, B)>,
+    ) -> Result<Self, TypedStoreError> {
+        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
+            return Err(TypedStoreError::CrossDBBatch);
+        }
+        new_vals
+            .into_iter()
+            .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
+                let k_buf = be_fix_int_ser(k.borrow())?;
+                self.batch.merge_cf(&db.cf(), k_buf, v);
                 Ok(())
             })?;
         Ok(self)
@@ -1841,6 +1899,7 @@ pub fn open_cf_opts<P: AsRef<Path>>(
             DBWithThreadModeWrapper {
                 underlying: rocksdb,
                 metric_conf,
+                db_path: PathBuf::from(path),
             },
         )))
     })
@@ -1869,6 +1928,7 @@ pub fn open_cf_opts_transactional<P: AsRef<Path>>(
             OptimisticTransactionDBWrapper {
                 underlying: rocksdb,
                 metric_conf,
+                db_path: PathBuf::from(path),
             },
         )))
     })
@@ -1930,6 +1990,7 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
             DBWithThreadModeWrapper {
                 underlying: rocksdb,
                 metric_conf,
+                db_path: secondary_path,
             },
         )))
     })

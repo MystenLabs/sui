@@ -35,10 +35,7 @@ function validatorsTableData(
     return {
         data: validators.map((validator) => {
             const validatorName = validator.metadata.name;
-            const delegatedStake =
-                +validator.delegation_staking_pool.sui_balance;
-            const selfStake = +validator.stake_amount;
-            const totalStake = selfStake + delegatedStake;
+            const totalStake = validator.staking_pool.sui_balance;
             const img = validator.metadata.image_url;
 
             const event = getValidatorMoveEvent(
@@ -179,10 +176,7 @@ function ValidatorPageResult() {
         const validators = data.validators.active_validators;
 
         return validators.reduce(
-            (acc, cur) =>
-                acc +
-                +cur.delegation_staking_pool.sui_balance +
-                +cur.stake_amount,
+            (acc, cur) => acc + +cur.staking_pool.sui_balance,
             0
         );
     }, [data]);

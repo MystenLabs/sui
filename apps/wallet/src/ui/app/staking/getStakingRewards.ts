@@ -17,7 +17,7 @@ export function getStakingRewards(
         return 0;
     const pool_id = delegation.staked_sui.pool_id;
     const validator = activeValidators.find(
-        (validator) => validator.delegation_staking_pool.id === pool_id
+        (validator) => validator.staking_pool.id === pool_id
     );
 
     if (!validator) return 0;
@@ -26,11 +26,9 @@ export function getStakingRewards(
         delegation.delegation_status.Active.pool_tokens.value
     );
     const delegationTokenSupply = new BigNumber(
-        validator.delegation_staking_pool.delegation_token_supply.value
+        validator.staking_pool.pool_token_balance
     );
-    const suiBalance = new BigNumber(
-        validator.delegation_staking_pool.sui_balance
-    );
+    const suiBalance = new BigNumber(validator.staking_pool.sui_balance);
     const pricipalAmout = new BigNumber(
         delegation.delegation_status.Active.principal_sui_amount
     );

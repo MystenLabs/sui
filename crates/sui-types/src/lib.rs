@@ -29,6 +29,7 @@ pub mod collection_types;
 pub mod committee;
 pub mod crypto;
 pub mod digests;
+pub mod display;
 pub mod dynamic_field;
 pub mod event;
 pub mod filter;
@@ -47,7 +48,6 @@ pub mod object;
 pub mod query;
 pub mod quorum_driver_types;
 pub mod signature;
-pub mod signature_seed;
 pub mod storage;
 pub mod sui_serde;
 pub mod sui_system_state;
@@ -93,6 +93,10 @@ pub fn parse_sui_struct_tag(s: &str) -> anyhow::Result<StructTag> {
 pub fn parse_sui_type_tag(s: &str) -> anyhow::Result<TypeTag> {
     use move_command_line_common::types::ParsedType;
     ParsedType::parse(s)?.into_type_tag(&resolve_address)
+}
+
+pub fn is_system_package(id: ObjectID) -> bool {
+    matches!(id, MOVE_STDLIB_OBJECT_ID | SUI_FRAMEWORK_OBJECT_ID)
 }
 
 fn resolve_address(addr: &str) -> Option<AccountAddress> {

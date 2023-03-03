@@ -29,7 +29,8 @@ use sui_types::{
     gas::SuiGasStatus,
     id::UID,
     messages::{
-        Argument, Command, EntryArgumentErrorKind, ProgrammableMoveCall, ProgrammableTransaction,
+        Argument, Command, CommandArgumentError, EntryArgumentErrorKind, ProgrammableMoveCall,
+        ProgrammableTransaction,
     },
     SUI_FRAMEWORK_ADDRESS,
 };
@@ -93,13 +94,79 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
     command: Command,
 ) -> Result<(), ExecutionError> {
     let results = match command {
+        Command::MakeMoveVec(tag_opt, args) if args.is_empty() => {
+            let Some(tag) = tag_opt else {
+                invariant_violation!(
+                    "input checker ensures if args are empty, there is a type specified"
+                );
+            };
+            let ty = context
+                .session
+                .load_type(&tag)
+                .map_err(|e| context.convert_vm_error(e))?;
+            let abilities = context
+                .session
+                .get_type_abilities(&ty)
+                .map_err(|e| context.convert_vm_error(e))?;
+            let type_ = RawValueType::Loaded {
+                ty,
+                abilities,
+                used_in_non_entry_move_call: false,
+            };
+            // BCS layout for any empty vector should be the same
+            let bytes = bcs::to_bytes::<Vec<u8>>(&vec![]).unwrap();
+            vec![Value::Raw(type_, bytes)]
+        }
+        Command::MakeMoveVec(tag_opt, args) => {
+            let mut res = vec![];
+            leb128::write::unsigned(&mut res, args.len() as u64).unwrap();
+            let mut arg_iter = args.into_iter().enumerate();
+            let (mut used_in_non_entry_move_call, tag) = match tag_opt {
+                Some(tag) => (false, tag),
+                // If no tag specified, it _must_ be an object
+                None => {
+                    // empty args covered above
+                    let (idx, arg) = arg_iter.next().unwrap();
+                    let obj: ObjectValue =
+                        context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
+                    obj.write_bcs_bytes(&mut res);
+                    let tag = TypeTag::Struct(Box::new(obj.type_.clone()));
+                    (obj.used_in_non_entry_move_call, tag)
+                }
+            };
+            let elem_ty = context
+                .session
+                .load_type(&tag)
+                .map_err(|e| context.convert_vm_error(e))?;
+            for (idx, arg) in arg_iter {
+                let value: Value = context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
+                check_param_type(context, idx, &value, &elem_ty)?;
+                used_in_non_entry_move_call =
+                    used_in_non_entry_move_call || value.was_used_in_non_entry_move_call();
+                value.write_bcs_bytes(&mut res);
+            }
+            let ty = Type::Vector(Box::new(elem_ty));
+            let abilities = context
+                .session
+                .get_type_abilities(&ty)
+                .map_err(|e| context.convert_vm_error(e))?;
+            vec![Value::Raw(
+                RawValueType::Loaded {
+                    ty,
+                    abilities,
+                    used_in_non_entry_move_call,
+                },
+                res,
+            )]
+        }
         Command::TransferObjects(objs, addr_arg) => {
             let objs: Vec<ObjectValue> = objs
                 .into_iter()
                 .enumerate()
-                .map(|(idx, arg)| context.take_arg(CommandKind::TransferObjects, idx, arg))
+                .map(|(idx, arg)| context.by_value_arg(CommandKind::TransferObjects, idx, arg))
                 .collect::<Result<_, _>>()?;
-            let addr: SuiAddress = context.clone_arg(objs.len(), addr_arg)?;
+            let addr: SuiAddress =
+                context.by_value_arg(CommandKind::TransferObjects, objs.len(), addr_arg)?;
             for obj in objs {
                 obj.ensure_public_transfer_eligible()?;
                 context.transfer_object(obj, addr)?;
@@ -109,9 +176,14 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
         Command::SplitCoin(coin_arg, amount_arg) => {
             let mut obj: ObjectValue = context.borrow_arg_mut(0, coin_arg)?;
             let ObjectContents::Coin(coin) = &mut obj.contents else {
-                panic!("not a coin")
+                let e = ExecutionErrorKind::command_argument_error(
+                    CommandArgumentError::TypeMismatch,
+                    0,
+                );
+                let msg = format!("Expected a coin but got an object of type {}", obj.type_);
+                return Err(ExecutionError::new_with_source(e, msg));
             };
-            let amount: u64 = context.clone_arg(1, amount_arg)?;
+            let amount: u64 = context.by_value_arg(CommandKind::SplitCoin, 1, amount_arg)?;
             let new_coin_id = context.fresh_id()?;
             let new_coin = coin.split_coin(amount, UID::new(new_coin_id))?;
             let coin_type = obj.type_.clone();
@@ -121,22 +193,43 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
         Command::MergeCoins(target_arg, coin_args) => {
             let mut target: ObjectValue = context.borrow_arg_mut(0, target_arg)?;
             let ObjectContents::Coin(target_coin) = &mut target.contents else {
-                panic!("not a coin")
+                let e = ExecutionErrorKind::command_argument_error(
+                    CommandArgumentError::TypeMismatch,
+                    0,
+                );
+                let msg = format!("Expected a coin but got an object of type {}", target.type_);
+                return Err(ExecutionError::new_with_source(e, msg));
             };
             let coins: Vec<ObjectValue> = coin_args
                 .into_iter()
                 .enumerate()
-                .map(|(idx, arg)| context.take_arg(CommandKind::MergeCoins, idx + 1, arg))
+                .map(|(idx, arg)| context.by_value_arg(CommandKind::MergeCoins, idx + 1, arg))
                 .collect::<Result<_, _>>()?;
-            for coin in coins {
+            for (idx, coin) in coins.into_iter().enumerate() {
+                if target.type_ != coin.type_ {
+                    let e = ExecutionErrorKind::command_argument_error(
+                        CommandArgumentError::TypeMismatch,
+                        (idx + 1) as u16,
+                    );
+                    let msg = format!(
+                        "Expected a coin of type {} but got an object of type {}",
+                        target.type_, coin.type_
+                    );
+                    return Err(ExecutionError::new_with_source(e, msg));
+                }
                 let ObjectContents::Coin(Coin { id, balance }) = coin.contents else {
-                    panic!("not a coin")
+                    invariant_violation!(
+                        "Target coin was a coin, and we already checked for the same type. \
+                        This should be a coin"
+                    );
                 };
                 context.delete_id(*id.object_id())?;
                 let Some(new_value) = target_coin.balance.value().checked_add(balance.value())
-                    else {
-                        panic!("coin overflow")
-                    };
+                else {
+                    return Err(ExecutionError::from_kind(
+                        ExecutionErrorKind::TotalCoinBalanceOverflow,
+                    ));
+                };
                 target_coin.balance = Balance::new(new_value);
             }
             context.restore_arg(target_arg, Value::Object(target))?;
@@ -206,21 +299,16 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>>(
         by_mut_ref.len() == mutable_reference_outputs.len(),
         "lost mutable input"
     );
-    // write back mutable inputs
+    // write back mutable inputs. We also update if they were used in non entry Move calls
+    // though we do not care for immutable usages of objects or other values
     for ((i1, bytes, _layout), (i2, value_info)) in
         mutable_reference_outputs.into_iter().zip(by_mut_ref)
     {
         assert_invariant!(i1 == i2, "lost mutable input");
         let arg_idx = i1 as usize;
-        let value = make_value(value_info, bytes, /* return value */ false)?;
+        let used_in_non_entry_move_call = function_kind == FunctionKind::NonEntry;
+        let value = make_value(value_info, bytes, used_in_non_entry_move_call)?;
         context.restore_arg(arguments[arg_idx], value)?;
-    }
-    // taint arguments if this function is not an entry function (i.e. just some public function)
-    // &mut on primitive, non-object values will already have been tainted when updating the value
-    if function_kind == FunctionKind::NonEntry {
-        for arg in &arguments {
-            context.mark_used_in_non_entry_move_call(*arg);
-        }
     }
 
     context.take_user_events(module_id)?;
@@ -232,7 +320,10 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>>(
         .into_iter()
         .zip(return_values)
         .map(|(value_info, (bytes, _layout))| {
-            make_value(value_info, bytes, /* return value */ true)
+            // only non entry functions have return values
+            make_value(
+                value_info, bytes, /* used_in_non_entry_move_call */ true,
+            )
         })
         .collect()
 }
@@ -240,7 +331,7 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>>(
 fn make_value(
     value_info: ValueKind,
     bytes: Vec<u8>,
-    is_return_value: bool,
+    used_in_non_entry_move_call: bool,
 ) -> Result<Value, ExecutionError> {
     Ok(match value_info {
         ValueKind::Object {
@@ -249,10 +340,17 @@ fn make_value(
         } => Value::Object(ObjectValue::new(
             type_,
             has_public_transfer,
-            is_return_value,
+            used_in_non_entry_move_call,
             &bytes,
         )?),
-        ValueKind::Raw(ty, abilities) => Value::Raw(ValueType::Loaded { ty, abilities }, bytes),
+        ValueKind::Raw(ty, abilities) => Value::Raw(
+            RawValueType::Loaded {
+                ty,
+                abilities,
+                used_in_non_entry_move_call,
+            },
+            bytes,
+        ),
     })
 }
 
@@ -261,6 +359,10 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     module_bytes: Vec<Vec<u8>>,
 ) -> Result<(), ExecutionError> {
+    assert_invariant!(
+        !module_bytes.is_empty(),
+        "empty package is checked in transaction input checker"
+    );
     let modules = publish_and_verify_modules(context, module_bytes)?;
     let modules_to_init = modules
         .iter()
@@ -498,9 +600,12 @@ fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>>(
     signature
         .return_
         .iter()
-        .map(|return_type| {
+        .enumerate()
+        .map(|(idx, return_type)| {
             if let Type::Reference(_) | Type::MutableReference(_) = return_type {
-                panic!("references not supported")
+                return Err(ExecutionError::from_kind(
+                    ExecutionErrorKind::InvalidPublicFunctionReturnType { idx: idx as u16 },
+                ));
             };
             let abilities = context
                 .session
@@ -625,15 +730,7 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>>(
             }
             Type::Reference(inner) => (context.borrow_arg(idx, arg)?, inner),
             t => {
-                let abilities = context
-                    .session
-                    .get_type_abilities(t)
-                    .map_err(|e| context.convert_vm_error(e))?;
-                let value = if abilities.has_copy() {
-                    context.clone_arg(idx, arg)?
-                } else {
-                    context.take_arg(command_kind, idx, arg)?
-                };
+                let value = context.by_value_arg(command_kind, idx, arg)?;
                 (value, t)
             }
         };
@@ -642,13 +739,20 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>>(
             FunctionKind::PrivateEntry | FunctionKind::Init
         ) && value.was_used_in_non_entry_move_call()
         {
-            panic!("private entry taint failed")
+            return Err(command_argument_error(
+                CommandArgumentError::InvalidArgumentToPrivateEntryFunction,
+                idx,
+            ));
         }
         check_param_type(context, idx, &value, non_ref_param_ty)?;
-        let bytes = value.to_bcs_bytes();
+        let bytes = {
+            let mut v = vec![];
+            value.write_bcs_bytes(&mut v);
+            v
+        };
         // Any means this was just some bytes passed in as an argument (as opposed to being
         // generated from a Move function). Meaning we will need to run validation
-        if matches!(value, Value::Raw(ValueType::Any, _)) {
+        if matches!(value, Value::Raw(RawValueType::Any, _)) {
             if let Some((string_struct, string_struct_layout)) = is_string_arg(context, param_ty)? {
                 validate_primitive_arg_string(
                     &bytes,
@@ -673,17 +777,17 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>>(
     let obj_ty;
     let ty = match value {
         // TODO dev inspect
-        Value::Raw(ValueType::Any, _) => {
+        Value::Raw(RawValueType::Any, _) => {
             if !is_entry_primitive_type(context, param_ty)? {
                 let msg = format!(
                     "Non-primitive argument at index {}. If it is an object, it must be \
-                    populated by an object ID",
+                    populated by an object",
                     idx,
                 );
                 return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::entry_argument_error(
-                        idx as LocalIndex,
-                        EntryArgumentErrorKind::UnsupportedPureArg,
+                    ExecutionErrorKind::command_argument_error(
+                        CommandArgumentError::InvalidUsageOfPureArg,
+                        idx as u16,
                     ),
                     msg,
                 ));
@@ -691,7 +795,7 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>>(
                 return Ok(());
             }
         }
-        Value::Raw(ValueType::Loaded { ty, abilities }, _) => {
+        Value::Raw(RawValueType::Loaded { ty, abilities, .. }, _) => {
             assert_invariant!(!abilities.has_key(), "Raw value should never be an object");
             ty
         }
@@ -704,7 +808,10 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>>(
         }
     };
     if ty != param_ty {
-        panic!("type mismatch")
+        Err(command_argument_error(
+            CommandArgumentError::TypeMismatch,
+            idx,
+        ))
     } else {
         Ok(())
     }

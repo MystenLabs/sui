@@ -9,7 +9,7 @@ import { SummaryCard } from './SummaryCard';
 import { TransactionSummaryCard } from './TransactionSummaryCard';
 import { TransactionTypeCard } from './TransactionTypeCard';
 import Loading from '_components/loading';
-import UserApproveContainer from '_components/user-approve-container';
+import { UserApproveContainer } from '_components/user-approve-container';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import {
     loadTransactionResponseMetadata,
@@ -80,21 +80,26 @@ export function DappTxApprovalPage() {
     const txRequest = useAppSelector(txRequestSelector);
     const loading = txRequestsLoading;
     const dispatch = useAppDispatch();
+    const addressForTransaction = txRequest?.tx.account;
     const handleOnSubmit = useCallback(
         async (approved: boolean) => {
-            if (txRequest) {
+            if (txRequest && addressForTransaction) {
                 await dispatch(
                     respondToTransactionRequest({
                         approved,
                         txRequestID: txRequest.id,
+                        addressForTransaction,
                     })
                 );
             }
         },
-        [dispatch, txRequest]
+        [dispatch, txRequest, addressForTransaction]
     );
 
     useEffect(() => {
+        if (!addressForTransaction) {
+            return;
+        }
         if (txRequest?.tx?.type === 'move-call' && !txRequest.metadata) {
             dispatch(
                 loadTransactionResponseMetadata({
@@ -127,10 +132,11 @@ export function DappTxApprovalPage() {
                 deserializeTxn({
                     serializedTxn: txRequest?.tx.data,
                     id: txRequest.id,
+                    addressForTransaction,
                 })
             );
         }
-    }, [txRequest, dispatch]);
+    }, [txRequest, dispatch, addressForTransaction]);
 
     const metadata = useMemo(() => {
         if (
@@ -291,23 +297,22 @@ export function DappTxApprovalPage() {
         }
     }, [txRequest]);
 
-    const address = useAppSelector(({ account: { address } }) => address);
-
     return (
         <Loading loading={loadingState}>
-            {txRequest ? (
+            {txRequest && addressForTransaction ? (
                 <UserApproveContainer
                     origin={txRequest.origin}
                     originFavIcon={txRequest.originFavIcon}
                     approveTitle="Approve"
                     rejectTitle="Reject"
                     onSubmit={handleOnSubmit}
+                    address={addressForTransaction}
                 >
                     <section className={st.txInfo}>
-                        {txRequest?.tx && address && (
+                        {txRequest?.tx && (
                             <TransactionSummaryCard
                                 txRequest={txRequest}
-                                address={address}
+                                address={addressForTransaction}
                             />
                         )}
                         <Permissions metadata={metadata} />

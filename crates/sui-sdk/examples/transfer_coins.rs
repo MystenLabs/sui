@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
     types::{
@@ -24,9 +23,9 @@ async fn main() -> Result<(), anyhow::Error> {
         None => panic!("Cannot obtain home directory path"),
     };
 
-    let my_address = SuiAddress::from_str("0x47722589dc23d63e82862f7814070002ffaaa465")?;
-    let gas_object_id = ObjectID::from_str("0x273b2a83f1af1fda3ddbc02ad31367fcb146a814")?;
-    let recipient = SuiAddress::from_str("0xbd42a850e81ebb8f80283266951d4f4f5722e301")?;
+    let my_address = SuiAddress::random_for_testing_only();
+    let gas_object_id = ObjectID::random();
+    let recipient = SuiAddress::random_for_testing_only();
 
     // Create a sui transfer transaction
     let transfer_tx = sui

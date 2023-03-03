@@ -15,12 +15,12 @@ export function useGetTransferAmount({
     txn: SuiTransactionResponse;
     activeAddress: SuiAddress;
 }) {
-    const { effects } = txn;
-    const { coins } = getEventsSummary(effects, activeAddress);
+    const { effects, events } = txn;
+    const { coins } = getEventsSummary(events, activeAddress);
 
     const suiTransfer = useMemo(() => {
         const txdetails = getTransactions(txn)[0];
-        return getAmount(txdetails, effects)?.map(
+        return getAmount(txdetails, effects, events)?.map(
             ({ amount, coinType, recipientAddress }) => {
                 return {
                     amount: amount || 0,
@@ -29,7 +29,7 @@ export function useGetTransferAmount({
                 };
             }
         );
-    }, [txn, effects]);
+    }, [txn, effects, events]);
 
     const transferAmount = useMemo(() => {
         return suiTransfer?.length

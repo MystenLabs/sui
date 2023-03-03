@@ -13,8 +13,8 @@ pub struct VecMap<K, V> {
 /// Rust version of the Move sui::vec_map::Entry type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct Entry<K, V> {
-    key: K,
-    value: V,
+    pub key: K,
+    pub value: V,
 }
 
 /// Rust version of the Move sui::vec_set::VecSet type

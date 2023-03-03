@@ -77,6 +77,7 @@ export function WalletListSelect({
                                 selected={values.includes(address)}
                                 mode={mode}
                                 disabled={disabled}
+                                isNew={deriveNextAccount.data === address}
                             />
                         </li>
                     ))}
@@ -86,19 +87,21 @@ export function WalletListSelect({
                 mode === 'select' ? (
                     <div className="flex flex-row flex-nowrap self-stretch justify-between">
                         <div>
-                            <Link
-                                color="heroDark"
-                                weight="medium"
-                                text="Select all"
-                                disabled={disabled}
-                                onClick={() =>
-                                    onChange(
-                                        filteredAccounts.map(
-                                            ({ address }) => address
+                            {filteredAccounts.length > 1 ? (
+                                <Link
+                                    color="heroDark"
+                                    weight="medium"
+                                    text="Select all"
+                                    disabled={disabled}
+                                    onClick={() =>
+                                        onChange(
+                                            filteredAccounts.map(
+                                                ({ address }) => address
+                                            )
                                         )
-                                    )
-                                }
-                            />
+                                    }
+                                />
+                            ) : null}
                         </div>
                         <div>
                             <Link
@@ -107,7 +110,21 @@ export function WalletListSelect({
                                 text="New account"
                                 disabled={disabled}
                                 loading={deriveNextAccount.isLoading}
-                                onClick={() => deriveNextAccount.mutate()}
+                                onClick={async () => {
+                                    const newAccountAddress =
+                                        await deriveNextAccount.mutateAsync();
+                                    if (
+                                        !visibleValues ||
+                                        visibleValues.includes(
+                                            newAccountAddress
+                                        )
+                                    ) {
+                                        onChange([
+                                            ...values,
+                                            newAccountAddress,
+                                        ]);
+                                    }
+                                }}
                             />
                         </div>
                     </div>

@@ -8,15 +8,13 @@ import { roundFloat } from '_helpers';
 const APY_DECIMALS = 4;
 
 export function calculateAPY(validators: Validator, epoch: number) {
-    const { sui_balance, starting_epoch, delegation_token_supply } =
-        validators.delegation_staking_pool;
+    const { sui_balance, starting_epoch, pool_token_balance } =
+        validators.staking_pool;
 
     const num_epochs_participated = +epoch - +starting_epoch;
     const apy =
         Math.pow(
-            1 +
-                (+sui_balance - +delegation_token_supply.value) /
-                    +delegation_token_supply.value,
+            1 + (+sui_balance - +pool_token_balance) / +pool_token_balance,
             365 / num_epochs_participated
         ) - 1;
 

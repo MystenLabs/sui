@@ -89,7 +89,7 @@ impl NativeTransferTest {
         obj_to_transfer_id: ObjectID,
         method: &str,
     ) {
-        let events = &mut response.effects.events;
+        let events = &mut response.events.data;
         assert_eq!(
             events.len(),
             3,

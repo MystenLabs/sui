@@ -61,10 +61,10 @@ module games::randomness_based_lottery_tests {
         test_scenario::next_tx(scenario, user4);
         randomness_based_lottery::buy_ticket(&mut lottery, coin, test_scenario::ctx(scenario));
 
-        // User 2 closes the game.
-        test_scenario::next_tx(scenario, user2);
+        // User 3 closes the game.
+        test_scenario::next_tx(scenario, user3);
         randomness_based_lottery::close(&mut lottery, test_scenario::ctx(scenario));
-        test_scenario::next_tx(scenario, user2);
+        test_scenario::next_tx(scenario, user3);
         let r = test_scenario::take_shared<Randomness<randomness_based_lottery::RANDOMNESS_WITNESS>>(scenario);
         assert!(option::is_none(randomness::value(&r)), 0);
 
@@ -72,8 +72,8 @@ module games::randomness_based_lottery_tests {
         randomness_based_lottery::determine_winner(&mut lottery, &mut r, sig);
         assert!(option::is_some(randomness::value(&r)), 0);
 
-        // User 3 is the winner
-        test_scenario::next_tx(scenario, user3);
+        // User 2 is the winner
+        test_scenario::next_tx(scenario, user2);
         let ticket = test_scenario::take_from_sender<Ticket>(scenario);
         randomness_based_lottery::claim_prize(&mut lottery, ticket, test_scenario::ctx(scenario));
 

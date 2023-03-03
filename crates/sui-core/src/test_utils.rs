@@ -23,6 +23,7 @@ use sui_types::crypto::{
 use sui_types::crypto::{AuthorityKeyPair, Signer};
 use sui_types::intent::{Intent, IntentScope};
 use sui_types::messages::{TransactionData, VerifiedTransaction, DUMMY_GAS_PRICE};
+use sui_types::object::OBJECT_START_VERSION;
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
@@ -160,6 +161,7 @@ async fn init_genesis(
         .collect();
     let pkg = Object::new_package(
         modules,
+        OBJECT_START_VERSION,
         TransactionDigest::genesis(),
         ProtocolConfig::get_for_max_version().max_move_package_size(),
     )
@@ -182,8 +184,6 @@ async fn init_genesis(
             worker_key: worker_name,
             account_key: account_key_pair.public(),
             network_key: network_key_pair.public().clone(),
-            stake: 1,
-            delegation: 0,
             gas_price: 1,
             commission_rate: 0,
             network_address: sui_config::utils::new_tcp_network_address(),

@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import { BCS, fromB64, getSuiMoveConfig } from "./../src/index";
 
-describe("Move bcs", () => {
+describe("BCS: Primitives", () => {
   it("should de/ser primitives: u8", () => {
     const bcs = new BCS(getSuiMoveConfig());
 

@@ -9,12 +9,11 @@ $values: (
     c-var.$main-content-background: c-val.$white,
     c-var.$text-on-main-content-background: c-val.$gray-100,
     shadows.$main-content: 0 -5px 20px 5px rgb(111 188 240 / 11%),
-    c-var.$nav-background-color: #f0f9ffb0,
-    c-var.$nav-background-filter: blur(40px),
-    c-var.$nav-item-color: c-val.$gray-60,
-    c-var.$nav-item-highlighted-color: c-val.$cta-blue,
-    c-var.$nav-item-icon-highlighted-color: transparent,
-    c-var.$nav-item-icon-highlighted-gradient-color:
-        linear-gradient(135deg, #589aea 0%, #4c75a6 100%),
+    c-var.$nav-background-color: rgb(240 249 255 / 69%),
+    c-var.$nav-background-filter: blur(20px),
+    c-var.$nav-item-color: c-val.$sui-blue-steel-dark,
+    c-var.$nav-item-highlighted-color: c-val.$sui-steel-darker,
+    c-var.$nav-item-active-color: c-val.$hero-dark,
+    c-var.$nav-item-active-highlighted-color: c-val.$hero,
     c-var.$menu-btn-color: c-val.$gray-70,
 );

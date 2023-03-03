@@ -7,10 +7,7 @@ use std::{
     marker::PhantomData,
 };
 
-use move_binary_format::{
-    errors::{Location, VMError},
-    file_format::LocalIndex,
-};
+use move_binary_format::errors::{Location, VMError};
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use sui_framework::natives::object_runtime::{max_event_error, ObjectRuntime, RuntimeResults};
@@ -21,8 +18,8 @@ use sui_types::{
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
     gas::SuiGasStatus,
-    messages::{Argument, CallArg, EntryArgumentErrorKind, ObjectArg},
-    object::{MoveObject, Object, Owner},
+    messages::{Argument, CallArg, CommandArgumentError, ObjectArg},
+    object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
     storage::{ObjectChange, SingleTxContext, Storage, WriteKind},
 };
 
@@ -186,26 +183,37 @@ where
         Ok(())
     }
 
-    /// Take the argument value, setting its value to None, making it unavailable
+    /// Get the argument value. Cloning the value if it is copyable, and setting its value to None
+    /// if it is not (making it unavailable).
     /// Errors if out of bounds, if the argument is borrowed, if it is unavailable (already taken),
     /// or if it is an object that cannot be taken by value (shared or immutable)
-    pub fn take_arg<V: TryFromValue>(
+    pub fn by_value_arg<V: TryFromValue>(
         &mut self,
         command_kind: CommandKind<'_>,
         arg_idx: usize,
         arg: Argument,
     ) -> Result<V, ExecutionError> {
+        self.by_value_arg_(command_kind, arg)
+            .map_err(|e| command_argument_error(e, arg_idx))
+    }
+    fn by_value_arg_<V: TryFromValue>(
+        &mut self,
+        command_kind: CommandKind<'_>,
+        arg: Argument,
+    ) -> Result<V, CommandArgumentError> {
         if matches!(arg, Argument::GasCoin) && !matches!(command_kind, CommandKind::TransferObjects)
         {
-            panic!("cannot take gas")
+            return Err(CommandArgumentError::InvalidGasCoinUsage);
         }
         if self.arg_is_borrowed(&arg) {
-            panic!("taken borrowed value")
+            return Err(CommandArgumentError::InvalidUsageOfBorrowedValue);
         }
-        let (input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::Take)?;
-        if val_opt.is_none() {
-            panic!("taken value")
-        }
+        let (input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::ByValue)?;
+        let is_copyable = if let Some(val) = val_opt {
+            val.is_copyable()
+        } else {
+            return Err(CommandArgumentError::InvalidUsageOfTakenValue);
+        };
         if matches!(
             input_metadata_opt,
             Some(InputObjectMetadata {
@@ -213,20 +221,14 @@ where
                 ..
             })
         ) {
-            let error = format!(
-                "Immutable and shared objects cannot be passed by-value, \
-                                violation found in argument {}",
-                arg_idx
-            );
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::entry_argument_error(
-                    arg_idx as LocalIndex,
-                    EntryArgumentErrorKind::InvalidObjectByValue,
-                ),
-                error,
-            ));
+            return Err(CommandArgumentError::InvalidObjectByValue);
         }
-        V::try_from_value(val_opt.take().unwrap())
+        let val = if is_copyable {
+            val_opt.as_ref().unwrap().clone()
+        } else {
+            val_opt.take().unwrap()
+        };
+        V::try_from_value(val)
     }
 
     /// Mimic a mutable borrow by taking the argument value, setting its value to None,
@@ -239,13 +241,20 @@ where
         arg_idx: usize,
         arg: Argument,
     ) -> Result<V, ExecutionError> {
+        self.borrow_arg_mut_(arg)
+            .map_err(|e| command_argument_error(e, arg_idx))
+    }
+    fn borrow_arg_mut_<V: TryFromValue>(
+        &mut self,
+        arg: Argument,
+    ) -> Result<V, CommandArgumentError> {
         if self.arg_is_borrowed(&arg) {
-            panic!("mutable args can only be used once in a given command")
+            return Err(CommandArgumentError::InvalidUsageOfBorrowedValue);
         }
         self.borrowed.insert(arg, /* is_mut */ true);
         let (input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::BorrowMut)?;
         if val_opt.is_none() {
-            panic!("taken value")
+            return Err(CommandArgumentError::InvalidUsageOfTakenValue);
         }
         if matches!(
             input_metadata_opt,
@@ -254,38 +263,9 @@ where
                 ..
             })
         ) {
-            let error = format!(
-                "Argument {} is expected to be mutable, immutable object found",
-                arg_idx
-            );
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::entry_argument_error(
-                    arg_idx as LocalIndex,
-                    EntryArgumentErrorKind::InvalidObjectByMuteRef,
-                ),
-                error,
-            ));
+            return Err(CommandArgumentError::InvalidObjectByMutRef);
         }
         V::try_from_value(val_opt.take().unwrap())
-    }
-
-    /// Clone the argument value without setting its value to None
-    /// Errors if out of bounds, if the argument is mutably borrowed,
-    /// or if it is unavailable (already taken)
-    pub fn clone_arg<V: TryFromValue>(
-        &mut self,
-        _arg_idx: usize,
-        arg: Argument,
-    ) -> Result<V, ExecutionError> {
-        if self.arg_is_mut_borrowed(&arg) {
-            panic!("mutable args can only be used once in a given command")
-        }
-        let (_input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::Clone)?;
-        if val_opt.is_none() {
-            panic!("taken value")
-        }
-        let val = val_opt.as_ref().unwrap().clone();
-        V::try_from_value(val)
     }
 
     /// Mimics an immutable borrow by cloning the argument value without setting its value to None
@@ -293,16 +273,20 @@ where
     /// or if it is unavailable (already taken)
     pub fn borrow_arg<V: TryFromValue>(
         &mut self,
-        _arg_idx: usize,
+        arg_idx: usize,
         arg: Argument,
     ) -> Result<V, ExecutionError> {
+        self.borrow_arg_(arg)
+            .map_err(|e| command_argument_error(e, arg_idx))
+    }
+    fn borrow_arg_<V: TryFromValue>(&mut self, arg: Argument) -> Result<V, CommandArgumentError> {
         if self.arg_is_mut_borrowed(&arg) {
-            panic!("mutable args can only be used once in a given command")
+            return Err(CommandArgumentError::InvalidUsageOfBorrowedValue);
         }
         self.borrowed.insert(arg, /* is_mut */ false);
         let (_input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::BorrowImm)?;
         if val_opt.is_none() {
-            panic!("taken value")
+            return Err(CommandArgumentError::InvalidUsageOfTakenValue);
         }
         V::try_from_value(val_opt.as_ref().unwrap().clone())
     }
@@ -315,7 +299,9 @@ where
             The take+restore is an implementation detail of mutable references"
         );
         // restore is exclusively used for mut
-        let (_, value_opt) = self.borrow_mut(arg, UsageKind::BorrowMut)?;
+        let Ok((_, value_opt)) = self.borrow_mut_impl(arg, None) else {
+            invariant_violation!("Should be able to borrow argument to restore it")
+        };
         let old_value = value_opt.replace(value);
         assert_invariant!(
             old_value.is_none(),
@@ -323,21 +309,6 @@ where
             The take+restore is an implementation detail of mutable references"
         );
         Ok(())
-    }
-
-    /// Taint a value showing it has been used in a non-entry Move call. This is important as it
-    /// means the value no longer behaves as if it was used in a series of independent transactions.
-    /// Particularly this is important for private entry functions, which assume this independent
-    /// behavior.
-    pub fn mark_used_in_non_entry_move_call(&mut self, arg: Argument) {
-        if let Ok((_, Some(val))) = self.borrow_mut_impl(arg, /* do not update usage */ None) {
-            match val {
-                Value::Object(obj) => obj.used_in_non_entry_move_call = true,
-                // nothing to do for raw, either it is pure bytes from input and there is nothing
-                // to change, or it is a Move value and it is never not tainted
-                Value::Raw(_, _) => (),
-            }
-        }
     }
 
     /// Transfer the object to a new owner
@@ -358,6 +329,7 @@ where
         // wrap the modules in an object, write it to the store
         let package_object = Object::new_package(
             modules,
+            OBJECT_START_VERSION,
             self.tx_context.digest(),
             self.protocol_config.max_move_package_size(),
         )?;
@@ -415,14 +387,9 @@ where
             }
             input_object_metadata.insert(object_metadata.id, object_metadata);
         };
-        // gas can be unused
         let gas_id = gas.object_metadata.as_ref().unwrap().id;
         add_input_object_write(gas);
-        // all other inputs must be used at least once
         for input in inputs {
-            if input.inner.last_usage_kind.is_none() {
-                panic!("unused input")
-            }
             add_input_object_write(input)
         }
         // check for unused values
@@ -434,19 +401,33 @@ where
                 } = result_value;
                 match value {
                     None => (),
-                    Some(Value::Object(_)) => panic!("unused value without drop {i} {j}"),
-                    Some(Value::Raw(ValueType::Any, _)) => (),
-                    Some(Value::Raw(ValueType::Loaded { abilities, .. }, _)) => {
+                    Some(Value::Object(_)) => {
+                        return Err(ExecutionErrorKind::UnusedValueWithoutDrop {
+                            result_idx: i as u16,
+                            secondary_idx: j as u16,
+                        }
+                        .into())
+                    }
+                    Some(Value::Raw(RawValueType::Any, _)) => (),
+                    Some(Value::Raw(RawValueType::Loaded { abilities, .. }, _)) => {
                         // - nothing to check for drop
                         // - if it does not have drop, but has copy,
-                        //   the last usage must be a take/clone in order to "lie" and say that the
+                        //   the last usage must be by value in order to "lie" and say that the
                         //   last usage is actually a take instead of a clone
                         // - Otherwise, an error
                         if abilities.has_drop() {
                         } else if abilities.has_copy()
-                            && !matches!(last_usage_kind, Some(UsageKind::Take | UsageKind::Clone))
+                            && !matches!(last_usage_kind, Some(UsageKind::ByValue))
                         {
-                            panic!("unused value without drop {i} {j}")
+                            let msg = "The value has copy, but not drop. \
+                                Its last usage must be by-value so it can be taken.";
+                            return Err(ExecutionError::new_with_source(
+                                ExecutionErrorKind::UnusedValueWithoutDrop {
+                                    result_idx: i as u16,
+                                    secondary_idx: j as u16,
+                                },
+                                msg,
+                            ));
                         }
                     }
                 }
@@ -617,7 +598,7 @@ where
         &mut self,
         arg: Argument,
         usage: UsageKind,
-    ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), ExecutionError> {
+    ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), CommandArgumentError> {
         self.borrow_mut_impl(arg, Some(usage))
     }
 
@@ -627,30 +608,33 @@ where
         &mut self,
         arg: Argument,
         update_last_usage: Option<UsageKind>,
-    ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), ExecutionError> {
+    ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), CommandArgumentError> {
         let (metadata, result_value) = match arg {
             Argument::GasCoin => (self.gas.object_metadata.as_ref(), &mut self.gas.inner),
             Argument::Input(i) => {
                 let Some(input_value) = self.inputs.get_mut(i as usize) else {
-                    panic!("out of bounds")
+                    return Err(CommandArgumentError::IndexOutOfBounds { idx: i });
                 };
                 (input_value.object_metadata.as_ref(), &mut input_value.inner)
             }
             Argument::Result(i) => {
                 let Some(command_result) = self.results.get_mut(i as usize) else {
-                    panic!("out of bounds")
+                    return Err(CommandArgumentError::IndexOutOfBounds { idx: i });
                 };
                 if command_result.len() != 1 {
-                    panic!("expected a single result")
+                    return Err(CommandArgumentError::InvalidResultArity { result_idx: i });
                 }
                 (None, &mut command_result[0])
             }
             Argument::NestedResult(i, j) => {
                 let Some(command_result) = self.results.get_mut(i as usize) else {
-                    panic!("out of bounds")
+                    return Err(CommandArgumentError::IndexOutOfBounds { idx: i });
                 };
                 let Some(result_value) = command_result.get_mut(j as usize) else {
-                    panic!("out of bounds")
+                    return Err(CommandArgumentError::SecondaryIndexOutOfBounds {
+                        result_idx: i,
+                        secondary_idx: j,
+                    });
                 };
                 (None, result_value)
             }
@@ -707,7 +691,7 @@ fn load_call_arg<S: Storage>(
     call_arg: CallArg,
 ) -> Result<InputValue, ExecutionError> {
     Ok(match call_arg {
-        CallArg::Pure(bytes) => InputValue::new_raw(ValueType::Any, bytes),
+        CallArg::Pure(bytes) => InputValue::new_raw(RawValueType::Any, bytes),
         CallArg::Object(obj_arg) => load_object_arg(state_view, object_owner_map, obj_arg)?,
         CallArg::ObjVec(_) => {
             // protected by transaction input checker
@@ -781,7 +765,10 @@ fn refund_max_gas_budget(
         .balance
         .value()
         .checked_add(gas_status.max_gax_budget_in_balance()) else {
-            panic!("coin overflow")
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::TotalCoinBalanceOverflow,
+                "Gas coin too large after returning the max gas budget",
+            ));
         };
     coin.balance = Balance::new(new_balance);
     *bytes = coin.to_bcs_bytes();

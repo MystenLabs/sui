@@ -37,7 +37,7 @@ More entry functions might be added in the future depending on the use cases.
 <pre><code><b>use</b> <a href="">0x1::string</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
-<b>use</b> <a href="publisher.md#0x2_publisher">0x2::publisher</a>;
+<b>use</b> <a href="package.md#0x2_package">0x2::package</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="vec_map.md#0x2_vec_map">0x2::vec_map</a>;
@@ -213,7 +213,7 @@ Create an empty Display object. It can either be shared empty or filled
 with data right away via cheaper <code>set_owned</code> method.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_new">new</a>&lt;T: key&gt;(pub: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_new">new</a>&lt;T: key&gt;(pub: &<a href="package.md#0x2_package_Publisher">package::Publisher</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;
 </code></pre>
 
 
@@ -266,7 +266,7 @@ Container package.
 Create a new Display<T> object with a set of fields.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_new_with_fields">new_with_fields</a>&lt;T: key&gt;(pub: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>, fields: <a href="">vector</a>&lt;<a href="_String">string::String</a>&gt;, values: <a href="">vector</a>&lt;<a href="_String">string::String</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_new_with_fields">new_with_fields</a>&lt;T: key&gt;(pub: &<a href="package.md#0x2_package_Publisher">package::Publisher</a>, fields: <a href="">vector</a>&lt;<a href="_String">string::String</a>&gt;, values: <a href="">vector</a>&lt;<a href="_String">string::String</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;
 </code></pre>
 
 
@@ -303,7 +303,7 @@ Create a new Display<T> object with a set of fields.
 Create a new empty Display<T> object and keep it.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_create_and_keep">create_and_keep</a>&lt;T: key&gt;(pub: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_create_and_keep">create_and_keep</a>&lt;T: key&gt;(pub: &<a href="package.md#0x2_package_Publisher">package::Publisher</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -471,7 +471,7 @@ Remove the key from the Display.
 Authorization check; can be performed externally to implement protection rules for Display.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_is_authorized">is_authorized</a>&lt;T: key&gt;(pub: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_is_authorized">is_authorized</a>&lt;T: key&gt;(pub: &<a href="package.md#0x2_package_Publisher">package::Publisher</a>): bool
 </code></pre>
 
 
@@ -481,7 +481,7 @@ Authorization check; can be performed externally to implement protection rules f
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_is_authorized">is_authorized</a>&lt;T: key&gt;(pub: &Publisher): bool {
-    is_package&lt;T&gt;(pub)
+    from_package&lt;T&gt;(pub)
 }
 </code></pre>
 

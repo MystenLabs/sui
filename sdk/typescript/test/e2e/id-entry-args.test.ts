@@ -36,7 +36,9 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         module: 'test',
         function: 'test_id',
         typeArguments: [],
-        arguments: ['0xc2b5625c221264078310a084df0a3137956d20ee'],
+        arguments: [
+          '0x000000000000000000000000c2b5625c221264078310a084df0a3137956d20ee',
+        ],
         gasBudget: 2000,
       });
       expect(getExecutionStatusType(txn)).toEqual('success');

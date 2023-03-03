@@ -95,10 +95,16 @@ export class ContentScriptConnection extends Connection {
                     this.permissionReply(permission, msg.id);
                 }
             } else if (isExecuteTransactionRequest(payload)) {
-                const allowed = await Permissions.hasPermissions(this.origin, [
-                    'viewAccount',
-                    'suggestTransactions',
-                ]);
+                if (!payload.transaction.account) {
+                    // make sure we don't execute transactions that doesn't have a specified account
+                    throw new Error('Missing account');
+                }
+                const allowed = await Permissions.hasPermissions(
+                    this.origin,
+                    ['viewAccount', 'suggestTransactions'],
+                    null,
+                    payload.transaction.account
+                );
                 if (allowed) {
                     const result = await Transactions.executeOrSignTransaction(
                         { tx: payload.transaction },
@@ -117,10 +123,16 @@ export class ContentScriptConnection extends Connection {
                     this.sendNotAllowedError(msg.id);
                 }
             } else if (isSignTransactionRequest(payload)) {
-                const allowed = await Permissions.hasPermissions(this.origin, [
-                    'viewAccount',
-                    'suggestTransactions',
-                ]);
+                if (!payload.transaction.account) {
+                    // make sure we don't execute transactions that doesn't have a specified account
+                    throw new Error('Missing account');
+                }
+                const allowed = await Permissions.hasPermissions(
+                    this.origin,
+                    ['viewAccount', 'suggestTransactions'],
+                    null,
+                    payload.transaction.account
+                );
                 if (allowed) {
                     const result = await Transactions.executeOrSignTransaction(
                         { sign: payload.transaction },

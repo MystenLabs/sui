@@ -16,15 +16,15 @@ export function CoinActivitiesCard({ coinType }: { coinType: string }) {
     const {
         data: txns,
         isLoading,
-        isError,
         error,
+        isError,
     } = useGetTransactionsByAddress(activeAddress);
 
     // filter txns by coinType
     const txnByCoinType = useMemo(() => {
         if (!txns || !activeAddress) return null;
         return txns?.filter((txn) => {
-            const { coins } = getEventsSummary(txn.effects, activeAddress);
+            const { coins } = getEventsSummary(txn.events, activeAddress);
             // find txn with coinType from eventsSummary
             return !!coins.find(
                 ({ coinType: summaryCoinType }) => summaryCoinType === coinType
@@ -37,7 +37,7 @@ export function CoinActivitiesCard({ coinType }: { coinType: string }) {
             <div className="p-2">
                 <Alert mode="warning">
                     <div className="font-semibold">
-                        {error?.message || 'Something went wrong'}
+                        {(error as Error).message}
                     </div>
                 </Alert>
             </div>

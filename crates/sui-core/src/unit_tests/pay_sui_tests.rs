@@ -82,7 +82,6 @@ async fn test_pay_sui_failure_insufficient_gas_balance_one_input_coin() {
         UserInputError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 1000,
             gas_budget: 1200,
-            gas_price: 1
         }
     );
 }
@@ -109,7 +108,6 @@ async fn test_pay_sui_failure_insufficient_total_balance_one_input_coin() {
         UserInputError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 1000,
             gas_budget: 100 + 100 + 900,
-            gas_price: 1
         }
     );
 }
@@ -137,7 +135,6 @@ async fn test_pay_sui_failure_insufficient_gas_balance_multiple_input_coins() {
         UserInputError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 400,
             gas_budget: 801,
-            gas_price: 1
         }
     );
 }
@@ -164,7 +161,6 @@ async fn test_pay_sui_failure_insufficient_total_balance_multiple_input_coins() 
         UserInputError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 400 + 600,
             gas_budget: 400 + 400 + 201,
-            gas_price: 1
         }
     );
 }
@@ -328,7 +324,6 @@ async fn test_pay_all_sui_failure_insufficient_gas_one_input_coin() {
         UserInputError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 1000,
             gas_budget: 2000,
-            gas_price: 1
         }
     );
 }
@@ -346,7 +341,6 @@ async fn test_pay_all_sui_failure_insufficient_gas_budget_multiple_input_coins()
         UserInputError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 1000,
             gas_budget: 2500,
-            gas_price: 1
         }
     );
 }

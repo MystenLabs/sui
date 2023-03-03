@@ -9,9 +9,8 @@ import { useBackgroundClient } from './useBackgroundClient';
 export function useDeriveNextAccountMutation() {
     const backgroundClient = useBackgroundClient();
     return useMutation({
-        mutationFn: async () => {
-            await backgroundClient.deriveNextAccount();
-            return null;
+        mutationFn: () => {
+            return backgroundClient.deriveNextAccount();
         },
         onSuccess: () => {
             toast.success('New account created');

@@ -15,6 +15,7 @@ use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
+    messages::CommandArgumentError,
     object::{Data, MoveObject, Object, Owner},
     storage::{ChildObjectResolver, ObjectChange, ParentSync, Storage},
 };
@@ -67,14 +68,13 @@ pub struct ResultValue {
 pub enum UsageKind {
     BorrowImm,
     BorrowMut,
-    Take,
-    Clone,
+    ByValue,
 }
 
 #[derive(Clone)]
 pub enum Value {
     Object(ObjectValue),
-    Raw(ValueType, Vec<u8>),
+    Raw(RawValueType, Vec<u8>),
 }
 
 #[derive(Clone)]
@@ -95,9 +95,13 @@ pub enum ObjectContents {
 }
 
 #[derive(Clone)]
-pub enum ValueType {
+pub enum RawValueType {
     Any,
-    Loaded { ty: Type, abilities: AbilitySet },
+    Loaded {
+        ty: Type,
+        abilities: AbilitySet,
+        used_in_non_entry_move_call: bool,
+    },
 }
 
 #[derive(Clone, Copy)]
@@ -107,6 +111,7 @@ pub enum CommandKind<'a> {
         module: &'a IdentStr,
         function: &'a IdentStr,
     },
+    MakeMoveVec,
     TransferObjects,
     SplitCoin,
     MergeCoins,
@@ -121,7 +126,7 @@ impl InputValue {
         }
     }
 
-    pub fn new_raw(ty: ValueType, value: Vec<u8>) -> Self {
+    pub fn new_raw(ty: RawValueType, value: Vec<u8>) -> Self {
         InputValue {
             object_metadata: None,
             inner: ResultValue::new(Value::Raw(ty, value)),
@@ -142,22 +147,15 @@ impl Value {
     pub fn is_copyable(&self) -> bool {
         match self {
             Value::Object(_) => false,
-            Value::Raw(ValueType::Any, _) => true,
-            Value::Raw(ValueType::Loaded { abilities, .. }, _) => abilities.has_copy(),
+            Value::Raw(RawValueType::Any, _) => true,
+            Value::Raw(RawValueType::Loaded { abilities, .. }, _) => abilities.has_copy(),
         }
     }
 
-    pub fn to_bcs_bytes(&self) -> Vec<u8> {
+    pub fn write_bcs_bytes(&self, buf: &mut Vec<u8>) {
         match self {
-            Value::Object(ObjectValue {
-                contents: ObjectContents::Raw(bytes),
-                ..
-            })
-            | Value::Raw(_, bytes) => bytes.clone(),
-            Value::Object(ObjectValue {
-                contents: ObjectContents::Coin(coin),
-                ..
-            }) => coin.to_bcs_bytes(),
+            Value::Object(obj_value) => obj_value.write_bcs_bytes(buf),
+            Value::Raw(_, bytes) => buf.extend(bytes),
         }
     }
 
@@ -166,8 +164,14 @@ impl Value {
             Value::Object(obj) => obj.used_in_non_entry_move_call,
             // Any is only used for Pure inputs, and if it was used by &mut it would have switched
             // to Loaded
-            Value::Raw(ValueType::Any, _) => false,
-            Value::Raw(ValueType::Loaded { .. }, _) => true,
+            Value::Raw(RawValueType::Any, _) => false,
+            Value::Raw(
+                RawValueType::Loaded {
+                    used_in_non_entry_move_call,
+                    ..
+                },
+                _,
+            ) => *used_in_non_entry_move_call,
         }
     }
 }
@@ -228,40 +232,44 @@ impl ObjectValue {
         }
         Ok(())
     }
+
+    pub fn write_bcs_bytes(&self, buf: &mut Vec<u8>) {
+        match &self.contents {
+            ObjectContents::Raw(bytes) => buf.extend(bytes),
+            ObjectContents::Coin(coin) => buf.extend(coin.to_bcs_bytes()),
+        }
+    }
 }
 
-impl ObjectContents {}
-impl ValueType {}
-
 pub trait TryFromValue: Sized {
-    fn try_from_value(value: Value) -> Result<Self, ExecutionError>;
+    fn try_from_value(value: Value) -> Result<Self, CommandArgumentError>;
 }
 
 impl TryFromValue for Value {
-    fn try_from_value(value: Value) -> Result<Self, ExecutionError> {
+    fn try_from_value(value: Value) -> Result<Self, CommandArgumentError> {
         Ok(value)
     }
 }
 
 impl TryFromValue for ObjectValue {
-    fn try_from_value(value: Value) -> Result<Self, ExecutionError> {
+    fn try_from_value(value: Value) -> Result<Self, CommandArgumentError> {
         match value {
             Value::Object(o) => Ok(o),
-            Value::Raw(_, _) => {
-                todo!("support this for dev inspect")
-            }
+            // TODO support Any for dev inspect
+            Value::Raw(RawValueType::Any, _) => Err(CommandArgumentError::TypeMismatch),
+            Value::Raw(RawValueType::Loaded { .. }, _) => Err(CommandArgumentError::TypeMismatch),
         }
     }
 }
 
 impl TryFromValue for SuiAddress {
-    fn try_from_value(value: Value) -> Result<Self, ExecutionError> {
+    fn try_from_value(value: Value) -> Result<Self, CommandArgumentError> {
         try_from_value_prim(&value, Type::Address)
     }
 }
 
 impl TryFromValue for u64 {
-    fn try_from_value(value: Value) -> Result<Self, ExecutionError> {
+    fn try_from_value(value: Value) -> Result<Self, CommandArgumentError> {
         try_from_value_prim(&value, Type::U64)
     }
 }
@@ -269,25 +277,24 @@ impl TryFromValue for u64 {
 fn try_from_value_prim<'a, T: Deserialize<'a>>(
     value: &'a Value,
     expected_ty: Type,
-) -> Result<T, ExecutionError> {
+) -> Result<T, CommandArgumentError> {
     match value {
-        Value::Object(_obj) => panic!("expected raw"),
-        Value::Raw(ValueType::Any, bytes) => {
-            let Ok(val) = bcs::from_bytes(bytes) else {
-                panic!("invalid pure arg")
-            };
-            Ok(val)
+        Value::Object(_) => Err(CommandArgumentError::TypeMismatch),
+        Value::Raw(RawValueType::Any, bytes) => {
+            bcs::from_bytes(bytes).map_err(|_| CommandArgumentError::InvalidBCSBytes)
         }
-        Value::Raw(ValueType::Loaded { ty, .. }, bytes) => {
+        Value::Raw(RawValueType::Loaded { ty, .. }, bytes) => {
             if ty == &expected_ty {
-                panic!("type mismatch")
+                return Err(CommandArgumentError::TypeMismatch);
             }
-            let res = bcs::from_bytes(bytes);
-            assert_invariant!(
-                res.is_ok(),
-                "Move values should be able to deserialize into their type"
-            );
-            Ok(res.unwrap())
+            bcs::from_bytes(bytes).map_err(|_| CommandArgumentError::InvalidBCSBytes)
         }
     }
+}
+
+pub fn command_argument_error(e: CommandArgumentError, arg_idx: usize) -> ExecutionError {
+    ExecutionError::from_kind(ExecutionErrorKind::command_argument_error(
+        e,
+        arg_idx as u16,
+    ))
 }

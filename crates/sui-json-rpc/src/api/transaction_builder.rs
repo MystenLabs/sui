@@ -240,6 +240,7 @@ pub trait TransactionBuilder {
         &self,
         /// the transaction signer's Sui address
         signer: SuiAddress,
+        // TODO: remove this parameter
         /// Delegation object ID
         delegation: ObjectID,
         /// StakedSui object ID

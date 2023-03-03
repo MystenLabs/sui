@@ -787,7 +787,7 @@ fn test_sponsored_transaction_validity_check() {
         sender,
         gas_data.clone(),
     )
-    .validity_check()
+    .validity_check(&ProtocolConfig::get_for_max_version())
     .unwrap();
 
     TransactionData::new_with_gas_data(
@@ -803,7 +803,7 @@ fn test_sponsored_transaction_validity_check() {
         sender,
         gas_data.clone(),
     )
-    .validity_check()
+    .validity_check(&ProtocolConfig::get_for_max_version())
     .unwrap();
 
     TransactionData::new_with_gas_data(
@@ -813,7 +813,7 @@ fn test_sponsored_transaction_validity_check() {
         sender,
         gas_data.clone(),
     )
-    .validity_check()
+    .validity_check(&ProtocolConfig::get_for_max_version())
     .unwrap();
 
     TransactionData::new_with_gas_data(
@@ -825,7 +825,7 @@ fn test_sponsored_transaction_validity_check() {
         sender,
         gas_data.clone(),
     )
-    .validity_check()
+    .validity_check(&ProtocolConfig::get_for_max_version())
     .unwrap();
 
     // TransferSui cannot be sponsored
@@ -838,7 +838,7 @@ fn test_sponsored_transaction_validity_check() {
             sender,
             gas_data.clone(),
         )
-        .validity_check()
+        .validity_check(&ProtocolConfig::get_for_max_version())
         .unwrap_err(),
         UserInputError::UnsupportedSponsoredTransactionKind
     );
@@ -854,7 +854,7 @@ fn test_sponsored_transaction_validity_check() {
             sender,
             gas_data.clone(),
         )
-        .validity_check()
+        .validity_check(&ProtocolConfig::get_for_max_version())
         .unwrap_err(),
         UserInputError::UnsupportedSponsoredTransactionKind
     );
@@ -869,7 +869,7 @@ fn test_sponsored_transaction_validity_check() {
             sender,
             gas_data.clone(),
         )
-        .validity_check()
+        .validity_check(&ProtocolConfig::get_for_max_version())
         .unwrap_err(),
         UserInputError::UnsupportedSponsoredTransactionKind
     );
@@ -885,7 +885,7 @@ fn test_sponsored_transaction_validity_check() {
             sender,
             gas_data,
         )
-        .validity_check()
+        .validity_check(&ProtocolConfig::get_for_max_version())
         .unwrap_err(),
         UserInputError::UnsupportedSponsoredTransactionKind
     );
@@ -1023,7 +1023,7 @@ fn verify_sender_signature_correctly_with_flag() {
 
 #[test]
 fn test_change_epoch_transaction() {
-    let tx = VerifiedTransaction::new_change_epoch(1, ProtocolVersion::MIN, 0, 0, 0, 0);
+    let tx = VerifiedTransaction::new_change_epoch(1, ProtocolVersion::MIN, 0, 0, 0, 0, vec![]);
     assert!(tx.contains_shared_object());
     assert_eq!(
         tx.shared_input_objects().next().unwrap(),

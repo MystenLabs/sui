@@ -102,8 +102,8 @@
 				]
 			},
 			{
-				"label": "Sui Exchange Integration FAQ",
-				"fileName": "learn/exchange-integration-faq"
+				"label": "Sui Exchange Integration Guide",
+				"fileName": "learn/exchange-integration-guide"
 			}
 		],
 		"build": [{

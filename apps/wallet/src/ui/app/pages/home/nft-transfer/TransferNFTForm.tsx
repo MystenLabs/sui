@@ -8,11 +8,11 @@ import { useEffect, useRef, memo } from 'react';
 
 import { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
-import AddressInput from '_components/address-input';
+import { AddressInput } from '_components/address-input';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useIndividualCoinMaxBalance } from '_hooks';
+import { useGetCoinBalance, useAppSelector } from '_hooks';
 import { useGasBudgetInMist } from '_src/ui/app/hooks/useGasBudgetInMist';
 
 import type { FormValues } from '.';
@@ -40,7 +40,14 @@ function TransferNFTForm({
     useEffect(() => {
         onClearRef.current();
     }, [to]);
-    const maxGasCoinBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
+
+    const accountAddress = useAppSelector(({ account }) => account.address);
+    const { data: coinBalance, isLoading: loadingBalances } = useGetCoinBalance(
+        SUI_TYPE_ARG,
+        accountAddress
+    );
+
+    const maxGasCoinBalance = coinBalance?.totalBalance || BigInt(0);
     const { gasBudget: gasBudgetInMist } = useGasBudgetInMist(gasBudget);
     const isInsufficientGas = maxGasCoinBalance < BigInt(gasBudgetInMist || 0);
     return (
@@ -88,7 +95,8 @@ function TransferNFTForm({
                                 !isValid ||
                                 isSubmitting ||
                                 isInsufficientGas ||
-                                !gasBudgetInMist
+                                !gasBudgetInMist ||
+                                loadingBalances
                             }
                             className={cl(st.action, 'btn', st.sendNftBtn)}
                         >

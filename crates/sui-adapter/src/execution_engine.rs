@@ -4,10 +4,11 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use crate::execution_mode::{self, ExecutionMode};
+use move_binary_format::CompiledModule;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_vm_runtime::move_vm::MoveVM;
 use sui_types::base_types::SequenceNumber;
-use tracing::{debug, instrument};
+use tracing::{debug, info, instrument};
 
 use crate::{adapter, programmable_transactions};
 use sui_protocol_config::ProtocolConfig;
@@ -46,8 +47,8 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_types::{
-    MOVE_STDLIB_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    is_system_package, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+    SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 
 use sui_types::temporary_store::TemporaryStore;
@@ -126,7 +127,7 @@ fn charge_gas_for_object_read<S>(
         .objects()
         .iter()
         // don't charge for loading Sui Framework or Move stdlib
-        .filter(|(id, _)| *id != &SUI_FRAMEWORK_OBJECT_ID && *id != &MOVE_STDLIB_OBJECT_ID)
+        .filter(|(id, _)| !is_system_package(**id))
         .map(|(_, obj)| obj.object_size_for_gas_metering())
         .sum();
     gas_status.charge_storage_read(total_size)
@@ -386,7 +387,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         vec![
             system_object_arg.clone(),
             CallArg::Pure(bcs::to_bytes(&change_epoch.epoch).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&change_epoch.protocol_version).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.protocol_version.as_u64()).unwrap()),
             CallArg::Pure(bcs::to_bytes(&change_epoch.storage_charge).unwrap()),
             CallArg::Pure(bcs::to_bytes(&change_epoch.computation_charge).unwrap()),
             CallArg::Pure(bcs::to_bytes(&change_epoch.storage_rebate).unwrap()),
@@ -398,6 +399,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         tx_ctx,
         protocol_config,
     );
+
     if result.is_err() {
         tracing::error!(
             "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. System state object: {:?}. Tx data: {:?}",
@@ -423,6 +425,26 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             protocol_config,
         )?;
     }
+
+    for (version, modules) in change_epoch.system_packages.into_iter() {
+        let modules = modules
+            .into_iter()
+            .map(|m| CompiledModule::deserialize(&m).unwrap())
+            .collect();
+
+        let new_package = Object::new_system_package(modules, version, tx_ctx.digest())?;
+
+        info!(
+            "upgraded system object {:?}",
+            new_package.compute_object_reference()
+        );
+        temporary_store.write_object(
+            &SingleTxContext::sui_system(),
+            new_package,
+            WriteKind::Mutate,
+        );
+    }
+
     Ok(())
 }
 
@@ -713,7 +735,7 @@ fn pay_all_sui<S>(
     recipient: SuiAddress,
 ) -> Result<(), ExecutionError> {
     let (mut coins, _coin_type) = check_coins(coin_objects, Some(GasCoin::type_()))?;
-    // overflow is not possible b/c total SUI supply is 10B SUI or 10^19 MISTs, and 10^19 < u64::MAX
+    // overflow is not possible b/c total SUI supply is 10B SUI or 10^19 MIST, and 10^19 < u64::MAX
     let total_coins = coins.iter().fold(0, |acc, c| acc + c.value());
 
     let mut merged_coin = coins.swap_remove(0);
@@ -1000,7 +1022,7 @@ fn test_pay_success_without_delete() {
     let mut ctx = TxContext::with_sender_for_testing_only(&sender);
 
     assert!(pay(&mut store, coin_objects, recipients, amounts, &mut ctx).is_ok());
-    let (store, _events) = store.into_inner();
+    let store = store.into_inner();
 
     assert!(store.deleted.is_empty());
     assert_eq!(store.created().len(), 2);
@@ -1037,7 +1059,7 @@ fn test_pay_success_delete_one() {
     let mut ctx = TxContext::random_for_testing_only();
 
     assert!(pay(&mut store, coin_objects, recipients, amounts, &mut ctx).is_ok());
-    let (store, _events) = store.into_inner();
+    let store = store.into_inner();
 
     assert_eq!(store.deleted.len(), 1);
     assert!(store.deleted.contains_key(&input_coin_id1));
@@ -1073,7 +1095,7 @@ fn test_pay_success_delete_all() {
     let mut ctx = TxContext::with_sender_for_testing_only(&sender);
 
     assert!(pay(&mut store, coin_objects, recipients, amounts, &mut ctx).is_ok());
-    let (store, _events) = store.into_inner();
+    let store = store.into_inner();
 
     assert_eq!(store.deleted.len(), 2);
     assert!(store.deleted.contains_key(&input_coin_id1));
@@ -1108,7 +1130,7 @@ fn test_pay_sui_success_one_input_coin() {
     );
     let mut ctx = TxContext::with_sender_for_testing_only(&sender);
     assert!(pay_sui(&mut store, &mut coin_objects, recipients, amounts, &mut ctx).is_ok());
-    let (store, _events) = store.into_inner();
+    let store = store.into_inner();
 
     assert!(store.deleted.is_empty());
     assert_eq!(store.written.len(), 3);
@@ -1147,7 +1169,7 @@ fn test_pay_sui_success_multiple_input_coins() {
     );
     let mut ctx = TxContext::with_sender_for_testing_only(&sender);
     assert!(pay_sui(&mut store, &mut coin_objects, recipients, amounts, &mut ctx).is_ok());
-    let (store, _events) = store.into_inner();
+    let store = store.into_inner();
 
     assert_eq!(store.deleted.len(), 2);
     assert!(store.deleted.contains_key(&input_coin_id2));
@@ -1186,7 +1208,7 @@ fn test_pay_all_sui_success_multiple_input_coins() {
         input_objects_from_objects(coin_objects.clone()),
     );
     assert!(pay_all_sui(sender, &mut store, &mut coin_objects, recipient).is_ok());
-    let (store, _events) = store.into_inner();
+    let store = store.into_inner();
 
     assert_eq!(store.deleted.len(), 2);
     assert!(store.deleted.contains_key(&input_coin_id2));

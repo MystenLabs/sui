@@ -34,7 +34,7 @@ use typed_store::rocks::{DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError}
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_notify_read::NotifyRead;
-use crate::authority::{CertTxGuard, MAX_TX_RECOVERY_RETRY};
+use crate::authority::{AuthorityStore, CertTxGuard, ResolverWrapper, MAX_TX_RECOVERY_RETRY};
 use crate::checkpoints::{
     CheckpointCommitHeight, CheckpointServiceNotify, EpochStats, PendingCheckpoint,
     PendingCheckpointInfo,
@@ -45,12 +45,17 @@ use crate::consensus_handler::{
 };
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::reconfiguration::ReconfigState;
+use crate::module_cache_metrics::ResolverMetrics;
 use crate::notify_once::NotifyOnce;
 use crate::stake_aggregator::StakeAggregator;
 use crate::transaction_manager::TransactionManager;
+use move_bytecode_utils::module_cache::SyncModuleCache;
+use move_vm_runtime::move_vm::MoveVM;
+use move_vm_runtime::native_functions::NativeFunctionTable;
 use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;
+use sui_adapter::adapter;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::TrustedEnvelope;
@@ -61,6 +66,7 @@ use sui_types::messages_checkpoint::{
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::temporary_store::InnerTemporaryStore;
+use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 use tokio::time::Instant;
 use typed_store::{retry_transaction_forever, Map};
 use typed_store_derive::DBMapUtils;
@@ -78,6 +84,16 @@ pub struct CertLockGuard(LockGuard);
 pub struct ExecutionIndicesWithHash {
     pub index: ExecutionIndices,
     pub hash: u64,
+}
+
+// Data related to VM and Move execution and type layout
+pub struct ExecutionComponents {
+    /// Move native functions that are available to invoke
+    pub(crate) native_functions: NativeFunctionTable,
+    pub(crate) move_vm: Arc<MoveVM>,
+    // TODO: use strategies (e.g. LRU?) to constraint memory usage
+    pub(crate) module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
+    metrics: Arc<ResolverMetrics>,
 }
 
 pub struct AuthorityPerEpochStore {
@@ -129,6 +145,9 @@ pub struct AuthorityPerEpochStore {
     epoch_close_time: RwLock<Option<Instant>>,
     metrics: Arc<EpochMetrics>,
     epoch_start_configuration: Arc<EpochStartConfiguration>,
+
+    /// Execution state that has to restart at each epoch change
+    execution_component: ExecutionComponents,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -316,6 +335,8 @@ impl AuthorityPerEpochStore {
         db_options: Option<Options>,
         metrics: Arc<EpochMetrics>,
         epoch_start_configuration: Option<EpochStartConfiguration>,
+        store: Arc<AuthorityStore>,
+        cache_metrics: Arc<ResolverMetrics>,
     ) -> Arc<Self> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -379,9 +400,11 @@ impl AuthorityPerEpochStore {
             .set(committee.weight(&name) as i64);
         metrics.epoch_total_votes.set(committee.total_votes as i64);
         let protocol_version = committee.protocol_version;
+        let protocol_config = ProtocolConfig::get_for_version(protocol_version);
+        let execution_component = ExecutionComponents::new(&protocol_config, store, cache_metrics);
         Arc::new(Self {
             committee,
-            protocol_config: ProtocolConfig::get_for_version(protocol_version),
+            protocol_config,
             tables,
             parent_path: parent_path.to_path_buf(),
             db_options,
@@ -397,6 +420,7 @@ impl AuthorityPerEpochStore {
             epoch_close_time: Default::default(),
             metrics,
             epoch_start_configuration,
+            execution_component,
         })
     }
 
@@ -415,6 +439,7 @@ impl AuthorityPerEpochStore {
         name: AuthorityName,
         new_committee: Committee,
         epoch_start_configuration: EpochStartConfiguration,
+        store: Arc<AuthorityStore>,
     ) -> Arc<Self> {
         assert_eq!(self.epoch() + 1, new_committee.epoch);
         self.record_reconfig_halt_duration_metric();
@@ -426,6 +451,8 @@ impl AuthorityPerEpochStore {
             self.db_options.clone(),
             self.metrics.clone(),
             Some(epoch_start_configuration),
+            store,
+            self.execution_component.metrics(),
         )
     }
 
@@ -473,6 +500,18 @@ impl AuthorityPerEpochStore {
 
     pub fn reference_gas_price(&self) -> u64 {
         self.system_state_object().reference_gas_price
+    }
+
+    pub fn module_cache(&self) -> &Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>> {
+        &self.execution_component.module_cache
+    }
+
+    pub fn move_vm(&self) -> &Arc<MoveVM> {
+        &self.execution_component.move_vm
+    }
+
+    pub fn native_functions(&self) -> &NativeFunctionTable {
+        &self.execution_component.native_functions
     }
 
     pub async fn acquire_tx_guard(
@@ -1960,5 +1999,34 @@ impl EpochStartConfiguration {
 
     pub fn epoch_digest(&self) -> CheckpointDigest {
         self.epoch_digest
+    }
+}
+
+impl ExecutionComponents {
+    fn new(
+        protocol_config: &ProtocolConfig,
+        store: Arc<AuthorityStore>,
+        metrics: Arc<ResolverMetrics>,
+    ) -> Self {
+        let native_functions =
+            sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+        let move_vm = Arc::new(
+            adapter::new_move_vm(native_functions.clone(), protocol_config)
+                .expect("We defined natives to not fail here"),
+        );
+        let module_cache = Arc::new(SyncModuleCache::new(ResolverWrapper::new(
+            store,
+            metrics.clone(),
+        )));
+        Self {
+            native_functions,
+            move_vm,
+            module_cache,
+            metrics,
+        }
+    }
+
+    pub(crate) fn metrics(&self) -> Arc<ResolverMetrics> {
+        self.metrics.clone()
     }
 }

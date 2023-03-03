@@ -16,7 +16,7 @@ pub mod epoch;
 pub mod event_handler;
 mod execution_driver;
 pub mod metrics;
-mod module_cache_gauge;
+pub mod module_cache_metrics;
 pub mod narwhal_manager;
 mod notify_once;
 pub mod quorum_driver;

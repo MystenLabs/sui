@@ -1,6 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use super::{base_types::*, committee::Committee, error::*, event::Event};
 use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
@@ -8,6 +9,7 @@ use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
     Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignatureInner, ToFromBytes,
 };
+use crate::digests::TransactionEventsDigest;
 use crate::gas::GasCostSummary;
 use crate::intent::{Intent, IntentMessage, IntentScope};
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
@@ -45,8 +47,9 @@ use std::{
     iter,
 };
 use strum::IntoStaticStr;
-use sui_protocol_config::SupportedProtocolVersions;
+use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use tap::Pipe;
+use thiserror::Error;
 use tracing::debug;
 
 pub const DUMMY_GAS_PRICE: u64 = 1;
@@ -86,6 +89,47 @@ pub struct TransferObject {
     pub object_ref: ObjectRef,
 }
 
+fn type_tag_validity_check(
+    tag: &TypeTag,
+    config: &ProtocolConfig,
+    depth: u32,
+    starting_count: usize,
+) -> UserInputResult<usize> {
+    fp_ensure!(
+        depth < config.max_type_argument_depth(),
+        UserInputError::SizeLimitExceeded {
+            limit: "maximum type argument depth in a call transaction".to_string(),
+            value: config.max_type_argument_depth().to_string()
+        }
+    );
+    let count = 1 + match tag {
+        TypeTag::Bool
+        | TypeTag::U8
+        | TypeTag::U64
+        | TypeTag::U128
+        | TypeTag::Address
+        | TypeTag::Signer
+        | TypeTag::U16
+        | TypeTag::U32
+        | TypeTag::U256 => 0,
+        TypeTag::Vector(t) => {
+            type_tag_validity_check(t.as_ref(), config, depth + 1, starting_count + 1)?
+        }
+        TypeTag::Struct(s) => s.type_params.iter().try_fold(0, |accum, t| {
+            let count = accum + type_tag_validity_check(t, config, depth + 1, starting_count + 1)?;
+            fp_ensure!(
+                count + starting_count < config.max_type_arguments() as usize,
+                UserInputError::SizeLimitExceeded {
+                    limit: "maximum type arguments in a call transaction".to_string(),
+                    value: config.max_type_arguments().to_string()
+                }
+            );
+            Ok(count)
+        })?,
+    };
+    Ok(count)
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MoveCall {
     pub package: ObjectID,
@@ -95,11 +139,57 @@ pub struct MoveCall {
     pub arguments: Vec<CallArg>,
 }
 
+impl MoveCall {
+    pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
+        let is_blocked = BLOCKED_MOVE_FUNCTIONS.contains(&(
+            self.package,
+            self.module.as_str(),
+            self.function.as_str(),
+        ));
+        fp_ensure!(!is_blocked, UserInputError::BlockedMoveFunction);
+        let mut type_arguments_count = 0;
+        for tag in self.type_arguments.iter() {
+            type_arguments_count += type_tag_validity_check(tag, config, 1, type_arguments_count)?;
+            fp_ensure!(
+                type_arguments_count < config.max_type_arguments() as usize,
+                UserInputError::SizeLimitExceeded {
+                    limit: "maximum type arguments in a call transaction".to_string(),
+                    value: config.max_type_arguments().to_string()
+                }
+            );
+        }
+        fp_ensure!(
+            self.arguments.len() < config.max_arguments() as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum arguments in a move call".to_string(),
+                value: config.max_arguments().to_string()
+            }
+        );
+        for a in self.arguments.iter() {
+            a.validity_check(config)?;
+        }
+        Ok(())
+    }
+}
+
 #[serde_as]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MoveModulePublish {
     #[serde_as(as = "Vec<Bytes>")]
     pub modules: Vec<Vec<u8>>,
+}
+
+impl MoveModulePublish {
+    pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
+        fp_ensure!(
+            self.modules.len() < config.max_modules_in_publish() as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum modules in a publish transaction".to_string(),
+                value: config.max_modules_in_publish().to_string()
+            }
+        );
+        Ok(())
+    }
 }
 
 // TODO: we can deprecate TransferSui when its callsites on RPC & SDK are
@@ -126,6 +216,29 @@ pub struct PayAllSui {
     pub recipient: SuiAddress,
 }
 
+impl PayAllSui {
+    pub fn validity_check(
+        &self,
+        config: &ProtocolConfig,
+        gas_payment: &ObjectRef,
+    ) -> UserInputResult {
+        fp_ensure!(!self.coins.is_empty(), UserInputError::EmptyInputCoins);
+        fp_ensure!(
+            // unwrap() is safe because coins are not empty.
+            self.coins.first().unwrap() == gas_payment,
+            UserInputError::UnexpectedGasPaymentObject
+        );
+        fp_ensure!(
+            self.coins.len() < config.max_coins() as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum coins in a payment transaction".to_string(),
+                value: config.max_coins().to_string()
+            }
+        );
+        Ok(())
+    }
+}
+
 /// Send SUI coins to a list of addresses, following a list of amounts.
 /// only for SUI coin and does not require a separate gas coin object.
 /// Specifically, what pay_sui does are:
@@ -146,6 +259,39 @@ pub struct PaySui {
     pub amounts: Vec<u64>,
 }
 
+impl PaySui {
+    pub fn validity_check(
+        &self,
+        config: &ProtocolConfig,
+        gas_payment: &ObjectRef,
+    ) -> UserInputResult {
+        fp_ensure!(!self.coins.is_empty(), UserInputError::EmptyInputCoins);
+        fp_ensure!(
+            // unwrap() is safe because coins are not empty.
+            self.coins.first().unwrap() == gas_payment,
+            UserInputError::UnexpectedGasPaymentObject
+        );
+        fp_ensure!(
+            self.coins.len() < config.max_coins() as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum coins in a payment transaction".to_string(),
+                value: config.max_coins().to_string()
+            }
+        );
+        fp_ensure!(
+            self.recipients.len() <= config.max_pay_recipients() as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum recipients in a payment transaction".to_string(),
+                value: config.max_pay_recipients().to_string()
+            }
+        );
+        // TODO: was this maybe missing a check for the following, or was
+        // it intentionally omitted?
+        // fp_ensure!(self.recipients.len() == self.amounts.len(), ...)
+        Ok(())
+    }
+}
+
 /// Pay each recipient the corresponding amount using the input coins
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Pay {
@@ -156,6 +302,29 @@ pub struct Pay {
     /// The amounts each recipient will receive.
     /// Must be the same length as recipients
     pub amounts: Vec<u64>,
+}
+
+impl Pay {
+    pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
+        fp_ensure!(
+            self.coins.len() < config.max_coins() as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum coins in a payment transaction".to_string(),
+                value: config.max_coins().to_string()
+            }
+        );
+        fp_ensure!(
+            self.recipients.len() <= config.max_pay_recipients() as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum recipients in a payment transaction".to_string(),
+                value: config.max_pay_recipients().to_string()
+            }
+        );
+        // TODO: was this maybe missing a check for the following, or was
+        // it intentionally omitted?
+        // fp_ensure!(self.recipients.len() == self.amounts.len(), ...)
+        Ok(())
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -172,6 +341,11 @@ pub struct ChangeEpoch {
     pub storage_rebate: u64,
     /// Unix timestamp when epoch started
     pub epoch_start_timestamp_ms: u64,
+    /// System packages (specifically framework and move stdlib) that are written before the new
+    /// epoch starts. This tracks framework upgrades on chain. When executing the ChangeEpoch txn,
+    /// the validator must write out the modules below.  Modules are given in their serialized form,
+    /// and include the ObjectID within their serialized form.
+    pub system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>)>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -286,6 +460,31 @@ impl CallArg {
                 .collect(),
         }
     }
+
+    pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
+        match self {
+            CallArg::Pure(p) => {
+                fp_ensure!(
+                    p.len() < config.max_pure_argument_size() as usize,
+                    UserInputError::SizeLimitExceeded {
+                        limit: "maximum pure argument size".to_string(),
+                        value: config.max_pure_argument_size().to_string()
+                    }
+                );
+            }
+            CallArg::Object(_) => (),
+            CallArg::ObjVec(v) => {
+                fp_ensure!(
+                    v.len() < config.max_object_vec_argument_size() as usize,
+                    UserInputError::SizeLimitExceeded {
+                        limit: "maximum object vector argument size".to_string(),
+                        value: config.max_object_vec_argument_size().to_string()
+                    }
+                );
+            }
+        }
+        Ok(())
+    }
 }
 
 impl MoveCall {
@@ -361,6 +560,10 @@ pub enum Command {
     MergeCoins(Argument, Vec<Argument>),
     /// Publishes a Move package
     Publish(Vec<Vec<u8>>),
+    /// `forall T: Vec<T> -> vector<T>`
+    /// Given n-values of the same type, it constructs a vector. For non objects or an empty vector,
+    /// the type tag must be specified.
+    MakeMoveVec(Option<TypeTag>, Vec<Argument>),
 }
 
 /// An argument to a programmable transaction command
@@ -437,13 +640,22 @@ impl Command {
         match self {
             Command::Publish(modules) => Self::publish_command_input_objects(modules),
             Command::MoveCall(c) => c.input_objects(),
-            Command::TransferObjects(_, _)
+            Command::MakeMoveVec(Some(t), _) => {
+                let mut packages = BTreeSet::new();
+                add_type_tag_packages(&mut packages, t);
+                packages
+                    .into_iter()
+                    .map(InputObjectKind::MovePackage)
+                    .collect()
+            }
+            Command::MakeMoveVec(None, _)
+            | Command::TransferObjects(_, _)
             | Command::SplitCoin(_, _)
             | Command::MergeCoins(_, _) => vec![],
         }
     }
 
-    fn validity_check(&self) -> UserInputResult {
+    fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         match self {
             Command::MoveCall(call) => {
                 let is_blocked = BLOCKED_MOVE_FUNCTIONS.contains(&(
@@ -452,11 +664,75 @@ impl Command {
                     call.function.as_str(),
                 ));
                 fp_ensure!(!is_blocked, UserInputError::BlockedMoveFunction);
+                let mut type_arguments_count = 0;
+                for tag in call.type_arguments.iter() {
+                    type_arguments_count +=
+                        type_tag_validity_check(tag, config, 1, type_arguments_count)?;
+                    fp_ensure!(
+                        type_arguments_count < config.max_type_arguments() as usize,
+                        UserInputError::SizeLimitExceeded {
+                            limit: "maximum type arguments in a call transaction".to_string(),
+                            value: config.max_type_arguments().to_string()
+                        }
+                    );
+                }
+                fp_ensure!(
+                    call.arguments.len() < config.max_arguments() as usize,
+                    UserInputError::SizeLimitExceeded {
+                        limit: "maximum arguments in a move call".to_string(),
+                        value: config.max_arguments().to_string()
+                    }
+                );
             }
-            Command::TransferObjects(_, _)
-            | Command::SplitCoin(_, _)
-            | Command::MergeCoins(_, _)
-            | Command::Publish(_) => (),
+            Command::TransferObjects(args, _) | Command::MergeCoins(_, args) => {
+                fp_ensure!(!args.is_empty(), UserInputError::EmptyCommandInput);
+                fp_ensure!(
+                    args.len() < config.max_arguments() as usize,
+                    UserInputError::SizeLimitExceeded {
+                        limit: "maximum arguments in a programmable transaction command"
+                            .to_string(),
+                        value: config.max_arguments().to_string()
+                    }
+                );
+            }
+            Command::MakeMoveVec(ty_opt, args) => {
+                // ty_opt.is_none() ==> !args.is_empty()
+                fp_ensure!(
+                    ty_opt.is_some() || !args.is_empty(),
+                    UserInputError::EmptyCommandInput
+                );
+                if let Some(ty) = ty_opt {
+                    let type_arguments_count = type_tag_validity_check(ty, config, 1, 0)?;
+                    fp_ensure!(
+                        type_arguments_count < config.max_type_arguments() as usize,
+                        UserInputError::SizeLimitExceeded {
+                            limit: "maximum type arguments in a call transaction".to_string(),
+                            value: config.max_type_arguments().to_string()
+                        }
+                    );
+                }
+                fp_ensure!(!args.is_empty(), UserInputError::EmptyCommandInput);
+                fp_ensure!(
+                    args.len() < config.max_arguments() as usize,
+                    UserInputError::SizeLimitExceeded {
+                        limit: "maximum arguments in a programmable transaction command"
+                            .to_string(),
+                        value: config.max_arguments().to_string()
+                    }
+                );
+            }
+            Command::Publish(modules) => {
+                fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput);
+                fp_ensure!(
+                    modules.len() < config.max_modules_in_publish() as usize,
+                    UserInputError::SizeLimitExceeded {
+                        limit: "maximum modules in a programmable transaction publish command"
+                            .to_string(),
+                        value: config.max_modules_in_publish().to_string()
+                    }
+                );
+            }
+            Command::SplitCoin(_, _) => (),
         };
         Ok(())
     }
@@ -484,24 +760,37 @@ impl ProgrammableTransaction {
             .iter()
             .flat_map(|arg| arg.input_objects())
             .collect::<Vec<_>>();
+        // all objects, not just mutable, must be unique
         let mut used = HashSet::new();
         if !input_arg_objects.iter().all(|o| used.insert(o.object_id())) {
             return Err(UserInputError::DuplicateObjectRefInput);
         }
+        // do not duplicate packages referred to in commands
+        let command_input_objects: BTreeSet<InputObjectKind> = commands
+            .iter()
+            .flat_map(|command| command.input_objects())
+            .collect();
         Ok(input_arg_objects
             .into_iter()
-            .chain(commands.iter().flat_map(|command| command.input_objects()))
+            .chain(command_input_objects)
             .collect())
     }
 
-    fn validity_check(&self) -> UserInputResult {
+    fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         if !cfg!(test) {
             return Err(UserInputError::Unsupported(
                 "Programmable transactions are not yet available".to_owned(),
             ));
         }
+        fp_ensure!(
+            self.commands.len() < config.max_programmable_tx_commands() as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum commands in a progammable transaction".to_string(),
+                value: config.max_programmable_tx_commands().to_string()
+            }
+        );
         for c in &self.commands {
-            c.validity_check()?
+            c.validity_check(config)?
         }
         Ok(())
     }
@@ -544,6 +833,17 @@ impl Display for Command {
         match self {
             Command::MoveCall(p) => {
                 write!(f, "MoveCall({p})")
+            }
+            Command::MakeMoveVec(ty_opt, elems) => {
+                write!(f, "MakeMoveVec(")?;
+                if let Some(ty) = ty_opt {
+                    write!(f, "Some{ty}")?;
+                } else {
+                    write!(f, "None")?;
+                }
+                write!(f, ",[")?;
+                write_sep(f, elems, ",")?;
+                write!(f, "])")
             }
             Command::TransferObjects(objs, addr) => {
                 write!(f, "TransferObjects([")?;
@@ -729,40 +1029,23 @@ impl SingleTransactionKind {
         Ok(input_objects)
     }
 
-    pub fn validity_check(&self, gas_payment: &ObjectRef) -> UserInputResult {
+    pub fn validity_check(
+        &self,
+        config: &ProtocolConfig,
+        gas_payment: &ObjectRef,
+    ) -> UserInputResult {
         match self {
-            SingleTransactionKind::Call(call) => {
-                let is_blocked = BLOCKED_MOVE_FUNCTIONS.contains(&(
-                    call.package,
-                    call.module.as_str(),
-                    call.function.as_str(),
-                ));
-                fp_ensure!(!is_blocked, UserInputError::BlockedMoveFunction);
-            }
-            SingleTransactionKind::Pay(_)
-            | SingleTransactionKind::Publish(_)
-            | SingleTransactionKind::TransferObject(_)
+            SingleTransactionKind::Publish(publish) => publish.validity_check(config)?,
+            SingleTransactionKind::Call(call) => call.validity_check(config)?,
+            SingleTransactionKind::Pay(p) => p.validity_check(config)?,
+            SingleTransactionKind::PaySui(p) => p.validity_check(config, gas_payment)?,
+            SingleTransactionKind::PayAllSui(pa) => pa.validity_check(config, gas_payment)?,
+            SingleTransactionKind::ProgrammableTransaction(p) => p.validity_check(config)?,
+            SingleTransactionKind::TransferObject(_)
             | SingleTransactionKind::TransferSui(_)
             | SingleTransactionKind::ChangeEpoch(_)
             | SingleTransactionKind::Genesis(_)
             | SingleTransactionKind::ConsensusCommitPrologue(_) => (),
-            SingleTransactionKind::PaySui(p) => {
-                fp_ensure!(!p.coins.is_empty(), UserInputError::EmptyInputCoins);
-                fp_ensure!(
-                    // unwrap() is safe because coins are not empty.
-                    p.coins.first().unwrap() == gas_payment,
-                    UserInputError::UnexpectedGasPaymentObject
-                );
-            }
-            SingleTransactionKind::PayAllSui(pa) => {
-                fp_ensure!(!pa.coins.is_empty(), UserInputError::EmptyInputCoins);
-                fp_ensure!(
-                    // unwrap() is safe because coins are not empty.
-                    pa.coins.first().unwrap() == gas_payment,
-                    UserInputError::UnexpectedGasPaymentObject
-                );
-            }
-            SingleTransactionKind::ProgrammableTransaction(p) => p.validity_check()?,
         };
         Ok(())
     }
@@ -1328,8 +1611,8 @@ impl TransactionData {
         Ok(inputs)
     }
 
-    pub fn validity_check(&self) -> UserInputResult {
-        Self::validity_check_impl(&self.kind, self.gas_payment_object_ref())?;
+    pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
+        Self::validity_check_impl(config, &self.kind, self.gas_payment_object_ref())?;
         self.check_sponsorship()
     }
 
@@ -1363,13 +1646,24 @@ impl TransactionData {
         Err(UserInputError::UnsupportedSponsoredTransactionKind)
     }
 
-    pub fn validity_check_impl(kind: &TransactionKind, gas_payment: &ObjectRef) -> UserInputResult {
+    pub fn validity_check_impl(
+        config: &ProtocolConfig,
+        kind: &TransactionKind,
+        gas_payment: &ObjectRef,
+    ) -> UserInputResult {
         match kind {
             TransactionKind::Batch(b) => {
                 fp_ensure!(
                     !b.is_empty(),
                     UserInputError::InvalidBatchTransaction {
                         error: "Batch Transaction cannot be empty".to_string(),
+                    }
+                );
+                fp_ensure!(
+                    b.len() <= config.max_tx_in_batch() as usize,
+                    UserInputError::SizeLimitExceeded {
+                        limit: "maximum transactions in a batch".to_string(),
+                        value: config.max_tx_in_batch().to_string()
                     }
                 );
                 // Check that all transaction kinds can be in a batch.
@@ -1395,10 +1689,10 @@ impl TransactionData {
                     }
                 );
                 for s in b {
-                    s.validity_check(gas_payment)?
+                    s.validity_check(config, gas_payment)?
                 }
             }
-            TransactionKind::Single(s) => s.validity_check(gas_payment)?,
+            TransactionKind::Single(s) => s.validity_check(config, gas_payment)?,
         }
         Ok(())
     }
@@ -1602,6 +1896,7 @@ impl VerifiedTransaction {
         computation_charge: u64,
         storage_rebate: u64,
         epoch_start_timestamp_ms: u64,
+        system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>)>,
     ) -> Self {
         ChangeEpoch {
             epoch: next_epoch,
@@ -1610,6 +1905,7 @@ impl VerifiedTransaction {
             computation_charge,
             storage_rebate,
             epoch_start_timestamp_ms,
+            system_packages,
         }
         .pipe(SingleTransactionKind::ChangeEpoch)
         .pipe(Self::new_system_transaction)
@@ -1687,7 +1983,11 @@ pub type SignedTransaction = Envelope<SenderSignedData, AuthoritySignInfo>;
 pub type VerifiedSignedTransaction = VerifiedEnvelope<SenderSignedData, AuthoritySignInfo>;
 
 pub type CertifiedTransaction = Envelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
-pub type TxCertAndSignedEffects = (CertifiedTransaction, SignedTransactionEffects);
+pub type TxCertAndSignedEffects = (
+    CertifiedTransaction,
+    SignedTransactionEffects,
+    TransactionEvents,
+);
 
 pub type VerifiedCertificate = VerifiedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
@@ -1796,6 +2096,7 @@ pub enum TransactionStatus {
     Executed(
         Option<AuthorityStrongQuorumSignInfo>,
         SignedTransactionEffects,
+        TransactionEvents,
     ),
 }
 
@@ -1809,7 +2110,7 @@ impl TransactionStatus {
 
     pub fn into_effects_for_testing(self) -> SignedTransactionEffects {
         match self {
-            Self::Executed(_, e) => e,
+            Self::Executed(_, e, _) => e,
             _ => unreachable!("Incorrect response type"),
         }
     }
@@ -1822,11 +2123,12 @@ impl PartialEq for TransactionStatus {
                 Self::Signed(s2) => s1.epoch == s2.epoch,
                 _ => false,
             },
-            Self::Executed(c1, e1) => match other {
-                Self::Executed(c2, e2) => {
+            Self::Executed(c1, e1, ev1) => match other {
+                Self::Executed(c2, e2, ev2) => {
                     c1.as_ref().map(|a| a.epoch) == c2.as_ref().map(|a| a.epoch)
                         && e1.epoch() == e2.epoch()
                         && e1.digest() == e2.digest()
+                        && ev1.digest() == ev2.digest()
                 }
                 _ => false,
             },
@@ -1847,16 +2149,24 @@ pub struct TransactionInfoResponse {
 #[derive(Clone, Debug)]
 pub enum VerifiedTransactionInfoResponse {
     Signed(VerifiedSignedTransaction),
-    ExecutedWithCert(VerifiedCertificate, VerifiedSignedTransactionEffects),
-    ExecutedWithoutCert(VerifiedTransaction, VerifiedSignedTransactionEffects),
+    ExecutedWithCert(
+        VerifiedCertificate,
+        VerifiedSignedTransactionEffects,
+        TransactionEvents,
+    ),
+    ExecutedWithoutCert(
+        VerifiedTransaction,
+        VerifiedSignedTransactionEffects,
+        TransactionEvents,
+    ),
 }
 
 impl VerifiedTransactionInfoResponse {
     pub fn is_executed(&self) -> bool {
         match self {
             VerifiedTransactionInfoResponse::Signed(_) => false,
-            VerifiedTransactionInfoResponse::ExecutedWithCert(_, _)
-            | VerifiedTransactionInfoResponse::ExecutedWithoutCert(_, _) => true,
+            VerifiedTransactionInfoResponse::ExecutedWithCert(_, _, _)
+            | VerifiedTransactionInfoResponse::ExecutedWithoutCert(_, _, _) => true,
         }
     }
 }
@@ -1865,11 +2175,13 @@ impl VerifiedTransactionInfoResponse {
 pub struct HandleCertificateResponse {
     pub signed_effects: SignedTransactionEffects,
     // TODO: Add a case for finalized transaction.
+    pub events: TransactionEvents,
 }
 
 #[derive(Clone, Debug)]
 pub struct VerifiedHandleCertificateResponse {
     pub signed_effects: VerifiedSignedTransactionEffects,
+    pub events: TransactionEvents,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -1996,6 +2308,22 @@ pub enum ExecutionFailureStatus {
     TotalPaymentAmountOverflow,
     /// The total balance of coins is larger than the maximum value of u64.
     TotalCoinBalanceOverflow,
+
+    //
+    // Programmable Transaction Errors
+    //
+    CommandArgumentError {
+        arg_idx: u16,
+        kind: CommandArgumentError,
+    },
+    UnusedValueWithoutDrop {
+        result_idx: u16,
+        secondary_idx: u16,
+    },
+    InvalidPublicFunctionReturnType {
+        idx: u16,
+    },
+    ArityMismatch,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }
@@ -2054,6 +2382,53 @@ pub struct InvalidSharedByValue {
     pub object: ObjectID,
 }
 
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash, Error)]
+pub enum CommandArgumentError {
+    #[error("The type of the value does not match the expected type")]
+    TypeMismatch,
+    #[error("The argument cannot be deserialized into a value of the specified type")]
+    InvalidBCSBytes,
+    #[error("The argument cannot be instantiated from raw bytes")]
+    InvalidUsageOfPureArg,
+    #[error(
+        "Invalid argument to private entry function. \
+        These functions cannot take arguments from other Move functions"
+    )]
+    InvalidArgumentToPrivateEntryFunction,
+    #[error("Out of bounds access to input or result vector {idx}")]
+    IndexOutOfBounds { idx: u16 },
+    #[error(
+        "Out of bounds secondary access to result vector \
+        {result_idx} at secondary index {secondary_idx}"
+    )]
+    SecondaryIndexOutOfBounds { result_idx: u16, secondary_idx: u16 },
+    #[error(
+        "Invalid usage of result {result_idx}, \
+        expected a single result but found multiple return values"
+    )]
+    InvalidResultArity { result_idx: u16 },
+    #[error(
+        "Invalid taking of the Gas coin. \
+        It can only be used by-value with TransferObjects"
+    )]
+    InvalidGasCoinUsage,
+    #[error(
+        "Invalid usage of borrowed value. \
+        Mutably borrowed values require unique usage. \
+        Immutably borrowed values cannot be taken or borrowed mutably"
+    )]
+    InvalidUsageOfBorrowedValue,
+    #[error(
+        "Invalid usage of already taken value. \
+        There is now no value available at this location"
+    )]
+    InvalidUsageOfTakenValue,
+    #[error("Immutable and shared objects cannot be passed by-value.")]
+    InvalidObjectByValue,
+    #[error("Immutable objects cannot be passed by mutable reference, &mut.")]
+    InvalidObjectByMutRef,
+}
+
 impl ExecutionFailureStatus {
     pub fn entry_argument_error(argument_idx: LocalIndex, kind: EntryArgumentErrorKind) -> Self {
         EntryArgumentError { argument_idx, kind }.into()
@@ -2077,6 +2452,10 @@ impl ExecutionFailureStatus {
     pub fn invalid_shared_by_value(object: ObjectID) -> Self {
         InvalidSharedByValue { object }.into()
     }
+
+    pub fn command_argument_error(kind: CommandArgumentError, arg_idx: u16) -> Self {
+        Self::CommandArgumentError { arg_idx, kind }
+    }
 }
 
 impl Display for ExecutionFailureStatus {
@@ -2089,11 +2468,8 @@ impl Display for ExecutionFailureStatus {
                 )
             }
             ExecutionFailureStatus::CoinTooLarge => {
-                write!(
-                    f,
-                    "Coin exceeds maximum value for a single coin"
-                )
-            },
+                write!(f, "Coin exceeds maximum value for a single coin")
+            }
             ExecutionFailureStatus::EmptyInputCoins => {
                 write!(f, "Expected a non-empty list of input Coin objects")
             }
@@ -2114,8 +2490,22 @@ impl Display for ExecutionFailureStatus {
             ExecutionFailureStatus::InvalidTransactionUpdate => {
                 write!(f, "Invalid Transaction Update.")
             }
-            ExecutionFailureStatus::MoveObjectTooBig { object_size, max_object_size } => write!(f, "Move object with size {object_size} is larger than the maximum object size {max_object_size}"),
-            ExecutionFailureStatus::MovePackageTooBig { object_size, max_object_size } => write!(f, "Move package with size {object_size} is larger than the maximum object size {max_object_size}"),
+            ExecutionFailureStatus::MoveObjectTooBig {
+                object_size,
+                max_object_size,
+            } => write!(
+                f,
+                "Move object with size {object_size} is larger \
+                than the maximum object size {max_object_size}"
+            ),
+            ExecutionFailureStatus::MovePackageTooBig {
+                object_size,
+                max_object_size,
+            } => write!(
+                f,
+                "Move package with size {object_size} is larger than the \
+                maximum object size {max_object_size}"
+            ),
             ExecutionFailureStatus::FunctionNotFound => write!(f, "Function Not Found."),
             ExecutionFailureStatus::InvariantViolation => write!(f, "INVARIANT VIOLATION."),
             ExecutionFailureStatus::InvalidTransferObject => write!(
@@ -2231,19 +2621,40 @@ impl Display for ExecutionFailureStatus {
             ),
             ExecutionFailureStatus::VMInvariantViolation => {
                 write!(f, "MOVE VM INVARIANT VIOLATION.")
-            },
+            }
             ExecutionFailureStatus::TotalPaymentAmountOverflow => {
-                write!(
-                    f,
-                    "The total amount of coins to be paid overflows of u64"
-                )
-            },
+                write!(f, "The total amount of coins to be paid overflows of u64")
+            }
             ExecutionFailureStatus::TotalCoinBalanceOverflow => {
+                write!(f, "The total balance of coins overflows u64")
+            }
+            ExecutionFailureStatus::CommandArgumentError { arg_idx, kind } => {
+                write!(f, "Invalid command argument at {arg_idx}. {kind}")
+            }
+            ExecutionFailureStatus::UnusedValueWithoutDrop {
+                result_idx,
+                secondary_idx,
+            } => {
                 write!(
                     f,
-                    "The total balance of coins overflows u64"
+                    "Unused result without the drop ability. \
+                    Command result {result_idx}, return value {secondary_idx}"
                 )
-            },
+            }
+            ExecutionFailureStatus::InvalidPublicFunctionReturnType { idx } => {
+                write!(
+                    f,
+                    "Invalid public Move function signature. \
+                    Unsupported return type for return value {idx}"
+                )
+            }
+            ExecutionFailureStatus::ArityMismatch => {
+                write!(
+                    f,
+                    "Arity mismatch for Move function. \
+                    The number of arguments does not match the number of parameters"
+                )
+            }
         }
     }
 }
@@ -2471,8 +2882,9 @@ pub struct TransactionEffects {
     /// The updated gas object reference. Have a dedicated field for convenient access.
     /// It's also included in mutated.
     pub gas_object: (ObjectRef, Owner),
-    /// The events emitted during execution. Note that only successful transactions emit events
-    pub events: Vec<Event>,
+    /// The digest of the events emitted during execution,
+    /// can be None if the transaction does not emmit any event.
+    pub events_digest: Option<TransactionEventsDigest>,
     /// The set of transaction digests this transaction depends on.
     pub dependencies: Vec<TransactionDigest>,
 }
@@ -2536,35 +2948,19 @@ impl TransactionEffects {
             unwrapped_object_count: self.unwrapped.len(),
             deleted_object_count: self.deleted.len(),
             wrapped_object_count: self.wrapped.len(),
-            event_count: self.events.len(),
             dependency_count: self.dependencies.len(),
         }
     }
 }
 
-impl Message for TransactionEffectsDigest {
-    type DigestType = TransactionEffectsDigest;
-    const SCOPE: IntentScope = IntentScope::TransactionEffectsDigest;
-
-    fn digest(&self) -> Self::DigestType {
-        *self
-    }
-
-    fn verify(&self) -> SuiResult {
-        Ok(())
-    }
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Default)]
+pub struct TransactionEvents {
+    pub data: Vec<Event>,
 }
 
-impl Message for ExecutionDigests {
-    type DigestType = TransactionDigest;
-    const SCOPE: IntentScope = IntentScope::ExecutionDigests;
-
-    fn digest(&self) -> Self::DigestType {
-        self.transaction
-    }
-
-    fn verify(&self) -> SuiResult {
-        Ok(())
+impl TransactionEvents {
+    pub fn digest(&self) -> TransactionEventsDigest {
+        TransactionEventsDigest::new(sha3_hash(self))
     }
 }
 
@@ -2642,7 +3038,7 @@ impl Default for TransactionEffects {
                 random_object_ref(),
                 Owner::AddressOwner(SuiAddress::default()),
             ),
-            events: Vec::new(),
+            events_digest: None,
             dependencies: Vec::new(),
         }
     }
@@ -2660,7 +3056,6 @@ pub struct TransactionEffectsDebugSummary {
     pub unwrapped_object_count: usize,
     pub deleted_object_count: usize,
     pub wrapped_object_count: usize,
-    pub event_count: usize,
     pub dependency_count: usize,
     // TODO: Add deleted_and_unwrapped_object_count and event digest.
 }
@@ -2676,7 +3071,7 @@ pub type VerifiedSignedTransactionEffects = VerifiedTransactionEffectsEnvelope<A
 pub type VerifiedCertifiedTransactionEffects =
     VerifiedTransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, PartialOrd, Ord)]
 pub enum InputObjectKind {
     // A Move package, must be immutable.
     MovePackage(ObjectID),
@@ -2888,8 +3283,13 @@ pub struct AuthorityCapabilities {
     /// (Currently, we just set this to the current time in milliseconds since the epoch, but this
     /// should not be interpreted as a timestamp.)
     pub generation: u64,
+
     /// ProtocolVersions that the authority supports.
     pub supported_protocol_versions: SupportedProtocolVersions,
+
+    /// The ObjectRefs of all versions of system packages that the validator possesses.
+    /// Used to determine whether to do a framework/movestdlib upgrade.
+    pub available_system_packages: Vec<ObjectRef>,
 }
 
 impl Debug for AuthorityCapabilities {
@@ -2901,6 +3301,7 @@ impl Debug for AuthorityCapabilities {
                 "supported_protocol_versions",
                 &self.supported_protocol_versions,
             )
+            .field("available_system_packages", &self.available_system_packages)
             .finish()
     }
 }
@@ -2909,6 +3310,7 @@ impl AuthorityCapabilities {
     pub fn new(
         authority: AuthorityName,
         supported_protocol_versions: SupportedProtocolVersions,
+        available_system_packages: Vec<ObjectRef>,
     ) -> Self {
         let generation = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -2920,6 +3322,7 @@ impl AuthorityCapabilities {
             authority,
             generation,
             supported_protocol_versions,
+            available_system_packages,
         }
     }
 }
@@ -3091,7 +3494,13 @@ pub type IsTransactionExecutedLocally = bool;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ExecuteTransactionResponse {
-    EffectsCert(Box<(FinalizedEffects, IsTransactionExecutedLocally)>),
+    EffectsCert(
+        Box<(
+            FinalizedEffects,
+            TransactionEvents,
+            IsTransactionExecutedLocally,
+        )>,
+    ),
 }
 
 #[derive(Clone, Debug)]
@@ -3102,6 +3511,7 @@ pub struct QuorumDriverRequest {
 #[derive(Debug, Clone)]
 pub struct QuorumDriverResponse {
     pub effects_cert: VerifiedCertifiedTransactionEffects,
+    pub events: TransactionEvents,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

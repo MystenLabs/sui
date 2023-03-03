@@ -63,24 +63,26 @@ export function Search({
             as="div"
             className="relative w-full"
         >
-            <Combobox.Input
-                spellCheck={false}
-                displayValue={(value: SearchResult) => value?.label}
-                className="w-full rounded-md border border-transparent bg-search-fill/60 pl-2 text-body leading-9 text-white/20 outline-none placeholder:text-xs placeholder:text-white/40 hover:bg-search-fill hover:placeholder:text-white/60 focus:border-sui focus:bg-search-fill focus:text-white focus:placeholder:text-white/60"
-                onChange={onChange}
-                placeholder={placeholder}
-                autoComplete="off"
-                onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-                    if (e.code === 'Enter' && !hasOptions) {
-                        e.stopPropagation();
-                        e.preventDefault();
-                    }
-                }}
-                value={queryValue}
-            />
+            <div className="relative flex items-center">
+                <Combobox.Input
+                    spellCheck={false}
+                    displayValue={(value: SearchResult) => value?.label}
+                    className="w-full rounded-md border border-transparent bg-search-fill/60 pl-2 text-body leading-9 text-white/20 outline-none placeholder:text-xs placeholder:text-white/40 hover:bg-search-fill hover:placeholder:text-white/60 focus:border-sui focus:bg-search-fill focus:text-white focus:placeholder:text-white/60"
+                    onChange={onChange}
+                    placeholder={placeholder}
+                    autoComplete="off"
+                    onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+                        if (e.code === 'Enter' && !hasOptions) {
+                            e.stopPropagation();
+                            e.preventDefault();
+                        }
+                    }}
+                    value={queryValue}
+                />
 
-            <div className="absolute bottom-0 right-0 mr-2 hidden h-full items-center text-2xl text-white/20 sm:flex">
-                <Search16 />
+                <div className="absolute right-0 mr-2 block items-center text-2xl text-white/20">
+                    <Search16 />
+                </div>
             </div>
 
             {queryValue && (

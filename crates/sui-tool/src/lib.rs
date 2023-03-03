@@ -30,7 +30,7 @@ fn make_clients(
 
     let mut authority_clients = BTreeMap::new();
 
-    for validator in genesis.into_validator_set() {
+    for validator in genesis.validator_set() {
         let channel = net_config
             .connect_lazy(validator.network_address())
             .map_err(|err| anyhow!(err.to_string()))?;
@@ -323,7 +323,7 @@ pub async fn get_transaction(tx_digest: TransactionDigest, genesis: PathBuf) -> 
                 r.2.as_ref()
                     .map(|ok_result| match &ok_result.status {
                         TransactionStatus::Signed(_) => None,
-                        TransactionStatus::Executed(_, effects) => Some(effects.digest()),
+                        TransactionStatus::Executed(_, effects, _) => Some(effects.digest()),
                     })
                     .ok();
             (key, r)
@@ -332,7 +332,9 @@ pub async fn get_transaction(tx_digest: TransactionDigest, genesis: PathBuf) -> 
         .group_by(|(_, r)| {
             r.2.as_ref().map(|ok_result| match &ok_result.status {
                 TransactionStatus::Signed(_) => None,
-                TransactionStatus::Executed(_, effects) => Some((effects.data(), effects.digest())),
+                TransactionStatus::Executed(_, effects, _) => {
+                    Some((effects.data(), effects.digest()))
+                }
             })
         });
     let mut s = String::new();

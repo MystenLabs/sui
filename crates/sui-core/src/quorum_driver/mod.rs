@@ -358,7 +358,7 @@ where
         &self,
         certificate: VerifiedCertificate,
     ) -> Result<QuorumDriverResponse, QuorumDriverInternalError> {
-        let effects = self
+        let (effects, events) = self
             .validators
             .load()
             .process_certificate(certificate.clone().into_inner())
@@ -369,6 +369,7 @@ where
             .map_err(QuorumDriverInternalError::CertificateError)?;
         let response = QuorumDriverResponse {
             effects_cert: effects,
+            events,
         };
 
         Ok(response)
@@ -474,7 +475,7 @@ where
         // If we are able to get a certificate right away, we use it and execute the cert;
         // otherwise, we have to re-form a cert and execute it.
         let verified_transaction = match response {
-            VerifiedTransactionInfoResponse::ExecutedWithCert(cert, _) => {
+            VerifiedTransactionInfoResponse::ExecutedWithCert(cert, _, _) => {
                 self.metrics
                     .total_times_conflicting_transaction_already_finalized_when_retrying
                     .inc();
@@ -504,7 +505,7 @@ where
                 return Ok(result.is_ok());
             }
             VerifiedTransactionInfoResponse::Signed(signed) => signed.into_unsigned(),
-            VerifiedTransactionInfoResponse::ExecutedWithoutCert(transaction, _) => transaction,
+            VerifiedTransactionInfoResponse::ExecutedWithoutCert(transaction, _, _) => transaction,
         };
         // Now ask validators to execute this transaction.
         let result = self
@@ -691,12 +692,15 @@ where
                     debug!(?tx_digest, "Transaction processing succeeded");
                     tx_cert
                 }
-                Ok(ProcessTransactionResult::Executed(effects_cert)) => {
+                Ok(ProcessTransactionResult::Executed(effects_cert, events)) => {
                     debug!(
                         ?tx_digest,
                         "Transaction processing succeeded with effects directly"
                     );
-                    let response = QuorumDriverResponse { effects_cert };
+                    let response = QuorumDriverResponse {
+                        effects_cert,
+                        events,
+                    };
                     quorum_driver.notify(&transaction, &Ok(response), old_retry_times + 1);
                     return;
                 }
@@ -716,9 +720,15 @@ where
         };
 
         let response = match quorum_driver.process_certificate(tx_cert.clone()).await {
-            Ok(QuorumDriverResponse { effects_cert }) => {
+            Ok(QuorumDriverResponse {
+                effects_cert,
+                events,
+            }) => {
                 debug!(?tx_digest, "Certificate processing succeeded");
-                QuorumDriverResponse { effects_cert }
+                QuorumDriverResponse {
+                    effects_cert,
+                    events,
+                }
             }
             // Note: non retryable failure when processing a cert
             // should be very rare.

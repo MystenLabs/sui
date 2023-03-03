@@ -8,11 +8,16 @@ use std::path::Path;
 use sui_storage::default_db_options;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
+use sui_types::digests::TransactionEventsDigest;
 use sui_types::storage::ObjectStore;
 use typed_store::metrics::SamplingInterval;
+use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
 use typed_store::rocks::{DBMap, DBOptions, MetricConf, ReadWriteOptions};
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
+use crate::authority::authority_store_types::{
+    StoreData, StoreMoveObject, StoreObject, StoreObjectPair,
+};
 use typed_store_derive::DBMapUtils;
 
 const CURRENT_EPOCH_KEY: u64 = 0;
@@ -22,6 +27,8 @@ const CURRENT_EPOCH_KEY: u64 = 0;
 pub struct AuthorityPerpetualTables {
     /// This is a map between the object (ID, version) and the latest state of the object, namely the
     /// state that is needed to process new transactions.
+    /// State is represented by `StoreObject` enum, which is either a move module, a move object, or
+    /// a pointer to an object stored in the `indirect_move_objects` table.
     ///
     /// Note that while this map can store all versions of an object, we will eventually
     /// prune old object versions from the db.
@@ -32,7 +39,10 @@ pub struct AuthorityPerpetualTables {
     /// been written out, and which must be retried. But, they cannot be retried unless their input
     /// objects are still accessible!
     #[default_options_override_fn = "objects_table_default_config"]
-    pub(crate) objects: DBMap<ObjectKey, Object>,
+    pub(crate) objects: DBMap<ObjectKey, StoreObject>,
+
+    #[default_options_override_fn = "indirect_move_objects_table_default_config"]
+    pub(crate) indirect_move_objects: DBMap<ObjectDigest, StoreMoveObject>,
 
     /// This is a map between object references of currently active objects that can be mutated,
     /// and the transaction that they are lock on for use by this specific authority. Where an object
@@ -71,6 +81,11 @@ pub struct AuthorityPerpetualTables {
     /// to be executed, we wait for them to appear in this table. When we revert transactions, we remove them from both
     /// tables.
     pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsDigest>,
+
+    // Currently this is needed in the validator for returning events during process certificates.
+    // We could potentially remove this if we decided not to provide events in the execution path.
+    // TODO: Figure out what to do with this table in the long run. Also we need a pruning policy for this table.
+    pub(crate) events: DBMap<TransactionEventsDigest, TransactionEvents>,
 
     /// When transaction is executed via checkpoint executor, we store association here
     pub(crate) executed_transactions_to_checkpoint:
@@ -119,7 +134,17 @@ impl AuthorityPerpetualTables {
             .skip_prior_to(&ObjectKey(object_id, version))else {
             return None
         };
-        iter.reverse().next().map(|(_, o)| o)
+        iter.reverse().next().and_then(|(_, o)| self.object(o).ok())
+    }
+
+    pub fn object(&self, store_object: StoreObject) -> Result<Object, SuiError> {
+        let indirect_object = match store_object.data {
+            StoreData::IndirectObject(ref metadata) => {
+                self.indirect_move_objects.get(&metadata.digest)?
+            }
+            _ => None,
+        };
+        StoreObjectPair(store_object, indirect_object).try_into()
     }
 
     pub fn get_latest_parent_entry(
@@ -204,7 +229,7 @@ impl ObjectStore for &AuthorityPerpetualTables {
                 );
                 Ok(None)
             }
-            Some((obj_ref, _)) if obj_ref.2.is_alive() => Ok(Some(obj)),
+            Some((obj_ref, _)) if obj_ref.2.is_alive() => Ok(Some(self.object(obj)?)),
             _ => Ok(None),
         }
     }
@@ -245,6 +270,7 @@ impl Iterator for LiveSetIter<'_> {
 fn owned_object_transaction_locks_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
+
 fn objects_table_default_config() -> DBOptions {
     let db_options = default_db_options(None, None).1;
     DBOptions {
@@ -254,9 +280,24 @@ fn objects_table_default_config() -> DBOptions {
         },
     }
 }
+
 fn transactions_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
+
 fn effects_table_default_config() -> DBOptions {
     default_db_options(None, None).1
+}
+
+fn indirect_move_objects_table_default_config() -> DBOptions {
+    let mut options = default_db_options(None, None).1;
+    options.options.set_merge_operator(
+        "refcount operator",
+        reference_count_merge_operator,
+        reference_count_merge_operator,
+    );
+    options
+        .options
+        .set_compaction_filter("empty filter", empty_compaction_filter);
+    options
 }

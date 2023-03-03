@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::node::AuthorityStorePruningConfig;
 use crate::node::{
     default_end_of_epoch_broadcast_channel_capacity, default_epoch_duration_ms,
     AuthorityKeyPairWithPath, KeyPairWithPath,
 };
+use crate::node::{AuthorityStorePruningConfig, StateSnapshotConfig};
 use crate::p2p::{P2pConfig, SeedPeer};
 use crate::{
     builder::{self, ProtocolVersionsConfig, SupportedProtocolVersionsCallback},
@@ -42,7 +42,7 @@ impl NetworkConfig {
         &self.validator_configs
     }
 
-    pub fn validator_set(&self) -> &[ValidatorInfo] {
+    pub fn validator_set(&self) -> Vec<ValidatorInfo> {
         self.genesis.validator_set()
     }
 
@@ -271,6 +271,7 @@ impl<'a> FullnodeConfigBuilder<'a> {
             checkpoint_executor_config: Default::default(),
             metrics: None,
             supported_protocol_versions: Some(supported_protocol_versions),
+            state_snapshot_config: StateSnapshotConfig::fullnode_config(),
         })
     }
 }

@@ -29,7 +29,12 @@ bcs.registerStructType("Coin", {
 });
 
 // deserialization: BCS bytes into Coin
-let bcsBytes = "2b3962603a5a0a5915349523120e441a5d20be92001100A1001100A1";
+let bytes = bcs
+  .ser("Coin", {
+    id: "0000000000000000000000000000000000000000000000000000000000000001",
+    value: 1000000n,
+  })
+  .toBytes();
 let coin = bcs.de("Coin", bcsBytes, "hex");
 
 // serialization: Object into bytes - an Option with <T = Coin>
@@ -59,9 +64,10 @@ BCS constructor is configurable for the target. The following parameters are ava
 // Example: All options used
 import { BCS } from "@mysten/bcs";
 
+const SUI_ADDRESS_LENGTH = 32;
 const bcs = new BCS({
   vectorType: "vector<T>",
-  addressLength: 20,
+  addressLength: SUI_ADDRESS_LENGTH,
   addressEncoding: "hex",
   genericSeparators: ["<", ">"],
   types: {
@@ -93,10 +99,10 @@ const bcs = new BCS(getSuiMoveConfig());
 
 // use bcs.ser() to serialize data
 const val = [1, 2, 3, 4];
-const ser = bcs.ser("vector<u8>", val).toBytes();
+const ser = bcs.ser(["vector", BCS.U8], val).toBytes();
 
 // use bcs.de() to deserialize data
-const res = bcs.de("vector<u8>", ser);
+const res = bcs.de(["vector", BCS.U8], ser);
 
 console.assert(res.toString() === val.toString());
 ```
@@ -109,8 +115,8 @@ import { BCS, getRustConfig } from "@mysten/bcs";
 
 const bcs = new BCS(getRustConfig());
 const val = [1, 2, 3, 4];
-const ser = bcs.ser("Vec<u8>", val).toBytes();
-const res = bcs.de("Vec<u8>", ser);
+const ser = bcs.ser(["Vec", BCS.U8], val).toBytes();
+const res = bcs.de(["Vec", BCS.U8], ser);
 
 console.assert(res.toString() === val.toString());
 ```
@@ -154,8 +160,8 @@ let _addr = bcs
 let _str = bcs.ser(BCS.STRING, "this is an ascii string").toBytes();
 
 // Vectors (vector<T>)
-let _u8_vec = bcs.ser("vector<u8>", [1, 2, 3, 4, 5, 6, 7]).toBytes();
-let _bool_vec = bcs.ser("vector<bool>", [true, true, false]).toBytes();
+let _u8_vec = bcs.ser(["vector", BCS.U8], [1, 2, 3, 4, 5, 6, 7]).toBytes();
+let _bool_vec = bcs.ser(["vector", BCS.BOOL], [true, true, false]).toBytes();
 let _str_vec = bcs
   .ser("vector<bool>", ["string1", "string2", "string3"])
   .toBytes();
@@ -250,12 +256,52 @@ bcs.registerStructType("Coin", {
 // structure as the definition
 let _bytes = bcs
   .ser("Coin", {
-    id: "0x0000000000000000000000000000000000000005",
+    id: "0x0000000000000000000000000000000000000000000000000000000000000005",
     balance: {
       value: 100000000n,
     },
   })
   .toBytes();
+```
+
+## Using Generics
+
+To define a generic struct or an enum, pass the type parameters. It can either be done as a part of a string or as an Array. See below:
+```ts
+// Example: Generics
+import { BCS, getSuiMoveConfig } from "@mysten/bcs";
+const bcs = new BCS(getSuiMoveConfig());
+
+// Container -> the name of the type
+// T -> type parameter which has to be passed in `ser()` or `de()` methods
+// If you're not familiar with generics, treat them as type Templates
+bcs.registerStructType(["Container", "T"], {
+  contents: "T"
+});
+
+// When serializing, we have to pass the type to use for `T`
+bcs.ser(["Container", BCS.U8], {
+  contents: 100
+}).toString("hex");
+
+// Reusing the same Container type with different contents.
+// Mind that generics need to be passed as Array after the main type.
+bcs.ser(["Container", [ "vector", BCS.BOOL ]], {
+  contents: [ true, false, true ]
+}).toString("hex");
+
+// Using multiple generics - you can use any string for convenience and
+// readability. See how we also use array notation for a field definition.
+bcs.registerStructType(["VecMap", "Key", "Val"], {
+  keys: ["vector", "Key"],
+  values: ["vector", "Val"]
+});
+
+// To serialize VecMap, we can use:
+bcs.ser(["VecMap", BCS.STRING, BCS.STRING], {
+  keys: [ "key1", "key2", "key3" ],
+  values: [ "value1", "value2", "value3" ]
+});
 ```
 
 ### Enum
@@ -313,7 +359,7 @@ const bcs = new BCS(getSuiMoveConfig());
 
 // Some value we want to serialize
 const coin = {
-  id: "0000000000000000000000000000000000000005",
+  id: "0000000000000000000000000000000000000000000000000000000000000005",
   value: 1111333333222n,
 };
 

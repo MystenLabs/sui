@@ -17,15 +17,15 @@ import type {
     TransactionEffects,
     SuiTransactionResponse,
     SuiEvent,
+    TransactionEvents,
 } from '@mysten/sui.js';
 
 const getCoinType = (
-    txEffects: TransactionEffects | null,
+    events: TransactionEvents | null,
     address: string
 ): string | null => {
-    if (!txEffects) return null;
+    if (!events) return null;
 
-    const events = txEffects?.events || [];
     const coinType = events
         ?.map((event: SuiEvent) => {
             const data = Object.values(event).find(
@@ -46,7 +46,8 @@ type FormattedBalance = {
 // For TransferObject, TransferSui, Pay, PaySui, transactions get the amount from the transfer data
 export function getTransfersAmount(
     txnData: SuiTransactionKind,
-    txnEffect?: TransactionEffects
+    txnEffect?: TransactionEffects,
+    events?: TransactionEvents
 ): FormattedBalance[] | null {
     const txKindName = getTransactionKindName(txnData);
     if (txKindName === 'TransferObject') {
@@ -67,8 +68,7 @@ export function getTransfersAmount(
                   {
                       address: txn.recipient,
                       amount: txn?.amount,
-                      coinType:
-                          txnEffect && getCoinType(txnEffect, txn.recipient),
+                      coinType: events && getCoinType(events, txn.recipient),
                   },
               ]
             : null;
@@ -88,7 +88,7 @@ export function getTransfersAmount(
                 coinType:
                     txKindName === 'PaySui'
                         ? SUI_TYPE_ARG
-                        : getCoinType(txnEffect || null, recipient),
+                        : getCoinType(events || null, recipient),
                 address: recipient,
             },
         }),
@@ -106,10 +106,9 @@ export function getTransfersAmount(
 // Get transaction amount from coinBalanceChange event for Call Txn
 // Aggregate coinBalanceChange by coinType and address
 function getTxnAmountFromCoinBalanceEvent(
-    txEffects: TransactionEffects,
+    events: TransactionEvents,
     address: string
 ): FormattedBalance[] {
-    const events = txEffects?.events || [];
     const coinsMeta = {} as { [coinType: string]: FormattedBalance };
 
     events.forEach((event) => {
@@ -145,11 +144,11 @@ export function getAmount({
     txnData: SuiTransactionResponse;
     suiCoinOnly?: boolean;
 }) {
-    const { effects } = txnData;
+    const { effects, events } = txnData;
     const txnDetails = getTransactions(txnData)[0];
     const sender = getTransactionSender(txnData);
     const suiTransfer = getTransfersAmount(txnDetails, effects);
-    const coinBalanceChange = getTxnAmountFromCoinBalanceEvent(effects, sender);
+    const coinBalanceChange = getTxnAmountFromCoinBalanceEvent(events, sender);
     const transfers = suiTransfer || coinBalanceChange;
     if (suiCoinOnly) {
         return transfers?.filter(({ coinType }) => coinType === SUI_TYPE_ARG);

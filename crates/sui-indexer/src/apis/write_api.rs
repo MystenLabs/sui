@@ -8,7 +8,7 @@ use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
 use sui_json_rpc::api::{WriteApiClient, WriteApiServer};
 use sui_json_rpc::SuiRpcModule;
-use sui_json_rpc_types::{DevInspectResults, SuiTransactionEffects, SuiTransactionResponse};
+use sui_json_rpc_types::{DevInspectResults, DryRunTransactionResponse, SuiTransactionResponse};
 use sui_open_rpc::Module;
 use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::messages::ExecuteTransactionRequestType;
@@ -70,7 +70,7 @@ impl WriteApiServer for WriteApi {
             .await
     }
 
-    async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<SuiTransactionEffects> {
+    async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<DryRunTransactionResponse> {
         self.fullnode.dry_run_transaction(tx_bytes).await
     }
 }

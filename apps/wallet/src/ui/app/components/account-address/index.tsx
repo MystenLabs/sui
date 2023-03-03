@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatAddress } from '@mysten/sui.js';
+import { formatAddress, type SuiAddress } from '@mysten/sui.js';
 import cl from 'classnames';
 
 import CopyToClipboard from '_components/copy-to-clipboard';
@@ -18,6 +18,7 @@ type AccountAddressProps = {
     shorten?: boolean;
     copyable?: boolean;
     mode?: 'normal' | 'faded';
+    address?: SuiAddress;
 };
 
 function AccountAddress({
@@ -26,24 +27,25 @@ function AccountAddress({
     shorten = true,
     copyable,
     mode = 'normal',
+    address,
 }: AccountAddressProps) {
     const network = useAppSelector(({ app }) => app.apiEnv);
     const showExplorerLink = API_ENV.customRPC !== network;
-
-    const address = useAppSelector(({ account: { address } }) => address);
+    const activeAddress = useAppSelector(({ account }) => account.address);
+    const addressToShow = address || activeAddress;
     const cpIconMode = mode === 'normal' ? 'normal' : 'highlighted';
 
-    const addressLink = address && (
-        <span className={cl(st.address, st[mode])} title={address}>
-            {shorten ? formatAddress(address) : address}
+    const addressLink = addressToShow && (
+        <span className={cl(st.address, st[mode])} title={addressToShow}>
+            {shorten ? formatAddress(addressToShow) : addressToShow}
         </span>
     );
 
-    return address ? (
+    return addressToShow ? (
         <span className={cl(st.addressContainer, className)}>
             {copyable ? (
                 <CopyToClipboard
-                    txt={address}
+                    txt={addressToShow}
                     mode={cpIconMode}
                     copySuccessMessage="Address copied"
                 >

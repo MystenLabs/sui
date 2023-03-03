@@ -367,14 +367,10 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                 let committee_cloned = Arc::new(worker.proxy.clone_committee());
                                 let start = Arc::new(Instant::now());
                                 let res = worker.proxy
-                                    .execute_bench_transaction(b.0.clone().into())
+                                    .execute_transaction(b.0.clone().into())
                                     .then(|res| async move  {
                                         match res {
                                             Ok(effects) => {
-                                                let new_version = effects.mutated().iter().find(|(object_ref, _)| {
-                                                    object_ref.0 == b.1.get_object_id()
-                                                }).map(|x| x.0).unwrap();
-
                                                 let latency = start.elapsed();
                                                 let square_latency_ms = latency.as_secs_f64().powf(2.0);
                                                 metrics_cloned.latency_s.with_label_values(&[&b.1.get_workload_type().to_string()]).observe(latency.as_secs_f64());
@@ -389,7 +385,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                                 }
                                                 NextOp::Response(Some((
                                                     latency,
-                                                    b.1.make_new_payload(new_version, effects.gas_object().0, &effects),
+                                                    b.1.make_new_payload(&effects),
                                                 ),
                                                 ))
                                             }
@@ -419,14 +415,10 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                 // TODO: clone committee for each request is not ideal.
                                 let committee_cloned = Arc::new(worker.proxy.clone_committee());
                                 let res = worker.proxy
-                                    .execute_bench_transaction(tx.clone().into())
+                                    .execute_transaction(tx.clone().into())
                                 .then(|res| async move {
                                     match res {
                                         Ok(effects) => {
-                                            let new_version = effects.mutated().iter().find(|(object_ref, _)| {
-                                                object_ref.0 == payload.get_object_id()
-                                            }).map(|x| x.0).unwrap();
-
                                             let latency = start.elapsed();
                                             let square_latency_ms = latency.as_secs_f64().powf(2.0);
                                             metrics_cloned.latency_s.with_label_values(&[&payload.get_workload_type().to_string()]).observe(latency.as_secs_f64());
@@ -439,7 +431,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                             if let Some(sig_info) = effects.quorum_sig() { sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc()) }
                                             NextOp::Response(Some((
                                                 latency,
-                                                payload.make_new_payload(new_version, effects.gas_object().0, &effects),
+                                                payload.make_new_payload(&effects),
                                             )))
                                         }
                                         Err(err) => {

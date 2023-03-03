@@ -81,7 +81,7 @@ impl EventReadApiServer for EventReadApi {
         // Retrieve 1 extra item for next cursor
         let mut data = self
             .state
-            .get_events(query, cursor, limit + 1, descending)
+            .query_events(query, cursor, limit + 1, descending)
             .await?;
         let next_cursor = data.get(limit).map(|(id, _)| id.clone());
         data.truncate(limit);
@@ -106,7 +106,18 @@ impl EventReadApiServer for EventReadApi {
         let state = self.state.clone();
         let stream = self.event_handler.subscribe(filter);
         let stream = stream.map(move |e: EventEnvelope| {
-            let event = SuiEvent::try_from(e.event, state.module_cache.as_ref());
+            let event = SuiEvent::try_from(
+                e.event,
+                // threading the epoch_store through this API does not
+                // seem possible, so we just read it from the state and fetch
+                // the module cache out of it.
+                // Notice that no matter what module cache we get things
+                // should work
+                state
+                    .load_epoch_store_one_call_per_task()
+                    .module_cache()
+                    .as_ref(),
+            );
             event.map(|event| SuiEventEnvelope {
                 timestamp: e.timestamp,
                 tx_digest: e.tx_digest,

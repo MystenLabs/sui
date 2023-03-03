@@ -6,8 +6,12 @@ use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::StructTag;
+use move_core_types::value::{MoveStruct, MoveValue};
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use sui_types::collection_types::VecMap;
+use sui_types::display::{DisplayCreatedEvent, DisplayObject};
 use sui_types::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use tap::TapFallible;
 
@@ -17,9 +21,9 @@ use jsonrpsee::RpcModule;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
-    GetRawObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page,
-    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
-    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
+    GetRawObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page, SuiEvent,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct,
+    SuiMoveValue, SuiObjectInfo, SuiTransactionEvents, SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
@@ -32,7 +36,7 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead};
-use sui_types::query::TransactionQuery;
+use sui_types::query::{EventQuery, TransactionQuery};
 
 use sui_types::dynamic_field::DynamicFieldName;
 use tracing::debug;
@@ -40,6 +44,8 @@ use tracing::debug;
 use crate::api::cap_page_limit;
 use crate::error::Error;
 use crate::SuiRpcModule;
+
+const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
 
 // An implementation of the read portion of the JSON-RPC interface intended for use in
 // Fullnodes.
@@ -158,9 +164,32 @@ impl ReadApiServer for ReadApi {
             .map_err(|e| anyhow!("{e}"))?;
         let checkpoint_timestamp = checkpoint.as_ref().map(|c| c.summary.timestamp_ms);
 
+        let events = if let Some(digest) = effects.events_digest {
+            let events = self
+                .state
+                .get_transaction_events(digest)
+                .await
+                .map_err(Error::from)?;
+            SuiTransactionEvents::try_from(
+                events,
+                // threading the epoch_store through this API does not
+                // seem possible, so we just read it from the state and fetch
+                // the module cache out of it.
+                // Notice that no matter what module cache we get things
+                // should work
+                self.state
+                    .load_epoch_store_one_call_per_task()
+                    .module_cache()
+                    .as_ref(),
+            )?
+        } else {
+            SuiTransactionEvents::default()
+        };
+
         Ok(SuiTransactionResponse {
             transaction: transaction.into_message().try_into()?,
-            effects: SuiTransactionEffects::try_from(effects, self.state.module_cache.as_ref())?,
+            effects: effects.into(),
+            events,
             timestamp_ms: checkpoint_timestamp,
             confirmed_local_execution: None,
             checkpoint: checkpoint.map(|c| c.summary.sequence_number),
@@ -372,6 +401,15 @@ impl ReadApiServer for ReadApi {
             .map_err(|e| anyhow!("{e}"))?
             .try_into()?)
     }
+
+    async fn get_display_deprecated(
+        &self,
+        object_id: ObjectID,
+    ) -> RpcResult<BTreeMap<String, String>> {
+        let (object_type, move_struct) = get_object_type_and_struct(self, object_id).await?;
+        let display_object = get_display_object(self, object_type).await?;
+        Ok(get_rendered_fields(display_object.fields, &move_struct).map_err(|e| anyhow!("{e}"))?)
+    }
 }
 
 impl SuiRpcModule for ReadApi {
@@ -381,6 +419,84 @@ impl SuiRpcModule for ReadApi {
 
     fn rpc_doc_module() -> Module {
         crate::api::ReadApiOpenRpc::module_doc()
+    }
+}
+
+async fn get_display_object(
+    fullnode_api: &ReadApi,
+    object_type: StructTag,
+) -> RpcResult<DisplayObject> {
+    let display_object_id = get_display_object_id(fullnode_api, object_type).await?;
+    if let ObjectRead::Exists(_, display_object, _) = fullnode_api
+        .state
+        .get_object_read(&display_object_id)
+        .await
+        .map_err(|e| anyhow!("Failed to fetch display object {display_object_id}: {e}"))?
+    {
+        let move_object = display_object
+            .data
+            .try_as_move()
+            .ok_or_else(|| anyhow!("Failed to extract Move object from {display_object_id}"))?;
+        Ok(bcs::from_bytes::<DisplayObject>(move_object.contents())
+            .map_err(|e| anyhow!("Failed to deserialize DisplayObject {display_object_id}: {e}"))?)
+    } else {
+        Err(anyhow!("Display object {display_object_id} does not exist"))?
+    }
+}
+
+async fn get_display_object_id(
+    fullnode_api: &ReadApi,
+    object_type: StructTag,
+) -> RpcResult<ObjectID> {
+    let display_created_event = fullnode_api
+        .state
+        .query_events(
+            EventQuery::MoveEvent(DisplayCreatedEvent::type_(&object_type).to_string()),
+            /* cursor */ None,
+            /* limit */ 1,
+            /* descending */ false,
+        )
+        .await?;
+    if display_created_event.is_empty() {
+        return Err(anyhow!(
+            "Failed to find DisplayCreated event for {object_type}"
+        ))?;
+    }
+    if let SuiEvent::MoveEvent { bcs, .. } = display_created_event[0].clone().1.event {
+        let display_object_id = bcs::from_bytes::<DisplayCreatedEvent>(&bcs)
+            .map_err(|e| anyhow!("Failed to deserialize DisplayCreatedEvent: {e}"))?
+            .id
+            .bytes;
+        Ok(display_object_id)
+    } else {
+        Err(anyhow!("Failed to extract display object id from event"))?
+    }
+}
+
+async fn get_object_type_and_struct(
+    fullnode_api: &ReadApi,
+    object_id: ObjectID,
+) -> RpcResult<(StructTag, MoveStruct)> {
+    let object_read = fullnode_api
+        .state
+        .get_object_read(&object_id)
+        .await
+        .map_err(|e| anyhow!("Failed to fetch {object_id}: {e}"))?;
+    if let ObjectRead::Exists(_, o, layout) = object_read {
+        let layout = layout.ok_or_else(|| anyhow!("Failed to extract layout"))?;
+        let object_type = o
+            .type_()
+            .ok_or_else(|| anyhow!("Failed to extract object type"))?
+            .clone();
+        let move_struct = o
+            .data
+            .try_as_move()
+            .ok_or_else(|| anyhow!("Failed to extract Move object from {object_id}"))?
+            .to_move_struct(&layout)
+            .map_err(|err| anyhow!("{err}"))?;
+        Ok((object_type, move_struct))
+    } else {
+        Err(anyhow!("Object {object_id} does not exist"))?
     }
 }
 
@@ -432,4 +548,108 @@ pub fn get_transaction_data_and_digest(
     );
     let txn_digest = TransactionDigest::new(sha3_hash(&intent_msg.value));
     Ok((intent_msg.value, txn_digest))
+}
+
+pub fn get_rendered_fields(
+    fields: VecMap<String, String>,
+    move_struct: &MoveStruct,
+) -> RpcResult<BTreeMap<String, String>> {
+    let sui_move_value: SuiMoveValue = MoveValue::Struct(move_struct.clone()).into();
+    if let SuiMoveValue::Struct(move_struct) = sui_move_value {
+        return fields
+            .contents
+            .iter()
+            .map(|entry| match parse_template(&entry.value, &move_struct) {
+                Ok(value) => Ok((entry.key.clone(), value)),
+                Err(e) => Err(e),
+            })
+            .collect::<RpcResult<BTreeMap<_, _>>>();
+    }
+    Err(anyhow!("Failed to parse move struct"))?
+}
+
+fn parse_template(template: &str, move_struct: &SuiMoveStruct) -> RpcResult<String> {
+    let mut output = template.to_string();
+    let mut var_name = String::new();
+    let mut in_braces = false;
+    let mut escaped = false;
+
+    for ch in template.chars() {
+        match ch {
+            '\\' => {
+                escaped = true;
+                continue;
+            }
+            '{' if !escaped => {
+                in_braces = true;
+                var_name.clear();
+            }
+            '}' if !escaped => {
+                in_braces = false;
+                let value = get_value_from_move_struct(move_struct, &var_name)?;
+                output = output.replace(&format!("{{{}}}", var_name), &value.to_string());
+            }
+            _ if !escaped => {
+                if in_braces {
+                    var_name.push(ch);
+                }
+            }
+            _ => {}
+        }
+        escaped = false;
+    }
+
+    Ok(output.replace('\\', ""))
+}
+
+fn get_value_from_move_struct(move_struct: &SuiMoveStruct, var_name: &str) -> RpcResult<String> {
+    let parts: Vec<&str> = var_name.split('.').collect();
+    if parts.is_empty() {
+        return Err(anyhow!("Display template value cannot be empty"))?;
+    }
+    if parts.len() > MAX_DISPLAY_NESTED_LEVEL {
+        return Err(anyhow!(
+            "Display template value nested depth cannot exist {}",
+            MAX_DISPLAY_NESTED_LEVEL
+        ))?;
+    }
+    let mut current_value = &SuiMoveValue::Struct(move_struct.clone());
+    // iterate over the parts and try to access the corresponding field
+    for part in parts {
+        match current_value {
+            SuiMoveValue::Struct(move_struct) => {
+                if let SuiMoveStruct::WithTypes { type_: _, fields }
+                | SuiMoveStruct::WithFields(fields) = move_struct
+                {
+                    if let Some(value) = fields.get(part) {
+                        current_value = value;
+                    } else {
+                        return Err(anyhow!(
+                            "Field value {} cannot be found in struct",
+                            var_name
+                        ))?;
+                    }
+                } else {
+                    return Err(anyhow!(
+                        "Unexpected move struct type for field {}",
+                        var_name
+                    ))?;
+                }
+            }
+            _ => return Err(anyhow!("Unexpected move value type for field {}", var_name))?,
+        }
+    }
+
+    match current_value {
+        SuiMoveValue::Option(move_option) => match move_option.as_ref() {
+            Some(move_value) => Ok(move_value.to_string()),
+            None => Ok("".to_string()),
+        },
+        SuiMoveValue::Vector(_) => Err(anyhow!(
+            "Vector is not supported as a Display value {}",
+            var_name
+        ))?,
+
+        _ => Ok(current_value.to_string()),
+    }
 }

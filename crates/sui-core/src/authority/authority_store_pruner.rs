@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::authority_store_types::{StoreData, StoreObject};
 use crate::checkpoints::CheckpointStore;
 use mysten_metrics::monitored_scope;
 use std::cmp::max;
@@ -9,7 +10,6 @@ use std::{sync::Arc, time::Duration};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_types::base_types::SequenceNumber;
 use sui_types::messages::TransactionEffects;
-use sui_types::object::Object;
 use sui_types::{
     base_types::{ObjectID, VersionNumber},
     storage::ObjectKey,
@@ -31,7 +31,7 @@ pub struct AuthorityStorePruner {
 }
 
 impl AuthorityStorePruner {
-    fn prune_objects(num_versions_to_retain: u64, objects: &DBMap<ObjectKey, Object>) -> u64 {
+    fn prune_objects(num_versions_to_retain: u64, objects: &DBMap<ObjectKey, StoreObject>) -> u64 {
         let iter = objects.iter().skip_to_last().reverse();
         let mut total_keys_scanned = 0;
         let mut total_objects_scanned = 0;
@@ -130,11 +130,11 @@ impl AuthorityStorePruner {
 
     fn handle_checkpoint(
         checkpoint_effects: impl IntoIterator<Item = TransactionEffects>,
-        objects: &DBMap<ObjectKey, Object>,
+        perpetual_db: &Arc<AuthorityPerpetualTables>,
     ) -> anyhow::Result<usize> {
         let _scope = monitored_scope("ObjectsLivePruner");
         let mut pruned = 0;
-        let mut wb = objects.batch();
+        let mut wb = perpetual_db.objects.batch();
         let mut updates = HashMap::new();
 
         for effects in checkpoint_effects {
@@ -145,16 +145,31 @@ impl AuthorityStorePruner {
                     .or_insert(seq_number);
             }
         }
+
+        let mut indirect_objects: HashMap<_, i64> = HashMap::new();
         for (object_id, version) in updates {
             let object_key = ObjectKey(object_id, version);
-            let iter = objects.iter().skip_prior_to(&object_key)?.reverse();
+            let iter = perpetual_db
+                .objects
+                .iter()
+                .skip_prior_to(&object_key)?
+                .reverse();
             let mut start_range = object_key;
             let end_range = ObjectKey(object_key.0, SequenceNumber::from(object_key.1.value() + 1));
-            for (key, _) in iter.take_while(|(key, _)| key.0 == object_key.0) {
+            for (key, value) in iter.take_while(|(key, _)| key.0 == object_key.0) {
+                if let StoreData::IndirectObject(indirect_object) = value.data {
+                    *indirect_objects.entry(indirect_object.digest).or_default() -= 1;
+                }
                 start_range = key;
                 pruned += 1;
             }
-            wb = wb.delete_range(objects, &start_range, &end_range)?;
+            wb = wb.delete_range(&perpetual_db.objects, &start_range, &end_range)?;
+        }
+        if !indirect_objects.is_empty() {
+            let ref_count_update = indirect_objects
+                .into_iter()
+                .map(|(digest, delta)| (digest, delta.to_le_bytes()));
+            wb = wb.partial_merge_batch(&perpetual_db.indirect_move_objects, ref_count_update)?;
         }
         wb.write()?;
         Ok(pruned)
@@ -189,7 +204,7 @@ impl AuthorityStorePruner {
             if effects.iter().any(|effect| effect.is_none()) {
                 return Err(anyhow::anyhow!("transaction effects data is missing"));
             }
-            Self::handle_checkpoint(effects.into_iter().flatten(), &perpetual_db.objects)?;
+            Self::handle_checkpoint(effects.into_iter().flatten(), perpetual_db)?;
             checkpoint_store.update_highest_pruned_checkpoint(&checkpoint)?;
             pruned_seq_number += 1;
         }
@@ -274,15 +289,17 @@ mod tests {
     use tracing::log::{error, info};
 
     use crate::authority::authority_store_tables::AuthorityPerpetualTables;
+    use crate::authority::authority_store_types::{StoreData, StoreObject, StoreObjectPair};
     #[cfg(not(target_env = "msvc"))]
     use pprof::Symbol;
-    use sui_types::base_types::VersionNumber;
+    use sui_types::base_types::{ObjectDigest, VersionNumber};
     use sui_types::messages::TransactionEffects;
     use sui_types::{
         base_types::{ObjectID, SequenceNumber},
         object::Object,
         storage::ObjectKey,
     };
+    use typed_store::rocks::util::reference_count_merge_operator;
     use typed_store::rocks::{DBMap, MetricConf, ReadWriteOptions};
     use typed_store::Map;
 
@@ -292,11 +309,21 @@ mod tests {
         let perpetual_db_path = db_path.join(Path::new("perpetual"));
         let cf_names = AuthorityPerpetualTables::describe_tables();
         let cfs: Vec<&str> = cf_names.keys().map(|x| x.as_str()).collect();
-        let perpetual_db =
-            typed_store::rocks::open_cf(perpetual_db_path, None, MetricConf::default(), &cfs);
+        let mut db_options = rocksdb::Options::default();
+        db_options.set_merge_operator(
+            "refcount operator",
+            reference_count_merge_operator,
+            reference_count_merge_operator,
+        );
+        let perpetual_db = typed_store::rocks::open_cf(
+            perpetual_db_path,
+            Some(db_options),
+            MetricConf::default(),
+            &cfs,
+        );
 
         let mut after_pruning = HashSet::new();
-        let objects = DBMap::<ObjectKey, Object>::reopen(
+        let objects = DBMap::<ObjectKey, StoreObject>::reopen(
             &perpetual_db?,
             Some("objects"),
             // open the db to bypass default db options which ignores range tombstones
@@ -322,22 +349,23 @@ mod tests {
         false
     }
 
-    fn insert_keys(objects: &DBMap<ObjectKey, Object>) -> Result<(), anyhow::Error> {
+    fn insert_keys(objects: &DBMap<ObjectKey, StoreObject>) -> Result<(), anyhow::Error> {
         let total_unique_object_ids = 100_000;
         let num_versions_per_object = 10;
         let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids)?;
         for id in ids {
             for i in (0..num_versions_per_object).rev() {
-                objects.insert(
-                    &ObjectKey(id, SequenceNumber::from(i)),
-                    &Object::immutable_with_id_for_testing(id),
-                )?;
+                let StoreObjectPair(obj, _) = Object::immutable_with_id_for_testing(id).into();
+                objects.insert(&ObjectKey(id, SequenceNumber::from(i)), &obj)?;
             }
         }
         Ok(())
     }
 
-    fn read_keys(objects: &DBMap<ObjectKey, Object>, num_reads: u32) -> Result<(), anyhow::Error> {
+    fn read_keys(
+        objects: &DBMap<ObjectKey, StoreObject>,
+        num_reads: u32,
+    ) -> Result<(), anyhow::Error> {
         let mut i = 0;
         while i < num_reads {
             let _res = objects.get(&ObjectKey(ObjectID::random(), VersionNumber::MAX))?;
@@ -353,6 +381,7 @@ mod tests {
         total_unique_object_ids: u32,
     ) -> Result<(Vec<ObjectKey>, Vec<ObjectKey>), anyhow::Error> {
         let (mut to_keep, mut to_delete) = (vec![], vec![]);
+        let mut batch = db.objects.batch();
 
         let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids.into())?;
         for id in ids {
@@ -364,12 +393,21 @@ mod tests {
                 } else {
                     to_delete.push(object_key);
                 }
-                db.objects.insert(
-                    &ObjectKey(id, SequenceNumber::from(i)),
-                    &Object::immutable_with_id_for_testing(id),
+                let StoreObjectPair(obj, indirect_obj) =
+                    Object::immutable_with_id_for_testing(id).into();
+                batch = batch.insert_batch(
+                    &db.objects,
+                    [(ObjectKey(id, SequenceNumber::from(i)), obj.clone())],
                 )?;
+                if let StoreData::IndirectObject(metadata) = obj.data {
+                    batch = batch.merge_batch(
+                        &db.indirect_move_objects,
+                        [(metadata.digest, indirect_obj.unwrap())],
+                    )?;
+                }
             }
         }
+        batch.write().unwrap();
         assert_eq!(
             to_keep.len() as u64,
             std::cmp::min(num_object_versions_to_retain, num_versions_per_object)
@@ -378,24 +416,38 @@ mod tests {
         Ok((to_keep, to_delete))
     }
 
-    #[tokio::test]
-    async fn test_live_pruning() {
-        let path = tempfile::tempdir().unwrap().into_path();
-
-        let to_keep = {
-            let db = Arc::new(AuthorityPerpetualTables::open(&path, None));
-            let (to_keep, to_delete) = generate_test_data(db.clone(), 3, 2, 1000).unwrap();
+    async fn live_pruner_iteration(
+        path: &Path,
+        num_versions_per_object: u64,
+        num_object_versions_to_retain: u64,
+        total_unique_object_ids: u32,
+    ) -> Vec<ObjectKey> {
+        let result;
+        {
+            let db = Arc::new(AuthorityPerpetualTables::open(path, None));
+            let (to_keep, to_delete) = generate_test_data(
+                db.clone(),
+                num_versions_per_object,
+                num_object_versions_to_retain,
+                total_unique_object_ids,
+            )
+            .unwrap();
+            result = to_keep;
+            // let expected_pruned = to_delete.len();
             let effects = TransactionEffects {
                 modified_at_versions: to_delete.into_iter().map(|o| (o.0, o.1)).collect(),
                 ..Default::default()
             };
-            let pruned =
-                AuthorityStorePruner::handle_checkpoint(vec![effects], &db.objects).unwrap();
-            assert_eq!(pruned, 1000);
-            to_keep
+            AuthorityStorePruner::handle_checkpoint(vec![effects], &db).unwrap();
         };
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        result
+    }
 
-        tokio::time::sleep(Duration::from_secs(3)).await;
+    #[tokio::test]
+    async fn test_basic_live_pruning() {
+        let path = tempfile::tempdir().unwrap().into_path();
+        let to_keep = live_pruner_iteration(&path, 3, 2, 1000).await;
         assert_eq!(
             HashSet::from_iter(to_keep),
             get_keys_after_pruning(path).unwrap()
@@ -475,6 +527,36 @@ mod tests {
 
     #[cfg(not(target_env = "msvc"))]
     #[tokio::test]
+    async fn test_ref_count_live_pruning() {
+        let path = tempfile::tempdir().unwrap().into_path();
+        live_pruner_iteration(&path, 3, 2, 1000).await;
+        {
+            let perpetual_db = AuthorityPerpetualTables::open(&path, None);
+            let count = perpetual_db.indirect_move_objects.keys().count();
+            // references are not reset, expected to have 1000 unique objects
+            assert_eq!(count, 1000);
+        }
+
+        let path = tempfile::tempdir().unwrap().into_path();
+        live_pruner_iteration(&path, 3, 0, 1000).await;
+        {
+            let perpetual_db = AuthorityPerpetualTables::open(&path, None);
+            perpetual_db.indirect_move_objects.flush().unwrap();
+            perpetual_db
+                .indirect_move_objects
+                .compact_range(&ObjectDigest::MIN, &ObjectDigest::MAX)
+                .unwrap();
+            perpetual_db
+                .indirect_move_objects
+                .compact_range(&ObjectDigest::MIN, &ObjectDigest::MAX)
+                .unwrap();
+            let count = perpetual_db.indirect_move_objects.keys().count();
+            assert_eq!(count, 0);
+        }
+    }
+
+    #[cfg(not(target_env = "msvc"))]
+    #[tokio::test]
     async fn test_db_size_after_compaction() -> Result<(), anyhow::Error> {
         let primary_path = tempfile::tempdir()?.into_path();
         let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None));
@@ -483,10 +565,10 @@ mod tests {
         let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids)?;
         for id in ids {
             for i in (0..num_versions_per_object).rev() {
-                perpetual_db.objects.insert(
-                    &ObjectKey(id, SequenceNumber::from(i)),
-                    &Object::immutable_with_id_for_testing(id),
-                )?;
+                let StoreObjectPair(obj, _) = Object::immutable_with_id_for_testing(id).into();
+                perpetual_db
+                    .objects
+                    .insert(&ObjectKey(id, SequenceNumber::from(i)), &obj)?;
             }
         }
         perpetual_db.objects.rocksdb.flush()?;
@@ -522,7 +604,7 @@ mod tests {
         let cfs: Vec<&str> = cf_names.keys().map(|x| x.as_str()).collect();
         let perpetual_db =
             typed_store::rocks::open_cf(perpetual_db_path, None, MetricConf::default(), &cfs);
-        let objects = DBMap::<ObjectKey, Object>::reopen(
+        let objects = DBMap::<ObjectKey, StoreObject>::reopen(
             &perpetual_db?,
             Some("objects"),
             &ReadWriteOptions {

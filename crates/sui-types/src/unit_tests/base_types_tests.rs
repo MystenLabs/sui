@@ -16,6 +16,7 @@ use crate::crypto::{
     Signature, SuiAuthoritySignature, SuiSignature,
 };
 use crate::intent::{Intent, IntentMessage};
+use crate::OBJECT_START_VERSION;
 use crate::{gas_coin::GasCoin, object::Object, SUI_FRAMEWORK_ADDRESS};
 use sui_protocol_config::ProtocolConfig;
 
@@ -111,8 +112,8 @@ fn test_object_id_conversions() {}
 
 #[test]
 fn test_object_id_display() {
-    let hex = "ca843279e3427144cead5e4d5999a3d05999a3d0";
-    let upper_hex = "CA843279E3427144CEAD5E4D5999A3D05999A3D0";
+    let hex = SAMPLE_ADDRESS;
+    let upper_hex = SAMPLE_ADDRESS.to_uppercase();
 
     let id = ObjectID::from_str(hex).unwrap();
     assert_eq!(format!("{:?}", id), format!("0x{hex}"));
@@ -124,9 +125,14 @@ fn test_object_id_display() {
 
 #[test]
 fn test_object_id_str_lossless() {
-    let id = ObjectID::from_str("0000000000c0f1f95c5b1c5f0eda533eff269000").unwrap();
-    let id_empty = ObjectID::from_str("0000000000000000000000000000000000000000").unwrap();
-    let id_one = ObjectID::from_str("0000000000000000000000000000000000000001").unwrap();
+    let id = ObjectID::from_str("0000000000000000000000000000000000c0f1f95c5b1c5f0eda533eff269000")
+        .unwrap();
+    let id_empty =
+        ObjectID::from_str("0000000000000000000000000000000000000000000000000000000000000000")
+            .unwrap();
+    let id_one =
+        ObjectID::from_str("0000000000000000000000000000000000000000000000000000000000000001")
+            .unwrap();
 
     assert_eq!(id.short_str_lossless(), "c0f1f95c5b1c5f0eda533eff269000",);
     assert_eq!(id_empty.short_str_lossless(), "0",);
@@ -136,7 +142,7 @@ fn test_object_id_str_lossless() {
 #[test]
 fn test_object_id_from_hex_literal() {
     let hex_literal = "0x1";
-    let hex = "0000000000000000000000000000000000000001";
+    let hex = "0000000000000000000000000000000000000000000000000000000000000001";
 
     let obj_id_from_literal = ObjectID::from_hex_literal(hex_literal).unwrap();
     let obj_id = ObjectID::from_str(hex).unwrap();
@@ -147,8 +153,10 @@ fn test_object_id_from_hex_literal() {
     // Missing '0x'
     ObjectID::from_hex_literal(hex).unwrap_err();
     // Too long
-    ObjectID::from_hex_literal("0x10000000000000000000000000000000000000000000000000000000001")
-        .unwrap_err();
+    ObjectID::from_hex_literal(
+        "0x10000000000000000000000000000000000000000000000000000000000000001",
+    )
+    .unwrap_err();
 }
 
 #[test]
@@ -174,13 +182,13 @@ fn test_object_id_deserialize_from_json_value() {
 
 #[test]
 fn test_object_id_serde_json() {
-    let hex = "0xca843279e342714123456784cead5e4d5999a3d0";
-    let json_hex = "\"0xca843279e342714123456784cead5e4d5999a3d0\"";
+    let hex = format!("0x{}", SAMPLE_ADDRESS);
+    let json_hex = format!("\"0x{}\"", SAMPLE_ADDRESS);
 
-    let obj_id = ObjectID::from_hex_literal(hex).unwrap();
+    let obj_id = ObjectID::from_hex_literal(&hex).unwrap();
 
     let json = serde_json::to_string(&obj_id).unwrap();
-    let json_obj_id: ObjectID = serde_json::from_str(json_hex).unwrap();
+    let json_obj_id: ObjectID = serde_json::from_str(&json_hex).unwrap();
 
     assert_eq!(json, json_hex);
     assert_eq!(obj_id, json_obj_id);
@@ -197,14 +205,12 @@ fn test_object_id_serde_not_human_readable() {
 
 #[test]
 fn test_object_id_serde_with_expected_value() {
-    let object_id_vec = vec![
-        71, 183, 32, 230, 10, 187, 253, 56, 195, 142, 30, 23, 38, 201, 102, 0, 130, 240, 199, 52,
-    ];
+    let object_id_vec = SAMPLE_ADDRESS_VEC.to_vec();
     let object_id = ObjectID::try_from(object_id_vec.clone()).unwrap();
     let json_serialized = serde_json::to_string(&object_id).unwrap();
     let bcs_serialized = bcs::to_bytes(&object_id).unwrap();
 
-    let expected_json_address = "\"0x47b720e60abbfd38c38e1e1726c9660082f0c734\"";
+    let expected_json_address = format!("\"0x{}\"", SAMPLE_ADDRESS);
     assert_eq!(expected_json_address, json_serialized);
     assert_eq!(object_id_vec, bcs_serialized);
 }
@@ -212,8 +218,8 @@ fn test_object_id_serde_with_expected_value() {
 #[test]
 fn test_object_id_zero_padding() {
     let hex = "0x2";
-    let long_hex = "0x0000000000000000000000000000000000000002";
-    let long_hex_alt = "0000000000000000000000000000000000000002";
+    let long_hex = "0x0000000000000000000000000000000000000000000000000000000000000002";
+    let long_hex_alt = "0000000000000000000000000000000000000000000000000000000000000002";
     let obj_id_1 = ObjectID::from_str(hex).unwrap();
     let obj_id_2 = ObjectID::from_str(long_hex).unwrap();
     let obj_id_3 = ObjectID::from_str(long_hex_alt).unwrap();
@@ -230,8 +236,8 @@ fn test_object_id_zero_padding() {
 
 #[test]
 fn test_address_display() {
-    let hex = "ca843279e3427144cead5e4d5999a3d05999a3d0";
-    let upper_hex = "CA843279E3427144CEAD5E4D5999A3D05999A3D0";
+    let hex = SAMPLE_ADDRESS;
+    let upper_hex = SAMPLE_ADDRESS.to_uppercase();
 
     let id = SuiAddress::from_str(hex).unwrap();
     assert_eq!(format!("{:?}", id), format!("0x{hex}"));
@@ -264,16 +270,13 @@ fn test_address_serde_human_readable() {
 
 #[test]
 fn test_address_serde_with_expected_value() {
-    let address_vec = vec![
-        42, 202, 201, 60, 233, 75, 103, 251, 224, 56, 148, 252, 58, 57, 61, 244, 92, 124, 211, 191,
-    ];
-    let address = SuiAddress::try_from(address_vec.clone()).unwrap();
+    let address = SuiAddress::try_from(SAMPLE_ADDRESS_VEC.to_vec()).unwrap();
     let json_serialized = serde_json::to_string(&address).unwrap();
     let bcs_serialized = bcs::to_bytes(&address).unwrap();
 
-    let expected_json_address = "\"0x2acac93ce94b67fbe03894fc3a393df45c7cd3bf\"";
+    let expected_json_address = format!("\"0x{}\"", SAMPLE_ADDRESS);
     assert_eq!(expected_json_address, json_serialized);
-    assert_eq!(address_vec, bcs_serialized);
+    assert_eq!(SAMPLE_ADDRESS_VEC.to_vec(), bcs_serialized);
 }
 
 #[test]
@@ -346,7 +349,7 @@ fn test_move_object_size_for_gas_metering() {
     let serialized = bcs::to_bytes(&object).unwrap();
     // If the following assertion breaks, it's likely you have changed MoveObject's fields.
     // Make sure to adjust `object_size_for_gas_metering()` to include those changes.
-    assert_eq!(size, serialized.len());
+    assert_eq!(size - 4, serialized.len());
 }
 
 #[test]
@@ -354,6 +357,7 @@ fn test_move_package_size_for_gas_metering() {
     let module = file_format::empty_module();
     let package = Object::new_package(
         vec![module],
+        OBJECT_START_VERSION,
         TransactionDigest::genesis(),
         ProtocolConfig::get_for_max_version().max_move_package_size(),
     )
@@ -362,12 +366,16 @@ fn test_move_package_size_for_gas_metering() {
     let serialized = bcs::to_bytes(&package).unwrap();
     // If the following assertion breaks, it's likely you have changed MovePackage's fields.
     // Make sure to adjust `object_size_for_gas_metering()` to include those changes.
-    assert_eq!(size + 2, serialized.len());
+    assert_eq!(size - 2, serialized.len());
 }
 
 // A sample address in hex generated by the current address derivation algorithm.
 #[cfg(test)]
-const SAMPLE_ADDRESS: &str = "32866f0109fa1ba911392dcd2d4260f1d8243133";
+const SAMPLE_ADDRESS: &str = "32866f0109fa1ba911392dcd2d4260f1d824313316f5467abf64187b3eefa555";
+const SAMPLE_ADDRESS_VEC: [u8; 32] = [
+    50, 134, 111, 1, 9, 250, 27, 169, 17, 57, 45, 205, 45, 66, 96, 241, 216, 36, 49, 51, 22, 245,
+    70, 122, 191, 100, 24, 123, 62, 239, 165, 85,
+];
 
 // Derive a sample address and public key tuple from KeyPair bytes.
 fn derive_sample_address() -> (SuiAddress, AccountKeyPair) {
