@@ -13,7 +13,7 @@ use aws_sdk_ec2::{
 };
 use serde::Serialize;
 
-use crate::orchestrator::{
+use crate::{
     error::{CloudProviderError, CloudProviderResult},
     settings::Settings,
 };

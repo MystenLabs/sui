@@ -4,7 +4,7 @@ use reqwest::{Client as NetworkClient, Response, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::orchestrator::{
+use crate::{
     error::{CloudProviderError, CloudProviderResult},
     settings::Settings,
 };

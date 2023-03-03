@@ -17,7 +17,7 @@ use tokio::time::{self, sleep, Instant};
 
 use crate::{
     ensure,
-    orchestrator::{
+    {
         client::Client,
         error::{TestbedError, TestbedResult},
         settings::Settings,

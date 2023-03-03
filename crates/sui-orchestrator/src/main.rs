@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use clap::Parser;
 use color_eyre::eyre::{Context, Result};
-use sui_benchmark::orchestrator::{
+use sui_orchestrator::{
     client::{aws::AwsClient, vultr::VultrClient, Client},
     parameters::{BenchmarkParametersGenerator, LoadType},
     settings::{CloudProvider, Settings},

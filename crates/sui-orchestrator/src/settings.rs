@@ -7,7 +7,7 @@ use std::{
 use reqwest::Url;
 use serde::{de::Error, Deserialize, Deserializer};
 
-use crate::orchestrator::error::{SettingsError, SettingsResult};
+use crate::error::{SettingsError, SettingsResult};
 
 #[derive(Deserialize, Clone)]
 pub struct Repository {

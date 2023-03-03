@@ -29,6 +29,7 @@ members = [
     "crates/sui-node",
     "crates/sui-open-rpc",
     "crates/sui-open-rpc-macros",
+    "crates/sui-orchestrator",
     "crates/sui-proc-macros",
     "crates/sui-protocol-config",
     "crates/sui-rosetta",

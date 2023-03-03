@@ -54,18 +54,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 test-utils = { path = "../test-utils" }
 sysinfo = "0.27.5"
 
-reqwest = { version = "0.11.13", features = ["json"] }
-color-eyre = "0.6.2"
-ssh2 = "0.9.4"
-prettytable-rs = "0.10"
-thiserror = "1.0.38"
-serde_yaml = "0.9.17"
-crossterm = "0.26.0"
-regex = "1.7.1"
-prometheus-parse = { git = "https://github.com/ccakes/prometheus-parse-rs.git", rev = "75334db" }
-aws-config = "0.54.1"
-aws-sdk-ec2 = "0.24.0"
-
 [target.'cfg(msim)'.dependencies]
 sui-macros = { path = "../sui-macros" }
 sui-simulator = { path = "../sui-simulator" }

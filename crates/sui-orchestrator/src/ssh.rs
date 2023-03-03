@@ -11,7 +11,7 @@ use tokio::net::TcpStream;
 
 use crate::{
     ensure,
-    orchestrator::error::{SshError, SshResult},
+    error::{SshError, SshResult},
 };
 
 use super::client::Instance;
