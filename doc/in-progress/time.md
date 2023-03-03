@@ -3,7 +3,7 @@
 You have options when needing to access network-based time for your transactions. If you need a near real-time measurement (within a few seconds), use the immutable reference of time provided by the `Clock` module in Sui Move. The reference value from this module updates with every network checkpoint. If you don't need as current a time slice, use the `epoch_timestamp_ms` function to capture the precise moment the current epoch started.
 ## `sui::clock::Clock`
 
-To access a prompt timestamp, you must pass a read-only reference of `sui::clock::Clock` as an entry function parameter in your transactions. The only available instance is found at address `0x6`.
+To access a prompt timestamp, you must pass a read-only reference of `sui::clock::Clock` as an entry function parameter in your transactions. An instance of `Clock` is provided at address at `0x6`, no new instances can be created.
 
 Extract a unix timestamp in milliseconds from an instance of `Clock` using
 
@@ -13,7 +13,32 @@ module sui::clock {
 }
 ```
 
-**Expect the resulting value to change every 2 to 3 seconds**, at the rate the network commits checkpoints.
+The example below demonstrates an entry function that emits an event containing a timestamp from the `Clock`:
+
+```
+module example::clock {
+    use sui::clock::{Self, Clock};
+    use sui::event;
+
+    struct TimeEvent has copy, drop, store { 
+        timestamp_ms: u64
+    }
+
+    entry fun access(clock: &Clock) {
+        event::emit(TimeEvent {
+            timestamp_ms: clock::timestamp_ms(clock),
+        });
+    }
+}
+```
+
+A call to the entry function above takes the following form, passing `0x6` as the address for the `Clock` parameter:
+
+```
+$ sui client call --package $EXAMPLE --module 'clock' --function 'access' --args '0x6' --gas-budget 10000
+```
+
+**Expect `Clock`'s timestamp to change every 2 to 3 seconds**, at the rate the network commits checkpoints.
 
 Successive calls to `sui::clock::timestamp_ms` in the same transaction always produce the same result (transactions are considered to take effect instantly), and might also overlap with other transactions that touch the same shared objects. Consequently, you can't assume that time progresses between transactions that are sequenced relative to each other.
 
@@ -29,8 +54,6 @@ module sui::clock {
     public fun increment_for_testing(clock: &mut Clock, tick: u64);
 }
 ```
-
-
 
 ## Epoch timestamps
 
