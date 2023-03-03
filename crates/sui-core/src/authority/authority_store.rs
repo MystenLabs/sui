@@ -1207,6 +1207,23 @@ impl AuthorityStore {
             .map(|v| v.map(|v| v.into()))
     }
 
+    pub fn get_transaction_and_serialized_size(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Result<Option<(VerifiedTransaction, usize)>, TypedStoreError> {
+        self.perpetual_tables
+            .transactions
+            .get_raw_bytes(tx_digest)
+            .and_then(|v| match v {
+                Some(tx_bytes) => {
+                    let tx: VerifiedTransaction =
+                        bcs::from_bytes::<TrustedTransaction>(&tx_bytes)?.into();
+                    Ok(Some((tx, tx_bytes.len())))
+                }
+                None => Ok(None),
+            })
+    }
+
     // TODO: Transaction Orchestrator also calls this, which is not ideal.
     // Instead of this function use AuthorityEpochStore::epoch_start_configuration() to access this object everywhere
     // besides when we are reading fields for the current epoch
