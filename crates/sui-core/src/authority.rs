@@ -8,6 +8,7 @@ use chrono::prelude::*;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::KeyPair;
+use itertools::izip;
 use itertools::Itertools;
 use move_binary_format::compatibility::Compatibility;
 use move_binary_format::CompiledModule;
@@ -155,6 +156,13 @@ pub type ReconfigConsensusMessage = (
     Vec<(ConsensusWorkerId, NetworkKeyPair)>,
     ConsensusWorkerCache,
 );
+
+pub type VerifiedTransactionBatch = Vec<(
+    VerifiedTransaction,
+    TransactionEffects,
+    TransactionEvents,
+    Option<(EpochId, CheckpointSequenceNumber)>,
+)>;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 pub struct AuthorityMetrics {
@@ -2134,6 +2142,46 @@ impl AuthorityState {
         match (transaction, effects) {
             (Some(transaction), Some(effects)) => Ok((transaction, effects)),
             _ => Err(anyhow!(SuiError::TransactionNotFound { digest })),
+        }
+    }
+
+    pub async fn multi_get_transactions(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Result<VerifiedTransactionBatch, anyhow::Error> {
+        let transactions = self.database.multi_get_transactions(digests)?;
+        let effects = self.database.multi_get_executed_effects(digests)?;
+        let checkpoints = self.database.multi_get_transaction_checkpoint(digests)?;
+
+        let mut events_digests: Vec<TransactionEventsDigest> = vec![];
+
+        for effect in effects.iter() {
+            match effect {
+                Some(eff) => events_digests.push(eff.events_digest.unwrap()),
+                _ => continue,
+            }
+        }
+
+        let events = self.database.multi_get_events(events_digests.as_slice())?;
+
+        let mut missed_digests = vec![];
+        let mut response: VerifiedTransactionBatch = vec![];
+
+        for data in izip!(digests, transactions, effects, events, checkpoints) {
+            match data {
+                (_, Some(tx), Some(effect), Some(event), cp) => {
+                    response.push((tx, effect, event, cp))
+                }
+                (digest, _, _, _, _) => missed_digests.push(*digest),
+            }
+        }
+
+        if !missed_digests.is_empty() {
+            Err(anyhow!(SuiError::TransactionsNotFound {
+                digests: missed_digests
+            }))
+        } else {
+            Ok(response)
         }
     }
 

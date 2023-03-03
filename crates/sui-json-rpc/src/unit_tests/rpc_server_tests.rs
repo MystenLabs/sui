@@ -613,6 +613,17 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     let tx: Vec<TransactionDigest> = http_client.get_transactions_in_range(0, 10).await?;
     assert_eq!(5, tx.len());
 
+    //test get_transaction_batch
+    let response: Vec<SuiTransactionResponse> = http_client.multi_get_transactions(tx).await?;
+
+    assert_eq!(5, response.len());
+
+    for r in response.iter().skip(1) {
+        assert!(tx_responses.iter().any(
+            |resp| matches!(resp, SuiTransactionResponse {effects, ..} if effects.transaction_digest == r.effects.transaction_digest)
+        ))
+    }
+
     // test get_transactions_in_range with smaller range
     let tx: Vec<TransactionDigest> = http_client.get_transactions_in_range(1, 3).await?;
     assert_eq!(2, tx.len());
