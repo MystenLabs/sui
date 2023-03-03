@@ -896,10 +896,19 @@ impl CheckpointAggregator {
     async fn run_inner(&mut self) -> SuiResult {
         let _scope = monitored_scope("CheckpointAggregator");
         'outer: loop {
+            let next_to_certify = self.next_checkpoint_to_certify();
             let current = if let Some(current) = &mut self.current {
+                // It's possible that the checkpoint was already certified by
+                // the rest of the network and we've already received the
+                // certified checkpoint via StateSync. In this case, we reset
+                // the current signature aggregator to the next checkpoint to
+                // be certified
+                if current.summary.sequence_number < next_to_certify {
+                    self.current = None;
+                    continue;
+                }
                 current
             } else {
-                let next_to_certify = self.next_checkpoint_to_certify();
                 let Some(summary) = self.epoch_store.get_built_checkpoint_summary(next_to_certify)? else { return Ok(()); };
                 self.current = Some(CheckpointSignatureAggregator {
                     next_index: 0,
