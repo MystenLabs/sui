@@ -178,7 +178,7 @@ where
             Checkpoint::default()
         } else {
             self.state
-                .get_checkpoint(checkpoint.sequence_number as i64 - 1)?
+                .get_checkpoint((checkpoint.sequence_number - 1).into())?
         };
 
         // Index transaction
@@ -276,7 +276,7 @@ where
                     })
                 })
             })
-            .filter_map(|o| o)
+            .flatten()
             .collect()
     }
 }

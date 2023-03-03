@@ -4,22 +4,25 @@
 use crate::errors::IndexerError;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::error_logs::commit_error_logs;
+use crate::models::transactions::Transaction;
 use crate::schema::addresses::account_address;
 use crate::schema::checkpoints::dsl::checkpoints as checkpoints_table;
-use crate::schema::checkpoints::sequence_number;
+use crate::schema::checkpoints::{checkpoint_digest, sequence_number};
 use crate::schema::packages::{author, module_names, package_content, package_id};
+use crate::schema::transactions::{dsl, transaction_digest};
 use crate::schema::{addresses, events, objects, owner_changes, packages, transactions};
 use crate::store::indexer_store::TemporaryCheckpointStore;
 use crate::store::{IndexerStore, TemporaryEpochStore};
 use crate::{get_pg_pool_connection, PgConnectionPool};
 use async_trait::async_trait;
-use diesel::dsl::max;
+use diesel::dsl::{count, max};
 use diesel::sql_types::VarChar;
 use diesel::upsert::excluded;
-use diesel::ExpressionMethods;
 use diesel::QueryableByName;
+use diesel::{ExpressionMethods, PgArrayExpressionMethods};
 use diesel::{QueryDsl, RunQueryDsl};
 use std::collections::BTreeMap;
+use sui_json_rpc_types::CheckpointId;
 use sui_types::committee::EpochId;
 use tracing::{error, info};
 
@@ -72,16 +75,20 @@ impl IndexerStore for PgIndexerStore {
             })
     }
 
-    fn get_checkpoint(&self, checkpoint_sequence_number: i64) -> Result<Checkpoint, IndexerError> {
+    fn get_checkpoint(&self, id: CheckpointId) -> Result<Checkpoint, IndexerError> {
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
         pg_pool_conn
             .build_transaction()
             .read_only()
-            .run(|conn| {
-                checkpoints_table
-                    .filter(sequence_number.eq(checkpoint_sequence_number))
+            .run(|conn| match id {
+                CheckpointId::SequenceNumber(seq) => checkpoints_table
+                    .filter(sequence_number.eq(seq as i64))
                     .limit(1)
-                    .first::<Checkpoint>(conn)
+                    .first::<Checkpoint>(conn),
+                CheckpointId::Digest(digest) => checkpoints_table
+                    .filter(checkpoint_digest.eq(digest.base58_encode()))
+                    .limit(1)
+                    .first::<Checkpoint>(conn),
             })
             .map_err(|e| {
                 IndexerError::PostgresReadError(format!(
@@ -172,6 +179,260 @@ impl IndexerStore for PgIndexerStore {
             }
         }
         Ok(())
+    }
+
+    fn get_total_transaction_number(&self) -> Result<i64, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| dsl::transactions.select(count(dsl::id)).first::<i64>(conn))
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading total transaction number with err: {:?}",
+                    e
+                ))
+            })
+    }
+
+    // NOTE: PG table serial number does not always increment by 1
+    // based on observations, thus `get_total_transaction_number` and
+    // `get_latest_transaction_sequence_number` are not always equal.
+    fn get_latest_transaction_sequence_number(&self) -> Result<i64, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                dsl::transactions
+                    .select(max(dsl::id))
+                    .first::<Option<i64>>(conn)
+                    // postgres serial starts from 1
+                    .map(|seq_num_opt| seq_num_opt.unwrap_or(0))
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading latest transaction sequence number with err: {:?}",
+                    e
+                ))
+            })
+    }
+
+    fn get_transaction_by_digest(&self, txn_digest: String) -> Result<Transaction, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                dsl::transactions
+                    .filter(transaction_digest.eq(txn_digest.clone()))
+                    .first::<Transaction>(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading transaction with digest {} and err: {:?}",
+                    txn_digest, e
+                ))
+            })
+    }
+
+    fn get_transaction_sequence_by_digest(
+        &self,
+        txn_digest: Option<String>,
+        reverse: bool,
+    ) -> Result<i64, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        let Some(txn_digest) = txn_digest else {
+            if reverse {
+                return self.get_latest_transaction_sequence_number();
+            } else {
+                // NOTE: Postgres serial starts from 1
+                return Ok(1);
+            }
+        };
+        pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                dsl::transactions
+                    .filter(transaction_digest.eq(txn_digest.clone()))
+                    .select(dsl::id)
+                    .first::<i64>(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading transaction sequence with digest {} and err: {:?}",
+                    txn_digest, e
+                ))
+            })
+    }
+
+    fn get_all_transaction_digest_page(
+        &self,
+        start_sequence: i64,
+        limit: usize,
+        reverse: bool,
+    ) -> Result<Vec<String>, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                if reverse {
+                    dsl::transactions
+                        .filter(dsl::id.le(start_sequence))
+                        .order(dsl::id.desc())
+                        .limit((limit + 1) as i64)
+                        .select(transaction_digest)
+                        .load::<String>(conn)
+                } else {
+                    dsl::transactions
+                        .filter(dsl::id.ge(start_sequence))
+                        .order(dsl::id.asc())
+                        .limit((limit + 1) as i64)
+                        .select(transaction_digest)
+                        .load::<String>(conn)
+                }
+            }).map_err(|e| {
+            IndexerError::PostgresReadError(format!(
+                "Failed reading all transaction digests with start_sequence {} and limit {} and err: {:?}",
+                start_sequence, limit, e
+            ))
+        })
+    }
+
+    fn get_transaction_digest_page_by_mutated_object(
+        &self,
+        object_id: String,
+        start_sequence: i64,
+        limit: usize,
+        reverse: bool,
+    ) -> Result<Vec<String>, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                if reverse {
+                    dsl::transactions
+                        .filter(dsl::id.le(start_sequence))
+                        .filter(dsl::mutated.contains(vec![Some(object_id.clone())]))
+                        .order(dsl::id.desc())
+                        .limit(limit as i64)
+                        .select(transaction_digest)
+                        .load::<String>(conn)
+                } else {
+                    dsl::transactions
+                        .filter(dsl::id.ge(start_sequence))
+                        .filter(dsl::mutated.contains(vec![Some(object_id.clone())]))
+                        .order(dsl::id.asc())
+                        .limit(limit as i64)
+                        .select(transaction_digest)
+                        .load::<String>(conn)
+                }
+            }).map_err(|e| {
+            IndexerError::PostgresReadError(format!(
+                "Failed reading transaction digests by mutated object id {} with start_sequence {} and limit {} and err: {:?}",
+                object_id, start_sequence, limit, e
+            ))
+        })
+    }
+
+    fn get_transaction_digest_page_by_sender_address(
+        &self,
+        sender_address: String,
+        start_sequence: i64,
+        limit: usize,
+        reverse: bool,
+    ) -> Result<Vec<String>, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                if reverse {
+                    dsl::transactions
+                        .filter(dsl::id.le(start_sequence))
+                        .filter(dsl::sender.eq(sender_address.clone()))
+                        .order(dsl::id.desc())
+                        .limit(limit as i64)
+                        .select(transaction_digest)
+                        .load::<String>(conn)
+                } else {
+                    dsl::transactions
+                        .filter(dsl::id.ge(start_sequence))
+                        .filter(dsl::sender.eq(sender_address.clone()))
+                        .order(dsl::id.asc())
+                        .limit(limit as i64)
+                        .select(transaction_digest)
+                        .load::<String>(conn)
+                }
+            }).map_err(|e| {
+            IndexerError::PostgresReadError(format!(
+                "Failed reading transaction digests by sender address {} with start_sequence {} and limit {} and err: {:?}",
+                sender_address, start_sequence, limit, e
+            ))
+        })
+    }
+
+    fn get_transaction_digest_page_by_recipient_address(
+        &self,
+        recipient_address: String,
+        start_sequence: i64,
+        limit: usize,
+        reverse: bool,
+    ) -> Result<Vec<String>, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                if reverse {
+                    dsl::transactions
+                        .filter(dsl::id.le(start_sequence))
+                        .filter(dsl::recipients.contains(vec![Some(recipient_address.clone())]))
+                        .order(dsl::id.desc())
+                        .limit(limit as i64)
+                        .select(transaction_digest)
+                        .load::<String>(conn)
+                } else {
+                    dsl::transactions
+                        .filter(dsl::id.ge(start_sequence))
+                        .filter(dsl::recipients.contains(vec![Some(recipient_address.clone())]))
+                        .order(dsl::id.asc())
+                        .limit(limit as i64)
+                        .select(transaction_digest)
+                        .load::<String>(conn)
+                }
+            }).map_err(|e| {
+            IndexerError::PostgresReadError(format!(
+                "Failed reading transaction digests by recipient address {} with start_sequence {} and limit {} and err: {:?}",
+                recipient_address, start_sequence, limit, e
+            ))
+        })
+    }
+
+    fn read_transactions(
+        &self,
+        last_processed_id: i64,
+        limit: usize,
+    ) -> Result<Vec<Transaction>, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                dsl::transactions
+                    .filter(dsl::id.gt(last_processed_id))
+                    .limit(limit as i64)
+                    .load::<Transaction>(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading transactions with last_processed_id {} and err: {:?}",
+                    last_processed_id, e
+                ))
+            })
     }
 }
 

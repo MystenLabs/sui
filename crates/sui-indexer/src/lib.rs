@@ -68,7 +68,7 @@ impl Indexer {
     }
 }
 
-async fn new_rpc_client(http_url: &str) -> Result<SuiClient, IndexerError> {
+pub async fn new_rpc_client(http_url: &str) -> Result<SuiClient, IndexerError> {
     info!("Getting new RPC client...");
     SuiClientBuilder::default()
         .max_concurrent_requests(5)

@@ -2,14 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::errors::IndexerError;
-use crate::models::checkpoints::{get_latest_checkpoint_sequence_number, get_rpc_checkpoint};
-use crate::models::transactions::{
-    get_all_transaction_digest_page, get_total_transaction_number, get_transaction_by_digest,
-    get_transaction_digest_page_by_mutated_object,
-    get_transaction_digest_page_by_recipient_address,
-    get_transaction_digest_page_by_sender_address, get_transaction_sequence_by_digest,
-};
-use crate::{get_pg_pool_connection, PgConnectionPool};
+use crate::store::IndexerStore;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
@@ -49,8 +42,7 @@ impl<S: IndexerStore> ReadApi<S> {
     }
 
     async fn get_total_transaction_number(&self) -> RpcResult<u64> {
-        let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
-        let total_tx_number = get_total_transaction_number(&mut pg_pool_conn)?;
+        let total_tx_number = self.state.get_total_transaction_number()?;
         Ok(total_tx_number as u64)
     }
 
@@ -58,9 +50,10 @@ impl<S: IndexerStore> ReadApi<S> {
         &self,
         digest: TransactionDigest,
     ) -> RpcResult<SuiTransactionResponse> {
-        let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
-        let txn_resp: SuiTransactionResponse =
-            get_transaction_by_digest(&mut pg_pool_conn, digest.to_string())?.try_into()?;
+        let txn_resp: SuiTransactionResponse = self
+            .state
+            .get_transaction_by_digest(digest.to_string())?
+            .try_into()?;
         Ok(txn_resp)
     }
 
@@ -72,16 +65,13 @@ impl<S: IndexerStore> ReadApi<S> {
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage> {
         let limit = cap_page_limit(limit);
-        let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
-        let indexer_seq_number = get_transaction_sequence_by_digest(
-            &mut pg_pool_conn,
+        let indexer_seq_number = self.state.get_transaction_sequence_by_digest(
             cursor.map(|digest| digest.to_string()),
             descending_order.unwrap_or_default(),
         )?;
 
         let digests_from_db = match query {
-            TransactionQuery::All => get_all_transaction_digest_page(
-                &mut pg_pool_conn,
+            TransactionQuery::All => self.state.get_all_transaction_digest_page(
                 indexer_seq_number,
                 limit,
                 descending_order.unwrap_or_default(),
@@ -98,8 +88,7 @@ impl<S: IndexerStore> ReadApi<S> {
             // This is now blocked by the endpoint on FN side.
             TransactionQuery::InputObject(_input_obj_id) => Ok(vec![]),
             TransactionQuery::MutatedObject(mutated_obj_id) => {
-                get_transaction_digest_page_by_mutated_object(
-                    &mut pg_pool_conn,
+                self.state.get_transaction_digest_page_by_mutated_object(
                     mutated_obj_id.to_string(),
                     indexer_seq_number,
                     limit + 1,
@@ -107,8 +96,7 @@ impl<S: IndexerStore> ReadApi<S> {
                 )
             }
             TransactionQuery::FromAddress(sender_address) => {
-                get_transaction_digest_page_by_sender_address(
-                    &mut pg_pool_conn,
+                self.state.get_transaction_digest_page_by_sender_address(
                     sender_address.to_string(),
                     indexer_seq_number,
                     limit + 1,
@@ -116,8 +104,7 @@ impl<S: IndexerStore> ReadApi<S> {
                 )
             }
             TransactionQuery::ToAddress(recipient_address) => {
-                get_transaction_digest_page_by_recipient_address(
-                    &mut pg_pool_conn,
+                self.state.get_transaction_digest_page_by_recipient_address(
                     recipient_address.to_string(),
                     indexer_seq_number,
                     limit + 1,
@@ -150,14 +137,12 @@ impl<S: IndexerStore> ReadApi<S> {
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
-        let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
-        get_latest_checkpoint_sequence_number(&mut pg_pool_conn)
+        self.state.get_latest_checkpoint_sequence_number()
     }
 
     async fn get_checkpoint(&self, id: CheckpointId) -> Result<Checkpoint, IndexerError> {
-        let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
-        let checkpoint = get_rpc_checkpoint(&mut pg_pool_conn, id)?;
-        Ok(checkpoint)
+        let checkpoint = self.state.get_checkpoint(id)?;
+        checkpoint.try_into()
     }
 }
 
@@ -205,7 +190,7 @@ where
         {
             return self.fullnode.get_total_transaction_number().await;
         }
-        self.fullnode.get_total_transaction_number().await
+        self.get_total_transaction_number().await
     }
 
     async fn get_transactions(
@@ -246,7 +231,7 @@ where
         {
             return self.fullnode.get_transaction(digest).await;
         }
-        self.fullnode.get_transaction(digest).await
+        self.get_transaction(digest).await
     }
 
     async fn get_normalized_move_modules_by_package(
@@ -316,7 +301,7 @@ where
         {
             return self.fullnode.get_latest_checkpoint_sequence_number().await;
         }
-        Ok(self.state.get_latest_checkpoint_sequence_number()? as u64)
+        Ok(self.get_latest_checkpoint_sequence_number().await? as u64)
     }
 
     async fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
@@ -326,7 +311,7 @@ where
         {
             return self.fullnode.get_checkpoint(id).await;
         }
-        Ok(self.fullnode.get_checkpoint(id).await?)
+        Ok(self.get_checkpoint(id).await?)
     }
 
     // NOTE: checkpoint APIs below will be deprecated,

@@ -8,8 +8,10 @@ use sui_indexer::errors::IndexerError;
 use sui_indexer::models::checkpoints::Checkpoint;
 use sui_indexer::models::objects::Object;
 use sui_indexer::models::owners::OwnerChange;
+use sui_indexer::models::transactions::Transaction;
 use sui_indexer::store::{IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore};
 use sui_indexer::Indexer;
+use sui_json_rpc_types::CheckpointId;
 use test_utils::network::TestClusterBuilder;
 
 #[tokio::test]
@@ -58,8 +60,88 @@ impl IndexerStore for InMemoryIndexerStore {
         Ok(self.tables.read().unwrap().checkpoints.len() as i64 - 1)
     }
 
-    fn get_checkpoint(&self, checkpoint_sequence_number: i64) -> Result<Checkpoint, IndexerError> {
-        Ok(self.tables.read().unwrap().checkpoints[checkpoint_sequence_number as usize].clone())
+    fn get_checkpoint(&self, id: CheckpointId) -> Result<Checkpoint, IndexerError> {
+        Ok(match id {
+            CheckpointId::SequenceNumber(seq) => {
+                self.tables.read().unwrap().checkpoints[seq as usize].clone()
+            }
+            CheckpointId::Digest(digest) => self
+                .tables
+                .read()
+                .unwrap()
+                .checkpoints
+                .iter()
+                .find(|c| c.checkpoint_digest == digest.base58_encode())
+                .unwrap()
+                .clone(),
+        })
+    }
+
+    fn get_total_transaction_number(&self) -> Result<i64, IndexerError> {
+        todo!()
+    }
+
+    fn get_latest_transaction_sequence_number(&self) -> Result<i64, IndexerError> {
+        todo!()
+    }
+
+    fn get_transaction_by_digest(&self, _txn_digest: String) -> Result<Transaction, IndexerError> {
+        todo!()
+    }
+
+    fn get_transaction_sequence_by_digest(
+        &self,
+        _txn_digest: Option<String>,
+        _reverse: bool,
+    ) -> Result<i64, IndexerError> {
+        todo!()
+    }
+
+    fn get_all_transaction_digest_page(
+        &self,
+        _start_sequence: i64,
+        _limit: usize,
+        _reverse: bool,
+    ) -> Result<Vec<String>, IndexerError> {
+        todo!()
+    }
+
+    fn get_transaction_digest_page_by_mutated_object(
+        &self,
+        _object_id: String,
+        _start_sequence: i64,
+        _limit: usize,
+        _reverse: bool,
+    ) -> Result<Vec<String>, IndexerError> {
+        todo!()
+    }
+
+    fn get_transaction_digest_page_by_sender_address(
+        &self,
+        _sender_address: String,
+        _start_sequence: i64,
+        _limit: usize,
+        _reverse: bool,
+    ) -> Result<Vec<String>, IndexerError> {
+        todo!()
+    }
+
+    fn get_transaction_digest_page_by_recipient_address(
+        &self,
+        _recipient_address: String,
+        _start_sequence: i64,
+        _limit: usize,
+        _reverse: bool,
+    ) -> Result<Vec<String>, IndexerError> {
+        todo!()
+    }
+
+    fn read_transactions(
+        &self,
+        _last_processed_id: i64,
+        _limit: usize,
+    ) -> Result<Vec<Transaction>, IndexerError> {
+        todo!()
     }
 
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError> {
