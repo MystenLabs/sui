@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::natives;
 use move_cli::base::test::UnitTestResult;
 use move_package::BuildConfig;
 use move_unit_test::UnitTestingConfig;
 use move_vm_test_utils::gas_schedule::INITIAL_COST_SCHEDULE;
 use std::{collections::HashMap, io::BufWriter, path::Path};
+use sui_framework::natives;
 use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 
 const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 1_000_000_000;
@@ -29,6 +29,7 @@ pub fn run_calib(runs: usize) -> HashMap<String, (Vec<(f32, f32)>, f32)> {
         .map(|q| (q.0, (q.1.clone(), summarize_values(&q.1))))
         .collect()
 }
+
 fn summarize_values(v: &Vec<(f32, f32)>) -> f32 {
     // Use average for now
     // TODO: investigate other methods
