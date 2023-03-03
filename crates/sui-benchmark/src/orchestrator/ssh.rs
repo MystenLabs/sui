@@ -130,7 +130,6 @@ impl SshConnectionManager {
                             }
                         }
                         .with_timeout(&command.timeout);
-                        println!("connected to {:?}", instance.main_ip);
 
                         match connection.execute(command.stringify(i)) {
                             r @ Ok(..) => return r,

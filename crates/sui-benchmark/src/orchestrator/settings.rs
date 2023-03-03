@@ -128,11 +128,25 @@ impl Settings {
             regions: vec!["London".into(), "New York".into()],
             specs: "small".into(),
             repository: Repository {
-                url: Url::parse("https://example.net/my-repo").unwrap(),
+                url: Url::parse("https://example.net/author/repo").unwrap(),
                 branch: "main".into(),
             },
             results_directory: "results".into(),
             logs_directory: "logs".into(),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use reqwest::Url;
+
+    use crate::orchestrator::settings::Settings;
+
+    #[test]
+    fn repository_name() {
+        let mut settings = Settings::new_for_test();
+        settings.repository.url = Url::parse("https://example.com/author/repo").unwrap();
+        assert_eq!(settings.repository_name(), "repo");
     }
 }
