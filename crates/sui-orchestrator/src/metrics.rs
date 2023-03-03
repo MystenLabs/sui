@@ -11,7 +11,7 @@ use prettytable::{format, row, Table};
 use prometheus_parse::Scrape;
 use serde::Serialize;
 
-use super::parameters::BenchmarkParameters;
+use super::benchmark::BenchmarkParameters;
 
 type BucketId = String;
 

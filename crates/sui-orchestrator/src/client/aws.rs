@@ -18,7 +18,7 @@ use crate::{
     settings::Settings,
 };
 
-use super::{Client, Instance};
+use super::{Instance, ServerProviderClient};
 
 impl<T> From<SdkError<T>> for CloudProviderError
 where
@@ -166,7 +166,7 @@ impl AwsClient {
 }
 
 #[async_trait::async_trait]
-impl Client for AwsClient {
+impl ServerProviderClient for AwsClient {
     const USERNAME: &'static str = "ubuntu";
 
     async fn list_instances(&self) -> CloudProviderResult<Vec<Instance>> {

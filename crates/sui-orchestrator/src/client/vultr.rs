@@ -9,7 +9,7 @@ use crate::{
     settings::Settings,
 };
 
-use super::{Client, Instance};
+use super::{Instance, ServerProviderClient};
 
 impl From<reqwest::Error> for CloudProviderError {
     fn from(e: reqwest::Error) -> Self {
@@ -142,7 +142,7 @@ impl VultrClient {
 }
 
 #[async_trait::async_trait]
-impl Client for VultrClient {
+impl ServerProviderClient for VultrClient {
     const USERNAME: &'static str = "root";
 
     async fn list_instances(&self) -> CloudProviderResult<Vec<Instance>> {

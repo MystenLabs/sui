@@ -39,7 +39,7 @@ impl Instance {
 }
 
 #[async_trait::async_trait]
-pub trait Client: Display {
+pub trait ServerProviderClient: Display {
     /// The username used to connect to the instances.
     const USERNAME: &'static str;
 
@@ -77,7 +77,7 @@ pub mod test_client {
 
     use crate::error::CloudProviderResult;
 
-    use super::{Client, Instance};
+    use super::{Instance, ServerProviderClient};
 
     #[derive(Default)]
     pub struct TestClient {
@@ -91,7 +91,7 @@ pub mod test_client {
     }
 
     #[async_trait::async_trait]
-    impl Client for TestClient {
+    impl ServerProviderClient for TestClient {
         const USERNAME: &'static str = "root";
 
         async fn list_instances(&self) -> CloudProviderResult<Vec<Instance>> {
