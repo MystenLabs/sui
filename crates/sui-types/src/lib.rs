@@ -45,6 +45,7 @@ pub mod messages_checkpoint;
 pub mod move_package;
 pub mod multisig;
 pub mod object;
+pub mod programmable_transaction_builder;
 pub mod query;
 pub mod quorum_driver_types;
 pub mod signature;
