@@ -418,18 +418,11 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             }
 
             if total_stake >= self.committee.quorum_threshold() {
+                // Do not wait on executions at all validators. Instead, rely on Narwhal to keep
+                // validators in sync. 
                 break;
             }
         }
-
-        // TODO: We can't stop sending transactions after receiving a quorum of replies otherwise
-        // some validators may not be able to process the next transactions. However this is a
-        // problem because it biases latency which should be computed upon receiving a quorum
-        // of certificate.
-        let _ = timeout(Duration::from_secs(2), async move {
-            while futures.next().await.is_some() {}
-        })
-        .await;
 
         // Abort if we failed to submit the certificate to enough validators. This typically
         // happens when the validators are overloaded and the requests timed out.
