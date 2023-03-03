@@ -5,7 +5,7 @@ import { type SuiAddress } from '@mysten/sui.js';
 
 import { TxnAddressLink } from './TxnAddressLink';
 import { useFormatCoin } from '_hooks';
-import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import { GAS_SYMBOL, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { Text } from '_src/ui/app/shared/text';
 
 type SponsoredTxnGasSummaryProps = {
@@ -17,10 +17,6 @@ export function SponsoredTxnGasSummary({
     totalGas,
     sponsor,
 }: SponsoredTxnGasSummaryProps) {
-    const [senderTotalAmount, senderTotalAmountSymbol] = useFormatCoin(
-        0,
-        GAS_TYPE_ARG
-    );
     const [sponsorTotalAmount, sponsorTotalAmountSymbol] = useFormatCoin(
         totalGas,
         GAS_TYPE_ARG
@@ -36,7 +32,7 @@ export function SponsoredTxnGasSummary({
                     You Paid
                 </Text>
                 <Text variant="body" weight="medium" color="steel-darker">
-                    {senderTotalAmount} {senderTotalAmountSymbol}
+                    0 {GAS_SYMBOL}
                 </Text>
             </div>
             <div className="flex justify-between items-center w-full">
