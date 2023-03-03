@@ -111,16 +111,19 @@ export type TransactionKindName =
   | 'Genesis';
 
 export const SuiTransactionKind = union([
-  object({ type: literal("TransferObject"), content: TransferObject }),
-  object({ type: literal("Publish"), content: SuiMovePackage }),
-  object({ type: literal("Call"), content: MoveCall }),
-  object({ type: literal("TransferSui"), content: SuiTransferSui }),
-  object({ type: literal("ChangeEpoch"), content: SuiChangeEpoch }),
-  object({ type: literal("ConsensusCommitPrologue"), content: SuiConsensusCommitPrologue }),
-  object({ type: literal("Pay"), content: Pay }),
-  object({ type: literal("PaySui"), content: PaySui }),
-  object({ type: literal("PayAllSui"), content: PayAllSui }),
-  object({ type: literal("Genesis"), content: Genesis }),
+  object({ type: literal('TransferObject'), content: TransferObject }),
+  object({ type: literal('Publish'), content: SuiMovePackage }),
+  object({ type: literal('Call'), content: MoveCall }),
+  object({ type: literal('TransferSui'), content: SuiTransferSui }),
+  object({ type: literal('ChangeEpoch'), content: SuiChangeEpoch }),
+  object({
+    type: literal('ConsensusCommitPrologue'),
+    content: SuiConsensusCommitPrologue,
+  }),
+  object({ type: literal('Pay'), content: Pay }),
+  object({ type: literal('PaySui'), content: PaySui }),
+  object({ type: literal('PayAllSui'), content: PayAllSui }),
+  object({ type: literal('Genesis'), content: Genesis }),
 ]);
 export type SuiTransactionKind = Infer<typeof SuiTransactionKind>;
 
@@ -535,9 +538,7 @@ export function getChangeEpochTransaction(
 export function getConsensusCommitPrologueTransaction(
   data: SuiTransactionKind,
 ): SuiConsensusCommitPrologue | undefined {
-  return data.type === 'ConsensusCommitPrologue'
-    ? data.content
-    : undefined;
+  return data.type === 'ConsensusCommitPrologue' ? data.content : undefined;
 }
 
 export function getTransactions(
