@@ -13,6 +13,7 @@ use sui_telemetry::send_telemetry_event;
 use tokio::task;
 use tokio::time::sleep;
 use tracing::info;
+use tracing::log::debug;
 
 const GIT_REVISION: &str = {
     if let Some(revision) = option_env!("GIT_REVISION") {
@@ -68,6 +69,8 @@ async fn main() -> Result<()> {
         .with_env()
         .with_prom_registry(&prometheus_registry)
         .init();
+
+    debug!("Config: {:?}", config);
 
     info!("Sui Node version: {VERSION}");
     info!(

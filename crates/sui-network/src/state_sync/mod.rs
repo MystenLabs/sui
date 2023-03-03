@@ -815,9 +815,9 @@ where
         .pipe(futures::stream::iter)
         .buffered(checkpoint_header_download_concurrency);
 
-    const MAX_CHECKPOINT_CHUNK : usize =  200; // This is an internal param, no need to expose as config
-    let mut chucks_stream =
-        request_stream.ready_chunks(checkpoint_header_download_concurrency.min(MAX_CHECKPOINT_CHUNK));
+    const MAX_CHECKPOINT_CHUNK: usize = 200; // This is an internal param, no need to expose as config
+    let mut chucks_stream = request_stream
+        .ready_chunks(checkpoint_header_download_concurrency.min(MAX_CHECKPOINT_CHUNK));
 
     while let Some(mut vec_checkpoints) = chucks_stream.next().await {
         let checkpoint_bundle: Vec<_> = vec_checkpoints
@@ -939,7 +939,7 @@ where
         // and return if it changes epoch, since we need the new epoch committee
         // to check the new epoch checkpoints. This is rare enough to not care.
         if current.summary().end_of_epoch_data.is_some() || vec_size == 0 {
-            info!("Sync interrupted at epoch boundary.");
+            debug!("Sync interrupted possibly at epoch boundary.");
             return Ok(());
         }
     }
@@ -1090,7 +1090,10 @@ fn download_full_checkpoint(
             }
         }
 
-        warn!("Failed to download checkpoint: {}", next);
+        debug!(
+            "Failed to download checkpoint despite trying all peers: {}",
+            next
+        );
         (None, next, None)
     }
 }
@@ -1098,8 +1101,7 @@ fn download_full_checkpoint(
 fn verify_checkpoint_not_certificate(
     current: &VerifiedCheckpoint,
     checkpoint: &Checkpoint,
-) -> Result<(), ()>
-{
+) -> Result<(), ()> {
     assert_eq!(
         checkpoint.sequence_number(),
         current.sequence_number().saturating_add(1)
