@@ -5,12 +5,14 @@ use super::*;
 
 use crate::consensus_utils::*;
 use crate::{metrics::ConsensusMetrics, Consensus, NUM_SHUTDOWN_RECEIVERS};
+use crossterm::style::Stylize;
 use fastcrypto::hash::Hash;
 #[allow(unused_imports)]
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
 #[cfg(test)]
 use std::collections::{BTreeSet, VecDeque};
+use std::time::Duration;
 use test_utils::CommitteeFixture;
 #[allow(unused_imports)]
 use tokio::sync::mpsc::channel;
@@ -530,6 +532,94 @@ async fn committed_round_after_restart() {
         // Shutdown consensus and wait for it to stop.
         tx_shutdown.send().unwrap();
         handle.await.unwrap();
+    }
+}
+
+// Adding a certificate whose parents are not present in the DAG and those
+// parents are above commit round & GC, should panic
+#[tokio::test]
+async fn parents_above_commit_round_exist() {
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
+
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let epoch = committee.epoch();
+    let gc_depth = 10;
+
+    // Make certificates for rounds 1 to 10.
+    let genesis = Certificate::genesis(&committee)
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let (certificates, _) =
+        test_utils::make_certificates_with_epoch(&committee, 1..=10, epoch, &genesis, &keys);
+
+    let store = make_consensus_store(&test_utils::temp_dir());
+    let mut state = ConsensusState::new(metrics.clone());
+    let mut bullshark = Bullshark::new(
+        committee,
+        store,
+        gc_depth,
+        metrics,
+        NUM_SUB_DAGS_PER_SCHEDULE,
+    );
+
+    // Generate the string representation of the DAG
+    let mut result = String::new();
+
+    // Add header row
+    result += &format!("{:>10} ", "");
+    for i in 0..4 {
+        result += &format!("{:^30} ", format!("V{}", i));
+    }
+    println!("{}", result);
+
+    // Populate DAG with the rounds up to round 7 so we trigger commits
+    let mut all_subdags = Vec::new();
+    for (i, certificate) in certificates.iter().filter(|c| c.round() <= 7).enumerate() {
+        if i % 4 == 0 {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let mut result = String::new();
+            result += "\n";
+            result += &format!("{:>10} ", format!("Round {}", certificate.round()));
+            print!("{}", result);
+        }
+        let (outcome, committed_subdags) = bullshark
+            .process_certificate(&mut state, certificate.clone())
+            .unwrap();
+        all_subdags.extend(committed_subdags);
+
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let mut result = String::new();
+        result += &format!("{:^30} ", certificate.digest().to_string());
+        let tresult = match outcome {
+            Outcome::CertificateBelowCommitRound => result.yellow(),
+            Outcome::NoLeaderElectedForOddRound => result.blue(),
+            Outcome::LeaderBelowCommitRound => result.magenta(),
+            Outcome::LeaderNotFound => result.white(),
+            Outcome::NotEnoughSupportForLeader => result.red(),
+            Outcome::Commit => result.green(),
+        };
+        print!("{}", tresult.to_string());
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    print!("\n\n");
+
+    // ensure the leaders of rounds 2, 4, and 6 have been committed
+    assert_eq!(all_subdags.drain(0..).len(), 3);
+
+    // now populate the certificates of rounds > 7
+    // Since we committed everything of rounds <= 6, then those certificates should get rejected.
+    for certificate in certificates.iter().filter(|c| c.round() > 8) {
+        // println!("{certificate:?}");
+        let (outcome, _) = bullshark
+            .process_certificate(&mut state, certificate.clone())
+            .unwrap();
+
+        // NoLeaderElectedForOddRound
+        assert_eq!(outcome, Outcome::CertificateBelowCommitRound);
     }
 }
 

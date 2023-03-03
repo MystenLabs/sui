@@ -31,6 +31,7 @@ mysten-metrics = { path = "../../crates/mysten-metrics" }
 mysten-util-mem.workspace = true
 store = { path = "../../crates/typed-store", package = "typed-store" }
 telemetry-subscribers.workspace = true
+crossterm = "0.26.1"
 
 [dev-dependencies]
 bincode = "1.3.3"
