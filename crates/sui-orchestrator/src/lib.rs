@@ -14,7 +14,7 @@ use crossterm::{
 };
 use futures::future::try_join_all;
 use logs::LogsParser;
-use measurement::MeasurementsCollector;
+use measurement::MeasurementsCollection;
 use settings::Settings;
 use ssh::{SshCommand, SshConnectionManager};
 use tokio::time::{self, sleep, Instant};
@@ -392,7 +392,7 @@ impl Orchestrator {
     pub async fn collect_metrics(
         &self,
         parameters: &BenchmarkParameters,
-    ) -> TestbedResult<MeasurementsCollector<usize>> {
+    ) -> TestbedResult<MeasurementsCollection<usize>> {
         crossterm::execute!(
             stdout(),
             Print(format!(
@@ -409,7 +409,7 @@ impl Orchestrator {
         let command = format!("curl 127.0.0.1:{}/metrics", Self::CLIENT_METRIC_PORT);
         let ssh_command = SshCommand::new(move |_| command.clone());
 
-        let mut aggregator = MeasurementsCollector::new(parameters.clone());
+        let mut aggregator = MeasurementsCollection::new(parameters.clone());
         let mut interval = time::interval(Self::SCRAPE_INTERVAL);
         interval.tick().await; // The first tick returns immediately.
 
@@ -520,7 +520,7 @@ impl Orchestrator {
 
     pub async fn run_benchmarks(
         &mut self,
-        mut generator: BenchmarkParametersGenerator<usize>,
+        mut generator: BenchmarkParametersGenerator,
     ) -> TestbedResult<()> {
         // Cleanup the testbed (in case the previous run was not completed).
         self.cleanup(true).await?;
