@@ -28,7 +28,7 @@
 -  [Function `update_validator_project_url`](#0x2_sui_system_update_validator_project_url)
 -  [Function `update_validator_next_epoch_network_address`](#0x2_sui_system_update_validator_next_epoch_network_address)
 -  [Function `update_validator_next_epoch_p2p_address`](#0x2_sui_system_update_validator_next_epoch_p2p_address)
--  [Function `update_validator_next_epoch_consensus_address`](#0x2_sui_system_update_validator_next_epoch_consensus_address)
+-  [Function `update_validator_next_epoch_primary_address`](#0x2_sui_system_update_validator_next_epoch_primary_address)
 -  [Function `update_validator_next_epoch_worker_address`](#0x2_sui_system_update_validator_next_epoch_worker_address)
 -  [Function `update_validator_next_epoch_protocol_pubkey`](#0x2_sui_system_update_validator_next_epoch_protocol_pubkey)
 -  [Function `update_validator_next_epoch_worker_pubkey`](#0x2_sui_system_update_validator_next_epoch_worker_pubkey)
@@ -44,6 +44,7 @@
 -  [Function `get_reporters_of`](#0x2_sui_system_get_reporters_of)
 -  [Function `load_system_state`](#0x2_sui_system_load_system_state)
 -  [Function `load_system_state_mut`](#0x2_sui_system_load_system_state_mut)
+-  [Function `upgrade_system_state`](#0x2_sui_system_upgrade_system_state)
 -  [Function `extract_coin_balance`](#0x2_sui_system_extract_coin_balance)
 -  [Function `extract_locked_coin_balance`](#0x2_sui_system_extract_locked_coin_balance)
 -  [Function `validators`](#0x2_sui_system_validators)
@@ -404,7 +405,7 @@ Create a new SuiSystemState object and make it shared.
 This function will be called only once in genesis.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, stake_subsidy_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_candidate_count: u64, min_validator_stake: u64, initial_stake_subsidy_amount: u64, protocol_version: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, stake_subsidy_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_candidate_count: u64, min_validator_stake: u64, initial_stake_subsidy_amount: u64, protocol_version: u64, system_state_version: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -421,6 +422,7 @@ This function will be called only once in genesis.
     min_validator_stake: u64,
     initial_stake_subsidy_amount: u64,
     protocol_version: u64,
+    system_state_version: u64,
     epoch_start_timestamp_ms: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
@@ -444,9 +446,9 @@ This function will be called only once in genesis.
     <b>let</b> self = <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a> {
         // Use a hardcoded ID.
         id: <a href="object.md#0x2_object_sui_system_state">object::sui_system_state</a>(),
-        version: protocol_version,
+        version: system_state_version,
     };
-    <a href="dynamic_field.md#0x2_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> self.id, protocol_version, system_state);
+    <a href="dynamic_field.md#0x2_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> self.id, system_state_version, system_state);
     <a href="transfer.md#0x2_transfer_share_object">transfer::share_object</a>(self);
 }
 </code></pre>
@@ -464,7 +466,7 @@ The <code><a href="validator.md#0x2_validator">validator</a></code> object needs
 The amount of stake in the <code><a href="validator.md#0x2_validator">validator</a></code> object must meet the requirements.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_validator">request_add_validator</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, description: <a href="">vector</a>&lt;u8&gt;, image_url: <a href="">vector</a>&lt;u8&gt;, project_url: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, p2p_address: <a href="">vector</a>&lt;u8&gt;, consensus_address: <a href="">vector</a>&lt;u8&gt;, worker_address: <a href="">vector</a>&lt;u8&gt;, stake: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, gas_price: u64, commission_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_validator">request_add_validator</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, description: <a href="">vector</a>&lt;u8&gt;, image_url: <a href="">vector</a>&lt;u8&gt;, project_url: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, p2p_address: <a href="">vector</a>&lt;u8&gt;, primary_address: <a href="">vector</a>&lt;u8&gt;, worker_address: <a href="">vector</a>&lt;u8&gt;, stake: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, gas_price: u64, commission_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -485,7 +487,7 @@ The amount of stake in the <code><a href="validator.md#0x2_validator">validator<
     project_url: <a href="">vector</a>&lt;u8&gt;,
     net_address: <a href="">vector</a>&lt;u8&gt;,
     p2p_address: <a href="">vector</a>&lt;u8&gt;,
-    consensus_address: <a href="">vector</a>&lt;u8&gt;,
+    primary_address: <a href="">vector</a>&lt;u8&gt;,
     worker_address: <a href="">vector</a>&lt;u8&gt;,
     stake: Coin&lt;SUI&gt;,
     gas_price: u64,
@@ -514,7 +516,7 @@ The amount of stake in the <code><a href="validator.md#0x2_validator">validator<
         project_url,
         net_address,
         p2p_address,
-        consensus_address,
+        primary_address,
         worker_address,
         <a href="coin.md#0x2_coin_into_balance">coin::into_balance</a>(stake),
         <a href="_none">option::none</a>(),
@@ -1083,15 +1085,15 @@ The change will only take effects starting from the next epoch.
 
 </details>
 
-<a name="0x2_sui_system_update_validator_next_epoch_consensus_address"></a>
+<a name="0x2_sui_system_update_validator_next_epoch_primary_address"></a>
 
-## Function `update_validator_next_epoch_consensus_address`
+## Function `update_validator_next_epoch_primary_address`
 
-Update a validator's consensus address.
+Update a validator's narwhal primary address.
 The change will only take effects starting from the next epoch.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_consensus_address">update_validator_next_epoch_consensus_address</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, consensus_address: <a href="">vector</a>&lt;u8&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_primary_address">update_validator_next_epoch_primary_address</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, primary_address: <a href="">vector</a>&lt;u8&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1100,14 +1102,14 @@ The change will only take effects starting from the next epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_consensus_address">update_validator_next_epoch_consensus_address</a>(
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_update_validator_next_epoch_primary_address">update_validator_next_epoch_primary_address</a>(
     self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
-    consensus_address: <a href="">vector</a>&lt;u8&gt;,
+    primary_address: <a href="">vector</a>&lt;u8&gt;,
     ctx: &TxContext,
 ) {
     <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self);
     <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_mut">validator_set::get_active_or_pending_validator_mut</a>(&<b>mut</b> self.validators, ctx);
-    <a href="validator.md#0x2_validator_update_next_epoch_consensus_address">validator::update_next_epoch_consensus_address</a>(<a href="validator.md#0x2_validator">validator</a>, consensus_address);
+    <a href="validator.md#0x2_validator_update_next_epoch_primary_address">validator::update_next_epoch_primary_address</a>(<a href="validator.md#0x2_validator">validator</a>, primary_address);
 }
 </code></pre>
 
@@ -1119,7 +1121,7 @@ The change will only take effects starting from the next epoch.
 
 ## Function `update_validator_next_epoch_worker_address`
 
-Update a validator's worker address.
+Update a validator's narwhal worker address.
 The change will only take effects starting from the next epoch.
 
 
@@ -1257,7 +1259,7 @@ gas coins.
 4. Update all validators.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, next_protocol_version: u64, storage_charge: u64, computation_charge: u64, storage_rebate: u64, storage_fund_reinvest_rate: u64, reward_slashing_rate: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, next_protocol_version: u64, storage_charge: u64, computation_charge: u64, storage_rebate: u64, storage_fund_reinvest_rate: u64, reward_slashing_rate: u64, epoch_start_timestamp_ms: u64, new_system_state_version: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1277,11 +1279,13 @@ gas coins.
                                      // into storage fund, in basis point.
     reward_slashing_rate: u64, // how much rewards are slashed <b>to</b> punish a <a href="validator.md#0x2_validator">validator</a>, in bps.
     epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
+    new_system_state_version: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
     <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, 0);
+    <b>let</b> old_protocol_version = self.protocol_version;
 
     self.epoch_start_timestamp_ms = epoch_start_timestamp_ms;
 
@@ -1369,8 +1373,17 @@ gas coins.
             total_stake_rewards: total_rewards_amount,
         }
     );
-
     self.safe_mode = <b>false</b>;
+
+    <b>if</b> (new_system_state_version != wrapper.version) {
+        // If we are upgrading the system state, we need <b>to</b> make sure that the protocol version
+        // is also upgraded.
+        <b>assert</b>!(old_protocol_version != next_protocol_version, 0);
+        <b>let</b> cur_state: <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> = <a href="dynamic_field.md#0x2_dynamic_field_remove">dynamic_field::remove</a>(&<b>mut</b> wrapper.id, wrapper.version);
+        <b>let</b> new_state = <a href="sui_system.md#0x2_sui_system_upgrade_system_state">upgrade_system_state</a>(cur_state);
+        wrapper.version = new_system_state_version;
+        <a href="dynamic_field.md#0x2_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> wrapper.id, wrapper.version, new_state);
+    };
 }
 </code></pre>
 
@@ -1654,6 +1667,33 @@ Returns all the validators who have reported <code>addr</code> this epoch.
 
 <pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> {
     <a href="dynamic_field.md#0x2_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, self.version)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_upgrade_system_state"></a>
+
+## Function `upgrade_system_state`
+
+
+
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_upgrade_system_state">upgrade_system_state</a>(cur_state: <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">sui_system::SuiSystemStateInner</a>): <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">sui_system::SuiSystemStateInner</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_upgrade_system_state">upgrade_system_state</a>(cur_state: <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a>): <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> {
+    // Whenever we upgrade the system state version, we will have <b>to</b> first
+    // ship a framework upgrade that introduces a new system state type, and make this
+    // function generate such type from the <b>old</b> state.
+    cur_state
 }
 </code></pre>
 

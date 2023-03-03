@@ -227,7 +227,7 @@ validators:
         project_url: ""
         net_address: []
         p2p_address: []
-        consensus_address: []
+        primary_address: []
         worker_address: []
         next_epoch_protocol_pubkey_bytes: ~
         next_epoch_proof_of_possession: ~
@@ -235,7 +235,7 @@ validators:
         next_epoch_worker_pubkey_bytes: ~
         next_epoch_net_address: ~
         next_epoch_p2p_address: ~
-        next_epoch_consensus_address: ~
+        next_epoch_primary_address: ~
         next_epoch_worker_address: ~
       voting_power: 10000
       gas_price: 1

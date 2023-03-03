@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useCoinDecimals, useFormatCoin, CoinFormat } from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
 import {
     SUI_TYPE_ARG,
@@ -11,7 +12,6 @@ import { Field, Form, useFormikContext, Formik } from 'formik';
 import { useMemo, useEffect } from 'react';
 
 import { createValidationSchemaStepOne } from './validation';
-import { useFormatCoin, CoinFormat } from '_app/hooks/useFormatCoin';
 import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, {
     Content,
@@ -22,11 +22,7 @@ import { IconTooltip } from '_app/shared/tooltip';
 import { AddressInput } from '_components/address-input';
 import Loading from '_components/loading';
 import { parseAmount } from '_helpers';
-import {
-    useCoinDecimals,
-    useAppSelector,
-    useIndividualCoinMaxBalance,
-} from '_hooks';
+import { useAppSelector, useIndividualCoinMaxBalance } from '_hooks';
 import {
     accountAggregateBalancesSelector,
     accountCoinsSelector,

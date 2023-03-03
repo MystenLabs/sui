@@ -179,7 +179,7 @@ module sui::sui_system_tests {
         sui_system::update_validator_project_url(system_state, b"new_project_url", ctx);
         sui_system::update_validator_next_epoch_network_address(system_state, network_address, ctx);
         sui_system::update_validator_next_epoch_p2p_address(system_state, p2p_address, ctx);
-        sui_system::update_validator_next_epoch_consensus_address(system_state, vector[4, 168, 168, 168, 168], ctx);
+        sui_system::update_validator_next_epoch_primary_address(system_state, vector[4, 168, 168, 168, 168], ctx);
         sui_system::update_validator_next_epoch_worker_address(system_state, vector[4, 168, 168, 168, 168], ctx);
         sui_system::update_validator_next_epoch_protocol_pubkey(
             system_state,
@@ -210,7 +210,7 @@ module sui::sui_system_tests {
         assert!(validator::project_url(validator) == &url::new_unsafe_from_bytes(b"new_project_url"), 0);
         assert!(validator::network_address(validator) == &network_address, 0);
         assert!(validator::p2p_address(validator) == &p2p_address, 0);
-        assert!(validator::consensus_address(validator) == &vector[4, 127, 0, 0, 1], 0);
+        assert!(validator::primary_address(validator) == &vector[4, 127, 0, 0, 1], 0);
         assert!(validator::worker_address(validator) == &vector[4, 127, 0, 0, 1], 0);
         assert!(validator::protocol_pubkey_bytes(validator) == &protocol_pub_key, 0);
         assert!(validator::proof_of_possession(validator) == &pop, 0);
@@ -220,7 +220,7 @@ module sui::sui_system_tests {
         // Next epoch
         assert!(validator::next_epoch_network_address(validator) == &option::some(new_network_address), 0);
         assert!(validator::next_epoch_p2p_address(validator) == &option::some(new_p2p_address), 0);
-        assert!(validator::next_epoch_consensus_address(validator) == &option::some(vector[4, 168, 168, 168, 168]), 0);
+        assert!(validator::next_epoch_primary_address(validator) == &option::some(vector[4, 168, 168, 168, 168]), 0);
         assert!(validator::next_epoch_worker_address(validator) == &option::some(vector[4, 168, 168, 168, 168]), 0);
         assert!(
             validator::next_epoch_protocol_pubkey_bytes(validator) == &option::some(new_protocol_pub_key),
@@ -255,7 +255,7 @@ module sui::sui_system_tests {
         assert!(validator::project_url(validator) == &url::new_unsafe_from_bytes(b"new_project_url"), 0);
         assert!(validator::network_address(validator) == &network_address, 0);
         assert!(validator::p2p_address(validator) == &p2p_address, 0);
-        assert!(validator::consensus_address(validator) == &vector[4, 168, 168, 168, 168], 0);
+        assert!(validator::primary_address(validator) == &vector[4, 168, 168, 168, 168], 0);
         assert!(validator::worker_address(validator) == &vector[4, 168, 168, 168, 168], 0);
         assert!(validator::protocol_pubkey_bytes(validator) == &protocol_pub_key, 0);
         assert!(validator::proof_of_possession(validator) == &pop, 0);
@@ -265,7 +265,7 @@ module sui::sui_system_tests {
         // Next epoch
         assert!(option::is_none(validator::next_epoch_network_address(validator)), 0);
         assert!(option::is_none(validator::next_epoch_p2p_address(validator)), 0);
-        assert!(option::is_none(validator::next_epoch_consensus_address(validator)), 0);
+        assert!(option::is_none(validator::next_epoch_primary_address(validator)), 0);
         assert!(option::is_none(validator::next_epoch_worker_address(validator)), 0);
         assert!(option::is_none(validator::next_epoch_protocol_pubkey_bytes(validator)), 0);
         assert!(option::is_none(validator::next_epoch_proof_of_possession(validator)), 0);

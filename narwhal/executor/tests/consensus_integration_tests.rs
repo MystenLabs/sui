@@ -166,7 +166,7 @@ async fn test_internal_consensus_output() {
         let tx = string_transaction(i);
 
         // serialise and send
-        let tr = bincode::serialize(&tx).unwrap();
+        let tr = bcs::to_bytes(&tx).unwrap();
         let txn = TransactionProto {
             transaction: Bytes::from(tr),
         };
@@ -180,7 +180,7 @@ async fn test_internal_consensus_output() {
         let result = receiver.recv().await.unwrap();
 
         // deserialise transaction
-        let output_transaction = bincode::deserialize::<String>(&result).unwrap();
+        let output_transaction = bcs::from_bytes::<String>(&result).unwrap();
 
         // we always remove the first transaction and check with the one
         // sequenced. We want the transactions to be sequenced in the

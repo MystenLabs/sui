@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useCoinDecimals, useFormatCoin } from '@mysten/core';
+
 import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
 import { TxnAddress } from '_components/receipt-card/TxnAddress';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
 import { parseAmount } from '_helpers';
-import { useAppSelector, useFormatCoin, useCoinDecimals } from '_hooks';
+import { useAppSelector } from '_hooks';
 import { GAS_SYMBOL, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
 export type PreviewTransferProps = {

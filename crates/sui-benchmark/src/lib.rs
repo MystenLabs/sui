@@ -7,9 +7,14 @@ use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use futures::{stream::FuturesUnordered, StreamExt};
 use prometheus::Registry;
 use roaring::RoaringBitmap;
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use sui_config::genesis::Genesis;
 use sui_config::NetworkConfig;
+use sui_core::signature_verifier::IgnoreSignatureVerifier;
 use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::{make_authority_clients, AuthorityAPI, NetworkAuthorityClient},
@@ -25,7 +30,7 @@ use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::messages::TransactionEvents;
 use sui_types::{
     base_types::ObjectID,
-    committee::{Committee, EpochId, ProtocolVersion},
+    committee::{Committee, EpochId},
     crypto::{
         AggregateAuthenticator, AggregateAuthoritySignature, AuthorityQuorumSignInfo,
         AuthoritySignature,
@@ -42,6 +47,7 @@ use sui_types::{
     messages::ExecuteTransactionRequestType, object::Owner,
 };
 use sui_types::{error::SuiError, sui_system_state::SuiSystemState};
+use tokio::{task::JoinSet, time::timeout};
 use tracing::{error, info};
 
 pub mod benchmark_setup;
@@ -135,10 +141,12 @@ pub trait ValidatorProxy {
 
 // TODO: Eventually remove this proxy because we shouldn't rely on validators to read objects.
 pub struct LocalValidatorAggregatorProxy {
-    _qd_handler: QuorumDriverHandler<NetworkAuthorityClient>,
-    qd: Arc<QuorumDriver<NetworkAuthorityClient>>,
+    _qd_handler: QuorumDriverHandler<NetworkAuthorityClient, IgnoreSignatureVerifier>,
+    // Stress client does not verify individual validator signatures since this is very expensive
+    qd: Arc<QuorumDriver<NetworkAuthorityClient, IgnoreSignatureVerifier>>,
     committee: Committee,
     clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
+    requests: Mutex<JoinSet<()>>,
 }
 
 impl LocalValidatorAggregatorProxy {
@@ -153,7 +161,7 @@ impl LocalValidatorAggregatorProxy {
             .unwrap();
 
         let validator_info = genesis.validator_set();
-        let committee = make_committee(0, ProtocolVersion::MIN, &validator_info).unwrap();
+        let committee = make_committee(0, &validator_info).unwrap();
         let clients = make_authority_clients(
             &validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
@@ -181,7 +189,7 @@ impl LocalValidatorAggregatorProxy {
             .unwrap();
 
         let validator_info = configs.validator_set();
-        let committee = make_committee(0, ProtocolVersion::MIN, &validator_info).unwrap();
+        let committee = make_committee(0, &validator_info).unwrap();
         let clients = make_authority_clients(
             &validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
@@ -199,7 +207,7 @@ impl LocalValidatorAggregatorProxy {
     }
 
     async fn new_impl(
-        aggregator: AuthorityAggregator<NetworkAuthorityClient>,
+        aggregator: AuthorityAggregator<NetworkAuthorityClient, IgnoreSignatureVerifier>,
         registry: &Registry,
         reconfig_fullnode_rpc_url: Option<&str>,
         clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
@@ -246,6 +254,7 @@ impl LocalValidatorAggregatorProxy {
             qd,
             clients,
             committee,
+            requests: Mutex::new(JoinSet::new()),
         }
     }
 }
@@ -393,8 +402,9 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         let mut transaction_effects = None;
         let mut transaction_events = None;
         for client in self.clients.values() {
-            let fut = client.handle_certificate(certified_transaction.clone());
-            futures.push(fut);
+            let client = client.clone();
+            let certificate = certified_transaction.clone();
+            futures.push(async move { client.handle_certificate(certificate).await });
         }
 
         // Wait for the replies from a quorum of validators.
@@ -416,19 +426,23 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                 Err(e) => tracing::warn!("Failed to submit certificate: {e}"),
             }
 
-            // TODO: We can't stop sending transactions after receiving a quorum of replies otherwise
-            // some validators may not be able to process the next transactions. However this is a
-            // problem because: (i) it biases latency which should be computed upon receiving a quorum
-            // of certificate, and (ii) it prevents us from running benchmarks under (crash-)faults.
-            // if total_stake >= self.committee.quorum_threshold() {
-            //     break;
-            // }
+            if total_stake >= self.committee.quorum_threshold() {
+                break;
+            }
         }
 
         // Abort if we failed to submit the certificate to enough validators. This typically
         // happens when the validators are overloaded and the requests timed out.
         if transaction_effects.is_none() || total_stake < self.committee.quorum_threshold() {
             bail!("Failed to submit certificate to quorum of validators");
+        }
+
+        // Wait for 10 more seconds on remaining requests asynchronously.
+        {
+            let mut requests = self.requests.lock().unwrap();
+            requests.spawn(async move {
+                let _ = timeout(Duration::from_secs(10), futures.collect::<Vec<_>>()).await;
+            });
         }
 
         // Package the certificate and effects to return.
@@ -456,6 +470,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             qd,
             clients: self.clients.clone(),
             committee: self.committee.clone(),
+            requests: Mutex::new(JoinSet::new()),
         })
     }
 
@@ -485,11 +500,10 @@ impl FullNodeProxy {
 
         let resp = sui_client.read_api().get_committee_info(None).await?;
         let epoch = resp.epoch;
-        let protocol_version = resp.protocol_version;
         let committee_vec = resp.committee_info;
         let committee_map =
             BTreeMap::from_iter(committee_vec.into_iter().map(|(name, stake)| (name, stake)));
-        let committee = Committee::new(epoch, protocol_version, committee_map)?;
+        let committee = Committee::new(epoch, committee_map)?;
 
         Ok(Self {
             sui_client,

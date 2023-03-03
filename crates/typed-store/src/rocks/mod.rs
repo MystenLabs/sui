@@ -1083,7 +1083,7 @@ impl DBBatch {
             .into_iter()
             .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
                 let k_buf = be_fix_int_ser(k.borrow())?;
-                let v_buf = bincode::serialize(v.borrow())?;
+                let v_buf = bcs::to_bytes(v.borrow())?;
                 self.batch.put_cf(&db.cf(), k_buf, v_buf);
                 Ok(())
             })?;
@@ -1145,7 +1145,7 @@ impl DBBatch {
             .into_iter()
             .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
                 let k_buf = be_fix_int_ser(k.borrow())?;
-                let v_buf = bincode::serialize(v.borrow())?;
+                let v_buf = bcs::to_bytes(v.borrow())?;
                 self.batch.put_cf(&db.cf(), k_buf, v_buf);
                 Ok(())
             })?;
@@ -1166,7 +1166,7 @@ impl DBBatch {
             .into_iter()
             .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
                 let k_buf = be_fix_int_ser(k.borrow())?;
-                let v_buf = bincode::serialize(v.borrow())?;
+                let v_buf = bcs::to_bytes(v.borrow())?;
                 self.batch.merge_cf(&db.cf(), k_buf, v_buf);
                 Ok(())
             })?;
@@ -1226,7 +1226,7 @@ impl<'a> DBTransaction<'a> {
             .into_iter()
             .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
                 let k_buf = be_fix_int_ser(k.borrow())?;
-                let v_buf = bincode::serialize(v.borrow())?;
+                let v_buf = bcs::to_bytes(v.borrow())?;
                 self.transaction.put_cf(&db.cf(), k_buf, v_buf)?;
                 Ok(())
             })?;
@@ -1272,7 +1272,7 @@ impl<'a> DBTransaction<'a> {
             .transaction
             .get_for_update_cf_opt(&db.cf(), k_buf, true, &db.opts.readopts())?
         {
-            Some(data) => Ok(Some(bincode::deserialize(&data)?)),
+            Some(data) => Ok(Some(bcs::from_bytes(&data)?)),
             None => Ok(None),
         }
     }
@@ -1286,7 +1286,7 @@ impl<'a> DBTransaction<'a> {
         self.transaction
             .get_cf_opt(&db.cf(), key_buf, &db.opts.readopts())
             .map_err(|e| TypedStoreError::RocksDBError(e.to_string()))
-            .map(|res| res.and_then(|bytes| bincode::deserialize::<V>(&bytes).ok()))
+            .map(|res| res.and_then(|bytes| bcs::from_bytes::<V>(&bytes).ok()))
     }
 
     pub fn multi_get<J: Borrow<K>, K: Serialize + DeserializeOwned, V: DeserializeOwned>(
@@ -1307,7 +1307,7 @@ impl<'a> DBTransaction<'a> {
         let values_parsed: Result<Vec<_>, TypedStoreError> = results
             .into_iter()
             .map(|value_byte| match value_byte? {
-                Some(data) => Ok(Some(bincode::deserialize(&data)?)),
+                Some(data) => Ok(Some(bcs::from_bytes(&data)?)),
                 None => Ok(None),
             })
             .collect();
@@ -1493,7 +1493,7 @@ where
                 .report_metrics(&self.cf);
         }
         match res {
-            Some(data) => Ok(Some(bincode::deserialize(&data)?)),
+            Some(data) => Ok(Some(bcs::from_bytes(&data)?)),
             None => Ok(None),
         }
     }
@@ -1545,7 +1545,7 @@ where
             None
         };
         let key_buf = be_fix_int_ser(key)?;
-        let value_buf = bincode::serialize(value)?;
+        let value_buf = bcs::to_bytes(value)?;
         if report_metrics.is_some() {
             self.db_metrics
                 .op_metrics
@@ -1698,7 +1698,7 @@ where
         let values_parsed: Result<Vec<_>, TypedStoreError> = results
             .into_iter()
             .map(|value_byte| match value_byte? {
-                Some(data) => Ok(Some(bincode::deserialize(&data)?)),
+                Some(data) => Ok(Some(bcs::from_bytes(&data)?)),
                 None => Ok(None),
             })
             .collect();

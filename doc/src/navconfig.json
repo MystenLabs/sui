@@ -6,9 +6,8 @@
 				"link": "doc-updates"
 			},
 			{
-				"label": "Sui Releases",
-				"link": "https://github.com/MystenLabs/sui/releases",
-				"external": true
+				"label": "Sui Upcoming Breaking Changes",
+				"link": "doc-updates/sui-breaking-changes"
 			},
 			{
 				"label": "Sui Developer Forums",

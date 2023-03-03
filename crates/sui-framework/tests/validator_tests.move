@@ -16,6 +16,7 @@ module sui::validator_tests {
     use sui::balance;
     use sui::staking_pool::{Self, StakedSui};
     use std::vector;
+    use sui::test_utils;
 
 
     const VALID_PUBKEY: vector<u8> = vector[153, 242, 94, 246, 31, 128, 50, 185, 20, 99, 100, 96, 152, 44, 92, 198, 241, 52, 239, 29, 218, 231, 102, 87, 242, 203, 254, 193, 235, 252, 141, 9, 115, 116, 8, 13, 246, 252, 240, 220, 184, 188, 75, 13, 142, 10, 245, 216, 14, 187, 255, 43, 76, 89, 159, 84, 244, 45, 99, 18, 223, 195, 20, 39, 96, 120, 193, 204, 52, 126, 187, 190, 197, 25, 139, 226, 88, 81, 63, 56, 107, 147, 13, 2, 194, 116, 154, 128, 62, 35, 48, 149, 94, 189, 26, 16];
@@ -72,7 +73,7 @@ module sui::validator_tests {
             assert!(validator::total_stake_amount(&validator) == 10, 0);
             assert!(validator::sui_address(&validator) == sender, 0);
 
-            validator::destroy(validator, ctx);
+            test_utils::destroy(validator);
         };
 
         // Check that after destroy, the original stake still exists.
@@ -133,7 +134,7 @@ module sui::validator_tests {
             test_scenario::return_to_sender(scenario, withdraw);
         };
 
-        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_utils::destroy(validator);
         test_scenario::end(scenario_val);
     }
 
@@ -269,7 +270,7 @@ module sui::validator_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = validator::EMetadataInvalidConsensusAddr)]
+    #[expected_failure(abort_code = validator::EMetadataInvalidPrimaryAddr)]
     fun test_metadata_invalid_consensus_addr() {
         let metadata = validator::new_metadata(
             @0x42,
@@ -330,7 +331,7 @@ module sui::validator_tests {
         {
             validator::update_next_epoch_network_address(&mut validator, vector[4, 192, 168, 1, 1]);
             validator::update_next_epoch_p2p_address(&mut validator, vector[4, 192, 168, 1, 1]);
-            validator::update_next_epoch_consensus_address(&mut validator, vector[4, 192, 168, 1, 1]);
+            validator::update_next_epoch_primary_address(&mut validator, vector[4, 192, 168, 1, 1]);
             validator::update_next_epoch_worker_address(&mut validator, vector[4, 192, 168, 1, 1]);
             validator::update_next_epoch_protocol_pubkey(
                 &mut validator,
@@ -361,7 +362,7 @@ module sui::validator_tests {
             assert!(validator::project_url(&mut validator) == &url::new_unsafe_from_bytes(b"new_proj_url"), 0);
             assert!(validator::network_address(&validator) == &VALID_NET_ADDR, 0);
             assert!(validator::p2p_address(&validator) == &VALID_P2P_ADDR, 0);
-            assert!(validator::consensus_address(&validator) == &VALID_CONSENSUS_ADDR, 0);
+            assert!(validator::primary_address(&validator) == &VALID_CONSENSUS_ADDR, 0);
             assert!(validator::worker_address(&validator) == &VALID_WORKER_ADDR, 0);
             assert!(validator::protocol_pubkey_bytes(&validator) == &VALID_PUBKEY, 0);
             assert!(validator::proof_of_possession(&validator) == &PROOF_OF_POSESSION, 0);
@@ -371,7 +372,7 @@ module sui::validator_tests {
             // Next epoch
             assert!(validator::next_epoch_network_address(&validator) == &option::some(vector[4, 192, 168, 1, 1]), 0);
             assert!(validator::next_epoch_p2p_address(&validator) == &option::some(vector[4, 192, 168, 1, 1]), 0);
-            assert!(validator::next_epoch_consensus_address(&validator) == &option::some(vector[4, 192, 168, 1, 1]), 0);
+            assert!(validator::next_epoch_primary_address(&validator) == &option::some(vector[4, 192, 168, 1, 1]), 0);
             assert!(validator::next_epoch_worker_address(&validator) == &option::some(vector[4, 192, 168, 1, 1]), 0);
             assert!(
                 validator::next_epoch_protocol_pubkey_bytes(&validator) == &option::some(new_protocol_pub_key),
@@ -391,7 +392,7 @@ module sui::validator_tests {
             );
         };
 
-        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_utils::destroy(validator);
         test_scenario::end(scenario_val);
     }
 
@@ -416,7 +417,7 @@ module sui::validator_tests {
             );
         };
 
-        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_utils::destroy(validator);
         test_scenario::end(scenario_val);
     }
 
@@ -439,7 +440,7 @@ module sui::validator_tests {
             );
         };
 
-        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_utils::destroy(validator);
         test_scenario::end(scenario_val);
     }
 
@@ -463,7 +464,7 @@ module sui::validator_tests {
             );
         };
 
-        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_utils::destroy(validator);
         test_scenario::end(scenario_val);
     }
 
@@ -486,11 +487,11 @@ module sui::validator_tests {
             );
         };
 
-        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_utils::destroy(validator);
         test_scenario::end(scenario_val);
     }
 
-    #[expected_failure(abort_code = sui::validator::EMetadataInvalidConsensusAddr)]
+    #[expected_failure(abort_code = sui::validator::EMetadataInvalidPrimaryAddr)]
     #[test]
     fun test_validator_update_metadata_invalid_consensus_addr() {
         let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
@@ -503,13 +504,13 @@ module sui::validator_tests {
 
         test_scenario::next_tx(scenario, sender);
         {
-            validator::update_next_epoch_consensus_address(
+            validator::update_next_epoch_primary_address(
                 &mut validator,
                 x"beef",
             );
         };
 
-        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_utils::destroy(validator);
         test_scenario::end(scenario_val);
     }
 
@@ -532,7 +533,7 @@ module sui::validator_tests {
             );
         };
 
-        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_utils::destroy(validator);
         test_scenario::end(scenario_val);
     }
 
@@ -555,7 +556,7 @@ module sui::validator_tests {
             );
         };
 
-        validator::destroy(validator, test_scenario::ctx(scenario));
+        test_utils::destroy(validator);
         test_scenario::end(scenario_val);
     }
 }

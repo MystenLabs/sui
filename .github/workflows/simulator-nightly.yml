@@ -29,7 +29,7 @@ env:
 
 jobs:
   simtest:
-    timeout-minutes: 90
+    timeout-minutes: 120
     runs-on: [ubuntu-ghcloud]
 
     steps:
@@ -60,10 +60,20 @@ jobs:
 
     steps:
     - uses: technote-space/workflow-conclusion-action@v3
+
+    - name: Checkout sui repo main branch
+      uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
+    
+    - name: Get sui commit
+      run: |
+        export sui_sha=$(git rev-parse HEAD)
+        echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
+
     - name: Post to slack
       uses: slackapi/slack-github-action@936158bbe252e9a6062e793ea4609642c966e302 # pin@v1.21.0
       env:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        SUI_SHA: ${{ env.sui_sha }}
       with:
         channel-id: 'simtest-nightly'
         payload: |
@@ -84,7 +94,14 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "Logs are here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \n"
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "Logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                 }
               }
             ]
