@@ -7,18 +7,18 @@ import { Text } from '_src/ui/app/shared/text';
 
 import type { GasCostSummary } from '@mysten/sui.js';
 
-type TxnGasSummeryProps = {
+type TxnGasSummaryProps = {
     gasSummary?: GasCostSummary;
     totalGas: number;
     transferAmount: number | null;
 };
 
 //TODO add gas breakdown
-export function TxnGasSummery({
+export function TxnGasSummary({
     gasSummary,
     totalGas,
     transferAmount,
-}: TxnGasSummeryProps) {
+}: TxnGasSummaryProps) {
     const [totalAmount, totalAmountSymbol] = useFormatCoin(
         totalGas + (transferAmount || 0),
         GAS_TYPE_ARG
@@ -31,28 +31,18 @@ export function TxnGasSummery({
                 <Text variant="body" weight="medium" color="steel-darker">
                     Gas Fees
                 </Text>
-
-                <div className="flex gap-1 items-center">
-                    <Text variant="body" weight="medium" color="steel-darker">
-                        {gas} {symbol}
-                    </Text>
-                </div>
+                <Text variant="body" weight="medium" color="steel-darker">
+                    {gas} {symbol}
+                </Text>
             </div>
             {transferAmount ? (
                 <div className="flex justify-between items-center w-full">
                     <Text variant="body" weight="medium" color="steel-darker">
                         Total Amount
                     </Text>
-
-                    <div className="flex gap-1 items-center">
-                        <Text
-                            variant="body"
-                            weight="medium"
-                            color="steel-darker"
-                        >
-                            {totalAmount} {totalAmountSymbol}
-                        </Text>
-                    </div>
+                    <Text variant="body" weight="medium" color="steel-darker">
+                        {totalAmount} {totalAmountSymbol}
+                    </Text>
                 </div>
             ) : null}
         </div>
