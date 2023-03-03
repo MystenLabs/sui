@@ -8,7 +8,6 @@ import { CoinBalance } from './CoinBalance';
 import { Heading } from './Heading';
 import { TransactionAddress } from './TransactionAddress';
 
-
 type SponsorTransactionAddressProps = {
     sponsor: string;
 };
