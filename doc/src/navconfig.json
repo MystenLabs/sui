@@ -7,8 +7,7 @@
 			},
 			{
 				"label": "Sui Upcoming Breaking Changes",
-				"link": "doc-updates/sui-breaking-changes",
-				"external": true
+				"link": "doc-updates/sui-breaking-changes"
 			},
 			{
 				"label": "Sui Developer Forums",
