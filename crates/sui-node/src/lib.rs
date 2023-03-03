@@ -430,12 +430,6 @@ impl SuiNode {
             // Set the max_frame_size to be 2 GB to work around the issue of there being too many
             // delegation events in the epoch change txn.
             anemo_config.max_frame_size = Some(2 << 30);
-            anemo_config.max_concurrent_connections = Some(10_000);
-            anemo_config.max_concurrent_outstanding_connecting_connections = Some(10_000);
-            let mut quic_config = anemo::QuicConfig::default();
-            quic_config.max_concurrent_bidi_streams = Some(10_000);
-            quic_config.max_concurrent_uni_streams = Some(10_000);
-            anemo_config.quic = Some(quic_config);
 
             let network = Network::bind(config.p2p_config.listen_address)
                 .server_name("sui")

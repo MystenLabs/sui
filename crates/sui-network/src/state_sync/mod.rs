@@ -539,6 +539,7 @@ where
                 self.peer_heights.clone(),
                 self.metrics.clone(),
                 self.config.checkpoint_header_download_concurrency(),
+                self.config.transaction_download_concurrency(),
                 self.checkpoint_event_sender.clone(),
                 self.config.timeout(),
                 // The if condition should ensure that this is Some
@@ -758,6 +759,7 @@ async fn sync_to_checkpoint<S>(
     peer_heights: Arc<RwLock<PeerHeights>>,
     metrics: Metrics,
     checkpoint_header_download_concurrency: usize,
+    transaction_download_concurrency: usize,
     checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
     timeout: Duration,
     checkpoint: Checkpoint,
@@ -799,31 +801,25 @@ where
         .map(|(&peer_id, &info)| (peer_id, info))
         .collect::<Vec<_>>();
 
-    // range of the next sequence_numbers to fetch
-    println!(
-        "Request Range {} -> {}",
-        current.sequence_number().saturating_add(1),
-        checkpoint.sequence_number()
-    );
-
-    let mut total_on_cpu = 0;
-    let mut total_on_net = 0;
-
     let request_stream = (current.sequence_number().saturating_add(1)
         ..=checkpoint.sequence_number())
-        .map(|next| download_full_checkpoint(next, peers.clone(), &network, timeout))
+        .map(|next| {
+            download_full_checkpoint(
+                next,
+                peers.clone(),
+                &network,
+                transaction_download_concurrency,
+                timeout,
+            )
+        })
         .pipe(futures::stream::iter)
         .buffered(checkpoint_header_download_concurrency);
 
+    const MAX_CHECKPOINT_CHUNK : usize =  200; // This is an internal param, no need to expose as config
     let mut chucks_stream =
-        request_stream.ready_chunks(checkpoint_header_download_concurrency.min(200));
+        request_stream.ready_chunks(checkpoint_header_download_concurrency.min(MAX_CHECKPOINT_CHUNK));
 
-    let mut now_net = tokio::time::Instant::now();
     while let Some(mut vec_checkpoints) = chucks_stream.next().await {
-        let net_elapsed = now_net.elapsed().as_millis();
-        total_on_net += net_elapsed;
-        let now = tokio::time::Instant::now();
-
         let checkpoint_bundle: Vec<_> = vec_checkpoints
             .clone()
             .into_iter()
@@ -860,8 +856,8 @@ where
         vec_checkpoints.truncate(checkpoint_bundle.len());
 
         // Check that the last item has a correct certificate
-        if let Some((last_checkpoint, _next_seq, maybe_peer_id)) = vec_checkpoints.last() {
-            let (checkpoint, _contents, _transaction_effects) = last_checkpoint.as_ref().unwrap(); //
+        if let Some((last_checkpoint, _, maybe_peer_id)) = vec_checkpoints.last() {
+            let (checkpoint, _, _) = last_checkpoint.as_ref().unwrap(); // Safe due to last() above
 
             let Some(committee) = store
             .get_committee(checkpoint.epoch())
@@ -899,16 +895,11 @@ where
         {
             if current.sequence_number().saturating_add(1) != *next {
                 // We must have experienced some failures so lets restart
-                debug!(
-                    "Restarting sync: Current {} next {}",
-                    current.sequence_number(),
-                    next
-                );
                 return Ok(());
             }
 
             // Verify the checkpoint
-            if verify_checkpoint_not_certificate(&current, &store, checkpoint.inner()).is_err() {
+            if verify_checkpoint_not_certificate(&current, checkpoint.inner()).is_err() {
                 warn!("Checkpoint failed verification (other checks).");
                 return flag_bad_checkpoint_peer(*maybe_peer_id, checkpoint.inner(), peer_heights);
             }
@@ -925,8 +916,6 @@ where
             verified_checkpoints.push(checkpoint.clone());
         }
 
-        let now_db = tokio::time::Instant::now();
-
         store
             .insert_full_bundle(checkpoint_bundle)
             .expect("store operation should not fail");
@@ -940,28 +929,12 @@ where
             let _ = sender.send(message).await;
         }
 
-        let now_db_elapsed = now_db.elapsed().as_millis();
-
         // Send all checkpooints to the channel for execution notification
         verified_checkpoints
             .into_iter()
             .for_each(|verified_checkpoint| {
                 let _ = checkpoint_event_sender.send(verified_checkpoint);
             });
-
-        let now_cpu = now.elapsed().as_millis();
-        total_on_cpu += now_cpu;
-
-        info!(
-            "Checkpoint Batch Post proc: net: {}ms cpu: {}ms (db: {}ms) for #{} Current seq: {} (totals: net {}ms cpu {}ms)",
-            net_elapsed,
-            now_cpu,
-            now_db_elapsed,
-            vec_size,
-            current.sequence_number(),
-            total_on_net,
-            total_on_cpu,
-        );
 
         // Since we stop at the epoch checkpoint it is safe to check the last one
         // and return if it changes epoch, since we need the new epoch committee
@@ -970,8 +943,6 @@ where
             info!("Sync interrupted at epoch boundary.");
             return Ok(());
         }
-
-        now_net = tokio::time::Instant::now();
     }
 
     peer_heights
@@ -986,6 +957,7 @@ fn download_full_checkpoint(
     next: u64,
     peers: Vec<(PeerId, PeerStateSyncInfo)>,
     network: &anemo::Network,
+    transaction_download_concurrency: usize,
     timeout: Duration,
 ) -> impl core::future::Future<
     Output = (
@@ -1009,7 +981,6 @@ fn download_full_checkpoint(
 
     let mut rng = <rand::rngs::StdRng as rand::SeedableRng>::from_entropy();
     rand::seq::SliceRandom::shuffle(peers.as_mut_slice(), &mut rng);
-    let transaction_download_concurrency = 1_000;
 
     async move {
         let now = tokio::time::Instant::now();
@@ -1123,14 +1094,10 @@ fn download_full_checkpoint(
     }
 }
 
-fn verify_checkpoint_not_certificate<S>(
+fn verify_checkpoint_not_certificate(
     current: &VerifiedCheckpoint,
-    _store: S,
     checkpoint: &Checkpoint,
 ) -> Result<(), ()>
-where
-    S: WriteStore,
-    <S as ReadStore>::Error: std::error::Error,
 {
     assert_eq!(
         checkpoint.sequence_number(),
@@ -1164,8 +1131,7 @@ where
         && current.next_epoch_committee().is_none()
     {
         debug!(
-            "next checkpoint claims to be from the next epoch but the latest verified \
-            checkpoint does not indicate that it is the last checkpoint of an epoch"
+            "next checkpoint claims to be from the next epoch but the latest verified checkpoint does not indicate that it is the last checkpoint of an epoch"
         );
         return Err(());
     }

@@ -80,12 +80,6 @@ pub struct StateSyncConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint_header_download_concurrency: Option<usize>,
 
-    /// Set the upper bound on the number of checkpoint contents to be downloaded concurrently.
-    ///
-    /// If unspecified, this will default to `100`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub checkpoint_content_download_concurrency: Option<usize>,
-
     /// Set the upper bound on the number of transactions to be downloaded concurrently from a
     /// single checkpoint.
     ///
@@ -132,41 +126,34 @@ impl StateSyncConfig {
     }
 
     pub fn mailbox_capacity(&self) -> usize {
-        const MAILBOX_CAPACITY: usize = 12_800;
+        const MAILBOX_CAPACITY: usize = 128;
 
         self.mailbox_capacity.unwrap_or(MAILBOX_CAPACITY)
     }
 
     pub fn synced_checkpoint_broadcast_channel_capacity(&self) -> usize {
-        const SYNCED_CHECKPOINT_BROADCAST_CHANNEL_CAPACITY: usize = 12_800;
+        const SYNCED_CHECKPOINT_BROADCAST_CHANNEL_CAPACITY: usize = 128;
 
         self.synced_checkpoint_broadcast_channel_capacity
             .unwrap_or(SYNCED_CHECKPOINT_BROADCAST_CHANNEL_CAPACITY)
     }
 
     pub fn checkpoint_header_download_concurrency(&self) -> usize {
-        const CHECKPOINT_HEADER_DOWNLOAD_CONCURRENCY: usize = 6_000;
+        const CHECKPOINT_HEADER_DOWNLOAD_CONCURRENCY: usize = 100;
 
         self.checkpoint_header_download_concurrency
             .unwrap_or(CHECKPOINT_HEADER_DOWNLOAD_CONCURRENCY)
     }
 
-    pub fn checkpoint_content_download_concurrency(&self) -> usize {
-        const CHECKPOINT_CONTENT_DOWNLOAD_CONCURRENCY: usize = 1000;
-
-        self.checkpoint_content_download_concurrency
-            .unwrap_or(CHECKPOINT_CONTENT_DOWNLOAD_CONCURRENCY)
-    }
-
     pub fn transaction_download_concurrency(&self) -> usize {
-        const TRANSACTION_DOWNLOAD_CONCURRENCY: usize = 1000;
+        const TRANSACTION_DOWNLOAD_CONCURRENCY: usize = 100;
 
         self.transaction_download_concurrency
             .unwrap_or(TRANSACTION_DOWNLOAD_CONCURRENCY)
     }
 
     pub fn timeout(&self) -> Duration {
-        const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+        const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
         self.timeout_ms
             .map(Duration::from_millis)
