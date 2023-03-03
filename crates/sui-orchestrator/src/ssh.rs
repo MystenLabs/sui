@@ -22,21 +22,15 @@ pub struct SshCommand<C: Fn(usize) -> String> {
     pub background: Option<String>,
     pub path: Option<PathBuf>,
     pub log_file: Option<PathBuf>,
-    pub timeout: Option<Duration>,
-    pub retrials: usize,
 }
 
 impl<C: Fn(usize) -> String> SshCommand<C> {
-    const DEFAULT_RETRIALS: usize = 5;
-
     pub fn new(command: C) -> Self {
         Self {
             command,
             background: None,
             path: None,
             log_file: None,
-            timeout: None,
-            retrials: Self::DEFAULT_RETRIALS,
         }
     }
 
@@ -52,16 +46,6 @@ impl<C: Fn(usize) -> String> SshCommand<C> {
 
     pub fn with_log_file(mut self, path: PathBuf) -> Self {
         self.log_file = Some(path);
-        self
-    }
-
-    pub fn with_timeout(mut self, timeout: Duration) -> Self {
-        self.timeout = Some(timeout);
-        self
-    }
-
-    pub fn with_retrials(mut self, retrials: usize) -> Self {
-        self.retrials = retrials;
         self
     }
 
@@ -87,6 +71,8 @@ impl<C: Fn(usize) -> String> SshCommand<C> {
 pub struct SshConnectionManager {
     username: String,
     private_key_file: PathBuf,
+    timeout: Option<Duration>,
+    retries: usize,
 }
 
 impl SshConnectionManager {
@@ -94,12 +80,26 @@ impl SshConnectionManager {
         Self {
             username,
             private_key_file,
+            timeout: None,
+            retries: 0,
         }
+    }
+
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
+    pub fn with_retries(mut self, retries: usize) -> Self {
+        self.retries = retries;
+        self
     }
 
     /// Create a new ssh connection with the provided host.
     pub async fn connect(&self, address: SocketAddr) -> SshResult<SshConnection> {
-        SshConnection::new(address, &self.username, self.private_key_file.clone()).await
+        SshConnection::new(address, &self.username, self.private_key_file.clone())
+            .await
+            .map(|x| x.with_timeout(&self.timeout))
     }
 
     /// Execute the specified ssh command on all provided instances.
@@ -121,15 +121,14 @@ impl SshConnectionManager {
 
                 tokio::spawn(async move {
                     let mut error = None;
-                    for _ in 0..command.retrials {
+                    for _ in 0..ssh_manager.retries {
                         let connection = match ssh_manager.connect(instance.ssh_address()).await {
                             Ok(x) => x,
                             Err(e) => {
                                 error = Some(e);
                                 continue;
                             }
-                        }
-                        .with_timeout(&command.timeout);
+                        };
 
                         match connection.execute(command.stringify(i)) {
                             r @ Ok(..) => return r,
@@ -177,7 +176,7 @@ impl SshConnection {
         Ok(Self { session, address })
     }
 
-    /// Set a new timeout for the ssh connection. If no timeouts are specified, reset it to the
+    /// Set a timeout for the ssh connection. If no timeouts are specified, reset it to the
     /// default value.
     pub fn with_timeout(self, timeout: &Option<Duration>) -> Self {
         let duration = match timeout {

@@ -14,21 +14,22 @@ use crossterm::{
 };
 use futures::future::try_join_all;
 use logs::LogsParser;
-use metrics::MetricsCollector;
+use measurement::MeasurementsCollector;
 use settings::Settings;
 use ssh::{SshCommand, SshConnectionManager};
 use tokio::time::{self, sleep, Instant};
 
-use crate::{config::Config, error::TestbedError};
-
-use self::{benchmark::BenchmarkParametersGenerator, error::TestbedResult};
+use crate::{
+    benchmark::BenchmarkParametersGenerator, config::Config, error::TestbedError,
+    error::TestbedResult,
+};
 
 pub mod benchmark;
 pub mod client;
-pub mod config;
-pub mod error;
-pub mod logs;
-pub mod metrics;
+mod config;
+mod error;
+mod logs;
+mod measurement;
 pub mod settings;
 pub mod ssh;
 pub mod testbed;
@@ -49,9 +50,11 @@ impl Orchestrator {
     const CLIENT_METRIC_PORT: u16 = 8081;
     const SCRAPE_INTERVAL: Duration = Duration::from_secs(30);
 
-    pub fn new(settings: Settings, instances: Vec<Instance>, username: &str) -> Self {
-        let private_key_file = settings.ssh_private_key_file.clone().into();
-        let ssh_manager = SshConnectionManager::new(username.into(), private_key_file);
+    pub fn new(
+        settings: Settings,
+        instances: Vec<Instance>,
+        ssh_manager: SshConnectionManager,
+    ) -> Self {
         Self {
             settings,
             instances,
@@ -389,7 +392,7 @@ impl Orchestrator {
     pub async fn collect_metrics(
         &self,
         parameters: &BenchmarkParameters,
-    ) -> TestbedResult<MetricsCollector<usize>> {
+    ) -> TestbedResult<MeasurementsCollector<usize>> {
         crossterm::execute!(
             stdout(),
             Print(format!(
@@ -406,7 +409,7 @@ impl Orchestrator {
         let command = format!("curl 127.0.0.1:{}/metrics", Self::CLIENT_METRIC_PORT);
         let ssh_command = SshCommand::new(move |_| command.clone());
 
-        let mut aggregator = MetricsCollector::new(parameters.clone());
+        let mut aggregator = MeasurementsCollector::new(parameters.clone());
         let mut interval = time::interval(Self::SCRAPE_INTERVAL);
         interval.tick().await; // The first tick returns immediately.
 
@@ -429,7 +432,7 @@ impl Orchestrator {
                     )
                     .unwrap();
                     for (i, (stdout, _stderr)) in stdio.iter().enumerate() {
-                        aggregator.collect(i, stdout);
+                        aggregator.add(i, stdout);
                     }
                 }
                 Err(e) => crossterm::execute!(
@@ -524,6 +527,7 @@ impl Orchestrator {
 
         // Update the software on all instances.
         if !self.skip_testbed_update {
+            self.install().await?;
             self.update().await?;
         }
 

@@ -6,7 +6,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use super::metrics::MetricsCollector;
+use super::measurement::MeasurementsCollector;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BenchmarkParameters {
@@ -74,8 +74,8 @@ pub struct BenchmarkParametersGenerator<ScraperId: Serialize + Clone> {
     duration: Duration,
     next_load: Option<usize>,
 
-    lower_bound_result: Option<MetricsCollector<ScraperId>>,
-    upper_bound_result: Option<MetricsCollector<ScraperId>>,
+    lower_bound_result: Option<MeasurementsCollector<ScraperId>>,
+    upper_bound_result: Option<MeasurementsCollector<ScraperId>>,
     iterations: usize,
 }
 
@@ -118,7 +118,7 @@ where
         self
     }
 
-    pub fn register_result(&mut self, result: MetricsCollector<ScraperId>) {
+    pub fn register_result(&mut self, result: MeasurementsCollector<ScraperId>) {
         self.next_load = match &mut self.load_type {
             LoadType::Fixed(loads) => {
                 if loads.is_empty() {

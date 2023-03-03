@@ -6,11 +6,12 @@ use sui_orchestrator::{
     benchmark::{BenchmarkParametersGenerator, LoadType},
     client::{aws::AwsClient, vultr::VultrClient, ServerProviderClient},
     settings::{CloudProvider, Settings},
+    ssh::SshConnectionManager,
     testbed::Testbed,
     Orchestrator,
 };
 
-async fn execute<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts) -> Result<()> {
+async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts) -> Result<()> {
     // Create a new testbed.
     let mut testbed = Testbed::new(settings.clone(), client)
         .await
@@ -50,11 +51,18 @@ async fn execute<C: ServerProviderClient>(settings: Settings, client: C, opts: O
             duration,
             loads,
             skip_testbed_update,
+            timeout,
+            retries,
         } => {
             // Create a new orchestrator to instruct the testbed.
-            let instances = testbed.instances();
             let username = testbed.username();
-            let orchestrator = Orchestrator::new(settings, instances, username);
+            let private_key_file = settings.ssh_private_key_file.clone().into();
+            let ssh_manager = SshConnectionManager::new(username.into(), private_key_file)
+                .with_timeout(timeout)
+                .with_retries(retries);
+
+            let instances = testbed.instances();
+            let orchestrator = Orchestrator::new(settings, instances, ssh_manager);
 
             let loads = if loads.is_empty() { vec![200] } else { loads };
 
@@ -86,7 +94,7 @@ async fn main() -> Result<()> {
             let client = AwsClient::new(settings.clone()).await;
 
             // Execute the command.
-            execute(settings, client, opts).await
+            run(settings, client, opts).await
         }
         CloudProvider::Vultr => {
             // Create the client for the cloud provider.
@@ -96,7 +104,7 @@ async fn main() -> Result<()> {
             let client = VultrClient::new(token, settings.clone());
 
             // Execute the command.
-            execute(settings, client, opts).await
+            run(settings, client, opts).await
         }
     }
 }
@@ -132,7 +140,7 @@ pub enum Operation {
         #[clap(long, value_name = "INT")]
         nodes: usize,
 
-        /// The fixed load (in tx/s) to submit to the nodes.
+        /// The fixed loads (in tx/s) to submit to the nodes.
         #[clap(
             long,
             value_name = "INT",
@@ -150,8 +158,17 @@ pub enum Operation {
         #[clap(long, value_parser = parse_duration, default_value = "180")]
         duration: Duration,
 
+        /// Whether to skip testbed updates before running benchmarks.
         #[clap(long, action, default_value = "false")]
         skip_testbed_update: bool,
+
+        /// The timeout duration for ssh commands.
+        #[clap(long, action, value_parser = parse_duration, default_value = "30")]
+        timeout: Duration,
+
+        /// The number of times the orchestrator should retry an ssh command.
+        #[clap(long, value_name = "INT", default_value = "5")]
+        retries: usize,
     },
 }
 
