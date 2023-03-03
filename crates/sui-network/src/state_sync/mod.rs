@@ -60,7 +60,7 @@ use sui_types::{messages_checkpoint::CertifiedCheckpointSummary, messages::{Tran
 use sui_types::{
     digests::CheckpointDigest,
     message_envelope::Message,
-    messages::{CertifiedTransaction, TransactionEffects},
+    messages::TransactionEffects,
     messages_checkpoint::{
         CertifiedCheckpointSummary as Checkpoint, CheckpointContents, CheckpointSequenceNumber,
         VerifiedCheckpoint,

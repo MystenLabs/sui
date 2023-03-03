@@ -19,7 +19,6 @@ use tokio::sync::mpsc::error::TrySendError;
 use tokio::time::Instant;
 use tracing::{debug, error};
 
-
 type Point = u64;
 type HistogramMessage = (HistogramLabels, Point);
 

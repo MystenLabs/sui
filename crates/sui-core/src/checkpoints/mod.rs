@@ -41,7 +41,7 @@ use sui_types::error::SuiResult;
 use sui_types::gas::GasCostSummary;
 
 use sui_types::messages::{
-    ConsensusTransactionKey, SingleTransactionKind, TransactionEffects, TransactionKind, VerifiedTransaction,
+    ConsensusTransactionKey, SingleTransactionKind, TransactionEffects, TransactionKind,
 };
 
 use sui_types::messages_checkpoint::{
