@@ -527,6 +527,15 @@ impl Orchestrator {
         &mut self,
         mut generator: BenchmarkParametersGenerator,
     ) -> TestbedResult<()> {
+        crossterm::execute!(
+            stdout(),
+            SetForegroundColor(Color::Green),
+            SetAttribute(Attribute::Bold),
+            Print(format!("\nPreparing testbed\n")),
+            ResetColor
+        )
+        .unwrap();
+
         // Cleanup the testbed (in case the previous run was not completed).
         self.cleanup(true).await?;
 

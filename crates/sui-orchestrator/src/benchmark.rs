@@ -48,8 +48,8 @@ impl Display for BenchmarkParameters {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} nodes ({} faulty) - {} tx/s",
-            self.nodes, self.faults, self.load
+            "{} nodes ({} faulty) - {} tx/s, {}% shared objects",
+            self.nodes, self.faults, self.load, self.shared_objects_ratio
         )
     }
 }
