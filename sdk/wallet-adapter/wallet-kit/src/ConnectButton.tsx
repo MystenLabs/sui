@@ -12,7 +12,7 @@ import { WalletAdapter } from "@mysten/wallet-adapter-base/src/index";
 
 interface ConnectButtonProps extends ComponentProps<typeof Button> {
   connectText?: ReactNode;
-  connectedText?: string;
+  connectedText?: ReactNode;
   connectedCallback?: (
     wallet: WalletAdapter | null,
     selected: string | null
