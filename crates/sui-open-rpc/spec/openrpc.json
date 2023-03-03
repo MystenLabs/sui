@@ -1976,6 +1976,36 @@
       }
     },
     {
+      "name": "sui_multiGetTransactions",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "digests",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TransactionDigest"
+            }
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<SuiTransactionResponse>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/SuiTransactionResponse"
+          }
+        }
+      }
+    },
+    {
       "name": "sui_pay",
       "tags": [
         {
@@ -3206,8 +3236,7 @@
         "type": "object",
         "required": [
           "committee_info",
-          "epoch",
-          "protocol_version"
+          "epoch"
         ],
         "properties": {
           "committee_info": {
@@ -3232,9 +3261,6 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
-          },
-          "protocol_version": {
-            "$ref": "#/components/schemas/ProtocolVersion"
           }
         }
       },
@@ -6841,13 +6867,13 @@
       "ValidatorMetadata": {
         "type": "object",
         "required": [
-          "consensus_address",
           "description",
           "image_url",
           "name",
           "net_address",
           "network_pubkey_bytes",
           "p2p_address",
+          "primary_address",
           "project_url",
           "proof_of_possession_bytes",
           "protocol_pubkey_bytes",
@@ -6856,14 +6882,6 @@
           "worker_pubkey_bytes"
         ],
         "properties": {
-          "consensus_address": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
-          },
           "description": {
             "type": "string"
           },
@@ -6883,17 +6901,6 @@
           },
           "network_pubkey_bytes": {
             "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
-          },
-          "next_epoch_consensus_address": {
-            "type": [
-              "array",
-              "null"
-            ],
             "items": {
               "type": "integer",
               "format": "uint8",
@@ -6923,6 +6930,17 @@
             }
           },
           "next_epoch_p2p_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_primary_address": {
             "type": [
               "array",
               "null"
@@ -6978,6 +6996,14 @@
             }
           },
           "p2p_address": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "primary_address": {
             "type": "array",
             "items": {
               "type": "integer",

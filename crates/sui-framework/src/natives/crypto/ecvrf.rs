@@ -39,12 +39,12 @@ pub fn ecvrf_verify(
         Err(_) => return Ok(NativeResult::err(cost, INVALID_ECVRF_HASH_LENGTH)),
     };
 
-    let public_key = match bincode::deserialize(public_key_bytes.as_bytes_ref().as_slice()) {
+    let public_key = match bcs::from_bytes(public_key_bytes.as_bytes_ref().as_slice()) {
         Ok(pk) => pk,
         Err(_) => return Ok(NativeResult::err(cost, INVALID_ECVRF_PUBLIC_KEY)),
     };
 
-    let proof: ECVRFProof = match bincode::deserialize(proof_bytes.as_bytes_ref().as_slice()) {
+    let proof: ECVRFProof = match bcs::from_bytes(proof_bytes.as_bytes_ref().as_slice()) {
         Ok(p) => p,
         Err(_) => return Ok(NativeResult::err(cost, INVALID_ECVRF_PROOF)),
     };

@@ -46,6 +46,8 @@ fn build_anemo_services(out_dir: &Path) {
     let mut automock_attribute = anemo_build::Attributes::default();
     automock_attribute.push_trait(".", r#"#[mockall::automock]"#);
 
+    let codec_path = "mysten_network::codec::anemo::BcsSnappyCodec";
+
     let primary_to_primary = anemo_build::manual::Service::builder()
         .name("PrimaryToPrimary")
         .package("narwhal")
@@ -56,7 +58,7 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("SendCertificate")
                 .request_type("crate::SendCertificateRequest")
                 .response_type("crate::SendCertificateResponse")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .codec_path(codec_path)
                 .build(),
         )
         .method(
@@ -65,7 +67,7 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("RequestVote")
                 .request_type("crate::RequestVoteRequest")
                 .response_type("crate::RequestVoteResponse")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .codec_path(codec_path)
                 .build(),
         )
         .method(
@@ -74,7 +76,7 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("GetPayloadAvailability")
                 .request_type("crate::PayloadAvailabilityRequest")
                 .response_type("crate::PayloadAvailabilityResponse")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .codec_path(codec_path)
                 .build(),
         )
         .method(
@@ -83,7 +85,7 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("GetCertificates")
                 .request_type("crate::GetCertificatesRequest")
                 .response_type("crate::GetCertificatesResponse")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .codec_path(codec_path)
                 .build(),
         )
         .method(
@@ -92,7 +94,7 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("FetchCertificates")
                 .request_type("crate::FetchCertificatesRequest")
                 .response_type("crate::FetchCertificatesResponse")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .codec_path(codec_path)
                 .build(),
         )
         .build();
@@ -107,7 +109,7 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("Synchronize")
                 .request_type("crate::WorkerSynchronizeMessage")
                 .response_type("()")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .codec_path(codec_path)
                 .build(),
         )
         .method(
@@ -116,7 +118,7 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("DeleteBatches")
                 .request_type("crate::WorkerDeleteBatchesMessage")
                 .response_type("()")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .codec_path(codec_path)
                 .build(),
         )
         .build();
@@ -131,7 +133,7 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("ReportOurBatch")
                 .request_type("crate::WorkerOurBatchMessage")
                 .response_type("()")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .codec_path(codec_path)
                 .build(),
         )
         .method(
@@ -140,7 +142,7 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("ReportOthersBatch")
                 .request_type("crate::WorkerOthersBatchMessage")
                 .response_type("()")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .codec_path(codec_path)
                 .build(),
         )
         .method(
@@ -149,7 +151,7 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("WorkerInfo")
                 .request_type("()")
                 .response_type("crate::WorkerInfoResponse")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .codec_path(codec_path)
                 .build(),
         )
         .build();
@@ -164,7 +166,7 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("ReportBatch")
                 .request_type("crate::WorkerBatchMessage")
                 .response_type("()")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .codec_path(codec_path)
                 .build(),
         )
         .method(
@@ -173,7 +175,7 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("RequestBatch")
                 .request_type("crate::RequestBatchRequest")
                 .response_type("crate::RequestBatchResponse")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .codec_path(codec_path)
                 .build(),
         )
         .build();

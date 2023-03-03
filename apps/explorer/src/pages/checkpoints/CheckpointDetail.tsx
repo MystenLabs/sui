@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature, useGrowthBook } from '@growthbook/growthbook-react';
+import { useRpcClient } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 import { Navigate, useParams } from 'react-router-dom';
 
 import { CheckpointTransactions } from './Transactions';
 
-import { useRpc } from '~/hooks/useRpc';
 import { Banner } from '~/ui/Banner';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
@@ -19,7 +19,7 @@ import { convertNumberToDate } from '~/utils/timeUtils';
 
 function CheckpointDetail() {
     const { digest } = useParams<{ digest: string }>();
-    const rpc = useRpc();
+    const rpc = useRpcClient();
 
     const checkpointQuery = useQuery(['checkpoints', digest], () =>
         rpc.getCheckpoint(digest!)

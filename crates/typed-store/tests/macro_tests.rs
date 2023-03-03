@@ -76,7 +76,7 @@ async fn macro_test() {
         let key = i.to_string();
         let value = i.to_string();
         let k_buf = be_fix_int_ser::<String>(&key).unwrap();
-        let value_buf = bincode::serialize::<String>(&value).unwrap();
+        let value_buf = bcs::to_bytes::<String>(&value).unwrap();
         raw_key_bytes1 += k_buf.len();
         raw_value_bytes1 += value_buf.len();
     }
@@ -93,7 +93,7 @@ async fn macro_test() {
         let key = i;
         let value = i.to_string();
         let k_buf = be_fix_int_ser(key.borrow()).unwrap();
-        let value_buf = bincode::serialize::<String>(&value).unwrap();
+        let value_buf = bcs::to_bytes::<String>(&value).unwrap();
         raw_key_bytes2 += k_buf.len();
         raw_value_bytes2 += value_buf.len();
     }

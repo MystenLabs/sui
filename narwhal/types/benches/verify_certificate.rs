@@ -30,7 +30,7 @@ pub fn verify_certificates(c: &mut Criterion) {
             make_optimal_certificates(&committee, 1..=1, &genesis, &keys);
         let certificate = certificates.front().unwrap().clone();
 
-        let data_size: usize = bincode::serialize(&certificate).unwrap().len();
+        let data_size: usize = bcs::to_bytes(&certificate).unwrap().len();
         bench_group.throughput(Throughput::Bytes(data_size as u64));
 
         bench_group.bench_with_input(

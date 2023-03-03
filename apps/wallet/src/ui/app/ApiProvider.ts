@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SentryRpcClient } from '@mysten/core';
 import {
     Connection,
     JsonRpcProvider,
     LocalTxnDataSerializer,
 } from '@mysten/sui.js';
 
-import { SentryRPCClient } from './SentryRpcClient';
 import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
 import { queryClient } from './helpers/queryClient';
 import { growthbook } from '_app/experimentation/feature-gating';
@@ -97,7 +97,7 @@ export default class ApiProvider {
         this._apiFullNodeProvider = new JsonRpcProvider(connection, {
             rpcClient:
                 !customRPC && SENTRY_MONITORED_ENVS.includes(apiEnv)
-                    ? new SentryRPCClient(connection.fullnode)
+                    ? new SentryRpcClient(connection.fullnode)
                     : undefined,
         });
         this._signerByAddress.clear();

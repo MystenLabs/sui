@@ -31,7 +31,6 @@ pub type CommitteeDigest = [u8; 32];
 #[derive(Clone, Debug, Serialize, Deserialize, Eq)]
 pub struct Committee {
     pub epoch: EpochId,
-    pub protocol_version: ProtocolVersion,
     pub voting_rights: Vec<(AuthorityName, StakeUnit)>,
     pub total_votes: StakeUnit,
     #[serde(skip)]
@@ -45,7 +44,6 @@ pub struct Committee {
 impl Committee {
     pub fn new(
         epoch: EpochId,
-        protocol_version: ProtocolVersion,
         voting_rights: BTreeMap<AuthorityName, StakeUnit>,
     ) -> SuiResult<Self> {
         let mut voting_rights: Vec<(AuthorityName, StakeUnit)> =
@@ -77,7 +75,6 @@ impl Committee {
 
         Ok(Committee {
             epoch,
-            protocol_version,
             voting_rights,
             total_votes,
             expanded_keys,
@@ -302,7 +299,6 @@ impl Committee {
         let key_pairs: Vec<_> = random_committee_key_pairs().into_iter().collect();
         let committee = Self::new(
             0,
-            ProtocolVersion::MIN,
             key_pairs
                 .iter()
                 .map(|key| {
@@ -320,7 +316,6 @@ impl TryFrom<CommitteeInfo> for Committee {
     fn try_from(committee_info: CommitteeInfo) -> Result<Self, Self::Error> {
         Self::new(
             committee_info.epoch,
-            committee_info.protocol_version,
             committee_info
                 .committee_info
                 .into_iter()
@@ -407,7 +402,7 @@ mod test {
         authorities.insert(a2, 1);
         authorities.insert(a3, 1);
 
-        let committee = Committee::new(0, ProtocolVersion::MIN, authorities).unwrap();
+        let committee = Committee::new(0, authorities).unwrap();
 
         assert_eq!(committee.shuffle_by_stake(None, None).len(), 3);
 
@@ -458,7 +453,7 @@ mod test {
         authorities.insert(a2, 1);
         authorities.insert(a3, 1);
         authorities.insert(a4, 1);
-        let committee = Committee::new(0, ProtocolVersion::MIN, authorities).unwrap();
+        let committee = Committee::new(0, authorities).unwrap();
         let items = vec![(a1, 666), (a2, 1), (a3, 2), (a4, 0)];
         assert_eq!(
             committee.robust_value(items.into_iter(), committee.quorum_threshold()),

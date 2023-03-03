@@ -37,7 +37,7 @@ pub fn tbls_verify_signature(
     let (pk_bls, _pk_vss) = mocked_dkg::generate_public_keys(1, epoch);
 
     // Verify the given signature.
-    let sig: Result<types::Signature, _> = bincode::deserialize(&sig.as_bytes_ref());
+    let sig: Result<types::Signature, _> = bcs::from_bytes(&sig.as_bytes_ref());
     let valid = sig.is_ok()
         && types::ThresholdBls12381MinSig::verify(&pk_bls, &msg.as_bytes_ref(), &sig.unwrap())
             .is_ok();
@@ -65,7 +65,7 @@ pub fn tbls_sign(
 
     let (sk, _pk) = mocked_dkg::generate_full_key_pair(epoch);
     let sig = types::ThresholdBls12381MinSig::sign(&sk, &msg.as_bytes_ref());
-    let sig = bincode::serialize(&sig);
+    let sig = bcs::to_bytes(&sig);
 
     match sig {
         Ok(sig) => Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(sig)])),

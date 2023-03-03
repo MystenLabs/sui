@@ -1,4 +1,4 @@
-name: simtest-nightly
+name: Simulator Tests
 
 on:
   schedule:
@@ -29,52 +29,80 @@ env:
 
 jobs:
   simtest:
-    timeout-minutes: 90
+    timeout-minutes: 120
     runs-on: [ubuntu-ghcloud]
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-      - uses: taiki-e/install-action@nextest
-      - name: cargo simtest
-        run: |
-          export MSIM_TEST_SEED=$(date +%s)
-          echo "Using MSIM_TEST_SEED=$MSIM_TEST_SEED"
-          MSIM_TEST_NUM=20 MSIM_WATCHDOG_TIMEOUT_MS=60000 scripts/simtest/cargo-simtest simtest
 
-  report-status:
-    name: Report Status
-    runs-on: ubuntu-latest
-    if: always()
-    needs: [release]
     steps:
-      - uses: technote-space/workflow-conclusion-action@v3
-      - name: Post to slack
-        uses: slackapi/slack-github-action@v1.23.0
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-        if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
-        with:
-          channel-id: 'simtest-nightly'
-          payload: |
-            {
-              "text": "Workflow *${{ github.workflow }}* failed",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "Workflow *${{ github.workflow }}* failed"
-                  }
-                },
-                {
-                  "type": "divider"
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "Logs are here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  }
+    - name: Checkout sui repo main branch
+      uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
+
+    - name: Install rust toolchain
+      uses: actions-rs/toolchain@v1
+
+    - name: Install nexttest
+      uses: taiki-e/install-action@nextest
+
+    - name: Build simtest
+      run: |
+        export RUST_LOG=off
+        ./scripts/simtest/cargo-simtest simtest build
+
+    - name: Run simtest
+      run: |
+        export RUST_LOG=off
+        ./scripts/simtest/simtest-run.sh
+
+  notify:
+    name: Notify
+    needs: [simtest]
+    runs-on: [self-hosted, self-hosted-arc]
+    if: always() # always notify
+
+    steps:
+    - uses: technote-space/workflow-conclusion-action@v3
+
+    - name: Checkout sui repo main branch
+      uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
+    
+    - name: Get sui commit
+      run: |
+        export sui_sha=$(git rev-parse HEAD)
+        echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
+
+    - name: Post to slack
+      uses: slackapi/slack-github-action@936158bbe252e9a6062e793ea4609642c966e302 # pin@v1.21.0
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        SUI_SHA: ${{ env.sui_sha }}
+      with:
+        channel-id: 'simtest-nightly'
+        payload: |
+          {
+            "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`"
                 }
-              ]
-            }
+              },
+              {
+                "type": "divider"
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \n"
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "Logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                }
+              }
+            ]
+          }

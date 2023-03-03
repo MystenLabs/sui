@@ -2883,7 +2883,7 @@ pub struct TransactionEffects {
     /// It's also included in mutated.
     pub gas_object: (ObjectRef, Owner),
     /// The digest of the events emitted during execution,
-    /// can be None if the transaction does not emmit any event.
+    /// can be None if the transaction does not emit any event.
     pub events_digest: Option<TransactionEventsDigest>,
     /// The set of transaction digests this transaction depends on.
     pub dependencies: Vec<TransactionDigest>,
@@ -3522,7 +3522,6 @@ pub struct CommitteeInfoRequest {
 #[derive(Serialize, Deserialize, Clone, schemars::JsonSchema, Debug)]
 pub struct CommitteeInfoResponse {
     pub epoch: EpochId,
-    pub protocol_version: ProtocolVersion,
     pub committee_info: Vec<(AuthorityName, StakeUnit)>,
     // TODO: We could also return the certified checkpoint that contains this committee.
     // This would allows a client to verify the authenticity of the committee.
@@ -3536,10 +3535,10 @@ impl CommitteeInfoResponse {
     }
 }
 
+// TODO: What's the difference between CommitteeInfoResponse and CommitteeInfo?
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CommitteeInfo {
     pub epoch: EpochId,
-    pub protocol_version: ProtocolVersion,
     pub committee_info: Vec<(AuthorityName, StakeUnit)>,
     // TODO: We could also return the certified checkpoint that contains this committee.
     // This would allows a client to verify the authenticity of the committee.

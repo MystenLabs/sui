@@ -4,6 +4,7 @@
 
 use crate::authority_client::AuthorityAPI;
 use crate::epoch::committee_store::CommitteeStore;
+use crate::signature_verifier::{DefaultSignatureVerifier, SignatureVerifier};
 use mysten_metrics::histogram::{Histogram, HistogramVec};
 use prometheus::core::GenericCounter;
 use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
@@ -132,14 +133,15 @@ impl SafeClientMetrics {
 /// See `SafeClientMetrics::new` for description of each metrics.
 /// The metrics are per validator client.
 #[derive(Clone)]
-pub struct SafeClient<C> {
+pub struct SafeClient<C, S = DefaultSignatureVerifier> {
     authority_client: C,
     committee_store: Arc<CommitteeStore>,
     address: AuthorityPublicKeyBytes,
     metrics: SafeClientMetrics,
+    verifier: S,
 }
 
-impl<C> SafeClient<C> {
+impl<C, S: SignatureVerifier + Default> SafeClient<C, S> {
     pub fn new(
         authority_client: C,
         committee_store: Arc<CommitteeStore>,
@@ -151,9 +153,12 @@ impl<C> SafeClient<C> {
             committee_store,
             address,
             metrics,
+            verifier: Default::default(),
         }
     }
+}
 
+impl<C, S: SignatureVerifier> SafeClient<C, S> {
     pub fn authority_client(&self) -> &C {
         &self.authority_client
     }
@@ -205,7 +210,7 @@ impl<C> SafeClient<C> {
             );
         }
         let committee = self.get_committee(&signed_effects.epoch())?;
-        signed_effects.verify(&committee)
+        self.verifier.verify_one(signed_effects, &committee)
     }
 
     fn check_transaction_info(
@@ -224,10 +229,10 @@ impl<C> SafeClient<C> {
         match status {
             TransactionStatus::Signed(signed) => {
                 let committee = self.get_committee(&signed.epoch)?;
-                Ok(VerifiedTransactionInfoResponse::Signed(
-                    SignedTransaction::new_from_data_and_sig(transaction.into_message(), signed)
-                        .verify(&committee)?,
-                ))
+                let signed_transaction =
+                    SignedTransaction::new_from_data_and_sig(transaction.into_message(), signed);
+                let transaction = self.verifier.verify_one(signed_transaction, &committee)?;
+                Ok(VerifiedTransactionInfoResponse::Signed(transaction))
             }
             TransactionStatus::Executed(cert_opt, effects, events) => {
                 let signed_effects = self.check_signed_effects(digest, effects, None)?;
@@ -235,6 +240,7 @@ impl<C> SafeClient<C> {
                     Some(cert) => {
                         let committee = self.get_committee(&cert.epoch)?;
                         Ok(VerifiedTransactionInfoResponse::ExecutedWithCert(
+                            // todo - use self.verifier
                             CertifiedTransaction::new_from_data_and_sig(
                                 transaction.into_message(),
                                 cert,
@@ -281,7 +287,7 @@ impl<C> SafeClient<C> {
     }
 }
 
-impl<C> SafeClient<C>
+impl<C, S: SignatureVerifier> SafeClient<C, S>
 where
     C: AuthorityAPI + Send + Sync + Clone + 'static,
 {

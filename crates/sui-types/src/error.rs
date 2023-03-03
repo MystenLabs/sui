@@ -27,6 +27,7 @@ use tonic::Status;
 use typed_store::rocks::TypedStoreError;
 
 pub const TRANSACTION_NOT_FOUND_MSG_PREFIX: &str = "Could not find the referenced transaction";
+pub const TRANSACTIONS_NOT_FOUND_MSG_PREFIX: &str = "Could not find the referenced transactions";
 
 #[macro_export]
 macro_rules! fp_bail {
@@ -292,6 +293,8 @@ pub enum SuiError {
     },
     #[error("{TRANSACTION_NOT_FOUND_MSG_PREFIX} [{:?}].", digest)]
     TransactionNotFound { digest: TransactionDigest },
+    #[error("{TRANSACTIONS_NOT_FOUND_MSG_PREFIX} [{:?}].", digests)]
+    TransactionsNotFound { digests: Vec<TransactionDigest> },
     #[error("Could not find the referenced transaction events [{digest:?}].")]
     TransactionEventsNotFound { digest: TransactionEventsDigest },
     #[error(
@@ -462,7 +465,7 @@ impl From<VMError> for SuiError {
 
 impl From<Status> for SuiError {
     fn from(status: Status) -> Self {
-        let result = bincode::deserialize::<SuiError>(status.details());
+        let result = bcs::from_bytes::<SuiError>(status.details());
         if let Ok(sui_error) = result {
             sui_error
         } else {
@@ -476,7 +479,7 @@ impl From<Status> for SuiError {
 
 impl From<SuiError> for Status {
     fn from(error: SuiError) -> Self {
-        let bytes = bincode::serialize(&error).unwrap();
+        let bytes = bcs::to_bytes(&error).unwrap();
         Status::with_details(tonic::Code::Internal, error.to_string(), bytes.into())
     }
 }

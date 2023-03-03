@@ -29,6 +29,7 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::{EpochId, TransactionDigest};
 use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
@@ -81,7 +82,7 @@ pub struct CheckpointStore {
     checkpoint_content: DBMap<CheckpointContentsDigest, CheckpointContents>,
 
     /// Stores certified checkpoints
-    certified_checkpoints: DBMap<CheckpointSequenceNumber, CertifiedCheckpointSummary>,
+    pub(crate) certified_checkpoints: DBMap<CheckpointSequenceNumber, CertifiedCheckpointSummary>,
     /// Map from checkpoint digest to certified checkpoint
     checkpoint_by_digest: DBMap<CheckpointDigest, CertifiedCheckpointSummary>,
 
@@ -334,11 +335,12 @@ impl CheckpointStore {
 
     pub fn update_highest_pruned_checkpoint(
         &self,
-        checkpoint: &VerifiedCheckpoint,
+        sequence_number: CheckpointSequenceNumber,
+        digest: CheckpointDigest,
     ) -> Result<(), TypedStoreError> {
         self.watermarks.insert(
             &CheckpointWatermark::HighestPruned,
-            &(checkpoint.sequence_number(), checkpoint.digest()),
+            &(sequence_number, digest),
         )
     }
 
@@ -688,7 +690,9 @@ impl CheckpointBuilder {
 
                 Some(EndOfEpochData {
                     next_epoch_committee: committee.voting_rights,
-                    next_epoch_protocol_version: committee.protocol_version,
+                    next_epoch_protocol_version: ProtocolVersion::new(
+                        system_state_obj.protocol_version,
+                    ),
                     root_state_digest: Accumulator::default().digest(),
                 })
             } else {
@@ -892,10 +896,19 @@ impl CheckpointAggregator {
     async fn run_inner(&mut self) -> SuiResult {
         let _scope = monitored_scope("CheckpointAggregator");
         'outer: loop {
+            let next_to_certify = self.next_checkpoint_to_certify();
             let current = if let Some(current) = &mut self.current {
+                // It's possible that the checkpoint was already certified by
+                // the rest of the network and we've already received the
+                // certified checkpoint via StateSync. In this case, we reset
+                // the current signature aggregator to the next checkpoint to
+                // be certified
+                if current.summary.sequence_number < next_to_certify {
+                    self.current = None;
+                    continue;
+                }
                 current
             } else {
-                let next_to_certify = self.next_checkpoint_to_certify();
                 let Some(summary) = self.epoch_store.get_built_checkpoint_summary(next_to_certify)? else { return Ok(()); };
                 self.current = Some(CheckpointSignatureAggregator {
                     next_index: 0,

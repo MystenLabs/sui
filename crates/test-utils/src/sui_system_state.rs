@@ -32,7 +32,7 @@ pub fn test_validatdor_metadata(
         project_url: "".to_string(),
         net_address,
         p2p_address: vec![],
-        consensus_address: vec![],
+        primary_address: vec![],
         worker_address: vec![],
         next_epoch_protocol_pubkey_bytes: None,
         next_epoch_proof_of_possession: None,
@@ -40,7 +40,7 @@ pub fn test_validatdor_metadata(
         next_epoch_worker_pubkey_bytes: None,
         next_epoch_net_address: None,
         next_epoch_p2p_address: None,
-        next_epoch_consensus_address: None,
+        next_epoch_primary_address: None,
         next_epoch_worker_address: None,
     }
 }

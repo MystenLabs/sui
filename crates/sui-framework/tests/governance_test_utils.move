@@ -67,6 +67,7 @@ module sui::governance_test_utils {
             0, // min_validator_stake
             0, // stake subsidy
             1, // protocol version
+            1, // system state version
             0, // epoch_start_timestamp_ms
             ctx,
         )
@@ -99,7 +100,7 @@ module sui::governance_test_utils {
 
         let ctx = test_scenario::ctx(scenario);
 
-        sui_system::advance_epoch(&mut system_state, new_epoch, 1, storage_charge, computation_charge, 0, 0, 0, 0,  ctx);
+        sui_system::advance_epoch(&mut system_state, new_epoch, 1, storage_charge, computation_charge, 0, 0, 0, 0, 1, ctx);
         test_scenario::return_shared(system_state);
         test_scenario::next_epoch(scenario, @0x0);
     }
@@ -117,7 +118,7 @@ module sui::governance_test_utils {
         let ctx = test_scenario::ctx(scenario);
 
         sui_system::advance_epoch(
-            &mut system_state, new_epoch, 1, storage_charge, computation_charge, 0, 0, reward_slashing_rate, 0, ctx
+            &mut system_state, new_epoch, 1, storage_charge, computation_charge, 0, 0, reward_slashing_rate, 0, 1, ctx
         );
         test_scenario::return_shared(system_state);
         test_scenario::next_epoch(scenario, @0x0);

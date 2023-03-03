@@ -416,12 +416,8 @@ impl InMemoryStore {
                 .iter()
                 .cloned()
                 .collect();
-            let committee = Committee::new(
-                checkpoint.epoch().saturating_add(1),
-                end_of_epoch_data.next_epoch_protocol_version,
-                next_committee,
-            )
-            .expect("new committee from consensus should be constructable");
+            let committee = Committee::new(checkpoint.epoch().saturating_add(1), next_committee)
+                .expect("new committee from consensus should be constructable");
             self.insert_committee(committee);
         }
 
@@ -680,7 +676,7 @@ impl ObjectStore for &[Object] {
     }
 }
 
-impl ObjectStore for &BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)> {
+impl ObjectStore for BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)> {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         Ok(self.get(object_id).map(|(_, obj, _)| obj).cloned())
     }

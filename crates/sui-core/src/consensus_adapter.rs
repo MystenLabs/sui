@@ -150,7 +150,7 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
         _epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         let serialized =
-            bincode::serialize(transaction).expect("Serializing consensus transaction cannot fail");
+            bcs::to_bytes(transaction).expect("Serializing consensus transaction cannot fail");
         let bytes = Bytes::from(serialized.clone());
 
         self.clone()
@@ -716,7 +716,7 @@ mod adapter_tests {
     use rand::{rngs::StdRng, Rng, SeedableRng};
     use sui_types::{
         base_types::TransactionDigest,
-        committee::{Committee, ProtocolVersion},
+        committee::Committee,
         crypto::{get_key_pair_from_rng, AuthorityKeyPair, AuthorityPublicKeyBytes},
     };
 
@@ -737,12 +737,7 @@ mod adapter_tests {
                 )
             })
             .collect::<Vec<_>>();
-        let committee = Committee::new(
-            0,
-            ProtocolVersion::MIN,
-            authorities.iter().cloned().collect(),
-        )
-        .unwrap();
+        let committee = Committee::new(0, authorities.iter().cloned().collect()).unwrap();
 
         // generate random transaction digests, and account for validator selection
         const NUM_TEST_TRANSACTIONS: usize = 1000;
