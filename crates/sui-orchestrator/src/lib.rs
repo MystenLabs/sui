@@ -29,7 +29,7 @@ pub mod client;
 mod config;
 mod error;
 mod logs;
-mod measurement;
+pub mod measurement;
 pub mod plot;
 pub mod settings;
 pub mod ssh;
@@ -182,7 +182,7 @@ impl Orchestrator {
             "sudo apt-get -y install curl git-all clang cmake gcc libssl-dev pkg-config libclang-dev",
             // This dependency is missing from the Sui docs.
             "sudo apt-get -y install libpq-dev",
-            // Install plotter dependencies.
+            // Install dependencies to compile 'plotter'.
             "sudo apt-get -y install libfontconfig libfontconfig1-dev",
             // Install rust (non-interactive).
             "curl --proto \"=https\" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y",
@@ -578,7 +578,7 @@ impl Orchestrator {
 
             // Wait for the benchmark to terminate. Then save the results and print a summary.
             let aggregator = self.collect_metrics(&parameters).await?;
-            aggregator.print_summary(&parameters);
+            aggregator.print_summary();
             generator.register_result(aggregator);
 
             // Kill the nodes and clients (without deleting the log files).

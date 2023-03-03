@@ -1,5 +1,11 @@
-use std::{collections::HashMap, fmt::Debug, path::PathBuf, time::Duration};
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display},
+    path::PathBuf,
+    time::Duration,
+};
 
+use color_eyre::eyre::{Context, Result};
 use glob::glob;
 use plotters::{
     prelude::{BitMapBackend, ChartBuilder, ErrorBar, IntoDrawingArea},
@@ -27,6 +33,16 @@ impl Debug for MeasurementsCollectionId {
             self.faults,
             self.nodes,
             self.duration.as_secs()
+        )
+    }
+}
+
+impl Display for MeasurementsCollectionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} nodes ({} faulty) - {}% shared objects",
+            self.nodes, self.faults, self.shared_objects_ratio
         )
     }
 }
@@ -110,14 +126,14 @@ impl Plotter {
         self
     }
 
-    pub fn plot_latency_throughput(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn plot_latency_throughput(&self) -> Result<()> {
         for (id, collections) in &self.measurements {
             let mut sorted = collections.clone();
             sorted.sort_by(|a, b| a.parameters.load.cmp(&b.parameters.load));
 
             let data_points = sorted.iter().map(|collection| collection.into()).collect();
-
-            self.plot_impl(id, data_points)?;
+            self.plot_impl(id, data_points)
+                .wrap_err(format!("Failed to plot measurements id {id}"))?;
         }
         Ok(())
     }
@@ -126,14 +142,14 @@ impl Plotter {
         &self,
         id: &MeasurementsCollectionId,
         data_points: Vec<PlotDataPoint>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<()> {
         let mut filename = PathBuf::new();
         filename.push(&self.settings.results_directory);
+        filename.push("plots");
+        std::fs::create_dir_all(&filename)?;
         filename.push(format!("latency-{id:?}"));
-        // filename.set_extension("svg");
         filename.set_extension("png");
 
-        // let root = SVGBackend::new(&filename, (640, 480)).into_drawing_area();
         let root = BitMapBackend::new(&filename, (640, 320)).into_drawing_area();
         root.fill(&WHITE)?;
         let root = root.margin(10, 10, 10, 10);
@@ -155,12 +171,15 @@ impl Plotter {
                 / 100) as f32
         });
         let mut chart = ChartBuilder::on(&root)
-            .x_label_area_size(20)
-            .y_label_area_size(20)
+            .caption(format!("{id}"), ("sans-serif", 20))
+            .x_label_area_size(30)
+            .y_label_area_size(30)
             .build_cartesian_2d(0.0..x_lim, 0.0..y_lim)?;
 
         chart
             .configure_mesh()
+            .x_desc("\nThroughput (tx/s)")
+            .y_desc("\nLatency (s)")
             .x_labels(5)
             .y_labels(5)
             .x_label_formatter(&|x| format!("{}", x))

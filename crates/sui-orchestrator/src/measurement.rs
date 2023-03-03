@@ -224,7 +224,7 @@ impl MeasurementsCollection {
         fs::write(file, json).unwrap();
     }
 
-    pub fn print_summary(&self, parameters: &BenchmarkParameters) {
+    pub fn print_summary(&self) {
         let duration = self.benchmark_duration();
         let total_tps = self.aggregate_tps();
         let average_latency = self.aggregate_average_latency();
@@ -245,9 +245,13 @@ impl MeasurementsCollection {
         table.set_format(format);
 
         table.set_titles(row![bH2->"Benchmark Summary"]);
-        table.add_row(row![b->"Nodes:", parameters.nodes]);
-        table.add_row(row![b->"Faults:", parameters.faults]);
-        table.add_row(row![b->"Load:", format!("{} tx/s", parameters.load)]);
+        table.add_row(
+            row![b->"Shared objects:", format!("{}%",self.parameters.shared_objects_ratio)],
+        );
+        table.add_row(row![bH2->""]);
+        table.add_row(row![b->"Nodes:", self.parameters.nodes]);
+        table.add_row(row![b->"Faults:", self.parameters.faults]);
+        table.add_row(row![b->"Load:", format!("{} tx/s", self.parameters.load)]);
         table.add_row(row![b->"Duration:", format!("{} s", duration.as_secs())]);
         table.add_row(row![bH2->""]);
         table.add_row(row![b->"TPS:", format!("{total_tps} tx/s")]);

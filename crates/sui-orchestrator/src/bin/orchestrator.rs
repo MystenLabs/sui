@@ -5,6 +5,7 @@ use color_eyre::eyre::{Context, Result};
 use sui_orchestrator::{
     benchmark::{BenchmarkParametersGenerator, LoadType},
     client::{aws::AwsClient, vultr::VultrClient, ServerProviderClient},
+    measurement::MeasurementsCollection,
     plot::Plotter,
     settings::{CloudProvider, Settings},
     ssh::SshConnectionManager,
@@ -87,14 +88,15 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
         }
 
         // Plot L-graphs from the collected data.
-        Operation::Plot { x_lim, y_lim } => {
-            Plotter::new(settings)
-                .with_x_lim(x_lim)
-                .with_y_lim(y_lim)
-                .collect_measurements()
-                .plot_latency_throughput()
-                .unwrap();
-        }
+        Operation::Plot { x_lim, y_lim } => Plotter::new(settings)
+            .with_x_lim(x_lim)
+            .with_y_lim(y_lim)
+            .collect_measurements()
+            .plot_latency_throughput()
+            .wrap_err("Failed to plot data")?,
+
+        // Print a summary of the specified measurements collection.
+        Operation::Summarize { path } => MeasurementsCollection::load(path)?.print_summary(),
     }
     Ok(())
 }
@@ -208,6 +210,13 @@ pub enum Operation {
         /// The limit of the y-axis.
         #[clap(long, value_name = "FLOAT")]
         y_lim: Option<f32>,
+    },
+
+    /// Print a summary of the specified measurements collection.
+    Summarize {
+        /// The path to the settings file.
+        #[clap(long, value_name = "FILE")]
+        path: String,
     },
 }
 
