@@ -64,44 +64,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    move_event_logs (id) {
-        id -> Int4,
-        next_cursor_tx_dig -> Nullable<Text>,
-        next_cursor_event_seq -> Nullable<Int8>,
-    }
-}
-
-diesel::table! {
-    move_events (id) {
-        id -> Int8,
-        transaction_digest -> Nullable<Varchar>,
-        event_sequence -> Int8,
-        event_time -> Nullable<Timestamp>,
-        event_type -> Varchar,
-        event_content -> Varchar,
-    }
-}
-
-diesel::table! {
-    object_event_logs (id) {
-        id -> Int4,
-        next_cursor_tx_dig -> Nullable<Text>,
-        next_cursor_event_seq -> Nullable<Int8>,
-    }
-}
-
-diesel::table! {
-    object_events (id) {
-        id -> Int8,
-        transaction_digest -> Nullable<Varchar>,
-        event_sequence -> Int8,
-        event_time -> Nullable<Timestamp>,
-        event_type -> Varchar,
-        event_content -> Varchar,
-    }
-}
-
-diesel::table! {
     object_logs (last_processed_id) {
         last_processed_id -> Int8,
     }
@@ -177,25 +139,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    publish_event_logs (id) {
-        id -> Int4,
-        next_cursor_tx_dig -> Nullable<Text>,
-        next_cursor_event_seq -> Nullable<Int8>,
-    }
-}
-
-diesel::table! {
-    publish_events (id) {
-        id -> Int8,
-        transaction_digest -> Nullable<Varchar>,
-        event_sequence -> Int8,
-        event_time -> Nullable<Timestamp>,
-        event_type -> Varchar,
-        event_content -> Varchar,
-    }
-}
-
-diesel::table! {
     transactions (id) {
         id -> Int8,
         transaction_digest -> Varchar,
@@ -230,17 +173,11 @@ diesel::allow_tables_to_appear_in_same_query!(
     checkpoints,
     error_logs,
     events,
-    move_event_logs,
-    move_events,
-    object_event_logs,
-    object_events,
     object_logs,
     objects,
     owner_changes,
     owner_index,
     package_logs,
     packages,
-    publish_event_logs,
-    publish_events,
     transactions,
 );
