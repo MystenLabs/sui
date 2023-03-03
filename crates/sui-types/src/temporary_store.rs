@@ -5,6 +5,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::ops::Neg;
 
+use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
@@ -16,9 +17,11 @@ use tracing::trace;
 use crate::coin::Coin;
 use crate::committee::EpochId;
 use crate::event::BalanceChangeType;
-use crate::storage::SingleTxContext;
-use crate::sui_system_state::SuiSystemState;
-use crate::SUI_SYSTEM_STATE_OBJECT_ID;
+use crate::messages::TransactionEvents;
+use crate::storage::{ObjectStore, SingleTxContext};
+use crate::sui_system_state::{
+    get_sui_system_state, get_sui_system_state_wrapper, SuiSystemState, SuiSystemStateWrapper,
+};
 use crate::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -27,6 +30,7 @@ use crate::{
     event::Event,
     fp_bail, gas,
     gas::{GasCostSummary, SuiGasStatus},
+    is_system_package,
     messages::{ExecutionStatus, InputObjects, TransactionEffects},
     object::Owner,
     object::{Data, Object},
@@ -43,6 +47,7 @@ pub struct InnerTemporaryStore {
     pub mutable_inputs: Vec<ObjectRef>,
     pub written: BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
     pub deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
+    pub events: TransactionEvents,
 }
 
 impl InnerTemporaryStore {
@@ -81,15 +86,12 @@ impl InnerTemporaryStore {
             .collect()
     }
 
+    pub fn get_sui_system_state_wrapper_object(&self) -> Option<SuiSystemStateWrapper> {
+        get_sui_system_state_wrapper(&self.written).ok()
+    }
+
     pub fn get_sui_system_state_object(&self) -> Option<SuiSystemState> {
-        let sui_system_object = self.get_written_object(&SUI_SYSTEM_STATE_OBJECT_ID)?;
-        let move_object = sui_system_object
-            .data
-            .try_as_move()
-            .expect("Sui System State object must be a Move object");
-        let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
-            .expect("Sui System State object deserialization cannot fail");
-        Some(result)
+        get_sui_system_state(&self.written).ok()
     }
 }
 
@@ -148,8 +150,35 @@ impl<S> TemporaryStore<S> {
         &self.input_objects
     }
 
+    /// Return the dynamic field objects that are written or deleted by this transaction
+    pub fn dynamic_fields_touched(&self) -> Vec<ObjectID> {
+        let mut dynamic_fields = Vec::new();
+        for (id, v) in &self.written {
+            match v.2 {
+                WriteKind::Mutate => {
+                    if !self.input_objects.contains_key(id) {
+                        dynamic_fields.push(*id)
+                    }
+                }
+                WriteKind::Create | WriteKind::Unwrap => (),
+            }
+        }
+        for (id, v) in &self.deleted {
+            match v.2 {
+                DeleteKind::Normal => {
+                    // TODO: is this how a deleted dynamic field will show up?
+                    if !self.input_objects.contains_key(id) {
+                        dynamic_fields.push(*id)
+                    }
+                }
+                DeleteKind::UnwrapThenDelete | DeleteKind::Wrap => (),
+            }
+        }
+        dynamic_fields
+    }
+
     /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
-    pub fn into_inner(self) -> (InnerTemporaryStore, Vec<Event>) {
+    pub fn into_inner(self) -> InnerTemporaryStore {
         #[cfg(debug_assertions)]
         {
             self.check_invariants();
@@ -182,7 +211,7 @@ impl<S> TemporaryStore<S> {
 
         for (id, (ctx, mut obj, kind)) in self.written {
             // Update the version for the written object, as long as it is a move object and not a
-            // package (whose versions are fixed to 1)
+            // package (whose versions are handled separately).
             if let Some(obj) = obj.data.try_as_move_mut() {
                 obj.increment_version_to(self.lamport_timestamp);
             }
@@ -252,13 +281,13 @@ impl<S> TemporaryStore<S> {
         // Combine object events with move events.
         events.extend(self.events);
 
-        let store = InnerTemporaryStore {
+        InnerTemporaryStore {
             objects: self.input_objects,
             mutable_inputs: self.mutable_input_refs,
             written,
             deleted,
-        };
-        (store, events)
+            events: TransactionEvents { data: events },
+        }
     }
 
     fn create_written_events(
@@ -294,31 +323,52 @@ impl<S> TemporaryStore<S> {
             }
             // For non-coin mutation
             (WriteKind::Mutate, Ok(None), old_obj) | (WriteKind::Unwrap, Ok(None), old_obj) => {
-                // We emit transfer object event for ownership changes
-                // if old object is none (unwrapping object) or if old owner != new owner.
-                let mut events = vec![];
-                if old_obj.map(|o| o.owner) != Some(obj.owner) {
-                    events.push(Event::transfer_object(
-                        &ctx,
-                        obj.owner,
-                        // Safe to unwrap, package cannot mutate
-                        obj.data.type_().unwrap().to_string(),
-                        obj.id(),
-                        obj.version(),
-                    ));
-                }
-                // Emit mutate event if there are data changes.
-                if old_obj.is_some() && old_obj.unwrap().data != obj.data {
-                    events.push(Event::MutateObject {
-                        package_id: ctx.package_id,
-                        transaction_module: ctx.transaction_module,
+                if obj.is_package() {
+                    // System transactions for framework upgrades will mutate packages.  Treat this
+                    // as a "publish" of a new version of the framework.
+                    assert!(
+                        ctx.sender == SuiAddress::ZERO,
+                        "Only validators can modify packages"
+                    );
+                    assert!(
+                        is_system_package(id),
+                        "Only system packages can be modified in place"
+                    );
+
+                    vec![Event::Publish {
                         sender: ctx.sender,
-                        object_type: obj.data.type_().unwrap().to_string(),
-                        object_id: obj.id(),
+                        package_id: id,
                         version: obj.version(),
-                    });
+                        digest: obj.digest(),
+                    }]
+                } else {
+                    // We emit transfer object event for ownership changes
+                    // if old object is none (unwrapping object) or if old owner != new owner.
+                    let mut events = vec![];
+
+                    if old_obj.map(|o| o.owner) != Some(obj.owner) {
+                        events.push(Event::transfer_object(
+                            &ctx,
+                            obj.owner,
+                            // Safe to unwrap, package case handled above
+                            obj.data.type_().unwrap().to_string(),
+                            obj.id(),
+                            obj.version(),
+                        ));
+                    }
+                    // Emit mutate event if there are data changes.
+                    if old_obj.is_some() && old_obj.unwrap().data != obj.data {
+                        events.push(Event::MutateObject {
+                            package_id: ctx.package_id,
+                            transaction_module: ctx.transaction_module,
+                            sender: ctx.sender,
+                            object_type: obj.data.type_().unwrap().to_string(),
+                            object_id: obj.id(),
+                            version: obj.version(),
+                        });
+                    }
+                    events
                 }
-                events
             }
             // For create object, if the object type is package, emit a Publish event, else emit NewObject event.
             (WriteKind::Create, Ok(None), _) => {
@@ -533,7 +583,7 @@ impl<S> TemporaryStore<S> {
             modified_at_versions.push((*id, *version));
         });
 
-        let (inner, events) = self.into_inner();
+        let inner = self.into_inner();
 
         // In the case of special transactions that don't require a gas object,
         // we don't really care about the effects to gas, just use the input for it.
@@ -588,7 +638,11 @@ impl<S> TemporaryStore<S> {
             unwrapped_then_deleted,
             wrapped,
             gas_object: updated_gas_object_info,
-            events,
+            events_digest: if inner.events.data.is_empty() {
+                None
+            } else {
+                Some(inner.events.digest())
+            },
             dependencies: transaction_dependencies,
         };
         (inner, effects)
@@ -700,16 +754,15 @@ impl<S> TemporaryStore<S> {
         }
         let cost_summary = gas_status.summary(result.is_ok());
         let gas_used = cost_summary.gas_used();
-        // we round storage rebate such that `>= x.5` goes to x+1 (rounds up) and
-        // `< x.5` goes to x (truncates). We replicate `f32/64::round()`
-        const BASIS_POINTS: u128 = 10000;
-        let gas_rebate = (((cost_summary.storage_rebate as u128 * self.storage_rebate_rate as u128)
-            + (BASIS_POINTS / 2)) // integer rounding adds half of the BASIS_POINTS (denominator)
-            / BASIS_POINTS) as u64;
+
         // We must re-fetch the gas object from the temporary store, as it may have been reset
         // previously in the case of error.
         let mut gas_object = self.read_object(&gas_object_id).unwrap().clone();
-        gas::deduct_gas(&mut gas_object, gas_used, gas_rebate);
+        gas::deduct_gas(
+            &mut gas_object,
+            gas_used,
+            cost_summary.sender_rebate(self.storage_rebate_rate),
+        );
         trace!(gas_used, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
 
         // Do not overwrite inner transaction context for gas charge
@@ -777,6 +830,60 @@ impl<S> TemporaryStore<S> {
                 }
             }
         }
+    }
+}
+
+impl<S: GetModule + ObjectStore> TemporaryStore<S> {
+    /// Check that this transaction neither creates nor destroys SUI. This should hold for all txes except
+    /// the epoch change tx, which mints staking rewards equal to the gas fees burned in the previous epoch.
+    /// This intended to be called *after* we have charged for gas + applied the storage rebate to the gas object,
+    /// but *before* we have updated object versions
+    pub fn check_sui_conserved(&self) {
+        let gas_summary = &self.gas_charged.as_ref().unwrap().2;
+        let storage_fund_rebate_inflow =
+            gas_summary.storage_fund_rebate_inflow(self.storage_rebate_rate);
+
+        // total SUI in input objects
+        let input_sui = self.mutable_input_refs.iter().fold(0, |acc, o| {
+            acc + self
+                .input_objects
+                .get(&o.0)
+                .unwrap()
+                .get_total_sui(&self.store)
+                .unwrap()
+        });
+        // if a dynamic field object O is written by this tx, count get_total_sui(pre_tx_value(O)) as part of input_sui
+        let dynamic_field_input_sui = self.dynamic_fields_touched().iter().fold(0, |acc, id| {
+            acc + self
+                .store
+                .get_object(id)
+                .unwrap()
+                .unwrap()
+                .get_total_sui(&self.store)
+                .unwrap()
+        });
+        // sum of the storage rebate fields of all objects written by this tx
+        let mut output_rebate_amount = 0;
+        // total SUI in output objects
+        let output_sui = self.written.values().fold(0, |acc, v| {
+            output_rebate_amount += v.1.storage_rebate;
+            acc + v.1.get_total_sui(&self.store).unwrap()
+        });
+
+        // storage gas cost should be equal to total rebates of mutated objects + storage fund rebate inflow (see below)
+        assert_eq!(
+            gas_summary.storage_cost,
+            output_rebate_amount + storage_fund_rebate_inflow
+        );
+
+        // note: storage_cost flows into the storage_rebate field of the output objects, which is why it is not accounted for here.
+        // similarly, storage_rebate flows into the gas coin
+        // we do account for the "storage rebate inflow" (portion of the storage rebate which flows back into the storage fund). like
+        // computation gas fees, this quantity is burned, then re-minted at epoch boundaries.
+        assert_eq!(
+            input_sui + dynamic_field_input_sui,
+            output_sui + gas_summary.computation_cost + storage_fund_rebate_inflow
+        )
     }
 }
 

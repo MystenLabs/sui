@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "0.27.0"
+    "version": "0.28.0"
   },
   "methods": [
     {
@@ -81,14 +81,14 @@
           "params": [
             {
               "name": "signer",
-              "value": "0x9b07815f04497e2e05d22cac3aa061410b20868c"
+              "value": "0x9b07815f04497e2e05d22cac3aa061410b20868cc619154c42a1c61be9902717"
             },
             {
               "name": "single_transaction_params",
               "value": [
                 {
                   "moveCallRequestParams": {
-                    "packageObjectId": "0x0000000000000000000000000000000000000002",
+                    "packageObjectId": "0x0000000000000000000000000000000000000000000000000000000000000002",
                     "module": "devnet_nft",
                     "function": "mint",
                     "typeArguments": [],
@@ -101,15 +101,15 @@
                 },
                 {
                   "transferObjectRequestParams": {
-                    "recipient": "0xc619154c42a1c61be9902717b24b8ec168fe4896",
-                    "objectId": "0xefef92cbf44b581f23222c10916b17a369b4da03"
+                    "recipient": "0xb24b8ec168fe4896f5b70ccb10f1a705e061d0fdfa189618d28b0d44efef92cb",
+                    "objectId": "0x672f0dbe129f1e39113f9f6164ea2867f8deccf3c3c518f146de9554f03f27a8"
                   }
                 }
               ]
             },
             {
               "name": "gas",
-              "value": "0xf5b70ccb10f1a705e061d0fdfa189618d28b0d44"
+              "value": "0xf44b581f23222c10916b17a369b4da039d075952b58036f2a7b561446592403c"
             },
             {
               "name": "gas_budget",
@@ -123,28 +123,28 @@
           "result": {
             "name": "Result",
             "value": {
-              "txBytes": "AQICAAAAAAAAAAAAAAAAAAAAAAAAAAIKZGV2bmV0X25mdARtaW50AAMAC0V4YW1wbGUgTkZUACtBbiBORlQgY3JlYXRlZCBieSB0aGUgU3VpIENvbW1hbmQgTGluZSBUb29sAEJpcGZzOi8vYmFma3JlaWJuZ3FobDNnYWE3ZGFvYjRpMnZjY3ppYXkyampscDQzNWNmNjZ2aG9ubzducnZ3dzUzdHkAxhkVTEKhxhvpkCcXskuOwWj+SJbv75LL9EtYHyMiLBCRaxejabTaAwEAAAAAAAAAIJ0HWVK1gDbyp7VhRGWSQDxnLw2+Ep8eORE/n2Fk6ihnmweBXwRJfi4F0iysOqBhQQsghoz1twzLEPGnBeBh0P36GJYY0osNRAEAAAAAAAAAIPjezPPDxRjxRt6VVPA/J6g9WxGF855x7zV+K9nhOWJRmweBXwRJfi4F0iysOqBhQQsghowBAAAAAAAAAOgDAAAAAAAAAA==",
+              "txBytes": "AQICAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIKZGV2bmV0X25mdARtaW50AAMAC0V4YW1wbGUgTkZUACtBbiBORlQgY3JlYXRlZCBieSB0aGUgU3VpIENvbW1hbmQgTGluZSBUb29sAEJpcGZzOi8vYmFma3JlaWJuZ3FobDNnYWE3ZGFvYjRpMnZjY3ppYXkyampscDQzNWNmNjZ2aG9ubzducnZ3dzUzdHkAskuOwWj+SJb1twzLEPGnBeBh0P36GJYY0osNRO/vkstnLw2+Ep8eORE/n2Fk6ihn+N7M88PFGPFG3pVU8D8nqAEAAAAAAAAAID1bEYXznnHvNX4r2eE5YlFrCkFAMnZDeyXw/76JfPR2mweBXwRJfi4F0iysOqBhQQsghozGGRVMQqHGG+mQJxf0S1gfIyIsEJFrF6NptNoDnQdZUrWANvKntWFEZZJAPAEAAAAAAAAAIMB3fp0kb/OXSsXxs1CqFsQuoNcRezDIyENs56klSzDSmweBXwRJfi4F0iysOqBhQQsghozGGRVMQqHGG+mQJxcBAAAAAAAAAOgDAAAAAAAAAA==",
               "gas": {
-                "objectId": "0xf5b70ccb10f1a705e061d0fdfa189618d28b0d44",
+                "objectId": "0xf44b581f23222c10916b17a369b4da039d075952b58036f2a7b561446592403c",
                 "version": 1,
-                "digest": "+N7M88PFGPFG3pVU8D8nqD1bEYXznnHvNX4r2eE5YlE="
+                "digest": "DxJxf3yJYN74x3saUWa3pxQ2HWETkpwv1pKWHjbZ3n2u"
               },
               "inputObjects": [
                 {
-                  "MovePackage": "0x0000000000000000000000000000000000000002"
+                  "MovePackage": "0x0000000000000000000000000000000000000000000000000000000000000002"
                 },
                 {
                   "ImmOrOwnedMoveObject": {
-                    "objectId": "0xefef92cbf44b581f23222c10916b17a369b4da03",
+                    "objectId": "0x672f0dbe129f1e39113f9f6164ea2867f8deccf3c3c518f146de9554f03f27a8",
                     "version": 1,
-                    "digest": "nQdZUrWANvKntWFEZZJAPGcvDb4Snx45ET+fYWTqKGc="
+                    "digest": "58WQqUhrsHbxjkMtiiGtkJfCpBwufnJCDVr88hExPwFs"
                   }
                 },
                 {
                   "ImmOrOwnedMoveObject": {
-                    "objectId": "0xf5b70ccb10f1a705e061d0fdfa189618d28b0d44",
+                    "objectId": "0xf44b581f23222c10916b17a369b4da039d075952b58036f2a7b561446592403c",
                     "version": 1,
-                    "digest": "+N7M88PFGPFG3pVU8D8nqD1bEYXznnHvNX4r2eE5YlE="
+                    "digest": "DxJxf3yJYN74x3saUWa3pxQ2HWETkpwv1pKWHjbZ3n2u"
                   }
                 }
               ]
@@ -157,7 +157,7 @@
       "name": "sui_devInspectTransaction",
       "tags": [
         {
-          "name": "Full Node API"
+          "name": "Write API"
         }
       ],
       "description": "Runs the transaction in dev-inspect mode. Which allows for nearly any transaction (or Move call) with any arguments. Detailed results are provided, including both the transaction effects and any return values.",
@@ -208,7 +208,7 @@
       "name": "sui_dryRunTransaction",
       "tags": [
         {
-          "name": "Full Node API"
+          "name": "Write API"
         }
       ],
       "description": "Return transaction execution effects including the gas cost summary, while the effects are not committed to the chain.",
@@ -222,10 +222,10 @@
         }
       ],
       "result": {
-        "name": "SuiTransactionEffects",
+        "name": "DryRunTransactionResponse",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionEffects"
+          "$ref": "#/components/schemas/DryRunTransactionResponse"
         }
       }
     },
@@ -233,7 +233,7 @@
       "name": "sui_executeTransaction",
       "tags": [
         {
-          "name": "APIs to execute transactions."
+          "name": "Write API"
         }
       ],
       "description": "Execute the transaction and wait for results if desired. Request types: 1. WaitForEffectsCert: waits for TransactionEffectsCert and then return to client.     This mode is a proxy for transaction finality. 2. WaitForLocalExecution: waits for TransactionEffectsCert and make sure the node     executed the transaction locally before returning the client. The local execution     makes sure this node is aware of this transaction when client fires subsequent queries.     However if the node fails to execute the transaction locally in a timely manner,     a bool type in the response is set to false to indicated the case.",
@@ -276,11 +276,11 @@
           "params": [
             {
               "name": "tx_bytes",
-              "value": "AACp45yy8jJSXNzuo1pDOnsPUOjfsuIbpJfFSrMKPZrcB8FCnE1rvsr5AgAAAAAAAAAg8nm+TGoQHpo69cgHARL4CGSLNu+/je6KGoLeRtlQTpZqld/2kzkfL9GZpRzXcr5ceJ4/CEV8mvd6kfYxdghTk004NjS898MmAgAAAAAAAAAgVQCaYfHeDq5CCi5K4bt3KrLdXVp9+pScDvBpCOelSQBqld/2kzkfL9GZpRzXcr5ceJ4/CAEAAAAAAAAA6AMAAAAAAAAA"
+              "value": "AABVfcQqrv7rjBVNfdxFa4rqoxMsdANTHcmOg/bhmNLX0XupHdx+cXz3CMk3Bg8EBIc27DP7F0bZmaXljNXGd+2AAgAAAAAAAAAgzMqpegLMOpgEFnDhYJ23FOmFjJbp5GmFXxzzv9+X6GVPuIgKC69cF+3DB1mtlwVnAyS6rhgBhRo36LTApC3mdU+C8chYe5jWTAC/tGw4Q72L9sz6fGWoYThpjNH9ysPcAgAAAAAAAAAg6NjHzoY/MT2j29kqg+8m0Si4j+Zr8m4ODQnNr3J9HYRPuIgKC69cF+3DB1mtlwVnAyS6rhgBhRo36LTApC3mdQEAAAAAAAAA6AMAAAAAAAAA"
             },
             {
               "name": "signature",
-              "value": "ACgIlj7a8fjfUNfRqKjJOIscuDtBQPpxolX1GF8GKgBVb0hwr06DaNvtB35bt6PatO3QPTdFEvEipLWeCGZFagpOsUtHUtBKVudSrWpHKNaBkJnTiEM2wczqdDW5L4mqJg=="
+              "value": "AH6XTo1HVHf4m92sObAgdmoNTFLiCFSzj7eOJobK8KjO3xa0NIv6WEOBVcC19elqJ+OmstR38vGS8P6j+eG4Aw5tqSk/XTlS5stFH/W02Kxeyb0TWYjhlUjBKhMcXPgTNg=="
             },
             {
               "name": "request_type",
@@ -295,29 +295,29 @@
                   "transactions": [
                     {
                       "TransferObject": {
-                        "recipient": "0xa9e39cb2f232525cdceea35a433a7b0f50e8dfb2",
+                        "recipient": "0x557dc42aaefeeb8c154d7ddc456b8aeaa3132c7403531dc98e83f6e198d2d7d1",
                         "objectRef": {
-                          "objectId": "0xe21ba497c54ab30a3d9adc07c1429c4d6bbecaf9",
+                          "objectId": "0x7ba91ddc7e717cf708c937060f04048736ec33fb1746d999a5e58cd5c677ed80",
                           "version": 2,
-                          "digest": "8nm+TGoQHpo69cgHARL4CGSLNu+/je6KGoLeRtlQTpY="
+                          "digest": "EnRQXe1hDGAJCFyF2ds2GmPHdvf9V6yxf24LisEsDkYt"
                         }
                       }
                     }
                   ],
-                  "sender": "0x6a95dff693391f2fd199a51cd772be5c789e3f08",
+                  "sender": "0x4fb8880a0baf5c17edc30759ad9705670324baae1801851a37e8b4c0a42de675",
                   "gasData": {
                     "payment": {
-                      "objectId": "0x457c9af77a91f631760853934d383634bcf7c326",
+                      "objectId": "0x4f82f1c8587b98d64c00bfb46c3843bd8bf6ccfa7c65a86138698cd1fdcac3dc",
                       "version": 2,
-                      "digest": "VQCaYfHeDq5CCi5K4bt3KrLdXVp9+pScDvBpCOelSQA="
+                      "digest": "GfwJqw63FK6AVQnKKkQprvrk3cVLziMBqhMfNkDuCHj9"
                     },
-                    "owner": "0x6a95dff693391f2fd199a51cd772be5c789e3f08",
+                    "owner": "0x4fb8880a0baf5c17edc30759ad9705670324baae1801851a37e8b4c0a42de675",
                     "price": 1,
                     "budget": 1000
                   }
                 },
                 "txSignatures": [
-                  "ACgIlj7a8fjfUNfRqKjJOIscuDtBQPpxolX1GF8GKgBVb0hwr06DaNvtB35bt6PatO3QPTdFEvEipLWeCGZFagpOsUtHUtBKVudSrWpHKNaBkJnTiEM2wczqdDW5L4mqJg=="
+                  "AH6XTo1HVHf4m92sObAgdmoNTFLiCFSzj7eOJobK8KjO3xa0NIv6WEOBVcC19elqJ+OmstR38vGS8P6j+eG4Aw5tqSk/XTlS5stFH/W02Kxeyb0TWYjhlUjBKhMcXPgTNg=="
                 ]
               },
               "effects": {
@@ -330,66 +330,68 @@
                   "storageCost": 100,
                   "storageRebate": 10
                 },
-                "transactionDigest": "BqjGUp6Ek8UxWdKkdfm2bmeDivvuEEUBHXvCD2GrfczB",
+                "transactionDigest": "Cv7n2YaM7Am1ssZGu4khsFkcKHnpgVhwFCSs4kLjrtLW",
                 "mutated": [
                   {
                     "owner": {
-                      "AddressOwner": "0x6a95dff693391f2fd199a51cd772be5c789e3f08"
+                      "AddressOwner": "0x4fb8880a0baf5c17edc30759ad9705670324baae1801851a37e8b4c0a42de675"
                     },
                     "reference": {
-                      "objectId": "0x457c9af77a91f631760853934d383634bcf7c326",
+                      "objectId": "0x4f82f1c8587b98d64c00bfb46c3843bd8bf6ccfa7c65a86138698cd1fdcac3dc",
                       "version": 2,
-                      "digest": "VQCaYfHeDq5CCi5K4bt3KrLdXVp9+pScDvBpCOelSQA="
+                      "digest": "GfwJqw63FK6AVQnKKkQprvrk3cVLziMBqhMfNkDuCHj9"
                     }
                   },
                   {
                     "owner": {
-                      "AddressOwner": "0xa9e39cb2f232525cdceea35a433a7b0f50e8dfb2"
+                      "AddressOwner": "0x557dc42aaefeeb8c154d7ddc456b8aeaa3132c7403531dc98e83f6e198d2d7d1"
                     },
                     "reference": {
-                      "objectId": "0xe21ba497c54ab30a3d9adc07c1429c4d6bbecaf9",
+                      "objectId": "0x7ba91ddc7e717cf708c937060f04048736ec33fb1746d999a5e58cd5c677ed80",
                       "version": 2,
-                      "digest": "8nm+TGoQHpo69cgHARL4CGSLNu+/je6KGoLeRtlQTpY="
+                      "digest": "EnRQXe1hDGAJCFyF2ds2GmPHdvf9V6yxf24LisEsDkYt"
                     }
                   }
                 ],
                 "gasObject": {
                   "owner": {
-                    "ObjectOwner": "0x6a95dff693391f2fd199a51cd772be5c789e3f08"
+                    "ObjectOwner": "0x4fb8880a0baf5c17edc30759ad9705670324baae1801851a37e8b4c0a42de675"
                   },
                   "reference": {
-                    "objectId": "0x457c9af77a91f631760853934d383634bcf7c326",
+                    "objectId": "0x4f82f1c8587b98d64c00bfb46c3843bd8bf6ccfa7c65a86138698cd1fdcac3dc",
                     "version": 2,
-                    "digest": "VQCaYfHeDq5CCi5K4bt3KrLdXVp9+pScDvBpCOelSQA="
+                    "digest": "GfwJqw63FK6AVQnKKkQprvrk3cVLziMBqhMfNkDuCHj9"
                   }
                 },
-                "events": [
-                  {
-                    "transferObject": {
-                      "packageId": "0x0000000000000000000000000000000000000002",
-                      "transactionModule": "native",
-                      "sender": "0x6a95dff693391f2fd199a51cd772be5c789e3f08",
-                      "recipient": {
-                        "AddressOwner": "0xa9e39cb2f232525cdceea35a433a7b0f50e8dfb2"
-                      },
-                      "objectType": "0x2::example::Object",
-                      "objectId": "0xe21ba497c54ab30a3d9adc07c1429c4d6bbecaf9",
-                      "version": 2
-                    }
-                  }
-                ]
+                "eventsDigest": "B3xLC8EbyvTxy5pgiwTNUzHLa6kS7uwD6sZdErKB8F8f"
               },
+              "events": [
+                {
+                  "transferObject": {
+                    "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                    "transactionModule": "native",
+                    "sender": "0x4fb8880a0baf5c17edc30759ad9705670324baae1801851a37e8b4c0a42de675",
+                    "recipient": {
+                      "AddressOwner": "0x557dc42aaefeeb8c154d7ddc456b8aeaa3132c7403531dc98e83f6e198d2d7d1"
+                    },
+                    "objectType": "0x2::example::Object",
+                    "objectId": "0x7ba91ddc7e717cf708c937060f04048736ec33fb1746d999a5e58cd5c677ed80",
+                    "version": 2
+                  }
+                }
+              ],
               "checkpoint": null
             }
           }
         }
-      ]
+      ],
+      "deprecated": true
     },
     {
       "name": "sui_executeTransactionSerializedSig",
       "tags": [
         {
-          "name": "APIs to execute transactions."
+          "name": "Write API"
         }
       ],
       "params": [
@@ -535,7 +537,7 @@
       "name": "sui_getCheckpoint",
       "tags": [
         {
-          "name": "Full Node API"
+          "name": "Read API"
         }
       ],
       "description": "Return a checkpoint",
@@ -570,9 +572,9 @@
             "value": {
               "epoch": 5000,
               "sequenceNumber": 1000,
-              "digest": "816hEv4WAW2reK9xkf11PeHiaZJrp7PQT9oGJZhdf9TN",
+              "digest": "3NynUFNC8xctjvGVBmGEDLNkAjSQpiygktDQhxhTBi8W",
               "networkTotalTransactions": 792385,
-              "previousDigest": "AbKbyf26XFmbBt9eg5KJ9tHtgsTysbsTe7Wpy6QKQfJG",
+              "previousDigest": "76gyHCk7FRrGACRqXM7Ybj5uJLtAzgEMJ5P9CeEzxZSG",
               "epochRollingGasCostSummary": {
                 "computation_cost": 0,
                 "storage_cost": 0,
@@ -581,7 +583,7 @@
               "timestampMs": 1676911928,
               "endOfEpochData": null,
               "transactions": [
-                "CAbHZCsbX6vsqtCqjhfNdT8XJFcuYkHVGz2hXg54goQk"
+                "6kerMphN4S5QTfd9TAhwMiFq1q9c2YwfpheBfWm85vUq"
               ]
             }
           }
@@ -592,7 +594,7 @@
       "name": "sui_getCheckpointContents",
       "tags": [
         {
-          "name": "Full Node API"
+          "name": "Read API"
         }
       ],
       "description": "Return contents of a checkpoint, namely a list of execution digests",
@@ -619,7 +621,7 @@
       "name": "sui_getCheckpointContentsByDigest",
       "tags": [
         {
-          "name": "Full Node API"
+          "name": "Read API"
         }
       ],
       "description": "Return contents of a checkpoint based on checkpoint content digest",
@@ -644,7 +646,7 @@
       "name": "sui_getCheckpointSummary",
       "tags": [
         {
-          "name": "Full Node API"
+          "name": "Read API"
         }
       ],
       "description": "Return a checkpoint summary based on a checkpoint sequence number",
@@ -671,7 +673,7 @@
       "name": "sui_getCheckpointSummaryByDigest",
       "tags": [
         {
-          "name": "Full Node API"
+          "name": "Read API"
         }
       ],
       "description": "Return a checkpoint summary based on checkpoint digest",
@@ -823,6 +825,35 @@
       }
     },
     {
+      "name": "sui_getDisplayDeprecated",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return the Display string of a object",
+      "params": [
+        {
+          "name": "object_id",
+          "description": "the id of the object",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
+      ],
+      "result": {
+        "name": "BTreeMap<String,String>",
+        "required": true,
+        "schema": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
       "name": "sui_getDynamicFieldObject",
       "tags": [
         {
@@ -844,7 +875,7 @@
           "description": "The Name of the dynamic field",
           "required": true,
           "schema": {
-            "type": "string"
+            "$ref": "#/components/schemas/DynamicFieldName"
           }
         }
       ],
@@ -953,13 +984,13 @@
             {
               "name": "query",
               "value": {
-                "Transaction": "AvLgYFSEW12Ac2uBFYcbznKdBj9CowNrpBuHMq53f8mu"
+                "Transaction": "7PsBHpUW6yfGNov2WrbVafLjgT9nYziQ3gVDbRq6zTbF"
               }
             },
             {
               "name": "cursor",
               "value": {
-                "txDigest": "AvLgYFSEW12Ac2uBFYcbznKdBj9CowNrpBuHMq53f8mu",
+                "txDigest": "7PsBHpUW6yfGNov2WrbVafLjgT9nYziQ3gVDbRq6zTbF",
                 "eventSeq": 10
               }
             },
@@ -978,21 +1009,21 @@
               "data": [
                 {
                   "timestamp": 0,
-                  "txDigest": "HZ7NnEYMCs69PgtbEvoE2dAswupLxBRNxqvhQqfgyY6K",
+                  "txDigest": "HzTi7BC8QyKBMEbcLMUF7H219B1LXC1EaE7hhCCQArJa",
                   "id": {
-                    "txDigest": "HZ7NnEYMCs69PgtbEvoE2dAswupLxBRNxqvhQqfgyY6K",
+                    "txDigest": "HzTi7BC8QyKBMEbcLMUF7H219B1LXC1EaE7hhCCQArJa",
                     "eventSeq": 0
                   },
                   "event": {
                     "transferObject": {
-                      "packageId": "0x0000000000000000000000000000000000000002",
+                      "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
                       "transactionModule": "native",
-                      "sender": "0x46763772eddec7a04173fd7f7ddcddedfd52a98f",
+                      "sender": "0x07579d9f6ba8ea13152dbcdac21159552dfbe58a18b3648e440a692e72767239",
                       "recipient": {
-                        "AddressOwner": "0x5ccaf18b7f1a4e3dc7b1e7ffd3dbd682f600d1f6"
+                        "AddressOwner": "0x6a101e9a3af5c8070112f808648b36efbf8dee8a1a82de46d9504e96a1108a17"
                       },
                       "objectType": "0x2::example::Object",
-                      "objectId": "0x2dc0921f7f7dbfca95055adc5e147a1eee2edd23",
+                      "objectId": "0x8ef76f56c399633a2eb310bca9124e5f2f38ce739eaacbb6600688804e078448",
                       "version": 2
                     }
                   }
@@ -1011,7 +1042,7 @@
       "name": "sui_getLatestCheckpointSequenceNumber",
       "tags": [
         {
-          "name": "Full Node API"
+          "name": "Read API"
         }
       ],
       "description": "Return the sequence number of the latest checkpoint that has been executed",
@@ -1030,7 +1061,7 @@
       "name": "sui_getMoveFunctionArgTypes",
       "tags": [
         {
-          "name": "Full Node API"
+          "name": "Read API"
         }
       ],
       "description": "Return the argument types of a Move function, based on normalized Type.",
@@ -1072,7 +1103,7 @@
       "name": "sui_getNormalizedMoveFunction",
       "tags": [
         {
-          "name": "Full Node API"
+          "name": "Read API"
         }
       ],
       "description": "Return a structured representation of Move function",
@@ -1111,7 +1142,7 @@
       "name": "sui_getNormalizedMoveModule",
       "tags": [
         {
-          "name": "Full Node API"
+          "name": "Read API"
         }
       ],
       "description": "Return a structured representation of Move module",
@@ -1143,7 +1174,7 @@
       "name": "sui_getNormalizedMoveModulesByPackage",
       "tags": [
         {
-          "name": "Full Node API"
+          "name": "Read API"
         }
       ],
       "description": "Return structured representations of all modules in the given package",
@@ -1171,7 +1202,7 @@
       "name": "sui_getNormalizedMoveStruct",
       "tags": [
         {
-          "name": "Full Node API"
+          "name": "Read API"
         }
       ],
       "description": "Return a structured representation of Move struct",
@@ -1237,7 +1268,7 @@
           "params": [
             {
               "name": "object_id",
-              "value": "0x6b0a41403276437b25f0ffbe897cf476c0777e9d"
+              "value": "0x53e4567ccafa5f36ce84c80aa8bc9be64e0d5ae796884274aef3005ae6733809"
             }
           ],
           "result": {
@@ -1252,19 +1283,19 @@
                   "fields": {
                     "balance": "10000",
                     "id": {
-                      "id": "0x6b0a41403276437b25f0ffbe897cf476c0777e9d"
+                      "id": "0x53e4567ccafa5f36ce84c80aa8bc9be64e0d5ae796884274aef3005ae6733809"
                     }
                   }
                 },
                 "owner": {
-                  "AddressOwner": "0x246ff3974ac5f1b350aa16c42ea0d7117b30c8c8"
+                  "AddressOwner": "0xc8ec1d5b84dd6289e193b9f88de4a994358c9f856135236c3e75a925e1c77ac3"
                 },
-                "previousTransaction": "5YCdeSBAf4VzmLzCarqjbTXNsbMxR3tWXkRuiYQv75qd",
+                "previousTransaction": "5PLgmQye6rraDYqpV3npV6H1cUXoJZgJh1dPCyRa3WCv",
                 "storageRebate": 100,
                 "reference": {
-                  "objectId": "0x6b0a41403276437b25f0ffbe897cf476c0777e9d",
+                  "objectId": "0x53e4567ccafa5f36ce84c80aa8bc9be64e0d5ae796884274aef3005ae6733809",
                   "version": 1,
-                  "digest": "rvMAWuZzOAnI7B1bhN1iieGTufiN5KmUNYyfhWE1I2w="
+                  "digest": "33K5ZXJ3RyubvYaHuEnQ1QXmmbhgtrFwp199dnEbL4n7"
                 }
               }
             }
@@ -1306,51 +1337,51 @@
           "params": [
             {
               "name": "address",
-              "value": "0x3568c40e814d9d5396d23087a0fd641e91e0e00d"
+              "value": "0x4e049913233eb918c11638af89d575beb99003d30a245ac74a02e26e45cb80ee"
             }
           ],
           "result": {
             "name": "Result",
             "value": [
               {
-                "objectId": "0xf6c012cded9ef9ba5e5bf042464b5ca6488b897c",
+                "objectId": "0x1b9c00a93345ce5f12bea9ffe04748d6696c30631735193aea95b8f9082c1062",
                 "version": 0,
-                "digest": "AFsuF/APwLyOftPyq1nWB7DjWGvaHNpOQrQUWyb6Neo=",
+                "digest": "p3mh2EkKPG2jckE87LnVpRF5uE3R7WWfaFZELQhqYMk",
                 "type": "0x2::coin::Coin<0x2::sui::SUI>",
                 "owner": {
-                  "AddressOwner": "0x3568c40e814d9d5396d23087a0fd641e91e0e00d"
+                  "AddressOwner": "0x4e049913233eb918c11638af89d575beb99003d30a245ac74a02e26e45cb80ee"
                 },
-                "previousTransaction": "2joDzF1sDVAVv9ej7j8197ZwiZ1hX73kSFW48c1nNxv3"
+                "previousTransaction": "Bv28BS3v5AuiQHY9SHfwo8PNM48mzR6LLBkbxsaoQFLd"
               },
               {
-                "objectId": "0xc11638af89d575beb99003d30a245ac74a02e26e",
+                "objectId": "0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427",
                 "version": 0,
-                "digest": "RcuA7hucAKkzRc5fEr6p/+BHSNZpbDBjFzUZOuqVuPk=",
+                "digest": "3LEKanp51C6hgnso1mkCBJZXTrxBtairWGstiozCYRoi",
                 "type": "0x2::coin::Coin<0x2::sui::SUI>",
                 "owner": {
-                  "AddressOwner": "0x3568c40e814d9d5396d23087a0fd641e91e0e00d"
+                  "AddressOwner": "0x4e049913233eb918c11638af89d575beb99003d30a245ac74a02e26e45cb80ee"
                 },
-                "previousTransaction": "YuETTgp5A2zikmTFCnY7M9gPdCq1UY3BCtarCCm3Jcx"
+                "previousTransaction": "FNgSG6ujbQ57wZaY4d8Jf6xAGJdqQvhRrSD9jTUHfVg6"
               },
               {
-                "objectId": "0x6b632eafa229ec3dd885442b44972526c4e8ce25",
+                "objectId": "0x1bc44cdfce3574e7f7f0b2de2323a06ebc356bad614726b313d811012d4be723",
                 "version": 0,
-                "digest": "oEFsOVXYGLsasOgyh31igjPj4dZPdrcagOxPMy9NGmc=",
+                "digest": "8u3E7cQUSuo96NwJ9mYS4hMGCs48CEjreQPGrKGsVTMV",
                 "type": "0x2::coin::Coin<0x2::sui::SUI>",
                 "owner": {
-                  "AddressOwner": "0x3568c40e814d9d5396d23087a0fd641e91e0e00d"
+                  "AddressOwner": "0x4e049913233eb918c11638af89d575beb99003d30a245ac74a02e26e45cb80ee"
                 },
-                "previousTransaction": "5VeL6DH6La2Ra9bjCCZY9wzHVytTjiytJq9DnTdDEvEp"
+                "previousTransaction": "6otjiis1Y5t2FFGcQjhof1wA2JSo4zhLEdQkH6GSXHHT"
               },
               {
-                "objectId": "0x842f736ab973e87f53b4857842789a1dd5916762",
+                "objectId": "0x5d1123f2b8a0ac606b940a66e42efd782af5203112331adc2ed6f402dca396bf",
                 "version": 0,
-                "digest": "mzxcq+R9v0iCfsCBjgDeSyl/BHw77aQ9bp+bGxvETN8=",
+                "digest": "GYEZNzUU2HeTTUTFr8bmPQ4mCY9gpPiTHdim9GgAxxwb",
                 "type": "0x2::coin::Coin<0x2::sui::SUI>",
                 "owner": {
-                  "AddressOwner": "0x3568c40e814d9d5396d23087a0fd641e91e0e00d"
+                  "AddressOwner": "0x4e049913233eb918c11638af89d575beb99003d30a245ac74a02e26e45cb80ee"
                 },
-                "previousTransaction": "EsxGG1qQpq9FKm6VbYxCv8MAPkfPGEyb8nerSao5Pxmo"
+                "previousTransaction": "53FQJhUHQqRektpSXPdyn55rjqh3K142iR8jtdPiRZ54"
               }
             ]
           }
@@ -1361,7 +1392,7 @@
       "name": "sui_getRawObject",
       "tags": [
         {
-          "name": "BCS API"
+          "name": "Read API"
         }
       ],
       "description": "Return the raw BCS serialized move object bytes for a specified object.",
@@ -1388,7 +1419,7 @@
           "params": [
             {
               "name": "object_id",
-              "value": "0x0a7c6df2389c373c8fbe06bda7a61120652668dd"
+              "value": "0x9c683fb7d0526e29d77e89e7bfefd4f73ada3d19ac87d45351f0196a880b95c3"
             }
           ],
           "result": {
@@ -1401,17 +1432,17 @@
                   "type": "0x2::coin::Coin<0x2::sui::SUI>",
                   "has_public_transfer": true,
                   "version": 1,
-                  "bcs_bytes": "Cnxt8jicNzyPvga9p6YRIGUmaN0QJwAAAAAAAA=="
+                  "bcs_bytes": "nGg/t9BSbinXfonnv+/U9zraPRmsh9RTUfAZaogLlcMQJwAAAAAAAA=="
                 },
                 "owner": {
-                  "AddressOwner": "0x5687fee73fac7a2c564da689e9da76e1430d191f"
+                  "AddressOwner": "0xea244dd060d2b6538196d048b7a6d04c8edc89579d86fd3fc90c52f9a14c6b81"
                 },
-                "previousTransaction": "Dh865EkUHa618sXQbkcn7psXQ6ggxZ6UFF8tTAqFTCCm",
+                "previousTransaction": "3w8JW8MkgX1TRyt1iqY17fexUDLA7smydFvBWLqMKTyh",
                 "storageRebate": 100,
                 "reference": {
-                  "objectId": "0x0a7c6df2389c373c8fbe06bda7a61120652668dd",
+                  "objectId": "0x9c683fb7d0526e29d77e89e7bfefd4f73ada3d19ac87d45351f0196a880b95c3",
                   "version": 1,
-                  "digest": "5C79eCr1IDESMxrcLtb0Atyjlr/m36OsilfqCIYIcP0="
+                  "digest": "CPUUvmJjaAXLqTgYeySypZ16NPrvuXFE35E689JvD2J2"
                 }
               }
             }
@@ -1541,7 +1572,7 @@
           "params": [
             {
               "name": "digest",
-              "value": "8Mq8H9SdaUWPZHJKsoontxhv6YLAGWW81ccbxvjhVCeZ"
+              "value": "GUPcK4cmRmgsTFr52ab9f6fnzNVg3Lz6hF2aXFcsRzaD"
             }
           ],
           "result": {
@@ -1552,29 +1583,29 @@
                   "transactions": [
                     {
                       "TransferObject": {
-                        "recipient": "0xd1e09be8e451cd3c364076623c0231898be0722c",
+                        "recipient": "0x64bb73a1ed58b2c18b0cbf377792e206e6b80d4d5eea64e2e70563b1589026c4",
                         "objectRef": {
-                          "objectId": "0x08e4eb229c44cb957d29cf7370af8a1b9c542d49",
+                          "objectId": "0xe37f941a451ef8209a0fbfbf1b549b2bb26b8eaee08895146df27bc3cf2610c1",
                           "version": 2,
-                          "digest": "jtyJV52G/T/JDFL5oUxrgSuU/mE8W867XusdRJ4lFhY="
+                          "digest": "9BQobwxQvJ1JxSXNn8v8htZPTu8FEzJJGgcD4kgLUuMd"
                         }
                       }
                     }
                   ],
-                  "sender": "0xd4783daffa7f6913e7b0b8f7c0f1790bdc021fe6",
+                  "sender": "0xf6f0ade7cd7d4c2ca2c1ad25115b06135dd146bd595eb56e4a30e1cd1aad862c",
                   "gasData": {
                     "payment": {
-                      "objectId": "0xb3c83cfb9c683fb7d0526e29d77e89e7bfefd4f7",
+                      "objectId": "0x4b2e27c1eed56c33b579034150ea46bccf7653e00b6f24b63bd04da68bc160c7",
                       "version": 2,
-                      "digest": "Oto9GayH1FNR8BlqiAuVw+okTdBg0rZTgZbQSLem0Ew="
+                      "digest": "6AyFnAuKAKCqm1cD94EyGzBqJCDDJ716ojjmsKF2rqoi"
                     },
-                    "owner": "0xd4783daffa7f6913e7b0b8f7c0f1790bdc021fe6",
+                    "owner": "0xf6f0ade7cd7d4c2ca2c1ad25115b06135dd146bd595eb56e4a30e1cd1aad862c",
                     "price": 1,
                     "budget": 1000
                   }
                 },
                 "txSignatures": [
-                  "AGHFWd4l3vh5soEmuLFrwM4rCoPSDZxhSPTIH6x1smErtWSzrfquGmS8hA4E8N+Bfcmh+PVfIfC3MU/Mh2eu3w66hmV5ZkKODtgnokS0vmNHVDWXWuuoOmN18GDl2YAdDg=="
+                  "AGslC3jrqZbH8FVkZXU3usnxIf7DDSdoxmPnV3548G/pwcwY8/Frtaktfjba1lQG73/cbIcTM/3fhW5bnpvMbQfrrHXjLu++Rq9ubpXx7Qa15+TAMzHp1FEJlaxEOtOHYQ=="
                 ]
               },
               "effects": {
@@ -1587,55 +1618,56 @@
                   "storageCost": 100,
                   "storageRebate": 10
                 },
-                "transactionDigest": "8Mq8H9SdaUWPZHJKsoontxhv6YLAGWW81ccbxvjhVCeZ",
+                "transactionDigest": "GUPcK4cmRmgsTFr52ab9f6fnzNVg3Lz6hF2aXFcsRzaD",
                 "mutated": [
                   {
                     "owner": {
-                      "AddressOwner": "0xd4783daffa7f6913e7b0b8f7c0f1790bdc021fe6"
+                      "AddressOwner": "0xf6f0ade7cd7d4c2ca2c1ad25115b06135dd146bd595eb56e4a30e1cd1aad862c"
                     },
                     "reference": {
-                      "objectId": "0xb3c83cfb9c683fb7d0526e29d77e89e7bfefd4f7",
+                      "objectId": "0x4b2e27c1eed56c33b579034150ea46bccf7653e00b6f24b63bd04da68bc160c7",
                       "version": 2,
-                      "digest": "Oto9GayH1FNR8BlqiAuVw+okTdBg0rZTgZbQSLem0Ew="
+                      "digest": "6AyFnAuKAKCqm1cD94EyGzBqJCDDJ716ojjmsKF2rqoi"
                     }
                   },
                   {
                     "owner": {
-                      "AddressOwner": "0xd1e09be8e451cd3c364076623c0231898be0722c"
+                      "AddressOwner": "0x64bb73a1ed58b2c18b0cbf377792e206e6b80d4d5eea64e2e70563b1589026c4"
                     },
                     "reference": {
-                      "objectId": "0x08e4eb229c44cb957d29cf7370af8a1b9c542d49",
+                      "objectId": "0xe37f941a451ef8209a0fbfbf1b549b2bb26b8eaee08895146df27bc3cf2610c1",
                       "version": 2,
-                      "digest": "jtyJV52G/T/JDFL5oUxrgSuU/mE8W867XusdRJ4lFhY="
+                      "digest": "9BQobwxQvJ1JxSXNn8v8htZPTu8FEzJJGgcD4kgLUuMd"
                     }
                   }
                 ],
                 "gasObject": {
                   "owner": {
-                    "ObjectOwner": "0xd4783daffa7f6913e7b0b8f7c0f1790bdc021fe6"
+                    "ObjectOwner": "0xf6f0ade7cd7d4c2ca2c1ad25115b06135dd146bd595eb56e4a30e1cd1aad862c"
                   },
                   "reference": {
-                    "objectId": "0xb3c83cfb9c683fb7d0526e29d77e89e7bfefd4f7",
+                    "objectId": "0x4b2e27c1eed56c33b579034150ea46bccf7653e00b6f24b63bd04da68bc160c7",
                     "version": 2,
-                    "digest": "Oto9GayH1FNR8BlqiAuVw+okTdBg0rZTgZbQSLem0Ew="
+                    "digest": "6AyFnAuKAKCqm1cD94EyGzBqJCDDJ716ojjmsKF2rqoi"
                   }
                 },
-                "events": [
-                  {
-                    "transferObject": {
-                      "packageId": "0x0000000000000000000000000000000000000002",
-                      "transactionModule": "native",
-                      "sender": "0xd4783daffa7f6913e7b0b8f7c0f1790bdc021fe6",
-                      "recipient": {
-                        "AddressOwner": "0xd1e09be8e451cd3c364076623c0231898be0722c"
-                      },
-                      "objectType": "0x2::example::Object",
-                      "objectId": "0x08e4eb229c44cb957d29cf7370af8a1b9c542d49",
-                      "version": 2
-                    }
-                  }
-                ]
+                "eventsDigest": "B2iV1SVbBjgTKfbJKPQrvTT6F3kNdekFuBwY9tQcAxV2"
               },
+              "events": [
+                {
+                  "transferObject": {
+                    "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                    "transactionModule": "native",
+                    "sender": "0xf6f0ade7cd7d4c2ca2c1ad25115b06135dd146bd595eb56e4a30e1cd1aad862c",
+                    "recipient": {
+                      "AddressOwner": "0x64bb73a1ed58b2c18b0cbf377792e206e6b80d4d5eea64e2e70563b1589026c4"
+                    },
+                    "objectType": "0x2::example::Object",
+                    "objectId": "0xe37f941a451ef8209a0fbfbf1b549b2bb26b8eaee08895146df27bc3cf2610c1",
+                    "version": 2
+                  }
+                }
+              ],
               "checkpoint": null
             }
           }
@@ -1646,7 +1678,7 @@
       "name": "sui_getTransactions",
       "tags": [
         {
-          "name": "Full Node API"
+          "name": "Read API"
         }
       ],
       "description": "Return list of transactions for a specified query criteria.",
@@ -1697,12 +1729,12 @@
             {
               "name": "query",
               "value": {
-                "InputObject": "0x8cdd6ef2d0531ce359f32e8bd0cd5f9e1c4ed785"
+                "InputObject": "0xc54ab30a3d9adc07c1429c4d6bbecaf9457c9af77a91f631760853934d383634"
               }
             },
             {
               "name": "cursor",
-              "value": "7UQEqTYpGUSadwaZh6xPAZEJnm1tixVWZYGRRFYBU8qP"
+              "value": "DiemdKPLqS6GKyWoJqnqm18m3KmHTW2a516RfvZ6ETSX"
             },
             {
               "name": "limit",
@@ -1717,11 +1749,11 @@
             "name": "Result",
             "value": {
               "data": [
-                "E3dSj5imFCTb5QUaaM2RKkmM2FUszD99qvfcNiUVqBBv",
-                "AMnwiktDXQXZNhk19FLnTFeBRxb1WdxernKS9wvRi55Z",
-                "BNPiQm34SwLKL1D3atKdGaMNRvC6XCHzjGMG9WqhLDfp"
+                "8QrPa4x9iNG5r2zQfmeH8pJoVjjtq9AGzp8rp2fxi8Sk",
+                "3nek86HEjXZ7K3EtrAcBG4wMrCS21gqr8BqwwC6M6P7F",
+                "AvLgYFSEW12Ac2uBFYcbznKdBj9CowNrpBuHMq53f8mu"
               ],
-              "nextCursor": "DDPpRFYdSvxHA2xpQsz8k3ZWqLEZiEfYo2op78Y7kyM6"
+              "nextCursor": "HxidAfFfyr4kXSiWeVq1J6Tk526YUVDoSUY5PSnS4tEJ"
             }
           }
         }
@@ -2273,73 +2305,6 @@
       }
     },
     {
-      "name": "sui_requestSwitchDelegation",
-      "tags": [
-        {
-          "name": "Transaction Builder API"
-        }
-      ],
-      "description": "Switch delegation from the current validator to a new one.",
-      "params": [
-        {
-          "name": "signer",
-          "description": "the transaction signer's Sui address",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        },
-        {
-          "name": "delegation",
-          "description": "Delegation object ID",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "staked_sui",
-          "description": "StakedSui object ID",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "new_validator_address",
-          "description": "Validator to switch to",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        },
-        {
-          "name": "gas",
-          "description": "gas object to be used in this transaction, node will pick one from the signer's possession if not provided",
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "gas_budget",
-          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "TransactionBytes",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
-        }
-      }
-    },
-    {
       "name": "sui_requestWithdrawDelegation",
       "tags": [
         {
@@ -2527,7 +2492,7 @@
       "name": "sui_submitTransaction",
       "tags": [
         {
-          "name": "APIs to execute transactions."
+          "name": "Write API"
         }
       ],
       "params": [
@@ -2572,12 +2537,12 @@
           "params": [
             {
               "name": "tx_bytes",
-              "value": "AABmzCnfsdpjc86U+dldylpA9OF2mRjuv5+64AvTjleHL0UiRGjh/BfIAgAAAAAAAAAgXwGimIeh2V5bVIthbaY7DOB9gW6J73uaOCF3tEIruqIC/zJV4AzkKt/uEhM/ciLdOKkz6xRwidxDGP3UANtnNk7zUMlSZ22FAgAAAAAAAAAgfcN/rn2TKYoSRcMbQgaIwWhstNE1bRcYDdguk6SDxasC/zJV4AzkKt/uEhM/ciLdOKkz6wEAAAAAAAAA6AMAAAAAAAAA"
+              "value": "AAAy9L9sPorELu8TheAUA+SaSylq3LIuon08kuTOIlasZFy6vcNs8bny7ISBomyn2BFpVZeUAouPAuQwKlWV2IiaAgAAAAAAAAAgLEOAXQ1vVAKnrQ2lvexUnHzeoGvEodM5oiUh7qkzuInTBWxU38/Wzpg7ga1fbxcalrZhjj8rLo7egQ86U3GPP2fG0xxslw5WfwPvZ9gRpPhDZluN4/KC+kiz4BA7qbvtAgAAAAAAAAAgagYVO5/EhuEB8OnicDrIZm0GrsxN3355JqNhlwxlpbHTBWxU38/Wzpg7ga1fbxcalrZhjj8rLo7egQ86U3GPPwEAAAAAAAAA6AMAAAAAAAAA"
             },
             {
               "name": "signatures",
               "value": [
-                "ANSYqxmukCpgjW9kUwwfMc9NJfAODKg5RNNZHyTWeQ5q1q6p7uWizti4qUkHQET4yEdtpkDX9EmPhW4kfsWE5wUgZe9Z6CbTODIzbq3ZFq53AzRXBmnyBDiKgDwkZI8sdA=="
+                "ANz1nc//IojONTcCQoBBkZPEoxhksBhL7jqy/JOSIMX9DPjIcAAEOJceXRDhHWGf1sxYS2QXeO/fVrJACZ7VFASRFyzRWy5Z5Iom1zB2m6Vx2RU7g7aQu+hOm3dBh5doKQ=="
               ]
             },
             {
@@ -2593,29 +2558,29 @@
                   "transactions": [
                     {
                       "TransferObject": {
-                        "recipient": "0x66cc29dfb1da6373ce94f9d95dca5a40f4e17699",
+                        "recipient": "0x32f4bf6c3e8ac42eef1385e01403e49a4b296adcb22ea27d3c92e4ce2256ac64",
                         "objectRef": {
-                          "objectId": "0x18eebf9fbae00bd38e57872f45224468e1fc17c8",
+                          "objectId": "0x5cbabdc36cf1b9f2ec8481a26ca7d81169559794028b8f02e4302a5595d8889a",
                           "version": 2,
-                          "digest": "XwGimIeh2V5bVIthbaY7DOB9gW6J73uaOCF3tEIruqI="
+                          "digest": "3yndxsmJNXFrRAUnuqKT6aekThhqmSDJ46opD7UjtL9N"
                         }
                       }
                     }
                   ],
-                  "sender": "0x02ff3255e00ce42adfee12133f7222dd38a933eb",
+                  "sender": "0xd3056c54dfcfd6ce983b81ad5f6f171a96b6618e3f2b2e8ede810f3a53718f3f",
                   "gasData": {
                     "payment": {
-                      "objectId": "0x147089dc4318fdd400db67364ef350c952676d85",
+                      "objectId": "0x67c6d31c6c970e567f03ef67d811a4f843665b8de3f282fa48b3e0103ba9bbed",
                       "version": 2,
-                      "digest": "fcN/rn2TKYoSRcMbQgaIwWhstNE1bRcYDdguk6SDxas="
+                      "digest": "88sbZ6JronTqbQUL25HUPouw9wJJRiSKtUjry81YgPDS"
                     },
-                    "owner": "0x02ff3255e00ce42adfee12133f7222dd38a933eb",
+                    "owner": "0xd3056c54dfcfd6ce983b81ad5f6f171a96b6618e3f2b2e8ede810f3a53718f3f",
                     "price": 1,
                     "budget": 1000
                   }
                 },
                 "txSignatures": [
-                  "ANSYqxmukCpgjW9kUwwfMc9NJfAODKg5RNNZHyTWeQ5q1q6p7uWizti4qUkHQET4yEdtpkDX9EmPhW4kfsWE5wUgZe9Z6CbTODIzbq3ZFq53AzRXBmnyBDiKgDwkZI8sdA=="
+                  "ANz1nc//IojONTcCQoBBkZPEoxhksBhL7jqy/JOSIMX9DPjIcAAEOJceXRDhHWGf1sxYS2QXeO/fVrJACZ7VFASRFyzRWy5Z5Iom1zB2m6Vx2RU7g7aQu+hOm3dBh5doKQ=="
                 ]
               },
               "effects": {
@@ -2628,55 +2593,56 @@
                   "storageCost": 100,
                   "storageRebate": 10
                 },
-                "transactionDigest": "9agZ3azEMgMqxrDVG8P4GddELfWag2HhimEkpjixHhGE",
+                "transactionDigest": "BhbWpBeESxuRWvmvLMyb2JNUuFa6j4aG1T4WUiPgKAHm",
                 "mutated": [
                   {
                     "owner": {
-                      "AddressOwner": "0x02ff3255e00ce42adfee12133f7222dd38a933eb"
+                      "AddressOwner": "0xd3056c54dfcfd6ce983b81ad5f6f171a96b6618e3f2b2e8ede810f3a53718f3f"
                     },
                     "reference": {
-                      "objectId": "0x147089dc4318fdd400db67364ef350c952676d85",
+                      "objectId": "0x67c6d31c6c970e567f03ef67d811a4f843665b8de3f282fa48b3e0103ba9bbed",
                       "version": 2,
-                      "digest": "fcN/rn2TKYoSRcMbQgaIwWhstNE1bRcYDdguk6SDxas="
+                      "digest": "88sbZ6JronTqbQUL25HUPouw9wJJRiSKtUjry81YgPDS"
                     }
                   },
                   {
                     "owner": {
-                      "AddressOwner": "0x66cc29dfb1da6373ce94f9d95dca5a40f4e17699"
+                      "AddressOwner": "0x32f4bf6c3e8ac42eef1385e01403e49a4b296adcb22ea27d3c92e4ce2256ac64"
                     },
                     "reference": {
-                      "objectId": "0x18eebf9fbae00bd38e57872f45224468e1fc17c8",
+                      "objectId": "0x5cbabdc36cf1b9f2ec8481a26ca7d81169559794028b8f02e4302a5595d8889a",
                       "version": 2,
-                      "digest": "XwGimIeh2V5bVIthbaY7DOB9gW6J73uaOCF3tEIruqI="
+                      "digest": "3yndxsmJNXFrRAUnuqKT6aekThhqmSDJ46opD7UjtL9N"
                     }
                   }
                 ],
                 "gasObject": {
                   "owner": {
-                    "ObjectOwner": "0x02ff3255e00ce42adfee12133f7222dd38a933eb"
+                    "ObjectOwner": "0xd3056c54dfcfd6ce983b81ad5f6f171a96b6618e3f2b2e8ede810f3a53718f3f"
                   },
                   "reference": {
-                    "objectId": "0x147089dc4318fdd400db67364ef350c952676d85",
+                    "objectId": "0x67c6d31c6c970e567f03ef67d811a4f843665b8de3f282fa48b3e0103ba9bbed",
                     "version": 2,
-                    "digest": "fcN/rn2TKYoSRcMbQgaIwWhstNE1bRcYDdguk6SDxas="
+                    "digest": "88sbZ6JronTqbQUL25HUPouw9wJJRiSKtUjry81YgPDS"
                   }
                 },
-                "events": [
-                  {
-                    "transferObject": {
-                      "packageId": "0x0000000000000000000000000000000000000002",
-                      "transactionModule": "native",
-                      "sender": "0x02ff3255e00ce42adfee12133f7222dd38a933eb",
-                      "recipient": {
-                        "AddressOwner": "0x66cc29dfb1da6373ce94f9d95dca5a40f4e17699"
-                      },
-                      "objectType": "0x2::example::Object",
-                      "objectId": "0x18eebf9fbae00bd38e57872f45224468e1fc17c8",
-                      "version": 2
-                    }
-                  }
-                ]
+                "eventsDigest": "GdfET1avZReDftpJNB8LSuHJ2cKUheSbEaLMzuPVXHsM"
               },
+              "events": [
+                {
+                  "transferObject": {
+                    "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                    "transactionModule": "native",
+                    "sender": "0xd3056c54dfcfd6ce983b81ad5f6f171a96b6618e3f2b2e8ede810f3a53718f3f",
+                    "recipient": {
+                      "AddressOwner": "0x32f4bf6c3e8ac42eef1385e01403e49a4b296adcb22ea27d3c92e4ce2256ac64"
+                    },
+                    "objectType": "0x2::example::Object",
+                    "objectId": "0x5cbabdc36cf1b9f2ec8481a26ca7d81169559794028b8f02e4302a5595d8889a",
+                    "version": 2
+                  }
+                }
+              ],
               "checkpoint": null
             }
           }
@@ -2687,7 +2653,7 @@
       "name": "sui_subscribeEvent",
       "tags": [
         {
-          "name": "Event Subscription"
+          "name": "Event Read API"
         },
         {
           "name": "Websocket"
@@ -2719,7 +2685,7 @@
       "name": "sui_tblsSignRandomnessObject",
       "tags": [
         {
-          "name": "Threshold BLS APIs"
+          "name": "Threshold BLS API"
         }
       ],
       "description": "Sign an a Randomness object with threshold BLS. **Warning**: This API is a work in progress and uses insecure randomness. Please use it for testing purposes only.",
@@ -2873,7 +2839,7 @@
       "name": "sui_tryGetPastObject",
       "tags": [
         {
-          "name": "Full Node API"
+          "name": "Read API"
         }
       ],
       "description": "Note there is no software-level guarantee/SLA that objects with past versions can be retrieved by this API, even if the object and version exists/existed. The result may vary across nodes depending on their pruning policies. Return the object information for a specified version",
@@ -2908,7 +2874,7 @@
           "params": [
             {
               "name": "object_id",
-              "value": "0x3e75a925e1c77ac34127c8baefbea0939f152471"
+              "value": "0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760"
             },
             {
               "name": "version",
@@ -2927,19 +2893,19 @@
                   "fields": {
                     "balance": "10000",
                     "id": {
-                      "id": "0x3e75a925e1c77ac34127c8baefbea0939f152471"
+                      "id": "0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760"
                     }
                   }
                 },
                 "owner": {
-                  "AddressOwner": "0x2b4d37a020b28cdd32138ae34d22e6397af3a9a7"
+                  "AddressOwner": "0x3568c40e814d9d5396d23087a0fd641e91e0e00df6c012cded9ef9ba5e5bf042"
                 },
-                "previousTransaction": "33K5ZXJ3RyubvYaHuEnQ1QXmmbhgtrFwp199dnEbL4n7",
+                "previousTransaction": "5jQByoouHBwaico5pQB73GdbzerC2StjTiHh5garBjiV",
                 "storageRebate": 100,
                 "reference": {
-                  "objectId": "0x3e75a925e1c77ac34127c8baefbea0939f152471",
+                  "objectId": "0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760",
                   "version": 4,
-                  "digest": "Ea9LhE/5Sz++9uNrUY2jrUxYVvpoZGRSSodrRj0Sl2A="
+                  "digest": "5VPAwDXy3BL72ehFc7gSJoz27ahMd6spUg5YwYc4ibcv"
                 }
               }
             }
@@ -3084,7 +3050,7 @@
             }
           },
           "user_signatures": {
-            "description": "This field 'pins' user signatures for the checkpoint:\n\n* For normal checkpoint this field will contain same number of elements as transactions. * Genesis checkpoint has transactions but this field is empty. * Last checkpoint in the epoch will have (last)extra system transaction in the transactions list not covered in the signatures list",
+            "description": "This field 'pins' user signatures for the checkpoint The length of this vector is same as length of transactions vector System transactions has empty signatures",
             "type": "array",
             "items": {
               "type": "array",
@@ -3240,8 +3206,7 @@
         "type": "object",
         "required": [
           "committee_info",
-          "epoch",
-          "protocol_version"
+          "epoch"
         ],
         "properties": {
           "committee_info": {
@@ -3266,14 +3231,11 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
-          },
-          "protocol_version": {
-            "$ref": "#/components/schemas/ProtocolVersion"
           }
         }
       },
       "CompressedSignature": {
-        "description": "Unlike `enum Signature`, `enum CompressedSignature` does not contain public key.",
+        "description": "Unlike [enum Signature], [enum CompressedSignature] does not contain public key.",
         "oneOf": [
           {
             "type": "object",
@@ -3318,30 +3280,26 @@
           {
             "type": "object",
             "required": [
-              "bcs_bytes",
               "dataType",
+              "fields",
               "has_public_transfer",
-              "type",
-              "version"
+              "type"
             ],
             "properties": {
-              "bcs_bytes": {
-                "$ref": "#/components/schemas/Base64"
-              },
               "dataType": {
                 "type": "string",
                 "enum": [
                   "moveObject"
                 ]
               },
+              "fields": {
+                "$ref": "#/components/schemas/MoveStruct"
+              },
               "has_public_transfer": {
                 "type": "boolean"
               },
               "type": {
                 "type": "string"
-              },
-              "version": {
-                "$ref": "#/components/schemas/SequenceNumber"
               }
             }
           },
@@ -3349,8 +3307,7 @@
             "type": "object",
             "required": [
               "dataType",
-              "id",
-              "module_map"
+              "disassembled"
             ],
             "properties": {
               "dataType": {
@@ -3359,14 +3316,9 @@
                   "package"
                 ]
               },
-              "id": {
-                "$ref": "#/components/schemas/ObjectID"
-              },
-              "module_map": {
+              "disassembled": {
                 "type": "object",
-                "additionalProperties": {
-                  "$ref": "#/components/schemas/Base64"
-                }
+                "additionalProperties": true
               }
             }
           }
@@ -3439,6 +3391,7 @@
         "type": "object",
         "required": [
           "effects",
+          "events",
           "results"
         ],
         "properties": {
@@ -3450,6 +3403,13 @@
               }
             ]
           },
+          "events": {
+            "description": "Events that likely would be generated if the transaction is actually run.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
+          },
           "results": {
             "description": "Execution results (including return values) from executing the transactions Currently contains only return values from Move calls",
             "allOf": [
@@ -3457,6 +3417,24 @@
                 "$ref": "#/components/schemas/Result_of_Array_of_Tuple_of_uint_and_SuiExecutionResult_or_String"
               }
             ]
+          }
+        }
+      },
+      "DryRunTransactionResponse": {
+        "type": "object",
+        "required": [
+          "effects",
+          "events"
+        ],
+        "properties": {
+          "effects": {
+            "$ref": "#/components/schemas/TransactionEffects"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
           }
         }
       },
@@ -3475,7 +3453,7 @@
             "$ref": "#/components/schemas/ObjectDigest"
           },
           "name": {
-            "type": "string"
+            "$ref": "#/components/schemas/DynamicFieldName"
           },
           "objectId": {
             "$ref": "#/components/schemas/ObjectID"
@@ -3489,6 +3467,19 @@
           "version": {
             "$ref": "#/components/schemas/SequenceNumber"
           }
+        }
+      },
+      "DynamicFieldName": {
+        "type": "object",
+        "required": [
+          "type",
+          "value"
+        ],
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "value": true
         }
       },
       "DynamicFieldType": {
@@ -3547,7 +3538,8 @@
         "type": "object",
         "required": [
           "next_epoch_committee",
-          "next_epoch_protocol_version"
+          "next_epoch_protocol_version",
+          "root_state_digest"
         ],
         "properties": {
           "next_epoch_committee": {
@@ -3576,6 +3568,17 @@
                 "$ref": "#/components/schemas/ProtocolVersion"
               }
             ]
+          },
+          "root_state_digest": {
+            "description": "The digest of the union of all checkpoint accumulators, representing the state of the system at the end of the epoch.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            },
+            "maxItems": 32,
+            "minItems": 32
           }
         }
       },
@@ -3592,22 +3595,6 @@
           },
           "value": {
             "$ref": "#/components/schemas/VecSet_for_SuiAddress"
-          }
-        }
-      },
-      "Entry_for_ValidatorPair_and_TableVec": {
-        "description": "Rust version of the Move sui::vec_map::Entry type",
-        "type": "object",
-        "required": [
-          "key",
-          "value"
-        ],
-        "properties": {
-          "key": {
-            "$ref": "#/components/schemas/ValidatorPair"
-          },
-          "value": {
-            "$ref": "#/components/schemas/TableVec"
           }
         }
       },
@@ -4614,32 +4601,6 @@
           }
         ]
       },
-      "LinkedTable_for_ObjectID": {
-        "description": "Rust version of the Move sui::linked_table::LinkedTable type. Putting it here since we only use it in sui_system in the framework.",
-        "type": "object",
-        "required": [
-          "head",
-          "id",
-          "size",
-          "tail"
-        ],
-        "properties": {
-          "head": {
-            "$ref": "#/components/schemas/MoveOption_for_ObjectID"
-          },
-          "id": {
-            "$ref": "#/components/schemas/ObjectID"
-          },
-          "size": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "tail": {
-            "$ref": "#/components/schemas/MoveOption_for_ObjectID"
-          }
-        }
-      },
       "MoveCall": {
         "type": "object",
         "required": [
@@ -4725,21 +4686,6 @@
             "additionalProperties": false
           }
         ]
-      },
-      "MoveOption_for_ObjectID": {
-        "description": "Rust version of the Move std::option::Option type. Putting it in this file because it's only used here.",
-        "type": "object",
-        "required": [
-          "vec"
-        ],
-        "properties": {
-          "vec": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ObjectID"
-            }
-          }
-        }
       },
       "MovePackage": {
         "type": "object",
@@ -4950,7 +4896,7 @@
         }
       },
       "ObjectDigest": {
-        "$ref": "#/components/schemas/Base64"
+        "$ref": "#/components/schemas/Sha3Digest"
       },
       "ObjectID": {
         "$ref": "#/components/schemas/Hex"
@@ -5553,7 +5499,7 @@
         "required": [
           "delegation_request_epoch",
           "id",
-          "pool_starting_epoch",
+          "pool_id",
           "principal",
           "validator_address"
         ],
@@ -5566,10 +5512,8 @@
           "id": {
             "$ref": "#/components/schemas/UID"
           },
-          "pool_starting_epoch": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+          "pool_id": {
+            "$ref": "#/components/schemas/ObjectID"
           },
           "principal": {
             "$ref": "#/components/schemas/Balance"
@@ -5591,23 +5535,42 @@
         "description": "Rust version of the Move sui::staking_pool::StakingPool type",
         "type": "object",
         "required": [
-          "delegation_token_supply",
-          "pending_delegations",
-          "pending_withdraws",
+          "exchange_rates",
+          "id",
+          "pending_delegation",
+          "pending_pool_token_withdraw",
+          "pending_total_sui_withdraw",
+          "pool_token_balance",
           "rewards_pool",
           "starting_epoch",
-          "sui_balance",
-          "validator_address"
+          "sui_balance"
         ],
         "properties": {
-          "delegation_token_supply": {
-            "$ref": "#/components/schemas/Supply"
+          "exchange_rates": {
+            "$ref": "#/components/schemas/Table"
           },
-          "pending_delegations": {
-            "$ref": "#/components/schemas/LinkedTable_for_ObjectID"
+          "id": {
+            "$ref": "#/components/schemas/ObjectID"
           },
-          "pending_withdraws": {
-            "$ref": "#/components/schemas/TableVec"
+          "pending_delegation": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "pending_pool_token_withdraw": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "pending_total_sui_withdraw": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "pool_token_balance": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           },
           "rewards_pool": {
             "$ref": "#/components/schemas/Balance"
@@ -5621,9 +5584,6 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
-          },
-          "validator_address": {
-            "$ref": "#/components/schemas/SuiAddress"
           }
         }
       },
@@ -5738,10 +5698,22 @@
       "SuiConsensusCommitPrologue": {
         "type": "object",
         "required": [
-          "checkpoint_start_timestamp_ms"
+          "commit_timestamp_ms",
+          "epoch",
+          "round"
         ],
         "properties": {
-          "checkpoint_start_timestamp_ms": {
+          "commit_timestamp_ms": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "round": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -6100,19 +6072,17 @@
         ]
       },
       "SuiSystemState": {
-        "description": "Rust version of the Move sui::sui_system::SuiSystemState type",
+        "description": "Rust version of the Move sui::sui_system::SuiSystemStateInner type We want to keep it named as SuiSystemState in Rust since this is the primary interface type.",
         "type": "object",
         "required": [
           "epoch",
           "epoch_start_timestamp_ms",
-          "info",
           "parameters",
           "protocol_version",
           "reference_gas_price",
           "safe_mode",
           "stake_subsidy",
           "storage_fund",
-          "treasury_cap",
           "validator_report_records",
           "validators"
         ],
@@ -6126,9 +6096,6 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
-          },
-          "info": {
-            "$ref": "#/components/schemas/UID"
           },
           "parameters": {
             "$ref": "#/components/schemas/SystemParameters"
@@ -6151,9 +6118,6 @@
           },
           "storage_fund": {
             "$ref": "#/components/schemas/Balance"
-          },
-          "treasury_cap": {
-            "$ref": "#/components/schemas/Supply"
           },
           "validator_report_records": {
             "$ref": "#/components/schemas/VecMap_for_SuiAddress_and_VecSet_for_SuiAddress"
@@ -6220,6 +6184,7 @@
         "type": "object",
         "required": [
           "effects",
+          "events",
           "transaction"
         ],
         "properties": {
@@ -6240,6 +6205,12 @@
           },
           "effects": {
             "$ref": "#/components/schemas/TransactionEffects"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
           },
           "timestampMs": {
             "type": [
@@ -6410,12 +6381,14 @@
         ],
         "properties": {
           "created": {
+            "description": "ObjectRef and owner of new objects created.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/OwnedObjectRef"
             }
           },
           "deleted": {
+            "description": "Object Refs of objects now deleted (the old refs).",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ObjectRef"
@@ -6428,12 +6401,16 @@
               "$ref": "#/components/schemas/TransactionDigest"
             }
           },
-          "events": {
-            "description": "The events emitted during execution. Note that only successful transactions emit events",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Event"
-            }
+          "eventsDigest": {
+            "description": "The digest of the events emitted during execution, can be None if the transaction does not emmit any event.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionEventsDigest"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "executedEpoch": {
             "description": "The epoch when this transaction was executed.",
@@ -6442,30 +6419,48 @@
             "minimum": 0.0
           },
           "gasObject": {
-            "$ref": "#/components/schemas/OwnedObjectRef"
+            "description": "The updated gas object reference. Have a dedicated field for convenient access. It's also included in mutated.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OwnedObjectRef"
+              }
+            ]
           },
           "gasUsed": {
             "$ref": "#/components/schemas/GasCostSummary"
           },
           "mutated": {
+            "description": "ObjectRef and owner of mutated objects, including gas object.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/OwnedObjectRef"
             }
           },
           "sharedObjects": {
+            "description": "The object references of the shared objects used in this transaction. Empty if no shared objects were used.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ObjectRef"
             }
           },
           "status": {
-            "$ref": "#/components/schemas/ExecutionStatus"
+            "description": "The status of the execution",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExecutionStatus"
+              }
+            ]
           },
           "transactionDigest": {
-            "$ref": "#/components/schemas/TransactionDigest"
+            "description": "The transaction digest",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TransactionDigest"
+              }
+            ]
           },
           "unwrapped": {
+            "description": "ObjectRef and owner of objects that are unwrapped in this transaction. Unwrapped objects are objects that were wrapped into other objects in the past, and just got extracted out.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/OwnedObjectRef"
@@ -6479,6 +6474,7 @@
             }
           },
           "wrapped": {
+            "description": "Object refs of objects now wrapped in other objects.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ObjectRef"
@@ -6487,6 +6483,9 @@
         }
       },
       "TransactionEffectsDigest": {
+        "$ref": "#/components/schemas/Sha3Digest"
+      },
+      "TransactionEventsDigest": {
         "$ref": "#/components/schemas/Sha3Digest"
       },
       "TransactionKind": {
@@ -6788,12 +6787,12 @@
         "type": "object",
         "required": [
           "commission_rate",
-          "delegation_staking_pool",
           "gas_price",
           "metadata",
-          "pending_stake",
-          "pending_withdraw",
-          "stake_amount",
+          "next_epoch_commission_rate",
+          "next_epoch_gas_price",
+          "next_epoch_stake",
+          "staking_pool",
           "voting_power"
         ],
         "properties": {
@@ -6801,9 +6800,6 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
-          },
-          "delegation_staking_pool": {
-            "$ref": "#/components/schemas/StakingPool"
           },
           "gas_price": {
             "type": "integer",
@@ -6813,20 +6809,23 @@
           "metadata": {
             "$ref": "#/components/schemas/ValidatorMetadata"
           },
-          "pending_stake": {
+          "next_epoch_commission_rate": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "pending_withdraw": {
+          "next_epoch_gas_price": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "stake_amount": {
+          "next_epoch_stake": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          },
+          "staking_pool": {
+            "$ref": "#/components/schemas/StakingPool"
           },
           "voting_power": {
             "type": "integer",
@@ -6838,32 +6837,21 @@
       "ValidatorMetadata": {
         "type": "object",
         "required": [
-          "consensus_address",
           "description",
           "image_url",
           "name",
           "net_address",
           "network_pubkey_bytes",
-          "next_epoch_commission_rate",
-          "next_epoch_delegation",
-          "next_epoch_gas_price",
-          "next_epoch_stake",
+          "p2p_address",
+          "primary_address",
           "project_url",
           "proof_of_possession_bytes",
-          "pubkey_bytes",
+          "protocol_pubkey_bytes",
           "sui_address",
           "worker_address",
           "worker_pubkey_bytes"
         ],
         "properties": {
-          "consensus_address": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
-          },
           "description": {
             "type": "string"
           },
@@ -6889,25 +6877,109 @@
               "minimum": 0.0
             }
           },
-          "next_epoch_commission_rate": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+          "next_epoch_net_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
           },
-          "next_epoch_delegation": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+          "next_epoch_network_pubkey_bytes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
           },
-          "next_epoch_gas_price": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+          "next_epoch_p2p_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
           },
-          "next_epoch_stake": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+          "next_epoch_primary_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_proof_of_possession": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_protocol_pubkey_bytes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_worker_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_worker_pubkey_bytes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "p2p_address": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "primary_address": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
           },
           "project_url": {
             "type": "string"
@@ -6920,7 +6992,7 @@
               "minimum": 0.0
             }
           },
-          "pubkey_bytes": {
+          "protocol_pubkey_bytes": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -6949,33 +7021,15 @@
           }
         }
       },
-      "ValidatorPair": {
-        "description": "Rust version of the Move sui::validator_set::ValidatorPair type",
-        "type": "object",
-        "required": [
-          "from",
-          "to"
-        ],
-        "properties": {
-          "from": {
-            "$ref": "#/components/schemas/SuiAddress"
-          },
-          "to": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      },
       "ValidatorSet": {
         "description": "Rust version of the Move sui::validator_set::ValidatorSet type",
         "type": "object",
         "required": [
           "active_validators",
-          "delegation_stake",
-          "next_epoch_validators",
-          "pending_delegation_switches",
           "pending_removals",
           "pending_validators",
-          "validator_stake"
+          "staking_pool_mappings",
+          "total_stake"
         ],
         "properties": {
           "active_validators": {
@@ -6983,20 +7037,6 @@
             "items": {
               "$ref": "#/components/schemas/Validator"
             }
-          },
-          "delegation_stake": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "next_epoch_validators": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ValidatorMetadata"
-            }
-          },
-          "pending_delegation_switches": {
-            "$ref": "#/components/schemas/VecMap_for_ValidatorPair_and_TableVec"
           },
           "pending_removals": {
             "type": "array",
@@ -7007,12 +7047,12 @@
             }
           },
           "pending_validators": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Validator"
-            }
+            "$ref": "#/components/schemas/TableVec"
           },
-          "validator_stake": {
+          "staking_pool_mappings": {
+            "$ref": "#/components/schemas/Table"
+          },
+          "total_stake": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -7030,21 +7070,6 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Entry_for_SuiAddress_and_VecSet_for_SuiAddress"
-            }
-          }
-        }
-      },
-      "VecMap_for_ValidatorPair_and_TableVec": {
-        "description": "Rust version of the Move sui::vec_map::VecMap type",
-        "type": "object",
-        "required": [
-          "contents"
-        ],
-        "properties": {
-          "contents": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Entry_for_ValidatorPair_and_TableVec"
             }
           }
         }

@@ -4,7 +4,6 @@
 import {
     getTransactionDigest,
     SUI_TYPE_ARG,
-    normalizeSuiAddress,
     type SuiAddress,
 } from '@mysten/sui.js';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
@@ -17,8 +16,7 @@ import Alert from '../../components/alert';
 import { useReferenceGasPrice } from '../../hooks/useReferenceGasPrice';
 import { getStakingRewards } from '../getStakingRewards';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { STATE_OBJECT } from '../usePendingDelegation';
-import { validatorsFields } from '../validatorsFields';
+import { useSystemState } from '../useSystemState';
 import { DelegationState, STATE_TO_COPY } from './../home/DelegationCard';
 import StakeForm from './StakeForm';
 import { UnStakeForm } from './UnstakeForm';
@@ -38,13 +36,10 @@ import {
     useSigner,
     useAppSelector,
     useCoinDecimals,
-    useGetObject,
+    useGetCoinBalance,
 } from '_hooks';
-import {
-    accountAggregateBalancesSelector,
-    createCoinsForTypeSelector,
-} from '_redux/slices/account';
-import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import { createCoinsForTypeSelector } from '_redux/slices/account';
+import { Coin } from '_redux/slices/sui-objects/Coin';
 import { trackEvent } from '_src/shared/plausible';
 import { Text } from '_src/ui/app/shared/text';
 
@@ -58,9 +53,11 @@ const initialValues = {
 export type FormValues = typeof initialValues;
 
 function StakingCard() {
-    const coinType = GAS_TYPE_ARG;
+    const coinType = SUI_TYPE_ARG;
     const accountAddress = useAppSelector(({ account }) => account.address);
-    const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
+    const { data: suiBalance, isLoading: loadingSuiBalances } =
+        useGetCoinBalance(coinType, accountAddress);
+    const coinBalance = BigInt(suiBalance?.totalBalance || 0);
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
     const stakeIdParams = searchParams.get('staked');
@@ -69,11 +66,7 @@ function StakingCard() {
         accountAddress || ''
     );
 
-    //TODO: since we only require epoch number, probably we can use a different query
-    const { data: validators, isLoading: validatorsIsloading } =
-        useGetObject(STATE_OBJECT);
-
-    const validatorsData = validators && validatorsFields(validators);
+    const { data: system, isLoading: validatorsIsloading } = useSystemState();
 
     const totalTokenBalance = useMemo(() => {
         if (!allDelegation) return 0n;
@@ -91,7 +84,7 @@ function StakingCard() {
             0n
         );
     }, [allDelegation, stakeIdParams]);
-    const coinBalance = (coinType && aggregateBalances[coinType]) || 0n;
+
     const delegationData = useMemo(() => {
         if (!allDelegation) return null;
 
@@ -106,12 +99,12 @@ function StakingCard() {
     );
 
     const suiEarned = useMemo(() => {
-        if (!validatorsData || !delegationData) return 0;
+        if (!system || !delegationData) return 0;
         return getStakingRewards(
-            validatorsData.validators.fields.active_validators,
+            system.validators.active_validators,
             delegationData
         );
-    }, [delegationData, validatorsData]);
+    }, [delegationData, system]);
 
     const [coinDecimals] = useCoinDecimals(coinType);
 
@@ -229,10 +222,10 @@ function StakingCard() {
                     txDigest = getTransactionDigest(response);
                 }
 
-                // Invalidate the react query for 0x5 and validator
+                // Invalidate the react query for system state and validator
                 Promise.all([
                     queryClient.invalidateQueries({
-                        queryKey: ['object', normalizeSuiAddress(STATE_OBJECT)],
+                        queryKey: ['system', 'state'],
                     }),
                     queryClient.invalidateQueries({
                         queryKey: ['validator'],
@@ -276,17 +269,18 @@ function StakingCard() {
     const loadingBalance = useAppSelector(
         ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
     );
-    if (
-        !coinType ||
-        !validatorAddress ||
-        (!validatorsIsloading && !validatorsData)
-    ) {
+    if (!coinType || !validatorAddress || (!validatorsIsloading && !system)) {
         return <Navigate to="/" replace={true} />;
     }
     return (
         <div className="flex flex-col flex-nowrap flex-grow w-full">
             <Loading
-                loading={loadingBalance || isLoading || validatorsIsloading}
+                loading={
+                    loadingBalance ||
+                    isLoading ||
+                    validatorsIsloading ||
+                    loadingSuiBalances
+                }
             >
                 <Formik
                     initialValues={initialValues}
@@ -306,7 +300,6 @@ function StakingCard() {
                                     <ValidatorFormDetail
                                         validatorAddress={validatorAddress}
                                         unstake={unstake}
-                                        stakedId={stakeIdParams}
                                     />
                                 </div>
 
@@ -320,7 +313,7 @@ function StakingCard() {
                                     <StakeForm
                                         coinBalance={coinBalance}
                                         coinType={coinType}
-                                        epoch={validatorsData?.epoch}
+                                        epoch={system?.epoch}
                                     />
                                 )}
 

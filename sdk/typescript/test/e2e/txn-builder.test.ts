@@ -10,7 +10,6 @@ import {
   LocalTxnDataSerializer,
   RawSigner,
   SignableTransaction,
-  SuiMoveObject,
   SUI_SYSTEM_STATE_OBJECT_ID,
 } from '../../src';
 import {
@@ -93,11 +92,8 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         toolbox.address(),
       );
 
-      const validators = await toolbox.getActiveValidators();
-      const validator_metadata = (validators[0] as SuiMoveObject).fields
-        .metadata;
-      const validator_address = (validator_metadata as SuiMoveObject).fields
-        .sui_address;
+      const [{ sui_address: validator_address }] =
+        await toolbox.getActiveValidators();
 
       await validateTransaction(signer, {
         kind: 'moveCall',

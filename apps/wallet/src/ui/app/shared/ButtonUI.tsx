@@ -117,7 +117,6 @@ export const Button = forwardRef(
         {
             variant = 'primary',
             size = 'narrow',
-            disabled,
             before,
             after,
             text,

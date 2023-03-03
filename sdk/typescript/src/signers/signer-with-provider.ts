@@ -15,9 +15,9 @@ import {
   getTotalGasUsedUpperBound,
   SuiAddress,
   SuiExecuteTransactionResponse,
-  TransactionEffects,
   DevInspectResults,
   bcsForVersion,
+  DryRunTransactionResponse,
 } from '../types';
 import { IntentScope, messageWithIntent } from '../utils/intent';
 import { Signer } from './signer';
@@ -36,6 +36,7 @@ import {
   SignableTransaction,
   UnserializedSignableTransaction,
   SignedTransaction,
+  SignedMessage,
 } from './txn-data-serializers/txn-data-serializer';
 
 ///////////////////////////////
@@ -91,10 +92,16 @@ export abstract class SignerWithProvider implements Signer {
   /**
    * Sign a message using the keypair, with the `PersonalMessage` intent.
    */
-  async signMessage(message: Uint8Array): Promise<SerializedSignature> {
-    return await this.signData(
+  async signMessage(message: Uint8Array): Promise<SignedMessage> {
+    const signature = await this.signData(
       messageWithIntent(IntentScope.PersonalMessage, message),
     );
+
+    return {
+      // TODO: Should this include the intent, or just be the raw bytes that are signed?
+      messageBytes: toB64(message),
+      signature,
+    };
   }
 
   /**
@@ -191,7 +198,7 @@ export abstract class SignerWithProvider implements Signer {
    */
   async dryRunTransaction(
     tx: SignableTransaction | string | Uint8Array,
-  ): Promise<TransactionEffects> {
+  ): Promise<DryRunTransactionResponse> {
     const address = await this.getAddress();
     let dryRunTxBytes: Uint8Array;
     if (typeof tx === 'string') {

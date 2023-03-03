@@ -18,16 +18,15 @@ diesel::table! {
 }
 
 diesel::table! {
-    checkpoint_logs (next_cursor_sequence_number) {
-        next_cursor_sequence_number -> Int8,
-    }
-}
-
-diesel::table! {
     checkpoints (sequence_number) {
         sequence_number -> Int8,
-        content_digest -> Varchar,
+        checkpoint_digest -> Varchar,
         epoch -> Int8,
+        transactions -> Array<Nullable<Text>>,
+        previous_checkpoint_digest -> Nullable<Varchar>,
+        next_epoch_committee -> Nullable<Text>,
+        next_epoch_protocol_version -> Nullable<Int8>,
+        end_of_epoch_data -> Nullable<Text>,
         total_gas_cost -> Int8,
         total_computation_cost -> Int8,
         total_storage_cost -> Int8,
@@ -35,8 +34,6 @@ diesel::table! {
         total_transactions -> Int8,
         total_transactions_current_epoch -> Int8,
         total_transactions_from_genesis -> Int8,
-        previous_digest -> Nullable<Varchar>,
-        next_epoch_committee -> Nullable<Text>,
         timestamp_ms -> Int8,
         timestamp_ms_str -> Timestamp,
         checkpoint_tps -> Float4,
@@ -159,17 +156,12 @@ diesel::table! {
 }
 
 diesel::table! {
-    transaction_logs (id) {
-        id -> Int4,
-        next_cursor_tx_digest -> Nullable<Text>,
-    }
-}
-
-diesel::table! {
     transactions (id) {
         id -> Int8,
         transaction_digest -> Varchar,
         sender -> Varchar,
+        recipients -> Array<Nullable<Text>>,
+        checkpoint_sequence_number -> Int8,
         transaction_time -> Nullable<Timestamp>,
         transaction_kinds -> Array<Nullable<Text>>,
         created -> Array<Nullable<Text>>,
@@ -177,6 +169,7 @@ diesel::table! {
         deleted -> Array<Nullable<Text>>,
         unwrapped -> Array<Nullable<Text>>,
         wrapped -> Array<Nullable<Text>>,
+        move_calls -> Array<Nullable<Text>>,
         gas_object_id -> Varchar,
         gas_object_sequence -> Int8,
         gas_object_digest -> Varchar,
@@ -187,13 +180,14 @@ diesel::table! {
         storage_rebate -> Int8,
         gas_price -> Int8,
         transaction_content -> Text,
+        transaction_effects_content -> Text,
+        confirmed_local_execution -> Nullable<Bool>,
     }
 }
 
 diesel::allow_tables_to_appear_in_same_query!(
     address_logs,
     addresses,
-    checkpoint_logs,
     checkpoints,
     error_logs,
     events,
@@ -207,6 +201,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     packages,
     publish_event_logs,
     publish_events,
-    transaction_logs,
     transactions,
 );

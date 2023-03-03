@@ -1,19 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use arc_swap::ArcSwap;
 use bytes::Bytes;
 use config::{Epoch, Parameters};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use crypto::PublicKey;
+use crypto::{KeyPair, PublicKey};
 use fastcrypto::{
     hash::Hash,
-    traits::{InsecureDefault, KeyPair as _, ToFromBytes},
+    traits::{KeyPair as _, ToFromBytes},
 };
 use narwhal_primary as primary;
 use narwhal_primary::NUM_SHUTDOWN_RECEIVERS;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
+use rand::thread_rng;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -42,6 +42,8 @@ async fn test_rounds_errors() {
     let network_keypair = author.network_keypair().copy();
     let name = keypair.public().clone();
 
+    let other_keypair = KeyPair::generate(&mut thread_rng());
+
     struct TestCase {
         public_key: Bytes,
         test_case_name: String,
@@ -57,7 +59,7 @@ async fn test_rounds_errors() {
                     .to_string(),
         },
         TestCase {
-            public_key: Bytes::from(PublicKey::insecure_default().as_bytes().to_vec()),
+            public_key: Bytes::from(other_keypair.public().as_bytes().to_vec()),
             test_case_name: "Valid public key, but authority not found in committee".to_string(),
             expected_error: "Invalid public key: unknown authority".to_string(),
         },
@@ -102,7 +104,7 @@ async fn test_rounds_errors() {
         name.clone(),
         keypair.copy(),
         network_keypair,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache,
         parameters.clone(),
         store_primary.header_store,
@@ -203,7 +205,7 @@ async fn test_rounds_return_successful_response() {
         name.clone(),
         keypair.copy(),
         author.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache,
         parameters.clone(),
         store_primary.header_store,
@@ -364,7 +366,7 @@ async fn test_node_read_causal_signed_certificates() {
         name_1.clone(),
         keypair_1.copy(),
         authority_1.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache.clone(),
         primary_1_parameters.clone(),
         primary_store_1.header_store.clone(),
@@ -403,7 +405,7 @@ async fn test_node_read_causal_signed_certificates() {
         name_2.clone(),
         keypair_2.copy(),
         authority_2.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache.clone(),
         primary_2_parameters.clone(),
         primary_store_2.header_store,

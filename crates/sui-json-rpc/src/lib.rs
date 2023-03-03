@@ -16,13 +16,13 @@ use tap::TapFallible;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
 
+use crate::error::Error;
 use sui_open_rpc::{Module, Project};
 
-use crate::metrics::MetricsLayer;
+use crate::metrics::MetricsLogger;
 use crate::routing_layer::RoutingLayer;
 
 pub mod api;
-pub mod bcs_api;
 pub mod coin_api;
 pub mod error;
 pub mod event_api;
@@ -68,23 +68,20 @@ pub fn sui_rpc_doc(version: &str) -> Project {
 }
 
 impl JsonRpcServerBuilder {
-    pub fn new(version: &str, prometheus_registry: &Registry) -> anyhow::Result<Self> {
-        Ok(Self {
+    pub fn new(version: &str, prometheus_registry: &Registry) -> Self {
+        Self {
             module: RpcModule::new(()),
             rpc_doc: sui_rpc_doc(version),
             registry: prometheus_registry.clone(),
-        })
+        }
     }
 
-    pub fn register_module<T: SuiRpcModule>(&mut self, module: T) -> Result<(), anyhow::Error> {
+    pub fn register_module<T: SuiRpcModule>(&mut self, module: T) -> Result<(), Error> {
         self.rpc_doc.add_module(T::rpc_doc_module());
         Ok(self.module.merge(module.rpc())?)
     }
 
-    pub async fn start(
-        mut self,
-        listen_address: SocketAddr,
-    ) -> Result<ServerHandle, anyhow::Error> {
+    pub async fn start(mut self, listen_address: SocketAddr) -> Result<ServerHandle, Error> {
         let acl = match env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
             Ok(value) => {
                 let allow_hosts = value
@@ -126,7 +123,7 @@ impl JsonRpcServerBuilder {
             })
             .unwrap_or(u32::MAX);
 
-        let metrics_layer = MetricsLayer::new(&self.registry, &methods_names);
+        let metrics_logger = MetricsLogger::new(&self.registry, &methods_names);
 
         let disable_routing = env::var("DISABLE_BACKWARD_COMPATIBILITY")
             .ok()
@@ -145,14 +142,14 @@ impl JsonRpcServerBuilder {
 
         let middleware = tower::ServiceBuilder::new()
             .layer(cors)
-            .layer(routing_layer)
-            .layer(metrics_layer);
+            .layer(routing_layer);
 
         let server = ServerBuilder::default()
             .max_response_body_size(MAX_REQUEST_SIZE)
             .max_connections(max_connection)
             .set_host_filtering(AllowHosts::Any)
             .set_middleware(middleware)
+            .set_logger(metrics_logger)
             .build(listen_address)
             .await?;
         let addr = server.local_addr()?;

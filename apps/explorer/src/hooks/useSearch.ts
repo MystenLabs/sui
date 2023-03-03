@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeature } from '@growthbook/growthbook-react';
 import {
     isValidTransactionDigest,
     isValidSuiAddress,
@@ -15,6 +16,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useRpc } from '~/hooks/useRpc';
 import { isGenesisLibAddress } from '~/utils/api/searchUtil';
+import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
 
 type Result = {
     label: string;
@@ -57,6 +59,25 @@ const getResultsForObject = async (rpc: JsonRpcProvider, query: string) => {
             ],
         };
     }
+
+    return null;
+};
+
+const getResultsForCheckpoint = async (rpc: JsonRpcProvider, query: string) => {
+    const { digest } = await rpc.getCheckpoint(query);
+    if (digest) {
+        return {
+            label: 'checkpoint',
+            results: [
+                {
+                    id: digest,
+                    label: digest,
+                    type: 'checkpoint',
+                },
+            ],
+        };
+    }
+
     return null;
 };
 
@@ -69,6 +90,7 @@ const getResultsForAddress = async (rpc: JsonRpcProvider, query: string) => {
         rpc.getTransactions({ FromAddress: normalized }, null, 1),
         rpc.getTransactions({ ToAddress: normalized }, null, 1),
     ]);
+
     if (from.data?.length || to.data?.length) {
         return {
             label: 'address',
@@ -81,22 +103,33 @@ const getResultsForAddress = async (rpc: JsonRpcProvider, query: string) => {
             ],
         };
     }
+
     return null;
 };
 
 export function useSearch(query: string) {
     const rpc = useRpc();
+    const checkpointsEnabled = useFeature(
+        GROWTHBOOK_FEATURES.EPOCHS_CHECKPOINTS
+    ).on;
 
     return useQuery(
         ['search', query],
         async () => {
-            const results = await Promise.all([
-                getResultsForTransaction(rpc, query),
-                getResultsForAddress(rpc, query),
-                getResultsForObject(rpc, query),
-            ]);
+            const results = (
+                await Promise.allSettled([
+                    getResultsForTransaction(rpc, query),
+                    ...(checkpointsEnabled
+                        ? [getResultsForCheckpoint(rpc, query)]
+                        : []),
+                    getResultsForAddress(rpc, query),
+                    getResultsForObject(rpc, query),
+                ])
+            ).filter(
+                (r) => r.status === 'fulfilled' && r.value
+            ) as PromiseFulfilledResult<Result>[];
 
-            return results.filter(Boolean) as Result[];
+            return results.map(({ value }) => value);
         },
         {
             enabled: !!query,

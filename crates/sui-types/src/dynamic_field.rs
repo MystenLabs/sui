@@ -1,25 +1,58 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::base_types::{ObjectDigest, SuiAddress};
+use crate::error::{SuiError, SuiResult};
+use crate::id::UID;
+use crate::sui_serde::Readable;
+use crate::{ObjectID, SequenceNumber, SUI_FRAMEWORK_ADDRESS};
+use fastcrypto::hash::{HashFunction, Sha3_256};
 use move_core_types::language_storage::{StructTag, TypeTag};
-use move_core_types::value::{MoveStruct, MoveValue};
+use move_core_types::value::{MoveStruct, MoveTypeLayout, MoveValue};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Value;
+use serde_with::serde_as;
+use serde_with::DisplayFromStr;
+use std::fmt::{Display, Formatter};
 
-use crate::base_types::ObjectDigest;
-use crate::error::{SuiError, SuiResult};
-use crate::{ObjectID, SequenceNumber, SUI_FRAMEWORK_ADDRESS};
+/// Rust version of the Move sui::dynamic_field::Field type
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct Field<N, V> {
+    pub id: UID,
+    pub name: N,
+    pub value: V,
+}
 
-#[derive(Clone, Serialize, Deserialize, JsonSchema, Ord, PartialOrd, Eq, PartialEq, Debug)]
+#[derive(Clone, Serialize, Deserialize, JsonSchema, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct DynamicFieldInfo {
-    pub name: String,
+    pub name: DynamicFieldName,
     pub type_: DynamicFieldType,
     pub object_type: String,
     pub object_id: ObjectID,
     pub version: SequenceNumber,
     pub digest: ObjectDigest,
+}
+
+#[serde_as]
+#[derive(Clone, Serialize, Deserialize, JsonSchema, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DynamicFieldName {
+    #[schemars(with = "String")]
+    #[serde_as(as = "Readable<DisplayFromStr, _>")]
+    pub type_: TypeTag,
+    // Bincode does not like serde_json::Value, rocksdb will not insert the value without serializing value as string.
+    #[schemars(with = "Value")]
+    #[serde_as(as = "Readable<_, DisplayFromStr>")]
+    pub value: Value,
+}
+
+impl Display for DynamicFieldName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.type_, self.value)
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, JsonSchema, Ord, PartialOrd, Eq, PartialEq, Debug)]
@@ -36,9 +69,25 @@ impl DynamicFieldInfo {
             && tag.name.as_str() == "Field"
     }
 
+    pub fn try_extract_field_name(tag: &StructTag, type_: &DynamicFieldType) -> SuiResult<TypeTag> {
+        match (type_, tag.type_params.first()) {
+            (DynamicFieldType::DynamicField, Some(name_type)) => Ok(name_type.clone()),
+            (DynamicFieldType::DynamicObject, Some(TypeTag::Struct(s))) => Ok(s
+                .type_params
+                .first()
+                .ok_or_else(|| SuiError::ObjectDeserializationError {
+                    error: format!("Error extracting dynamic object name from object: {tag}"),
+                })?
+                .clone()),
+            _ => Err(SuiError::ObjectDeserializationError {
+                error: format!("Error extracting dynamic object name from object: {tag}"),
+            }),
+        }
+    }
+
     pub fn parse_move_object(
         move_struct: &MoveStruct,
-    ) -> SuiResult<(String, DynamicFieldType, ObjectID)> {
+    ) -> SuiResult<(MoveValue, DynamicFieldType, ObjectID)> {
         let name = extract_field_from_move_struct(move_struct, "name").ok_or_else(|| {
             SuiError::ObjectDeserializationError {
                 error: "Cannot extract [name] field from sui::dynamic_field::Field".to_string(),
@@ -70,7 +119,7 @@ impl DynamicFieldInfo {
                         sui::dynamic_field::Field, {value:?}"
                     ),
                 })?;
-            (name.to_string(), DynamicFieldType::DynamicObject, object_id)
+            (name.clone(), DynamicFieldType::DynamicObject, object_id)
         } else {
             // ID of the Field object
             let object_id = extract_object_id(move_struct).ok_or_else(|| {
@@ -81,7 +130,7 @@ impl DynamicFieldInfo {
                     ),
                 }
             })?;
-            (name.to_string(), DynamicFieldType::DynamicField, object_id)
+            (name.clone(), DynamicFieldType::DynamicField, object_id)
         })
     }
 }
@@ -146,4 +195,33 @@ pub fn is_dynamic_object(move_struct: &MoveStruct) -> bool {
         }
         _ => false,
     }
+}
+
+pub fn derive_dynamic_field_id<T>(
+    parent: T,
+    key_type_tag: &TypeTag,
+    key_type_layout: &MoveTypeLayout,
+    key: &move_vm_types::values::Value,
+) -> Option<ObjectID>
+where
+    T: Into<SuiAddress>,
+{
+    let Ok(k_tag_bytes) = bcs::to_bytes(key_type_tag) else {
+        return None;
+    };
+    let Some(k_bytes) = key.simple_serialize(key_type_layout) else {
+        return None;
+    };
+
+    // hash(parent || key || key_type_tag)
+    let mut hasher = Sha3_256::default();
+    hasher.update(parent.into());
+    hasher.update(k_bytes.len().to_le_bytes());
+    hasher.update(k_bytes);
+    hasher.update(k_tag_bytes);
+    let hash = hasher.finalize();
+
+    // truncate into an ObjectID and return
+    // OK to access slice because Sha3_256 should never be shorter than ObjectID::LENGTH.
+    Some(ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap())
 }

@@ -41,6 +41,7 @@ pub enum AppId {
     Sui = 0,
 }
 
+// TODO(joyqvq): Use num_derive
 impl TryFrom<u8> for AppId {
     type Error = eyre::Report;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -64,6 +65,8 @@ pub enum IntentScope {
     TransactionEffects = 1,
     CheckpointSummary = 2,
     PersonalMessage = 3,
+    SenderSignedTransaction = 4,
+    ProofOfPossession = 5,
 }
 
 impl TryFrom<u8> for IntentScope {
@@ -74,6 +77,8 @@ impl TryFrom<u8> for IntentScope {
             1 => Ok(Self::TransactionEffects),
             2 => Ok(Self::CheckpointSummary),
             3 => Ok(Self::PersonalMessage),
+            4 => Ok(Self::SenderSignedTransaction),
+            5 => Ok(Self::ProofOfPossession),
             _ => Err(eyre!("Invalid IntentScope")),
         }
     }

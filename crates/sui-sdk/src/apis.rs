@@ -13,10 +13,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc_types::{
-    Balance, Checkpoint, CheckpointId, Coin, CoinPage, DynamicFieldPage, EventPage,
-    GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse, SuiCoinMetadata,
-    SuiEventEnvelope, SuiEventFilter, SuiMoveNormalizedModule, SuiObjectInfo,
-    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
+    Balance, Checkpoint, CheckpointId, Coin, CoinPage, DryRunTransactionResponse, DynamicFieldPage,
+    EventPage, GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
+    SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter, SuiMoveNormalizedModule, SuiObjectInfo,
+    SuiTransactionResponse, TransactionsPage,
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{
@@ -33,10 +33,7 @@ use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
 
 use futures::StreamExt;
-use sui_json_rpc::api::{
-    CoinReadApiClient, EventReadApiClient, EventStreamingApiClient, RpcBcsApiClient,
-    RpcFullNodeReadApiClient, RpcReadApiClient, TransactionExecutionApiClient,
-};
+use sui_json_rpc::api::{CoinReadApiClient, EventReadApiClient, ReadApiClient, WriteApiClient};
 use sui_types::governance::DelegatedStake;
 
 #[derive(Debug)]
@@ -205,7 +202,7 @@ impl ReadApi {
     pub async fn dry_run_transaction(
         &self,
         tx: TransactionData,
-    ) -> SuiRpcResult<SuiTransactionEffects> {
+    ) -> SuiRpcResult<DryRunTransactionResponse> {
         Ok(self
             .api
             .http
@@ -448,7 +445,7 @@ impl QuorumDriver {
     ) -> SuiRpcResult<()> {
         let start = Instant::now();
         loop {
-            let resp = RpcReadApiClient::get_transaction(&c.http, tx_digest).await;
+            let resp = ReadApiClient::get_transaction(&c.http, tx_digest).await;
             if let Err(err) = resp {
                 if err.to_string().contains(TRANSACTION_NOT_FOUND_MSG_PREFIX) {
                     tokio::time::sleep(Duration::from_millis(300)).await;

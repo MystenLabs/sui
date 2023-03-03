@@ -4,8 +4,8 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import { Popover, Transition } from '@headlessui/react';
 import { ChevronDown12, Copy12 } from '@mysten/icons';
+import { formatAddress } from '@mysten/sui.js';
 
-import { useMiddleEllipsis } from '../hooks';
 import { useAccounts } from '../hooks/useAccounts';
 import { useActiveAddress } from '../hooks/useActiveAddress';
 import { useBackgroundClient } from '../hooks/useBackgroundClient';
@@ -19,7 +19,6 @@ export function AccountSelector() {
     const allAccounts = useAccounts();
     const activeAddress = useActiveAddress();
     const multiAccountsEnabled = useFeature(FEATURES.WALLET_MULTI_ACCOUNTS).on;
-    const activeAddressShort = useMiddleEllipsis(activeAddress);
     const copyToAddress = useCopyToClipboard(activeAddress || '', {
         copySuccessMessage: 'Address copied',
     });
@@ -29,7 +28,7 @@ export function AccountSelector() {
     }
     const buttonText = (
         <Text mono variant="bodySmall">
-            {activeAddressShort}
+            {activeAddress ? formatAddress(activeAddress) : ''}
         </Text>
     );
     if (!multiAccountsEnabled || allAccounts.length === 1) {

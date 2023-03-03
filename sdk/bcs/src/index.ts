@@ -15,6 +15,8 @@ import { toB64, fromB64 } from "./b64";
 import { toHEX, fromHEX } from "./hex";
 import bs58 from "bs58";
 
+const SUI_ADDRESS_LENGTH = 32;
+
 function toLittleEndian(bigint: bigint, size: number) {
   let result = new Uint8Array(size);
   let i = 0;
@@ -37,6 +39,17 @@ export { toB58, fromB58, toB64, fromB64, fromHEX, toHEX };
  * Used in `Reader.toString()` as well as in `decodeStr` and `encodeStr` functions.
  */
 export type Encoding = "base58" | "base64" | "hex";
+
+/**
+ * Allows for array definitions for names.
+ * @example
+ * ```
+ * bcs.registerStructType(['vector', BCS.STRING], ...);
+ * // equals
+ * bcs.registerStructType('vector<string>', ...);
+ * ```
+ */
+export type TypeName = string | [string, ...(TypeName | string)[]];
 
 /**
  * Class used for reading BCS data chunk by chunk. Meant to be used
@@ -390,18 +403,29 @@ function ulebDecode(arr: number[] | Uint8Array): {
  * BCS value or a part of a composed structure/vector.
  */
 export interface TypeInterface {
-  encode: (data: any, size: number, typeParams: string[]) => BcsWriter;
-  decode: (data: Uint8Array, typeParams: string[]) => any;
+  encode: (data: any, size: number, typeParams: TypeName[]) => BcsWriter;
+  decode: (data: Uint8Array, typeParams: TypeName[]) => any;
 
-  _encodeRaw: (writer: BcsWriter, data: any, typeParams: string[]) => BcsWriter;
-  _decodeRaw: (reader: BcsReader, typeParams: string[]) => any;
+  _encodeRaw: (
+    writer: BcsWriter,
+    data: any,
+    typeParams: TypeName[],
+    typeMap: { [key: string]: TypeName }
+  ) => BcsWriter;
+  _decodeRaw: (
+    reader: BcsReader,
+    typeParams: TypeName[],
+    typeMap: { [key: string]: TypeName }
+  ) => any;
 }
 
 /**
  * Struct type definition. Used as input format in BcsConfig.types
  * as well as an argument type for `bcs.registerStructType`.
  */
-export type StructTypeDefinition = { [key: string]: string };
+export type StructTypeDefinition = {
+  [key: string]: TypeName | StructTypeDefinition;
+};
 
 /**
  * Enum type definition. Used as input format in BcsConfig.types
@@ -416,7 +440,9 @@ export type StructTypeDefinition = { [key: string]: string };
  *   none: null
  * });
  */
-export type EnumTypeDefinition = { [key: string]: string | null };
+export type EnumTypeDefinition = {
+  [key: string]: TypeName | StructTypeDefinition | null;
+};
 
 /**
  * Configuration that is passed into BCS constructor.
@@ -452,7 +478,7 @@ export type BcsConfig = {
   types?: {
     structs?: { [key: string]: StructTypeDefinition };
     enums?: { [key: string]: EnumTypeDefinition };
-    aliases?: { [key: string]: string }
+    aliases?: { [key: string]: string };
   };
   /**
    * Whether to auto-register primitive types on launch.
@@ -493,17 +519,17 @@ export class BCS {
   protected schema: BcsConfig;
 
   /**
+   * Count temp keys to generate a new one when requested.
+   */
+  protected counter: number = 0;
+
+  /**
    * Name of the key to use for temporary struct definitions.
    * Returns a temp key + index (for a case when multiple temp
    * structs are processed).
    */
-  private get tempKey() {
-    const key = (i: any) => "temp-struct-" + i;
-    let i = 0;
-    while (this.hasType(key(i))) {
-      i++;
-    }
-    return key(i);
+  private tempKey() {
+    return `bcs-struct-${++this.counter}`;
   }
 
   /**
@@ -574,22 +600,20 @@ export class BCS {
    * @return A BCS reader instance. Usually you'd want to call `.toBytes()`
    */
   public ser(
-    type: string | StructTypeDefinition,
+    type: TypeName | StructTypeDefinition,
     data: any,
     size: number = 1024
   ): BcsWriter {
-    if (typeof type === "string") {
-      const { typeName, typeParams } = this.parseTypeName(type);
-      return this.getTypeInterface(typeName).encode(data, size, typeParams);
+    if (typeof type === "string" || type instanceof Array) {
+      const { name, params } = this.parseTypeName(type);
+      return this.getTypeInterface(name).encode(data, size, params as string[]);
     }
 
     // Quick serialization without registering the type in the main struct.
     if (typeof type == "object") {
-      const key = this.tempKey;
+      const key = this.tempKey();
       const temp = new BCS(this);
-      return temp
-        .registerStructType(key, type)
-        .ser(key, data, size);
+      return temp.registerStructType(key, type).ser(key, data, size);
     }
 
     throw new Error(
@@ -613,7 +637,7 @@ export class BCS {
    * @return Deserialized data.
    */
   public de(
-    type: string | StructTypeDefinition,
+    type: TypeName | StructTypeDefinition,
     data: Uint8Array | string,
     encoding?: Encoding
   ): any {
@@ -626,18 +650,16 @@ export class BCS {
     }
 
     // In case the type specified is already registered.
-    if (typeof type == "string") {
-      const { typeName, typeParams } = this.parseTypeName(type);
-      return this.getTypeInterface(typeName).decode(data, typeParams);
+    if (typeof type == "string" || type instanceof Array) {
+      const { name, params } = this.parseTypeName(type);
+      return this.getTypeInterface(name).decode(data, params as string[]);
     }
 
     // Deserialize without registering a type using a temporary clone.
     if (typeof type == "object") {
       const temp = new BCS(this);
-      const key = this.tempKey;
-      return temp
-        .registerStructType(key, type)
-        .de(key, data, encoding);
+      const key = this.tempKey();
+      return temp.registerStructType(key, type).de(key, data, encoding);
     }
 
     throw new Error(
@@ -698,30 +720,55 @@ export class BCS {
    * @param validateCb Optional validator Callback to check type before serialization.
    */
   public registerType(
-    name: string,
-    encodeCb: (writer: BcsWriter, data: any, typeParams: string[]) => BcsWriter,
-    decodeCb: (reader: BcsReader, typeParams: string[]) => any,
+    typeName: TypeName,
+    encodeCb: (
+      writer: BcsWriter,
+      data: any,
+      typeParams: TypeName[],
+      typeMap: { [key: string]: TypeName }
+    ) => BcsWriter,
+    decodeCb: (
+      reader: BcsReader,
+      typeParams: TypeName[],
+      typeMap: { [key: string]: TypeName }
+    ) => any,
     validateCb: (data: any) => boolean = () => true
   ): BCS {
+    const { name, params: generics } = this.parseTypeName(typeName);
+
     this.types.set(name, {
       encode(data, size = 1024, typeParams) {
-        return this._encodeRaw(new BcsWriter(size), data, typeParams);
+        const typeMap = (generics as string[]).reduce(
+          (acc: any, value: string, index) => {
+            return Object.assign(acc, { [value]: typeParams[index] });
+          },
+          {}
+        );
+
+        return this._encodeRaw(new BcsWriter(size), data, typeParams, typeMap);
       },
       decode(data, typeParams) {
-        return this._decodeRaw(new BcsReader(data), typeParams);
+        const typeMap = (generics as string[]).reduce(
+          (acc: any, value: string, index) => {
+            return Object.assign(acc, { [value]: typeParams[index] });
+          },
+          {}
+        );
+
+        return this._decodeRaw(new BcsReader(data), typeParams, typeMap);
       },
 
       // these methods should always be used with caution as they require pre-defined
       // reader and writer and mainly exist to allow multi-field (de)serialization;
-      _encodeRaw(writer, data, typeParams) {
+      _encodeRaw(writer, data, typeParams, typeMap) {
         if (validateCb(data)) {
-          return encodeCb(writer, data, typeParams);
+          return encodeCb(writer, data, typeParams, typeMap);
         } else {
           throw new Error(`Validation failed for type ${name}, data: ${data}`);
         }
       },
-      _decodeRaw(reader, typeParams) {
-        return decodeCb(reader, typeParams);
+      _decodeRaw(reader, typeParams, typeMap) {
+        return decodeCb(reader, typeParams, typeMap);
       },
     } as TypeInterface);
 
@@ -731,8 +778,8 @@ export class BCS {
   /**
    * Register an address type which is a sequence of U8s of specified length.
    * @example
-   * bcs.registerAddressType('address', 20);
-   * let addr = bcs.de('address', 'ca27601ec5d915dd40d42e36c395d4a156b24026');
+   * bcs.registerAddressType('address', SUI_ADDRESS_LENGTH);
+   * let addr = bcs.de('address', 'c3aca510c785c7094ac99aeaa1e69d493122444df50bb8a99dfa790c654a79af');
    *
    * @param name Name of the address type.
    * @param length Byte length of the address.
@@ -776,45 +823,83 @@ export class BCS {
    * @param elementType Optional name of the inner type of the vector
    * @return Returns self for chaining.
    */
-  private registerVectorType(name: string, elementType?: string): BCS {
-    let { typeName, typeParams } = this.parseTypeName(name);
-    if (typeParams.length > 1) {
+  private registerVectorType(typeName: string): BCS {
+    let { name, params } = this.parseTypeName(typeName);
+    if (params.length > 1) {
       throw new Error("Vector can have only one type parameter; got " + name);
     }
 
     return this.registerType(
       typeName,
-      (writer: BcsWriter, data: any[], typeParams: string[]) =>
+      (writer: BcsWriter, data: any[], typeParams: TypeName[], typeMap) =>
         writer.writeVec(data, (writer, el) => {
-          let vectorType = elementType || typeParams[0];
+          let elementType: TypeName = typeParams[0];
+          if (!elementType) {
+            throw new Error(
+              `Incorrect number of type parameters passed a to vector '${typeName}'`
+            );
+          }
 
-          if (!!vectorType) {
-            let { typeName, typeParams } = this.parseTypeName(vectorType);
-            return this.getTypeInterface(elementType || typeName)._encodeRaw(
+          let { name, params } = this.parseTypeName(elementType);
+          if (this.hasType(name)) {
+            return this.getTypeInterface(name)._encodeRaw(
               writer,
               el,
-              typeParams
-            );
-          } else {
-            throw new Error(
-              `Incorrect number of type parameters passed to vector '${typeName}'`
+              params,
+              typeMap
             );
           }
+
+          if (name in typeMap == false) {
+            throw new Error(
+              `Unable to find a matching type definition for ${name} in vector; make sure you passed a generic`
+            );
+          }
+
+          let { name: innerName, params: innerParams } = this.parseTypeName(
+            typeMap[name]
+          );
+
+          return this.getTypeInterface(innerName)._encodeRaw(
+            writer,
+            el,
+            innerParams,
+            typeMap
+          );
         }),
-      (reader: BcsReader, typeParams) =>
+      (reader: BcsReader, typeParams, typeMap) =>
         reader.readVec((reader) => {
-          let vectorType = elementType || typeParams[0];
-          if (!!vectorType) {
-            let { typeName, typeParams } = this.parseTypeName(vectorType);
-            return this.getTypeInterface(elementType || typeName)._decodeRaw(
-              reader,
-              typeParams
-            );
-          } else {
+          let elementType: TypeName = typeParams[0];
+          if (!elementType) {
             throw new Error(
-              `Incorrect number of type parameters passed to vector '${typeName}'`
+              `Incorrect number of type parameters passed to a vector '${typeName}'`
             );
           }
+
+          let { name, params } = this.parseTypeName(elementType);
+          if (this.hasType(name)) {
+            return this.getTypeInterface(name)._decodeRaw(
+              reader,
+              params,
+              typeMap
+            );
+          }
+
+          if (name in typeMap == false) {
+            throw new Error(
+              `Unable to find a matching type definition for ${name} in vector; make sure you passed a generic`
+            );
+          }
+
+          let { name: innerName, params: innerParams } = this.parseTypeName(
+            typeMap[name]
+          );
+
+          this.getTypeInterface(innerName)._decodeRaw(
+            reader,
+            innerParams,
+            typeMap
+          );
         })
     );
   }
@@ -863,7 +948,23 @@ export class BCS {
    * @param fields Fields of the struct. Must be in the correct order.
    * @return Returns BCS for chaining.
    */
-  public registerStructType(name: string, fields: StructTypeDefinition): BCS {
+  public registerStructType(
+    typeName: TypeName,
+    fields: StructTypeDefinition
+  ): BCS {
+    // When an Object is passed, we register it under a new key and store it
+    // in the registered type system. This way we allow nested inline definitions.
+    for (let key in fields) {
+      let internalName = this.tempKey();
+      let value = fields[key];
+
+      // TODO: add a type guard here?
+      if (value instanceof Array == false && typeof value !== "string") {
+        fields[key] = internalName;
+        this.registerStructType(internalName, value as StructTypeDefinition);
+      }
+    }
+
     let struct = Object.freeze(fields); // Make sure the order doesn't get changed
 
     // IMPORTANT: we need to store canonical order of fields for each registered
@@ -873,49 +974,137 @@ export class BCS {
 
     // Holds generics for the struct definition. At this stage we can check that
     // generic parameter matches the one defined in the struct.
-    let { typeName, typeParams: structTypeParams } = this.parseTypeName(name);
+    let { name: structName, params: generics } = this.parseTypeName(typeName);
 
     // Make sure all the types in the fields description are already known
     // and that all the field types are strings.
     return this.registerType(
       typeName,
-      // (typeParam: string) => ,
-      (writer: BcsWriter, data: { [key: string]: any }, typeParams) => {
+      (
+        writer: BcsWriter,
+        data: { [key: string]: any },
+        typeParams,
+        typeMap
+      ) => {
         if (!data || data.constructor !== Object) {
-          throw new Error(`Expected ${name} to be an Object, got: ${data}`);
+          throw new Error(
+            `Expected ${structName} to be an Object, got: ${data}`
+          );
         }
+
+        if (typeParams.length !== generics.length) {
+          throw new Error(
+            `Incorrect number of generic parameters passed; expected: ${generics.length}, got: ${typeParams.length}`
+          );
+        }
+
+        // follow the canonical order when serializing
         for (let key of canonicalOrder) {
-          if (key in data) {
-            let paramIndex = structTypeParams.indexOf(struct[key]);
-            let typeOrParam =
-              paramIndex === -1 ? struct[key] : typeParams[paramIndex];
-            {
-              let { typeName, typeParams } = this.parseTypeName(typeOrParam);
-              this.getTypeInterface(typeName)._encodeRaw(
+          if (key in data == false) {
+            throw new Error(
+              `Struct ${structName} requires field ${key}:${struct[key]}`
+            );
+          }
+
+          // Before deserializing, read the canonical field type.
+          const { name: fieldType, params: fieldParams } = this.parseTypeName(
+            struct[key] as TypeName
+          );
+
+          // Check whether this type is a generic defined in this struct.
+          // If it is -> read the type parameter matching its index.
+          // If not - tread as a regular field.
+          if (!generics.includes(fieldType)) {
+            this.getTypeInterface(fieldType)._encodeRaw(
+              writer,
+              data[key],
+              fieldParams,
+              typeMap
+            );
+          } else {
+            const paramIdx = generics.indexOf(fieldType);
+            let { name, params } = this.parseTypeName(typeParams[paramIdx]);
+
+            // If the type from the type parameters already exists
+            // and known -> proceed with type decoding.
+            if (this.hasType(name)) {
+              this.getTypeInterface(name)._encodeRaw(
                 writer,
                 data[key],
-                typeParams
+                params as string[],
+                typeMap
+              );
+              continue;
+            }
+
+            // Alternatively, if it's a global generic parameter...
+            if (name in typeMap == false) {
+              throw new Error(
+                `Unable to find a matching type definition for ${name} in ${structName}; make sure you passed a generic`
               );
             }
-          } else {
-            throw new Error(
-              `Struct ${name} requires field ${key}:${struct[key]}`
+
+            let { name: innerName, params: innerParams } = this.parseTypeName(
+              typeMap[name]
+            );
+            this.getTypeInterface(innerName)._encodeRaw(
+              writer,
+              data[key],
+              innerParams,
+              typeMap
             );
           }
         }
         return writer;
       },
-      (reader: BcsReader, typeParams) => {
+      (reader: BcsReader, typeParams, typeMap) => {
+        if (typeParams.length !== generics.length) {
+          throw new Error(
+            `Incorrect number of generic parameters passed; expected: ${generics.length}, got: ${typeParams.length}`
+          );
+        }
+
         let result: { [key: string]: any } = {};
         for (let key of canonicalOrder) {
-          let paramIndex = structTypeParams.indexOf(struct[key]);
-          let typeOrParam =
-            paramIndex === -1 ? struct[key] : typeParams[paramIndex];
-          {
-            let { typeName, typeParams } = this.parseTypeName(typeOrParam);
-            result[key] = this.getTypeInterface(typeName)._decodeRaw(
+          const { name: fieldName, params: fieldParams } = this.parseTypeName(
+            struct[key] as TypeName
+          );
+
+          // if it's not a generic
+          if (!generics.includes(fieldName)) {
+            result[key] = this.getTypeInterface(fieldName)._decodeRaw(
               reader,
-              typeParams
+              fieldParams as string[],
+              typeMap
+            );
+          } else {
+            const paramIdx = generics.indexOf(fieldName);
+            let { name, params } = this.parseTypeName(typeParams[paramIdx]);
+
+            // If the type from the type parameters already exists
+            // and known -> proceed with type decoding.
+            if (this.hasType(name)) {
+              result[key] = this.getTypeInterface(name)._decodeRaw(
+                reader,
+                params,
+                typeMap
+              );
+              continue;
+            }
+
+            if (name in typeMap == false) {
+              throw new Error(
+                `Unable to find a matching type definition for ${name} in ${structName}; make sure you passed a generic`
+              );
+            }
+
+            let { name: innerName, params: innerParams } = this.parseTypeName(
+              typeMap[name]
+            );
+            result[key] = this.getTypeInterface(innerName)._decodeRaw(
+              reader,
+              innerParams,
+              typeMap
             );
           }
         }
@@ -946,19 +1135,42 @@ export class BCS {
    * @param name
    * @param variants
    */
-  public registerEnumType(name: string, variants: EnumTypeDefinition): BCS {
+  public registerEnumType(
+    typeName: TypeName,
+    variants: EnumTypeDefinition
+  ): BCS {
+    // When an Object is passed, we register it under a new key and store it
+    // in the registered type system. This way we allow nested inline definitions.
+    for (let key in variants) {
+      let internalName = this.tempKey();
+      let value = variants[key];
+
+      if (
+        value !== null &&
+        value instanceof Array == false &&
+        typeof value !== "string"
+      ) {
+        variants[key] = internalName;
+        this.registerStructType(internalName, value as StructTypeDefinition);
+      }
+    }
+
     let struct = Object.freeze(variants); // Make sure the order doesn't get changed
 
     // IMPORTANT: enum is an ordered type and we have to preserve ordering in BCS
     let canonicalOrder = Object.keys(struct);
 
     // Parse type parameters in advance to know the index of each generic parameter.
-    let { typeName, typeParams: canonicalTypeParams } =
-      this.parseTypeName(name);
+    let { name, params: canonicalTypeParams } = this.parseTypeName(typeName);
 
     return this.registerType(
       typeName,
-      (writer: BcsWriter, data: { [key: string]: any | null }, typeParams) => {
+      (
+        writer: BcsWriter,
+        data: { [key: string]: any | null },
+        typeParams,
+        typeMap
+      ) => {
         if (data === undefined) {
           throw new Error(`Unable to write enum ${name}, missing data`);
         }
@@ -974,7 +1186,7 @@ export class BCS {
           );
         }
         let invariant = canonicalOrder[orderByte];
-        let invariantType = struct[invariant];
+        let invariantType = struct[invariant] as TypeName | null;
 
         // write order byte
         writer.write8(orderByte);
@@ -989,18 +1201,19 @@ export class BCS {
           paramIndex === -1 ? invariantType : typeParams[paramIndex];
 
         {
-          let { typeName, typeParams } = this.parseTypeName(typeOrParam);
-          return this.getTypeInterface(typeName)._encodeRaw(
+          let { name, params } = this.parseTypeName(typeOrParam);
+          return this.getTypeInterface(name)._encodeRaw(
             writer,
             data[key],
-            typeParams
+            params,
+            typeMap
           );
         }
       },
-      (reader: BcsReader, typeParams) => {
+      (reader: BcsReader, typeParams, typeMap) => {
         let orderByte = reader.readULEB();
         let invariant = canonicalOrder[orderByte];
-        let invariantType = struct[invariant];
+        let invariantType = struct[invariant] as TypeName | null;
 
         if (orderByte === -1) {
           throw new Error(
@@ -1018,11 +1231,12 @@ export class BCS {
           paramIndex === -1 ? invariantType : typeParams[paramIndex];
 
         {
-          let { typeName, typeParams } = this.parseTypeName(typeOrParam);
+          let { name, params } = this.parseTypeName(typeOrParam);
           return {
-            [invariant]: this.getTypeInterface(typeName)._decodeRaw(
+            [invariant]: this.getTypeInterface(name)._decodeRaw(
               reader,
-              typeParams
+              params,
+              typeMap
             ),
           };
         }
@@ -1045,7 +1259,11 @@ export class BCS {
       let chain: string[] = [];
       while (typeof typeInterface === "string") {
         if (chain.includes(typeInterface)) {
-          throw new Error(`Recursive definition found: ${chain.join(' -> ')} -> ${typeInterface}`);
+          throw new Error(
+            `Recursive definition found: ${chain.join(
+              " -> "
+            )} -> ${typeInterface}`
+          );
         }
         chain.push(typeInterface);
         typeInterface = this.types.get(typeInterface);
@@ -1069,10 +1287,19 @@ export class BCS {
    * @param name Name of the type to process
    * @returns Object with typeName and typeParams listed as Array
    */
-  public parseTypeName(name: string): {
-    typeName: string;
-    typeParams: string[];
+  public parseTypeName(name: TypeName): {
+    name: string;
+    params: TypeName[];
   } {
+    if (name instanceof Array) {
+      let [typeName, ...params] = name;
+      return { name: typeName, params };
+    }
+
+    if (typeof name !== "string") {
+      throw new Error(`Illegal type passed as a name of the type: ${name}`);
+    }
+
     let [left, right] = this.schema.genericSeparators || ["<", ">"];
 
     let l_bound = name.indexOf(left);
@@ -1080,7 +1307,7 @@ export class BCS {
 
     // if there are no generics - exit gracefully.
     if (l_bound === -1 && r_bound === -1) {
-      return { typeName: name, typeParams: [] };
+      return { name: name, params: [] };
     }
 
     // if one of the bounds is not defined - throw an Error.
@@ -1089,12 +1316,12 @@ export class BCS {
     }
 
     let typeName = name.slice(0, l_bound);
-    let typeParams = name
+    let params = name
       .slice(l_bound + 1, name.length - r_bound - 1)
       .split(",")
       .map((e) => e.trim());
 
-    return { typeName, typeParams };
+    return { name: typeName, params };
   }
 }
 
@@ -1253,7 +1480,7 @@ export function getRustConfig(): BcsConfig {
   return {
     genericSeparators: ["<", ">"],
     vectorType: "Vec",
-    addressLength: 20,
+    addressLength: SUI_ADDRESS_LENGTH,
     addressEncoding: "hex",
   };
 }
@@ -1262,7 +1489,7 @@ export function getSuiMoveConfig(): BcsConfig {
   return {
     genericSeparators: ["<", ">"],
     vectorType: "vector",
-    addressLength: 20,
+    addressLength: SUI_ADDRESS_LENGTH,
     addressEncoding: "hex",
   };
 }

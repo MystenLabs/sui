@@ -19,7 +19,7 @@ export function ConnectButton({
 }: ConnectButtonProps) {
   const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [connectModalOpen, setConnectModalOpen] = useState(false);
-  const { currentAccount, } = useWalletKit();
+  const { currentAccount } = useWalletKit();
 
   return (
     <>
@@ -32,7 +32,7 @@ export function ConnectButton({
           type="button"
           {...props}
         >
-          {formatAddress(currentAccount)}
+          {formatAddress(currentAccount.address)}
         </Button>
       ) : (
         <Button

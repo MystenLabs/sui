@@ -52,10 +52,10 @@ fn build_anemo_services(out_dir: &Path) {
         .attributes(automock_attribute.clone())
         .method(
             anemo_build::manual::Method::builder()
-                .name("send_message")
-                .route_name("SendMessage")
-                .request_type("crate::PrimaryMessage")
-                .response_type("()")
+                .name("send_certificate")
+                .route_name("SendCertificate")
+                .request_type("crate::SendCertificateRequest")
+                .response_type("crate::SendCertificateResponse")
                 .codec_path("anemo::rpc::codec::BincodeCodec")
                 .build(),
         )
@@ -101,15 +101,6 @@ fn build_anemo_services(out_dir: &Path) {
         .name("PrimaryToWorker")
         .package("narwhal")
         .attributes(automock_attribute.clone())
-        .method(
-            anemo_build::manual::Method::builder()
-                .name("reconfigure")
-                .route_name("Reconfigure")
-                .request_type("crate::WorkerReconfigureMessage")
-                .response_type("()")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
-                .build(),
-        )
         .method(
             anemo_build::manual::Method::builder()
                 .name("synchronize")

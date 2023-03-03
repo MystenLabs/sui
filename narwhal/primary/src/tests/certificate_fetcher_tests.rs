@@ -30,8 +30,8 @@ use types::{
     BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
     HeaderDigest, Metadata, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
-    PreSubscribedBroadcastSender, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
-    RequestVoteRequest, RequestVoteResponse, Round,
+    PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
+    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse,
 };
 
 pub struct NetworkProxy {
@@ -41,12 +41,12 @@ pub struct NetworkProxy {
 
 #[async_trait]
 impl PrimaryToPrimary for NetworkProxy {
-    async fn send_message(
+    async fn send_certificate(
         &self,
-        request: anemo::Request<PrimaryMessage>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        request: anemo::Request<SendCertificateRequest>,
+    ) -> Result<anemo::Response<SendCertificateResponse>, anemo::rpc::Status> {
         unimplemented!(
-            "FetchCertificateProxy::send_message() is unimplemented!! {:#?}",
+            "FetchCertificateProxy::send_certificate() is unimplemented!! {:#?}",
             request
         );
     }
@@ -170,7 +170,7 @@ async fn fetch_certificates_basic() {
     // Make a synchronizer for certificates.
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
-        fixture.committee().into(),
+        fixture.committee(),
         worker_cache.clone(),
         gc_depth,
         certificate_store.clone(),
@@ -205,7 +205,6 @@ async fn fetch_certificates_basic() {
     let _certificate_fetcher_handle = CertificateFetcher::spawn(
         name.clone(),
         fixture.committee(),
-        fixture.shared_worker_cache(),
         client_network.clone(),
         certificate_store.clone(),
         rx_consensus_round_updates.clone(),
@@ -260,9 +259,10 @@ async fn fetch_certificates_basic() {
     // Send a primary message for a certificate with parents that do not exist locally, to trigger fetching.
     let target_index = 123;
     assert!(!synchronizer
-        .check_parents(&certificates[target_index].clone())
+        .get_missing_parents(&certificates[target_index].clone())
         .await
-        .unwrap());
+        .unwrap()
+        .is_empty());
 
     // Verify the fetch request.
     let mut req = rx_fetch_req.recv().await.unwrap();

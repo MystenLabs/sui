@@ -48,7 +48,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
@@ -72,6 +72,8 @@ validator_configs:
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
       local-execution-timeout-sec: 10
+    state-snapshot-config:
+      enabled: false
   - protocol-key-pair:
       value: avYcyVgYMXTyaUYh9IRwLK0gSzl7YF6ZQDAbrS1Bhvo=
     worker-key-pair:
@@ -117,7 +119,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
@@ -141,6 +143,8 @@ validator_configs:
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
       local-execution-timeout-sec: 10
+    state-snapshot-config:
+      enabled: false
   - protocol-key-pair:
       value: OXnx3yM1C/ppgnDMx/o1d49fJs7E05kq11mXNae/O+I=
     worker-key-pair:
@@ -186,7 +190,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
@@ -210,6 +214,8 @@ validator_configs:
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
       local-execution-timeout-sec: 10
+    state-snapshot-config:
+      enabled: false
   - protocol-key-pair:
       value: CyNkjqNVr3HrHTH7f/NLs7u5lUHJzuPAw0PqMTD2y2s=
     worker-key-pair:
@@ -255,7 +261,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
@@ -279,6 +285,8 @@ validator_configs:
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
       local-execution-timeout-sec: 10
+    state-snapshot-config:
+      enabled: false
   - protocol-key-pair:
       value: X/I/kM+KvHcxAKEf2UU6Sr7SpN3bhiE9nP5CuM/iIY0=
     worker-key-pair:
@@ -324,7 +332,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
@@ -348,6 +356,8 @@ validator_configs:
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
       local-execution-timeout-sec: 10
+    state-snapshot-config:
+      enabled: false
   - protocol-key-pair:
       value: N272EiFDyKtxRbDKbyN6ujenJ+skPcRoc/XolpOLGnU=
     worker-key-pair:
@@ -393,7 +403,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
@@ -417,6 +427,8 @@ validator_configs:
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
       local-execution-timeout-sec: 10
+    state-snapshot-config:
+      enabled: false
   - protocol-key-pair:
       value: a74f03IOjL8ZFSWFChFVEi+wiMwHNwNCPDGIYkGfgjs=
     worker-key-pair:
@@ -462,7 +474,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
         anemo:
-          send_message_rate_limit: ~
+          send_certificate_rate_limit: ~
           get_payload_availability_rate_limit: ~
           get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
@@ -486,6 +498,8 @@ validator_configs:
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
       local-execution-timeout-sec: 10
+    state-snapshot-config:
+      enabled: false
 account_keys:
   - 10wECHkYvXqL5/CY6WhjbfFPotZb5tjEbpmumqbRxuk=
   - ZTWBfKEmFOyYM9oBU9dNfREBuAU5fm2OBhg/vPtI00c=

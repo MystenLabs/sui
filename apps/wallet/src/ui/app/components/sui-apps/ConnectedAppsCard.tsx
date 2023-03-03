@@ -1,65 +1,84 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeature } from '@growthbook/growthbook-react';
 import cl from 'classnames';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 
-import SuiApp, { SuiAppEmpty } from './SuiApp';
-import { notEmpty } from '_helpers';
+import { useBackgroundClient } from '../../hooks/useBackgroundClient';
+import { permissionsSelectors } from '../../redux/slices/permissions';
+import Loading from '../loading';
+import { type DAppEntry, SuiApp } from './SuiApp';
+import { SuiAppEmpty } from './SuiAppEmpty';
 import { useAppSelector } from '_hooks';
-import { thunkExtras } from '_store/thunk-extras';
+import { FEATURES } from '_src/shared/experimentation/features';
+import { prepareLinkToCompare } from '_src/shared/utils';
 
 import st from './Playground.module.scss';
 
+const emptyArray: DAppEntry[] = [];
+
 function ConnectedDapps() {
+    const backgroundClient = useBackgroundClient();
     useEffect(() => {
-        //TODO - move to action
-        thunkExtras.background.sendGetPermissionRequests();
-    }, []);
-
-    const connectedApps = useAppSelector(({ permissions }) => permissions);
-
-    const filteredApps =
-        (connectedApps.initialized &&
-            connectedApps?.ids
-                .map((id) => {
-                    const appData = connectedApps?.entities[id];
-                    // if the app is not allowed, don't show it
-                    if (!appData || appData.allowed !== true) return null;
-
-                    //TODO: add a name and descriptions field to the app data
-                    // use the app name if it exists, otherwise use the origin
-                    // use the first part of the domain name
-                    const origin = new URL(appData.origin).hostname
-                        .replace('www.', '')
-                        .split('.')[0];
-
-                    const name = appData?.name || origin;
+        backgroundClient.sendGetPermissionRequests();
+    }, [backgroundClient]);
+    const ecosystemApps =
+        useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value ?? emptyArray;
+    const loading = useAppSelector(
+        ({ permissions }) => !permissions.initialized
+    );
+    const allPermissions = useAppSelector(permissionsSelectors.selectAll);
+    const connectedApps = useMemo(
+        () =>
+            allPermissions
+                .filter(({ allowed }) => allowed)
+                .map((aPermission) => {
+                    const matchedEcosystemApp = ecosystemApps.find(
+                        (anEcosystemApp) => {
+                            const originAdj = prepareLinkToCompare(
+                                aPermission.origin
+                            );
+                            const pageLinkAdj = aPermission.pagelink
+                                ? prepareLinkToCompare(aPermission.pagelink)
+                                : null;
+                            const anEcosystemAppLinkAdj = prepareLinkToCompare(
+                                anEcosystemApp.link
+                            );
+                            return (
+                                originAdj === anEcosystemAppLinkAdj ||
+                                pageLinkAdj === anEcosystemAppLinkAdj
+                            );
+                        }
+                    );
+                    let appNameFromOrigin = '';
+                    try {
+                        appNameFromOrigin = new URL(aPermission.origin).hostname
+                            .replace('www.', '')
+                            .split('.')[0];
+                    } catch (e) {
+                        // do nothing
+                    }
                     return {
-                        name: name,
-                        icon: appData?.favIcon,
-                        link: appData.origin,
-                        pagelink: appData.pagelink,
-                        linkLabel: appData.origin.replace('https://', ''),
+                        name: aPermission.name || appNameFromOrigin,
                         description: '',
-                        id: appData.id,
-                        accounts: appData.accounts,
-                        permissions: appData.permissions || [],
-                        createdDate: appData.createdDate,
-                        responseDate: appData.responseDate,
+                        icon: aPermission.favIcon || '',
+                        link: aPermission.pagelink || aPermission.origin,
+                        tags: [],
+                        // override data from ecosystemApps
+                        ...matchedEcosystemApp,
+                        permissionID: aPermission.id,
                     };
-                })
-                .filter(notEmpty)) ||
-        [] ||
-        [];
-
+                }),
+        [allPermissions, ecosystemApps]
+    );
     return (
-        <>
+        <Loading loading={loading}>
             <div className={cl(st.container)}>
                 <div className={st.desc}>
                     <div className={st.title}>
-                        {filteredApps.length
-                            ? `Connected apps (${filteredApps.length})`
+                        {connectedApps.length
+                            ? `Connected apps (${connectedApps.length})`
                             : 'No APPS connected'}
                     </div>
                     Apps you connect to through the SUI wallet in this browser
@@ -67,24 +86,23 @@ function ConnectedDapps() {
                 </div>
 
                 <div className={cl(st.apps, st.appCards)}>
-                    {filteredApps.length ? (
-                        filteredApps.map((app, index) => (
+                    {connectedApps.length ? (
+                        connectedApps.map((app) => (
                             <SuiApp
-                                key={index}
+                                key={app.permissionID}
                                 {...app}
-                                displaytype="card"
-                                disconnect={true}
+                                displayType="card"
                             />
                         ))
                     ) : (
                         <>
-                            <SuiAppEmpty displaytype="card" />
-                            <SuiAppEmpty displaytype="card" />
+                            <SuiAppEmpty displayType="card" />
+                            <SuiAppEmpty displayType="card" />
                         </>
                     )}
                 </div>
             </div>
-        </>
+        </Loading>
     );
 }
 

@@ -22,7 +22,7 @@ use sui_json_rpc_types::{RPCTransactionRequestParams, SuiData, SuiTypeTag};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SuiAddress};
 use sui_types::coin::{Coin, LockedCoin};
-use sui_types::error::SuiError;
+use sui_types::error::UserInputError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, InputObjectKind, MoveCall, ObjectArg, SingleTransactionKind, TransactionData,
@@ -31,7 +31,7 @@ use sui_types::messages::{
 
 use sui_types::governance::{
     ADD_DELEGATION_LOCKED_COIN_FUN_NAME, ADD_DELEGATION_MUL_COIN_FUN_NAME,
-    SWITCH_DELEGATION_FUN_NAME, WITHDRAW_DELEGATION_FUN_NAME,
+    WITHDRAW_DELEGATION_FUN_NAME,
 };
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Object, Owner};
@@ -194,7 +194,10 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         amounts: Vec<u64>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
-        fp_ensure!(!input_coins.is_empty(), SuiError::EmptyInputCoins.into());
+        fp_ensure!(
+            !input_coins.is_empty(),
+            UserInputError::EmptyInputCoins.into()
+        );
 
         let handles: Vec<_> = input_coins
             .into_iter()
@@ -225,7 +228,10 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         recipient: SuiAddress,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
-        fp_ensure!(!input_coins.is_empty(), SuiError::EmptyInputCoins.into());
+        fp_ensure!(
+            !input_coins.is_empty(),
+            UserInputError::EmptyInputCoins.into()
+        );
 
         let handles: Vec<_> = input_coins
             .into_iter()
@@ -348,14 +354,15 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         type_args: &[TypeTag],
         json_args: Vec<SuiJsonValue>,
     ) -> Result<Vec<CallArg>, anyhow::Error> {
-        let package = self.0.get_object(package_id).await?.into_object()?;
-        let package = package
+        let object = self.0.get_object(package_id).await?.into_object()?;
+        let package = object
             .data
             .try_as_package()
             .cloned()
             .ok_or_else(|| anyhow!("Object [{}] is not a move package.", package_id))?;
         let package: MovePackage = MovePackage::new(
             package.id,
+            object.version(),
             &package.module_map,
             ProtocolConfig::get_for_min_version().max_move_package_size(),
         )?;
@@ -538,7 +545,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
     ) -> anyhow::Result<TransactionData> {
         fp_ensure!(
             !single_transaction_params.is_empty(),
-            SuiError::InvalidBatchTransaction {
+            UserInputError::InvalidBatchTransaction {
                 error: "Batch Transaction cannot be empty".to_owned(),
             }
             .into()
@@ -662,12 +669,11 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
     pub async fn request_withdraw_delegation(
         &self,
         signer: SuiAddress,
-        delegation: ObjectID,
+        _delegation: ObjectID,
         staked_sui: ObjectID,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
-        let delegation = self.get_object_ref(delegation).await?;
         let staked_sui = self.get_object_ref(staked_sui).await?;
         let gas_price = self.0.get_reference_gas_price().await?;
         let gas = self
@@ -686,45 +692,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
                     mutable: true,
                 }),
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(delegation)),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(staked_sui)),
-            ],
-            gas_budget,
-            gas_price,
-        ))
-    }
-
-    pub async fn request_switch_delegation(
-        &self,
-        signer: SuiAddress,
-        delegation: ObjectID,
-        staked_sui: ObjectID,
-        new_validator_address: SuiAddress,
-        gas: Option<ObjectID>,
-        gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
-        let delegation = self.get_object_ref(delegation).await?;
-        let staked_sui = self.get_object_ref(staked_sui).await?;
-        let gas_price = self.0.get_reference_gas_price().await?;
-        let gas = self
-            .select_gas(signer, gas, gas_budget, vec![], gas_price)
-            .await?;
-        Ok(TransactionData::new_move_call(
-            signer,
-            SUI_FRAMEWORK_OBJECT_ID,
-            SUI_SYSTEM_MODULE_NAME.to_owned(),
-            SWITCH_DELEGATION_FUN_NAME.to_owned(),
-            vec![],
-            gas,
-            vec![
-                CallArg::Object(ObjectArg::SharedObject {
-                    id: SUI_SYSTEM_STATE_OBJECT_ID,
-                    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                    mutable: true,
-                }),
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(delegation)),
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(staked_sui)),
-                CallArg::Pure(bcs::to_bytes(&new_validator_address)?),
             ],
             gas_budget,
             gas_price,

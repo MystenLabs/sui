@@ -11,13 +11,17 @@ use async_trait::async_trait;
 use mysten_metrics::monitored_scope;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::ConsensusOutput;
+use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
-use sui_types::base_types::AuthorityName;
-use sui_types::messages::ConsensusTransaction;
+use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
+use sui_types::messages::{
+    ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
+    VerifiedExecutableTransaction, VerifiedTransaction,
+};
 use sui_types::storage::ParentSync;
-use tracing::{debug, instrument, warn};
+use tracing::{debug, error, instrument};
 
 pub struct ConsensusHandler<T> {
     /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
@@ -71,8 +75,8 @@ fn update_hash(
     previous_hash.hash(&mut hasher);
     v.hash(&mut hasher);
     let hash = hasher.finish();
-    // Log hash for every sub dag
-    if index.sub_dag_index == 1 && last_seen_guard.index.sub_dag_index == 1 {
+    // Log hash every 100th transaction of the subdag
+    if index.transaction_index % 100 == 0 {
         debug!(
             "Integrity hash for consensus output at subdag {} is {:016x}",
             index.sub_dag_index, hash
@@ -94,10 +98,23 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
     ) {
         let _scope = monitored_scope("HandleConsensusOutput");
         let mut sequenced_transactions = Vec::new();
-        let mut seq = 0;
 
         let mut bytes = 0usize;
         let round = consensus_output.sub_dag.round();
+
+        /* (serialized, transaction, output_cert) */
+        let mut transactions = vec![];
+
+        let prologue_transaction = self.consensus_commit_prologue_transaction(
+            consensus_output.sub_dag.round(),
+            consensus_output.sub_dag.leader.metadata.created_at,
+        );
+        transactions.push((
+            vec![],
+            SequencedConsensusTransactionKind::System(prologue_transaction),
+            Arc::new(consensus_output.sub_dag.leader.clone()),
+        ));
+
         for (cert, batches) in consensus_output.batches {
             let author = cert.header.author.clone();
             let output_cert = Arc::new(cert);
@@ -111,39 +128,47 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                     ) {
                         Ok(transaction) => transaction,
                         Err(err) => {
-                            warn!(
-                                    "Ignoring malformed transaction (failed to deserialize) from {}: {}",
+                            // This should be prevented by batch verification, hence `error` log level
+                            error!(
+                                    "Ignoring unexpected malformed transaction (failed to deserialize) from {}: {}",
                                     author, err
                                 );
                             continue;
                         }
                     };
-                    let index = ExecutionIndices {
-                        last_committed_round: round,
-                        sub_dag_index: consensus_output.sub_dag.sub_dag_index,
-                        transaction_index: seq,
-                    };
+                    self.metrics
+                        .consensus_handler_processed
+                        .with_label_values(&[classify(&transaction)])
+                        .inc();
+                    let transaction = SequencedConsensusTransactionKind::External(transaction);
+                    transactions.push((serialized_transaction, transaction, output_cert.clone()));
+                }
+            }
+        }
 
-                    let index_with_hash =
-                        match update_hash(&self.last_seen, index, &serialized_transaction) {
-                            Some(i) => i,
-                            None => {
-                                debug!(
+        for (seq, (serialized, transaction, output_cert)) in transactions.into_iter().enumerate() {
+            let index = ExecutionIndices {
+                last_committed_round: round,
+                sub_dag_index: consensus_output.sub_dag.sub_dag_index,
+                transaction_index: seq as u64,
+            };
+
+            let index_with_hash = match update_hash(&self.last_seen, index, &serialized) {
+                Some(i) => i,
+                None => {
+                    debug!(
                 "Ignore consensus transaction at index {:?} as it appear to be already processed",
                 index
             );
-                                continue;
-                            }
-                        };
-
-                    sequenced_transactions.push(SequencedConsensusTransaction {
-                        certificate: output_cert.clone(),
-                        consensus_index: index_with_hash,
-                        transaction,
-                    });
-                    seq += 1;
+                    continue;
                 }
-            }
+            };
+
+            sequenced_transactions.push(SequencedConsensusTransaction {
+                certificate: output_cert.clone(),
+                consensus_index: index_with_hash,
+                transaction,
+            });
         }
 
         self.metrics
@@ -185,15 +210,92 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
     }
 }
 
+impl<T> ConsensusHandler<T> {
+    #[allow(dead_code)]
+    fn consensus_commit_prologue_transaction(
+        &self,
+        round: u64,
+        commit_timestamp_ms: u64,
+    ) -> VerifiedExecutableTransaction {
+        let transaction = VerifiedTransaction::new_consensus_commit_prologue(
+            self.epoch(),
+            round,
+            commit_timestamp_ms,
+        );
+        VerifiedExecutableTransaction::new_system(transaction, self.epoch())
+    }
+
+    fn epoch(&self) -> EpochId {
+        self.epoch_store.epoch()
+    }
+}
+
+fn classify(transaction: &ConsensusTransaction) -> &'static str {
+    match &transaction.kind {
+        ConsensusTransactionKind::UserTransaction(certificate) => {
+            if certificate.contains_shared_object() {
+                "shared_certificate"
+            } else {
+                "owned_certificate"
+            }
+        }
+        ConsensusTransactionKind::CheckpointSignature(_) => "checkpoint_signature",
+        ConsensusTransactionKind::EndOfPublish(_) => "end_of_publish",
+        ConsensusTransactionKind::CapabilityNotification(_) => "capability_notification",
+    }
+}
+
 pub struct SequencedConsensusTransaction {
     pub certificate: Arc<narwhal_types::Certificate>,
     pub consensus_index: ExecutionIndicesWithHash,
-    pub transaction: ConsensusTransaction,
+    pub transaction: SequencedConsensusTransactionKind,
+}
+
+pub enum SequencedConsensusTransactionKind {
+    External(ConsensusTransaction),
+    System(VerifiedExecutableTransaction),
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Hash, PartialEq, Eq, Debug)]
+pub enum SequencedConsensusTransactionKey {
+    External(ConsensusTransactionKey),
+    System(TransactionDigest),
+}
+
+impl SequencedConsensusTransactionKind {
+    pub fn key(&self) -> SequencedConsensusTransactionKey {
+        match self {
+            SequencedConsensusTransactionKind::External(ext) => {
+                SequencedConsensusTransactionKey::External(ext.key())
+            }
+            SequencedConsensusTransactionKind::System(txn) => {
+                SequencedConsensusTransactionKey::System(*txn.digest())
+            }
+        }
+    }
+
+    pub fn get_tracking_id(&self) -> u64 {
+        match self {
+            SequencedConsensusTransactionKind::External(ext) => ext.get_tracking_id(),
+            SequencedConsensusTransactionKind::System(_txn) => 0,
+        }
+    }
+
+    pub fn is_executable_transaction(&self) -> bool {
+        match self {
+            SequencedConsensusTransactionKind::External(ext) => ext.is_user_certificate(),
+            SequencedConsensusTransactionKind::System(_) => true,
+        }
+    }
 }
 
 impl SequencedConsensusTransaction {
     pub fn sender_authority(&self) -> AuthorityName {
         (&self.certificate.header.author).into()
+    }
+
+    pub fn key(&self) -> SequencedConsensusTransactionKey {
+        self.transaction.key()
     }
 }
 
@@ -210,7 +312,7 @@ impl VerifiedSequencedConsensusTransaction {
 impl SequencedConsensusTransaction {
     pub fn new_test(transaction: ConsensusTransaction) -> Self {
         Self {
-            transaction,
+            transaction: SequencedConsensusTransactionKind::External(transaction),
             certificate: Default::default(),
             consensus_index: Default::default(),
         }

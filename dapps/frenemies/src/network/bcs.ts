@@ -167,8 +167,10 @@ export const bcs = suiBcs
     projectUrl: "string",
     /** The network address of the validator (could also contain extra info such as port, DNS and etc.).  */
     netAddress: "vector<u8>",
+    /** The p2p address of the validator (could also contain extra info such as port, DNS and etc.).  */
+    p2pAddress: "vector<u8>",
     /** The address of the narwhal primary  */
-    consensusAddress: "vector<u8>",
+    primaryAddress: "vector<u8>",
     /** The address of the narwhal worker  */
     workerAddress: "vector<u8>",
     /** Total amount of validator stake that would be active in the next epoch.  */
@@ -179,6 +181,22 @@ export const bcs = suiBcs
     nextEpochGasPrice: "u64",
     /** The commission rate of the validator starting the next epoch, in basis point.  */
     nextEpochCommissionRate: "u64",
+    /** Next epoch's protocol public key of the validator */
+    nextEpochProtocolPubkeyBytes: "Option<vector<u8>>",
+    /** Next epoch's protocol key proof of posesssion of the validator */
+    nextEpochProofOfPossession: "Option<vector<u8>>",
+    /** Next epoch's network public key of the validator */
+    nextEpochNetworkPubkeyBytes: "Option<vector<u8>>",
+    /** Next epoch's worker public key of the validator */
+    nextEpochWorkerPubkeyBytes: "Option<vector<u8>>",
+    /** Next epoch's network address of the validator */
+    nextEpochNetAddress: "Option<vector<u8>>",
+    /** Next epoch's p2p address of the validator*/
+    nextEpochP2pAddress: "Option<vector<u8>>",
+    /** Next epoch's consensus address of the validator*/
+    nextEpochPrimaryAddress: "Option<vector<u8>>",
+    /** Next epoch's worker address of the validator*/
+    nextEpochWorkerAddress: "Option<vector<u8>>",
   })
 
   .registerEnumType("Option<T>", {

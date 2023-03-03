@@ -36,6 +36,7 @@ tower = { version = "0.4.13", features = ["full"] }
 tracing = "0.1.36"
 tap = "1.0.1"
 
+
 consensus = { path = "../consensus", package = "narwhal-consensus" }
 fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
@@ -53,6 +54,7 @@ anemo-tower.workspace = true
 fail = "0.5.1"
 
 [dev-dependencies]
+dashmap = "5.4.0"
 arc-swap = { version = "1.5.1", features = ["serde"] }
 async-trait = "0.1.61"
 executor = { path = "../executor", package = "narwhal-executor" }

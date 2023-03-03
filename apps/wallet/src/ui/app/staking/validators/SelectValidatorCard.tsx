@@ -6,16 +6,14 @@ import { useState, useMemo } from 'react';
 
 import { calculateAPY } from '../calculateAPY';
 import { calculateStakeShare } from '../calculateStakeShare';
-import { STATE_OBJECT, getName } from '../usePendingDelegation';
+import { useSystemState } from '../useSystemState';
 import { ValidatorListItem } from './ValidatorListItem';
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import { Text } from '_app/shared/text';
-import { validatorsFields } from '_app/staking/validatorsFields';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useGetObject } from '_hooks';
 
 type SortKeys = 'name' | 'stakeShare' | 'apy';
 const sortKeys: Record<SortKeys, string> = {
@@ -30,9 +28,7 @@ export function SelectValidatorCard() {
     );
     const [sortKey, setSortKey] = useState<SortKeys>('stakeShare');
     const [sortAscending, setSortAscending] = useState(true);
-    const { data, isLoading, isError } = useGetObject(STATE_OBJECT);
-
-    const validatorsData = data && validatorsFields(data);
+    const { data, isLoading, isError } = useSystemState();
 
     const selectValidator = (address: string) => {
         setSelectedValidator((state) => (state !== address ? address : null));
@@ -46,38 +42,26 @@ export function SelectValidatorCard() {
     };
 
     const totalStake = useMemo(() => {
-        if (!validatorsData) return 0;
-        return validatorsData?.validators.fields.active_validators.reduce(
-            (acc, curr) =>
-                (acc +=
-                    BigInt(
-                        curr.fields.delegation_staking_pool.fields.sui_balance
-                    ) + BigInt(curr.fields.stake_amount)),
+        if (!data) return 0;
+        return data.validators.active_validators.reduce(
+            (acc, curr) => (acc += BigInt(curr.staking_pool.sui_balance)),
             0n
         );
-    }, [validatorsData]);
+    }, [data]);
 
     const validatorList = useMemo(() => {
-        if (!validatorsData) return [];
+        if (!data) return [];
 
-        const sortedAsc = validatorsData.validators.fields.active_validators
+        const sortedAsc = data.validators.active_validators
             .map((validator) => ({
-                name: getName(validator.fields.metadata.fields.name),
-                address: validator.fields.metadata.fields.sui_address,
-                apy: calculateAPY(validator, +validatorsData.epoch),
+                name: validator.metadata.name,
+                address: validator.metadata.sui_address,
+                apy: calculateAPY(validator, +data.epoch),
                 stakeShare: calculateStakeShare(
-                    BigInt(
-                        validator.fields.delegation_staking_pool.fields
-                            .sui_balance
-                    ) + BigInt(validator.fields.stake_amount),
+                    BigInt(validator.staking_pool.sui_balance),
                     BigInt(totalStake)
                 ),
-                logo:
-                    validator.fields.metadata.fields.image_url &&
-                    typeof validator.fields.metadata.fields.image_url ===
-                        'string'
-                        ? validator.fields.metadata.fields.image_url
-                        : null,
+                logo: validator.metadata.image_url,
             }))
             .sort((a, b) => {
                 if (sortKey === 'name') {
@@ -89,7 +73,7 @@ export function SelectValidatorCard() {
                 return a[sortKey] - b[sortKey];
             });
         return sortAscending ? sortedAsc : sortedAsc.reverse();
-    }, [sortAscending, sortKey, validatorsData, totalStake]);
+    }, [sortAscending, sortKey, data, totalStake]);
 
     if (isLoading) {
         return (
@@ -171,7 +155,7 @@ export function SelectValidatorCard() {
                     </div>
                 </div>
                 <div className="flex items-start flex-col w-full mt-1 flex-1">
-                    {validatorsData &&
+                    {data &&
                         validatorList.map((validator) => (
                             <div
                                 className="cursor-pointer w-full relative"

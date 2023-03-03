@@ -2,8 +2,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub use crate::committee::EpochId;
+use crate::crypto::{
+    AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SignatureScheme,
+    SuiPublicKey, SuiSignature,
+};
+pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
+use crate::epoch_data::EpochData;
+use crate::error::ExecutionErrorKind;
+use crate::error::SuiError;
+use crate::error::{ExecutionError, SuiResult};
+use crate::gas_coin::GasCoin;
+use crate::messages_checkpoint::CheckpointTimestamp;
+use crate::multisig::MultiSigPublicKey;
+use crate::object::{Object, Owner};
+use crate::signature::GenericSignature;
+use crate::sui_serde::HexAccountAddress;
+use crate::sui_serde::Readable;
 use anyhow::anyhow;
 use fastcrypto::encoding::decode_bytes_hex;
+use fastcrypto::encoding::{Encoding, Hex};
+use fastcrypto::hash::{HashFunction, Sha3_256};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
@@ -16,24 +35,6 @@ use std::cmp::max;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::str::FromStr;
-
-pub use crate::committee::EpochId;
-use crate::crypto::{
-    AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SignatureScheme,
-    SuiPublicKey, SuiSignature,
-};
-pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
-use crate::epoch_data::EpochData;
-use crate::error::ExecutionErrorKind;
-use crate::error::SuiError;
-use crate::error::{ExecutionError, SuiResult};
-use crate::gas_coin::GasCoin;
-use crate::multisig::MultiSigPublicKey;
-use crate::object::{Object, Owner};
-use crate::signature::GenericSignature;
-use crate::sui_serde::Readable;
-use fastcrypto::encoding::{Encoding, Hex};
-use fastcrypto::hash::{HashFunction, Sha3_256};
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
@@ -74,7 +75,7 @@ pub type AuthorityName = AuthorityPublicKeyBytes;
 #[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct ObjectID(
     #[schemars(with = "Hex")]
-    #[serde_as(as = "Readable<Hex, _>")]
+    #[serde_as(as = "Readable<HexAccountAddress, _>")]
     AccountAddress,
 );
 
@@ -363,6 +364,8 @@ pub struct TxContext {
     digest: Vec<u8>,
     /// The current epoch number
     epoch: EpochId,
+    /// Timestamp that the epoch started at
+    epoch_timestamp_ms: CheckpointTimestamp,
     /// Number of `ObjectID`'s generated during execution of the current transaction
     ids_created: u64,
 }
@@ -373,6 +376,7 @@ impl TxContext {
             sender: AccountAddress::new(sender.0),
             digest: digest.into_inner().to_vec(),
             epoch: epoch_data.epoch_id(),
+            epoch_timestamp_ms: epoch_data.epoch_start_timestamp(),
             ids_created: 0,
         }
     }
@@ -422,13 +426,13 @@ impl TxContext {
         Self::new(
             &SuiAddress::random_for_testing_only(),
             &TransactionDigest::random(),
-            &EpochData::genesis(),
+            &EpochData::new_test(),
         )
     }
 
     // for testing
     pub fn with_sender_for_testing_only(sender: &SuiAddress) -> Self {
-        Self::new(sender, &TransactionDigest::random(), &EpochData::genesis())
+        Self::new(sender, &TransactionDigest::random(), &EpochData::new_test())
     }
 }
 
@@ -511,6 +515,11 @@ impl SequenceNumber {
 
     pub const fn from_u64(u: u64) -> Self {
         SequenceNumber(u)
+    }
+
+    pub fn increment(&mut self) {
+        assert_ne!(self.0, u64::MAX);
+        self.0 += 1;
     }
 
     pub fn increment_to(&mut self, next: SequenceNumber) {

@@ -18,7 +18,7 @@ use anemo_tower::{
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
 use anemo_tower::{rate_limit, set_header::SetResponseHeaderLayer};
-use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
+use config::{Committee, Parameters, SharedWorkerCache, WorkerId};
 use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey, PublicKey};
 use multiaddr::{Multiaddr, Protocol};
 use mysten_metrics::spawn_logged_monitored_task;
@@ -57,7 +57,7 @@ pub struct Worker {
     /// The id of this worker used for index-based lookup by other NW nodes.
     id: WorkerId,
     /// The committee information.
-    committee: SharedCommittee,
+    committee: Committee,
     /// The worker information cache.
     worker_cache: SharedWorkerCache,
     /// The configuration parameters
@@ -71,7 +71,7 @@ impl Worker {
         primary_name: PublicKey,
         keypair: NetworkKeyPair,
         id: WorkerId,
-        committee: SharedCommittee,
+        committee: Committee,
         worker_cache: SharedWorkerCache,
         parameters: Parameters,
         validator: impl TransactionValidator,
@@ -164,11 +164,10 @@ impl Worker {
             .unwrap();
         let addr = network::multiaddr_to_address(&address).unwrap();
 
-        let epoch_string: String = committee.load().epoch.to_string();
+        let epoch_string: String = committee.epoch.to_string();
 
         // Set up anemo Network.
         let our_primary_peer_id = committee
-            .load()
             .network_key(&primary_name)
             .map(|public_key| PeerId(public_key.0.to_bytes()))
             .unwrap();
@@ -295,12 +294,10 @@ impl Worker {
 
         // Connect worker to its corresponding primary.
         let primary_address = committee
-            .load()
             .primary(&primary_name)
             .expect("Our primary is not in the committee");
 
         let primary_network_key = committee
-            .load()
             .network_key(&primary_name)
             .expect("Our primary is not in the committee");
 
@@ -315,7 +312,7 @@ impl Worker {
         // update the peer_types with the "other_primary". We do not add them in the Network
         // struct, otherwise the networking library will try to connect to it
         let other_primaries: Vec<(PublicKey, Multiaddr, NetworkPublicKey)> =
-            committee.load().others_primaries(&primary_name);
+            committee.others_primaries(&primary_name);
         for (_, _, network_key) in other_primaries {
             peer_types.insert(
                 PeerId(network_key.0.to_bytes()),
@@ -323,7 +320,7 @@ impl Worker {
             );
         }
 
-        let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
+        let (connection_monitor_handle, _) = network::connectivity::ConnectionMonitor::spawn(
             network.downgrade(),
             network_connection_metrics,
             peer_types,
@@ -343,7 +340,6 @@ impl Worker {
             network_admin_server_base_port,
             network.clone(),
             shutdown_receivers.pop().unwrap(),
-            None,
         );
 
         let primary_connector_handle = PrimaryConnector::spawn(
@@ -495,7 +491,7 @@ impl Worker {
         let quorum_waiter_handle = QuorumWaiter::spawn(
             self.primary_name.clone(),
             self.id,
-            (*(*(*self.committee).load()).clone()).clone(),
+            self.committee.clone(),
             self.worker_cache.clone(),
             shutdown_receivers.pop().unwrap(),
             /* rx_message */ rx_quorum_waiter,

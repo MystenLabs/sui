@@ -2,14 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Check12, Copy12 } from '@mysten/icons';
+import { formatAddress, type SuiAddress } from '@mysten/sui.js';
 
-import { useMiddleEllipsis } from '../hooks';
 import { useAccounts } from '../hooks/useAccounts';
 import { useActiveAddress } from '../hooks/useActiveAddress';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import { Text } from '../shared/text';
-
-import type { SuiAddress } from '@mysten/sui.js/src';
 
 export type AccountItemProps = {
     address: SuiAddress;
@@ -22,7 +20,6 @@ export function AccountListItem({
 }: AccountItemProps) {
     const account = useAccounts([address])[0];
     const activeAddress = useActiveAddress();
-    const addressShort = useMiddleEllipsis(address);
     const copy = useCopyToClipboard(address, {
         copySuccessMessage: 'Address Copied',
     });
@@ -38,7 +35,7 @@ export function AccountListItem({
         >
             <div className="flex-1">
                 <Text color="steel-darker" variant="bodySmall" mono>
-                    {addressShort}
+                    {formatAddress(address)}
                 </Text>
             </div>
             {activeAddress === address ? (

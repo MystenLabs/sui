@@ -22,6 +22,7 @@ custom coins with <code><a href="balance.md#0x2_balance_Supply">Supply</a></code
 -  [Function `destroy_zero`](#0x2_balance_destroy_zero)
 -  [Function `create_staking_rewards`](#0x2_balance_create_staking_rewards)
 -  [Function `destroy_storage_rebates`](#0x2_balance_destroy_storage_rebates)
+-  [Function `destroy_supply`](#0x2_balance_destroy_supply)
 
 
 <pre><code></code></pre>
@@ -455,6 +456,32 @@ and nowhere else.
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="balance.md#0x2_balance_destroy_storage_rebates">destroy_storage_rebates</a>&lt;T&gt;(self: <a href="balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;) {
     <b>let</b> <a href="balance.md#0x2_balance_Balance">Balance</a> { value: _ } = self;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_balance_destroy_supply"></a>
+
+## Function `destroy_supply`
+
+Destroy a <code><a href="balance.md#0x2_balance_Supply">Supply</a></code> preventing any further minting and burning.
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="balance.md#0x2_balance_destroy_supply">destroy_supply</a>&lt;T&gt;(self: <a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="balance.md#0x2_balance_destroy_supply">destroy_supply</a>&lt;T&gt;(self: <a href="balance.md#0x2_balance_Supply">Supply</a>&lt;T&gt;): u64 {
+    <b>let</b> <a href="balance.md#0x2_balance_Supply">Supply</a> { value } = self;
+    value
 }
 </code></pre>
 

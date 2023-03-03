@@ -12,6 +12,7 @@ use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 use sui_types::{
     error::{SuiError, SuiResult},
@@ -228,7 +229,7 @@ impl<C> SafeClient<C> {
                         .verify(&committee)?,
                 ))
             }
-            TransactionStatus::Executed(cert_opt, effects) => {
+            TransactionStatus::Executed(cert_opt, effects, events) => {
                 let signed_effects = self.check_signed_effects(digest, effects, None)?;
                 match cert_opt {
                     Some(cert) => {
@@ -240,11 +241,13 @@ impl<C> SafeClient<C> {
                             )
                             .verify(&committee)?,
                             signed_effects,
+                            events,
                         ))
                     }
                     None => Ok(VerifiedTransactionInfoResponse::ExecutedWithoutCert(
                         transaction,
                         signed_effects,
+                        events,
                     )),
                 }
             }
@@ -308,6 +311,7 @@ where
     ) -> SuiResult<VerifiedHandleCertificateResponse> {
         Ok(VerifiedHandleCertificateResponse {
             signed_effects: self.check_signed_effects(digest, response.signed_effects, None)?,
+            events: response.events,
         })
     }
 
@@ -482,5 +486,11 @@ where
                 error!(?err, authority=?self.address, "Client error in handle_checkpoint");
             })?;
         Ok(resp)
+    }
+
+    pub async fn handle_system_state_object(&self) -> Result<SuiSystemState, SuiError> {
+        self.authority_client
+            .handle_system_state_object(SystemStateRequest { _unused: false })
+            .await
     }
 }

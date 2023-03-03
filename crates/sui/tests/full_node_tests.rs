@@ -32,7 +32,7 @@ use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
 use sui_types::{
-    base_types::{ObjectID, SuiAddress, TransactionDigest},
+    base_types::{ObjectID, SuiAddress},
     messages::TransactionInfoRequest,
 };
 use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_OBJECT_ID};
@@ -147,7 +147,7 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
             payment: gas_obj,
             owner: sponsor,
             price: 100,
-            budget: 10000,
+            budget: 1000000,
         },
     );
 
@@ -349,7 +349,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     // query all events
     let all_events = node
         .state()
-        .get_events(
+        .query_events(
             EventQuery::TimeRange {
                 start_time: ts.unwrap() - HOUR_MS,
                 end_time: ts.unwrap() + HOUR_MS,
@@ -378,7 +378,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     // query by sender
     let events_by_sender = node
         .state()
-        .get_events(EventQuery::Sender(sender), None, 10, false)
+        .query_events(EventQuery::Sender(sender), None, 10, false)
         .await?;
     assert_eq!(events_by_sender[0].1.tx_digest, digest);
     let events_by_sender = events_by_sender
@@ -398,7 +398,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     // query by tx digest
     let events_by_tx = node
         .state()
-        .get_events(EventQuery::Transaction(digest), None, 10, false)
+        .query_events(EventQuery::Transaction(digest), None, 10, false)
         .await?;
     assert_eq!(events_by_tx[0].1.tx_digest, digest);
     let events_by_tx = events_by_tx
@@ -418,7 +418,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     // query by recipient
     let events_by_recipient = node
         .state()
-        .get_events(
+        .query_events(
             EventQuery::Recipient(Owner::AddressOwner(receiver)),
             None,
             100,
@@ -431,7 +431,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     // query by object
     let mut events_by_object = node
         .state()
-        .get_events(EventQuery::Object(transferred_object), None, 100, false)
+        .query_events(EventQuery::Object(transferred_object), None, 100, false)
         .await?;
     let events_by_object = events_by_object.split_off(events_by_object.len() - 2);
     assert_eq!(events_by_object[0].1.tx_digest, digest);
@@ -449,7 +449,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     // Query by module ID
     let events_by_module = node
         .state()
-        .get_events(
+        .query_events(
             EventQuery::MoveModule {
                 package: SUI_FRAMEWORK_OBJECT_ID,
                 module: "transfer_object".to_string(),
@@ -662,8 +662,12 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
 
     let type_ = sui_framework_address_concat_string("::devnet_nft::MintNFTEvent");
     let type_tag = parse_struct_tag(&type_).unwrap();
-    let expected_parsed_event =
-        Event::move_event_to_move_struct(&type_tag, &bcs, &*node.state().module_cache).unwrap();
+    let expected_parsed_event = Event::move_event_to_move_struct(
+        &type_tag,
+        &bcs,
+        &**node.state().epoch_store_for_testing().module_cache(),
+    )
+    .unwrap();
     let (_, expected_parsed_event) =
         type_and_fields_from_move_struct(&type_tag, expected_parsed_event);
     let expected_event = SuiEvent::MoveEvent {
@@ -678,7 +682,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
     // Query by move event struct name
     let events_by_sender = node
         .state()
-        .get_events(EventQuery::MoveEvent(struct_tag_str), None, 10, false)
+        .query_events(EventQuery::MoveEvent(struct_tag_str), None, 10, false)
         .await?;
     assert_eq!(events_by_sender.len(), 1);
     assert_eq!(events_by_sender[0].1.event, expected_event);
@@ -919,14 +923,13 @@ async fn test_full_node_event_read_api_ok() {
     // genesis txn
     // The first txn emits TransferObject(sender), TransferObject(recipient), Gas
     // The second txn emits MoveEvent, NewObject and Gas
-    let tx_digests: Vec<TransactionDigest> = all_events
-        .data
-        .iter()
-        .map(|envelope| envelope.tx_digest)
-        .collect();
+    let tx_digests = all_events.data.iter().map(|envelope| envelope.tx_digest);
     // Sorted in ascending time
+    let tx_digests: Vec<_> = tx_digests
+        .filter(|d| *d == digest || *d == digest2)
+        .collect();
     assert_eq!(
-        tx_digests[tx_digests.len() - 6..],
+        tx_digests,
         vec![digest, digest, digest, digest2, digest2, digest2]
     );
 }
@@ -964,17 +967,20 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
     let ExecuteTransactionResponse::EffectsCert(res) = res;
-    let QuorumDriverResponse {
-        tx_cert: certified_txn,
-        effects_cert: certified_txn_effects,
-    } = rx.recv().await.unwrap().unwrap();
-    let (ct, cte, is_executed_locally) = *res;
-    assert_eq!(*ct.unwrap().digest(), digest);
-    assert_eq!(*certified_txn.unwrap().digest(), digest);
+    let (
+        tx,
+        QuorumDriverResponse {
+            effects_cert: certified_txn_effects,
+            events: txn_events,
+        },
+    ) = rx.recv().await.unwrap().unwrap();
+    let (cte, events, is_executed_locally) = *res;
+    assert_eq!(*tx.digest(), digest);
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(is_executed_locally);
+    assert_eq!(events.digest(), txn_events.digest());
     // verify that the node has sequenced and executed the txn
-    node.state().get_transaction(digest).await
+    node.state().get_executed_transaction_and_effects(digest).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForLocalExecution: {:?}", digest, e));
 
     // Test WaitForEffectsCert
@@ -989,17 +995,20 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
     let ExecuteTransactionResponse::EffectsCert(res) = res;
-    let QuorumDriverResponse {
-        tx_cert: certified_txn,
-        effects_cert: certified_txn_effects,
-    } = rx.recv().await.unwrap().unwrap();
-    let (ct, cte, is_executed_locally) = *res;
-    assert_eq!(*ct.unwrap().digest(), digest);
-    assert_eq!(*certified_txn.unwrap().digest(), digest);
+    let (
+        tx,
+        QuorumDriverResponse {
+            effects_cert: certified_txn_effects,
+            events: txn_events,
+        },
+    ) = rx.recv().await.unwrap().unwrap();
+    let (cte, events, is_executed_locally) = *res;
+    assert_eq!(*tx.digest(), digest);
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
+    assert_eq!(txn_events.digest(), events.digest());
     assert!(!is_executed_locally);
     wait_for_tx(digest, node.state().clone()).await;
-    node.state().get_transaction(digest).await
+    node.state().get_executed_transaction_and_effects(digest).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForEffectsCert: {:?}", digest, e));
 
     Ok(())

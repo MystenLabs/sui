@@ -128,7 +128,7 @@ Fetch objects owned by the address `0xbff6ccc8707aa517b4f1b95750a2a8c666012df3`
 ```typescript
 import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider();
-const objects = await provider.getOwnedObjectRefs(
+const objects = await provider.getObjectsOwnedByAddress(
   '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3',
 );
 ```

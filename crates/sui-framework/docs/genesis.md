@@ -12,6 +12,7 @@
 <pre><code><b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="clock.md#0x2_clock">0x2::clock</a>;
+<b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
 <b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
 <b>use</b> <a href="sui_system.md#0x2_sui_system">0x2::sui_system</a>;
@@ -57,12 +58,12 @@ Stake subisidy to be given out in the very first epoch. Placeholder value.
 
 
 
-<a name="0x2_genesis_INIT_STORAGE_FUND"></a>
+<a name="0x2_genesis_INIT_STAKE_SUBSIDY_FUND_BALANCE"></a>
 
-The initial amount of SUI locked in the storage fund.
+The initial balance of the Subsidy fund in Mist (1 Billion * 10^9)
 
 
-<pre><code><b>const</b> <a href="genesis.md#0x2_genesis_INIT_STORAGE_FUND">INIT_STORAGE_FUND</a>: u64 = 1;
+<pre><code><b>const</b> <a href="genesis.md#0x2_genesis_INIT_STAKE_SUBSIDY_FUND_BALANCE">INIT_STAKE_SUBSIDY_FUND_BALANCE</a>: u64 = 1000000000000000000;
 </code></pre>
 
 
@@ -76,7 +77,7 @@ It will create a singleton SuiSystemState object, which contains
 all the information we need in the system.
 
 
-<pre><code><b>fun</b> <a href="genesis.md#0x2_genesis_create">create</a>(validator_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_network_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_worker_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_proof_of_possessions: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_sui_addresses: <a href="">vector</a>&lt;<b>address</b>&gt;, validator_names: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_descriptions: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_image_urls: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_project_urls: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_net_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_consensus_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_worker_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_stakes: <a href="">vector</a>&lt;u64&gt;, validator_gas_prices: <a href="">vector</a>&lt;u64&gt;, validator_commission_rates: <a href="">vector</a>&lt;u64&gt;, protocol_version: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="genesis.md#0x2_genesis_create">create</a>(initial_sui_custody_account_address: <b>address</b>, validator_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_network_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_worker_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_proof_of_possessions: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_sui_addresses: <a href="">vector</a>&lt;<b>address</b>&gt;, validator_names: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_descriptions: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_image_urls: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_project_urls: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_net_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_p2p_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_primary_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_worker_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_gas_prices: <a href="">vector</a>&lt;u64&gt;, validator_commission_rates: <a href="">vector</a>&lt;u64&gt;, protocol_version: u64, system_state_version: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -86,6 +87,7 @@ all the information we need in the system.
 
 
 <pre><code><b>fun</b> <a href="genesis.md#0x2_genesis_create">create</a>(
+    initial_sui_custody_account_address: <b>address</b>,
     validator_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
     validator_network_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
     validator_worker_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
@@ -96,28 +98,30 @@ all the information we need in the system.
     validator_image_urls: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
     validator_project_urls: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
     validator_net_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
-    validator_consensus_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
+    validator_p2p_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
+    validator_primary_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
     validator_worker_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
-    validator_stakes: <a href="">vector</a>&lt;u64&gt;,
     validator_gas_prices: <a href="">vector</a>&lt;u64&gt;,
     validator_commission_rates: <a href="">vector</a>&lt;u64&gt;,
     protocol_version: u64,
+    system_state_version: u64,
     epoch_start_timestamp_ms: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> sui_supply = <a href="sui.md#0x2_sui_new">sui::new</a>(ctx);
-    <b>let</b> storage_fund = <a href="balance.md#0x2_balance_increase_supply">balance::increase_supply</a>(&<b>mut</b> sui_supply, <a href="genesis.md#0x2_genesis_INIT_STORAGE_FUND">INIT_STORAGE_FUND</a>);
+    <b>let</b> subsidy_fund = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> sui_supply, <a href="genesis.md#0x2_genesis_INIT_STAKE_SUBSIDY_FUND_BALANCE">INIT_STAKE_SUBSIDY_FUND_BALANCE</a>);
+    <b>let</b> storage_fund = <a href="balance.md#0x2_balance_zero">balance::zero</a>();
     <b>let</b> validators = <a href="_empty">vector::empty</a>();
     <b>let</b> count = <a href="_length">vector::length</a>(&validator_pubkeys);
     <b>assert</b>!(
         <a href="_length">vector::length</a>(&validator_sui_addresses) == count
-            && <a href="_length">vector::length</a>(&validator_stakes) == count
             && <a href="_length">vector::length</a>(&validator_names) == count
             && <a href="_length">vector::length</a>(&validator_descriptions) == count
             && <a href="_length">vector::length</a>(&validator_image_urls) == count
             && <a href="_length">vector::length</a>(&validator_project_urls) == count
             && <a href="_length">vector::length</a>(&validator_net_addresses) == count
-            && <a href="_length">vector::length</a>(&validator_consensus_addresses) == count
+            && <a href="_length">vector::length</a>(&validator_p2p_addresses) == count
+            && <a href="_length">vector::length</a>(&validator_primary_addresses) == count
             && <a href="_length">vector::length</a>(&validator_worker_addresses) == count
             && <a href="_length">vector::length</a>(&validator_gas_prices) == count
             && <a href="_length">vector::length</a>(&validator_commission_rates) == count,
@@ -135,9 +139,9 @@ all the information we need in the system.
         <b>let</b> image_url = *<a href="_borrow">vector::borrow</a>(&validator_image_urls, i);
         <b>let</b> project_url = *<a href="_borrow">vector::borrow</a>(&validator_project_urls, i);
         <b>let</b> net_address = *<a href="_borrow">vector::borrow</a>(&validator_net_addresses, i);
-        <b>let</b> consensus_address = *<a href="_borrow">vector::borrow</a>(&validator_consensus_addresses, i);
+        <b>let</b> p2p_address = *<a href="_borrow">vector::borrow</a>(&validator_p2p_addresses, i);
+        <b>let</b> primary_address = *<a href="_borrow">vector::borrow</a>(&validator_primary_addresses, i);
         <b>let</b> worker_address = *<a href="_borrow">vector::borrow</a>(&validator_worker_addresses, i);
-        <b>let</b> <a href="stake.md#0x2_stake">stake</a> = *<a href="_borrow">vector::borrow</a>(&validator_stakes, i);
         <b>let</b> gas_price = *<a href="_borrow">vector::borrow</a>(&validator_gas_prices, i);
         <b>let</b> commission_rate = *<a href="_borrow">vector::borrow</a>(&validator_commission_rates, i);
         <a href="_push_back">vector::push_back</a>(&<b>mut</b> validators, <a href="validator.md#0x2_validator_new">validator::new</a>(
@@ -151,12 +155,16 @@ all the information we need in the system.
             image_url,
             project_url,
             net_address,
-            consensus_address,
+            p2p_address,
+            primary_address,
             worker_address,
-            <a href="balance.md#0x2_balance_increase_supply">balance::increase_supply</a>(&<b>mut</b> sui_supply, <a href="stake.md#0x2_stake">stake</a>),
+            // TODO Figure out <b>if</b> we want <b>to</b> instead initialize validators <b>with</b> 0 stake.
+            // Initialize all validators <b>with</b> 1 Mist stake.
+            <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> sui_supply, 1),
             <a href="_none">option::none</a>(),
             gas_price,
             commission_rate,
+            0, // start operating right away at epoch 0
             ctx
         ));
         i = i + 1;
@@ -164,16 +172,21 @@ all the information we need in the system.
 
     <a href="sui_system.md#0x2_sui_system_create">sui_system::create</a>(
         validators,
-        sui_supply,
+        subsidy_fund,
         storage_fund,
         <a href="genesis.md#0x2_genesis_INIT_MAX_VALIDATOR_COUNT">INIT_MAX_VALIDATOR_COUNT</a>,
         <a href="genesis.md#0x2_genesis_INIT_MIN_VALIDATOR_STAKE">INIT_MIN_VALIDATOR_STAKE</a>,
         <a href="genesis.md#0x2_genesis_INIT_STAKE_SUBSIDY_AMOUNT">INIT_STAKE_SUBSIDY_AMOUNT</a>,
         protocol_version,
+        system_state_version,
         epoch_start_timestamp_ms,
+        ctx,
     );
 
     <a href="clock.md#0x2_clock_create">clock::create</a>();
+
+    // Transfer the remaining <a href="balance.md#0x2_balance">balance</a> of <a href="sui.md#0x2_sui">sui</a>'s supply <b>to</b> the initial account
+    <a href="sui.md#0x2_sui_transfer">sui::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(sui_supply, ctx), initial_sui_custody_account_address);
 }
 </code></pre>
 

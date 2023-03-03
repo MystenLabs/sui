@@ -10,7 +10,6 @@ import {
     getTransferObjectTransaction,
     getTransactionSignature,
     getMovePackageContent,
-    getObjectId,
     SUI_TYPE_ARG,
     getExecutionStatusType,
     getTotalGasUsed,
@@ -18,6 +17,10 @@ import {
     type SuiTransactionResponse,
     getGasData,
     getTransactionDigest,
+    fromSerializedSignature,
+    toB64,
+    type SignaturePubkeyPair,
+    type SuiAddress,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
@@ -50,12 +53,16 @@ import { DateCard } from '~/ui/DateCard';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { ObjectLink } from '~/ui/InternalLink';
 import { PageHeader } from '~/ui/PageHeader';
-import { SenderRecipient } from '~/ui/SenderRecipient';
 import { StatAmount } from '~/ui/StatAmount';
 import { TableHeader } from '~/ui/TableHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
 import { Tooltip } from '~/ui/Tooltip';
+import {
+    RecipientTransactionAddresses,
+    SenderTransactionAddress,
+    SponsorTransactionAddress,
+} from '~/ui/TransactionAddressSection';
 import { ReactComponent as ChevronDownIcon } from '~/ui/icons/chevron_down.svg';
 import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
@@ -118,12 +125,7 @@ function formatByTransactionKind(
                     category: 'address',
                 },
                 package: {
-                    // TODO: Simplify after v0.24.0 launched everywhere, when
-                    // moveCall.package is always an ObjectID (a string)
-                    value:
-                        typeof moveCall.package === 'string'
-                            ? moveCall.package
-                            : getObjectId(moveCall.package),
+                    value: moveCall.package,
                     link: true,
                     category: 'object',
                 },
@@ -163,6 +165,15 @@ function formatByTransactionKind(
         default:
             return {};
     }
+}
+
+function getSignatureFromAddress(
+    signatures: SignaturePubkeyPair[],
+    suiAddress: SuiAddress
+) {
+    return signatures.find(
+        (signature) => `0x${signature.pubKey.toSuiAddress()}` === suiAddress
+    );
 }
 
 type TxItemView = {
@@ -333,7 +344,7 @@ function TransactionView({
     );
 
     const txKindData = formatByTransactionKind(txKindName, txnDetails, sender);
-    const txEventData = transaction.effects.events?.map(eventToDisplay);
+    const txEventData = transaction.events?.map(eventToDisplay);
 
     let eventTitles: [string, string][] = [];
     const txEventDisplay = txEventData?.map((ed, index) => {
@@ -354,17 +365,6 @@ function TransactionView({
             {title}
         </div>
     ));
-
-    const transactionSignatureData = {
-        title: 'Transaction Signatures',
-        content: [
-            {
-                label: 'Signature',
-                value: getTransactionSignature(transaction),
-                monotypeClass: true,
-            },
-        ],
-    };
 
     const createdMutateData = generateMutatedCreated(transaction);
 
@@ -394,7 +394,9 @@ function TransactionView({
                       {
                           label: 'Argument',
                           monotypeClass: true,
-                          value: JSON.stringify(txKindData.arguments.value),
+                          value: JSON.stringify(
+                              txKindData.arguments.value ?? []
+                          ),
                       },
                   ],
               }
@@ -421,10 +423,23 @@ function TransactionView({
     const txError = getExecutionStatusError(transaction);
 
     const gasData = getGasData(transaction);
-
     const gasPrice = gasData.price || 1;
     const gasPayment = gasData.payment;
     const gasBudget = gasData.budget;
+    const gasOwner = gasData.owner;
+    const isSponsoredTransaction = gasOwner !== sender;
+
+    const transactionSignatures = getTransactionSignature(transaction);
+    const deserializedTransactionSignatures = transactionSignatures.map(
+        (signature) => fromSerializedSignature(signature)
+    );
+    const accountSignature = getSignatureFromAddress(
+        deserializedTransactionSignatures,
+        sender
+    );
+    const sponsorSignature = isSponsoredTransaction
+        ? getSignatureFromAddress(deserializedTransactionSignatures, gasOwner)
+        : null;
 
     const timestamp = transaction.timestamp_ms || transaction.timestampMs;
 
@@ -491,12 +506,23 @@ function TransactionView({
                                         </div>
                                     )
                                 )}
-
-                                <SenderRecipient
-                                    sender={sender}
-                                    transferCoin={!!coinTransfer}
-                                    recipients={recipients}
-                                />
+                                {isSponsoredTransaction && (
+                                    <div className="mt-10">
+                                        <SponsorTransactionAddress
+                                            sponsor={gasOwner}
+                                        />
+                                    </div>
+                                )}
+                                <div className="mt-10">
+                                    <SenderTransactionAddress sender={sender} />
+                                </div>
+                                {recipients.length > 0 && (
+                                    <div className="mt-10">
+                                        <RecipientTransactionAddresses
+                                            recipients={recipients}
+                                        />
+                                    </div>
+                                )}
                                 <div className="mt-5 flex w-full max-w-lg">
                                     {totalRecipientsCount >
                                         MAX_RECIPIENTS_PER_PAGE && (
@@ -544,7 +570,15 @@ function TransactionView({
                             )}
                         </div>
                         <div data-testid="gas-breakdown" className="mt-8">
-                            <TableHeader>Gas & Storage Fees</TableHeader>
+                            <TableHeader
+                                subText={
+                                    isSponsoredTransaction
+                                        ? '(Paid by Sponsor)'
+                                        : undefined
+                                }
+                            >
+                                Gas & Storage Fees
+                            </TableHeader>
 
                             <DescriptionList>
                                 <DescriptionItem title="Gas Payment">
@@ -640,7 +674,54 @@ function TransactionView({
                     )}
                     <TabPanel>
                         <div className={styles.txgridcomponent}>
-                            <ItemView data={transactionSignatureData} />
+                            {accountSignature && (
+                                <ItemView
+                                    data={{
+                                        title: 'Account Signature',
+                                        content: [
+                                            {
+                                                label: 'Scheme',
+                                                value: accountSignature.signatureScheme,
+                                            },
+                                            {
+                                                label: 'PubKey',
+                                                value: `0x${accountSignature.pubKey.toSuiAddress()}`,
+                                                monotypeClass: true,
+                                            },
+                                            {
+                                                label: 'Signature',
+                                                value: toB64(
+                                                    accountSignature.signature
+                                                ),
+                                            },
+                                        ],
+                                    }}
+                                />
+                            )}
+                            {sponsorSignature && (
+                                <ItemView
+                                    data={{
+                                        title: 'Sponsor Signature',
+                                        content: [
+                                            {
+                                                label: 'Scheme',
+                                                value: sponsorSignature.signatureScheme,
+                                            },
+                                            {
+                                                label: 'PubKey',
+                                                value: `0x${sponsorSignature.pubKey.toSuiAddress()}`,
+                                                monotypeClass: true,
+                                            },
+                                            {
+                                                label: 'Signature',
+                                                value: toB64(
+                                                    sponsorSignature.signature
+                                                ),
+                                            },
+                                        ],
+                                    }}
+                                />
+                            )}
                         </div>
                     </TabPanel>
                 </TabPanels>

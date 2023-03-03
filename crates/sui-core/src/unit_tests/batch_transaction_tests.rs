@@ -17,10 +17,10 @@ use sui_types::{
 #[tokio::test]
 async fn test_batch_transaction_ok() -> anyhow::Result<()> {
     // This test tests a sucecssful normal batch transaction.
-    // This batch transaction contains 100 transfers, and 100 Move calls.
+    // This batch transaction contains 5 transfers, and 5 Move calls.
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let (recipient, _): (_, AccountKeyPair) = get_key_pair();
-    const N: usize = 10;
+    const N: usize = 5;
     const TOTAL: usize = N + 1;
     let all_ids = (0..TOTAL).map(|_| ObjectID::random()).collect::<Vec<_>>();
     let (authority_state, package) = init_state_with_ids_and_object_basics(
@@ -89,7 +89,7 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
     // We make sure that the entire batch is rolled back, and only gas is charged.
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let (recipient, _): (_, AccountKeyPair) = get_key_pair();
-    const N: usize = 100;
+    const N: usize = 5;
     const TOTAL: usize = N + 1;
     let all_ids = (0..TOTAL).map(|_| ObjectID::random()).collect::<Vec<_>>();
     let (authority_state, package) = init_state_with_ids_and_object_basics(
@@ -161,11 +161,8 @@ async fn test_batch_contains_publish() -> anyhow::Result<()> {
     let tx = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await;
     assert!(matches!(
-        *response
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        SuiError::InvalidBatchTransaction { .. }
+        UserInputError::try_from(response.unwrap_err()).unwrap(),
+        UserInputError::InvalidBatchTransaction { .. }
     ));
     Ok(())
 }
@@ -194,18 +191,15 @@ async fn test_batch_contains_transfer_sui() -> anyhow::Result<()> {
     let tx = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await;
     assert!(matches!(
-        *response
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        SuiError::InvalidBatchTransaction { .. }
+        UserInputError::try_from(response.unwrap_err()).unwrap(),
+        UserInputError::InvalidBatchTransaction { .. }
     ));
     Ok(())
 }
 
 #[tokio::test]
 async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
-    // This test creates 100 Move call transactions batch, each with a budget of 5000.
+    // This test creates 10 Move call transactions batch, each with a budget of 5000.
     // However we provide a gas coin with only 49999 balance.
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let (authority_state, package) = init_state_with_ids_and_object_basics([]).await;
@@ -219,7 +213,7 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
         .insert_genesis_object(gas_object.clone())
         .await;
 
-    const N: usize = 100;
+    const N: usize = 10;
     let mut transactions = vec![];
     for _ in 0..N {
         transactions.push(SingleTransactionKind::Call(MoveCall {
@@ -244,11 +238,8 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
     let response = send_and_confirm_transaction(&authority_state, tx).await;
 
     assert!(matches!(
-        *response
-            .unwrap_err()
-            .collapse_if_single_transaction_input_error()
-            .unwrap(),
-        SuiError::GasBalanceTooLowToCoverGasBudget { .. }
+        UserInputError::try_from(response.unwrap_err()).unwrap(),
+        UserInputError::GasBalanceTooLowToCoverGasBudget { .. }
     ));
 
     Ok(())

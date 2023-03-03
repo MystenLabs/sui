@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { SUI_ADDRESS_LENGTH } from "../../typescript/src";
 import {
   BCS,
   BcsWriter,
@@ -14,7 +15,7 @@ import {
   getSuiMoveConfig,
 } from "./../src/index";
 
-describe("README Examples", () => {
+describe("BCS: README Examples", () => {
   it("quick start", () => {
     const bcs = new BCS(getSuiMoveConfig());
 
@@ -30,8 +31,14 @@ describe("README Examples", () => {
     });
 
     // deserialization: BCS bytes into Coin
-    let bcsBytes = "2b3962603a5a0a5915349523120e441a5d20be92001100A1001100A1";
-    let coin = bcs.de("Coin", bcsBytes, "hex");
+    let bytes = bcs
+      .ser("Coin", {
+        id: "0000000000000000000000000000000000000000000000000000000000000001",
+        value: 1000000n,
+      })
+      .toBytes();
+  
+    let coin = bcs.de("Coin", bytes);
 
     // serialization: Object into bytes
     let data = bcs.ser("Option<Coin>", { some: coin }).toString("hex");
@@ -40,7 +47,7 @@ describe("README Examples", () => {
   it("Example: All options used", () => {
     const bcs = new BCS({
       vectorType: "vector<T>",
-      addressLength: 20,
+      addressLength: SUI_ADDRESS_LENGTH,
       addressEncoding: "hex",
       genericSeparators: ["<", ">"],
       types: {
@@ -173,12 +180,51 @@ describe("README Examples", () => {
     // structure as the definition
     let _bytes = bcs
       .ser("Coin", {
-        id: "0x0000000000000000000000000000000000000005",
+        id: "0x0000000000000000000000000000000000000000000000000000000000000005",
         balance: {
           value: 100000000n,
         },
       })
       .toBytes();
+  });
+
+  it("Example: Generics", () => {
+    const bcs = new BCS(getSuiMoveConfig());
+
+    // Container -> the name of the type
+    // T -> type parameter which has to be passed in `ser()` or `de()` methods
+    // If you're not familiar with generics, treat them as type Templates
+    bcs.registerStructType(["Container", "T"], {
+      contents: "T",
+    });
+
+    // When serializing, we have to pass the type to use for `T`
+    bcs
+      .ser(["Container", BCS.U8], {
+        contents: 100,
+      })
+      .toString("hex");
+
+    // Reusing the same Container type with different contents.
+    // Mind that generics need to be passed as Array after the main type.
+    bcs
+      .ser(["Container", ["vector", BCS.BOOL]], {
+        contents: [true, false, true],
+      })
+      .toString("hex");
+
+    // Using multiple generics - you can use any string for convenience and
+    // readability. See how we also use array notation for a field definition.
+    bcs.registerStructType(["VecMap", "Key", "Val"], {
+      keys: ["vector", "Key"],
+      values: ["vector", "Val"],
+    });
+
+    // To serialize VecMap, we can use:
+    bcs.ser(["VecMap", BCS.STRING, BCS.STRING], {
+      keys: ["key1", "key2", "key3"],
+      values: ["value1", "value2", "value3"],
+    });
   });
 
   it("Example: Enum", () => {
@@ -222,7 +268,7 @@ describe("README Examples", () => {
 
     // Some value we want to serialize
     const coin = {
-      id: "0000000000000000000000000000000000000005",
+      id: "0000000000000000000000000000000000000000000000000000000000000005",
       value: 1111333333222n,
     };
 

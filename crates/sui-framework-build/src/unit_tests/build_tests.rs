@@ -16,9 +16,13 @@ fn generate_struct_layouts() {
     let pkg = BuildConfig::new_for_testing().build(path).unwrap();
     let registry = pkg.generate_struct_layouts();
     // check for a couple of types that aren't likely to go away
-    assert!(registry.contains_key("0000000000000000000000000000000000000001::string::String"));
-    assert!(registry.contains_key("0000000000000000000000000000000000000002::object::UID"));
-    assert!(
-        registry.contains_key("0000000000000000000000000000000000000002::tx_context::TxContext")
-    );
+    assert!(registry.contains_key(
+        "0000000000000000000000000000000000000000000000000000000000000001::string::String"
+    ));
+    assert!(registry.contains_key(
+        "0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+    ));
+    assert!(registry.contains_key(
+        "0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+    ));
 }

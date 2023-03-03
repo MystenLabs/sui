@@ -22,7 +22,7 @@ import {
 } from '_payloads/permissions';
 
 import type { ContentScriptConnection } from './connections/ContentScriptConnection';
-import type { SuiAddress } from '@mysten/sui.js/src';
+import type { SuiAddress } from '@mysten/sui.js';
 import type {
     Permission,
     PermissionResponse,
@@ -236,7 +236,8 @@ class Permissions {
     public async hasPermissions(
         origin: string,
         permissionTypes: readonly PermissionType[],
-        permission?: Permission | null
+        permission?: Permission | null,
+        address?: SuiAddress
     ): Promise<boolean> {
         const existingPermission = await this.getPermission(origin, permission);
         return Boolean(
@@ -244,20 +245,32 @@ class Permissions {
                 existingPermission.allowed &&
                 permissionTypes.every((permissionType) =>
                     existingPermission.permissions.includes(permissionType)
-                )
+                ) &&
+                (!address ||
+                    (address && existingPermission.accounts.includes(address)))
         );
     }
 
-    public async delete(origin: string) {
+    public async delete(origin: string, specificAccounts: SuiAddress[] = []) {
         const allPermissions = await this.getPermissions();
-        if (origin in allPermissions) {
-            delete allPermissions[origin];
+        const thePermission = allPermissions[origin];
+        if (thePermission) {
+            const remainingAccounts = specificAccounts.length
+                ? thePermission.accounts.filter(
+                      (anAccount) => !specificAccounts.includes(anAccount)
+                  )
+                : [];
+            if (!remainingAccounts.length) {
+                delete allPermissions[origin];
+            } else {
+                thePermission.accounts = remainingAccounts;
+            }
             await Browser.storage.local.set({
                 [PERMISSIONS_STORAGE_KEY]: allPermissions,
             });
             this.#events.emit('connectedAccountsChanged', {
                 origin,
-                accounts: [],
+                accounts: remainingAccounts,
             });
         }
     }

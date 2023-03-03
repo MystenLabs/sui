@@ -14,6 +14,8 @@ import {
   Struct,
   validate,
 } from 'superstruct';
+import { pkgVersion } from '../pkg-version';
+import { TARGETED_RPC_VERSION } from '../providers/json-rpc-provider';
 
 /**
  * An object defining headers to be passed to the RPC server
@@ -53,11 +55,7 @@ export class JsonRpcClient {
   private rpcClient: RpcClient;
 
   constructor(url: string, httpHeaders?: HttpHeaders) {
-    this.rpcClient = this.createRpcClient(url, httpHeaders);
-  }
-
-  private createRpcClient(url: string, httpHeaders?: HttpHeaders): RpcClient {
-    const client = new RpcClient(
+    this.rpcClient = new RpcClient(
       async (
         request: any,
         callback: (arg0: Error | null, arg1?: string | undefined) => void,
@@ -65,12 +63,13 @@ export class JsonRpcClient {
         const options = {
           method: 'POST',
           body: request,
-          headers: Object.assign(
-            {
-              'Content-Type': 'application/json',
-            },
-            httpHeaders || {},
-          ),
+          headers: {
+            'Content-Type': 'application/json',
+            'Client-Sdk-Type': 'typescript',
+            'Client-Sdk-Version': pkgVersion,
+            'Client-Target-Api-Version': TARGETED_RPC_VERSION,
+            ...httpHeaders,
+          },
         };
 
         try {
@@ -92,8 +91,6 @@ export class JsonRpcClient {
       },
       {},
     );
-
-    return client;
   }
 
   async requestWithType<T>(

@@ -473,6 +473,13 @@ impl<'b> GasMeter for GasStatus<'b> {
         // TODO (Gas Maintenance)
         Ok(())
     }
+
+    fn remaining_gas(&self) -> InternalGas {
+        if !self.charge {
+            return InternalGas::new(u64::MAX);
+        }
+        self.gas_left
+    }
 }
 
 pub fn new_from_instructions(mut instrs: Vec<(Bytecode, GasCost)>) -> CostTable {

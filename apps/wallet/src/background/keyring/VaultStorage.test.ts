@@ -10,6 +10,7 @@ import {
     setToSessionStorage,
     isSessionStorageSupported,
 } from '../storage-utils';
+import { Account } from './Account';
 import {
     EPHEMERAL_PASSWORD_KEY,
     EPHEMERAL_VAULT_KEY,
@@ -21,6 +22,7 @@ import {
     testDataVault2,
     testEntropySerialized,
     testMnemonic,
+    testEd25519,
 } from '_src/test-utils/vault';
 
 vi.mock('../storage-utils');
@@ -170,7 +172,7 @@ describe('VaultStorage', () => {
     describe('importKeypair', () => {
         it('throws when vault is locked', async () => {
             await expect(
-                VaultStorage.importKeypair(testEd25519Serialized, '12345')
+                VaultStorage.importKeypair(testEd25519Serialized, '12345', [])
             ).rejects.toThrow();
         });
 
@@ -184,9 +186,10 @@ describe('VaultStorage', () => {
             expect(
                 await VaultStorage.importKeypair(
                     testEd25519Serialized,
-                    testDataVault2.password
+                    testDataVault2.password,
+                    []
                 )
-            ).toBe(true);
+            ).toBeTruthy();
             expect(VaultStorage.getImportedKeys()?.length).toBe(1);
             expect(setToLocalStorage).toHaveBeenCalledOnce();
             expect(setToSessionStorage).toHaveBeenCalledTimes(2);
@@ -213,9 +216,10 @@ describe('VaultStorage', () => {
             expect(
                 await VaultStorage.importKeypair(
                     testEd25519Serialized,
-                    testDataVault1.password
+                    testDataVault1.password,
+                    [new Account({ type: 'imported', keypair: testEd25519 })]
                 )
-            ).toBe(false);
+            ).toBe(null);
         });
     });
 });

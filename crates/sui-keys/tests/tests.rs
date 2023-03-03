@@ -33,7 +33,8 @@ fn mnemonic_test() {
 #[test]
 fn sui_wallet_address_mnemonic_test() -> Result<(), anyhow::Error> {
     let phrase = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
-    let expected_address = SuiAddress::from_str("0x1a4623343cd42be47d67314fce0ad042f3c82685")?;
+    let expected_address =
+        SuiAddress::from_str("0x1a4623343cd42be47d67314fce0ad042f3c82685544bc91d8c11d24e74ba7357")?;
 
     let temp_dir = TempDir::new().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");

@@ -8,6 +8,7 @@ import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
 import { VaultStorage } from './VaultStorage';
 import Alarm from '_src/background/Alarms';
 import {
+    testEd25519,
     testEd25519Serialized,
     testMnemonic,
     testSecp256k1,
@@ -59,7 +60,7 @@ describe('Keyring', () => {
         describe('getActiveAccount', () => {
             it('returns as active account the first derived from mnemonic', async () => {
                 expect((await k.getActiveAccount())!.address).toBe(
-                    '0x9c08076187d961f1ed809a9d803fa49037a92039'
+                    '0x9c08076187d961f1ed809a9d803fa49037a92039d04f539255072713a180dd5c'
                 );
                 expect((await k.getActiveAccount())!.derivationPath).toBe(
                     "m/44'/784'/0'/0'/0'"
@@ -71,16 +72,10 @@ describe('Keyring', () => {
             it('creates the account with index 1 and emits a change event', async () => {
                 const eventSpy = vi.fn();
                 k.on('accountsChanged', eventSpy);
-                const result = await k.deriveNextAccount();
-                expect(result).toBe(true);
+                const account = await k.deriveNextAccount();
+                expect(account!.derivationPath).toBe("m/44'/784'/1'/0'/0'");
                 const accounts = k.getAccounts();
                 expect(accounts?.length).toBe(3);
-                expect(
-                    accounts?.find(
-                        (anAccount) =>
-                            anAccount.derivationPath === "m/44'/784'/1'/0'/0'"
-                    )
-                ).toBeTruthy();
                 expect(eventSpy).toHaveBeenCalledOnce();
                 expect(eventSpy.mock.calls[0][0].length).toBe(3);
             });
@@ -139,12 +134,12 @@ describe('Keyring', () => {
                 const eventSpy = vi.fn();
                 k.on('accountsChanged', eventSpy);
                 vaultStorageMock.verifyPassword.mockResolvedValue(true);
-                vaultStorageMock.importKeypair.mockResolvedValue(true);
+                vaultStorageMock.importKeypair.mockResolvedValue(testEd25519);
                 const added = await k.importAccountKeypair(
                     testEd25519Serialized,
                     'correct password'
                 );
-                expect(added).toBe(true);
+                expect(added).toBeTruthy();
                 expect(eventSpy).toHaveBeenCalledOnce();
             });
 
@@ -152,12 +147,12 @@ describe('Keyring', () => {
                 const eventSpy = vi.fn();
                 k.on('accountsChanged', eventSpy);
                 vaultStorageMock.verifyPassword.mockResolvedValue(true);
-                vaultStorageMock.importKeypair.mockResolvedValue(false);
+                vaultStorageMock.importKeypair.mockResolvedValue(null);
                 const added = await k.importAccountKeypair(
                     testEd25519Serialized,
                     'correct password'
                 );
-                expect(added).toBe(false);
+                expect(added).toBe(null);
                 expect(eventSpy).not.toHaveBeenCalled();
             });
 

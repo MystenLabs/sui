@@ -15,10 +15,9 @@ use std::time::Duration;
 use tokio::task::JoinHandle;
 use types::{
     Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
-    GetCertificatesRequest, GetCertificatesResponse, PrimaryMessage, PrimaryToPrimaryClient,
-    PrimaryToWorkerClient, RequestBatchRequest, WorkerBatchMessage, WorkerDeleteBatchesMessage,
-    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerReconfigureMessage,
-    WorkerSynchronizeMessage, WorkerToPrimaryClient, WorkerToWorkerClient,
+    GetCertificatesRequest, GetCertificatesResponse, PrimaryToPrimaryClient, PrimaryToWorkerClient,
+    RequestBatchRequest, WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
+    WorkerOurBatchMessage, WorkerSynchronizeMessage, WorkerToPrimaryClient, WorkerToWorkerClient,
 };
 
 fn unreliable_send<F, R, Fut>(
@@ -89,44 +88,6 @@ where
 // Primary-to-Primary
 //
 
-impl UnreliableNetwork<PrimaryMessage> for anemo::Network {
-    type Response = ();
-    fn unreliable_send(
-        &self,
-        peer: NetworkPublicKey,
-        message: &PrimaryMessage,
-    ) -> Result<JoinHandle<Result<anemo::Response<()>>>> {
-        let message = message.to_owned();
-        let f = move |peer| async move {
-            PrimaryToPrimaryClient::new(peer)
-                .send_message(message)
-                .await
-        };
-        unreliable_send(self, peer, f)
-    }
-}
-
-impl ReliableNetwork<PrimaryMessage> for anemo::Network {
-    type Response = ();
-    fn send(
-        &self,
-        peer: NetworkPublicKey,
-        message: &PrimaryMessage,
-    ) -> CancelOnDropHandler<Result<anemo::Response<()>>> {
-        let message = message.to_owned();
-        let f = move |peer| {
-            let message = message.clone();
-            async move {
-                PrimaryToPrimaryClient::new(peer)
-                    .send_message(message)
-                    .await
-            }
-        };
-
-        send(self.clone(), peer, f)
-    }
-}
-
 #[async_trait]
 impl PrimaryToPrimaryRpc for anemo::Network {
     async fn get_certificates(
@@ -164,38 +125,6 @@ impl PrimaryToPrimaryRpc for anemo::Network {
 //
 // Primary-to-Worker
 //
-
-impl UnreliableNetwork<WorkerReconfigureMessage> for anemo::Network {
-    type Response = ();
-    fn unreliable_send(
-        &self,
-        peer: NetworkPublicKey,
-        message: &WorkerReconfigureMessage,
-    ) -> Result<JoinHandle<Result<anemo::Response<()>>>> {
-        let message = message.to_owned();
-        let f =
-            move |peer| async move { PrimaryToWorkerClient::new(peer).reconfigure(message).await };
-        unreliable_send(self, peer, f)
-    }
-}
-
-impl ReliableNetwork<WorkerReconfigureMessage> for anemo::Network {
-    type Response = ();
-    fn send(
-        &self,
-        peer: NetworkPublicKey,
-        message: &WorkerReconfigureMessage,
-    ) -> CancelOnDropHandler<Result<anemo::Response<()>>> {
-        let message = message.to_owned();
-        let f = move |peer| {
-            let message = message.clone();
-            async move { PrimaryToWorkerClient::new(peer).reconfigure(message).await }
-        };
-
-        send(self.clone(), peer, f)
-    }
-}
-
 impl UnreliableNetwork<WorkerSynchronizeMessage> for anemo::Network {
     type Response = ();
     fn unreliable_send(

@@ -11,6 +11,7 @@ mod test_scenario;
 mod transfer;
 mod tx_context;
 mod types;
+mod validator;
 
 use crate::make_native;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
@@ -23,10 +24,7 @@ use move_vm_types::{
 };
 use std::sync::Arc;
 
-use self::crypto::{
-    bls12381, bulletproofs, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, elliptic_curve, groth16, hash,
-    hmac, tbls,
-};
+use self::crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac, tbls};
 
 pub fn all_natives(
     move_stdlib_addr: AccountAddress,
@@ -46,11 +44,6 @@ pub fn all_natives(
             "bls12381",
             "bls12381_min_pk_verify",
             make_native!(bls12381::bls12381_min_pk_verify),
-        ),
-        (
-            "bulletproofs",
-            "native_verify_full_range_proof",
-            make_native!(bulletproofs::verify_range_proof),
         ),
         (
             "dynamic_field",
@@ -117,31 +110,6 @@ pub fn all_natives(
             "ed25519",
             "ed25519_verify",
             make_native!(ed25519::ed25519_verify),
-        ),
-        (
-            "elliptic_curve",
-            "native_add_ristretto_point",
-            make_native!(elliptic_curve::add_ristretto_point),
-        ),
-        (
-            "elliptic_curve",
-            "native_subtract_ristretto_point",
-            make_native!(elliptic_curve::subtract_ristretto_point),
-        ),
-        (
-            "elliptic_curve",
-            "native_create_pedersen_commitment",
-            make_native!(elliptic_curve::pedersen_commit),
-        ),
-        (
-            "elliptic_curve",
-            "native_scalar_from_u64",
-            make_native!(elliptic_curve::scalar_from_u64),
-        ),
-        (
-            "elliptic_curve",
-            "native_scalar_from_bytes",
-            make_native!(elliptic_curve::scalar_from_bytes),
         ),
         ("event", "emit", make_native!(event::emit)),
         (
@@ -256,6 +224,11 @@ pub fn all_natives(
             "types",
             "is_one_time_witness",
             make_native!(types::is_one_time_witness),
+        ),
+        (
+            "validator",
+            "validate_metadata_bcs",
+            make_native!(validator::validate_metadata_bcs),
         ),
     ];
     sui_natives

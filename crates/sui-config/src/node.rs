@@ -19,7 +19,6 @@ use std::usize;
 use sui_keys::keypair_file::{read_authority_keypair_from_file, read_keypair_from_file};
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::base_types::SuiAddress;
-use sui_types::committee::StakeUnit;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::NetworkKeyPair;
@@ -99,6 +98,9 @@ pub struct NodeConfig {
     /// order to test protocol upgrades.
     #[serde(skip)]
     pub supported_protocol_versions: Option<SupportedProtocolVersions>,
+
+    #[serde(default)]
+    pub state_snapshot_config: StateSnapshotConfig,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
@@ -337,6 +339,21 @@ pub struct MetricsConfig {
     pub push_url: Option<String>,
 }
 
+#[derive(Default, Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct StateSnapshotConfig {
+    pub enabled: bool,
+}
+
+impl StateSnapshotConfig {
+    pub fn validator_config() -> Self {
+        Self { enabled: false }
+    }
+    pub fn fullnode_config() -> Self {
+        Self { enabled: true }
+    }
+}
+
 /// Publicly known information about a validator
 /// TODO read most of this from on-chain
 #[serde_as]
@@ -348,8 +365,6 @@ pub struct ValidatorInfo {
     pub protocol_key: AuthorityPublicKeyBytes,
     pub worker_key: NetworkPublicKey,
     pub network_key: NetworkPublicKey,
-    pub stake: StakeUnit,
-    pub delegation: StakeUnit,
     pub gas_price: u64,
     pub commission_rate: u64,
     pub network_address: Multiaddr,
@@ -386,14 +401,6 @@ impl ValidatorInfo {
         &self.account_key
     }
 
-    pub fn stake(&self) -> StakeUnit {
-        self.stake
-    }
-
-    pub fn delegation(&self) -> StakeUnit {
-        self.delegation
-    }
-
     pub fn gas_price(&self) -> u64 {
         self.gas_price
     }
@@ -418,15 +425,11 @@ impl ValidatorInfo {
         &self.p2p_address
     }
 
+    //TODO remove this
     pub fn voting_rights(validator_set: &[Self]) -> BTreeMap<AuthorityPublicKeyBytes, u64> {
         validator_set
             .iter()
-            .map(|validator| {
-                (
-                    validator.protocol_key(),
-                    validator.stake() + validator.delegation(),
-                )
-            })
+            .map(|validator| (validator.protocol_key(), 1))
             .collect()
     }
 }

@@ -27,7 +27,7 @@ module sui::table_vec_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = sui::table_vec::ETABLE_NONEMPTY)]
+    #[expected_failure(abort_code = sui::table_vec::ETableNonEmpty)]
     fun destroy_non_empty_aborts() {
         let scenario = ts::begin(TEST_SENDER_ADDR);
         let table_vec = table_vec::singleton(1, ts::ctx(&mut scenario));
@@ -36,7 +36,7 @@ module sui::table_vec_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = sui::table_vec::EINDEX_OUT_OF_BOUND)]
+    #[expected_failure(abort_code = sui::table_vec::EIndexOutOfBound)]
     fun pop_back_empty_aborts() {
         let scenario = ts::begin(TEST_SENDER_ADDR);
         let table_vec = table_vec::empty<u64>(ts::ctx(&mut scenario));
@@ -46,7 +46,7 @@ module sui::table_vec_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = sui::table_vec::EINDEX_OUT_OF_BOUND)]
+    #[expected_failure(abort_code = sui::table_vec::EIndexOutOfBound)]
     fun borrow_out_of_bounds_aborts() {
         let scenario = ts::begin(TEST_SENDER_ADDR);
         let table_vec = table_vec::singleton(1, ts::ctx(&mut scenario));
@@ -56,7 +56,7 @@ module sui::table_vec_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = sui::table_vec::EINDEX_OUT_OF_BOUND)]
+    #[expected_failure(abort_code = sui::table_vec::EIndexOutOfBound)]
     fun borrow_mut_out_of_bounds_aborts() {
         let scenario = ts::begin(TEST_SENDER_ADDR);
         let table_vec = table_vec::singleton(1, ts::ctx(&mut scenario));

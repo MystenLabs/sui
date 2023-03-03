@@ -4,7 +4,7 @@
 use anemo::types::response::StatusCode;
 use anyhow::Result;
 use async_trait::async_trait;
-use config::{SharedCommittee, SharedWorkerCache, WorkerId};
+use config::{Committee, SharedWorkerCache, WorkerId};
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -17,7 +17,7 @@ use tracing::{debug, error, info, trace, warn};
 use types::{
     metered_channel::Sender, Batch, BatchDigest, PrimaryToWorker, RequestBatchRequest,
     RequestBatchResponse, WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
-    WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
+    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
 };
 
 use mysten_metrics::monitored_future;
@@ -86,7 +86,7 @@ pub struct PrimaryReceiverHandler<V> {
     // The id of this worker.
     pub id: WorkerId,
     // The committee information.
-    pub committee: SharedCommittee,
+    pub committee: Committee,
     // The worker information cache.
     pub worker_cache: SharedWorkerCache,
     // The batch store
@@ -101,19 +101,6 @@ pub struct PrimaryReceiverHandler<V> {
 
 #[async_trait]
 impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
-    async fn reconfigure(
-        &self,
-        _request: anemo::Request<WorkerReconfigureMessage>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-        // TODO: remove the endpoint on follow up PR
-        // Notify all other tasks.
-        //self.tx_shutdown
-        //    .send()
-        //    .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
-
-        Ok(anemo::Response::new(()))
-    }
-
     async fn synchronize(
         &self,
         request: anemo::Request<WorkerSynchronizeMessage>,

@@ -160,9 +160,9 @@ export function LatestTxCard({
     const recentTx = useMemo(
         () =>
             transactionQuery.data
-                ? genTableDataFromTxData(transactionQuery.data, truncateLength)
+                ? genTableDataFromTxData(transactionQuery.data)
                 : null,
-        [transactionQuery.data, truncateLength]
+        [transactionQuery.data]
     );
 
     const stats = {
@@ -254,12 +254,12 @@ export function LatestTxCard({
                                 rowCount={15}
                                 rowHeight="16px"
                                 colHeadings={[
-                                    'Time',
                                     'Type',
                                     'Transaction ID',
                                     'Addresses',
                                     'Amount',
                                     'Gas',
+                                    'Time',
                                 ]}
                                 colWidths={[
                                     '85px',

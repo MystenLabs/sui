@@ -66,19 +66,19 @@ pub(crate) enum BincodeErrorDef {
 impl fmt::Display for BincodeErrorDef {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            BincodeErrorDef::Io(ref ioerr) => write!(fmt, "io error: {}", ioerr),
+            BincodeErrorDef::Io(ref ioerr) => write!(fmt, "io error: {ioerr}"),
             BincodeErrorDef::InvalidUtf8Encoding(ref e) => {
-                write!(fmt, "{}", e)
+                write!(fmt, "{e}")
             }
             BincodeErrorDef::InvalidBoolEncoding(b) => {
-                write!(fmt, "expected 0 or 1, found {}", b)
+                write!(fmt, "expected 0 or 1, found {b}")
             }
-            BincodeErrorDef::InvalidCharEncoding => write!(fmt, "{:?}", self),
+            BincodeErrorDef::InvalidCharEncoding => write!(fmt, "{self:?}"),
             BincodeErrorDef::InvalidTagEncoding(tag) => {
-                write!(fmt, "found {}", tag)
+                write!(fmt, "found {tag}")
             }
-            BincodeErrorDef::SequenceMustHaveLength => write!(fmt, "{:?}", self),
-            BincodeErrorDef::SizeLimit => write!(fmt, "{:?}", self),
+            BincodeErrorDef::SequenceMustHaveLength => write!(fmt, "{self:?}"),
+            BincodeErrorDef::SizeLimit => write!(fmt, "{self:?}"),
             BincodeErrorDef::DeserializeAnyNotSupported => write!(
                 fmt,
                 "Bincode does not support the serde::Deserializer::deserialize_any method"

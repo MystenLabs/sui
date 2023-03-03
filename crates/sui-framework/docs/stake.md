@@ -84,12 +84,12 @@ TODO: this is a placehodler number and may be changed.
 
 
 
-<a name="0x2_stake_ENONZERO_BALANCE"></a>
+<a name="0x2_stake_ENonzeroBalance"></a>
 
 Error number for when a Stake with nonzero balance is burnt.
 
 
-<pre><code><b>const</b> <a href="stake.md#0x2_stake_ENONZERO_BALANCE">ENONZERO_BALANCE</a>: u64 = 0;
+<pre><code><b>const</b> <a href="stake.md#0x2_stake_ENonzeroBalance">ENonzeroBalance</a>: u64 = 0;
 </code></pre>
 
 

@@ -5,7 +5,6 @@
 #[path = "../unit_tests/narwhal_manager_tests.rs"]
 pub mod narwhal_manager_tests;
 
-use arc_swap::ArcSwap;
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
 use narwhal_config::{Committee, Epoch, Parameters, SharedWorkerCache, WorkerId};
@@ -114,7 +113,7 @@ impl NarwhalManager {
     // Starts the Narwhal (primary & worker(s)) - if not already running.
     pub async fn start<State, TxValidator: TransactionValidator>(
         &self,
-        committee: Arc<Committee>,
+        committee: Committee,
         shared_worker_cache: SharedWorkerCache,
         execution_state: Arc<State>,
         tx_validator: TxValidator,
@@ -150,7 +149,7 @@ impl NarwhalManager {
                 .start(
                     self.primary_keypair.copy(),
                     self.network_keypair.copy(),
-                    Arc::new(ArcSwap::new(committee.clone())),
+                    committee.clone(),
                     shared_worker_cache.clone(),
                     &store,
                     execution_state.clone(),
@@ -187,7 +186,7 @@ impl NarwhalManager {
                 .start(
                     name.clone(),
                     id_keypair_copy,
-                    Arc::new(ArcSwap::new(committee.clone())),
+                    committee.clone(),
                     shared_worker_cache.clone(),
                     &store,
                     tx_validator.clone(),

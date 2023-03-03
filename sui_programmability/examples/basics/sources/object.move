@@ -24,7 +24,7 @@ module basics::object {
 
     /// An object that can be stored inside global objects or other child
     /// objects, but cannot be placed in the global object pool on its own.
-    /// Note that it doesn't need an ID field
+    /// Note that it doesn't need an ID field.
     struct ChildObject has store {
         a_field: bool,
     }
@@ -69,30 +69,29 @@ module basics::object {
     }
 
     /// Example of an entrypoint function to be embedded in a Sui
-    /// transaction. The first argument of an entrypoint is always a
-    /// special `TxContext` created by the runtime that is useful for deriving
+    /// transaction. A possible argument of an entrypoint function is a
+    /// `TxContext` created by the runtime that is useful for deriving
     /// new id's or determining the sender of the transaction.
-    /// After the `TxContext`, entrypoints can take struct types with the `key`
+    /// Next to the `TxContext`, entrypoints can take struct types with the `key`
     /// attribute as input, as well as primitive types like ints, bools, ...
     ///
     /// A Sui transaction must declare the ID's of each object it will
     /// access + any primitive inputs. The runtime that processes the
     /// transaction fetches the values associated with the ID's, type-checks
-    /// the values + primitive inputs against the function signature of the
-    /// `main`, then calls the function with these values.
+    /// the values + primitive inputs against the function signature
+    /// , then calls the `main` function with these values.
     ///
     /// If the script terminates successfully, the runtime collects changes to
     /// input objects + created objects + emitted events, increments the
-    /// sequence number each object, creates a hash that commits to the
+    /// sequence number of each object, creates a hash that commits to the
     /// outputs, etc.
     public entry fun main(
-        to_read: &Object,
-        to_write: &mut Object,
-        to_consume: Object,
+        to_read: &Object,      // The argument of type Object is passed as a read-only reference
+        to_write: &mut Object, // The argument is passed as a mutable reference
+        to_consume: Object,    // The argument is passed as a value
         // ... end objects, begin primitive type inputs
         int_input: u64,
         recipient: address,
-        // end primitive types. last arg must be TxContext
         ctx: &mut TxContext,
     ) {
         let v = read_field(to_read);

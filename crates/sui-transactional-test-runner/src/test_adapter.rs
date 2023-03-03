@@ -25,9 +25,7 @@ use move_transactional_test_runner::{
     framework::{CompiledState, MoveTestAdapter},
     tasks::{InitCommand, SyntaxChoice, TaskInput},
 };
-use move_vm_runtime::{
-    move_vm::MoveVM, native_functions::NativeFunctionTable, session::SerializedReturnValues,
-};
+use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues};
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::fmt::Write;
@@ -38,9 +36,9 @@ use std::{
 };
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter::new_move_vm, execution_mode};
+use sui_core::transaction_input_checker::check_objects;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::clock::Clock;
 use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiCostTable;
 use sui_types::id::UID;
@@ -51,14 +49,13 @@ use sui_types::{
     crypto::{get_key_pair_from_rng, AccountKeyPair},
     event::Event,
     gas,
-    messages::{
-        ExecutionStatus, InputObjects, TransactionData, TransactionEffects, VerifiedTransaction,
-    },
+    messages::{ExecutionStatus, TransactionData, TransactionEffects, VerifiedTransaction},
     object::{self, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
     object::{MoveObject, Owner},
     MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
     SUI_FRAMEWORK_ADDRESS,
 };
+use sui_types::{clock::Clock, object::OBJECT_START_VERSION};
 use sui_types::{gas::SuiGasStatus, temporary_store::TemporaryStore};
 
 pub(crate) type FakeID = u64;
@@ -74,7 +71,6 @@ const RNG_SEED: [u8; 32] = [
 pub struct SuiTestAdapter<'a> {
     vm: Arc<MoveVM>,
     pub(crate) storage: Arc<InMemoryStorage>,
-    native_functions: NativeFunctionTable,
     pub(crate) compiled_state: CompiledState<'a>,
     accounts: BTreeMap<String, (SuiAddress, AccountKeyPair)>,
     default_syntax: SyntaxChoice,
@@ -129,12 +125,14 @@ fn create_genesis_module_objects() -> Genesis {
     let packages = vec![
         Object::new_package(
             std_modules.clone(),
+            OBJECT_START_VERSION,
             TransactionDigest::genesis(),
             PROTOCOL_CONSTANTS.max_move_package_size(),
         )
         .unwrap(),
         Object::new_package(
             sui_modules.clone(),
+            OBJECT_START_VERSION,
             TransactionDigest::genesis(),
             PROTOCOL_CONSTANTS.max_move_package_size(),
         )
@@ -250,9 +248,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         }
 
         let mut test_adapter = Self {
-            vm: Arc::new(new_move_vm(native_functions.clone(), &PROTOCOL_CONSTANTS).unwrap()),
+            vm: Arc::new(new_move_vm(native_functions, &PROTOCOL_CONSTANTS).unwrap()),
             storage: Arc::new(InMemoryStorage::new(objects)),
-            native_functions,
             compiled_state: CompiledState::new(
                 named_address_mapping,
                 pre_compiled_deps,
@@ -517,7 +514,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             SuiSubcommand::ConsensusCommitPrologue(ConsensusCommitPrologueCommand {
                 timestamp_ms,
             }) => {
-                let transaction = VerifiedTransaction::new_consensus_commit_prologue(timestamp_ms);
+                let transaction =
+                    VerifiedTransaction::new_consensus_commit_prologue(0, 0, timestamp_ms);
                 let summary = self.execute_txn(transaction, GAS_VALUE_FOR_TESTING)?;
                 let output = self.object_summary_output(&summary, false);
                 Ok(output)
@@ -566,9 +564,12 @@ impl<'a> SuiTestAdapter<'a> {
             gas::start_gas_metering(gas_budget, 1, 1, SuiCostTable::new(&PROTOCOL_CONSTANTS))
                 .unwrap()
         };
-
+        transaction
+            .data()
+            .transaction_data()
+            .validity_check(&PROTOCOL_CONSTANTS)?;
         let transaction_digest = TransactionDigest::new(self.rng.gen());
-        let objects_by_kind = transaction
+        let (input_objects, objects) = transaction
             .data()
             .intent_message
             .value
@@ -580,8 +581,12 @@ impl<'a> SuiTestAdapter<'a> {
                 let obj = self.storage.get_object(&id)?.clone();
                 Some((kind, obj))
             })
-            .collect::<Vec<_>>();
-        let input_objects = InputObjects::new(objects_by_kind);
+            .unzip();
+        let input_objects = check_objects(
+            transaction.data().transaction_data(),
+            input_objects,
+            objects,
+        )?;
         let transaction_dependencies = input_objects.transaction_dependencies();
         let shared_object_refs: Vec<_> = input_objects.filter_shared_objects();
         let temporary_store = TemporaryStore::new(
@@ -597,7 +602,6 @@ impl<'a> SuiTestAdapter<'a> {
             inner,
             TransactionEffects {
                 status,
-                events,
                 created,
                 mutated,
                 unwrapped,
@@ -618,10 +622,9 @@ impl<'a> SuiTestAdapter<'a> {
             transaction_digest,
             transaction_dependencies,
             &self.vm,
-            &self.native_functions,
             gas_status,
             // TODO: Support different epochs in transactional tests.
-            &EpochData::genesis(),
+            &EpochData::new_test(),
             &PROTOCOL_CONSTANTS,
         );
 
@@ -666,7 +669,7 @@ impl<'a> SuiTestAdapter<'a> {
                 created: created_ids,
                 written: written_ids,
                 deleted: deleted_ids,
-                events,
+                events: inner.events.data,
             }),
             ExecutionStatus::Failure { error, .. } => {
                 Err(anyhow::anyhow!(self.stabilize_str(format!(

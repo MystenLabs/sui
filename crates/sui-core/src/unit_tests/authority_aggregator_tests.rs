@@ -209,7 +209,7 @@ where
                 }
                 tx_data = Some(data);
             }
-            Ok(VerifiedTransactionInfoResponse::ExecutedWithCert(cert, _)) => {
+            Ok(VerifiedTransactionInfoResponse::ExecutedWithCert(cert, _, _)) => {
                 return cert.into_inner();
             }
             _ => {}
@@ -623,7 +623,7 @@ fn get_agg<A>(
     clients: BTreeMap<AuthorityName, A>,
     epoch: EpochId,
 ) -> AuthorityAggregator<A> {
-    let committee = Committee::new(epoch, ProtocolVersion::MIN, authorities).unwrap();
+    let committee = Committee::new(epoch, authorities).unwrap();
     let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
 
     AuthorityAggregator::new_with_timeouts(
@@ -700,7 +700,7 @@ async fn test_handle_transaction_response() {
     // Case 2
     // Validators return signed-tx with epoch 0, client expects 1
     // Update client to epoch 1
-    let committee_1 = Committee::new(1, ProtocolVersion::MIN, authorities.clone()).unwrap();
+    let committee_1 = Committee::new(1, authorities.clone()).unwrap();
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
@@ -721,6 +721,7 @@ async fn test_handle_transaction_response() {
         status: TransactionStatus::Executed(
             Some(cert_epoch_0.auth_sig().clone()),
             sign_tx_effects(effects, 0, *name_0, key_0),
+            TransactionEvents { data: vec![] },
         ),
     };
     clients
@@ -750,7 +751,7 @@ async fn test_handle_transaction_response() {
     )
     .await;
 
-    let committee_1 = Committee::new(1, ProtocolVersion::MIN, authorities.clone()).unwrap();
+    let committee_1 = Committee::new(1, authorities.clone()).unwrap();
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
@@ -807,6 +808,7 @@ async fn test_handle_transaction_response() {
         transaction_digest: *cert_epoch_0.digest(),
         status: ExecutionStatus::Failure {
             error: ExecutionFailureStatus::InsufficientGas,
+            command: None,
         },
         ..Default::default()
     };
@@ -913,6 +915,7 @@ fn set_tx_info_response_with_cert_and_effects<'a>(
             status: TransactionStatus::Executed(
                 Some(cert.auth_sig().clone()),
                 SignedTransactionEffects::new(epoch, effects.clone(), key, *name),
+                TransactionEvents { data: vec![] },
             ),
         };
         clients.get_mut(name).unwrap().set_tx_info_response(resp);

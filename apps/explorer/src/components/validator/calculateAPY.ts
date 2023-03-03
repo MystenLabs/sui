@@ -1,22 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { MoveActiveValidator } from '@mysten/sui.js';
+import type { Validator } from '@mysten/sui.js';
 
 import { roundFloat } from '~/utils/roundFloat';
 
 const APY_DECIMALS = 4;
 
-export function calculateAPY(validators: MoveActiveValidator, epoch: number) {
-    const { sui_balance, starting_epoch, delegation_token_supply } =
-        validators.fields.delegation_staking_pool.fields;
+export function calculateAPY(validator: Validator, epoch: number) {
+    const { sui_balance, starting_epoch, pool_token_balance } =
+        validator.staking_pool;
 
     const num_epochs_participated = +epoch - +starting_epoch;
     const apy =
         Math.pow(
-            1 +
-                (+sui_balance - +delegation_token_supply.fields.value) /
-                    +delegation_token_supply.fields.value,
+            1 + (+sui_balance - +pool_token_balance) / +pool_token_balance,
             365 / num_epochs_participated
         ) - 1;
 

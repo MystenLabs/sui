@@ -12,6 +12,7 @@ anyhow = { version = "1.0.64", features = ["backtrace"] }
 fastcrypto = { workspace = true }
 once_cell = "1.16"
 tempfile = "3.3.0"
+expect-test = "1.4.0"
 
 serde-reflection = "0.3.6"
 sui-types = { path = "../sui-types" }

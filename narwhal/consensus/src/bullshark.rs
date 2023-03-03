@@ -4,15 +4,18 @@
 use crate::metrics::ConsensusMetrics;
 use crate::{
     consensus::{ConsensusProtocol, ConsensusState, Dag},
-    utils,
+    utils, ConsensusError, Outcome,
 };
 use config::{Committee, Stake};
 use crypto::PublicKey;
+use fastcrypto::hash::Hash;
 use fastcrypto::traits::EncodeDecodeBase64;
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::time::Instant;
 use tracing::{debug, trace};
-use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round, StoreResult};
+use types::{
+    Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, ReputationScores, Round,
+};
 
 #[cfg(test)]
 #[path = "tests/bullshark_tests.rs"]
@@ -48,6 +51,9 @@ pub struct Bullshark {
     pub last_leader_election: LastRound,
     /// The most recent round of inserted certificate
     pub max_inserted_certificate_round: Round,
+    /// The number of committed subdags that will trigger the schedule change and reputation
+    /// score reset.
+    pub num_sub_dags_per_schedule: u64,
 }
 
 impl ConsensusProtocol for Bullshark {
@@ -55,7 +61,7 @@ impl ConsensusProtocol for Bullshark {
         &mut self,
         state: &mut ConsensusState,
         certificate: Certificate,
-    ) -> StoreResult<Vec<CommittedSubDag>> {
+    ) -> Result<(Outcome, Vec<CommittedSubDag>), ConsensusError> {
         debug!("Processing {:?}", certificate);
         let round = certificate.round();
 
@@ -63,9 +69,9 @@ impl ConsensusProtocol for Bullshark {
         self.log_error_if_missing_parents(&certificate, state);
 
         // Add the new certificate to the local storage.
-        if !state.try_insert(&certificate) {
-            // Certificate is not inserted. This operation is a no-op.
-            return Ok(Vec::new());
+        if !state.try_insert(&certificate)? {
+            // Certificate has not been added to the dag since it's below commit round
+            return Ok((Outcome::CertificateBelowCommitRound, vec![]));
         }
 
         // Report last leader election if was unsuccessful
@@ -94,14 +100,14 @@ impl ConsensusProtocol for Bullshark {
 
         // We only elect leaders for even round numbers.
         if r % 2 != 0 || r < 2 {
-            return Ok(Vec::new());
+            return Ok((Outcome::NoLeaderElectedForOddRound, Vec::new()));
         }
 
         // Get the certificate's digest of the leader. If we already ordered this leader,
         // there is nothing to do.
         let leader_round = r;
         if leader_round <= state.last_committed_round {
-            return Ok(Vec::new());
+            return Ok((Outcome::LeaderBelowCommitRound, Vec::new()));
         }
         let (leader_digest, leader) = match Self::leader(&self.committee, leader_round, &state.dag)
         {
@@ -112,7 +118,7 @@ impl ConsensusProtocol for Bullshark {
                     leader_has_support: false,
                 };
                 // leader has not been found - we don't have any certificate
-                return Ok(Vec::new());
+                return Ok((Outcome::LeaderNotFound, Vec::new()));
             }
         };
 
@@ -136,7 +142,7 @@ impl ConsensusProtocol for Bullshark {
         // a leader block means committing all its dependencies.
         if stake < self.committee.validity_threshold() {
             debug!("Leader {:?} does not have enough support", leader);
-            return Ok(Vec::new());
+            return Ok((Outcome::NotEnoughSupportForLeader, Vec::new()));
         }
 
         self.last_leader_election.leader_has_support = true;
@@ -163,10 +169,16 @@ impl ConsensusProtocol for Bullshark {
             }
 
             let next_sub_dag_index = state.latest_sub_dag_index + 1;
+
+            // We update the reputation score stored in state
+            let reputation_score =
+                self.update_reputation_score(state, &sequence, next_sub_dag_index);
+
             let sub_dag = CommittedSubDag {
                 certificates: sequence,
                 leader: leader.clone(),
                 sub_dag_index: next_sub_dag_index,
+                reputation_score,
             };
 
             // Persist the update.
@@ -176,6 +188,7 @@ impl ConsensusProtocol for Bullshark {
 
             // Increase the global consensus index.
             state.latest_sub_dag_index = next_sub_dag_index;
+            state.last_committed_leader = Some(sub_dag.leader.digest());
 
             committed_sub_dags.push(sub_dag);
         }
@@ -225,7 +238,7 @@ impl ConsensusProtocol for Bullshark {
             .committed_certificates
             .observe(total_committed_certificates as f64);
 
-        Ok(committed_sub_dags)
+        Ok((Outcome::Commit, committed_sub_dags))
     }
 }
 
@@ -236,6 +249,7 @@ impl Bullshark {
         store: Arc<ConsensusStore>,
         gc_depth: Round,
         metrics: Arc<ConsensusMetrics>,
+        num_sub_dags_per_schedule: u64,
     ) -> Self {
         Self {
             committee,
@@ -245,6 +259,7 @@ impl Bullshark {
             last_leader_election: LastRound::default(),
             max_inserted_certificate_round: 0,
             metrics,
+            num_sub_dags_per_schedule,
         }
     }
 
@@ -313,5 +328,47 @@ impl Bullshark {
 
         // Return its certificate and the certificate's digest.
         dag.get(&round).and_then(|x| x.get(&leader))
+    }
+
+    /// Updates and calculates the reputation score for the current commit managing any internal state.
+    /// It returns the updated reputation score.
+    fn update_reputation_score(
+        &mut self,
+        state: &mut ConsensusState,
+        committed_sequence: &[Certificate],
+        sub_dag_index: u64,
+    ) -> ReputationScores {
+        // we reset the scores for every schedule change window.
+        // TODO: when schedule change is implemented we should probably change a little bit
+        // this logic here.
+        if sub_dag_index % self.num_sub_dags_per_schedule == 0 {
+            state.last_consensus_reputation_score = ReputationScores::default()
+        }
+
+        // update the score for the previous leader. If no previous leader exists,
+        // then this is the first time we commit a leader, so no score update takes place
+        if let Some(previous_leader) = state.last_committed_leader {
+            for certificate in committed_sequence {
+                // TODO: we could iterate only the certificates of the round above the previous leader's round
+                if certificate
+                    .header
+                    .parents
+                    .iter()
+                    .any(|digest| *digest == previous_leader)
+                {
+                    state
+                        .last_consensus_reputation_score
+                        .add_score(certificate.origin(), 1);
+                }
+            }
+        }
+
+        // we check if this is the last subdag of the current schedule. If yes then we mark the
+        // scores as final_of_schedule = true so any downstream user can now that those are the last
+        // ones calculated for the current schedule.
+        state.last_consensus_reputation_score.final_of_schedule =
+            (sub_dag_index + 1) % self.num_sub_dags_per_schedule == 0;
+
+        state.last_consensus_reputation_score.clone()
     }
 }

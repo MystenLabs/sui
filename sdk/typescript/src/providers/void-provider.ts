@@ -31,7 +31,6 @@ import {
   RpcApiVersion,
   FaucetResponse,
   Order,
-  TransactionEffects,
   CoinMetadata,
   DevInspectResults,
   SuiSystemState,
@@ -45,10 +44,12 @@ import {
   CheckpointDigest,
   CheckPointContentsDigest,
   CommitteeInfo,
+  Checkpoint,
+  DryRunTransactionResponse,
 } from '../types';
 import { Provider } from './provider';
 
-import { DynamicFieldPage } from '../types/dynamic_fields';
+import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import { SerializedSignature } from '../cryptography/signature';
 
 export class VoidProvider extends Provider {
@@ -125,7 +126,10 @@ export class VoidProvider extends Provider {
   }
 
   // Objects
-  async getObjectsOwnedByAddress(_address: string): Promise<SuiObjectInfo[]> {
+  async getObjectsOwnedByAddress(
+    _address: string,
+    _typefilter?: string,
+  ): Promise<SuiObjectInfo[]> {
     throw this.newError('getObjectsOwnedByAddress');
   }
 
@@ -195,7 +199,7 @@ export class VoidProvider extends Provider {
     throw this.newError('devInspectTransaction');
   }
 
-  dryRunTransaction(_txBytes: Uint8Array): Promise<TransactionEffects> {
+  dryRunTransaction(_txBytes: Uint8Array): Promise<DryRunTransactionResponse> {
     throw this.newError('dryRunTransaction');
   }
 
@@ -209,7 +213,7 @@ export class VoidProvider extends Provider {
 
   getDynamicFieldObject(
     _parent_object_id: ObjectId,
-    _name: string,
+    _name: string | DynamicFieldName,
   ): Promise<GetObjectDataResponse> {
     throw this.newError('getDynamicFieldObject');
   }
@@ -314,6 +318,10 @@ export class VoidProvider extends Provider {
     _digest: CheckpointDigest,
   ): Promise<CheckpointSummary> {
     throw this.newError('getCheckpointSummaryByDigest');
+  }
+
+  async getCheckpoint(_id: CheckpointDigest | number): Promise<Checkpoint> {
+    throw this.newError('getCheckpoint');
   }
 
   async getCheckpointContents(

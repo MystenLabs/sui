@@ -26,6 +26,9 @@ interface WalletKitProviderProps extends Partial<WalletKitCoreOptions> {
   enableUnsafeBurner?: boolean;
   children: ReactNode;
   disableAutoConnect?: boolean;
+  // Define the wallet standard features that you will use. This will filter the list of wallets
+  // displayed to the user.
+  features?: string[];
 }
 
 export function WalletKitProvider({
@@ -36,11 +39,12 @@ export function WalletKitProvider({
   storageAdapter,
   storageKey,
   disableAutoConnect,
+  features,
 }: WalletKitProviderProps) {
   const adapters = useMemo(
     () =>
       configuredAdapters ?? [
-        new WalletStandardAdapterProvider(),
+        new WalletStandardAdapterProvider({ features }),
         ...(enableUnsafeBurner ? [new UnsafeBurnerWalletAdapter()] : []),
       ],
     [configuredAdapters]
@@ -77,7 +81,11 @@ export function WalletKitProvider({
 type UseWalletKit = WalletKitCoreState &
   Pick<
     WalletKitCore,
-    "connect" | "disconnect" | "signTransaction" | "signAndExecuteTransaction"
+    | "connect"
+    | "disconnect"
+    | "signMessage"
+    | "signTransaction"
+    | "signAndExecuteTransaction"
   >;
 
 export function useWalletKit(): UseWalletKit {
@@ -95,6 +103,7 @@ export function useWalletKit(): UseWalletKit {
     () => ({
       connect: walletKit.connect,
       disconnect: walletKit.disconnect,
+      signMessage: walletKit.signMessage,
       signTransaction: walletKit.signTransaction,
       signAndExecuteTransaction: walletKit.signAndExecuteTransaction,
       ...state,

@@ -18,13 +18,14 @@ use sui_core::{
     },
     validator_info::make_committee,
 };
-use sui_json_rpc_types::{SuiObjectRead, SuiTransaction, SuiTransactionEffects};
+use sui_json_rpc_types::{SuiObjectRead, SuiTransactionEffects};
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::{AuthorityName, SuiAddress};
+use sui_types::messages::TransactionEvents;
 use sui_types::{
     base_types::ObjectID,
-    committee::{Committee, EpochId, ProtocolVersion},
+    committee::{Committee, EpochId},
     crypto::{
         AggregateAuthenticator, AggregateAuthoritySignature, AuthorityQuorumSignInfo,
         AuthoritySignature,
@@ -56,14 +57,14 @@ pub mod workloads;
 /// responses from LocalValidatorAggregatorProxy and FullNodeProxy
 #[allow(clippy::large_enum_variant)]
 pub enum ExecutionEffects {
-    CertifiedTransactionEffects(CertifiedTransactionEffects),
+    CertifiedTransactionEffects(CertifiedTransactionEffects, TransactionEvents),
     SuiTransactionEffects(SuiTransactionEffects),
 }
 
 impl ExecutionEffects {
     pub fn mutated(&self) -> Vec<(ObjectRef, Owner)> {
         match self {
-            ExecutionEffects::CertifiedTransactionEffects(certified_effects) => {
+            ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 certified_effects.data().mutated.clone()
             }
             ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
@@ -77,7 +78,7 @@ impl ExecutionEffects {
 
     pub fn created(&self) -> Vec<(ObjectRef, Owner)> {
         match self {
-            ExecutionEffects::CertifiedTransactionEffects(certified_effects) => {
+            ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 certified_effects.data().created.clone()
             }
             ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
@@ -91,7 +92,7 @@ impl ExecutionEffects {
 
     pub fn quorum_sig(&self) -> Option<&AuthorityStrongQuorumSignInfo> {
         match self {
-            ExecutionEffects::CertifiedTransactionEffects(certified_effects) => {
+            ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 Some(certified_effects.auth_sig())
             }
             ExecutionEffects::SuiTransactionEffects(_) => None,
@@ -100,7 +101,7 @@ impl ExecutionEffects {
 
     pub fn gas_object(&self) -> (ObjectRef, Owner) {
         match self {
-            ExecutionEffects::CertifiedTransactionEffects(certified_effects) => {
+            ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 certified_effects.data().gas_object
             }
             ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => {
@@ -117,17 +118,11 @@ pub trait ValidatorProxy {
 
     async fn get_latest_system_state_object(&self) -> Result<SuiSystemState, anyhow::Error>;
 
-    async fn execute_transaction(
-        &self,
-        tx: Transaction,
-    ) -> anyhow::Result<(Option<SuiTransaction>, ExecutionEffects)>;
+    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects>;
 
     /// This function is similar to `execute_transaction` but does not check any validator's
     /// signature. It should only be used for benchmarks.
-    async fn execute_bench_transaction(
-        &self,
-        tx: Transaction,
-    ) -> anyhow::Result<(Option<SuiTransaction>, ExecutionEffects)>;
+    async fn execute_bench_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects>;
 
     fn clone_committee(&self) -> Committee;
 
@@ -158,9 +153,9 @@ impl LocalValidatorAggregatorProxy {
             .unwrap();
 
         let validator_info = genesis.validator_set();
-        let committee = make_committee(0, ProtocolVersion::MIN, validator_info).unwrap();
+        let committee = make_committee(0, &validator_info).unwrap();
         let clients = make_authority_clients(
-            validator_info,
+            &validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
             DEFAULT_REQUEST_TIMEOUT_SEC,
         );
@@ -186,9 +181,9 @@ impl LocalValidatorAggregatorProxy {
             .unwrap();
 
         let validator_info = configs.validator_set();
-        let committee = make_committee(0, ProtocolVersion::MIN, validator_info).unwrap();
+        let committee = make_committee(0, &validator_info).unwrap();
         let clients = make_authority_clients(
-            validator_info,
+            &validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
             DEFAULT_REQUEST_TIMEOUT_SEC,
         );
@@ -269,10 +264,10 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         auth_agg.get_latest_system_state_object_for_testing().await
     }
 
-    async fn execute_transaction(
-        &self,
-        tx: Transaction,
-    ) -> anyhow::Result<(Option<SuiTransaction>, ExecutionEffects)> {
+    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
+        if std::env::var("BENCH_MODE").is_ok() {
+            return self.execute_bench_transaction(tx).await;
+        }
         let tx_digest = *tx.digest();
         let tx = tx.verify()?;
         let mut retry_cnt = 0;
@@ -282,14 +277,12 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             match ticket.await {
                 Ok(resp) => {
                     let QuorumDriverResponse {
-                        tx_cert,
                         effects_cert,
+                        events,
                     } = resp;
-                    return Ok((
-                        tx_cert
-                            .map(|cert| cert.data().clone().try_into())
-                            .transpose()?,
-                        ExecutionEffects::CertifiedTransactionEffects(effects_cert.into()),
+                    return Ok(ExecutionEffects::CertifiedTransactionEffects(
+                        effects_cert.into(),
+                        events,
                     ));
                 }
                 Err(err) => {
@@ -304,10 +297,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         bail!("Transaction {:?} failed for {retry_cnt} times", tx_digest);
     }
 
-    async fn execute_bench_transaction(
-        &self,
-        tx: Transaction,
-    ) -> anyhow::Result<(Option<SuiTransaction>, ExecutionEffects)> {
+    async fn execute_bench_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
         // Store the epoch number; we read it from the votes and use it later to create the certificate.
         let mut epoch = 0;
 
@@ -334,7 +324,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                         votes.push(signature);
                     }
                     // The transaction may be submitted again in case the certificate's submission failed.
-                    TransactionStatus::Executed(cert, _effects) => {
+                    TransactionStatus::Executed(cert, _effects, _) => {
                         tracing::warn!("Transaction already submitted: {tx:?}");
                         if let Some(cert) = cert {
                             certificate = Some(CertifiedTransaction::new_from_data_and_sig(
@@ -401,6 +391,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         let mut futures = FuturesUnordered::new();
         total_stake = 0;
         let mut transaction_effects = None;
+        let mut transaction_events = None;
         for client in self.clients.values() {
             let fut = client.handle_certificate(certified_transaction.clone());
             futures.push(fut);
@@ -410,9 +401,13 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         while let Some(response) = futures.next().await {
             match response {
                 // If all goes well, the validators reply with signed effects.
-                Ok(HandleCertificateResponse { signed_effects }) => {
+                Ok(HandleCertificateResponse {
+                    signed_effects,
+                    events,
+                }) => {
                     let author = signed_effects.auth_sig().authority;
                     transaction_effects = Some(signed_effects.data().clone());
+                    transaction_events = Some(events);
                     total_stake += self.committee.weight(&author);
                 }
 
@@ -438,11 +433,11 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
         // Package the certificate and effects to return.
         let signed_material = certified_transaction.auth_sig().clone();
-        let tx = certified_transaction.data().clone().try_into()?;
         let effects = ExecutionEffects::CertifiedTransactionEffects(
             Envelope::new_from_data_and_sig(transaction_effects.unwrap(), signed_material),
+            transaction_events.unwrap(),
         );
-        Ok((Some(tx), effects))
+        Ok(effects)
     }
 
     fn clone_committee(&self) -> Committee {
@@ -490,11 +485,10 @@ impl FullNodeProxy {
 
         let resp = sui_client.read_api().get_committee_info(None).await?;
         let epoch = resp.epoch;
-        let protocol_version = resp.protocol_version;
         let committee_vec = resp.committee_info;
         let committee_map =
             BTreeMap::from_iter(committee_vec.into_iter().map(|(name, stake)| (name, stake)));
-        let committee = Committee::new(epoch, protocol_version, committee_map)?;
+        let committee = Committee::new(epoch, committee_map)?;
 
         Ok(Self {
             sui_client,
@@ -516,10 +510,7 @@ impl ValidatorProxy for FullNodeProxy {
         Ok(self.sui_client.read_api().get_sui_system_state().await?)
     }
 
-    async fn execute_transaction(
-        &self,
-        tx: Transaction,
-    ) -> anyhow::Result<(Option<SuiTransaction>, ExecutionEffects)> {
+    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
         let tx_digest = *tx.digest();
         let tx = tx.verify()?;
         let mut retry_cnt = 0;
@@ -537,9 +528,8 @@ impl ValidatorProxy for FullNodeProxy {
                 .await
             {
                 Ok(resp) => {
-                    let tx = resp.transaction;
                     let effects = ExecutionEffects::SuiTransactionEffects(resp.effects);
-                    return Ok((Some(tx), effects));
+                    return Ok(effects);
                 }
                 Err(err) => {
                     error!(
@@ -553,10 +543,7 @@ impl ValidatorProxy for FullNodeProxy {
         bail!("Transaction {:?} failed for {retry_cnt} times", tx_digest);
     }
 
-    async fn execute_bench_transaction(
-        &self,
-        tx: Transaction,
-    ) -> anyhow::Result<(Option<SuiTransaction>, ExecutionEffects)> {
+    async fn execute_bench_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
         self.execute_transaction(tx).await
     }
 

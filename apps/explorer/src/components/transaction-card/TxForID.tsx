@@ -17,7 +17,6 @@ import { useRpc } from '~/hooks/useRpc';
 import { Banner } from '~/ui/Banner';
 import { TableCard } from '~/ui/TableCard';
 
-const TRUNCATE_LENGTH = 14;
 const ITEMS_PER_PAGE = 20;
 
 const DATATYPE_DEFAULT = {
@@ -40,7 +39,7 @@ const viewFn = (results: any) => <TxForIDView showData={results} />;
 function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
     if (!showData || showData.length === 0) return null;
 
-    const tableData = genTableDataFromTxData(showData, TRUNCATE_LENGTH);
+    const tableData = genTableDataFromTxData(showData);
 
     return (
         <div data-testid="tx">

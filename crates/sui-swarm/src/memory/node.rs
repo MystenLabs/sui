@@ -5,6 +5,7 @@ use anyhow::anyhow;
 use anyhow::Result;
 use std::sync::Mutex;
 use sui_config::NodeConfig;
+use sui_node::SuiNodeHandle;
 use sui_types::base_types::AuthorityName;
 use tap::TapFallible;
 use tracing::{error, info};
@@ -20,7 +21,7 @@ use super::container::Container;
 #[derive(Debug)]
 pub struct Node {
     container: Mutex<Option<Container>>,
-    config: NodeConfig,
+    pub config: NodeConfig,
     runtime_type: RuntimeType,
 }
 
@@ -69,7 +70,19 @@ impl Node {
 
     /// If this Node is currently running
     pub fn is_running(&self) -> bool {
-        self.container.lock().unwrap().is_some()
+        self.container
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map_or(false, |c| c.is_alive())
+    }
+
+    pub fn get_node_handle(&self) -> Option<SuiNodeHandle> {
+        self.container
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|c| c.get_node_handle())
     }
 
     /// Perform a health check on this Node by:

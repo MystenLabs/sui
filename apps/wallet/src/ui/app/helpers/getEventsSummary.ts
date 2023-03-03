@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { TransactionEffects } from '@mysten/sui.js';
+import type { TransactionEvents } from '@mysten/sui.js';
 
 export type CoinsMetaProps = {
     amount: number;
@@ -15,10 +15,9 @@ export type TxnMetaResponse = {
 };
 
 export function getEventsSummary(
-    txEffects: TransactionEffects,
+    events: TransactionEvents,
     address: string
 ): TxnMetaResponse {
-    const events = txEffects?.events || [];
     const coinsMeta = {} as { [coinType: string]: CoinsMetaProps };
     const objectIDs: string[] = [];
 

@@ -21,24 +21,21 @@
 use std::{
     collections::HashMap,
     sync::Arc,
-    time::{Duration, SystemTime},
+    time::{Duration, Instant, SystemTime},
 };
 
 use futures::stream::FuturesOrdered;
 use itertools::izip;
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{spawn_monitored_task, MonitoredFutureExt};
 use prometheus::Registry;
 use sui_config::node::CheckpointExecutorConfig;
 use sui_types::error::SuiResult;
+use sui_types::message_envelope::Message;
 use sui_types::messages::VerifiedExecutableTransaction;
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
-    messages::{TransactionEffects, VerifiedCertificate},
+    messages::TransactionEffects,
     messages_checkpoint::{CheckpointSequenceNumber, EndOfEpochData, VerifiedCheckpoint},
-};
-use sui_types::{
-    committee::{Committee, EpochId},
-    message_envelope::Message,
 };
 use tap::TapFallible;
 use tokio::{
@@ -52,6 +49,7 @@ use typed_store::Map;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
+use crate::state_accumulator::StateAccumulator;
 use crate::transaction_manager::TransactionManager;
 use crate::{authority::EffectsNotifyRead, checkpoints::CheckpointStore};
 
@@ -68,6 +66,7 @@ pub struct CheckpointExecutor {
     checkpoint_store: Arc<CheckpointStore>,
     authority_store: Arc<AuthorityStore>,
     tx_manager: Arc<TransactionManager>,
+    accumulator: Arc<StateAccumulator>,
     config: CheckpointExecutorConfig,
     metrics: Arc<CheckpointExecutorMetrics>,
 }
@@ -78,6 +77,7 @@ impl CheckpointExecutor {
         checkpoint_store: Arc<CheckpointStore>,
         authority_store: Arc<AuthorityStore>,
         tx_manager: Arc<TransactionManager>,
+        accumulator: Arc<StateAccumulator>,
         config: CheckpointExecutorConfig,
         prometheus_registry: &Registry,
     ) -> Self {
@@ -86,6 +86,7 @@ impl CheckpointExecutor {
             checkpoint_store,
             authority_store,
             tx_manager,
+            accumulator,
             config,
             metrics: CheckpointExecutorMetrics::new(prometheus_registry),
         }
@@ -96,22 +97,23 @@ impl CheckpointExecutor {
         checkpoint_store: Arc<CheckpointStore>,
         authority_store: Arc<AuthorityStore>,
         tx_manager: Arc<TransactionManager>,
+        accumulator: Arc<StateAccumulator>,
     ) -> Self {
         Self {
             mailbox,
             checkpoint_store,
             authority_store,
             tx_manager,
+            accumulator,
             config: Default::default(),
             metrics: CheckpointExecutorMetrics::new_for_tests(),
         }
     }
 
     /// Ensure that all checkpoints in the current epoch will be executed.
-    /// Return the committee of the next epoch.
     /// We don't technically need &mut on self, but passing it to make sure only one instance is
     /// running at one time.
-    pub async fn run_epoch(&mut self, epoch_store: Arc<AuthorityPerEpochStore>) -> Committee {
+    pub async fn run_epoch(&mut self, epoch_store: Arc<AuthorityPerEpochStore>) {
         debug!(
             "Checkpoint executor running for epoch {}",
             epoch_store.epoch(),
@@ -136,17 +138,25 @@ impl CheckpointExecutor {
                 0
             });
         let mut pending: CheckpointExecutionBuffer = FuturesOrdered::new();
+
+        let mut now_time = Instant::now();
+        let mut now_transaction_num = highest_executed
+            .as_ref()
+            .map(|c| c.summary.network_total_transactions)
+            .unwrap_or(0);
+
         loop {
             // If we have executed the last checkpoint of the current epoch, stop.
-            if let Some(next_epoch_committee) =
-                check_epoch_last_checkpoint(epoch_store.epoch(), &highest_executed)
+            if self
+                .check_epoch_last_checkpoint(epoch_store.clone(), &highest_executed)
+                .await
             {
                 // be extra careful to ensure we don't have orphans
                 assert!(
                     pending.is_empty(),
                     "Pending checkpoint execution buffer should be empty after processing last checkpoint of epoch",
                 );
-                return next_epoch_committee;
+                return;
             }
             self.schedule_synced_checkpoints(
                 &mut pending,
@@ -163,6 +173,17 @@ impl CheckpointExecutor {
                 Some(Ok(checkpoint)) = pending.next() => {
                     self.process_executed_checkpoint(&checkpoint);
                     highest_executed = Some(checkpoint);
+
+                    // Estimate TPS every 10k transactions or 30 sec
+                    let elapsed = now_time.elapsed().as_millis();
+                    let current_transaction_num =  highest_executed.as_ref().map(|c| c.summary.network_total_transactions).unwrap_or(0);
+                    if current_transaction_num - now_transaction_num > 10_000 || elapsed > 30_000{
+                        let tps = (1000.0 * (current_transaction_num - now_transaction_num) as f64 / elapsed as f64) as i32;
+                        self.metrics.checkpoint_exec_sync_tps.set(tps as i64);
+                        now_time = Instant::now();
+                        now_transaction_num = current_transaction_num;
+                    }
+
                 }
                 // Check for newly synced checkpoints from StateSync.
                 received = self.mailbox.recv() => match received {
@@ -283,6 +304,7 @@ impl CheckpointExecutor {
         let authority_store = self.authority_store.clone();
         let checkpoint_store = self.checkpoint_store.clone();
         let tx_manager = self.tx_manager.clone();
+        let accumulator = self.accumulator.clone();
 
         pending.push_back(spawn_monitored_task!(async move {
             let epoch_store = epoch_store.clone();
@@ -290,8 +312,9 @@ impl CheckpointExecutor {
                 checkpoint.clone(),
                 authority_store.clone(),
                 checkpoint_store.clone(),
-                &epoch_store,
+                epoch_store.clone(),
                 tx_manager.clone(),
+                accumulator.clone(),
                 local_execution_timeout_sec,
                 &metrics,
             )
@@ -307,40 +330,45 @@ impl CheckpointExecutor {
             checkpoint
         }));
     }
-}
 
-/// Check whether `checkpoint` is the last checkpoint of the current epoch. If so, return the
-/// committee of the next epoch.
-fn check_epoch_last_checkpoint(
-    cur_epoch: EpochId,
-    checkpoint: &Option<VerifiedCheckpoint>,
-) -> Option<Committee> {
-    if let Some(checkpoint) = checkpoint {
-        if checkpoint.epoch() == cur_epoch {
-            if let Some(EndOfEpochData {
-                next_epoch_committee,
-                next_epoch_protocol_version,
-            }) = &checkpoint.summary.end_of_epoch_data
-            {
-                info!(
-                    ended_epoch = cur_epoch,
-                    ?next_epoch_protocol_version,
-                    last_checkpoint = checkpoint.sequence_number(),
-                    "Reached end of epoch",
-                );
-                let next_epoch = cur_epoch + 1;
-                return Some(
-                    Committee::new(
-                        next_epoch,
-                        *next_epoch_protocol_version,
-                        next_epoch_committee.iter().cloned().collect(),
-                    )
-                    .expect("Creating new committee object cannot fail"),
-                );
+    /// Check whether `checkpoint` is the last checkpoint of the current epoch. If so, return true.
+    pub async fn check_epoch_last_checkpoint(
+        &self,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        checkpoint: &Option<VerifiedCheckpoint>,
+    ) -> bool {
+        let cur_epoch = epoch_store.epoch();
+
+        if let Some(checkpoint) = checkpoint {
+            if checkpoint.epoch() == cur_epoch {
+                if let Some(EndOfEpochData {
+                    next_epoch_protocol_version,
+                    ..
+                }) = &checkpoint.summary.end_of_epoch_data
+                {
+                    info!(
+                        ended_epoch = cur_epoch,
+                        ?next_epoch_protocol_version,
+                        last_checkpoint = checkpoint.sequence_number(),
+                        "Reached end of epoch",
+                    );
+
+                    self.accumulator
+                        .accumulate_epoch(
+                            &cur_epoch,
+                            checkpoint.sequence_number(),
+                            epoch_store.clone(),
+                        )
+                        .in_monitored_scope("CheckpointExecutor::accumulate_epoch")
+                        .await
+                        .expect("Accumulating epoch cannot fail");
+
+                    return true;
+                }
             }
         }
+        false
     }
-    None
 }
 
 #[instrument(level = "error", skip_all, fields(seq = ?checkpoint.sequence_number(), epoch = ?epoch_store.epoch()))]
@@ -348,8 +376,9 @@ pub async fn execute_checkpoint(
     checkpoint: VerifiedCheckpoint,
     authority_store: Arc<AuthorityStore>,
     checkpoint_store: Arc<CheckpointStore>,
-    epoch_store: &AuthorityPerEpochStore,
+    epoch_store: Arc<AuthorityPerEpochStore>,
     transaction_manager: Arc<TransactionManager>,
+    accumulator: Arc<StateAccumulator>,
     local_execution_timeout_sec: u64,
     metrics: &Arc<CheckpointExecutorMetrics>,
 ) -> SuiResult {
@@ -382,7 +411,8 @@ pub async fn execute_checkpoint(
         epoch_store,
         transaction_manager,
         local_execution_timeout_sec,
-        checkpoint.sequence_number(),
+        checkpoint,
+        accumulator,
     )
     .await
 }
@@ -390,21 +420,26 @@ pub async fn execute_checkpoint(
 async fn execute_transactions(
     execution_digests: Vec<ExecutionDigests>,
     authority_store: Arc<AuthorityStore>,
-    epoch_store: &AuthorityPerEpochStore,
+    epoch_store: Arc<AuthorityPerEpochStore>,
     transaction_manager: Arc<TransactionManager>,
     log_timeout_sec: u64,
-    checkpoint_sequence: CheckpointSequenceNumber,
+    checkpoint: VerifiedCheckpoint,
+    accumulator: Arc<StateAccumulator>,
 ) -> SuiResult {
+    let checkpoint_sequence = checkpoint.sequence_number();
     let all_tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();
 
-    let synced_txns: Vec<VerifiedCertificate> = authority_store
-        .perpetual_tables
-        .synced_transactions
-        .multi_get(&all_tx_digests)?
+    let executable_txns: Vec<_> = authority_store
+        .multi_get_transactions(&all_tx_digests)?
         .into_iter()
-        .flatten()
-        .map(|tx| tx.into())
+        .map(|tx| {
+            VerifiedExecutableTransaction::new_from_checkpoint(
+                tx.expect("state-sync should have ensured that the transaction exists"),
+                epoch_store.epoch(),
+                checkpoint_sequence,
+            )
+        })
         .collect();
 
     let effects_digests: Vec<_> = execution_digests
@@ -426,29 +461,19 @@ async fn execute_transactions(
         })
         .collect();
 
-    for tx in synced_txns.clone() {
+    for tx in &executable_txns {
         if tx.contains_shared_object() {
             epoch_store
                 .acquire_shared_locks_from_effects(
-                    &tx,
+                    tx,
                     digest_to_effects.get(tx.digest()).unwrap(),
                     &authority_store,
                 )
                 .await?;
         }
     }
-    let executable_txns = synced_txns
-        .into_iter()
-        .map(|cert| {
-            VerifiedExecutableTransaction::new_from_checkpoint_to_be_replaced(
-                cert,
-                epoch_store.epoch(),
-                checkpoint_sequence,
-            )
-        })
-        .collect();
 
-    transaction_manager.enqueue(executable_txns, epoch_store)?;
+    transaction_manager.enqueue(executable_txns, &epoch_store)?;
 
     // Once synced_txns have been awaited, all txns should have effects committed.
     let mut periods = 1;
@@ -483,6 +508,7 @@ async fn execute_transactions(
             }
             Ok(Err(err)) => return Err(err),
             Ok(Ok(effects)) => {
+                let checkpoint_sequence = checkpoint.sequence_number();
                 for (tx_digest, expected_digest, actual_effects) in
                     izip!(&all_tx_digests, &execution_digests, &effects)
                 {
@@ -491,11 +517,13 @@ async fn execute_transactions(
                         panic!("When executing checkpoint {checkpoint_sequence}, transaction {tx_digest} is expected to have effects digest {expected_effects_digest}, but got {}!", actual_effects.digest());
                     }
                 }
+
                 authority_store.insert_finalized_transactions(
                     &all_tx_digests,
                     epoch_store.epoch(),
                     checkpoint_sequence,
                 )?;
+                accumulator.accumulate_checkpoint(effects, checkpoint_sequence, epoch_store)?;
 
                 return Ok(());
             }

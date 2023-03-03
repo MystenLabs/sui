@@ -4,12 +4,14 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
 use std::collections::HashSet;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ObjectRef;
+use sui_types::error::{SuiError, UserInputError, UserInputResult};
 use sui_types::gas::SuiCostTable;
 use sui_types::messages::{TransactionKind, VerifiedExecutableTransaction};
 use sui_types::{
     base_types::{SequenceNumber, SuiAddress},
-    error::{SuiError, SuiResult},
+    error::SuiResult,
     fp_ensure,
     gas::{self, SuiGasStatus},
     messages::{InputObjectKind, InputObjects, SingleTransactionKind, TransactionData},
@@ -42,24 +44,19 @@ async fn get_gas_status(
         extra_gas_object_refs,
     )
     .await
-    .map_err(SuiError::into_transaction_input_error)
 }
 
-// Note: Transaction Input related errors returned from this function
-// should be aggregated into Sui::TransactionInputObjectsErrors
 #[instrument(level = "trace", skip_all)]
 pub async fn check_transaction_input(
     store: &AuthorityStore,
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
-    transaction
-        .validity_check()
-        .map_err(SuiError::into_transaction_input_error)?;
+    transaction.validity_check(epoch_store.protocol_config())?;
     let gas_status = get_gas_status(store, epoch_store, transaction).await?;
     let input_objects = transaction.input_objects()?;
     let objects = store.check_input_objects(&input_objects)?;
-    let input_objects = check_objects(transaction, input_objects, objects).await?;
+    let input_objects = check_objects(transaction, input_objects, objects)?;
     Ok((gas_status, input_objects))
 }
 
@@ -67,11 +64,12 @@ pub async fn check_transaction_input(
 /// bypasses many of the normal object checks
 pub(crate) async fn check_dev_inspect_input(
     store: &AuthorityStore,
+    config: &ProtocolConfig,
     kind: &TransactionKind,
     gas_object: Object,
 ) -> Result<(ObjectRef, InputObjects), anyhow::Error> {
     let gas_object_ref = gas_object.compute_object_reference();
-    TransactionData::validity_check_impl(kind, &gas_object_ref)?;
+    TransactionData::validity_check_impl(config, kind, &gas_object_ref)?;
     for k in kind.single_transactions() {
         match k {
             SingleTransactionKind::TransferObject(_)
@@ -96,12 +94,8 @@ pub(crate) async fn check_dev_inspect_input(
         if !object.is_immutable() {
             fp_ensure!(
                 used_objects.insert(object.id().into()),
-                SuiError::InvalidBatchTransaction {
-                    error: format!(
-                        "Mutable object {} cannot appear in more than one single \
-                        transactions in a batch",
-                        object.id()
-                    ),
+                UserInputError::MutableObjectUsedMoreThanOnce {
+                    object_id: object.id()
                 }
                 .into()
             );
@@ -128,7 +122,7 @@ pub async fn check_certificate_input(
     } else {
         store.check_sequenced_input_objects(cert.digest(), &input_object_kinds, epoch_store)?
     };
-    let input_objects = check_objects(tx_data, input_object_kinds, input_object_data).await?;
+    let input_objects = check_objects(tx_data, input_object_kinds, input_object_data)?;
     Ok((gas_status, input_objects))
 }
 
@@ -150,9 +144,11 @@ async fn check_gas(
         Ok(SuiGasStatus::new_unmetered())
     } else {
         let gas_object = store.get_object_by_key(&gas_payment.0, gas_payment.1)?;
-        let gas_object = gas_object.ok_or(SuiError::ObjectNotFound {
-            object_id: gas_payment.0,
-            version: Some(gas_payment.1),
+        let gas_object = gas_object.ok_or_else(|| {
+            SuiError::from(UserInputError::ObjectNotFound {
+                object_id: gas_payment.0,
+                version: Some(gas_payment.1),
+            })
         })?;
 
         // If the transaction is TransferSui, we ensure that the gas balance is enough to cover
@@ -166,10 +162,11 @@ async fn check_gas(
         };
         let reference_gas_price = epoch_store.reference_gas_price();
         if computation_gas_price < reference_gas_price {
-            return Err(SuiError::GasPriceUnderRGP {
+            return Err(UserInputError::GasPriceUnderRGP {
                 gas_price: computation_gas_price,
                 reference_gas_price,
-            });
+            }
+            .into());
         }
         let protocol_config = epoch_store.protocol_config();
         let cost_table = SuiCostTable::new(protocol_config);
@@ -182,7 +179,7 @@ async fn check_gas(
             let mut additional_objs = vec![];
             for obj_ref in additional_objects_for_gas_payment.iter() {
                 let obj = store.get_object_by_key(&obj_ref.0, obj_ref.1)?;
-                let obj = obj.ok_or(SuiError::ObjectNotFound {
+                let obj = obj.ok_or(UserInputError::ObjectNotFound {
                     object_id: obj_ref.0,
                     version: Some(obj_ref.1),
                 })?;
@@ -213,18 +210,18 @@ async fn check_gas(
             storage_gas_price,
             cost_table,
         )
+        .map_err(|e| e.into())
     }
 }
 
 /// Check all the objects used in the transaction against the database, and ensure
 /// that they are all the correct version and number.
-// Transaction input errors should be aggregated in TransactionInputObjectsErrors
 #[instrument(level = "trace", skip_all)]
-async fn check_objects(
+pub fn check_objects(
     transaction: &TransactionData,
     input_objects: Vec<InputObjectKind>,
     objects: Vec<Object>,
-) -> Result<InputObjects, SuiError> {
+) -> UserInputResult<InputObjects> {
     // We require that mutable objects cannot show up more than once.
     // In [`SingleTransactionKind::input_objects`] we checked that there is no
     // duplicate objects in the same SingleTransactionKind. However for a Batch
@@ -238,10 +235,8 @@ async fn check_objects(
         if !object.is_immutable() {
             fp_ensure!(
                 used_objects.insert(object.id().into()),
-                SuiError::TransactionInputObjectsErrors { errors: vec![
-                    SuiError::InvalidBatchTransaction {
-                        error: format!("Mutable object {} cannot appear in more than one single transactions in a batch", object.id()),
-                    }]
+                UserInputError::MutableObjectUsedMoreThanOnce {
+                    object_id: object.id()
                 }
             );
         }
@@ -249,7 +244,6 @@ async fn check_objects(
 
     // Gather all objects and errors.
     let mut all_objects = Vec::with_capacity(input_objects.len());
-    let mut errors = Vec::new();
     let transfer_object_ids: HashSet<_> = transaction
         .kind
         .single_transactions()
@@ -264,7 +258,11 @@ async fn check_objects(
 
     for (object_kind, object) in input_objects.into_iter().zip(objects) {
         if transfer_object_ids.contains(&object.id()) {
-            object.ensure_public_transfer_eligible()?;
+            object.ensure_public_transfer_eligible().map_err(|_e| {
+                UserInputError::TransferObjectWithoutPublicTransferError {
+                    object_id: object.id(),
+                }
+            })?;
         }
         // For Gas Object, we check the object is owned by gas owner
         let owner_address = if object.id() == transaction.gas_payment_object_ref().0 {
@@ -274,39 +272,29 @@ async fn check_objects(
         };
         // Check if the object contents match the type of lock we need for
         // this object.
-        match check_one_object(&owner_address, object_kind, &object) {
-            Ok(()) => all_objects.push((object_kind, object)),
-            Err(e) => {
-                errors.push(e);
-            }
-        }
-    }
-    // If any errors with the locks were detected, we return all errors to give the client
-    // a chance to update the authority if possible.
-    if !errors.is_empty() {
-        return Err(SuiError::TransactionInputObjectsErrors { errors });
+        let system_transaction = transaction.kind.is_system_tx();
+        check_one_object(&owner_address, object_kind, &object, system_transaction)?;
+        all_objects.push((object_kind, object));
     }
     if !transaction.kind.is_genesis_tx() && all_objects.is_empty() {
-        return Err(SuiError::TransactionInputObjectsErrors {
-            errors: vec![SuiError::ObjectInputArityViolation],
-        });
+        return Err(UserInputError::ObjectInputArityViolation);
     }
 
     Ok(InputObjects::new(all_objects))
 }
 
-/// The logic to check one object against a reference, and return the object if all is well
-/// or an error if not.
+/// Check one object against a reference
 fn check_one_object(
     owner: &SuiAddress,
     object_kind: InputObjectKind,
     object: &Object,
-) -> SuiResult {
+    system_transaction: bool,
+) -> UserInputResult {
     match object_kind {
         InputObjectKind::MovePackage(package_id) => {
             fp_ensure!(
                 object.data.try_as_package().is_some(),
-                SuiError::MoveObjectAsPackage {
+                UserInputError::MoveObjectAsPackage {
                     object_id: package_id
                 }
             );
@@ -314,11 +302,11 @@ fn check_one_object(
         InputObjectKind::ImmOrOwnedMoveObject((object_id, sequence_number, object_digest)) => {
             fp_ensure!(
                 !object.is_package(),
-                SuiError::MovePackageAsObject { object_id }
+                UserInputError::MovePackageAsObject { object_id }
             );
             fp_ensure!(
                 sequence_number < SequenceNumber::MAX,
-                SuiError::InvalidSequenceNumber
+                UserInputError::InvalidSequenceNumber
             );
 
             // This is an invariant - we just load the object with the given ID and version.
@@ -331,11 +319,11 @@ fn check_one_object(
                 object.id(),
             );
 
-            // Check the digest matches - uesr could give a mismatched ObjectDigest
+            // Check the digest matches - user could give a mismatched ObjectDigest
             let expected_digest = object.digest();
             fp_ensure!(
                 expected_digest == object_digest,
-                SuiError::InvalidObjectDigest {
+                UserInputError::InvalidObjectDigest {
                     object_id,
                     expected_digest
                 }
@@ -349,13 +337,13 @@ fn check_one_object(
                     // Check the owner is correct.
                     fp_ensure!(
                         owner == &actual_owner,
-                        SuiError::IncorrectSigner {
+                        UserInputError::IncorrectUserSignature {
                             error: format!("Object {:?} is owned by account address {:?}, but given owner/signer address is {:?}", object_id, actual_owner, owner),
                         }
                     );
                 }
                 Owner::ObjectOwner(owner) => {
-                    return Err(SuiError::InvalidChildObjectArgument {
+                    return Err(UserInputError::InvalidChildObjectArgument {
                         child_id: object.id(),
                         parent_id: owner.into(),
                     });
@@ -363,7 +351,7 @@ fn check_one_object(
                 Owner::Shared { .. } => {
                     // This object is a mutable shared object. However the transaction
                     // specifies it as an owned object. This is inconsistent.
-                    return Err(SuiError::NotSharedObjectError);
+                    return Err(UserInputError::NotSharedObjectError);
                 }
             };
         }
@@ -372,9 +360,15 @@ fn check_one_object(
             initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
             mutable: true,
         } => {
-            // Only system transactions (which don't perform input checks) can accept the Clock
+            // Only system transactions can accept the Clock
             // object as a mutable parameter.
-            return Err(SuiError::ImmutableParameterExpectedError);
+            if system_transaction {
+                return Ok(());
+            } else {
+                return Err(UserInputError::ImmutableParameterExpectedError {
+                    object_id: SUI_CLOCK_OBJECT_ID,
+                });
+            }
         }
         InputObjectKind::SharedMoveObject {
             initial_shared_version: input_initial_shared_version,
@@ -382,20 +376,20 @@ fn check_one_object(
         } => {
             fp_ensure!(
                 object.version() < SequenceNumber::MAX,
-                SuiError::InvalidSequenceNumber
+                UserInputError::InvalidSequenceNumber
             );
 
             match object.owner {
                 Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
                     // When someone locks an object as shared it must be shared already.
-                    return Err(SuiError::NotSharedObjectError);
+                    return Err(UserInputError::NotSharedObjectError);
                 }
                 Owner::Shared {
                     initial_shared_version: actual_initial_shared_version,
                 } => {
                     fp_ensure!(
                         input_initial_shared_version == actual_initial_shared_version,
-                        SuiError::SharedObjectStartingVersionMismatch
+                        UserInputError::SharedObjectStartingVersionMismatch
                     )
                 }
             }

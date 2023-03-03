@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, it } from "vitest";
+import { SUI_ADDRESS_LENGTH } from "../../typescript/src";
 import { BCS, getSuiMoveConfig } from "./../src/index";
 
-describe("serde", () => {
+describe("BCS: Serde", () => {
   it("should serialize primitives in both directions", () => {
     const bcs = new BCS(getSuiMoveConfig());
 
@@ -28,37 +29,37 @@ describe("serde", () => {
     expect(serde(bcs, "bool", false)).toEqual(false);
 
     expect(
-      serde(bcs, "address", "0xe3edac2c684ddbba5ad1a2b90fb361100b2094af")
-    ).toEqual("e3edac2c684ddbba5ad1a2b90fb361100b2094af");
+      serde(bcs, "address", "0x000000000000000000000000e3edac2c684ddbba5ad1a2b90fb361100b2094af")
+    ).toEqual("000000000000000000000000e3edac2c684ddbba5ad1a2b90fb361100b2094af");
   });
 
   it("should serde structs", () => {
     let bcs = new BCS(getSuiMoveConfig());
 
-    bcs.registerAddressType("address", 20, "hex");
+    bcs.registerAddressType("address", SUI_ADDRESS_LENGTH, "hex");
     bcs.registerStructType("Beep", { id: "address", value: "u64" });
 
     let bytes = bcs
       .ser("Beep", {
-        id: "0x45aacd9ed90a5a8e211502ac3fa898a3819f23b2",
+        id: "0x00000000000000000000000045aacd9ed90a5a8e211502ac3fa898a3819f23b2",
         value: 10000000,
       })
       .toBytes();
     let struct = bcs.de("Beep", bytes);
 
-    expect(struct.id).toEqual("45aacd9ed90a5a8e211502ac3fa898a3819f23b2");
+    expect(struct.id).toEqual("00000000000000000000000045aacd9ed90a5a8e211502ac3fa898a3819f23b2");
     expect(struct.value.toString(10)).toEqual("10000000");
   });
 
   it("should serde enums", () => {
     let bcs = new BCS(getSuiMoveConfig());
-    bcs.registerAddressType("address", 20, "hex");
+    bcs.registerAddressType("address", SUI_ADDRESS_LENGTH, "hex");
     bcs.registerEnumType("Enum", {
       with_value: "address",
       no_value: null,
     });
 
-    let addr = "45aacd9ed90a5a8e211502ac3fa898a3819f23b2";
+    let addr = "bb967ddbebfee8c40d8fdd2c24cb02452834cd3a7061d18564448f900eb9e66d";
 
     expect(addr).toEqual(
       bcs.de("Enum", bcs.ser("Enum", { with_value: addr }).toBytes()).with_value
@@ -100,10 +101,10 @@ describe("serde", () => {
 
     {
       let value = [
-        "e3edac2c684ddbba5ad1a2b90fb361100b2094af",
-        "0000000000000000000000000000000000000001",
-        "0000000000000000000000000000000000000002",
-        "c0ffeec0ffeec0ffeec0ffeec0ffeec0ffee1337",
+        "000000000000000000000000e3edac2c684ddbba5ad1a2b90fb361100b2094af",
+        "0000000000000000000000000000000000000000000000000000000000000001",
+        "0000000000000000000000000000000000000000000000000000000000000002",
+        "000000000000000000000000c0ffeec0ffeec0ffeec0ffeec0ffeec0ffee1337",
       ];
 
       expect(serde(bcs, "vector<address>", value)).toEqual(value);
@@ -142,7 +143,7 @@ describe("serde", () => {
 
     {
       let value = {
-        owner: "0000000000000000000000000000000000000001",
+        owner: "0000000000000000000000000000000000000000000000000000000000000001",
         is_active: true,
         item: { balance: { value: "10000" } },
       };

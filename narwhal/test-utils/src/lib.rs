@@ -33,10 +33,10 @@ use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell, ConsensusStore,
     FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
     GetCertificatesResponse, Header, HeaderBuilder, PayloadAvailabilityRequest,
-    PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
-    PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse,
-    RequestVoteRequest, RequestVoteResponse, Round, SequenceNumber, TimestampMs, Transaction, Vote,
-    WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerReconfigureMessage,
+    PayloadAvailabilityResponse, PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker,
+    PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, RequestVoteRequest,
+    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, SequenceNumber,
+    TimestampMs, Transaction, Vote, WorkerBatchMessage, WorkerDeleteBatchesMessage,
     WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
@@ -173,14 +173,14 @@ pub fn transaction() -> Transaction {
 
 #[derive(Clone)]
 pub struct PrimaryToPrimaryMockServer {
-    sender: Sender<PrimaryMessage>,
+    sender: Sender<SendCertificateRequest>,
 }
 
 impl PrimaryToPrimaryMockServer {
     pub fn spawn(
         network_keypair: NetworkKeyPair,
         address: Multiaddr,
-    ) -> (Receiver<PrimaryMessage>, anemo::Network) {
+    ) -> (Receiver<SendCertificateRequest>, anemo::Network) {
         let addr = network::multiaddr_to_address(&address).unwrap();
         let (sender, receiver) = channel(1);
         let service = PrimaryToPrimaryServer::new(Self { sender });
@@ -198,15 +198,15 @@ impl PrimaryToPrimaryMockServer {
 
 #[async_trait]
 impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
-    async fn send_message(
+    async fn send_certificate(
         &self,
-        request: anemo::Request<PrimaryMessage>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        request: anemo::Request<SendCertificateRequest>,
+    ) -> Result<anemo::Response<SendCertificateResponse>, anemo::rpc::Status> {
         let message = request.into_body();
 
         self.sender.send(message).await.unwrap();
 
-        Ok(anemo::Response::new(()))
+        Ok(anemo::Response::new(SendCertificateResponse {}))
     }
 
     async fn request_vote(
@@ -238,7 +238,6 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
 
 pub struct PrimaryToWorkerMockServer {
     // TODO: refactor tests to use mockall for this.
-    msg_sender: Sender<WorkerReconfigureMessage>,
     synchronize_sender: Sender<WorkerSynchronizeMessage>,
 }
 
@@ -246,18 +245,10 @@ impl PrimaryToWorkerMockServer {
     pub fn spawn(
         keypair: NetworkKeyPair,
         address: Multiaddr,
-    ) -> (
-        Receiver<WorkerReconfigureMessage>,
-        Receiver<WorkerSynchronizeMessage>,
-        anemo::Network,
-    ) {
+    ) -> (Receiver<WorkerSynchronizeMessage>, anemo::Network) {
         let addr = network::multiaddr_to_address(&address).unwrap();
-        let (msg_sender, msg_receiver) = channel(1);
         let (synchronize_sender, synchronize_receiver) = channel(1);
-        let service = PrimaryToWorkerServer::new(Self {
-            msg_sender,
-            synchronize_sender,
-        });
+        let service = PrimaryToWorkerServer::new(Self { synchronize_sender });
 
         let routes = anemo::Router::new().add_rpc_service(service);
         let network = anemo::Network::bind(addr)
@@ -266,20 +257,12 @@ impl PrimaryToWorkerMockServer {
             .start(routes)
             .unwrap();
         info!("starting network on: {}", network.local_addr());
-        (msg_receiver, synchronize_receiver, network)
+        (synchronize_receiver, network)
     }
 }
 
 #[async_trait]
 impl PrimaryToWorker for PrimaryToWorkerMockServer {
-    async fn reconfigure(
-        &self,
-        request: anemo::Request<WorkerReconfigureMessage>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-        let message = request.into_body();
-        self.msg_sender.send(message).await.unwrap();
-        Ok(anemo::Response::new(()))
-    }
     async fn synchronize(
         &self,
         request: anemo::Request<WorkerSynchronizeMessage>,

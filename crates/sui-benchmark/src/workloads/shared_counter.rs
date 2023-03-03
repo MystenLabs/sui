@@ -35,17 +35,12 @@ pub struct SharedCounterTestPayload {
 }
 
 impl Payload for SharedCounterTestPayload {
-    fn make_new_payload(
-        self: Box<Self>,
-        _: ObjectRef,
-        new_gas: ObjectRef,
-        _: &ExecutionEffects,
-    ) -> Box<dyn Payload> {
+    fn make_new_payload(self: Box<Self>, effects: &ExecutionEffects) -> Box<dyn Payload> {
         Box::new(SharedCounterTestPayload {
             package_id: self.package_id,
             counter_id: self.counter_id,
             counter_initial_shared_version: self.counter_initial_shared_version,
-            gas: (new_gas, self.gas.1, self.gas.2),
+            gas: (effects.gas_object().0, self.gas.1, self.gas.2),
             system_state_observer: self.system_state_observer,
         })
     }
@@ -63,15 +58,9 @@ impl Payload for SharedCounterTestPayload {
             Some(*self.system_state_observer.reference_gas_price.borrow()),
         )
     }
-    fn get_object_id(&self) -> ObjectID {
-        self.counter_id
-    }
+
     fn get_workload_type(&self) -> WorkloadType {
         WorkloadType::SharedCounter
-    }
-
-    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self as &SharedCounterTestPayload)
     }
 }
 
@@ -139,7 +128,7 @@ pub async fn publish_basics_package(
     path.push("../../sui_programmability/examples/basics");
     let transaction =
         create_publish_move_package_transaction(gas, path, sender, keypair, Some(gas_price));
-    let (_, effects) = proxy.execute_transaction(transaction.into()).await.unwrap();
+    let effects = proxy.execute_transaction(transaction.into()).await.unwrap();
     parse_package_ref(&effects.created()).unwrap()
 }
 
@@ -192,7 +181,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
             );
             let proxy_ref = proxy.clone();
             futures.push(async move {
-                if let Ok((_, effects)) = proxy_ref.execute_transaction(transaction.into()).await {
+                if let Ok(effects) = proxy_ref.execute_transaction(transaction.into()).await {
                     effects.created()[0].0
                 } else {
                     panic!("Failed to create shared counter!");

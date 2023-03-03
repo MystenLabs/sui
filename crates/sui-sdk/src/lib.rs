@@ -26,7 +26,6 @@ use sui_json_rpc_types::{GetRawObjectDataResponse, SuiObjectInfo};
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, SuiAddress};
-
 pub mod apis;
 pub mod error;
 pub const SUI_COIN_TYPE: &str = "0x2::sui::SUI";

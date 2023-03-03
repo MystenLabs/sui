@@ -23,20 +23,21 @@ use prometheus::{
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_protocol_config::ProtocolVersion;
 use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    FinalizedEffects, QuorumDriverResponse, VerifiedCertificate,
-    VerifiedCertifiedTransactionEffects,
+    FinalizedEffects, QuorumDriverResponse, VerifiedCertifiedTransactionEffects,
+    VerifiedExecutableTransaction,
 };
 use sui_types::quorum_driver_types::{
     QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResult,
 };
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::broadcast::{self, Receiver};
+use tokio::sync::broadcast::Receiver;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tracing::{debug, error, error_span, info, instrument, warn, Instrument};
@@ -61,7 +62,7 @@ pub struct TransactiondOrchestrator<A> {
 impl TransactiondOrchestrator<NetworkAuthorityClient> {
     pub async fn new_with_network_clients(
         validator_state: Arc<AuthorityState>,
-        reconfig_channel: broadcast::Receiver<Committee>,
+        reconfig_channel: Receiver<(Committee, ProtocolVersion)>,
         parent_path: &Path,
         prometheus_registry: &Registry,
     ) -> anyhow::Result<Self> {
@@ -189,7 +190,7 @@ where
 
         let _timer_guards = self.get_timer_guards(&transaction);
 
-        let ticket = self.submit(transaction).await.map_err(|e| {
+        let ticket = self.submit(transaction.clone()).await.map_err(|e| {
             warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
             QuorumDriverError::QuorumDriverInternalError(e)
         })?;
@@ -210,36 +211,35 @@ where
             Err(err) => Err(err),
             Ok(response) => {
                 good_response_metrics.inc();
-                let QuorumDriverResponse {
-                    tx_cert,
-                    effects_cert,
-                } = response;
+                let QuorumDriverResponse { effects_cert, .. } = response;
                 if !wait_for_local_execution {
                     return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        tx_cert.map(|cert| cert.into()),
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
+                        response.events,
                         false,
                     ))));
                 }
-                // TODO: Once we support executing transactions without a cert, we won't need this unwrap.
-                let tx_cert = tx_cert.expect("Currently we always obtain a cert");
+                let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
+                    transaction,
+                    effects_cert.executed_epoch,
+                );
 
                 match Self::execute_finalized_tx_locally_with_timeout(
                     &self.validator_state,
-                    &tx_cert,
+                    &executable_tx,
                     &effects_cert,
                     &self.metrics,
                 )
                 .await
                 {
                     Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        Some(tx_cert.into()),
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
+                        response.events,
                         true,
                     )))),
                     Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        Some(tx_cert.into()),
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
+                        response.events,
                         false,
                     )))),
                 }
@@ -267,10 +267,10 @@ where
         Ok(ticket)
     }
 
-    #[instrument(name = "tx_orchestrator_execute_finalized_tx_locally_with_timeout", level = "debug", skip_all, fields(tx_digest = ?tx_cert.digest()), err)]
+    #[instrument(name = "tx_orchestrator_execute_finalized_tx_locally_with_timeout", level = "debug", skip_all, fields(tx_digest = ?transaction.digest()), err)]
     async fn execute_finalized_tx_locally_with_timeout(
         validator_state: &Arc<AuthorityState>,
-        tx_cert: &VerifiedCertificate,
+        transaction: &VerifiedExecutableTransaction,
         effects_cert: &VerifiedCertifiedTransactionEffects,
         metrics: &TransactionOrchestratorMetrics,
     ) -> SuiResult {
@@ -285,7 +285,7 @@ where
         // 2. an up-to-date fullnode should have minimal overhead to sync parents
         //      (for one extra time)
         // 3. at the end of day, the tx will be executed at most once per lock guard.
-        let tx_digest = tx_cert.digest();
+        let tx_digest = transaction.digest();
         if validator_state.is_tx_already_executed(tx_digest)? {
             return Ok(());
         }
@@ -294,7 +294,7 @@ where
                 in_flight.dec();
             });
 
-        let _guard = if tx_cert.contains_shared_object() {
+        let _guard = if transaction.contains_shared_object() {
             metrics.local_execution_latency_shared_obj.start_timer()
         } else {
             metrics.local_execution_latency_single_writer.start_timer()
@@ -302,7 +302,7 @@ where
         match timeout(
             LOCAL_EXECUTION_TIMEOUT,
             validator_state.fullnode_execute_certificate_with_effects(
-                tx_cert,
+                transaction,
                 effects_cert,
                 &epoch_store,
             ),
@@ -344,13 +344,12 @@ where
     ) {
         loop {
             match effects_receiver.recv().await {
-                Ok(Ok(QuorumDriverResponse {
-                    tx_cert,
-                    effects_cert,
-                })) => {
-                    // TODO: Once we support executing transactions without a cert, we won't need this unwrap.
-                    let tx_cert = tx_cert.expect("Currently we always obtain a cert");
-                    let tx_digest = tx_cert.digest();
+                Ok(Ok((transaction, QuorumDriverResponse { effects_cert, .. }))) => {
+                    let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
+                        transaction,
+                        effects_cert.executed_epoch,
+                    );
+                    let tx_digest = executable_tx.digest();
                     if let Err(err) = pending_transaction_log.finish_transaction(tx_digest) {
                         error!(
                             ?tx_digest,
@@ -359,7 +358,7 @@ where
                     }
                     let _ = Self::execute_finalized_tx_locally_with_timeout(
                         &validator_state,
-                        &tx_cert,
+                        &executable_tx,
                         &effects_cert,
                         &metrics,
                     )

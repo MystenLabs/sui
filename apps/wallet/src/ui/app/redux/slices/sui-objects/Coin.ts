@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Coin as CoinAPI, getTransactionEffects } from '@mysten/sui.js';
+import {
+    Coin as CoinAPI,
+    getEvents,
+    getTransactionEffects,
+    SUI_SYSTEM_STATE_OBJECT_ID,
+} from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
 
 import type {
@@ -9,7 +14,6 @@ import type {
     SuiObject,
     SuiAddress,
     SuiMoveObject,
-    JsonRpcProvider,
     SuiExecuteTransactionResponse,
     SignerWithProvider,
 } from '@mysten/sui.js';
@@ -22,8 +26,6 @@ export const DEFAULT_GAS_BUDGET_FOR_STAKE = 15000;
 export const GAS_TYPE_ARG = '0x2::sui::SUI';
 export const GAS_SYMBOL = 'SUI';
 export const DEFAULT_NFT_TRANSFER_GAS_FEE = 450;
-export const SUI_SYSTEM_STATE_OBJECT_ID =
-    '0x0000000000000000000000000000000000000005';
 
 // TODO use sdk
 export class Coin {
@@ -150,17 +152,6 @@ export class Coin {
         }
     }
 
-    public static async getActiveValidators(
-        provider: JsonRpcProvider
-    ): Promise<Array<SuiMoveObject>> {
-        const contents = await provider.getObject(SUI_SYSTEM_STATE_OBJECT_ID);
-        const data = (contents.details as SuiObject).data;
-        const validators = (data as SuiMoveObject).fields.validators;
-        const active_validators = (validators as SuiMoveObject).fields
-            .active_validators;
-        return active_validators as Array<SuiMoveObject>;
-    }
-
     private static async coinManageForStake(
         signer: SignerWithProvider,
         coins: SuiMoveObject[],
@@ -197,12 +188,13 @@ export class Coin {
             });
 
             const effects = getTransactionEffects(result);
+            const events = getEvents(result);
 
-            if (!effects || !effects.events) {
+            if (!effects || !events) {
                 throw new Error('Missing effects or events');
             }
 
-            const changeEvent = effects.events.find((event) => {
+            const changeEvent = events.find((event) => {
                 if ('coinBalanceChange' in event) {
                     return event.coinBalanceChange.amount === Number(amount);
                 }

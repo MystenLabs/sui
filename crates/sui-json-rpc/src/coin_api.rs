@@ -21,6 +21,7 @@ use sui_types::coin::{Coin, CoinMetadata, LockedCoin, TreasuryCap};
 use sui_types::error::SuiError;
 use sui_types::event::Event;
 use sui_types::gas_coin::GAS;
+use sui_types::messages::TransactionEvents;
 use sui_types::object::Object;
 use sui_types::parse_sui_struct_tag;
 
@@ -38,7 +39,12 @@ impl CoinReadApi {
     }
 
     async fn get_object(&self, object_id: &ObjectID) -> Result<Object, Error> {
-        Ok(self.state.get_object_read(object_id).await?.into_object()?)
+        Ok(self
+            .state
+            .get_object_read(object_id)
+            .await?
+            .into_object()
+            .map_err(SuiError::from)?)
     }
 
     async fn get_coin(&self, coin_id: &ObjectID) -> Result<SuiCoin, Error> {
@@ -118,10 +124,18 @@ impl CoinReadApi {
         object_struct_tag: StructTag,
     ) -> Result<Object, Error> {
         let publish_txn_digest = self.get_object(package_id).await?.previous_transaction;
-        let (_, effects) = self.state.get_transaction(publish_txn_digest).await?;
+        let (_, effect) = self
+            .state
+            .get_executed_transaction_and_effects(publish_txn_digest)
+            .await?;
 
-        let object_id = effects
-            .events
+        let events = if let Some(digests) = effect.events_digest {
+            self.state.get_transaction_events(digests).await?
+        } else {
+            TransactionEvents::default()
+        };
+
+        let object_id = events.data
             .into_iter()
             .find_map(|e| {
                 if let Event::NewObject { object_type, .. } = &e {
@@ -274,10 +288,7 @@ impl CoinReadApiServer for CoinReadApi {
         let coin_struct = parse_sui_struct_tag(&coin_type)?;
 
         Ok(if GAS::is_gas(&coin_struct) {
-            self.state
-                .get_sui_system_state_object()
-                .map_err(Error::from)?
-                .treasury_cap
+            Supply { value: 0 }
         } else {
             let treasury_cap_object = self
                 .find_package_object(&coin_struct.address.into(), TreasuryCap::type_(coin_struct))

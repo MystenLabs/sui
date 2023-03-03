@@ -90,6 +90,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
     async fn get_sui_system_state(&self) -> RpcResult<SuiSystemState> {
         Ok(self
             .state
+            .database
             .get_sui_system_state_object()
             .map_err(Error::from)?)
     }

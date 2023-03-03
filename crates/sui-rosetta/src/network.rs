@@ -50,8 +50,8 @@ pub async fn status(
         .map(|v| Peer {
             peer_id: ObjectID::from(v.metadata.sui_address).into(),
             metadata: Some(json!({
-                "public_key": Hex::from_bytes(&v.metadata.pubkey_bytes),
-                "stake_amount": v.stake_amount
+                "public_key": Hex::from_bytes(&v.metadata.protocol_pubkey_bytes),
+                "stake_amount": v.staking_pool.sui_balance,
             })),
         })
         .collect();

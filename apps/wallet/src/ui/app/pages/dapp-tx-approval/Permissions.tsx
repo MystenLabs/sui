@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { formatAddress } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useEffect, useState } from 'react';
 
@@ -8,14 +9,11 @@ import { MiniNFT } from './MiniNFT';
 import { SummaryCard } from './SummaryCard';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
-import { useMiddleEllipsis, useGetNFTMeta } from '_hooks';
+import { useGetNFTMeta } from '_hooks';
 
 import st from './DappTxApprovalPage.module.scss';
 
 type TabType = 'transfer' | 'modify' | 'read';
-
-const TRUNCATE_MAX_LENGTH = 10;
-const TRUNCATE_PREFIX_LENGTH = 6;
 
 interface MetadataGroup {
     name: string;
@@ -23,12 +21,6 @@ interface MetadataGroup {
 }
 
 export function PassedObject({ id, module }: { id: string; module: string }) {
-    const objectId = useMiddleEllipsis(
-        id,
-        TRUNCATE_MAX_LENGTH,
-        TRUNCATE_PREFIX_LENGTH
-    );
-
     const nftMeta = useGetNFTMeta(id);
 
     return (
@@ -40,7 +32,7 @@ export function PassedObject({ id, module }: { id: string; module: string }) {
                     className={cl(st.objectId, 'text-sui-dark')}
                     showIcon={false}
                 >
-                    {objectId}
+                    {formatAddress(id)}
                 </ExplorerLink>
                 <div className={st.objectName}>{module}</div>
             </div>

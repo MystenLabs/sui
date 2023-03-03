@@ -10,16 +10,18 @@ use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
-use move_core_types::value::{MoveStruct, MoveStructLayout, MoveTypeLayout};
+use move_core_types::value::{MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 
+use crate::balance::Balance;
 use crate::base_types::ObjectIDParseError;
 use crate::crypto::{deterministic_random_account_key, sha3_hash};
-use crate::error::{ExecutionError, ExecutionErrorKind};
+use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
 use crate::error::{SuiError, SuiResult};
+use crate::gas_coin::GAS;
 use crate::move_package::MovePackage;
 use crate::{
     base_types::{
@@ -27,13 +29,11 @@ use crate::{
     },
     gas_coin::GasCoin,
 };
+use crate::{MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID};
 use sui_protocol_config::ProtocolConfig;
 
 pub const GAS_VALUE_FOR_TESTING: u64 = 1_000_000_u64;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
-
-/// Packages are immutable, version is always 1
-pub const PACKAGE_VERSION: SequenceNumber = OBJECT_START_VERSION;
 
 #[serde_as]
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
@@ -58,6 +58,14 @@ pub struct ObjectFormatOptions {
     ///  If false, include field names only; e.g.:
     /// `{ "f": 20, "g": { "h": true } }`
     include_types: bool,
+}
+
+impl ObjectFormatOptions {
+    pub fn with_types() -> Self {
+        ObjectFormatOptions {
+            include_types: true,
+        }
+    }
 }
 
 impl MoveObject {
@@ -87,7 +95,9 @@ impl MoveObject {
         )
     }
 
-    unsafe fn new_from_execution_with_limit(
+    /// # Safety
+    /// This function should ONLY be called if has_public_transfer has been determined by the type_
+    pub unsafe fn new_from_execution_with_limit(
         type_: StructTag,
         has_public_transfer: bool,
         version: SequenceNumber,
@@ -290,6 +300,33 @@ impl MoveObject {
         // + 8 for `version`
         self.contents.len() + seriealized_type_tag.len() + 1 + 8
     }
+
+    /// Get the total amount of SUI embedded in `self`. Intended for testing purposes
+    pub fn get_total_sui(&self, resolver: &impl GetModule) -> Result<u64, SuiError> {
+        let layout = self.get_layout(ObjectFormatOptions::with_types(), resolver)?;
+        let move_struct = self.to_move_struct(&layout)?;
+        Ok(Self::get_total_sui_(&move_struct, 0))
+    }
+
+    /// Get all SUI in `s`, either directly or in its (transitive) fields. Intended for testing purposes
+    fn get_total_sui_(s: &MoveStruct, acc: u64) -> u64 {
+        match s {
+            MoveStruct::WithTypes { type_, fields } => {
+                if type_ == &Balance::type_(GAS::type_()) {
+                    match fields[0].1 {
+                        MoveValue::U64(n) => acc + n,
+                        _ => unreachable!(), // a Balance<SUI> object should have exactly one field, of type int
+                    }
+                } else {
+                    fields.iter().fold(acc, |acc, (_, v)| match v {
+                        MoveValue::Struct(s) => Self::get_total_sui_(s, acc),
+                        _ => acc,
+                    })
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
@@ -320,6 +357,14 @@ impl Data {
     }
 
     pub fn try_as_package(&self) -> Option<&MovePackage> {
+        use Data::*;
+        match self {
+            Move(_) => None,
+            Package(p) => Some(p),
+        }
+    }
+
+    pub fn try_as_package_mut(&mut self) -> Option<&mut MovePackage> {
         use Data::*;
         match self {
             Move(_) => None,
@@ -449,14 +494,40 @@ impl Object {
         }
     }
 
+    /// Returns true if the object is a system package.
+    pub fn is_system_package(&self) -> bool {
+        let id = self.id();
+        self.is_package() && (id == SUI_FRAMEWORK_OBJECT_ID || id == MOVE_STDLIB_OBJECT_ID)
+    }
+
+    /// Create a system package which is not subject to size limits. Panics if the object ID is not
+    /// a known system package.
+    pub fn new_system_package(
+        modules: Vec<CompiledModule>,
+        version: SequenceNumber,
+        previous_transaction: TransactionDigest,
+    ) -> Result<Self, ExecutionError> {
+        let ret = Self::new_package(
+            modules,
+            version,
+            previous_transaction,
+            // System objects are not subject to limits
+            u64::MAX,
+        )?;
+        assert!(ret.is_system_package());
+        Ok(ret)
+    }
+
     // Note: this will panic if `modules` is empty
     pub fn new_package(
         modules: Vec<CompiledModule>,
+        version: SequenceNumber,
         previous_transaction: TransactionDigest,
         max_move_package_size: u64,
     ) -> Result<Self, ExecutionError> {
         Ok(Object {
             data: Data::Package(MovePackage::from_module_iter(
+                version,
                 modules,
                 max_move_package_size,
             )?),
@@ -472,6 +543,7 @@ impl Object {
     ) -> Result<Self, ExecutionError> {
         Self::new_package(
             modules,
+            OBJECT_START_VERSION,
             previous_transaction,
             ProtocolConfig::get_for_max_version().max_move_package_size(),
         )
@@ -525,8 +597,8 @@ impl Object {
         use Data::*;
 
         match &self.data {
-            Move(v) => v.version(),
-            Package(_) => PACKAGE_VERSION,
+            Move(o) => o.version(),
+            Package(p) => p.version(),
         }
     }
 
@@ -546,11 +618,7 @@ impl Object {
         let meta_data_size = size_of::<Owner>() + size_of::<TransactionDigest>() + size_of::<u64>();
         let data_size = match &self.data {
             Data::Move(m) => m.object_size_for_gas_metering(),
-            Data::Package(p) => p
-                .serialized_module_map()
-                .iter()
-                .map(|(name, module)| name.len() + module.len())
-                .sum(),
+            Data::Package(p) => p.object_size_for_gas_metering(),
         };
         meta_data_size + data_size
     }
@@ -609,6 +677,15 @@ impl Object {
 
 // Testing-related APIs.
 impl Object {
+    /// Get the total amount of SUI embedded in `self`, including both Move objects and the storage rebate
+    pub fn get_total_sui(&self, resolver: &impl GetModule) -> Result<u64, SuiError> {
+        Ok(self.storage_rebate
+            + match &self.data {
+                Data::Move(m) => m.get_total_sui(resolver)?,
+                Data::Package(_) => 0,
+            })
+    }
+
     pub fn immutable_with_id_for_testing(id: ObjectID) -> Self {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
@@ -767,10 +844,10 @@ pub enum ObjectRead {
 impl ObjectRead {
     /// Returns the object value if there is any, otherwise an Err if
     /// the object does not exist or is deleted.
-    pub fn into_object(self) -> Result<Object, SuiError> {
+    pub fn into_object(self) -> UserInputResult<Object> {
         match self {
-            Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: oref }),
-            Self::NotExists(id) => Err(SuiError::ObjectNotFound {
+            Self::Deleted(oref) => Err(UserInputError::ObjectDeleted { object_ref: oref }),
+            Self::NotExists(id) => Err(UserInputError::ObjectNotFound {
                 object_id: id,
                 version: None,
             }),
@@ -825,15 +902,15 @@ pub enum PastObjectRead {
 
 impl PastObjectRead {
     /// Returns the object value if there is any, otherwise an Err
-    pub fn into_object(self) -> Result<Object, SuiError> {
+    pub fn into_object(self) -> UserInputResult<Object> {
         match self {
-            Self::ObjectDeleted(oref) => Err(SuiError::ObjectDeleted { object_ref: oref }),
-            Self::ObjectNotExists(id) => Err(SuiError::ObjectNotFound {
+            Self::ObjectDeleted(oref) => Err(UserInputError::ObjectDeleted { object_ref: oref }),
+            Self::ObjectNotExists(id) => Err(UserInputError::ObjectNotFound {
                 object_id: id,
                 version: None,
             }),
             Self::VersionFound(_, o, _) => Ok(o),
-            Self::VersionNotFound(object_id, version) => Err(SuiError::ObjectNotFound {
+            Self::VersionNotFound(object_id, version) => Err(UserInputError::ObjectNotFound {
                 object_id,
                 version: Some(version),
             }),
@@ -841,7 +918,7 @@ impl PastObjectRead {
                 object_id,
                 asked_version,
                 latest_version,
-            } => Err(SuiError::ObjectSequenceNumberTooHigh {
+            } => Err(UserInputError::ObjectSequenceNumberTooHigh {
                 object_id,
                 asked_version,
                 latest_version,

@@ -4,7 +4,7 @@
 
 #![allow(clippy::mutable_key_type)]
 
-use crate::{metrics::ConsensusMetrics, ConsensusError, SequenceNumber};
+use crate::{metrics::ConsensusMetrics, ConsensusError, Outcome, SequenceNumber};
 use config::Committee;
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
@@ -18,8 +18,8 @@ use storage::CertificateStore;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{
-    metered_channel, Certificate, CertificateDigest, CommittedSubDag, ConditionalBroadcastReceiver,
-    ConsensusStore, Round, StoreResult, Timestamp,
+    metered_channel, Certificate, CertificateDigest, CommittedSubDag, CommittedSubDagShell,
+    ConditionalBroadcastReceiver, ConsensusStore, ReputationScores, Round, Timestamp,
 };
 
 #[cfg(test)]
@@ -38,6 +38,11 @@ pub struct ConsensusState {
     pub last_committed: HashMap<PublicKey, Round>,
     /// Used to populate the index in the sub-dag construction.
     pub latest_sub_dag_index: SequenceNumber,
+    /// The last calculated consensus reputation score
+    pub last_consensus_reputation_score: ReputationScores,
+    /// The last committed sub dag leader. This allow us to calculate the reputation score of the nodes
+    /// that vote for the last leader.
+    pub last_committed_leader: Option<CertificateDigest>,
     /// Keeps the latest committed certificate (and its parents) for every authority. Anything older
     /// must be regularly cleaned up through the function `update`.
     pub dag: Dag,
@@ -52,6 +57,8 @@ impl ConsensusState {
             last_committed: Default::default(),
             latest_sub_dag_index: 0,
             dag: Default::default(),
+            last_consensus_reputation_score: ReputationScores::default(),
+            last_committed_leader: None,
             metrics,
         }
     }
@@ -59,7 +66,7 @@ impl ConsensusState {
     pub fn new_from_store(
         metrics: Arc<ConsensusMetrics>,
         recover_last_committed: HashMap<PublicKey, Round>,
-        latest_sub_dag_index: SequenceNumber,
+        latest_sub_dag: Option<CommittedSubDagShell>,
         cert_store: CertificateStore,
     ) -> Self {
         let last_committed_round = *recover_last_committed
@@ -67,13 +74,21 @@ impl ConsensusState {
             .max_by(|a, b| a.1.cmp(b.1))
             .map(|(_k, v)| v)
             .unwrap_or_else(|| &0);
-        let dag = Self::construct_dag_from_cert_store(cert_store, &recover_last_committed);
+        let dag = Self::construct_dag_from_cert_store(cert_store, &recover_last_committed)
+            .expect("error when recovering DAG from store");
         metrics.recovered_consensus_state.inc();
+
+        let (latest_sub_dag_index, last_consensus_reputation_score, last_committed_leader) =
+            latest_sub_dag
+                .map(|s| (s.sub_dag_index, s.reputation_score, Some(s.leader)))
+                .unwrap_or_default();
 
         Self {
             last_committed_round,
             last_committed: recover_last_committed,
+            last_consensus_reputation_score,
             latest_sub_dag_index,
+            last_committed_leader,
             dag,
             metrics,
         }
@@ -83,7 +98,7 @@ impl ConsensusState {
     pub fn construct_dag_from_cert_store(
         cert_store: CertificateStore,
         last_committed: &HashMap<PublicKey, Round>,
-    ) -> Dag {
+    ) -> Result<Dag, ConsensusError> {
         let mut dag: Dag = BTreeMap::new();
         let min_committed_round = last_committed.values().min().cloned().unwrap_or(0);
 
@@ -97,7 +112,7 @@ impl ConsensusState {
 
         let mut num_certs = 0;
         for cert in &certificates {
-            if Self::try_insert_in_dag(&mut dag, last_committed, cert) {
+            if Self::try_insert_in_dag(&mut dag, last_committed, cert)? {
                 info!("Inserted certificate: {:?}", cert);
                 num_certs += 1;
             }
@@ -108,11 +123,11 @@ impl ConsensusState {
             dag.len()
         );
 
-        dag
+        Ok(dag)
     }
 
     /// Returns true if certificate is inserted in the dag.
-    pub fn try_insert(&mut self, certificate: &Certificate) -> bool {
+    pub fn try_insert(&mut self, certificate: &Certificate) -> Result<bool, ConsensusError> {
         Self::try_insert_in_dag(&mut self.dag, &self.last_committed, certificate)
     }
 
@@ -121,7 +136,7 @@ impl ConsensusState {
         dag: &mut Dag,
         last_committed: &HashMap<PublicKey, Round>,
         certificate: &Certificate,
-    ) -> bool {
+    ) -> Result<bool, ConsensusError> {
         let origin_last_committed_round = last_committed
             .get(&certificate.origin())
             .cloned()
@@ -131,16 +146,22 @@ impl ConsensusState {
                 "Ignoring certificate {:?} as it is at or before last committed round {} for this origin",
                 certificate, origin_last_committed_round
             );
-            return false;
+            return Ok(false);
         }
 
-        dag.entry(certificate.round())
-            .or_default()
-            .insert(
-                certificate.origin(),
-                (certificate.digest(), certificate.clone()),
-            )
-            .is_none()
+        if let Some((_, existing_certificate)) = dag.entry(certificate.round()).or_default().insert(
+            certificate.origin(),
+            (certificate.digest(), certificate.clone()),
+        ) {
+            // we want to error only if we try to insert a different certificate in the dag
+            if existing_certificate.digest() != certificate.digest() {
+                return Err(ConsensusError::CertificateEquivocation(
+                    certificate.clone(),
+                    existing_certificate,
+                ));
+            }
+        }
+        Ok(true)
     }
 
     /// Update and clean up internal state after committing a certificate.
@@ -191,7 +212,7 @@ pub trait ConsensusProtocol {
         state: &mut ConsensusState,
         // The new certificate.
         certificate: Certificate,
-    ) -> StoreResult<Vec<CommittedSubDag>>;
+    ) -> Result<(Outcome, Vec<CommittedSubDag>), ConsensusError>;
 }
 
 pub struct Consensus<ConsensusProtocol> {
@@ -239,11 +260,11 @@ where
     ) -> JoinHandle<()> {
         // The consensus state (everything else is immutable).
         let recovered_last_committed = store.read_last_committed();
-        let latest_sub_dag_index = store.get_latest_sub_dag_index();
+        let latest_sub_dag = store.get_latest_sub_dag();
         let state = ConsensusState::new_from_store(
             metrics.clone(),
             recovered_last_committed,
-            latest_sub_dag_index,
+            latest_sub_dag,
             cert_store,
         );
         tx_consensus_round_updates
@@ -277,7 +298,7 @@ where
 
     async fn run_inner(mut self) -> Result<(), ConsensusError> {
         // Listen to incoming certificates.
-        loop {
+        'main: loop {
             tokio::select! {
 
                 _ = self.rx_shutdown.receiver.recv() => {
@@ -291,15 +312,12 @@ where
                         }
                         _ => {
                             tracing::debug!("Already moved to the next epoch");
-                            continue
+                            continue 'main;
                         }
                     }
 
                     // Process the certificate using the selected consensus protocol.
-                    let committed_sub_dags =
-                        self.protocol
-                            .process_certificate(&mut self.state, certificate)?;
-
+                    let (_, committed_sub_dags) = self.protocol.process_certificate(&mut self.state, certificate)?;
 
                     // We extract a list of headers from this specific validator that
                     // have been agreed upon, and signal this back to the narwhal sub-system

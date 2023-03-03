@@ -27,8 +27,7 @@ created: object(113), object(114)
 written: object(111), object(112)
 
 task 7 'run'. lines 132-136:
-Error: Transaction Effects Status: Invalid Object Owned Argument. Object fake(113) is owned by object fake(114). Objects owned by other objects cannot be used as input arguments.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidChildObjectArgument(InvalidChildObjectArgument { child: fake(113), parent: fake(114) }), source: None } }
+Error: Object 0x01b2156087ad45d0d2fb96eb055cd6257a53618f4086e94ee301ec3388d82896 is owned by object 0xb221913a3af7acfea147609cf80ac9ff54e941c3fc918fc4972a9a2c95b9c5ba. Objects owned by other objects cannot be used as input arguments.
 
 task 8 'run'. lines 138-138:
 created: object(117)
@@ -36,7 +35,7 @@ written: object(116)
 
 task 9 'run'. lines 140-143:
 Error: Transaction Effects Status: Entry Argument Error. Error for argument at index 0: Type mismatch.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: TypeMismatch }), source: Some("Expected argument of type Test::M::Obj, but found type Test::M::AnotherObj") } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: TypeMismatch }), source: Some("Expected argument of type Test::M::Obj, but found type Test::M::AnotherObj"), command: None } }
 
 task 10 'run'. lines 145-145:
 created: object(120)
@@ -48,7 +47,7 @@ written: object(121)
 
 task 12 'run'. lines 149-152:
 Error: Transaction Effects Status: Entry Argument Error. Error for argument at index 0: Type mismatch.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: TypeMismatch }), source: Some("Expected argument of type Test::M::Obj, but found type Test::M::AnotherObj") } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: TypeMismatch }), source: Some("Expected argument of type Test::M::Obj, but found type Test::M::AnotherObj"), command: None } }
 
 task 13 'run'. lines 154-154:
 created: object(125)
@@ -56,18 +55,18 @@ written: object(124)
 
 task 14 'run'. lines 156-159:
 Error: Transaction Effects Status: Entry Argument Error. Error for argument at index 0: Immutable and shared objects cannot be passed by-value.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: InvalidObjectByValue }), source: Some("Immutable and shared objects cannot be passed by-value, violation found in argument 0") } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: InvalidObjectByValue }), source: Some("Immutable and shared objects cannot be passed by-value, violation found in argument 0"), command: None } }
 
 task 15 'run'. lines 161-161:
 created: object(128)
 written: object(127)
 
 task 16 'run'. lines 163-166:
-Error: Error checking transaction input objects: [DuplicateObjectRefInput]
+Error: The transaction inputs contain duplicated ObjectRef's
 
 task 17 'run'. lines 168-168:
 created: object(131)
 written: object(130)
 
 task 18 'run'. lines 170-170:
-Error: Error checking transaction input objects: [DuplicateObjectRefInput]
+Error: The transaction inputs contain duplicated ObjectRef's

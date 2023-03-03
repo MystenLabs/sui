@@ -57,20 +57,20 @@ A basic scalable vector library implemented using <code>Table</code>.
 ## Constants
 
 
-<a name="0x2_table_vec_EINDEX_OUT_OF_BOUND"></a>
+<a name="0x2_table_vec_EIndexOutOfBound"></a>
 
 
 
-<pre><code><b>const</b> <a href="table_vec.md#0x2_table_vec_EINDEX_OUT_OF_BOUND">EINDEX_OUT_OF_BOUND</a>: u64 = 0;
+<pre><code><b>const</b> <a href="table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>: u64 = 0;
 </code></pre>
 
 
 
-<a name="0x2_table_vec_ETABLE_NONEMPTY"></a>
+<a name="0x2_table_vec_ETableNonEmpty"></a>
 
 
 
-<pre><code><b>const</b> <a href="table_vec.md#0x2_table_vec_ETABLE_NONEMPTY">ETABLE_NONEMPTY</a>: u64 = 1;
+<pre><code><b>const</b> <a href="table_vec.md#0x2_table_vec_ETableNonEmpty">ETableNonEmpty</a>: u64 = 1;
 </code></pre>
 
 
@@ -197,7 +197,7 @@ Aborts if <code>i</code> is out of bounds.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="table_vec.md#0x2_table_vec_borrow">borrow</a>&lt;Element: store&gt;(t: &<a href="table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;, i: u64): &Element {
-    <b>assert</b>!(<a href="table_vec.md#0x2_table_vec_length">length</a>(t) &gt; i, <a href="table_vec.md#0x2_table_vec_EINDEX_OUT_OF_BOUND">EINDEX_OUT_OF_BOUND</a>);
+    <b>assert</b>!(<a href="table_vec.md#0x2_table_vec_length">length</a>(t) &gt; i, <a href="table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
     <a href="table.md#0x2_table_borrow">table::borrow</a>(&t.contents, i)
 }
 </code></pre>
@@ -250,7 +250,7 @@ Aborts if <code>i</code> is out of bounds.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="table_vec.md#0x2_table_vec_borrow_mut">borrow_mut</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;, i: u64): &<b>mut</b> Element {
-    <b>assert</b>!(<a href="table_vec.md#0x2_table_vec_length">length</a>(t) &gt; i, <a href="table_vec.md#0x2_table_vec_EINDEX_OUT_OF_BOUND">EINDEX_OUT_OF_BOUND</a>);
+    <b>assert</b>!(<a href="table_vec.md#0x2_table_vec_length">length</a>(t) &gt; i, <a href="table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
     <a href="table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> t.contents, i)
 }
 </code></pre>
@@ -278,7 +278,7 @@ Aborts if <code>t</code> is empty.
 
 <pre><code><b>public</b> <b>fun</b> <a href="table_vec.md#0x2_table_vec_pop_back">pop_back</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;): Element {
     <b>let</b> length = <a href="table_vec.md#0x2_table_vec_length">length</a>(t);
-    <b>assert</b>!(length &gt; 0, <a href="table_vec.md#0x2_table_vec_EINDEX_OUT_OF_BOUND">EINDEX_OUT_OF_BOUND</a>);
+    <b>assert</b>!(length &gt; 0, <a href="table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
     <a href="table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> t.contents, length - 1)
 }
 </code></pre>
@@ -305,7 +305,7 @@ Aborts if <code>t</code> is not empty.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="table_vec.md#0x2_table_vec_destroy_empty">destroy_empty</a>&lt;Element: store&gt;(t: <a href="table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;) {
-    <b>assert</b>!(<a href="table_vec.md#0x2_table_vec_length">length</a>(&t) == 0, <a href="table_vec.md#0x2_table_vec_ETABLE_NONEMPTY">ETABLE_NONEMPTY</a>);
+    <b>assert</b>!(<a href="table_vec.md#0x2_table_vec_length">length</a>(&t) == 0, <a href="table_vec.md#0x2_table_vec_ETableNonEmpty">ETableNonEmpty</a>);
     <b>let</b> <a href="table_vec.md#0x2_table_vec_TableVec">TableVec</a> { contents } = t;
     <a href="table.md#0x2_table_destroy_empty">table::destroy_empty</a>(contents);
 }
