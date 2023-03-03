@@ -203,6 +203,10 @@ export abstract class Provider {
    */
   abstract getObjectRef(objectId: string): Promise<SuiObjectRef | undefined>;
 
+  abstract getObjectBatch(
+    objectIds: ObjectId[],
+  ): Promise<GetObjectDataResponse[]>;
+
   // Transactions
   /**
    * Get transaction digests for a given range

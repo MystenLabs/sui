@@ -165,6 +165,12 @@ export class VoidProvider extends Provider {
     throw this.newError('getObjectRef');
   }
 
+  async getObjectBatch(
+    _objectIds: ObjectId[],
+  ): Promise<GetObjectDataResponse[]> {
+    throw this.newError('getObjectBatch');
+  }
+
   // Transactions
   async getTransaction(
     _digest: TransactionDigest,

@@ -17,7 +17,12 @@ import {
   integer,
 } from 'superstruct';
 import { Provider } from '../providers/provider';
-import { extractStructTag, normalizeSuiObjectId } from '../types';
+import {
+  extractStructTag,
+  getObjectReference,
+  getSharedObjectInitialVersion,
+  normalizeSuiObjectId,
+} from '../types';
 import { builder } from './bcs';
 import {
   Commands,
@@ -440,10 +445,31 @@ export class Transaction {
       );
     }
 
-    // TODO: Resolve objects:
-    // objectsToResolve.forEach(() => {});
+    if (objectsToResolve.length) {
+      // TODO: Use multi-get objects when that API exists instead of batch:
+      // TODO: Avoid fetching object contents when an API exists for that.
+      const objects = await expectProvider(provider).getObjectBatch(
+        objectsToResolve.map(({ id }) => id),
+      );
 
-    // Resolve inputs:
+      objects.forEach((object, i) => {
+        const { id, input } = objectsToResolve[i];
+        const initialSharedVersion = getSharedObjectInitialVersion(object);
+
+        if (initialSharedVersion) {
+          const mutable = true; // Defaulted to True to match current behavior.
+          input.value = Inputs.SharedObjectRef({
+            objectId: id,
+            initialSharedVersion,
+            mutable,
+          });
+        } else {
+          input.value = Inputs.ObjectRef(getObjectReference(object)!);
+        }
+      });
+    }
+
+    // Resolve inputs down to values:
     const inputs = this.#inputs.map((input) => {
       assert(input.value, CallArg);
       return input.value;
