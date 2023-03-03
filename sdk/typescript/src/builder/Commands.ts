@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+  is,
   any,
   array,
   Infer,
@@ -11,7 +12,10 @@ import {
   optional,
   string,
   union,
+  assert,
+  Struct,
 } from 'superstruct';
+import { COMMAND_TYPE, WellKnownEncoding } from './utils';
 
 export const TransactionInput = object({
   kind: literal('Input'),
@@ -21,7 +25,7 @@ export const TransactionInput = object({
 });
 export type TransactionInput = Infer<typeof TransactionInput>;
 
-export const CommandArgument = union([
+const CommandArgumentTypes = [
   TransactionInput,
   object({ kind: literal('GasCoin') }),
   object({ kind: literal('Result'), index: integer() }),
@@ -30,8 +34,26 @@ export const CommandArgument = union([
     index: integer(),
     resultIndex: integer(),
   }),
-]);
+] as const;
+
+// Generic command argument
+export const CommandArgument = union([...CommandArgumentTypes]);
 export type CommandArgument = Infer<typeof CommandArgument>;
+
+// Command argument referring to an object:
+export const ObjectCommandArgument = union([...CommandArgumentTypes]);
+(ObjectCommandArgument as any)[COMMAND_TYPE] = {
+  kind: 'object',
+} as WellKnownEncoding;
+
+export const PureCommandArgument = (type: string) => {
+  const struct = union([...CommandArgumentTypes]);
+  (struct as any)[COMMAND_TYPE] = {
+    kind: 'pure',
+    type,
+  } as WellKnownEncoding;
+  return struct;
+};
 
 export const MoveCallCommand = union([
   object({
@@ -53,29 +75,29 @@ export type MoveCallCommand = Infer<typeof MoveCallCommand>;
 
 export const TransferObjectsCommand = object({
   kind: literal('TransferObjects'),
-  objects: array(CommandArgument),
-  address: CommandArgument,
+  objects: array(ObjectCommandArgument),
+  address: ObjectCommandArgument,
 });
 export type TransferObjectsCommand = Infer<typeof TransferObjectsCommand>;
 
 export const SplitCoinCommand = object({
   kind: literal('SplitCoin'),
-  coin: CommandArgument,
-  amount: CommandArgument,
+  coin: ObjectCommandArgument,
+  amount: PureCommandArgument('u64'),
 });
 export type SplitCoinCommand = Infer<typeof SplitCoinCommand>;
 
 export const MergeCoinsCommand = object({
   kind: literal('MergeCoins'),
-  coin: CommandArgument,
-  coins: array(CommandArgument),
+  destination: ObjectCommandArgument,
+  sources: array(ObjectCommandArgument),
 });
 export type MergeCoinsCommand = Infer<typeof MergeCoinsCommand>;
 
 export const MakeMoveVecCommand = object({
   kind: literal('MakeMoveVec'),
   type: optional(string()),
-  objects: array(CommandArgument),
+  objects: array(ObjectCommandArgument),
 });
 export type MakeMoveVecCommand = Infer<typeof MakeMoveVecCommand>;
 
@@ -85,15 +107,22 @@ export const PublishCommand = object({
 });
 export type PublishCommand = Infer<typeof PublishCommand>;
 
-export const TransactionCommand = union([
+const TransactionCommandTypes = [
   MoveCallCommand,
   TransferObjectsCommand,
   SplitCoinCommand,
   MergeCoinsCommand,
   PublishCommand,
   MakeMoveVecCommand,
-]);
+] as const;
+
+export const TransactionCommand = union([...TransactionCommandTypes]);
 export type TransactionCommand = Infer<typeof TransactionCommand>;
+
+export function getTransactionCommandType(data: unknown) {
+  assert(data, TransactionCommand);
+  return TransactionCommandTypes.find((schema) => is(data, schema as Struct))!;
+}
 
 // Refined types for move call which support both the target interface, and the
 // deconstructed interface:
@@ -132,10 +161,10 @@ export const Commands = {
     return { kind: 'SplitCoin', coin, amount };
   },
   MergeCoins(
-    coin: CommandArgument,
-    coins: CommandArgument[],
+    destination: CommandArgument,
+    sources: CommandArgument[],
   ): MergeCoinsCommand {
-    return { kind: 'MergeCoins', coin, coins };
+    return { kind: 'MergeCoins', destination, sources };
   },
   Publish(modules: number[][]): PublishCommand {
     return { kind: 'Publish', modules };

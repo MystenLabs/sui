@@ -23,14 +23,24 @@ import {
   CommandArgument,
   TransactionCommand,
   TransactionInput,
+  KNOWN_COMMAND_TYPES,
+  getTransactionCommandType,
 } from './Commands';
-import { CallArg } from './Inputs';
-import { create } from './utils';
+import { CallArg, Inputs } from './Inputs';
+import { COMMAND_TYPE, create, WellKnownEncoding } from './utils';
 
 type TransactionResult = CommandArgument & CommandArgument[];
 
 function createTransactionResult(index: number): TransactionResult {
   const baseResult: CommandArgument = { kind: 'Result', index };
+
+  const nestedResults: CommandArgument[] = [];
+  const nestedResultFor = (resultIndex: number): CommandArgument =>
+    (nestedResults[resultIndex] ??= {
+      kind: 'NestedResult',
+      index,
+      resultIndex,
+    });
 
   return new Proxy(baseResult, {
     set() {
@@ -52,26 +62,17 @@ function createTransactionResult(index: number): TransactionResult {
         return function* () {
           let i = 0;
           while (true) {
-            yield { kind: 'NestedResult', index, resultIndex: i };
+            yield nestedResultFor(i);
             i++;
           }
         };
       }
 
-      if (typeof property === 'symbol') {
-        throw new Error(
-          `Unexpected symbol property access: "${String(property)}"`,
-        );
-      }
+      if (typeof property === 'symbol') return;
 
       const resultIndex = parseInt(property, 10);
-      if (Number.isNaN(resultIndex) || resultIndex < 0) {
-        throw new Error(`Invalid result index: "${property}"`);
-      }
-
-      // TODO: Rather than dynamically construct this, should we share a cache for the destructured / array properties
-      // so that they return the same reference every time?
-      return { kind: 'NestedResult', index, resultIndex };
+      if (Number.isNaN(resultIndex) || resultIndex < 0) return;
+      return nestedResultFor(resultIndex);
     },
   }) as TransactionResult;
 }
@@ -164,6 +165,11 @@ export class Transaction {
   /** A helper to retrieve the Transaction builder `Commands` */
   static get Commands() {
     return Commands;
+  }
+
+  /** A helper to retrieve the Transaction builder `Inputs` */
+  static get Inputs() {
+    return Inputs;
   }
 
   #sender?: string;
@@ -280,12 +286,42 @@ export class Transaction {
       );
     }
 
-    // Resolve commands:
-    const commands = this.#commands;
+    this.#commands.forEach((command) => {
+      // Get the matching struct definition for the command, and use it to attempt to automatically
+      // encode the matching inputs.
+      const commandType = getTransactionCommandType(command);
+      if (!commandType.schema) return;
+      Object.entries(command).forEach(([key, value]) => {
+        if (key === 'kind') return;
+        const keySchema = (commandType.schema as any)[key];
+        const isArray = keySchema.type === 'array';
+        const wellKnownEncoding: WellKnownEncoding = isArray
+          ? keySchema.schema[COMMAND_TYPE]
+          : keySchema[COMMAND_TYPE];
 
-    // TODO: Use the commands to resolve input values:
-    // commands.forEach(() => {
-    // });
+        // This argument has unknown encoding, assume it must be fully-encoded:
+        if (!wellKnownEncoding) return;
+
+        if (isArray) {
+          throw new Error('TODO: Array encoders.');
+        } else {
+          if (value.kind !== 'Input') return;
+          const input = this.#inputs.at(value.index);
+          if (!input) {
+            throw new Error(`Missing input ${value.index}`);
+          }
+
+          // Input is fully resolved:
+          if (is(input.value, CallArg)) return;
+          if (wellKnownEncoding.kind === 'object') {
+            throw new Error('Object encoding not yet supported');
+          }
+
+          // Construct BCS bytes:
+          input.value = Inputs.Pure(wellKnownEncoding.type, input.value);
+        }
+      });
+    });
 
     // Resolve inputs:
     const inputs = this.#inputs.map((input) => {
@@ -318,7 +354,7 @@ export class Transaction {
         Single: {
           ProgrammableTransaction: {
             inputs,
-            commands,
+            commands: this.#commands,
           },
         },
       },

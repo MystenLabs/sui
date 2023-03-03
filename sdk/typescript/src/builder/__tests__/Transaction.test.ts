@@ -66,16 +66,19 @@ describe('offline build', () => {
   it('builds a split command', async () => {
     const tx = setup();
     tx.add(Commands.SplitCoin(tx.gas, tx.input(Inputs.Pure('u64', 100))));
-    console.log(tx.inputs);
-    console.log(tx.commands);
     await tx.build();
   });
 
   it('infers the type of inputs', async () => {
     const tx = setup();
     tx.add(Commands.SplitCoin(tx.gas, tx.input(100)));
-    console.log(tx.inputs);
-    console.log(tx.commands);
+    await tx.build();
+  });
+
+  it('builds a more complex interaction', async () => {
+    const tx = setup();
+    const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(100)));
+    tx.add(Commands.MergeCoins(tx.gas, [coin, tx.input('0x2')]));
     await tx.build();
   });
 });
