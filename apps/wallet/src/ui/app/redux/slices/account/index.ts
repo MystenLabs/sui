@@ -49,6 +49,9 @@ export const logout = createAsyncThunk<void, void, AppThunkConfig>(
     'account/logout',
     async (_, { extra: { background } }): Promise<void> => {
         await Browser.storage.local.clear();
+        await Browser.storage.local.set({
+            v: -1,
+        });
         await background.clearWallet();
     }
 );

@@ -93,10 +93,7 @@ export function TxAddresses({ content }: { content: LinkObj[] }) {
 }
 
 // Generate table data from the transaction data
-export const genTableDataFromTxData = (
-    results: TxnData[],
-    truncateLength: number
-) => ({
+export const genTableDataFromTxData = (results: TxnData[]) => ({
     data: results.map((txn) => ({
         date: <TxTimeType timestamp={txn.timestamp_ms} />,
         transactionId: (

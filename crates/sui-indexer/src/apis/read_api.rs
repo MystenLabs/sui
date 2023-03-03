@@ -2,21 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::errors::IndexerError;
-use crate::models::checkpoints::{get_latest_checkpoint_sequence_number, get_rpc_checkpoint};
-use crate::models::transactions::{get_total_transaction_number, get_transaction_by_digest};
-use crate::{get_pg_pool_connection, PgConnectionPool};
+use crate::store::IndexerStore;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
 use std::collections::BTreeMap;
-use std::sync::Arc;
-use sui_json_rpc::api::ReadApiClient;
-use sui_json_rpc::api::ReadApiServer;
+use sui_json_rpc::api::{cap_page_limit, ReadApiClient, ReadApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
-    GetRawObjectDataResponse, MoveFunctionArgType, SuiMoveNormalizedFunction,
+    GetRawObjectDataResponse, MoveFunctionArgType, Page, SuiMoveNormalizedFunction,
     SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionResponse,
     TransactionsPage,
 };
@@ -29,16 +25,16 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::query::TransactionQuery;
 
-pub(crate) struct ReadApi {
+pub(crate) struct ReadApi<S> {
     fullnode: HttpClient,
-    pg_connection_pool: Arc<PgConnectionPool>,
+    state: S,
     method_to_be_forwarded: Vec<String>,
 }
 
-impl ReadApi {
-    pub fn new(pg_connection_pool: Arc<PgConnectionPool>, fullnode_client: HttpClient) -> Self {
+impl<S: IndexerStore> ReadApi<S> {
+    pub fn new(state: S, fullnode_client: HttpClient) -> Self {
         Self {
-            pg_connection_pool,
+            state,
             fullnode: fullnode_client,
             // TODO: read from config or env file
             method_to_be_forwarded: vec![],
@@ -46,8 +42,7 @@ impl ReadApi {
     }
 
     async fn get_total_transaction_number(&self) -> RpcResult<u64> {
-        let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
-        let total_tx_number = get_total_transaction_number(&mut pg_pool_conn)?;
+        let total_tx_number = self.state.get_total_transaction_number()?;
         Ok(total_tx_number as u64)
     }
 
@@ -55,26 +50,107 @@ impl ReadApi {
         &self,
         digest: TransactionDigest,
     ) -> RpcResult<SuiTransactionResponse> {
-        let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
-        let txn_resp: SuiTransactionResponse =
-            get_transaction_by_digest(&mut pg_pool_conn, digest.to_string())?.try_into()?;
+        let txn_resp: SuiTransactionResponse = self
+            .state
+            .get_transaction_by_digest(digest.to_string())?
+            .try_into()?;
         Ok(txn_resp)
     }
 
+    async fn get_transactions(
+        &self,
+        query: TransactionQuery,
+        cursor: Option<TransactionDigest>,
+        limit: Option<usize>,
+        descending_order: Option<bool>,
+    ) -> RpcResult<TransactionsPage> {
+        let limit = cap_page_limit(limit);
+        let indexer_seq_number = self.state.get_transaction_sequence_by_digest(
+            cursor.map(|digest| digest.to_string()),
+            descending_order.unwrap_or_default(),
+        )?;
+
+        let digests_from_db = match query {
+            TransactionQuery::All => self.state.get_all_transaction_digest_page(
+                indexer_seq_number,
+                limit,
+                descending_order.unwrap_or_default(),
+            ),
+            // TODO(gegaowp): implement Move call query handling.
+            TransactionQuery::MoveFunction {
+                package: _,
+                module: _,
+                function: _,
+            } => Ok(vec![]),
+            // TODO(gegaowp): input objects are tricky to retrive from
+            // SuiTransactionResponse, instead we should store the BCS
+            // serialized transaction and retrive from there.
+            // This is now blocked by the endpoint on FN side.
+            TransactionQuery::InputObject(_input_obj_id) => Ok(vec![]),
+            TransactionQuery::MutatedObject(mutated_obj_id) => {
+                self.state.get_transaction_digest_page_by_mutated_object(
+                    mutated_obj_id.to_string(),
+                    indexer_seq_number,
+                    limit + 1,
+                    descending_order.unwrap_or_default(),
+                )
+            }
+            TransactionQuery::FromAddress(sender_address) => {
+                self.state.get_transaction_digest_page_by_sender_address(
+                    sender_address.to_string(),
+                    indexer_seq_number,
+                    limit + 1,
+                    descending_order.unwrap_or_default(),
+                )
+            }
+            TransactionQuery::ToAddress(recipient_address) => {
+                self.state.get_transaction_digest_page_by_recipient_address(
+                    recipient_address.to_string(),
+                    indexer_seq_number,
+                    limit + 1,
+                    descending_order.unwrap_or_default(),
+                )
+            }
+        }?;
+
+        // digests here are of size (limit + 1), where the last one is the cursor for the next page
+        let mut txn_digests = digests_from_db
+            .iter()
+            .map(|digest| {
+                let txn_digest: Result<TransactionDigest, _> = digest.clone().parse();
+                txn_digest.map_err(|e| {
+                    IndexerError::JsonSerdeError(format!(
+                        "Failed to deserialize transaction digest: {:?} with error {:?}",
+                        digest, e
+                    ))
+                })
+            })
+            .collect::<Result<Vec<TransactionDigest>, IndexerError>>()?;
+
+        let next_cursor = txn_digests.get(limit).cloned();
+        txn_digests.truncate(limit);
+
+        Ok(Page {
+            data: txn_digests,
+            next_cursor,
+        })
+    }
+
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
-        let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
-        get_latest_checkpoint_sequence_number(&mut pg_pool_conn)
+        self.state.get_latest_checkpoint_sequence_number()
     }
 
     async fn get_checkpoint(&self, id: CheckpointId) -> Result<Checkpoint, IndexerError> {
-        let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
-        let checkpoint = get_rpc_checkpoint(&mut pg_pool_conn, id)?;
-        Ok(checkpoint)
+        let checkpoint = self.state.get_checkpoint(id)?;
+        checkpoint.try_into()
     }
 }
 
 #[async_trait]
-impl ReadApiServer for ReadApi {
+impl<S> ReadApiServer for ReadApi<S>
+where
+    S: IndexerStore + Sync + Send + 'static,
+{
     async fn get_objects_owned_by_address(
         &self,
         address: SuiAddress,
@@ -124,8 +200,16 @@ impl ReadApiServer for ReadApi {
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage> {
-        self.fullnode
-            .get_transactions(query, cursor, limit, descending_order)
+        if self
+            .method_to_be_forwarded
+            .contains(&"get_transactions".to_string())
+        {
+            return self
+                .fullnode
+                .get_transactions(query, cursor, limit, descending_order)
+                .await;
+        }
+        self.get_transactions(query, cursor, limit, descending_order)
             .await
     }
 
@@ -274,7 +358,10 @@ impl ReadApiServer for ReadApi {
     }
 }
 
-impl SuiRpcModule for ReadApi {
+impl<S> SuiRpcModule for ReadApi<S>
+where
+    S: IndexerStore + Sync + Send + 'static,
+{
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

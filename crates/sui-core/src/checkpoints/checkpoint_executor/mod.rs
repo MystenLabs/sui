@@ -26,19 +26,16 @@ use std::{
 
 use futures::stream::FuturesOrdered;
 use itertools::izip;
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{spawn_monitored_task, MonitoredFutureExt};
 use prometheus::Registry;
 use sui_config::node::CheckpointExecutorConfig;
 use sui_types::error::SuiResult;
+use sui_types::message_envelope::Message;
 use sui_types::messages::VerifiedExecutableTransaction;
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
     messages::TransactionEffects,
     messages_checkpoint::{CheckpointSequenceNumber, EndOfEpochData, VerifiedCheckpoint},
-};
-use sui_types::{
-    committee::{Committee, EpochId},
-    message_envelope::Message,
 };
 use tap::TapFallible;
 use tokio::{
@@ -114,10 +111,9 @@ impl CheckpointExecutor {
     }
 
     /// Ensure that all checkpoints in the current epoch will be executed.
-    /// Return the committee of the next epoch.
     /// We don't technically need &mut on self, but passing it to make sure only one instance is
     /// running at one time.
-    pub async fn run_epoch(&mut self, epoch_store: Arc<AuthorityPerEpochStore>) -> Committee {
+    pub async fn run_epoch(&mut self, epoch_store: Arc<AuthorityPerEpochStore>) {
         debug!(
             "Checkpoint executor running for epoch {}",
             epoch_store.epoch(),
@@ -151,15 +147,16 @@ impl CheckpointExecutor {
 
         loop {
             // If we have executed the last checkpoint of the current epoch, stop.
-            if let Some(next_epoch_committee) =
-                check_epoch_last_checkpoint(epoch_store.epoch(), &highest_executed)
+            if self
+                .check_epoch_last_checkpoint(epoch_store.clone(), &highest_executed)
+                .await
             {
                 // be extra careful to ensure we don't have orphans
                 assert!(
                     pending.is_empty(),
                     "Pending checkpoint execution buffer should be empty after processing last checkpoint of epoch",
                 );
-                return next_epoch_committee;
+                return;
             }
             self.schedule_synced_checkpoints(
                 &mut pending,
@@ -333,41 +330,45 @@ impl CheckpointExecutor {
             checkpoint
         }));
     }
-}
 
-/// Check whether `checkpoint` is the last checkpoint of the current epoch. If so, return the
-/// committee of the next epoch.
-fn check_epoch_last_checkpoint(
-    cur_epoch: EpochId,
-    checkpoint: &Option<VerifiedCheckpoint>,
-) -> Option<Committee> {
-    if let Some(checkpoint) = checkpoint {
-        if checkpoint.epoch() == cur_epoch {
-            if let Some(EndOfEpochData {
-                next_epoch_committee,
-                next_epoch_protocol_version,
-                ..
-            }) = &checkpoint.summary.end_of_epoch_data
-            {
-                info!(
-                    ended_epoch = cur_epoch,
-                    ?next_epoch_protocol_version,
-                    last_checkpoint = checkpoint.sequence_number(),
-                    "Reached end of epoch",
-                );
-                let next_epoch = cur_epoch + 1;
-                return Some(
-                    Committee::new(
-                        next_epoch,
-                        *next_epoch_protocol_version,
-                        next_epoch_committee.iter().cloned().collect(),
-                    )
-                    .expect("Creating new committee object cannot fail"),
-                );
+    /// Check whether `checkpoint` is the last checkpoint of the current epoch. If so, return true.
+    pub async fn check_epoch_last_checkpoint(
+        &self,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        checkpoint: &Option<VerifiedCheckpoint>,
+    ) -> bool {
+        let cur_epoch = epoch_store.epoch();
+
+        if let Some(checkpoint) = checkpoint {
+            if checkpoint.epoch() == cur_epoch {
+                if let Some(EndOfEpochData {
+                    next_epoch_protocol_version,
+                    ..
+                }) = &checkpoint.summary.end_of_epoch_data
+                {
+                    info!(
+                        ended_epoch = cur_epoch,
+                        ?next_epoch_protocol_version,
+                        last_checkpoint = checkpoint.sequence_number(),
+                        "Reached end of epoch",
+                    );
+
+                    self.accumulator
+                        .accumulate_epoch(
+                            &cur_epoch,
+                            checkpoint.sequence_number(),
+                            epoch_store.clone(),
+                        )
+                        .in_monitored_scope("CheckpointExecutor::accumulate_epoch")
+                        .await
+                        .expect("Accumulating epoch cannot fail");
+
+                    return true;
+                }
             }
         }
+        false
     }
-    None
 }
 
 #[instrument(level = "error", skip_all, fields(seq = ?checkpoint.sequence_number(), epoch = ?epoch_store.epoch()))]

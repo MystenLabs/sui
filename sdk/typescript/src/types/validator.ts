@@ -31,7 +31,7 @@ export const ValidatorMetaData = object({
   project_url: string(),
   p2p_address: array(number()),
   net_address: array(number()),
-  consensus_address: array(number()),
+  primary_address: array(number()),
   worker_address: array(number()),
   next_epoch_protocol_pubkey_bytes: nullable(array(number())),
   next_epoch_proof_of_possession: nullable(array(number())),
@@ -39,7 +39,7 @@ export const ValidatorMetaData = object({
   next_epoch_worker_pubkey_bytes: nullable(array(number())),
   next_epoch_net_address: nullable(array(number())),
   next_epoch_p2p_address: nullable(array(number())),
-  next_epoch_consensus_address: nullable(array(number())),
+  next_epoch_primary_address: nullable(array(number())),
   next_epoch_worker_address: nullable(array(number())),
 });
 

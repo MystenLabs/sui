@@ -3,9 +3,10 @@
 
 use prometheus::Registry;
 use std::net::{IpAddr, SocketAddr};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use sui_config::NodeConfig;
-use sui_node::SuiNode;
+use sui_node::{SuiNode, SuiNodeHandle};
+use tokio::sync::watch;
 use tracing::{info, trace};
 
 use super::node::RuntimeType;
@@ -14,6 +15,7 @@ use super::node::RuntimeType;
 pub(crate) struct Container {
     handle: Option<ContainerHandle>,
     cancel_sender: Option<tokio::sync::watch::Sender<bool>>,
+    node_watch: watch::Receiver<Weak<SuiNode>>,
 }
 
 #[derive(Debug)]
@@ -34,7 +36,7 @@ impl Drop for Container {
 impl Container {
     /// Spawn a new Node.
     pub async fn spawn(config: NodeConfig, _runtime: RuntimeType) -> Self {
-        let (startup_sender, mut startup_reciever) = tokio::sync::watch::channel(false);
+        let (startup_sender, mut startup_reciever) = tokio::sync::watch::channel(Weak::new());
         let (cancel_sender, cancel_reciever) = tokio::sync::watch::channel(false);
 
         let handle = sui_simulator::runtime::Handle::current();
@@ -59,9 +61,9 @@ impl Container {
                 let startup_sender = startup_sender.clone();
                 async move {
                     let registry_service = mysten_metrics::RegistryService::new(Registry::new());
-                    let _server = SuiNode::start(&config, registry_service).await.unwrap();
+                    let server = SuiNode::start(&config, registry_service).await.unwrap();
 
-                    startup_sender.send(true).ok();
+                    startup_sender.send(Arc::downgrade(&server)).ok();
 
                     // run until canceled
                     loop {
@@ -75,12 +77,17 @@ impl Container {
             .build();
 
         startup_reciever.changed().await.unwrap();
-        assert!(*startup_reciever.borrow());
 
         Self {
             handle: Some(ContainerHandle { node_id: node.id() }),
             cancel_sender: Some(cancel_sender),
+            node_watch: startup_reciever,
         }
+    }
+
+    /// Get a SuiNodeHandle to the node owned by the container.
+    pub fn get_node_handle(&self) -> Option<SuiNodeHandle> {
+        Some(SuiNodeHandle::new(self.node_watch.borrow().upgrade()?))
     }
 
     /// Check to see that the Node is still alive by checking if the receiving side of the

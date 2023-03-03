@@ -29,12 +29,14 @@ pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance
 pub const CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME: &IdentStr =
     ident_str!("consensus_commit_prologue");
 
+pub const INIT_SYSTEM_STATE_VERSION: u64 = 1;
+
 const E_METADATA_INVALID_PUBKEY: u64 = 1;
 const E_METADATA_INVALID_NET_PUBKEY: u64 = 2;
 const E_METADATA_INVALID_WORKER_PUBKEY: u64 = 3;
 const E_METADATA_INVALID_NET_ADDR: u64 = 4;
 const E_METADATA_INVALID_P2P_ADDR: u64 = 5;
-const E_METADATA_INVALID_CONSENSUS_ADDR: u64 = 6;
+const E_METADATA_INVALID_PRIMARY_ADDR: u64 = 6;
 const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 
 /// Rust version of the Move sui::sui_system::SystemParameters type
@@ -64,7 +66,7 @@ pub struct ValidatorMetadata {
     pub project_url: String,
     pub net_address: Vec<u8>,
     pub p2p_address: Vec<u8>,
-    pub consensus_address: Vec<u8>,
+    pub primary_address: Vec<u8>,
     pub worker_address: Vec<u8>,
     pub next_epoch_protocol_pubkey_bytes: Option<Vec<u8>>,
     pub next_epoch_proof_of_possession: Option<Vec<u8>>,
@@ -72,7 +74,7 @@ pub struct ValidatorMetadata {
     pub next_epoch_worker_pubkey_bytes: Option<Vec<u8>>,
     pub next_epoch_net_address: Option<Vec<u8>>,
     pub next_epoch_p2p_address: Option<Vec<u8>>,
-    pub next_epoch_consensus_address: Option<Vec<u8>>,
+    pub next_epoch_primary_address: Option<Vec<u8>>,
     pub next_epoch_worker_address: Option<Vec<u8>>,
 }
 
@@ -89,7 +91,7 @@ pub struct VerifiedValidatorMetadata {
     pub project_url: String,
     pub net_address: Multiaddr,
     pub p2p_address: Multiaddr,
-    pub consensus_address: Multiaddr,
+    pub primary_address: Multiaddr,
     pub worker_address: Multiaddr,
     pub next_epoch_protocol_pubkey: Option<narwhal_crypto::PublicKey>,
     pub next_epoch_proof_of_possession: Option<Vec<u8>>,
@@ -97,7 +99,7 @@ pub struct VerifiedValidatorMetadata {
     pub next_epoch_worker_pubkey: Option<narwhal_crypto::NetworkPublicKey>,
     pub next_epoch_net_address: Option<Multiaddr>,
     pub next_epoch_p2p_address: Option<Multiaddr>,
-    pub next_epoch_consensus_address: Option<Multiaddr>,
+    pub next_epoch_primary_address: Option<Multiaddr>,
     pub next_epoch_worker_address: Option<Multiaddr>,
 }
 
@@ -119,8 +121,8 @@ impl ValidatorMetadata {
             .map_err(|_| E_METADATA_INVALID_NET_ADDR)?;
         let p2p_address = Multiaddr::try_from(self.p2p_address.clone())
             .map_err(|_| E_METADATA_INVALID_P2P_ADDR)?;
-        let consensus_address = Multiaddr::try_from(self.consensus_address.clone())
-            .map_err(|_| E_METADATA_INVALID_CONSENSUS_ADDR)?;
+        let primary_address = Multiaddr::try_from(self.primary_address.clone())
+            .map_err(|_| E_METADATA_INVALID_PRIMARY_ADDR)?;
         let worker_address = Multiaddr::try_from(self.worker_address.clone())
             .map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?;
 
@@ -163,10 +165,10 @@ impl ValidatorMetadata {
             )),
         }?;
 
-        let next_epoch_consensus_address = match self.next_epoch_consensus_address.clone() {
+        let next_epoch_primary_address = match self.next_epoch_primary_address.clone() {
             None => Ok::<Option<Multiaddr>, u64>(None),
             Some(address) => Ok(Some(
-                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_CONSENSUS_ADDR)?,
+                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_PRIMARY_ADDR)?,
             )),
         }?;
 
@@ -189,7 +191,7 @@ impl ValidatorMetadata {
             project_url: self.project_url.clone(),
             net_address,
             p2p_address,
-            consensus_address,
+            primary_address,
             worker_address,
             next_epoch_protocol_pubkey,
             next_epoch_proof_of_possession: self.next_epoch_proof_of_possession.clone(),
@@ -197,7 +199,7 @@ impl ValidatorMetadata {
             next_epoch_worker_pubkey,
             next_epoch_net_address,
             next_epoch_p2p_address,
-            next_epoch_consensus_address,
+            next_epoch_primary_address,
             next_epoch_worker_address,
         })
     }
@@ -213,7 +215,7 @@ impl ValidatorMetadata {
     }
 
     pub fn narwhal_primary_address(&self) -> Result<Multiaddr> {
-        Multiaddr::try_from(self.consensus_address.clone()).map_err(Into::into)
+        Multiaddr::try_from(self.primary_address.clone()).map_err(Into::into)
     }
 
     pub fn narwhal_worker_address(&self) -> Result<Multiaddr> {
@@ -424,14 +426,10 @@ impl SuiSystemState {
             net_addresses.insert(name, net_address);
         }
         CommitteeWithNetAddresses {
-            committee: Committee::new(
-                self.epoch,
-                ProtocolVersion::new(self.protocol_version),
-                voting_rights,
-            )
-            // unwrap is safe because we should have verified the committee on-chain.
-            // TODO: Make sure we actually verify it.
-            .unwrap(),
+            committee: Committee::new(self.epoch, voting_rights)
+                // unwrap is safe because we should have verified the committee on-chain.
+                // TODO: Make sure we actually verify it.
+                .unwrap(),
             net_addresses,
         }
     }
@@ -449,7 +447,7 @@ impl SuiSystemState {
                     .expect("Metadata should have been verified upon request");
                 let authority = narwhal_config::Authority {
                     stake: validator.voting_power as narwhal_config::Stake,
-                    primary_address: verified_metadata.consensus_address,
+                    primary_address: verified_metadata.primary_address,
                     network_key: verified_metadata.network_pubkey,
                 };
                 (verified_metadata.protocol_pubkey, authority)
@@ -569,11 +567,11 @@ where
     Ok(result)
 }
 
-pub fn get_sui_system_state<S>(object_store: S) -> Result<SuiSystemState, SuiError>
+pub fn get_sui_system_state<S>(object_store: &S) -> Result<SuiSystemState, SuiError>
 where
     S: ObjectStore,
 {
-    let wrapper = get_sui_system_state_wrapper(&object_store)?;
+    let wrapper = get_sui_system_state_wrapper(object_store)?;
     let inner_id = derive_dynamic_field_id(
         wrapper.id.id.bytes,
         &TypeTag::U64,
@@ -591,4 +589,8 @@ where
     let result = bcs::from_bytes::<Field<u64, SuiSystemState>>(move_object.contents())
         .expect("Sui System State object deserialization cannot fail");
     Ok(result.value)
+}
+
+pub fn get_sui_system_state_version(_protocol_version: ProtocolVersion) -> u64 {
+    INIT_SYSTEM_STATE_VERSION
 }

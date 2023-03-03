@@ -51,6 +51,7 @@ pub struct CompiledPackage {
 }
 
 /// Wrapper around the core Move `BuildConfig` with some Sui-specific info
+#[derive(Clone)]
 pub struct BuildConfig {
     pub config: MoveBuildConfig,
     /// If true, run the Move bytecode verifier on the bytecode from a successful build

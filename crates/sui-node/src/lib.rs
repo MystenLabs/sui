@@ -18,6 +18,7 @@ use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::Registry;
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{ConsensusConfig, NodeConfig};
@@ -42,7 +43,7 @@ use sui_network::discovery;
 use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
 use tracing::debug;
 
-use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
 
 use sui_storage::{
     event_store::{EventStoreType, SqlEventStore},
@@ -87,7 +88,7 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{AuthorityCapabilities, ConsensusTransaction};
 
 pub struct ValidatorComponents {
-    validator_server_handle: tokio::task::JoinHandle<Result<()>>,
+    validator_server_handle: JoinHandle<Result<()>>,
     narwhal_manager: NarwhalManager,
     narwhal_epoch_data_remover: EpochDataRemover,
     consensus_adapter: Arc<ConsensusAdapter>,
@@ -115,10 +116,19 @@ pub struct SuiNode {
     accumulator: Arc<StateAccumulator>,
     connection_monitor_status: Arc<ConnectionMonitorStatus>,
 
-    end_of_epoch_channel: tokio::sync::broadcast::Sender<Committee>,
+    /// Broadcast channel to send the committee and protocol version for the next epoch.
+    end_of_epoch_channel: broadcast::Sender<(Committee, ProtocolVersion)>,
 
     #[cfg(msim)]
     sim_node: sui_simulator::runtime::NodeHandle,
+}
+
+impl fmt::Debug for SuiNode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("SuiNode")
+            .field("name", &self.state.name.concise())
+            .finish()
+    }
 }
 
 impl SuiNode {
@@ -264,14 +274,15 @@ impl SuiNode {
                 .unwrap();
         }
 
-        let (end_of_epoch_channel, _receiver) =
-            broadcast::channel::<Committee>(config.end_of_epoch_broadcast_channel_capacity);
+        let (end_of_epoch_channel, receiver) = broadcast::channel::<(Committee, ProtocolVersion)>(
+            config.end_of_epoch_broadcast_channel_capacity,
+        );
 
         let transaction_orchestrator = if is_full_node {
             Some(Arc::new(
                 TransactiondOrchestrator::new_with_network_clients(
                     state.clone(),
-                    end_of_epoch_channel.subscribe(),
+                    receiver,
                     config.db_path(),
                     &prometheus_registry,
                 )
@@ -362,7 +373,7 @@ impl SuiNode {
         Ok(node)
     }
 
-    pub fn subscribe_to_epoch_change(&self) -> tokio::sync::broadcast::Receiver<Committee> {
+    pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<(Committee, ProtocolVersion)> {
         self.end_of_epoch_channel.subscribe()
     }
 
@@ -800,6 +811,7 @@ impl SuiNode {
                         self.config
                             .supported_protocol_versions
                             .expect("Supported versions should be populated"),
+                        self.state.get_available_system_packages().await,
                     ));
                 info!(?transaction, "submitting capabilities to consensus");
                 components
@@ -807,18 +819,14 @@ impl SuiNode {
                     .submit(transaction, None, &cur_epoch_store)?;
             }
 
-            let next_epoch_committee = checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
-            let next_epoch = next_epoch_committee.epoch();
-            assert_eq!(cur_epoch_store.epoch() + 1, next_epoch);
+            checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
             let system_state = self
                 .state
                 .get_sui_system_state_object_during_reconfig()
                 .expect("Read Sui System State object cannot fail");
-            // Double check that the committee in the last checkpoint is identical to what's on-chain.
-            assert_eq!(
-                system_state.get_current_epoch_committee().committee,
-                next_epoch_committee
-            );
+            let next_epoch_committee = system_state.get_current_epoch_committee().committee;
+            let next_epoch = next_epoch_committee.epoch();
+            assert_eq!(cur_epoch_store.epoch() + 1, next_epoch);
 
             // If we eventually add tests that exercise safe mode, we will need a configurable way of
             // guarding against unexpected safe_mode.
@@ -839,7 +847,10 @@ impl SuiNode {
                 .update_mapping_for_epoch(authority_names_to_peer_ids);
 
             cur_epoch_store.record_epoch_reconfig_start_time_metric();
-            let _ = self.end_of_epoch_channel.send(next_epoch_committee.clone());
+            let _ = self.end_of_epoch_channel.send((
+                next_epoch_committee.clone(),
+                ProtocolVersion::new(system_state.protocol_version),
+            ));
 
             // The following code handles 4 different cases, depending on whether the node
             // was a validator in the previous epoch, and whether the node is a validator

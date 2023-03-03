@@ -25,7 +25,7 @@ use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::messages::TransactionEvents;
 use sui_types::{
     base_types::ObjectID,
-    committee::{Committee, EpochId, ProtocolVersion},
+    committee::{Committee, EpochId},
     crypto::{
         AggregateAuthenticator, AggregateAuthoritySignature, AuthorityQuorumSignInfo,
         AuthoritySignature,
@@ -153,7 +153,7 @@ impl LocalValidatorAggregatorProxy {
             .unwrap();
 
         let validator_info = genesis.validator_set();
-        let committee = make_committee(0, ProtocolVersion::MIN, &validator_info).unwrap();
+        let committee = make_committee(0, &validator_info).unwrap();
         let clients = make_authority_clients(
             &validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
@@ -181,7 +181,7 @@ impl LocalValidatorAggregatorProxy {
             .unwrap();
 
         let validator_info = configs.validator_set();
-        let committee = make_committee(0, ProtocolVersion::MIN, &validator_info).unwrap();
+        let committee = make_committee(0, &validator_info).unwrap();
         let clients = make_authority_clients(
             &validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
@@ -485,11 +485,10 @@ impl FullNodeProxy {
 
         let resp = sui_client.read_api().get_committee_info(None).await?;
         let epoch = resp.epoch;
-        let protocol_version = resp.protocol_version;
         let committee_vec = resp.committee_info;
         let committee_map =
             BTreeMap::from_iter(committee_vec.into_iter().map(|(name, stake)| (name, stake)));
-        let committee = Committee::new(epoch, protocol_version, committee_map)?;
+        let committee = Committee::new(epoch, committee_map)?;
 
         Ok(Self {
             sui_client,

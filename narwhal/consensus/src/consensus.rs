@@ -18,8 +18,8 @@ use storage::CertificateStore;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{
-    metered_channel, Certificate, CertificateDigest, CommittedSubDag, ConditionalBroadcastReceiver,
-    ConsensusStore, Round, Timestamp,
+    metered_channel, Certificate, CertificateDigest, CommittedSubDag, CommittedSubDagShell,
+    ConditionalBroadcastReceiver, ConsensusStore, ReputationScores, Round, Timestamp,
 };
 
 #[cfg(test)]
@@ -38,6 +38,11 @@ pub struct ConsensusState {
     pub last_committed: HashMap<PublicKey, Round>,
     /// Used to populate the index in the sub-dag construction.
     pub latest_sub_dag_index: SequenceNumber,
+    /// The last calculated consensus reputation score
+    pub last_consensus_reputation_score: ReputationScores,
+    /// The last committed sub dag leader. This allow us to calculate the reputation score of the nodes
+    /// that vote for the last leader.
+    pub last_committed_leader: Option<CertificateDigest>,
     /// Keeps the latest committed certificate (and its parents) for every authority. Anything older
     /// must be regularly cleaned up through the function `update`.
     pub dag: Dag,
@@ -52,6 +57,8 @@ impl ConsensusState {
             last_committed: Default::default(),
             latest_sub_dag_index: 0,
             dag: Default::default(),
+            last_consensus_reputation_score: ReputationScores::default(),
+            last_committed_leader: None,
             metrics,
         }
     }
@@ -59,7 +66,7 @@ impl ConsensusState {
     pub fn new_from_store(
         metrics: Arc<ConsensusMetrics>,
         recover_last_committed: HashMap<PublicKey, Round>,
-        latest_sub_dag_index: SequenceNumber,
+        latest_sub_dag: Option<CommittedSubDagShell>,
         cert_store: CertificateStore,
     ) -> Self {
         let last_committed_round = *recover_last_committed
@@ -71,10 +78,17 @@ impl ConsensusState {
             .expect("error when recovering DAG from store");
         metrics.recovered_consensus_state.inc();
 
+        let (latest_sub_dag_index, last_consensus_reputation_score, last_committed_leader) =
+            latest_sub_dag
+                .map(|s| (s.sub_dag_index, s.reputation_score, Some(s.leader)))
+                .unwrap_or_default();
+
         Self {
             last_committed_round,
             last_committed: recover_last_committed,
+            last_consensus_reputation_score,
             latest_sub_dag_index,
+            last_committed_leader,
             dag,
             metrics,
         }
@@ -246,11 +260,11 @@ where
     ) -> JoinHandle<()> {
         // The consensus state (everything else is immutable).
         let recovered_last_committed = store.read_last_committed();
-        let latest_sub_dag_index = store.get_latest_sub_dag_index();
+        let latest_sub_dag = store.get_latest_sub_dag();
         let state = ConsensusState::new_from_store(
             metrics.clone(),
             recovered_last_committed,
-            latest_sub_dag_index,
+            latest_sub_dag,
             cert_store,
         );
         tx_consensus_round_updates

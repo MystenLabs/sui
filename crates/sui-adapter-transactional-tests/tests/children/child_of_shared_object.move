@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses t1=0x0 t2=0x0 t3=0x0 A=0x42
+//# init --addresses t1=0x0 t2=0x0 t3=0x0 --accounts A
 
 //# publish
 
@@ -81,11 +81,11 @@ module t1::o1 {
     }
 }
 
-//# run t3::o3::create
+//# run t3::o3::create --sender A
 
-//# run t2::o2::create_shared --args object(110)
+//# run t2::o2::create_shared --args object(111) --sender A
 
-// This run should error as Obj2/Obj3 were not defined in o1
-//# run t1::o1::use_o2_o3 --args object(112) object(110)
+// child arguments cannot be taken directly
+//# run t1::o1::use_o2_o3 --args object(113) object(114) --sender A
 
-//# run t2::o2::use_o2_o3 --args object(112) object(110)
+//# run t2::o2::use_o2_o3 --args object(113) object(110) --sender A

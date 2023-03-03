@@ -1,6 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use super::{base_types::*, committee::Committee, error::*, event::Event};
 use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
@@ -48,6 +49,7 @@ use std::{
 use strum::IntoStaticStr;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use tap::Pipe;
+use thiserror::Error;
 use tracing::debug;
 
 pub const DUMMY_GAS_PRICE: u64 = 1;
@@ -339,6 +341,11 @@ pub struct ChangeEpoch {
     pub storage_rebate: u64,
     /// Unix timestamp when epoch started
     pub epoch_start_timestamp_ms: u64,
+    /// System packages (specifically framework and move stdlib) that are written before the new
+    /// epoch starts. This tracks framework upgrades on chain. When executing the ChangeEpoch txn,
+    /// the validator must write out the modules below.  Modules are given in their serialized form,
+    /// and include the ObjectID within their serialized form.
+    pub system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>)>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -1889,6 +1896,7 @@ impl VerifiedTransaction {
         computation_charge: u64,
         storage_rebate: u64,
         epoch_start_timestamp_ms: u64,
+        system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>)>,
     ) -> Self {
         ChangeEpoch {
             epoch: next_epoch,
@@ -1897,6 +1905,7 @@ impl VerifiedTransaction {
             computation_charge,
             storage_rebate,
             epoch_start_timestamp_ms,
+            system_packages,
         }
         .pipe(SingleTransactionKind::ChangeEpoch)
         .pipe(Self::new_system_transaction)
@@ -2299,6 +2308,22 @@ pub enum ExecutionFailureStatus {
     TotalPaymentAmountOverflow,
     /// The total balance of coins is larger than the maximum value of u64.
     TotalCoinBalanceOverflow,
+
+    //
+    // Programmable Transaction Errors
+    //
+    CommandArgumentError {
+        arg_idx: u16,
+        kind: CommandArgumentError,
+    },
+    UnusedValueWithoutDrop {
+        result_idx: u16,
+        secondary_idx: u16,
+    },
+    InvalidPublicFunctionReturnType {
+        idx: u16,
+    },
+    ArityMismatch,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }
@@ -2357,6 +2382,53 @@ pub struct InvalidSharedByValue {
     pub object: ObjectID,
 }
 
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash, Error)]
+pub enum CommandArgumentError {
+    #[error("The type of the value does not match the expected type")]
+    TypeMismatch,
+    #[error("The argument cannot be deserialized into a value of the specified type")]
+    InvalidBCSBytes,
+    #[error("The argument cannot be instantiated from raw bytes")]
+    InvalidUsageOfPureArg,
+    #[error(
+        "Invalid argument to private entry function. \
+        These functions cannot take arguments from other Move functions"
+    )]
+    InvalidArgumentToPrivateEntryFunction,
+    #[error("Out of bounds access to input or result vector {idx}")]
+    IndexOutOfBounds { idx: u16 },
+    #[error(
+        "Out of bounds secondary access to result vector \
+        {result_idx} at secondary index {secondary_idx}"
+    )]
+    SecondaryIndexOutOfBounds { result_idx: u16, secondary_idx: u16 },
+    #[error(
+        "Invalid usage of result {result_idx}, \
+        expected a single result but found multiple return values"
+    )]
+    InvalidResultArity { result_idx: u16 },
+    #[error(
+        "Invalid taking of the Gas coin. \
+        It can only be used by-value with TransferObjects"
+    )]
+    InvalidGasCoinUsage,
+    #[error(
+        "Invalid usage of borrowed value. \
+        Mutably borrowed values require unique usage. \
+        Immutably borrowed values cannot be taken or borrowed mutably"
+    )]
+    InvalidUsageOfBorrowedValue,
+    #[error(
+        "Invalid usage of already taken value. \
+        There is now no value available at this location"
+    )]
+    InvalidUsageOfTakenValue,
+    #[error("Immutable and shared objects cannot be passed by-value.")]
+    InvalidObjectByValue,
+    #[error("Immutable objects cannot be passed by mutable reference, &mut.")]
+    InvalidObjectByMutRef,
+}
+
 impl ExecutionFailureStatus {
     pub fn entry_argument_error(argument_idx: LocalIndex, kind: EntryArgumentErrorKind) -> Self {
         EntryArgumentError { argument_idx, kind }.into()
@@ -2380,6 +2452,10 @@ impl ExecutionFailureStatus {
     pub fn invalid_shared_by_value(object: ObjectID) -> Self {
         InvalidSharedByValue { object }.into()
     }
+
+    pub fn command_argument_error(kind: CommandArgumentError, arg_idx: u16) -> Self {
+        Self::CommandArgumentError { arg_idx, kind }
+    }
 }
 
 impl Display for ExecutionFailureStatus {
@@ -2392,11 +2468,8 @@ impl Display for ExecutionFailureStatus {
                 )
             }
             ExecutionFailureStatus::CoinTooLarge => {
-                write!(
-                    f,
-                    "Coin exceeds maximum value for a single coin"
-                )
-            },
+                write!(f, "Coin exceeds maximum value for a single coin")
+            }
             ExecutionFailureStatus::EmptyInputCoins => {
                 write!(f, "Expected a non-empty list of input Coin objects")
             }
@@ -2417,8 +2490,22 @@ impl Display for ExecutionFailureStatus {
             ExecutionFailureStatus::InvalidTransactionUpdate => {
                 write!(f, "Invalid Transaction Update.")
             }
-            ExecutionFailureStatus::MoveObjectTooBig { object_size, max_object_size } => write!(f, "Move object with size {object_size} is larger than the maximum object size {max_object_size}"),
-            ExecutionFailureStatus::MovePackageTooBig { object_size, max_object_size } => write!(f, "Move package with size {object_size} is larger than the maximum object size {max_object_size}"),
+            ExecutionFailureStatus::MoveObjectTooBig {
+                object_size,
+                max_object_size,
+            } => write!(
+                f,
+                "Move object with size {object_size} is larger \
+                than the maximum object size {max_object_size}"
+            ),
+            ExecutionFailureStatus::MovePackageTooBig {
+                object_size,
+                max_object_size,
+            } => write!(
+                f,
+                "Move package with size {object_size} is larger than the \
+                maximum object size {max_object_size}"
+            ),
             ExecutionFailureStatus::FunctionNotFound => write!(f, "Function Not Found."),
             ExecutionFailureStatus::InvariantViolation => write!(f, "INVARIANT VIOLATION."),
             ExecutionFailureStatus::InvalidTransferObject => write!(
@@ -2534,19 +2621,40 @@ impl Display for ExecutionFailureStatus {
             ),
             ExecutionFailureStatus::VMInvariantViolation => {
                 write!(f, "MOVE VM INVARIANT VIOLATION.")
-            },
+            }
             ExecutionFailureStatus::TotalPaymentAmountOverflow => {
-                write!(
-                    f,
-                    "The total amount of coins to be paid overflows of u64"
-                )
-            },
+                write!(f, "The total amount of coins to be paid overflows of u64")
+            }
             ExecutionFailureStatus::TotalCoinBalanceOverflow => {
+                write!(f, "The total balance of coins overflows u64")
+            }
+            ExecutionFailureStatus::CommandArgumentError { arg_idx, kind } => {
+                write!(f, "Invalid command argument at {arg_idx}. {kind}")
+            }
+            ExecutionFailureStatus::UnusedValueWithoutDrop {
+                result_idx,
+                secondary_idx,
+            } => {
                 write!(
                     f,
-                    "The total balance of coins overflows u64"
+                    "Unused result without the drop ability. \
+                    Command result {result_idx}, return value {secondary_idx}"
                 )
-            },
+            }
+            ExecutionFailureStatus::InvalidPublicFunctionReturnType { idx } => {
+                write!(
+                    f,
+                    "Invalid public Move function signature. \
+                    Unsupported return type for return value {idx}"
+                )
+            }
+            ExecutionFailureStatus::ArityMismatch => {
+                write!(
+                    f,
+                    "Arity mismatch for Move function. \
+                    The number of arguments does not match the number of parameters"
+                )
+            }
         }
     }
 }
@@ -2775,7 +2883,7 @@ pub struct TransactionEffects {
     /// It's also included in mutated.
     pub gas_object: (ObjectRef, Owner),
     /// The digest of the events emitted during execution,
-    /// can be None if the transaction does not emmit any event.
+    /// can be None if the transaction does not emit any event.
     pub events_digest: Option<TransactionEventsDigest>,
     /// The set of transaction digests this transaction depends on.
     pub dependencies: Vec<TransactionDigest>,
@@ -3175,8 +3283,13 @@ pub struct AuthorityCapabilities {
     /// (Currently, we just set this to the current time in milliseconds since the epoch, but this
     /// should not be interpreted as a timestamp.)
     pub generation: u64,
+
     /// ProtocolVersions that the authority supports.
     pub supported_protocol_versions: SupportedProtocolVersions,
+
+    /// The ObjectRefs of all versions of system packages that the validator possesses.
+    /// Used to determine whether to do a framework/movestdlib upgrade.
+    pub available_system_packages: Vec<ObjectRef>,
 }
 
 impl Debug for AuthorityCapabilities {
@@ -3188,6 +3301,7 @@ impl Debug for AuthorityCapabilities {
                 "supported_protocol_versions",
                 &self.supported_protocol_versions,
             )
+            .field("available_system_packages", &self.available_system_packages)
             .finish()
     }
 }
@@ -3196,6 +3310,7 @@ impl AuthorityCapabilities {
     pub fn new(
         authority: AuthorityName,
         supported_protocol_versions: SupportedProtocolVersions,
+        available_system_packages: Vec<ObjectRef>,
     ) -> Self {
         let generation = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -3207,6 +3322,7 @@ impl AuthorityCapabilities {
             authority,
             generation,
             supported_protocol_versions,
+            available_system_packages,
         }
     }
 }
@@ -3406,7 +3522,6 @@ pub struct CommitteeInfoRequest {
 #[derive(Serialize, Deserialize, Clone, schemars::JsonSchema, Debug)]
 pub struct CommitteeInfoResponse {
     pub epoch: EpochId,
-    pub protocol_version: ProtocolVersion,
     pub committee_info: Vec<(AuthorityName, StakeUnit)>,
     // TODO: We could also return the certified checkpoint that contains this committee.
     // This would allows a client to verify the authenticity of the committee.
@@ -3420,10 +3535,10 @@ impl CommitteeInfoResponse {
     }
 }
 
+// TODO: What's the difference between CommitteeInfoResponse and CommitteeInfo?
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CommitteeInfo {
     pub epoch: EpochId,
-    pub protocol_version: ProtocolVersion,
     pub committee_info: Vec<(AuthorityName, StakeUnit)>,
     // TODO: We could also return the certified checkpoint that contains this committee.
     // This would allows a client to verify the authenticity of the committee.

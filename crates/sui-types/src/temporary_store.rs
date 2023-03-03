@@ -19,7 +19,9 @@ use crate::committee::EpochId;
 use crate::event::BalanceChangeType;
 use crate::messages::TransactionEvents;
 use crate::storage::{ObjectStore, SingleTxContext};
-use crate::sui_system_state::{get_sui_system_state, SuiSystemState};
+use crate::sui_system_state::{
+    get_sui_system_state, get_sui_system_state_wrapper, SuiSystemState, SuiSystemStateWrapper,
+};
 use crate::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -28,6 +30,7 @@ use crate::{
     event::Event,
     fp_bail, gas,
     gas::{GasCostSummary, SuiGasStatus},
+    is_system_package,
     messages::{ExecutionStatus, InputObjects, TransactionEffects},
     object::Owner,
     object::{Data, Object},
@@ -81,6 +84,10 @@ impl InnerTemporaryStore {
                 }
             })
             .collect()
+    }
+
+    pub fn get_sui_system_state_wrapper_object(&self) -> Option<SuiSystemStateWrapper> {
+        get_sui_system_state_wrapper(&self.written).ok()
     }
 
     pub fn get_sui_system_state_object(&self) -> Option<SuiSystemState> {
@@ -204,7 +211,7 @@ impl<S> TemporaryStore<S> {
 
         for (id, (ctx, mut obj, kind)) in self.written {
             // Update the version for the written object, as long as it is a move object and not a
-            // package (whose versions are fixed to 1)
+            // package (whose versions are handled separately).
             if let Some(obj) = obj.data.try_as_move_mut() {
                 obj.increment_version_to(self.lamport_timestamp);
             }
@@ -316,31 +323,52 @@ impl<S> TemporaryStore<S> {
             }
             // For non-coin mutation
             (WriteKind::Mutate, Ok(None), old_obj) | (WriteKind::Unwrap, Ok(None), old_obj) => {
-                // We emit transfer object event for ownership changes
-                // if old object is none (unwrapping object) or if old owner != new owner.
-                let mut events = vec![];
-                if old_obj.map(|o| o.owner) != Some(obj.owner) {
-                    events.push(Event::transfer_object(
-                        &ctx,
-                        obj.owner,
-                        // Safe to unwrap, package cannot mutate
-                        obj.data.type_().unwrap().to_string(),
-                        obj.id(),
-                        obj.version(),
-                    ));
-                }
-                // Emit mutate event if there are data changes.
-                if old_obj.is_some() && old_obj.unwrap().data != obj.data {
-                    events.push(Event::MutateObject {
-                        package_id: ctx.package_id,
-                        transaction_module: ctx.transaction_module,
+                if obj.is_package() {
+                    // System transactions for framework upgrades will mutate packages.  Treat this
+                    // as a "publish" of a new version of the framework.
+                    assert!(
+                        ctx.sender == SuiAddress::ZERO,
+                        "Only validators can modify packages"
+                    );
+                    assert!(
+                        is_system_package(id),
+                        "Only system packages can be modified in place"
+                    );
+
+                    vec![Event::Publish {
                         sender: ctx.sender,
-                        object_type: obj.data.type_().unwrap().to_string(),
-                        object_id: obj.id(),
+                        package_id: id,
                         version: obj.version(),
-                    });
+                        digest: obj.digest(),
+                    }]
+                } else {
+                    // We emit transfer object event for ownership changes
+                    // if old object is none (unwrapping object) or if old owner != new owner.
+                    let mut events = vec![];
+
+                    if old_obj.map(|o| o.owner) != Some(obj.owner) {
+                        events.push(Event::transfer_object(
+                            &ctx,
+                            obj.owner,
+                            // Safe to unwrap, package case handled above
+                            obj.data.type_().unwrap().to_string(),
+                            obj.id(),
+                            obj.version(),
+                        ));
+                    }
+                    // Emit mutate event if there are data changes.
+                    if old_obj.is_some() && old_obj.unwrap().data != obj.data {
+                        events.push(Event::MutateObject {
+                            package_id: ctx.package_id,
+                            transaction_module: ctx.transaction_module,
+                            sender: ctx.sender,
+                            object_type: obj.data.type_().unwrap().to_string(),
+                            object_id: obj.id(),
+                            version: obj.version(),
+                        });
+                    }
+                    events
                 }
-                events
             }
             // For create object, if the object type is package, emit a Publish event, else emit NewObject event.
             (WriteKind::Create, Ok(None), _) => {

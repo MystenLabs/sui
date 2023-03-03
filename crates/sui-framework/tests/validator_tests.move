@@ -269,7 +269,7 @@ module sui::validator_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = validator::EMetadataInvalidConsensusAddr)]
+    #[expected_failure(abort_code = validator::EMetadataInvalidPrimaryAddr)]
     fun test_metadata_invalid_consensus_addr() {
         let metadata = validator::new_metadata(
             @0x42,
@@ -330,7 +330,7 @@ module sui::validator_tests {
         {
             validator::update_next_epoch_network_address(&mut validator, vector[4, 192, 168, 1, 1]);
             validator::update_next_epoch_p2p_address(&mut validator, vector[4, 192, 168, 1, 1]);
-            validator::update_next_epoch_consensus_address(&mut validator, vector[4, 192, 168, 1, 1]);
+            validator::update_next_epoch_primary_address(&mut validator, vector[4, 192, 168, 1, 1]);
             validator::update_next_epoch_worker_address(&mut validator, vector[4, 192, 168, 1, 1]);
             validator::update_next_epoch_protocol_pubkey(
                 &mut validator,
@@ -361,7 +361,7 @@ module sui::validator_tests {
             assert!(validator::project_url(&mut validator) == &url::new_unsafe_from_bytes(b"new_proj_url"), 0);
             assert!(validator::network_address(&validator) == &VALID_NET_ADDR, 0);
             assert!(validator::p2p_address(&validator) == &VALID_P2P_ADDR, 0);
-            assert!(validator::consensus_address(&validator) == &VALID_CONSENSUS_ADDR, 0);
+            assert!(validator::primary_address(&validator) == &VALID_CONSENSUS_ADDR, 0);
             assert!(validator::worker_address(&validator) == &VALID_WORKER_ADDR, 0);
             assert!(validator::protocol_pubkey_bytes(&validator) == &VALID_PUBKEY, 0);
             assert!(validator::proof_of_possession(&validator) == &PROOF_OF_POSESSION, 0);
@@ -371,7 +371,7 @@ module sui::validator_tests {
             // Next epoch
             assert!(validator::next_epoch_network_address(&validator) == &option::some(vector[4, 192, 168, 1, 1]), 0);
             assert!(validator::next_epoch_p2p_address(&validator) == &option::some(vector[4, 192, 168, 1, 1]), 0);
-            assert!(validator::next_epoch_consensus_address(&validator) == &option::some(vector[4, 192, 168, 1, 1]), 0);
+            assert!(validator::next_epoch_primary_address(&validator) == &option::some(vector[4, 192, 168, 1, 1]), 0);
             assert!(validator::next_epoch_worker_address(&validator) == &option::some(vector[4, 192, 168, 1, 1]), 0);
             assert!(
                 validator::next_epoch_protocol_pubkey_bytes(&validator) == &option::some(new_protocol_pub_key),
@@ -490,7 +490,7 @@ module sui::validator_tests {
         test_scenario::end(scenario_val);
     }
 
-    #[expected_failure(abort_code = sui::validator::EMetadataInvalidConsensusAddr)]
+    #[expected_failure(abort_code = sui::validator::EMetadataInvalidPrimaryAddr)]
     #[test]
     fun test_validator_update_metadata_invalid_consensus_addr() {
         let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
@@ -503,7 +503,7 @@ module sui::validator_tests {
 
         test_scenario::next_tx(scenario, sender);
         {
-            validator::update_next_epoch_consensus_address(
+            validator::update_next_epoch_primary_address(
                 &mut validator,
                 x"beef",
             );

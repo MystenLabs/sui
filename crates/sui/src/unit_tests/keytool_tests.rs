@@ -143,6 +143,40 @@ fn test_read_write_keystore_with_flag() {
 }
 
 #[test]
+fn test_sui_operations_config() {
+    let temp_dir = TempDir::new().unwrap();
+    let path = temp_dir.path().join("sui.keystore");
+    let path1 = path.clone();
+    // This is the hardcoded keystore in sui-operation: https://github.com/MystenLabs/sui-operations/blob/af04c9d3b61610dbb36401aff6bef29d06ef89f8/docker/config/generate/static/sui.keystore
+    // If this test fails, address hardcoded in sui-operations is likely needed be updated.
+    let kp = SuiKeyPair::decode_base64("ANRj4Rx5FZRehqwrctiLgZDPrY/3tI5+uJLCdaXPCj6C").unwrap();
+    let contents = kp.encode_base64();
+    let res = std::fs::write(path, contents);
+    assert!(res.is_ok());
+    let kp_read = read_keypair_from_file(path1);
+    assert_eq!(
+        SuiAddress::from_str("849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3")
+            .unwrap(),
+        SuiAddress::from(&kp_read.unwrap().public())
+    );
+
+    // This is the hardcoded keystore in sui-operation: https://github.com/MystenLabs/sui-operations/blob/af04c9d3b61610dbb36401aff6bef29d06ef89f8/docker/config/generate/static/sui-benchmark.keystore
+    // If this test fails, address hardcoded in sui-operations is likely needed be updated.
+    let path2 = temp_dir.path().join("sui-benchmark.keystore");
+    let path3 = path2.clone();
+    let kp = SuiKeyPair::decode_base64("APCWxPNCbgGxOYKeMfPqPmXmwdNVyau9y4IsyBcmC14A").unwrap();
+    let contents = kp.encode_base64();
+    let res = std::fs::write(path2, contents);
+    assert!(res.is_ok());
+    let kp_read = read_keypair_from_file(path3);
+    assert_eq!(
+        SuiAddress::from_str("b9e0a0d97f83b5cd84a2df2f83c9d72af19a6952ed637a36dfacf884a2d6e27f")
+            .unwrap(),
+        SuiAddress::from(&kp_read.unwrap().public())
+    );
+}
+
+#[test]
 fn test_load_keystore_err() {
     let temp_dir = TempDir::new().unwrap();
     let path = temp_dir.path().join("sui.keystore");

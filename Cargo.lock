@@ -2170,6 +2170,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "diesel-derive-enum"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b10c03b954333d05bfd5be1d8a74eae2c9ca77b86e0f1c3a1ea29c49da1d6c2"
+dependencies = [
+ "heck 0.4.0",
+ "proc-macro2 1.0.51",
+ "quote 1.0.23",
+ "syn 1.0.107",
+]
+
+[[package]]
 name = "diesel_derives"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8285,6 +8297,7 @@ dependencies = [
  "git-version",
  "jemalloc-ctl",
  "jsonrpsee",
+ "move-binary-format",
  "move-cli",
  "move-core-types",
  "move-package",
@@ -8313,6 +8326,7 @@ dependencies = [
  "sui-framework",
  "sui-framework-build",
  "sui-json",
+ "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-keys",
  "sui-macros",
@@ -8680,6 +8694,7 @@ dependencies = [
  "once_cell",
  "serde 1.0.152",
  "smallvec",
+ "sui-cost-tables",
  "sui-framework-build",
  "sui-protocol-config",
  "sui-types",
@@ -8717,6 +8732,7 @@ dependencies = [
  "chrono",
  "clap 3.2.23",
  "diesel",
+ "diesel-derive-enum",
  "fastcrypto",
  "futures",
  "jsonrpsee",
@@ -8724,6 +8740,7 @@ dependencies = [
  "mysten-metrics",
  "narwhal-network",
  "prometheus",
+ "rand 0.8.5",
  "serde 1.0.152",
  "serde_json",
  "sui-config",
@@ -8882,8 +8899,11 @@ dependencies = [
  "git-version",
  "jemalloc-ctl",
  "jsonrpsee",
+ "move-binary-format",
  "move-cli",
  "move-core-types",
+ "move-disassembler",
+ "move-ir-types",
  "move-package",
  "move-prover",
  "move-prover-boogie-backend",
@@ -11119,6 +11139,7 @@ dependencies = [
  "determinator",
  "deunicode",
  "diesel",
+ "diesel-derive-enum",
  "diesel_derives",
  "diff",
  "difference",

@@ -29,6 +29,7 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::{EpochId, TransactionDigest};
 use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
@@ -44,7 +45,10 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::SuiSystemState;
-use tokio::sync::{watch, Notify};
+use tokio::{
+    sync::{watch, Notify},
+    time::timeout,
+};
 use tracing::{debug, error, info, warn};
 use typed_store::rocks::{DBMap, MetricConf, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
@@ -685,7 +689,9 @@ impl CheckpointBuilder {
 
                 Some(EndOfEpochData {
                     next_epoch_committee: committee.voting_rights,
-                    next_epoch_protocol_version: committee.protocol_version,
+                    next_epoch_protocol_version: ProtocolVersion::new(
+                        system_state_obj.protocol_version,
+                    ),
                     root_state_digest: Accumulator::default().digest(),
                 })
             } else {
@@ -870,7 +876,12 @@ impl CheckpointAggregator {
                 continue;
             }
 
-            match select(self.exit.changed().boxed(), self.notify.notified().boxed()).await {
+            match select(
+                self.exit.changed().boxed(),
+                timeout(Duration::from_secs(1), self.notify.notified()).boxed(),
+            )
+            .await
+            {
                 Either::Left(_) => {
                     // return on exit signal
                     info!("Shutting down CheckpointAggregator");
@@ -913,8 +924,9 @@ impl CheckpointAggregator {
                     return Ok(());
                 }
                 debug!(
-                    "Processing signature for checkpoint {} from {:?}",
+                    "Processing signature for checkpoint {} (digest: {:?}) from {:?}",
                     current.summary.sequence_number,
+                    current.summary.digest(),
                     data.summary.auth_signature.authority.concise()
                 );
                 self.metrics
