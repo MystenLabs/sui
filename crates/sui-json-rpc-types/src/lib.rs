@@ -1613,7 +1613,35 @@ pub struct SuiGenesisTransaction {
     pub objects: Vec<ObjectID>,
 }
 
+<<<<<<< HEAD
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+=======
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "SponsoredTransactionResponse", rename_all = "camelCase")]
+pub struct SponsoredTransactionResponse {
+    /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
+    pub tx_bytes: Base64,
+    /// Base58 encoded transaction digest
+    pub tx_digest: TransactionDigest,
+    /// Base64 encoded transaction signature, signed by the gas owner
+    pub signature: GenericSignature,
+    /// Expiration time of the assigned gas object
+    pub expire_at: u64,
+    pub error: Option<String>,
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(
+    rename = "GetSponsoredTransactionStatusResponse",
+    rename_all = "camelCase"
+)]
+pub struct GetSponsoredTransactionStatusResponse {
+    pub status: String,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+>>>>>>> 9b95f4135 (creating gas station client and adding to txn builder sdk)
 pub struct SuiConsensusCommitPrologue {
     pub checkpoint_start_timestamp_ms: u64,
 }

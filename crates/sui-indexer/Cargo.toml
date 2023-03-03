@@ -24,6 +24,7 @@ serde_json = "1.0.83"
 thiserror = "1.0.34"
 tracing = "0.1.36"
 tokio = { workspace = true, features = ["full"] }
+move-core-types.workspace = true
 
 narwhal-network = { path = "../../narwhal/network" }
 sui-core = { path = "../sui-core" }

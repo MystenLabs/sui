@@ -8776,6 +8776,13 @@ dependencies = [
  "diesel",
  "fastcrypto",
  "futures",
+<<<<<<< HEAD
+=======
+ "jsonrpsee",
+ "jsonrpsee-proc-macros",
+ "move-core-types",
+ "mysten-metrics",
+>>>>>>> 9b95f4135 (creating gas station client and adding to txn builder sdk)
  "narwhal-network",
  "prometheus",
  "serde 1.0.152",
@@ -9316,13 +9323,18 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
+ "fastcrypto",
  "futures",
+ "jsonrpsee",
+ "jsonrpsee-proc-macros",
  "move-core-types",
+ "reqwest",
  "sui-adapter",
  "sui-json",
  "sui-json-rpc-types",
  "sui-protocol-config",
  "sui-types",
+ "tracing",
  "workspace-hack",
 ]
 
