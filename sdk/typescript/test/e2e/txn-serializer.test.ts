@@ -221,6 +221,7 @@ describe('Transaction Serialization and deserialization', () => {
     } as PaySuiTx;
 
     const tx_data = {
+      messageVersion: 1,
       sender: DEFAULT_RECIPIENT_2,
       kind: { Single: paySuiTx } as TransactionKind,
       gasData: {
@@ -267,6 +268,7 @@ describe('Transaction Serialization and deserialization', () => {
       },
     } as PayAllSuiTx;
     const tx_data = {
+      messageVersion: 1,
       sender: DEFAULT_RECIPIENT_2,
       kind: { Single: payAllSui } as TransactionKind,
       gasData: {
