@@ -170,7 +170,7 @@ impl CertificateFetcher {
                             // Otherwise, continue to update fetch targets.
                         }
                         Err(e) => {
-                            // If this happens, it is most likely due to bincode serialization error.
+                            // If this happens, it is most likely due to serialization error.
                             error!("Failed to read latest round for {}: {}", header.author, e);
                             continue;
                         }

@@ -48,7 +48,7 @@ pub fn process_certificates(c: &mut Criterion) {
 
         let data_size: usize = certificates
             .iter()
-            .map(|cert| bincode::serialize(&cert).unwrap().len())
+            .map(|cert| bcs::to_bytes(&cert).unwrap().len())
             .sum();
         consensus_group.throughput(Throughput::Bytes(data_size as u64));
 
