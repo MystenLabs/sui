@@ -381,6 +381,30 @@ impl<C> Testbed<C> {
         Ok(())
     }
 
+    pub async fn wait_until_command<'a, I>(
+        &self,
+        instances: I,
+        command_id: &str,
+    ) -> TestbedResult<()>
+    where
+        I: Iterator<Item = &'a Instance> + Clone,
+    {
+        loop {
+            sleep(Duration::from_secs(5)).await;
+
+            let ssh_command = SshCommand::new(move |_| "(tmux ls || true)".into());
+            let result = self
+                .ssh_manager
+                .execute(instances.clone(), ssh_command)
+                .await?;
+
+            if result.iter().all(|(stdout, _)| stdout.contains(command_id)) {
+                break;
+            }
+        }
+        Ok(())
+    }
+
     pub async fn install(&self) -> TestbedResult<()> {
         crossterm::execute!(
             stdout(),
@@ -571,6 +595,9 @@ impl<C> Testbed<C> {
 
         // Select the instances to run.
         let instances = self.select_instances(parameters)?;
+
+        // For the nodes to boot.
+        self.wait_until_command(instances.iter(), "node").await?;
 
         // Deploy the load generators.
         let committee_size = instances.len();
