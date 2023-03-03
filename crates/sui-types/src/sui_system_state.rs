@@ -709,6 +709,13 @@ where
                     .expect("Sui System State object deserialization cannot fail");
             Ok(SuiSystemState::V1(result.value))
         }
+        #[cfg(test)]
+        2 => {
+            let result =
+                bcs::from_bytes::<Field<u64, SuiSystemStateInnerV1>>(move_object.contents())
+                    .expect("Sui System State object deserialization cannot fail");
+            Ok(SuiSystemState::V1(result.value))
+        }
         _ => {
             error!("Unsupported Sui System State version: {}", wrapper.version);
             Err(SuiError::SuiSystemStateUnexpectedVersion)

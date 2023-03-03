@@ -3066,7 +3066,7 @@ async fn test_sui_system_state_nop_upgrade() {
         new_system_state_version
     );
     // TODO: Figure out a proper way to test this.
-    // inner.get_sui_system_state_object().unwrap();
+    inner.get_sui_system_state_object().unwrap();
 }
 
 #[tokio::test]
