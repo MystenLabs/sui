@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { TxnAddressLink } from './TxnAddressLink';
+import { TxnAddressLink } from '../TxnAddressLink';
 import { Text } from '_src/ui/app/shared/text';
 
 type TxnAddressProps = {

@@ -17,10 +17,10 @@ import {
 import { useMemo } from 'react';
 
 import { DateCard } from '../../shared/date-card';
+import { TxnAddressLink } from '../TxnAddressLink';
 import { ReceiptCardBg } from './ReceiptCardBg';
 import { SponsoredTxnGasSummary } from './SponsoredTxnGasSummary';
 import { StatusIcon } from './StatusIcon';
-import { TxnAddressLink } from './TxnAddressLink';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { StakeTxnCard } from '_components/receipt-card/StakeTxnCard';

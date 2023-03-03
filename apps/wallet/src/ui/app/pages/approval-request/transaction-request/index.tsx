@@ -270,8 +270,6 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
         }
     }, [txRequest]);
 
-    console.log('TX', txRequest);
-
     return (
         <Loading loading={loadingState}>
             <UserApproveContainer
