@@ -43,6 +43,22 @@ impl From<MeasurementsCollection> for MeasurementsCollectionId {
     }
 }
 
+struct PlotDataPoint {
+    x: f32,
+    y: f32,
+    stdev: f32,
+}
+
+impl From<&MeasurementsCollection> for PlotDataPoint {
+    fn from(collection: &MeasurementsCollection) -> Self {
+        Self {
+            x: collection.aggregate_tps() as f32,
+            y: collection.aggregate_average_latency().as_secs_f64() as f32,
+            stdev: collection.aggregate_stdev_latency().as_secs_f64() as f32,
+        }
+    }
+}
+
 pub struct Plotter {
     settings: Settings,
     measurements: HashMap<MeasurementsCollectionId, Vec<MeasurementsCollection>>,
@@ -99,16 +115,7 @@ impl Plotter {
             let mut sorted = collections.clone();
             sorted.sort_by(|a, b| a.parameters.load.cmp(&b.parameters.load));
 
-            let data_points = sorted
-                .iter()
-                .map(|collection| {
-                    (
-                        collection.aggregate_tps() as f32,
-                        collection.aggregate_average_latency().as_secs_f64() as f32,
-                        collection.aggregate_stdev_latency().as_secs_f64() as f32,
-                    )
-                })
-                .collect();
+            let data_points = sorted.iter().map(|collection| collection.into()).collect();
 
             self.plot_impl(id, data_points)?;
         }
@@ -118,7 +125,7 @@ impl Plotter {
     fn plot_impl(
         &self,
         id: &MeasurementsCollectionId,
-        data_points: Vec<(f32, f32, f32)>,
+        data_points: Vec<PlotDataPoint>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut filename = PathBuf::new();
         filename.push(&self.settings.results_directory);
@@ -134,7 +141,7 @@ impl Plotter {
         let x_lim = self.x_lim.unwrap_or_else(|| {
             (data_points
                 .iter()
-                .map(|x| (x.0 * 100.0) as u64)
+                .map(|data| (data.x * 100.0) as u64)
                 .max()
                 .unwrap_or_default()
                 / 100) as f32
@@ -142,7 +149,7 @@ impl Plotter {
         let y_lim = self.y_lim.unwrap_or_else(|| {
             (data_points
                 .iter()
-                .map(|x| (x.1 * 100.0) as u64)
+                .map(|data| (data.y * 100.0) as u64)
                 .max()
                 .unwrap_or_default()
                 / 100) as f32
@@ -160,14 +167,14 @@ impl Plotter {
             .y_label_formatter(&|x| format!("{}", x))
             .draw()?;
 
-        chart.draw_series(data_points.iter().map(|(x, y, std)| {
-            let yl = (y - std).max(0.0);
-            let yh = y + std;
-            ErrorBar::new_vertical(*x, yl, *y, yh, RED.filled(), 10)
+        chart.draw_series(data_points.iter().map(|data| {
+            let yl = (data.y - data.stdev).max(0.0);
+            let yh = data.y + data.stdev;
+            ErrorBar::new_vertical(data.x, yl, data.y, yh, RED.filled(), 10)
         }))?;
 
         chart.draw_series(LineSeries::new(
-            data_points.iter().map(|(x, y, _)| (*x, *y)),
+            data_points.iter().map(|data| (data.x, data.y)),
             &RED,
         ))?;
 
