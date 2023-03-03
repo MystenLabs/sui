@@ -56,7 +56,6 @@ use std::{
     time::{Duration, SystemTime},
 };
 use sui_config::p2p::StateSyncConfig;
-use sui_types::{messages_checkpoint::CertifiedCheckpointSummary, messages::{Transaction, VerifiedTransaction}};
 use sui_types::{
     digests::CheckpointDigest,
     message_envelope::Message,
@@ -67,6 +66,10 @@ use sui_types::{
     },
     storage::ReadStore,
     storage::WriteStore,
+};
+use sui_types::{
+    messages::{Transaction, VerifiedTransaction},
+    messages_checkpoint::CertifiedCheckpointSummary,
 };
 use tap::{Pipe, TapFallible, TapOptional};
 use tokio::{
@@ -837,10 +840,7 @@ where
                 let verified: Vec<_> = transaction_effects
                     .into_iter()
                     .map(|(transaction, effects)| {
-                        (
-                            VerifiedTransaction::new_unchecked(transaction),
-                            effects,
-                        )
+                        (VerifiedTransaction::new_unchecked(transaction), effects)
                     })
                     .collect();
                 (
@@ -958,7 +958,6 @@ fn download_full_checkpoint(
     network: &anemo::Network,
     transaction_download_concurrency: usize,
     timeout: Duration,
-
 ) -> impl core::future::Future<
     Output = (
         Option<(
@@ -970,7 +969,6 @@ fn download_full_checkpoint(
         Option<PeerId>,
     ),
 > {
-
     let mut peers = peers
         .iter()
         // Filter out any peers who can't help with this particular checkpoint

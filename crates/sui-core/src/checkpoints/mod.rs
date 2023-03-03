@@ -26,7 +26,6 @@ use sui_types::accumulator::Accumulator;
 
 use sui_types::storage::CheckpointBundle;
 
-
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::SequencedConsensusTransactionKey;
 use std::collections::HashSet;
