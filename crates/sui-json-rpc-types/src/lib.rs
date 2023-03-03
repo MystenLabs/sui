@@ -43,7 +43,7 @@ use sui_types::messages::{
     CallArg, EffectsFinalityInfo, ExecutionStatus, GenesisObject, InputObjectKind, ObjectArg, Pay,
     PayAllSui, PaySui, SenderSignedData, SingleTransactionKind, TransactionData,
     TransactionDataAPI, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
-    TransactionKind,
+    TransactionKind, VersionedProtocolMessage,
 };
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointDigest, CheckpointSequenceNumber, CheckpointSummary,
@@ -766,6 +766,7 @@ pub struct SuiGasData {
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq, Eq)]
 #[serde(rename = "TransactionData", rename_all = "camelCase")]
 pub struct SuiTransactionData {
+    pub message_version: u64,
     pub transactions: Vec<SuiTransactionKind>,
     pub sender: SuiAddress,
     pub gas_data: SuiGasData,
@@ -822,6 +823,9 @@ impl TryFrom<TransactionData> for SuiTransactionData {
                 .collect::<Result<Vec<_>, _>>()?,
         };
         Ok(Self {
+            message_version: data
+                .message_version()
+                .expect("TransactionData defines message_version()"),
             transactions,
             sender: data.sender(),
             gas_data: SuiGasData {
@@ -1151,6 +1155,7 @@ impl Display for SuiFinalizedEffects {
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "TransactionEffects", rename_all = "camelCase")]
 pub struct SuiTransactionEffects {
+    pub message_version: u64,
     /// The status of the execution
     pub status: SuiExecutionStatus,
     /// The epoch when this transaction was executed.
@@ -1202,6 +1207,9 @@ impl SuiTransactionEffects {
 impl From<TransactionEffects> for SuiTransactionEffects {
     fn from(effect: TransactionEffects) -> Self {
         Self {
+            message_version: effect
+                .message_version()
+                .expect("TransactionEffects defines message_version()"),
             status: effect.status().clone().into(),
             executed_epoch: effect.executed_epoch(),
             gas_used: effect.gas_cost_summary().clone().into(),

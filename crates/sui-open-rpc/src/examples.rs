@@ -431,6 +431,7 @@ impl RpcExampleProvider {
         }];
         let result = SuiTransactionResponse {
             effects: SuiTransactionEffects {
+                message_version: 1,
                 status: SuiExecutionStatus::Success,
                 executed_epoch: 0,
                 gas_used: SuiGasCostSummary {
