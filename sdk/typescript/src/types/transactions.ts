@@ -514,7 +514,7 @@ export function getTransferSuiTransaction(
 }
 
 export function getPayTransaction(data: SuiTransactionKind): Pay | undefined {
-  return data.type == 'Pay' ? data.content : undefined;
+  return data.type === 'Pay' ? data.content : undefined;
 }
 
 export function getPaySuiTransaction(
