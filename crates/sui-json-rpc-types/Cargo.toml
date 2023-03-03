@@ -22,6 +22,7 @@ tracing = "0.1.36"
 bcs = "0.1.4"
 bincode = "1.3.3"
 sui-protocol-config = { path = "../sui-protocol-config" }
+enum_dispatch = "^0.3"
 
 move-binary-format.workspace = true
 move-core-types.workspace = true

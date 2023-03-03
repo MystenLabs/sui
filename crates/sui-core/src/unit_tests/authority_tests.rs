@@ -32,7 +32,9 @@ use std::fs;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use sui_json_rpc_types::{SuiExecutionResult, SuiExecutionStatus, SuiGasCostSummary};
+use sui_json_rpc_types::{
+    SuiExecutionResult, SuiExecutionStatus, SuiGasCostSummary, SuiTransactionEffectsAPI,
+};
 use sui_types::error::UserInputError;
 use sui_types::utils::{
     make_committee_key, mock_certified_checkpoint, to_sender_signed_transaction,
@@ -233,7 +235,7 @@ async fn test_dry_run_transaction() {
         )
         .await
         .unwrap();
-    assert_eq!(response.effects.status, SuiExecutionStatus::Success);
+    assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
 
     // Make sure that objects are not mutated after dry run.
     let gas_object_version = fullnode
@@ -276,11 +278,11 @@ async fn test_dev_inspect_object_by_bytes() {
     )
     .await
     .unwrap();
-    assert_eq!(effects.created.len(), 1);
+    assert_eq!(effects.created().len(), 1);
     // random gas is mutated
-    assert_eq!(effects.mutated.len(), 1);
-    assert!(effects.deleted.is_empty());
-    assert!(effects.gas_used.computation_cost > 0);
+    assert_eq!(effects.mutated().len(), 1);
+    assert!(effects.deleted().is_empty());
+    assert!(effects.gas_used().computation_cost > 0);
     let mut results = results.unwrap();
     assert_eq!(results.len(), 1);
     let (idx, exec_results) = results.pop().unwrap();
@@ -291,7 +293,7 @@ async fn test_dev_inspect_object_by_bytes() {
     assert_eq!(idx, 0);
     assert!(mutable_reference_outputs.is_empty());
     assert!(return_values.is_empty());
-    let dev_inspect_gas_summary = effects.gas_used;
+    let dev_inspect_gas_summary = effects.gas_used().clone();
 
     // actually make the call to make an object
     let effects = call_move_(
@@ -345,12 +347,12 @@ async fn test_dev_inspect_object_by_bytes() {
     )
     .await
     .unwrap();
-    assert!(effects.created.is_empty());
+    assert!(effects.created().is_empty());
     // the object is not marked as mutated, since it was passed in via bytes
     // but random gas is mutated
-    assert_eq!(effects.mutated.len(), 1);
-    assert!(effects.deleted.is_empty());
-    assert!(effects.gas_used.computation_cost > 0);
+    assert_eq!(effects.mutated().len(), 1);
+    assert!(effects.deleted().is_empty());
+    assert!(effects.gas_used().computation_cost > 0);
 
     let mut results = results.unwrap();
     assert_eq!(results.len(), 1);
@@ -451,11 +453,11 @@ async fn test_dev_inspect_unowned_object() {
     )
     .await
     .unwrap();
-    assert!(effects.created.is_empty());
+    assert!(effects.created().is_empty());
     // random gas and input object are mutated
-    assert_eq!(effects.mutated.len(), 2);
-    assert!(effects.deleted.is_empty());
-    assert!(effects.gas_used.computation_cost > 0);
+    assert_eq!(effects.mutated().len(), 2);
+    assert!(effects.deleted().is_empty());
+    assert!(effects.gas_used().computation_cost > 0);
 
     let mut results = results.unwrap();
     assert_eq!(results.len(), 1);
@@ -555,12 +557,12 @@ async fn test_dev_inspect_dynamic_field() {
     .await
     .unwrap();
     let mut results = results.unwrap();
-    assert_eq!(effects.created.len(), 1);
+    assert_eq!(effects.created().len(), 1);
     // random gas is mutated
-    assert_eq!(effects.mutated.len(), 1);
+    assert_eq!(effects.mutated().len(), 1);
     // nothing is deleted
-    assert!(effects.deleted.is_empty());
-    assert!(effects.gas_used.computation_cost > 0);
+    assert!(effects.deleted().is_empty());
+    assert!(effects.gas_used().computation_cost > 0);
     assert_eq!(results.len(), 1);
     let (idx, exec_results) = results.pop().unwrap();
     let SuiExecutionResult {

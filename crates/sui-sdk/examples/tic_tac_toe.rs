@@ -16,7 +16,7 @@ use serde::Deserialize;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
     json::SuiJsonValue,
-    rpc_types::SuiData,
+    rpc_types::{SuiData, SuiTransactionEffectsAPI},
     types::{
         base_types::{ObjectID, SuiAddress},
         id::UID,
@@ -113,7 +113,7 @@ impl TicTacToe {
         // We know `create_game` move function will create 1 object.
         let game_id = response
             .effects
-            .created
+            .created()
             .first()
             .unwrap()
             .reference
@@ -207,7 +207,7 @@ impl TicTacToe {
             assert!(response.confirmed_local_execution.unwrap());
 
             // Print any execution error.
-            let status = response.effects.status;
+            let status = response.effects.status();
             if status.is_err() {
                 eprintln!("{:?}", status);
             }

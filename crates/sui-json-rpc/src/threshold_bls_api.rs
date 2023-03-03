@@ -16,7 +16,7 @@ use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::SuiTBlsSignObjectCommitmentType::{ConsensusCommitted, FastPathCommitted};
 use sui_json_rpc_types::{
     SuiEffectsFinalityInfo, SuiFinalizedEffects, SuiTBlsSignObjectCommitmentType,
-    SuiTBlsSignRandomnessObjectResponse,
+    SuiTBlsSignRandomnessObjectResponse, SuiTransactionEffectsAPI,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::ObjectID;
@@ -90,9 +90,9 @@ impl ThresholdBlsApi {
                 // Check that the object is indeed in the effects.
                 finalized_effects
                     .effects
-                    .created
+                    .created()
                     .iter()
-                    .chain(finalized_effects.effects.mutated.iter())
+                    .chain(finalized_effects.effects.mutated().iter())
                     .find(|owned_obj_ref| owned_obj_ref.reference.object_id == object_id)
                     .ok_or_else(|| {
                         anyhow!(

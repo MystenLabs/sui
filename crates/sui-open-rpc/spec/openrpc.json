@@ -294,7 +294,7 @@
             "value": {
               "transaction": {
                 "data": {
-                  "messageVersion": 1,
+                  "messageVersion": "v1",
                   "transactions": [
                     {
                       "TransferObject": {
@@ -1586,7 +1586,7 @@
             "value": {
               "transaction": {
                 "data": {
-                  "messageVersion": 1,
+                  "messageVersion": "v1",
                   "transactions": [
                     {
                       "TransferObject": {
@@ -2595,7 +2595,7 @@
             "value": {
               "transaction": {
                 "data": {
-                  "messageVersion": 1,
+                  "messageVersion": "v1",
                   "transactions": [
                     {
                       "TransferObject": {
@@ -6420,32 +6420,37 @@
         }
       },
       "TransactionData": {
-        "type": "object",
-        "required": [
-          "gasData",
-          "messageVersion",
-          "sender",
-          "transactions"
-        ],
-        "properties": {
-          "gasData": {
-            "$ref": "#/components/schemas/GasData"
-          },
-          "messageVersion": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "sender": {
-            "$ref": "#/components/schemas/SuiAddress"
-          },
-          "transactions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TransactionKind"
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "gasData",
+              "messageVersion",
+              "sender",
+              "transactions"
+            ],
+            "properties": {
+              "gasData": {
+                "$ref": "#/components/schemas/GasData"
+              },
+              "messageVersion": {
+                "type": "string",
+                "enum": [
+                  "v1"
+                ]
+              },
+              "sender": {
+                "$ref": "#/components/schemas/SuiAddress"
+              },
+              "transactions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TransactionKind"
+                }
+              }
             }
           }
-        }
+        ]
       },
       "TransactionDigest": {
         "description": "A transaction will have a (unique) digest.",

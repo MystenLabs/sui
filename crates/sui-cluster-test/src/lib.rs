@@ -12,7 +12,9 @@ use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder};
 use std::sync::Arc;
 use sui::client_commands::WalletContext;
 use sui_faucet::CoinInfo;
-use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionResponse, TransactionBytes};
+use sui_json_rpc_types::{
+    SuiExecutionStatus, SuiTransactionEffectsAPI, SuiTransactionResponse, TransactionBytes,
+};
 use sui_types::base_types::TransactionDigest;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
@@ -139,7 +141,7 @@ impl TestContext {
             )
             .await
             .unwrap_or_else(|e| panic!("Failed to execute transaction for {}. {}", desc, e));
-        assert!(matches!(resp.effects.status, SuiExecutionStatus::Success));
+        assert!(matches!(resp.effects.status(), SuiExecutionStatus::Success));
         resp
     }
 

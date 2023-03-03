@@ -6,7 +6,10 @@ use futures::future::join_all;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use std::collections::BTreeMap;
-use sui_json_rpc_types::{SuiParsedData, SuiParsedObject, SuiTransactionResponse};
+use sui_json_rpc_types::{
+    SuiParsedData, SuiParsedObject, SuiTransactionDataAPI, SuiTransactionEffectsAPI,
+    SuiTransactionResponse,
+};
 use sui_sdk::SuiClient;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
@@ -136,11 +139,11 @@ where
             .iter()
             .flat_map(|tx| {
                 tx.effects
-                    .created
-                    .clone()
-                    .into_iter()
-                    .chain(tx.effects.mutated.clone().into_iter())
-                    .chain(tx.effects.unwrapped.clone().into_iter())
+                    .created()
+                    .iter()
+                    .cloned()
+                    .chain(tx.effects.mutated().iter().cloned())
+                    .chain(tx.effects.unwrapped().iter().cloned())
             })
             .map(|o| (o.reference.object_id, o.reference.version));
 
@@ -202,7 +205,7 @@ where
                     })?;
                     let event = Event {
                         id: None,
-                        transaction_digest: tx.effects.transaction_digest.to_string(),
+                        transaction_digest: tx.effects.transaction_digest().to_string(),
                         event_sequence,
                         event_time: tx
                             .timestamp_ms
@@ -270,9 +273,13 @@ where
         transactions
             .iter()
             .flat_map(|tx| {
-                tx.effects.created.iter().map(|oref| {
+                tx.effects.created().iter().map(|oref| {
                     object_map.get(&oref.reference.object_id).map(|o| {
-                        Package::try_from(oref.reference.object_id, tx.transaction.data.sender, o)
+                        Package::try_from(
+                            oref.reference.object_id,
+                            *tx.transaction.data.sender(),
+                            o,
+                        )
                     })
                 })
             })

@@ -16,7 +16,7 @@ use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
 use sui_sdk::rpc_types::{
     OwnedObjectRef, SuiData, SuiEvent, SuiExecutionStatus, SuiTransactionEffects,
-    SuiTransactionEvents, SuiTransactionResponse,
+    SuiTransactionEffectsAPI, SuiTransactionEvents, SuiTransactionResponse,
 };
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
@@ -500,7 +500,7 @@ fn find_module_object(
             {
                 if transaction_module == module && object_type.contains(object_type_name) {
                     return effects
-                        .created
+                        .created()
                         .iter()
                         .find(|obj| &obj.reference.object_id == object_id);
                 }
@@ -580,12 +580,15 @@ async fn test_transaction(
     if !expect_fail {
         assert_eq!(
             SuiExecutionStatus::Success,
-            effects.status,
+            *effects.status(),
             "TX execution failed for {:#?}",
             data
         );
     } else {
-        assert!(matches!(effects.status, SuiExecutionStatus::Failure { .. }));
+        assert!(matches!(
+            effects.status(),
+            SuiExecutionStatus::Failure { .. }
+        ));
     }
 
     let ops = response.clone().try_into().unwrap();
