@@ -5,6 +5,7 @@ import {
   any,
   array,
   assign,
+  bigint,
   boolean,
   Infer,
   literal,
@@ -31,7 +32,7 @@ export const SuiObjectRef = object({
   /** Hex code as string representing the object id */
   objectId: string(),
   /** Object version */
-  version: number(),
+  version: union([bigint(), number()]),
 });
 export type SuiObjectRef = Infer<typeof SuiObjectRef>;
 

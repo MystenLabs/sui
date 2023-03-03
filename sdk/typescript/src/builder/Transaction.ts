@@ -17,16 +17,18 @@ import {
   integer,
 } from 'superstruct';
 import { Provider } from '../providers/provider';
+import { extractStructTag, normalizeSuiObjectId } from '../types';
 import { builder } from './bcs';
 import {
   Commands,
   CommandArgument,
   TransactionCommand,
   TransactionInput,
-  KNOWN_COMMAND_TYPES,
   getTransactionCommandType,
+  MoveCallCommand,
 } from './Commands';
 import { CallArg, Inputs } from './Inputs';
+import { getPureSerializationType, isTxContext } from './serializer';
 import { COMMAND_TYPE, create, WellKnownEncoding } from './utils';
 
 type TransactionResult = CommandArgument & CommandArgument[];
@@ -263,6 +265,11 @@ export class Transaction {
   // sharedObjectRef() {}
   // pure() {}
 
+  // TODO: Currently, tx.input() takes in both fully-resolved input values, and partially-resolved input values.
+  // We could also simplify the transaction building quite a bit if we force folks to use fully-resolved pure types
+  // always, and just offer object building through some API like `tx.object()`, which we can just track slightly
+  // different internally.
+
   /** Add a command to the transaction. */
   add(command: TransactionCommand) {
     // TODO: This should also look at the command arguments and add any referenced commands that are not present in this transaction.
@@ -286,11 +293,35 @@ export class Transaction {
       );
     }
 
+    const moveModulesToResolve: MoveCallCommand[] = [];
+
+    // Keep track of the object references that will need to be resolved at the end of the transaction.
+    // We keep the input by-reference to avoid needing to re-resolve it:
+    const objectsToResolve: { id: string; input: TransactionInput }[] = [];
+
     this.#commands.forEach((command) => {
+      // Special case move call:
+      if (command.kind === 'MoveCall') {
+        // Determine if any of the arguments require encoding.
+        // - If they don't, then this is good to go.
+        // - If they do, then we need to fetch the normalized move module.
+        const needsResolution = command.arguments.some(
+          (arg) =>
+            arg.kind === 'Input' && !is(this.#inputs[arg.index].value, CallArg),
+        );
+
+        if (needsResolution) {
+          moveModulesToResolve.push(command);
+        }
+
+        return;
+      }
+
       // Get the matching struct definition for the command, and use it to attempt to automatically
       // encode the matching inputs.
       const commandType = getTransactionCommandType(command);
       if (!commandType.schema) return;
+
       Object.entries(command).forEach(([key, value]) => {
         if (key === 'kind') return;
         const keySchema = (commandType.schema as any)[key];
@@ -302,35 +333,120 @@ export class Transaction {
         // This argument has unknown encoding, assume it must be fully-encoded:
         if (!wellKnownEncoding) return;
 
-        if (isArray) {
-          throw new Error('TODO: Array encoders.');
-        } else {
-          if (value.kind !== 'Input') return;
-          const input = this.#inputs.at(value.index);
+        const encodeInput = (index: number) => {
+          const input = this.#inputs[index];
           if (!input) {
             throw new Error(`Missing input ${value.index}`);
           }
 
           // Input is fully resolved:
           if (is(input.value, CallArg)) return;
-          if (wellKnownEncoding.kind === 'object') {
-            throw new Error('Object encoding not yet supported');
+          if (
+            wellKnownEncoding.kind === 'object' &&
+            typeof input.value === 'string'
+          ) {
+            // The input is a string that we need to resolve to an object reference:
+            objectsToResolve.push({ id: input.value, input });
+          } else if (wellKnownEncoding.kind === 'pure') {
+            // Pure encoding, so construct BCS bytes:
+            input.value = Inputs.Pure(wellKnownEncoding.type, input.value);
+          } else {
+            throw new Error('Unexpected input format.');
           }
+        };
 
-          // Construct BCS bytes:
-          input.value = Inputs.Pure(wellKnownEncoding.type, input.value);
+        if (isArray) {
+          value.forEach((arrayItem: CommandArgument) => {
+            if (arrayItem.kind !== 'Input') return;
+            encodeInput(arrayItem.index);
+          });
+        } else {
+          if (value.kind !== 'Input') return;
+          encodeInput(value.index);
         }
       });
     });
 
+    if (moveModulesToResolve.length) {
+      await Promise.all(
+        moveModulesToResolve.map(async (moveCall) => {
+          const [packageId, moduleName, functionName] =
+            moveCall.target.split('::');
+
+          const normalized = await expectProvider(
+            provider,
+          ).getNormalizedMoveFunction(
+            normalizeSuiObjectId(packageId),
+            moduleName,
+            functionName,
+          );
+
+          // Entry functions can have a mutable reference to an instance of the TxContext
+          // struct defined in the TxContext module as the last parameter. The caller of
+          // the function does not need to pass it in as an argument.
+          const hasTxContext =
+            normalized.parameters.length > 0 &&
+            isTxContext(normalized.parameters.at(-1)!);
+
+          const params = hasTxContext
+            ? normalized.parameters.slice(0, normalized.parameters.length - 1)
+            : normalized.parameters;
+
+          if (params.length !== moveCall.arguments.length) {
+            throw new Error('Incorrect number of arguments.');
+          }
+
+          params.forEach((param, i) => {
+            const arg = moveCall.arguments[i];
+            if (arg.kind !== 'Input') return;
+            if (is(this.#inputs[arg.index], CallArg)) return;
+            const input = this.#inputs[arg.index];
+            const inputValue = input.value;
+
+            const serType = getPureSerializationType(param, inputValue);
+
+            if (serType) {
+              input.value = Inputs.Pure(serType, inputValue);
+              return;
+            }
+
+            const structVal = extractStructTag(param);
+            if (
+              structVal != null ||
+              (typeof param === 'object' && 'TypeParameter' in param)
+            ) {
+              if (typeof inputValue !== 'string') {
+                throw new Error(
+                  `Expect the argument to be an object id string, got ${JSON.stringify(
+                    inputValue,
+                    null,
+                    2,
+                  )}`,
+                );
+              }
+              objectsToResolve.push({ id: inputValue, input });
+              return;
+            }
+
+            throw new Error(
+              `Unknown call arg type ${JSON.stringify(
+                param,
+                null,
+                2,
+              )} for value ${JSON.stringify(inputValue, null, 2)}`,
+            );
+          });
+        }),
+      );
+    }
+
+    // TODO: Resolve objects:
+    // objectsToResolve.forEach(() => {});
+
     // Resolve inputs:
     const inputs = this.#inputs.map((input) => {
-      if (is(input.value, CallArg)) {
-        return input.value;
-      }
-
-      // TODO: What Input not of a known type:
-      throw new Error('Unexpected input value');
+      assert(input.value, CallArg);
+      return input.value;
     });
 
     const transactionData = {

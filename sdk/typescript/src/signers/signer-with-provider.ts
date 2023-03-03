@@ -3,7 +3,6 @@
 
 import { fromB64, toB64 } from '@mysten/bcs';
 import { Transaction } from '../builder';
-import { convertToTransactionBuilder } from '../builder/legacy';
 import { SerializedSignature } from '../cryptography/signature';
 import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import { Provider } from '../providers/provider';
@@ -122,14 +121,14 @@ export abstract class SignerWithProvider implements Signer {
       transactionBytes =
         transaction instanceof Uint8Array ? transaction : transaction.data;
     } else {
-      transactionBytes = await convertToTransactionBuilder(transaction).build({
-        provider: this.provider,
-      });
-      // transactionBytes = await this.serializer.serializeToBytes(
-      //   await this.getAddress(),
-      //   transaction,
-      //   'Commit',
-      // );
+      // transactionBytes = await convertToTransactionBuilder(transaction).build({
+      //   provider: this.provider,
+      // });
+      transactionBytes = await this.serializer.serializeToBytes(
+        await this.getAddress(),
+        transaction,
+        'Commit',
+      );
     }
 
     const intentMessage = messageWithIntent(
@@ -171,14 +170,14 @@ export abstract class SignerWithProvider implements Signer {
     } else if (tx instanceof Uint8Array || tx.kind === 'bytes') {
       txBytes = tx instanceof Uint8Array ? tx : tx.data;
     } else {
-      txBytes = await convertToTransactionBuilder(tx).build({
-        provider: this.provider,
-      });
-      // txBytes = await this.serializer.serializeToBytes(
-      //   await this.getAddress(),
-      //   tx,
-      //   'DevInspect',
-      // );
+      // txBytes = await convertToTransactionBuilder(tx).build({
+      //   provider: this.provider,
+      // });
+      txBytes = await this.serializer.serializeToBytes(
+        await this.getAddress(),
+        tx,
+        'DevInspect',
+      );
     }
     const version = await this.provider.getRpcApiVersion();
     const bcs = bcsForVersion(version);
@@ -231,14 +230,14 @@ export abstract class SignerWithProvider implements Signer {
           dryRunTxBytes = tx.data;
           break;
         default:
-          dryRunTxBytes = await convertToTransactionBuilder(tx).build({
-            provider: this.provider,
-          });
-          // dryRunTxBytes = await this.serializer.serializeToBytes(
-          //   address,
-          //   tx,
-          //   'Commit',
-          // );
+          // dryRunTxBytes = await convertToTransactionBuilder(tx).build({
+          //   provider: this.provider,
+          // });
+          dryRunTxBytes = await this.serializer.serializeToBytes(
+            address,
+            tx,
+            'Commit',
+          );
           break;
       }
     }

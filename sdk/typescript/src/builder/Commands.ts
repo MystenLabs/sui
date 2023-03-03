@@ -55,22 +55,12 @@ export const PureCommandArgument = (type: string) => {
   return struct;
 };
 
-export const MoveCallCommand = union([
-  object({
-    kind: literal('MoveCall'),
-    typeArguments: array(string()),
-    arguments: array(CommandArgument),
-    target: string(),
-  }),
-  object({
-    kind: literal('MoveCall'),
-    typeArguments: array(string()),
-    arguments: array(CommandArgument),
-    package: string(),
-    module: string(),
-    function: string(),
-  }),
-]);
+export const MoveCallCommand = object({
+  kind: literal('MoveCall'),
+  target: string(),
+  typeArguments: array(string()),
+  arguments: array(CommandArgument),
+});
 export type MoveCallCommand = Infer<typeof MoveCallCommand>;
 
 export const TransferObjectsCommand = object({
@@ -149,7 +139,14 @@ type MoveCallInput = (
  */
 export const Commands = {
   MoveCall(input: MoveCallInput): MoveCallCommand {
-    return { kind: 'MoveCall', ...input };
+    return {
+      kind: 'MoveCall',
+      target:
+        input.target ??
+        [input.package, input.module, input.function].join('::'),
+      arguments: input.arguments,
+      typeArguments: input.typeArguments,
+    };
   },
   TransferObjects(
     objects: CommandArgument[],
