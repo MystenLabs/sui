@@ -262,14 +262,27 @@ impl Bullshark {
     // Returns the PublicKey of the authority which is the leader for the provided `round`.
     // Pay attention that this method will return always the first authority as the leader
     // when used under a test environment.
-    pub fn leader_authority(committee: &Committee, _round: Round) -> PublicKey {
+    pub fn leader_authority(committee: &Committee, round: Round) -> PublicKey {
+        assert_eq!(
+            round % 2,
+            0,
+            "We should never attempt to do a leader election for odd rounds"
+        );
+
         cfg_if::cfg_if! {
             if #[cfg(test)] {
-                // consensus tests rely on returning the same leader.
-                committee.authorities.iter().next().expect("Empty authorities table!").0.clone()
+                // We apply round robin in leader election. Since we expect round to be an even number,
+                // 2, 4, 6, 8... it can't work well for leader election as we'll omit leaders. Thus
+                // we can always dive by 2 to get a monotonically incremented sequence,
+                // 2/2 = 1, 4/2 = 2, 6/2 = 3, 8/2 = 4  etc, and then do minus 1 so we can always
+                // start with base zero 0.
+                let next_leader = (round/2 - 1) as usize % committee.authorities.len();
+                let authorities = committee.authorities.iter().collect::<Vec<_>>();
+
+                authorities.get(next_leader).unwrap().0.clone()
             } else {
                 // Elect the leader in a stake-weighted choice seeded by the round
-                committee.leader(_round)
+                committee.leader(round)
             }
         }
     }
@@ -285,6 +298,8 @@ impl Bullshark {
         // Note: this function is often called with even rounds only. While we do not aim at random selection
         // yet (see issue #10), repeated calls to this function should still pick from the whole roster of leaders.
         let leader = Self::leader_authority(committee, round);
+
+        println!("Leader for round {}: {:?}", round, leader);
 
         // Return its certificate and the certificate's digest.
         dag.get(&round).and_then(|x| x.get(&leader))

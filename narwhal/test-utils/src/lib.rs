@@ -454,6 +454,85 @@ pub fn make_certificates(
     rounds_of_certificates(range, initial_parents, keys, failure_probability, generator)
 }
 
+// Creates certificates for the provided rounds but also having slow nodes.
+// `range`: the rounds for which we intend to create the certificates for
+// `initial_parents`: the parents to use when start creating the certificates
+// `keys`: the authorities for which it will create certificates for
+// `slow_nodes`: the authorities which are considered slow. Being a slow authority means that we will
+//  still create certificates for them on each round, but no other authority from higher round will refer
+// to those certificates. The number (by stake) o slow_nodes can not be > f , as otherwise no valid graph will be
+// produced.
+pub fn make_certificates_with_slow_nodes(
+    committee: &Committee,
+    range: RangeInclusive<Round>,
+    initial_parents: Vec<Certificate>,
+    keys: &[PublicKey],
+    slow_nodes: &[(PublicKey, f64)],
+) -> (VecDeque<Certificate>, Vec<Certificate>) {
+    // ensure provided slow nodes do not account > f
+    let slow_nodes_stake: Stake = slow_nodes
+        .iter()
+        .map(|(key, _)| committee.authorities.get(key).unwrap().stake)
+        .sum();
+
+    assert_eq!(keys.len(), 4);
+    assert!(slow_nodes_stake < committee.validity_threshold());
+
+    let mut certificates = VecDeque::new();
+    let mut parents = initial_parents;
+    let mut next_parents = Vec::new();
+
+    for round in range {
+        next_parents.clear();
+        for name in keys {
+            let this_cert_parents =
+                this_cert_parents_with_slow_nodes(name, parents.clone(), slow_nodes);
+            let (_, certificate) =
+                mock_certificate(committee, name.clone(), round, this_cert_parents);
+            certificates.push_back(certificate.clone());
+            next_parents.push(certificate);
+        }
+        parents = next_parents.clone();
+    }
+    (certificates, next_parents)
+}
+
+// Returns the parents that should be used as part of a newly created certificate.
+// The `slow_nodes` parameter is used to dictate which parents to exclude and not use. The slow
+// node will not be used under some probability which is provided as part of the tuple.
+// If probability to use it is 0.0, then the parent node will NEVER be used.
+// If probability to use it is 1.0, then the parent node will ALWAYS be used.
+// We always make sure to include our "own" certificate, thus the `name` property is needed.
+fn this_cert_parents_with_slow_nodes(
+    name: &PublicKey,
+    ancestors: Vec<Certificate>,
+    slow_nodes: &[(PublicKey, f64)],
+) -> BTreeSet<CertificateDigest> {
+    let mut parents = BTreeSet::new();
+    for parent in ancestors {
+        // Identify if the parent is within the slow nodes - and is not the same author as the
+        // one we want to create the certificate for.
+        if let Some((_, inclusion_probability)) = slow_nodes
+            .iter()
+            .find(|(key, _)| *key != *name && *key == parent.header.author)
+        {
+            let f: f64 = thread_rng().gen_range(0_f64..1_f64);
+
+            // if we are within the probability to include the node,
+            // then we add it as parent.
+            if f < *inclusion_probability {
+                parents.insert(parent.digest());
+            }
+        } else {
+            // just add it directly as it is not within the slow nodes or we are the
+            // same author.
+            parents.insert(parent.digest());
+        }
+    }
+
+    parents
+}
+
 // make rounds worth of unsigned certificates with the sampled number of parents
 pub fn make_certificates_with_epoch(
     committee: &Committee,
