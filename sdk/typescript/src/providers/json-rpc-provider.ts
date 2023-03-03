@@ -42,7 +42,7 @@ import {
   normalizeSuiObjectId,
   CoinMetadataStruct,
   PaginatedCoins,
-  GetObjectDataResponse,
+  SuiObjectWithStatus,
   GetOwnedObjectsResponse,
   DelegatedStake,
   ValidatorMetaData,
@@ -56,6 +56,7 @@ import {
   CheckPointContentsDigest,
   CommitteeInfo,
   DryRunTransactionResponse,
+  SuiObjectContentOptions,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -440,7 +441,7 @@ export class JsonRpcProvider extends Provider {
   async getCoinBalancesOwnedByAddress(
     address: SuiAddress,
     typeArg?: string,
-  ): Promise<GetObjectDataResponse[]> {
+  ): Promise<SuiObjectWithStatus[]> {
     const objects = await this.getObjectsOwnedByAddress(address);
     const coinIds = objects
       .filter(
@@ -458,15 +459,15 @@ export class JsonRpcProvider extends Provider {
     amount: bigint,
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = [],
-  ): Promise<GetObjectDataResponse[]> {
+  ): Promise<SuiObjectWithStatus[]> {
     const coinsStruct = await this.getCoins(address, typeArg);
     const coinIds = coinsStruct.data.map((c) => c.coinObjectId);
-    const coins = await this.getObjectBatch(coinIds);
+    const coins = await this.getObjectBatch(coinIds, { showContent: true });
     return (await Coin.selectCoinsWithBalanceGreaterThanOrEqual(
       coins,
       amount,
       exclude,
-    )) as GetObjectDataResponse[];
+    )) as SuiObjectWithStatus[];
   }
 
   async selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
@@ -474,26 +475,29 @@ export class JsonRpcProvider extends Provider {
     amount: bigint,
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = [],
-  ): Promise<GetObjectDataResponse[]> {
+  ): Promise<SuiObjectWithStatus[]> {
     const coinsStruct = await this.getCoins(address, typeArg);
     const coinIds = coinsStruct.data.map((c) => c.coinObjectId);
-    const coins = await this.getObjectBatch(coinIds);
+    const coins = await this.getObjectBatch(coinIds, { showContent: true });
     return (await Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
       coins,
       amount,
       exclude,
-    )) as GetObjectDataResponse[];
+    )) as SuiObjectWithStatus[];
   }
 
-  async getObject(objectId: ObjectId): Promise<GetObjectDataResponse> {
+  async getObject(
+    objectId: ObjectId,
+    options?: SuiObjectContentOptions,
+  ): Promise<SuiObjectWithStatus> {
     try {
       if (!objectId || !isValidSuiObjectId(normalizeSuiObjectId(objectId))) {
         throw new Error('Invalid Sui Object id');
       }
       return await this.client.requestWithType(
         'sui_getObject',
-        [objectId],
-        GetObjectDataResponse,
+        [objectId, options],
+        SuiObjectWithStatus,
         this.options.skipDataValidation,
       );
     } catch (err) {
@@ -502,13 +506,14 @@ export class JsonRpcProvider extends Provider {
   }
 
   async getObjectRef(objectId: ObjectId): Promise<SuiObjectRef | undefined> {
-    const resp = await this.getObject(objectId);
+    const resp = await this.getObject(objectId, { showType: false });
     return getObjectReference(resp);
   }
 
   async getObjectBatch(
     objectIds: ObjectId[],
-  ): Promise<GetObjectDataResponse[]> {
+    options?: SuiObjectContentOptions,
+  ): Promise<SuiObjectWithStatus[]> {
     try {
       const requests = objectIds.map((id) => {
         if (!id || !isValidSuiObjectId(normalizeSuiObjectId(id))) {
@@ -516,12 +521,12 @@ export class JsonRpcProvider extends Provider {
         }
         return {
           method: 'sui_getObject',
-          args: [id],
+          args: [id, options],
         };
       });
       return await this.client.batchRequestWithType(
         requests,
-        GetObjectDataResponse,
+        SuiObjectWithStatus,
         this.options.skipDataValidation,
       );
     } catch (err) {
@@ -888,12 +893,12 @@ export class JsonRpcProvider extends Provider {
   async getDynamicFieldObject(
     parent_object_id: ObjectId,
     name: string | DynamicFieldName,
-  ): Promise<GetObjectDataResponse> {
+  ): Promise<SuiObjectWithStatus> {
     try {
       const resp = await this.client.requestWithType(
         'sui_getDynamicFieldObject',
         [parent_object_id, name],
-        GetObjectDataResponse,
+        SuiObjectWithStatus,
         this.options.skipDataValidation,
       );
       return resp;

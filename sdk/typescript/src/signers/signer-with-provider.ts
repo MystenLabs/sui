@@ -14,10 +14,10 @@ import {
   generateTransactionDigest,
   getTotalGasUsedUpperBound,
   SuiAddress,
-  SuiTransactionResponse,
   DevInspectResults,
   bcsForVersion,
   DryRunTransactionResponse,
+  SuiTransactionResponse,
 } from '../types';
 import { IntentScope, messageWithIntent } from '../utils/intent';
 import { Signer } from './signer';

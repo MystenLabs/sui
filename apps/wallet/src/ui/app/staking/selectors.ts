@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Delegation } from '@mysten/sui.js';
+import { Delegation, getObjectFields } from '@mysten/sui.js';
 import { createSelector } from '@reduxjs/toolkit';
 
 import { ownedObjects } from '_redux/slices/account';
@@ -24,7 +24,7 @@ export const activeDelegationsSelector = createSelector(
 
 export const activeDelegationIDsSelector = createSelector(
     activeDelegationsSelector,
-    (delegations) => delegations.map(({ reference: { objectId } }) => objectId)
+    (delegations) => delegations.map(({ objectId }) => objectId)
 );
 
 export const totalActiveStakedSelector = createSelector(
@@ -39,25 +39,27 @@ export const totalActiveStakedSelector = createSelector(
 export const epochSelector = createSelector(
     suiSystemObjectSelector,
     (systemObj) =>
-        systemObj && systemObj.data.dataType === 'moveObject'
-            ? (systemObj.data.fields.epoch as number)
+        systemObj && getObjectFields(systemObj)
+            ? (getObjectFields(systemObj)?.epoch as number)
             : null
 );
 
 export function getValidatorSelector(validatorAddress?: string) {
     // TODO this is limited only to the active and next set of validators. Is there a way to access the list of all validators?
     return createSelector(suiSystemObjectSelector, (systemObj) => {
-        const { data } = systemObj || {};
-        if (data?.dataType === 'moveObject') {
-            const { active_validators: active } = data.fields.validators.fields;
-            const validator: SuiMoveObject | undefined = [
-                ...active.map((v: SuiMoveObject) => v.fields.metadata),
-            ].find(
-                (aValidator) =>
-                    aValidator.fields.sui_address === validatorAddress
-            );
-            return validator;
+        if (!systemObj) {
+            return undefined;
         }
-        return undefined;
+        const fields = getObjectFields(systemObj);
+        if (!fields) {
+            return undefined;
+        }
+        const { active_validators: active } = fields.validators.fields;
+        const validator: SuiMoveObject | undefined = [
+            ...active.map((v: SuiMoveObject) => v.fields.metadata),
+        ].find(
+            (aValidator) => aValidator.fields.sui_address === validatorAddress
+        );
+        return validator;
     });
 }

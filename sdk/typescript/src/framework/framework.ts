@@ -3,12 +3,12 @@
 
 import {
   getObjectFields,
-  GetObjectDataResponse,
+  SuiObjectWithStatus,
   SuiMoveObject,
   SuiObjectInfo,
-  SuiObject,
-  getMoveObjectType,
+  SuiObjectData,
   getObjectId,
+  getObjectType,
 } from '../types/objects';
 import { normalizeSuiObjectId, ObjectId, SuiAddress } from '../types/common';
 
@@ -31,7 +31,7 @@ export const PAY_JOIN_COIN_FUNC_NAME = 'join';
 export const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
 
 type ObjectData = ObjectDataFull | SuiObjectInfo;
-type ObjectDataFull = GetObjectDataResponse | SuiMoveObject;
+type ObjectDataFull = SuiObjectWithStatus | SuiMoveObject;
 
 export const CoinMetadataStruct = object({
   decimals: number(),
@@ -153,7 +153,7 @@ export class Coin {
     }
 
     let sum = BigInt(0);
-    let ret = [];
+    let ret: ObjectDataFull[] = [];
     while (sum < total) {
       // prefer to add a coin with smallest sufficient balance
       const target = amount - sum;
@@ -207,7 +207,7 @@ export class Coin {
 
   private static getType(data: ObjectData): string | undefined {
     if ('status' in data) {
-      return getMoveObjectType(data);
+      return getObjectType(data);
     }
     return data.type;
   }
@@ -304,7 +304,7 @@ export type DelegationData = SuiMoveObject & {
   };
 };
 
-export type DelegationSuiObject = Omit<SuiObject, 'data'> & {
+export type DelegationSuiObject = Omit<SuiObjectData, 'data'> & {
   data: DelegationData;
 };
 
@@ -315,9 +315,9 @@ export class Delegation {
   private suiObject: DelegationSuiObject;
 
   public static isDelegationSuiObject(
-    obj: SuiObject,
+    obj: SuiObjectData,
   ): obj is DelegationSuiObject {
-    return 'type' in obj.data && obj.data.type === Delegation.SUI_OBJECT_TYPE;
+    return 'type' in obj && obj.type === Delegation.SUI_OBJECT_TYPE;
   }
 
   constructor(obj: DelegationSuiObject) {

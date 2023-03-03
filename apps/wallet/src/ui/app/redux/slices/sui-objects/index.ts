@@ -3,13 +3,14 @@
 
 import {
     getExecutionStatusType,
-    getObjectExistsResponse,
+    getSuiObjectData,
     getObjectId,
     getTimestampFromTransactionResponse,
     getTotalGasUsed,
     getTransactionDigest,
     getObjectVersion,
     SUI_SYSTEM_STATE_OBJECT_ID,
+    getObjectContentOptions,
 } from '@mysten/sui.js';
 import {
     createAsyncThunk,
@@ -20,18 +21,17 @@ import {
 import { activeAccountSelector } from '../account';
 import { ExampleNFT } from './NFT';
 
-import type { SuiObject, SuiAddress, ObjectId } from '@mysten/sui.js';
+import type { SuiObjectData, SuiAddress, ObjectId } from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
-const objectsAdapter = createEntityAdapter<SuiObject>({
-    selectId: ({ reference }) => reference.objectId,
-    sortComparer: (a, b) =>
-        a.reference.objectId.localeCompare(b.reference.objectId),
+const objectsAdapter = createEntityAdapter<SuiObjectData>({
+    selectId: ({ objectId }) => objectId,
+    sortComparer: (a, b) => a.objectId.localeCompare(b.objectId),
 });
 
 export const fetchAllOwnedAndRequiredObjects = createAsyncThunk<
-    SuiObject[],
+    SuiObjectData[],
     void,
     AppThunkConfig
 >('sui-objects/fetch-all', async (_, { getState, extra: { api } }) => {
@@ -39,7 +39,7 @@ export const fetchAllOwnedAndRequiredObjects = createAsyncThunk<
     const {
         account: { address },
     } = state;
-    const allSuiObjects: SuiObject[] = [];
+    const allSuiObjects: SuiObjectData[] = [];
     if (address) {
         const allObjectRefs =
             await api.instance.fullNode.getObjectsOwnedByAddress(`${address}`);
@@ -51,7 +51,7 @@ export const fetchAllOwnedAndRequiredObjects = createAsyncThunk<
                     getObjectId(anObj)
                 );
                 const storedVersion = storedObj
-                    ? getObjectVersion(storedObj.reference)
+                    ? getObjectVersion(storedObj)
                     : null;
                 const objOutdated = fetchedVersion !== storedVersion;
                 if (!objOutdated && storedObj) {
@@ -61,9 +61,12 @@ export const fetchAllOwnedAndRequiredObjects = createAsyncThunk<
             })
             .map((anObj) => anObj.objectId);
         objectIDs.push(SUI_SYSTEM_STATE_OBJECT_ID);
-        const allObjRes = await api.instance.fullNode.getObjectBatch(objectIDs);
+        const allObjRes = await api.instance.fullNode.getObjectBatch(
+            objectIDs,
+            getObjectContentOptions('full_content')
+        );
         for (const objRes of allObjRes) {
-            const suiObj = getObjectExistsResponse(objRes);
+            const suiObj = getSuiObjectData(objRes);
             if (suiObj) {
                 allSuiObjects.push(suiObj);
             }
@@ -73,14 +76,17 @@ export const fetchAllOwnedAndRequiredObjects = createAsyncThunk<
 });
 
 export const batchFetchObject = createAsyncThunk<
-    SuiObject[],
+    SuiObjectData[],
     ObjectId[],
     AppThunkConfig
 >('sui-objects/batch', async (objectIDs, { extra: { api } }) => {
-    const allSuiObjects: SuiObject[] = [];
-    const allObjRes = await api.instance.fullNode.getObjectBatch(objectIDs);
+    const allSuiObjects: SuiObjectData[] = [];
+    const allObjRes = await api.instance.fullNode.getObjectBatch(
+        objectIDs,
+        getObjectContentOptions('full_content')
+    );
     for (const objRes of allObjRes) {
-        const suiObj = getObjectExistsResponse(objRes);
+        const suiObj = getSuiObjectData(objRes);
         if (suiObj) {
             allSuiObjects.push(suiObj);
         }
@@ -102,7 +108,7 @@ export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
 );
 
 type NFTTxResponse = {
-    timestamp_ms?: number;
+    timestampMs?: number;
     status?: string;
     gasFee?: number;
     txId?: string;
@@ -123,7 +129,7 @@ export const transferNFT = createAsyncThunk<
         const txn = await signer.transferObject(data);
         await dispatch(fetchAllOwnedAndRequiredObjects());
         const txnResp = {
-            timestamp_ms: getTimestampFromTransactionResponse(txn),
+            timestampMs: getTimestampFromTransactionResponse(txn),
             status: getExecutionStatusType(txn),
             gasFee: txn ? getTotalGasUsed(txn) : 0,
             txId: getTransactionDigest(txn),

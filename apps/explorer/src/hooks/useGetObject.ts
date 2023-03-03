@@ -3,8 +3,9 @@
 
 import { useRpcClient } from '@mysten/core';
 import {
-    type GetObjectDataResponse,
+    type SuiObjectWithStatus,
     normalizeSuiAddress,
+    getObjectContentOptions,
 } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
@@ -20,12 +21,16 @@ export function useGetSystemObject() {
 
 export function useGetObject(
     objectId: string
-): UseQueryResult<GetObjectDataResponse, unknown> {
+): UseQueryResult<SuiObjectWithStatus, unknown> {
     const rpc = useRpcClient();
     const normalizedObjId = normalizeSuiAddress(objectId);
     const response = useQuery(
         ['object', normalizedObjId],
-        async () => rpc.getObject(normalizedObjId),
+        async () =>
+            rpc.getObject(
+                normalizedObjId,
+                getObjectContentOptions('full_content')
+            ),
         { enabled: !!objectId }
     );
 

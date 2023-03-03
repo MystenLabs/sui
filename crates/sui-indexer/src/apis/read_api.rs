@@ -11,10 +11,10 @@ use std::collections::BTreeMap;
 use sui_json_rpc::api::{cap_page_limit, ReadApiClient, ReadApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, GetPastObjectDataResponse, MoveFunctionArgType,
-    Page, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
-    SuiObjectContentOptions, SuiObjectInfo, SuiObjectWithStatus, SuiTransactionResponse,
-    TransactionsPage,
+    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, Page,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
+    SuiObjectContentOptions, SuiObjectInfo, SuiObjectWithStatus, SuiPastObjectResponse,
+    SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TxSequenceNumber};
@@ -309,7 +309,7 @@ where
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
-    ) -> RpcResult<GetPastObjectDataResponse> {
+    ) -> RpcResult<SuiPastObjectResponse> {
         self.fullnode.try_get_past_object(object_id, version).await
     }
 

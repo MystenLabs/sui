@@ -21,10 +21,10 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::RpcModule;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, GetPastObjectDataResponse, MoveFunctionArgType,
-    ObjectValueKind, Page, SuiEvent, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
-    SuiMoveNormalizedStruct, SuiMoveStruct, SuiMoveValue, SuiObjectContentOptions, SuiObjectInfo,
-    SuiObjectWithStatus, SuiTransactionEvents, SuiTransactionResponse, TransactionsPage,
+    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, ObjectValueKind, Page,
+    SuiEvent, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
+    SuiMoveStruct, SuiMoveValue, SuiObjectContentOptions, SuiObjectInfo, SuiObjectWithStatus,
+    SuiPastObjectResponse, SuiTransactionEvents, SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{
@@ -386,7 +386,7 @@ impl ReadApiServer for ReadApi {
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
-    ) -> RpcResult<GetPastObjectDataResponse> {
+    ) -> RpcResult<SuiPastObjectResponse> {
         Ok(self
             .state
             .get_past_object_read(&object_id, version)

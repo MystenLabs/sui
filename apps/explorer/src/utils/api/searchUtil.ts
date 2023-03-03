@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isValidTransactionDigest, isValidSuiAddress } from '@mysten/sui.js';
+import {
+    isValidTransactionDigest,
+    isValidSuiAddress,
+    getObjectContentOptions,
+} from '@mysten/sui.js';
 
 import { DefaultRpcClient as rpc, type Network } from './DefaultRpcClient';
 
@@ -39,7 +43,7 @@ export const navigateWithUnknown = async (
                     };
                 }),
             rpc(network)
-                .getObject(input)
+                .getObject(input, getObjectContentOptions('full_content'))
                 .then((data) => {
                     if (data.status !== 'Exists') {
                         throw new Error('no object found');

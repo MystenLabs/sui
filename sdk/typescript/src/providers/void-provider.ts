@@ -8,7 +8,7 @@ import {
   GetTxnDigestsResponse,
   GatewayTxSeqNumber,
   SuiObjectInfo,
-  GetObjectDataResponse,
+  SuiObjectWithStatus,
   SuiObjectRef,
   SuiMoveFunctionArgTypes,
   SuiMoveNormalizedFunction,
@@ -19,7 +19,6 @@ import {
   SuiEventEnvelope,
   SubscriptionId,
   ExecuteTransactionRequestType,
-  SuiTransactionResponse,
   SuiAddress,
   ObjectId,
   TransactionQuery,
@@ -45,6 +44,7 @@ import {
   CommitteeInfo,
   Checkpoint,
   DryRunTransactionResponse,
+  SuiTransactionResponse,
 } from '../types';
 import { Provider } from './provider';
 
@@ -144,7 +144,7 @@ export class VoidProvider extends Provider {
   async getCoinBalancesOwnedByAddress(
     _address: string,
     _typeArg?: string,
-  ): Promise<GetObjectDataResponse[]> {
+  ): Promise<SuiObjectWithStatus[]> {
     throw this.newError('getCoinBalancesOwnedByAddress');
   }
 
@@ -153,7 +153,7 @@ export class VoidProvider extends Provider {
     _amount: bigint,
     _typeArg: string,
     _exclude: ObjectId[] = [],
-  ): Promise<GetObjectDataResponse[]> {
+  ): Promise<SuiObjectWithStatus[]> {
     throw this.newError('selectCoinsWithBalanceGreaterThanOrEqual');
   }
 
@@ -162,11 +162,11 @@ export class VoidProvider extends Provider {
     _amount: bigint,
     _typeArg: string,
     _exclude: ObjectId[],
-  ): Promise<GetObjectDataResponse[]> {
+  ): Promise<SuiObjectWithStatus[]> {
     throw this.newError('selectCoinSetWithCombinedBalanceGreaterThanOrEqual');
   }
 
-  async getObject(_objectId: string): Promise<GetObjectDataResponse> {
+  async getObject(_objectId: string): Promise<SuiObjectWithStatus> {
     throw this.newError('getObject');
   }
 
@@ -213,7 +213,7 @@ export class VoidProvider extends Provider {
   getDynamicFieldObject(
     _parent_object_id: ObjectId,
     _name: string | DynamicFieldName,
-  ): Promise<GetObjectDataResponse> {
+  ): Promise<SuiObjectWithStatus> {
     throw this.newError('getDynamicFieldObject');
   }
 

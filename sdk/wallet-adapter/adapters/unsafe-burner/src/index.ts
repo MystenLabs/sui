@@ -3,13 +3,11 @@
 
 import {
   Ed25519Keypair,
-  getTransactionEffects,
   JsonRpcProvider,
   LocalTxnDataSerializer,
   RawSigner,
   Connection,
   devnetConnection,
-  getEvents,
 } from "@mysten/sui.js";
 import {
   WalletAdapter,

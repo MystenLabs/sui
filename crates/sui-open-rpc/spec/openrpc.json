@@ -381,8 +381,7 @@
                     "version": 2
                   }
                 }
-              ],
-              "checkpoint": null
+              ]
             }
           }
         }
@@ -1308,15 +1307,14 @@
                 "content": {
                   "dataType": "moveObject",
                   "type": "0x2::coin::Coin<0x2::sui::SUI>",
-                  "has_public_transfer": true,
+                  "hasPublicTransfer": true,
                   "fields": {
                     "balance": "10000",
                     "id": {
                       "id": "0x53e4567ccafa5f36ce84c80aa8bc9be64e0d5ae796884274aef3005ae6733809"
                     }
                   }
-                },
-                "bcs": null
+                }
               }
             }
           }
@@ -1625,8 +1623,7 @@
                     "version": 2
                   }
                 }
-              ],
-              "checkpoint": null
+              ]
             }
           }
         }
@@ -2630,8 +2627,7 @@
                     "version": 2
                   }
                 }
-              ],
-              "checkpoint": null
+              ]
             }
           }
         }
@@ -2850,7 +2846,7 @@
         }
       ],
       "result": {
-        "name": "GetPastObjectDataResponse",
+        "name": "SuiPastObjectResponse",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/ObjectRead"
@@ -2874,26 +2870,25 @@
             "value": {
               "status": "VersionFound",
               "details": {
-                "data": {
+                "objectId": "0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760",
+                "version": 4,
+                "digest": "5VPAwDXy3BL72ehFc7gSJoz27ahMd6spUg5YwYc4ibcv",
+                "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                "owner": {
+                  "AddressOwner": "0x3568c40e814d9d5396d23087a0fd641e91e0e00df6c012cded9ef9ba5e5bf042"
+                },
+                "previousTransaction": "5jQByoouHBwaico5pQB73GdbzerC2StjTiHh5garBjiV",
+                "storageRebate": 100,
+                "content": {
                   "dataType": "moveObject",
                   "type": "0x2::coin::Coin<0x2::sui::SUI>",
-                  "has_public_transfer": true,
+                  "hasPublicTransfer": true,
                   "fields": {
                     "balance": "10000",
                     "id": {
                       "id": "0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760"
                     }
                   }
-                },
-                "owner": {
-                  "AddressOwner": "0x3568c40e814d9d5396d23087a0fd641e91e0e00df6c012cded9ef9ba5e5bf042"
-                },
-                "previousTransaction": "5jQByoouHBwaico5pQB73GdbzerC2StjTiHh5garBjiV",
-                "storageRebate": 100,
-                "reference": {
-                  "objectId": "0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760",
-                  "version": 4,
-                  "digest": "5VPAwDXy3BL72ehFc7gSJoz27ahMd6spUg5YwYc4ibcv"
                 }
               }
             }
@@ -3270,7 +3265,7 @@
             "required": [
               "dataType",
               "fields",
-              "has_public_transfer",
+              "hasPublicTransfer",
               "type"
             ],
             "properties": {
@@ -3283,7 +3278,7 @@
               "fields": {
                 "$ref": "#/components/schemas/MoveStruct"
               },
-              "has_public_transfer": {
+              "hasPublicTransfer": {
                 "type": "boolean"
               },
               "type": {
@@ -5077,20 +5072,7 @@
             ],
             "properties": {
               "details": {
-                "type": "array",
-                "items": [
-                  {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SequenceNumber"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ObjectDigest"
-                  }
-                ],
-                "maxItems": 3,
-                "minItems": 3
+                "$ref": "#/components/schemas/ObjectRef"
               },
               "status": {
                 "type": "string",
@@ -5488,14 +5470,14 @@
           {
             "type": "object",
             "required": [
-              "bcs_bytes",
+              "bcsBytes",
               "dataType",
-              "has_public_transfer",
+              "hasPublicTransfer",
               "type",
               "version"
             ],
             "properties": {
-              "bcs_bytes": {
+              "bcsBytes": {
                 "$ref": "#/components/schemas/Base64"
               },
               "dataType": {
@@ -5504,7 +5486,7 @@
                   "moveObject"
                 ]
               },
-              "has_public_transfer": {
+              "hasPublicTransfer": {
                 "type": "boolean"
               },
               "type": {
@@ -5520,7 +5502,7 @@
             "required": [
               "dataType",
               "id",
-              "module_map"
+              "moduleMap"
             ],
             "properties": {
               "dataType": {
@@ -5532,7 +5514,7 @@
               "id": {
                 "$ref": "#/components/schemas/ObjectID"
               },
-              "module_map": {
+              "moduleMap": {
                 "type": "object",
                 "additionalProperties": {
                   "$ref": "#/components/schemas/Base64"
