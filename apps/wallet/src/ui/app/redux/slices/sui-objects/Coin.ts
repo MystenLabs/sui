@@ -182,8 +182,7 @@ export class Coin {
                     .reverse()
                     .map((coin) => Coin.getID(coin as SuiMoveObject)),
                 recipients: [address, address],
-                // TODO: Update SDK to accept bigint
-                amounts: [Number(amount), Number(gasFee)],
+                amounts: [amount.toString(), gasFee.toString()],
                 gasBudget,
             });
 
