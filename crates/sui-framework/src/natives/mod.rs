@@ -15,6 +15,7 @@ mod types;
 mod validator;
 
 use crate::make_native;
+use better_any::{Tid, TidAble};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use move_stdlib::natives::{GasParameters, NurseryGasParameters};
@@ -24,8 +25,62 @@ use move_vm_types::{
     values::{Struct, Value},
 };
 use std::sync::Arc;
+use sui_protocol_config::ProtocolConfig;
 
-use self::crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac, tbls};
+use self::{
+    address::{AddressFromBytesCostParams, AddressFromU256CostParams, AddressToU256CostParams},
+    crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac, tbls},
+    event::EventEmitCostParams,
+};
+
+#[derive(Tid)]
+pub struct NativesCostTable {
+    pub address_from_bytes_cost_params: AddressFromBytesCostParams,
+    pub address_to_u256_cost_params: AddressToU256CostParams,
+    pub address_from_u256_cost_params: AddressFromU256CostParams,
+    pub event_emit_cost_params: EventEmitCostParams,
+}
+
+impl NativesCostTable {
+    pub fn from_protocol_config(protocol_config: &ProtocolConfig) -> NativesCostTable {
+        Self {
+            address_from_bytes_cost_params: AddressFromBytesCostParams {
+                copy_bytes_to_address_cost_per_byte: protocol_config
+                    .copy_bytes_to_address_cost_per_byte()
+                    .into(),
+            },
+            address_to_u256_cost_params: AddressToU256CostParams {
+                address_to_vec_cost_per_byte: protocol_config.address_to_vec_cost_per_byte().into(),
+                address_vec_reverse_cost_per_byte: protocol_config
+                    .address_vec_reverse_cost_per_byte()
+                    .into(),
+                copy_convert_to_u256_cost_per_byte: protocol_config
+                    .copy_convert_to_u256_cost_per_byte()
+                    .into(),
+            },
+            address_from_u256_cost_params: AddressFromU256CostParams {
+                u256_to_bytes_to_vec_cost_per_byte: protocol_config
+                    .u256_to_bytes_to_vec_cost_per_byte()
+                    .into(),
+                u256_bytes_vec_reverse_cost_per_byte: protocol_config
+                    .u256_bytes_vec_reverse_cost_per_byte()
+                    .into(),
+                copy_convert_to_address_cost_per_byte: protocol_config
+                    .u256_bytes_vec_reverse_cost_per_byte()
+                    .into(),
+            },
+            event_emit_cost_params: EventEmitCostParams {
+                event_value_size_derivation_cost_per_byte: protocol_config
+                    .event_value_size_derivation_cost_per_byte()
+                    .into(),
+                event_tag_size_derivation_cost_per_byte: protocol_config
+                    .event_tag_size_derivation_cost_per_byte()
+                    .into(),
+                event_emit_cost_per_byte: protocol_config.event_emit_cost_per_byte().into(),
+            },
+        }
+    }
+}
 
 pub fn all_natives(
     move_stdlib_addr: AccountAddress,

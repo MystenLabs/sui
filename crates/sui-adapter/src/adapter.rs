@@ -36,7 +36,10 @@ use move_vm_runtime::{
 };
 
 use sui_cost_tables::bytecode_tables::GasStatus;
-use sui_framework::natives::object_runtime::{self, ObjectRuntime};
+use sui_framework::natives::{
+    object_runtime::{self, ObjectRuntime},
+    NativesCostTable,
+};
 use sui_json::primitive_type;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
@@ -105,6 +108,7 @@ pub fn new_session<
         is_metered,
         protocol_config,
     ));
+    extensions.add(NativesCostTable::from_protocol_config(protocol_config));
     vm.new_session_with_extensions(state_view, extensions)
 }
 
