@@ -26,7 +26,8 @@
         "@sentry/tracing": "^7.38.0",
         "@tanstack/react-query": "^4.20.9",
         "bignumber.js": "^9.1.1",
-        "react": "^18.2.0"
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0"
     },
     "devDependencies": {
         "@headlessui/tailwindcss": "^0.1.2",

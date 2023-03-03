@@ -1,12 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { RpcClientContext } from '@mysten/core';
 import { type Meta, type StoryObj } from '@storybook/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { type ComponentProps } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 
 import { RecipientTransactionAddresses } from '../TransactionAddressSection';
+
+import { DefaultRpcClient, Network } from '~/utils/api/DefaultRpcClient';
 
 const recipientsData = [
     {
@@ -39,9 +42,13 @@ export default {
     decorators: [
         (Story) => (
             <QueryClientProvider client={new QueryClient()}>
-                <MemoryRouter>
-                    <Story />
-                </MemoryRouter>
+                <RpcClientContext.Provider
+                    value={DefaultRpcClient(Network.LOCAL)}
+                >
+                    <MemoryRouter>
+                        <Story />
+                    </MemoryRouter>
+                </RpcClientContext.Provider>
             </QueryClientProvider>
         ),
     ],

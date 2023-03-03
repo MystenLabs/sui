@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { CoinFormat, formatBalance } from '~/hooks/useFormatCoin';
+import { CoinFormat, formatBalance } from '@mysten/core';
+
 import { Heading } from '~/ui/Heading';
 
 export type AmountProps = {

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useRpcClient } from '@mysten/core';
 import { Coin, getObjectFields, getObjectId } from '@mysten/sui.js';
 import {
     useCallback,
@@ -22,7 +23,6 @@ import OwnedObjectView from './views/OwnedObjectView';
 
 import styles from './styles/OwnedObjects.module.css';
 
-import { useRpc } from '~/hooks/useRpc';
 import { useNavigateWithQuery } from '~/ui/utils/LinkWithQuery';
 import { navigateWithUnknown } from '~/utils/api/searchUtil';
 
@@ -47,7 +47,7 @@ function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
     const [isLoaded, setIsLoaded] = useState(false);
     const [isFail, setIsFail] = useState(false);
     const [network] = useContext(NetworkContext);
-    const rpc = useRpc();
+    const rpc = useRpcClient();
     const navigate = useNavigateWithQuery();
     const navigateFn = useCallback(
         (id: string) => () => navigateWithUnknown(id, navigate, network),

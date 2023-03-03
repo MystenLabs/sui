@@ -25,7 +25,8 @@ const CONNECTIONS: Record<Network, Connection> = {
 };
 
 const defaultRpcMap: Map<Network | string, JsonRpcProvider> = new Map();
-/** @deprecated This shouldn't be directly used, and instead should be used through `useRpc()`. */
+
+// NOTE: This class should not be used directly in React components, prefer to use the useRpcClient() hook instead
 export const DefaultRpcClient = (network: Network | string) => {
     const existingClient = defaultRpcMap.get(network);
     if (existingClient) return existingClient;

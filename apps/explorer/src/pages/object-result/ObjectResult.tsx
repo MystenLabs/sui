@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useRpcClient } from '@mysten/core';
 import { getTransactionSender } from '@mysten/sui.js';
 import { useEffect, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
@@ -13,7 +14,6 @@ import {
 } from './ObjectResultType';
 import ObjectView from './views/ObjectView';
 
-import { useRpc } from '~/hooks/useRpc';
 import { Banner } from '~/ui/Banner';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
@@ -42,7 +42,7 @@ function Fail({ objID }: { objID: string | undefined }) {
 
 function ObjectResultAPI({ objID }: { objID: string }) {
     const [showObjectState, setObjectState] = useState(DATATYPE_DEFAULT);
-    const rpc = useRpc();
+    const rpc = useRpcClient();
 
     useEffect(() => {
         rpc.getObject(objID)

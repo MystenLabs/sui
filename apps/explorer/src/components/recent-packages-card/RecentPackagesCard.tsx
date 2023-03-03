@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { useRpcClient } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
@@ -11,7 +12,6 @@ import type {
     SuiEvents,
 } from '@mysten/sui.js';
 
-import { useRpc } from '~/hooks/useRpc';
 import { Banner } from '~/ui/Banner';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
@@ -68,7 +68,7 @@ const transformTable = (events: SuiEvents) => ({
 const RECENT_MODULES_COUNT = 10;
 
 export function RecentModulesCard() {
-    const rpc = useRpc();
+    const rpc = useRpcClient();
 
     const { data, isLoading, isSuccess, isError } = useQuery(
         ['recentPackage'],
