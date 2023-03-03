@@ -10,7 +10,7 @@ import CoinBalance from './coin-balance';
 import IconLink from './icon-link';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { Text } from '_app/shared/text';
-import Loading from '_components/loading';
+import Alert from '_components/alert';
 import { SuiIcons } from '_font-icons/output/sui-icons';
 import { useAppSelector, useGetAllBalances, useGetCoinBalance } from '_hooks';
 import { AccountSelector } from '_src/ui/app/components/AccountSelector';
@@ -23,15 +23,14 @@ type TokenDetailsProps = {
 
 function MyTokens() {
     const accountAddress = useActiveAddress();
-    const { data: balance, isLoading: loadingBalances } =
-        useGetAllBalances(accountAddress);
+    const { data: balance } = useGetAllBalances(accountAddress);
 
     const noSuiToken = !balance?.find(
         ({ coinType }) => coinType === SUI_TYPE_ARG
     );
 
     return (
-        <Loading loading={loadingBalances}>
+        <>
             {balance?.length ? (
                 <div className="flex flex-1 justify-start flex-col w-full mt-6">
                     <Text variant="caption" color="steel" weight="semibold">
@@ -57,17 +56,18 @@ function MyTokens() {
                     </Text>
                 </div>
             ) : null}
-        </Loading>
+        </>
     );
 }
 
 function TokenDetails({ coinType }: TokenDetailsProps) {
     const activeCoinType = coinType || SUI_TYPE_ARG;
     const accountAddress = useAppSelector(({ account }) => account.address);
-    const { data: coinBalance, isLoading: loadingBalances } = useGetCoinBalance(
-        activeCoinType,
-        accountAddress
-    );
+    const {
+        data: coinBalance,
+        isError,
+        errorUpdateCount,
+    } = useGetCoinBalance(activeCoinType, accountAddress);
 
     const tokenBalance = coinBalance?.totalBalance || BigInt(0);
 
@@ -84,15 +84,21 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                 className="flex flex-col h-full flex-1 flex-grow items-center"
                 data-testid="coin-page"
             >
+                {isError || errorUpdateCount > 0 ? (
+                    <Alert>
+                        <div>
+                            <strong>Error updating balance</strong>
+                        </div>
+                    </Alert>
+                ) : null}
+
                 {!coinType && <AccountSelector />}
                 <div className="mt-1.5">
-                    <Loading loading={loadingBalances}>
-                        <CoinBalance
-                            balance={tokenBalance}
-                            type={activeCoinType}
-                            mode="standalone"
-                        />
-                    </Loading>
+                    <CoinBalance
+                        balance={tokenBalance}
+                        type={activeCoinType}
+                        mode="standalone"
+                    />
                 </div>
                 <div className="flex flex-nowrap gap-2  justify-center w-full  mt-5">
                     <IconLink

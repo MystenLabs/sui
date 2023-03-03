@@ -23,6 +23,7 @@ export { useGetTransferAmount } from './useGetTransferAmount';
 export { useGetCoinBalance } from './useGetCoinBalance';
 export { useGetAllBalances } from './useGetAllBalances';
 export { useObjectsOwnedByAddress } from './useObjectsOwnedByAddress';
+export { useOwnedNFT } from './useOwnedNFT';
 export * from './useSigner';
 export * from './useIndividualCoinMaxBalance';
 export * from './useOriginbyteNft';

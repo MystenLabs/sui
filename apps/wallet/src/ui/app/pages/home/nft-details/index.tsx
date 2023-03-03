@@ -4,9 +4,9 @@
 import {
     hasPublicTransfer,
     formatAddress,
+    getObjectOwner,
     SuiObject,
     is,
-    getObjectOwner,
 } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useMemo } from 'react';
@@ -67,8 +67,9 @@ function NFTDetailsPage() {
     const nftId = searchParams.get('objectId');
     const accountAddress = useActiveAddress();
 
-    const { data: objectData, isLoading } = useGetObject(nftId!);
-    const selectedNft = useMemo(() => {
+    const { data: objectData, isLoading } = useGetObject(nftId || '');
+
+    const selectedObject = useMemo(() => {
         if (!is(objectData?.details, SuiObject) || !objectData) return null;
         const owner = getObjectOwner(objectData) as { AddressOwner: string };
         return owner.AddressOwner === accountAddress
@@ -76,13 +77,12 @@ function NFTDetailsPage() {
             : null;
     }, [accountAddress, objectData]);
 
-    const isTransferable = !!selectedNft && hasPublicTransfer(selectedNft);
-    const { nftFields, fileExtensionType, filePath } =
-        useNFTBasicData(selectedNft);
+    const isTransferable =
+        !!selectedObject && hasPublicTransfer(selectedObject);
 
-    if (!nftId) {
-        return <Navigate to="/" replace={true} />;
-    }
+    const { nftFields, fileExtensionType, filePath } =
+        useNFTBasicData(selectedObject);
+
     // Extract either the attributes, or use the top-level NFT fields:
     const metaFields =
         nftFields?.metadata?.fields?.attributes?.fields ||
@@ -106,7 +106,7 @@ function NFTDetailsPage() {
             })}
         >
             <Loading loading={isLoading}>
-                {selectedNft ? (
+                {selectedObject ? (
                     <>
                         <PageTitle back="/nfts" />
                         <div className="flex flex-col flex-nowrap flex-1 items-stretch overflow-y-auto overflow-x-hidden gap-7">
