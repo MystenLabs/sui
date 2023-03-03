@@ -8,7 +8,7 @@ use move_package::BuildConfig as MoveBuildConfig;
 use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use move_vm_test_utils::gas_schedule::INITIAL_COST_SCHEDULE;
-use natives::object_runtime::ObjectRuntime;
+use natives::{object_runtime::ObjectRuntime, NativesCostTable};
 use once_cell::sync::Lazy;
 use std::{collections::BTreeMap, path::Path};
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
@@ -66,9 +66,9 @@ static MOVE_STDLIB_TEST: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
 });
 
 static SET_EXTENSION_HOOK: Lazy<()> =
-    Lazy::new(|| set_extension_hook(Box::new(new_testing_object_runtime)));
+    Lazy::new(|| set_extension_hook(Box::new(new_testing_object_and_natives_cost_runtime)));
 
-fn new_testing_object_runtime(ext: &mut NativeContextExtensions) {
+fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions) {
     let store = InMemoryStorage::new(vec![]);
     let state_view = TemporaryStore::new(
         store,
@@ -81,7 +81,10 @@ fn new_testing_object_runtime(ext: &mut NativeContextExtensions) {
         BTreeMap::new(),
         false,
         &ProtocolConfig::get_for_min_version(),
-    ))
+    ));
+    ext.add(NativesCostTable::from_protocol_config(
+        &ProtocolConfig::get_for_min_version(),
+    ));
 }
 
 pub fn get_sui_framework() -> Vec<CompiledModule> {

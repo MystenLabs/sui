@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::natives::NativesCostTable;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas, u256::U256};
 use move_vm_runtime::{
@@ -11,7 +12,6 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::{collections::VecDeque, ops::Mul};
-use crate::natives::NativesCostTable;
 
 const E_ADDRESS_PARSE_ERROR: u64 = 0;
 
