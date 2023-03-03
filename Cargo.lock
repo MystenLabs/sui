@@ -7074,7 +7074,7 @@ dependencies = [
 [[package]]
 name = "prometheus-parse"
 version = "0.2.3"
-source = "git+https://github.com/ccakes/prometheus-parse-rs.git?rev=75334db#75334dbe2d286edf6d4424abba92a74643333096"
+source = "git+https://github.com/asonnino/prometheus-parser.git?rev=75334db#75334dbe2d286edf6d4424abba92a74643333096"
 dependencies = [
  "chrono",
  "itertools",
@@ -9552,7 +9552,7 @@ dependencies = [
 
 [[package]]
 name = "sui-orchestrator"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "async-trait",
  "aws-config",
@@ -9566,18 +9566,13 @@ dependencies = [
  "prettytable-rs",
  "prometheus-parse",
  "rand 0.8.5",
- "regex",
  "reqwest",
  "serde 1.0.152",
  "serde_json",
  "serde_yaml 0.9.17",
  "ssh2",
  "sui-config",
- "sui-core",
  "sui-keys",
- "sui-network",
- "sui-node",
- "sui-sdk",
  "sui-types",
  "thiserror",
  "tokio",

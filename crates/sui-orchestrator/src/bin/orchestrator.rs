@@ -115,7 +115,7 @@ pub struct Opts {
     #[clap(
         long,
         value_name = "FILE",
-        default_value = "crates/sui-benchmark/src/orchestrator/assets/settings.json",
+        default_value = "crates/sui-orchestrator/assets/settings.json",
         global = true
     )]
     settings_path: String,

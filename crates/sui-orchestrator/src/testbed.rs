@@ -766,9 +766,7 @@ impl<C> Testbed<C> {
 
 #[cfg(test)]
 mod test {
-    use crate::orchestrator::{
-        client::test_client::TestClient, settings::Settings, testbed::Testbed,
-    };
+    use crate::{client::test_client::TestClient, settings::Settings, testbed::Testbed};
 
     #[tokio::test]
     async fn populate() {

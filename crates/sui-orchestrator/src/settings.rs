@@ -141,7 +141,7 @@ impl Settings {
 mod test {
     use reqwest::Url;
 
-    use crate::orchestrator::settings::Settings;
+    use crate::settings::Settings;
 
     #[test]
     fn repository_name() {

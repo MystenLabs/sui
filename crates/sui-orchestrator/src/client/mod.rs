@@ -75,7 +75,7 @@ pub mod test_client {
 
     use serde::Serialize;
 
-    use crate::orchestrator::error::CloudProviderResult;
+    use crate::error::CloudProviderResult;
 
     use super::{Client, Instance};
 
