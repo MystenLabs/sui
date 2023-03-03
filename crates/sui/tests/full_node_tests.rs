@@ -14,7 +14,8 @@ use prometheus::Registry;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui_json_rpc_types::{
     type_and_fields_from_move_struct, EventPage, SuiEvent, SuiEventEnvelope, SuiEventFilter,
-    SuiExecutionStatus, SuiMoveStruct, SuiMoveValue, SuiTransactionResponse,
+    SuiExecutionStatus, SuiMoveStruct, SuiMoveValue, SuiTransactionEffectsAPI,
+    SuiTransactionResponse,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
@@ -94,7 +95,7 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context, sender).await;
 
     let response = increment_counter(context, sender, None, package_ref.0, counter_ref.0).await;
-    let digest = response.effects.transaction_digest;
+    let digest = *response.effects.transaction_digest();
     wait_for_tx(digest, node.state().clone()).await;
 
     Ok(())
@@ -163,7 +164,7 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
 
     let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context, sender).await;
     let response = increment_counter(context, sender, None, package_ref.0, counter_ref.0).await;
-    let digest = response.effects.transaction_digest;
+    let digest = *response.effects.transaction_digest();
 
     wait_for_tx(digest, node.state().clone()).await;
     let txes = node.state().get_transactions(
@@ -531,14 +532,14 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                 };
 
                 owned_tx_digest = if let SuiClientCommandResult::SplitCoin(resp) = res {
-                    Some(resp.effects.transaction_digest)
+                    Some(*resp.effects.transaction_digest())
                 } else {
                     panic!("transfer command did not return WalletCommandResult::Transfer");
                 };
 
                 let context = &context.lock().await;
                 shared_tx_digest = Some(
-                    increment_counter(
+                    *increment_counter(
                         context,
                         sender,
                         Some(gas_object_id),
@@ -547,7 +548,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                     )
                     .await
                     .effects
-                    .transaction_digest,
+                    .transaction_digest(),
                 );
             }
             tx.send((owned_tx_digest.unwrap(), shared_tx_digest.unwrap()))
@@ -1039,7 +1040,7 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
             confirmed_local_execution,
             ..
         } = response;
-        assert_eq!(&effects.transaction_digest, tx_digest);
+        assert_eq!(effects.transaction_digest(), tx_digest);
         assert!(confirmed_local_execution.unwrap());
     }
     Ok(())
@@ -1079,7 +1080,7 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
         confirmed_local_execution,
         ..
     } = response;
-    assert_eq!(&effects.transaction_digest, tx_digest);
+    assert_eq!(effects.transaction_digest(), tx_digest);
     assert!(confirmed_local_execution.unwrap());
 
     let _response: SuiTransactionResponse = jsonrpc_client
@@ -1104,7 +1105,7 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
         confirmed_local_execution,
         ..
     } = response;
-    assert_eq!(&effects.transaction_digest, tx_digest);
+    assert_eq!(effects.transaction_digest(), tx_digest);
     assert!(!confirmed_local_execution.unwrap());
 
     Ok(())
@@ -1180,7 +1181,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
 
     // Delete the object
     let response = delete_devnet_nft(context, &recipient, object_ref_v2).await;
-    assert_eq!(response.effects.status, SuiExecutionStatus::Success);
+    assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
     sleep(Duration::from_secs(1)).await;
 
     // Now test get_object_read

@@ -3,6 +3,7 @@
 
 use axum::{Extension, Json};
 use fastcrypto::encoding::{Encoding, Hex};
+use sui_json_rpc_types::SuiTransactionEffectsAPI;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{SignatureScheme, ToFromBytes};
 use sui_types::messages::{
@@ -132,13 +133,13 @@ pub async fn submit(
         )
         .await?;
 
-    if let SuiExecutionStatus::Failure { error } = response.effects.status {
-        return Err(Error::TransactionExecutionError(error));
+    if let SuiExecutionStatus::Failure { error } = response.effects.status() {
+        return Err(Error::TransactionExecutionError(error.to_string()));
     }
 
     Ok(TransactionIdentifierResponse {
         transaction_identifier: TransactionIdentifier {
-            hash: response.effects.transaction_digest,
+            hash: *response.effects.transaction_digest(),
         },
         metadata: None,
     })
@@ -275,7 +276,8 @@ pub async fn metadata(
         })?;
     let dry_run = context.client.read_api().dry_run_transaction(data).await?;
 
-    let budget = dry_run.effects.gas_used.computation_cost + dry_run.effects.gas_used.storage_cost;
+    let budget =
+        dry_run.effects.gas_used().computation_cost + dry_run.effects.gas_used().storage_cost;
 
     Ok(ConstructionMetadataResponse {
         metadata: ConstructionMetadata {

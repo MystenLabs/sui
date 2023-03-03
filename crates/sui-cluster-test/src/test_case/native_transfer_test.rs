@@ -7,7 +7,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use jsonrpsee::rpc_params;
-use sui_json_rpc_types::SuiTransactionResponse;
+use sui_json_rpc_types::{SuiTransactionEffectsAPI, SuiTransactionResponse};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
@@ -121,7 +121,7 @@ impl NativeTransferTest {
             .check(&events.remove(0));
 
         // Verify fullnode observes the txn
-        ctx.let_fullnode_sync(vec![response.effects.transaction_digest], 5)
+        ctx.let_fullnode_sync(vec![*response.effects.transaction_digest()], 5)
             .await;
 
         let _ = ObjectChecker::new(obj_to_transfer_id)

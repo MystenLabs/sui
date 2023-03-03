@@ -9,8 +9,8 @@ use std::vec;
 use serde::Deserialize;
 use serde::Serialize;
 use sui_sdk::rpc_types::{
-    SuiEvent, SuiMoveCall, SuiPaySui, SuiTransactionData, SuiTransactionKind,
-    SuiTransactionResponse,
+    SuiEvent, SuiMoveCall, SuiPaySui, SuiTransactionData, SuiTransactionDataAPI,
+    SuiTransactionEffectsAPI, SuiTransactionKind, SuiTransactionResponse,
 };
 
 use sui_types::base_types::{SequenceNumber, SuiAddress};
@@ -301,10 +301,10 @@ impl Operations {
 impl TryFrom<SuiTransactionData> for Operations {
     type Error = Error;
     fn try_from(data: SuiTransactionData) -> Result<Self, Self::Error> {
-        let sender = data.sender;
-        data.transactions
-            .into_iter()
-            .map(|tx| Self::from_transaction(tx, sender, None))
+        let sender = *data.sender();
+        data.transactions()
+            .iter()
+            .map(|tx| Self::from_transaction(tx.clone(), sender, None))
             .collect()
     }
 }
@@ -312,7 +312,7 @@ impl TryFrom<SuiTransactionData> for Operations {
 impl TryFrom<SuiTransactionResponse> for Operations {
     type Error = Error;
     fn try_from(response: SuiTransactionResponse) -> Result<Self, Self::Error> {
-        let status = Some(response.effects.status.into());
+        let status = Some(response.effects.into_status().into());
         let ops: Operations = response.transaction.data.try_into()?;
         let ops = ops.set_status(status).into_iter();
 

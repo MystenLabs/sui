@@ -22,7 +22,9 @@ use sui_core::{
         QuorumDriver, QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics,
     },
 };
-use sui_json_rpc_types::{SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffects};
+use sui_json_rpc_types::{
+    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffects, SuiTransactionEffectsAPI,
+};
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::messages::TransactionEvents;
@@ -76,9 +78,8 @@ impl ExecutionEffects {
                 certified_effects.data().mutated().to_vec()
             }
             ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
-                .mutated
-                .clone()
-                .into_iter()
+                .mutated()
+                .iter()
                 .map(|refe| (refe.reference.to_object_ref(), refe.owner))
                 .collect(),
         }
@@ -90,9 +91,8 @@ impl ExecutionEffects {
                 certified_effects.data().created().to_vec()
             }
             ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
-                .created
-                .clone()
-                .into_iter()
+                .created()
+                .iter()
                 .map(|refe| (refe.reference.to_object_ref(), refe.owner))
                 .collect(),
         }
@@ -113,7 +113,7 @@ impl ExecutionEffects {
                 *certified_effects.data().gas_object()
             }
             ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => {
-                let refe = &sui_tx_effects.gas_object;
+                let refe = &sui_tx_effects.gas_object();
                 (refe.reference.to_object_ref(), refe.owner)
             }
         }

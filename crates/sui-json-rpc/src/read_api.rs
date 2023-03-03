@@ -195,7 +195,7 @@ impl ReadApiServer for ReadApi {
 
         Ok(SuiTransactionResponse {
             transaction: transaction.into_message().try_into()?,
-            effects: effects.into(),
+            effects: effects.try_into()?,
             events,
             timestamp_ms: checkpoint_timestamp,
             confirmed_local_execution: None,
@@ -226,7 +226,7 @@ impl ReadApiServer for ReadApi {
                 let (transaction, effects, events, checkpoint) = txn;
                 responses.push(SuiTransactionResponse {
                     transaction: transaction.into_message().try_into()?,
-                    effects: effects.into(),
+                    effects: effects.try_into()?,
                     events: SuiTransactionEvents::try_from(
                         events,
                         // threading the epoch_store through this API does not

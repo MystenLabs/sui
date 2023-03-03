@@ -16,7 +16,7 @@ use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DryRunTransactionResponse, DynamicFieldPage,
     EventPage, SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter, SuiMoveNormalizedModule,
     SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
-    SuiSystemStateRpc, SuiTransactionResponse, TransactionsPage,
+    SuiSystemStateRpc, SuiTransactionEffectsAPI, SuiTransactionResponse, TransactionsPage,
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{
@@ -429,7 +429,7 @@ impl QuorumDriver {
                     if !confirmed_local_execution {
                         Self::wait_until_fullnode_sees_tx(
                             &self.api,
-                            response.effects.transaction_digest,
+                            *response.effects.transaction_digest(),
                         )
                         .await?;
                     }

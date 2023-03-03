@@ -1028,7 +1028,7 @@ impl AuthorityState {
                 epoch_store.protocol_config(),
             );
         Ok(DryRunTransactionResponse {
-            effects: effects.into(),
+            effects: effects.try_into()?,
             events: SuiTransactionEvents::try_from(
                 inner_temp_store.events,
                 epoch_store.module_cache().as_ref(),
