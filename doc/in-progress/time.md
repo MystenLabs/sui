@@ -40,13 +40,13 @@ $ sui client call --package $EXAMPLE --module 'clock' --function 'access' --args
 
 **Expect `Clock`'s timestamp to change every 2 to 3 seconds**, at the rate the network commits checkpoints.
 
-Successive calls to `sui::clock::timestamp_ms` in the same transaction always produce the same result (transactions are considered to take effect instantly), and might also overlap with other transactions that touch the same shared objects. Consequently, you can't assume that time progresses between transactions that are sequenced relative to each other.
+Successive calls to `sui::clock::timestamp_ms` in the same transaction always produce the same result (transactions are considered to take effect instantly), but timestamps from `Clock` are otherwise monotonic across transactions that touch the same shared objects:  Successive transactions seeing a greater or equal timestamp to their predecessors.
 
 Any transaction that requires access to a `Clock` must go through [consensus](/learn/architecture/consensus) because the only available instance is a [shared object](/learn/objects#shared). As a result, this technique is not suitable for transactions that must use the single-owner fast-path (see [Epoch timestamps](#epoch-timestamps) for a single-owner-compatible source of timestamps).
 
 **Transactions that use the clock must accept it as an immutable reference** (not a mutable reference or value).  This prevents contention, as transactions that access the `Clock` can only read it, so do not need to be sequenced relative to each other.  Validators refuse to sign transactions that do not meet this requirement and packages that include entry functions that accept a `Clock` or `&mut Clock` fail to publish.
 
-The following example shows how to test 'Clock'-dependent code by manually incrementing its timestamp, which is possible only in test code: 
+The following function is used to test 'Clock'-dependent code by manually incrementing its timestamp, which is possible only in test code: 
 
 ```
 module sui::clock {
@@ -65,9 +65,9 @@ module sui::tx_context {
 }
 ```
 
-The preceding example returns the point in time when the current epoch started, as a millisecond granularity unix timestamp in a `u64`.  **This value changes roughly once every 24 hours**, when the epoch changes.
+The preceding function returns the point in time when the current epoch started, as a millisecond granularity unix timestamp in a `u64`.  **This value changes roughly once every 24 hours**, when the epoch changes.
 
-Tests based on `sui::test_scenario` for time-sensitive code that uses the previous function can use `sui::test_scenario::later_epoch` to simulate the progress of time:
+Tests based on `sui::test_scenario` can use `later_epoch` (below), to exercise time-sensitive code that uses `epoch_timestamp_ms` (above):
 
 ```
 module sui::test_scenario {
@@ -79,4 +79,4 @@ module sui::test_scenario {
 }
 ```
 
-The preceding code behaves like `sui::test_scenario::next_epoch` (finishes the current transaction and epoch), but also increments the timestamp by `delta_ms` milliseconds.
+`later_epoch` behaves like `sui::test_scenario::next_epoch` (finishes the current transaction and epoch in the test scenario), but also increments the timestamp by `delta_ms` milliseconds to simulate the progress of time.
