@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useRpcClient } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 
 import { NftClient } from '../helpers/NftClient';
-import { useRpc } from './useRpc';
 import { parseIpfsUrl } from '_hooks';
 
 export function useOriginbyteNft(nftId: string | null) {
-    const rpc = useRpc();
+    const rpc = useRpcClient();
     return useQuery(
         ['originbyte-nft', nftId],
         async () => {

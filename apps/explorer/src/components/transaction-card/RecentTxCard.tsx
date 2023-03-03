@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useRpcClient } from '@mysten/core';
 import { type JsonRpcProvider } from '@mysten/sui.js';
 import { type QueryStatus, useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
@@ -18,7 +19,6 @@ import {
 
 import styles from './RecentTxCard.module.css';
 
-import { useRpc } from '~/hooks/useRpc';
 import { Banner } from '~/ui/Banner';
 import { Link } from '~/ui/Link';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
@@ -111,7 +111,7 @@ export function LatestTxCard({
         initialTxPerPage || NUMBER_OF_TX_PER_PAGE
     );
 
-    const rpc = useRpc();
+    const rpc = useRpcClient();
     const [searchParams, setSearchParams] = useSearchParamsMerged();
 
     const [pageIndex, setPageIndex] = useState(

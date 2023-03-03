@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useRpcClient } from '@mysten/core';
 import { type GetTxnDigestsResponse } from '@mysten/sui.js';
 import { useState, useEffect, useContext } from 'react';
 
@@ -13,7 +14,6 @@ import {
     getDataOnTxDigests,
 } from './TxCardUtils';
 
-import { useRpc } from '~/hooks/useRpc';
 import { Banner } from '~/ui/Banner';
 import { TableCard } from '~/ui/TableCard';
 
@@ -54,7 +54,7 @@ function TxForID({ id, category }: { id: string; category: categoryType }) {
         loadState: string;
     }>(DATATYPE_DEFAULT);
     const [network] = useContext(NetworkContext);
-    const rpc = useRpc();
+    const rpc = useRpcClient();
     useEffect(() => {
         getTx(id, network, category).then(
             (transactions) => {

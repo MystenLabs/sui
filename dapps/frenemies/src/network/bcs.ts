@@ -170,7 +170,7 @@ export const bcs = suiBcs
     /** The p2p address of the validator (could also contain extra info such as port, DNS and etc.).  */
     p2pAddress: "vector<u8>",
     /** The address of the narwhal primary  */
-    consensusAddress: "vector<u8>",
+    primaryAddress: "vector<u8>",
     /** The address of the narwhal worker  */
     workerAddress: "vector<u8>",
     /** Total amount of validator stake that would be active in the next epoch.  */
@@ -194,7 +194,7 @@ export const bcs = suiBcs
     /** Next epoch's p2p address of the validator*/
     nextEpochP2pAddress: "Option<vector<u8>>",
     /** Next epoch's consensus address of the validator*/
-    nextEpochConsensusAddress: "Option<vector<u8>>",
+    nextEpochPrimaryAddress: "Option<vector<u8>>",
     /** Next epoch's worker address of the validator*/
     nextEpochWorkerAddress: "Option<vector<u8>>",
   })

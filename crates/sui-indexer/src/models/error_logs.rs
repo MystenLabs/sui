@@ -7,49 +7,44 @@ use crate::PgPoolConnection;
 
 use chrono::{NaiveDateTime, Utc};
 use diesel::prelude::*;
-use diesel::result::Error;
 
 // NOTE: this is for the errors table in PG
-#[derive(Queryable, Debug)]
-pub struct ErrorLog {
-    pub id: i64,
-    pub error_type: String,
-    pub error: String,
-    pub error_time: NaiveDateTime,
-}
-
-#[derive(Debug, Insertable)]
+#[derive(Queryable, Insertable, Debug)]
 #[diesel(table_name = error_logs)]
-pub struct NewErrorLog {
+pub struct ErrorLog {
+    pub id: Option<i64>,
     pub error_type: String,
     pub error: String,
     pub error_time: NaiveDateTime,
 }
 
-pub fn err_to_error_log(error: IndexerError) -> NewErrorLog {
-    NewErrorLog {
-        error_type: error.name(),
-        error: error.to_string(),
-        error_time: Utc::now().naive_utc(),
+impl From<IndexerError> for ErrorLog {
+    fn from(error: IndexerError) -> Self {
+        ErrorLog {
+            id: None,
+            error_type: error.name(),
+            error: error.to_string(),
+            error_time: Utc::now().naive_utc(),
+        }
     }
 }
 
 pub fn commit_error_logs(
     pg_pool_conn: &mut PgPoolConnection,
-    new_error_logs: Vec<NewErrorLog>,
+    new_error_logs: Vec<ErrorLog>,
 ) -> Result<usize, IndexerError> {
-    let error_commit_result: Result<usize, Error> = pg_pool_conn
+    pg_pool_conn
         .build_transaction()
         .read_write()
-        .run::<_, Error, _>(|conn| {
-        diesel::insert_into(error_logs::table)
-            .values(&new_error_logs)
-            .execute(conn)
-    });
-    error_commit_result.map_err(|e| {
-        IndexerError::PostgresWriteError(format!(
-            "Failed writing error logs to PostgresDB with error logs  {:?} and error: {:?}",
-            new_error_logs, e
-        ))
-    })
+        .run(|conn| {
+            diesel::insert_into(error_logs::table)
+                .values(&new_error_logs)
+                .execute(conn)
+        })
+        .map_err(|e| {
+            IndexerError::PostgresWriteError(format!(
+                "Failed writing error logs to PostgresDB with error logs  {:?} and error: {:?}",
+                new_error_logs, e
+            ))
+        })
 }

@@ -45,6 +45,7 @@ use tokio::time::{sleep, timeout};
 
 use crate::authority::AuthorityStore;
 use crate::epoch::committee_store::CommitteeStore;
+use crate::signature_verifier::{DefaultSignatureVerifier, SignatureVerifier};
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregator};
 
 pub const DEFAULT_RETRIES: usize = 4;
@@ -236,11 +237,11 @@ impl ProcessTransactionResult {
 }
 
 #[derive(Clone)]
-pub struct AuthorityAggregator<A> {
+pub struct AuthorityAggregator<A, S = DefaultSignatureVerifier> {
     /// Our Sui committee.
     pub committee: Committee,
     /// How to talk to this committee.
-    pub authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
+    pub authority_clients: BTreeMap<AuthorityName, SafeClient<A, S>>,
     /// Metrics
     pub metrics: AuthAggMetrics,
     /// Metric base for the purpose of creating new safe clients during reconfiguration.
@@ -250,7 +251,7 @@ pub struct AuthorityAggregator<A> {
     pub committee_store: Arc<CommitteeStore>,
 }
 
-impl<A> AuthorityAggregator<A> {
+impl<A, S: SignatureVerifier + Default> AuthorityAggregator<A, S> {
     pub fn new(
         committee: Committee,
         committee_store: Arc<CommitteeStore>,
@@ -338,7 +339,7 @@ impl<A> AuthorityAggregator<A> {
         committee: CommitteeWithNetAddresses,
         network_config: &Config,
         disallow_missing_intermediate_committees: bool,
-    ) -> SuiResult<AuthorityAggregator<NetworkAuthorityClient>> {
+    ) -> SuiResult<AuthorityAggregator<NetworkAuthorityClient, S>> {
         let network_clients =
             make_network_authority_client_sets_from_committee(&committee, network_config).map_err(
                 |err| SuiError::GenericAuthorityError {
@@ -394,11 +395,11 @@ impl<A> AuthorityAggregator<A> {
         })
     }
 
-    pub fn get_client(&self, name: &AuthorityName) -> Option<&SafeClient<A>> {
+    pub fn get_client(&self, name: &AuthorityName) -> Option<&SafeClient<A, S>> {
         self.authority_clients.get(name)
     }
 
-    pub fn clone_client(&self, name: &AuthorityName) -> SafeClient<A>
+    pub fn clone_client(&self, name: &AuthorityName) -> SafeClient<A, S>
     where
         A: Clone,
     {
@@ -421,7 +422,7 @@ impl<A> AuthorityAggregator<A> {
     }
 }
 
-impl AuthorityAggregator<NetworkAuthorityClient> {
+impl<S: SignatureVerifier + Default> AuthorityAggregator<NetworkAuthorityClient, S> {
     /// Create a new network authority aggregator by reading the committee and
     /// network address information from the system state object on-chain.
     /// This function needs metrics parameters because registry will panic
@@ -470,7 +471,7 @@ pub enum ReduceOutput<R, S> {
     Success(R),
 }
 
-impl<A> AuthorityAggregator<A>
+impl<A, SV: SignatureVerifier + Default> AuthorityAggregator<A, SV>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
@@ -503,7 +504,7 @@ where
         initial_timeout: Duration,
     ) -> Result<R, S>
     where
-        FMap: FnOnce(AuthorityName, &'a SafeClient<A>) -> AsyncResult<'a, V, SuiError> + Clone,
+        FMap: FnOnce(AuthorityName, &'a SafeClient<A, SV>) -> AsyncResult<'a, V, SuiError> + Clone,
         FReduce: Fn(
             S,
             AuthorityName,
@@ -530,7 +531,7 @@ where
         initial_timeout: Duration,
     ) -> Result<R, S>
     where
-        FMap: FnOnce(AuthorityName, &'a SafeClient<A>) -> AsyncResult<'a, V, SuiError> + Clone,
+        FMap: FnOnce(AuthorityName, &'a SafeClient<A, SV>) -> AsyncResult<'a, V, SuiError> + Clone,
         FReduce: Fn(
             S,
             AuthorityName,
@@ -605,7 +606,10 @@ where
         authority_errors: &mut HashMap<AuthorityName, SuiError>,
     ) -> Result<S, SuiError>
     where
-        FMap: Fn(AuthorityName, SafeClient<A>) -> AsyncResult<'a, S, SuiError> + Send + Clone + 'a,
+        FMap: Fn(AuthorityName, SafeClient<A, SV>) -> AsyncResult<'a, S, SuiError>
+            + Send
+            + Clone
+            + 'a,
         S: Send,
     {
         let start = tokio::time::Instant::now();
@@ -623,7 +627,7 @@ where
 
             let mut futures = FuturesUnordered::<BoxFuture<'a, Event<S>>>::new();
 
-            let start_req = |name: AuthorityName, client: SafeClient<A>| {
+            let start_req = |name: AuthorityName, client: SafeClient<A, SV>| {
                 let map_each_authority = map_each_authority.clone();
                 Box::pin(monitored_future!(async move {
                     trace!(name=?name.concise(), now = ?tokio::time::Instant::now() - start, "new request");
@@ -738,7 +742,10 @@ where
         description: String,
     ) -> Result<S, SuiError>
     where
-        FMap: Fn(AuthorityName, SafeClient<A>) -> AsyncResult<'a, S, SuiError> + Send + Clone + 'a,
+        FMap: Fn(AuthorityName, SafeClient<A, SV>) -> AsyncResult<'a, S, SuiError>
+            + Send
+            + Clone
+            + 'a,
         S: Send,
     {
         let mut authority_errors = HashMap::new();
@@ -1352,10 +1359,10 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         self
     }
 
-    pub fn build(
+    pub fn build<S: SignatureVerifier + Default>(
         self,
     ) -> anyhow::Result<(
-        AuthorityAggregator<NetworkAuthorityClient>,
+        AuthorityAggregator<NetworkAuthorityClient, S>,
         BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>,
     )> {
         let validator_info = if let Some(network_config) = self.network_config {
@@ -1365,7 +1372,7 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         } else {
             anyhow::bail!("need either NetworkConfig or Genesis.");
         };
-        let committee = make_committee(0, self.protocol_version, &validator_info)?;
+        let committee = make_committee(0, &validator_info)?;
         let mut registry = &prometheus::Registry::new();
         if self.registry.is_some() {
             registry = self.registry.unwrap();

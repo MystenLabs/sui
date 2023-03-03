@@ -8,6 +8,7 @@ use chrono::prelude::*;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::KeyPair;
+use itertools::izip;
 use itertools::Itertools;
 use move_binary_format::compatibility::Compatibility;
 use move_binary_format::CompiledModule;
@@ -155,6 +156,13 @@ pub type ReconfigConsensusMessage = (
     Vec<(ConsensusWorkerId, NetworkKeyPair)>,
     ConsensusWorkerCache,
 );
+
+pub type VerifiedTransactionBatch = Vec<(
+    VerifiedTransaction,
+    TransactionEffects,
+    TransactionEvents,
+    Option<(EpochId, CheckpointSequenceNumber)>,
+)>;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 pub struct AuthorityMetrics {
@@ -1496,7 +1504,6 @@ impl AuthorityState {
         };
         Ok(CommitteeInfoResponse {
             epoch,
-            protocol_version: committee.protocol_version,
             committee_info: committee.voting_rights,
         })
     }
@@ -1537,15 +1544,12 @@ impl AuthorityState {
         event_store: Option<Arc<EventStoreType>>,
         checkpoint_store: Arc<CheckpointStore>,
         prometheus_registry: &Registry,
-        pruning_config: &AuthorityStorePruningConfig,
+        pruning_config: AuthorityStorePruningConfig,
         genesis_objects: &[Object],
         epoch_duration_ms: u64,
         state_snapshot_config: &StateSnapshotConfig,
     ) -> Arc<Self> {
-        Self::check_protocol_version(
-            supported_protocol_versions,
-            epoch_store.committee().protocol_version,
-        );
+        Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
         let event_handler = event_store.map(|es| {
             let handler = EventHandler::new(es);
@@ -1562,14 +1566,14 @@ impl AuthorityState {
         ));
         let (tx_execution_shutdown, rx_execution_shutdown) = oneshot::channel();
 
+        let _authority_per_epoch_pruner =
+            AuthorityPerEpochStorePruner::new(epoch_store.get_parent_path(), &pruning_config);
         let _objects_pruner = AuthorityStorePruner::new(
             store.perpetual_tables.clone(),
             checkpoint_store.clone(),
             pruning_config,
             epoch_duration_ms,
         );
-        let _authority_per_epoch_pruner =
-            AuthorityPerEpochStorePruner::new(epoch_store.get_parent_path(), pruning_config);
 
         let state = Arc::new(AuthorityState {
             name,
@@ -1673,7 +1677,7 @@ impl AuthorityState {
             None,
             checkpoint_store,
             &registry,
-            &AuthorityStorePruningConfig::default(),
+            AuthorityStorePruningConfig::default(),
             genesis.objects(),
             10000,
             &StateSnapshotConfig::default(),
@@ -1799,7 +1803,10 @@ impl AuthorityState {
         new_committee: Committee,
         epoch_start_configuration: EpochStartConfiguration,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
-        Self::check_protocol_version(supported_protocol_versions, new_committee.protocol_version);
+        Self::check_protocol_version(
+            supported_protocol_versions,
+            epoch_start_configuration.protocol_version(),
+        );
 
         self.committee_store.insert_new_committee(&new_committee)?;
         let db = self.db();
@@ -2135,6 +2142,46 @@ impl AuthorityState {
         match (transaction, effects) {
             (Some(transaction), Some(effects)) => Ok((transaction, effects)),
             _ => Err(anyhow!(SuiError::TransactionNotFound { digest })),
+        }
+    }
+
+    pub async fn multi_get_transactions(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Result<VerifiedTransactionBatch, anyhow::Error> {
+        let transactions = self.database.multi_get_transactions(digests)?;
+        let effects = self.database.multi_get_executed_effects(digests)?;
+        let checkpoints = self.database.multi_get_transaction_checkpoint(digests)?;
+
+        let mut events_digests: Vec<TransactionEventsDigest> = vec![];
+
+        for effect in effects.iter() {
+            match effect {
+                Some(eff) => events_digests.push(eff.events_digest.unwrap()),
+                _ => continue,
+            }
+        }
+
+        let events = self.database.multi_get_events(events_digests.as_slice())?;
+
+        let mut missed_digests = vec![];
+        let mut response: VerifiedTransactionBatch = vec![];
+
+        for data in izip!(digests, transactions, effects, events, checkpoints) {
+            match data {
+                (_, Some(tx), Some(effect), Some(event), cp) => {
+                    response.push((tx, effect, event, cp))
+                }
+                (digest, _, _, _, _) => missed_digests.push(*digest),
+            }
+        }
+
+        if !missed_digests.is_empty() {
+            Err(anyhow!(SuiError::TransactionsNotFound {
+                digests: missed_digests
+            }))
+        } else {
+            Ok(response)
         }
     }
 
@@ -2825,11 +2872,11 @@ impl AuthorityState {
     }
 
     fn choose_protocol_version_and_system_packages(
+        current_protocol_version: ProtocolVersion,
         committee: &Committee,
         protocol_config: &ProtocolConfig,
         capabilities: Vec<AuthorityCapabilities>,
     ) -> (ProtocolVersion, Vec<ObjectRef>) {
-        let current_protocol_version = committee.protocol_version;
         let next_protocol_version = current_protocol_version + 1;
 
         // For each validator, gather the protocol version and system packages that it would like
@@ -2923,6 +2970,7 @@ impl AuthorityState {
 
         let (next_epoch_protocol_version, next_epoch_system_packages) =
             Self::choose_protocol_version_and_system_packages(
+                epoch_store.protocol_version(),
                 epoch_store.committee(),
                 epoch_store.protocol_config(),
                 epoch_store.get_capabilities(),
@@ -3109,13 +3157,13 @@ pub mod sui_framework_injection {
 
     type Framework = Vec<CompiledModule>;
 
-    type FrameworkUpradeCallback =
+    type FrameworkUpgradeCallback =
         Box<dyn Fn(AuthorityName) -> Option<Framework> + Send + Sync + 'static>;
 
     enum FrameworkOverrideConfig {
         Default,
         Global(Framework),
-        PerValidator(FrameworkUpradeCallback),
+        PerValidator(FrameworkUpgradeCallback),
     }
 
     fn compiled_modules_to_bytes(modules: &[CompiledModule]) -> Vec<Vec<u8>> {
@@ -3133,7 +3181,7 @@ pub mod sui_framework_injection {
         OVERRIDE.with(|bs| *bs.borrow_mut() = FrameworkOverrideConfig::Global(modules));
     }
 
-    pub fn set_override_cb(func: FrameworkUpradeCallback) {
+    pub fn set_override_cb(func: FrameworkUpgradeCallback) {
         OVERRIDE.with(|bs| *bs.borrow_mut() = FrameworkOverrideConfig::PerValidator(func));
     }
 

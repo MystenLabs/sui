@@ -4,6 +4,7 @@
 use async_trait::async_trait;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use sui_core::signature_verifier::SignatureVerifier;
 use sui_core::{
     authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
     authority_client::NetworkAuthorityClient,
@@ -53,12 +54,14 @@ impl FullNodeReconfigObserver {
 }
 
 #[async_trait]
-impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
-    fn clone_boxed(&self) -> Box<dyn ReconfigObserver<NetworkAuthorityClient> + Send + Sync> {
+impl<S: SignatureVerifier + Default> ReconfigObserver<NetworkAuthorityClient, S>
+    for FullNodeReconfigObserver
+{
+    fn clone_boxed(&self) -> Box<dyn ReconfigObserver<NetworkAuthorityClient, S> + Send + Sync> {
         Box::new(self.clone())
     }
 
-    async fn run(&mut self, quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>) {
+    async fn run(&mut self, quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient, S>>) {
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
             match self.fullnode_client.read_api().get_sui_system_state().await {
@@ -76,7 +79,6 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
                                 // Safe to unwrap, checked above
                                 Committee::new(
                                     committee.epoch,
-                                    committee.protocol_version,
                                     BTreeMap::from_iter(committee.committee_info.into_iter())).unwrap_or_else(
                                     |e| panic!("Can't create a valid Committee given info returned from Full Node: {:?}", e)
                                 )

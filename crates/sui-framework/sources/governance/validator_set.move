@@ -857,29 +857,4 @@ module sui::validator_set {
     public fun active_validators(self: &ValidatorSet): &vector<Validator> {
         &self.active_validators
     }
-
-    #[test_only]
-    public fun destroy_for_testing(
-        self: ValidatorSet,
-    ) {
-        let ValidatorSet {
-            total_stake: _,
-            active_validators,
-            pending_validators,
-            pending_removals: _,
-            staking_pool_mappings,
-        } = self;
-        destroy_validators_for_testing(active_validators);
-        table_vec::destroy_empty(pending_validators);
-        table::drop(staking_pool_mappings);
-    }
-
-    #[test_only]
-    public fun destroy_validators_for_testing(v: vector<Validator>) {
-        while (!vector::is_empty(&v)) {
-            let v = vector::pop_back(&mut v);
-            validator::destroy(v, &mut tx_context::dummy());
-        };
-        vector::destroy_empty(v)
-    }
 }

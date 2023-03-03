@@ -2170,6 +2170,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "diesel-derive-enum"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b10c03b954333d05bfd5be1d8a74eae2c9ca77b86e0f1c3a1ea29c49da1d6c2"
+dependencies = [
+ "heck 0.4.0",
+ "proc-macro2 1.0.51",
+ "quote 1.0.23",
+ "syn 1.0.107",
+]
+
+[[package]]
 name = "diesel_derives"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5116,13 +5128,15 @@ dependencies = [
 name = "mysten-network"
 version = "0.2.0"
 dependencies = [
- "bincode",
+ "anemo",
+ "bcs",
  "bytes",
  "eyre",
  "futures",
  "http",
  "multiaddr",
  "serde 1.0.152",
+ "snap",
  "tokio",
  "tokio-stream",
  "tonic",
@@ -5304,6 +5318,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "backoff",
+ "bcs",
  "bincode",
  "bytes",
  "fastcrypto",
@@ -5437,6 +5452,7 @@ dependencies = [
  "async-trait",
  "backoff",
  "base64",
+ "bcs",
  "bincode",
  "bytes",
  "dashmap",
@@ -5556,6 +5572,7 @@ dependencies = [
  "anemo-build",
  "async-trait",
  "base64",
+ "bcs",
  "bincode",
  "bytes",
  "criterion",
@@ -5565,6 +5582,7 @@ dependencies = [
  "futures",
  "indexmap",
  "mockall",
+ "mysten-network",
  "mysten-util-mem",
  "narwhal-config",
  "narwhal-crypto",
@@ -8001,6 +8019,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f67ad224767faa3c7d8b6d91985b78e70a1324408abcb1cfcc2be4c06bc06043"
 
 [[package]]
+name = "snap"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e9f0ab6ef7eb7353d9119c170a436d1bf248eea575ac42d19d12f4e34130831"
+
+[[package]]
 name = "socket2"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8667,18 +8691,13 @@ dependencies = [
  "fastcrypto-zkp",
  "linked-hash-map",
  "move-binary-format",
- "move-bytecode-verifier",
- "move-cli",
  "move-compiler",
  "move-core-types",
  "move-package",
  "move-stdlib",
- "move-unit-test",
  "move-vm-runtime",
- "move-vm-test-utils",
  "move-vm-types",
  "multiaddr",
- "narwhal-crypto",
  "once_cell",
  "serde 1.0.152",
  "smallvec",
@@ -8711,6 +8730,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-framework-test"
+version = "0.1.0"
+dependencies = [
+ "move-cli",
+ "move-package",
+ "sui-framework",
+ "sui-framework-build",
+ "sui-move",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-indexer"
 version = "0.0.0"
 dependencies = [
@@ -8720,6 +8751,7 @@ dependencies = [
  "chrono",
  "clap 3.2.23",
  "diesel",
+ "diesel-derive-enum",
  "fastcrypto",
  "futures",
  "jsonrpsee",
@@ -8895,8 +8927,12 @@ dependencies = [
  "move-prover",
  "move-prover-boogie-backend",
  "move-stackless-bytecode",
+ "move-stdlib",
  "move-unit-test",
+ "move-vm-runtime",
+ "move-vm-test-utils",
  "mysten-metrics",
+ "once_cell",
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.152",
@@ -8907,6 +8943,7 @@ dependencies = [
  "sui-framework-build",
  "sui-macros",
  "sui-node",
+ "sui-protocol-config",
  "sui-simulator",
  "sui-types",
  "telemetry-subscribers",
@@ -8914,7 +8951,6 @@ dependencies = [
  "test-utils",
  "tokio",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -10330,6 +10366,7 @@ name = "typed-store"
 version = "0.4.0"
 dependencies = [
  "async-trait",
+ "bcs",
  "bincode",
  "collectable",
  "eyre",
@@ -11027,7 +11064,6 @@ dependencies = [
  "bulletproofs",
  "bumpalo",
  "byte-slice-cast",
- "bytecode-interpreter-crypto",
  "bytemuck",
  "byteorder",
  "bytes",
@@ -11035,7 +11071,6 @@ dependencies = [
  "camino",
  "cargo-platform",
  "cargo_metadata",
- "cassowary",
  "cast",
  "cbc",
  "cc",
@@ -11090,10 +11125,7 @@ dependencies = [
  "crossbeam-epoch",
  "crossbeam-queue",
  "crossbeam-utils",
- "crossterm 0.21.0",
- "crossterm 0.22.1",
  "crossterm 0.25.0",
- "crossterm_winapi 0.8.0",
  "crossterm_winapi 0.9.0",
  "crunchy",
  "crypto-bigint",
@@ -11103,7 +11135,6 @@ dependencies = [
  "csv-core",
  "ctor",
  "ctr",
- "curve25519-dalek-fiat",
  "curve25519-dalek-ng",
  "darling",
  "darling_core",
@@ -11126,6 +11157,7 @@ dependencies = [
  "determinator",
  "deunicode",
  "diesel",
+ "diesel-derive-enum",
  "diesel_derives",
  "diff",
  "difference",
@@ -11150,7 +11182,6 @@ dependencies = [
  "ecdsa 0.15.1",
  "ed25519",
  "ed25519-consensus",
- "ed25519-dalek-fiat",
  "either",
  "elliptic-curve",
  "encode_unicode 0.3.6",
@@ -11174,7 +11205,6 @@ dependencies = [
  "fd-lock",
  "fdlimit",
  "ff",
- "fiat-crypto",
  "findshlibs",
  "fixed-hash",
  "fixedbitset 0.2.0",
@@ -11315,7 +11345,6 @@ dependencies = [
  "mime_guess",
  "minimal-lexical",
  "miniz_oxide",
- "mio 0.7.14",
  "mio 0.8.5",
  "mockall",
  "mockall_derive",
@@ -11326,8 +11355,6 @@ dependencies = [
  "move-bytecode-source-map",
  "move-bytecode-utils",
  "move-bytecode-verifier",
- "move-bytecode-viewer",
- "move-cli",
  "move-command-line-common",
  "move-compiler",
  "move-core-types",
@@ -11335,7 +11362,6 @@ dependencies = [
  "move-disassembler",
  "move-docgen",
  "move-errmapgen",
- "move-ir-compiler",
  "move-ir-to-bytecode",
  "move-ir-to-bytecode-syntax",
  "move-ir-types",
@@ -11344,16 +11370,10 @@ dependencies = [
  "move-prover",
  "move-prover-boogie-backend",
  "move-read-write-set-types",
- "move-resource-viewer",
  "move-stackless-bytecode",
- "move-stackless-bytecode-interpreter",
  "move-stdlib",
  "move-symbol-pool",
- "move-table-extension",
- "move-transactional-test-runner",
- "move-unit-test",
  "move-vm-runtime",
- "move-vm-test-utils",
  "move-vm-types",
  "multiaddr",
  "multibase",
@@ -11491,8 +11511,6 @@ dependencies = [
  "rayon",
  "rayon-core",
  "rcgen",
- "read-write-set",
- "read-write-set-dynamic",
  "readonly",
  "ref-cast",
  "ref-cast-impl",
@@ -11584,6 +11602,7 @@ dependencies = [
  "slug",
  "smallvec",
  "smawk",
+ "snap",
  "socket2",
  "soketto",
  "spin 0.5.2",
@@ -11653,7 +11672,6 @@ dependencies = [
  "tokio-util 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "toml",
  "toml_datetime",
- "toml_edit 0.14.4",
  "toml_edit 0.15.0",
  "tonic",
  "tonic-build",
@@ -11673,7 +11691,6 @@ dependencies = [
  "tracing-subscriber 0.2.25",
  "tracing-subscriber 0.3.16",
  "try-lock",
- "tui",
  "twox-hash",
  "typed-arena",
  "typenum",

@@ -103,8 +103,8 @@ proptest! {
     fn test_deserialize_keypair(
         bytes in collection::vec(any::<u8>(), 0..1024)
     ){
-        let _skp: Result<SuiKeyPair, _> = bincode::deserialize(&bytes);
-        let _pk: Result<PublicKey, _> = bincode::deserialize(&bytes);
+        let _skp: Result<SuiKeyPair, _> = bcs::from_bytes(&bytes);
+        let _pk: Result<PublicKey, _> = bcs::from_bytes(&bytes);
     }
 
 

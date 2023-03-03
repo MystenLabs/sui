@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { formatBalance } from '@mysten/core';
 import BigNumber from 'bignumber.js';
 import * as Yup from 'yup';
 
-import { formatBalance } from '_app/hooks/useFormatCoin';
 import { GAS_SYMBOL, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
 export function createTokenValidation(

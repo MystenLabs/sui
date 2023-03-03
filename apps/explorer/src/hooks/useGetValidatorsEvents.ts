@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useRpcClient } from '@mysten/core';
 import { type PaginatedEvents, type EventId } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-
-import { useRpc } from './useRpc';
 
 export const VALIDATORS_EVENTS_QUERY = '0x2::validator_set::ValidatorEpochInfo';
 
@@ -20,7 +19,7 @@ export function useGetValidatorsEvents({
     limit,
     order,
 }: GetValidatorsEvent): UseQueryResult<PaginatedEvents> {
-    const rpc = useRpc();
+    const rpc = useRpcClient();
     const eventCursor = cursor || null;
     const eventLimit = limit || null;
 

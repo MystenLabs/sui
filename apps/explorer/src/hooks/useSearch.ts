@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
+import { useRpcClient } from '@mysten/core';
 import {
     isValidTransactionDigest,
     isValidSuiAddress,
@@ -14,7 +15,6 @@ import {
 } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 
-import { useRpc } from '~/hooks/useRpc';
 import { isGenesisLibAddress } from '~/utils/api/searchUtil';
 import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
 
@@ -108,7 +108,7 @@ const getResultsForAddress = async (rpc: JsonRpcProvider, query: string) => {
 };
 
 export function useSearch(query: string) {
-    const rpc = useRpc();
+    const rpc = useRpcClient();
     const checkpointsEnabled = useFeature(
         GROWTHBOOK_FEATURES.EPOCHS_CHECKPOINTS
     ).on;

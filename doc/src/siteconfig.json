@@ -135,19 +135,13 @@
             "url": "/doc-updates"
           },
           {
-            "name": "Sui Releases",
-            "url": "https://github.com/MystenLabs/sui/releases",
-            "external": true
+            "name": "Sui Breaking Changes",
+            "url": "/doc-updates/sui-breaking-changes"
           },
           {
             "name": "Sui Announcements (Discord)",
             "url": "https://discord.com/channels/916379725201563759/925109817834631189",
             "external": true            
-          },
-          {
-            "name": "Sui Developer Experience Roadmap",
-            "url": "https://github.com/MystenLabs/sui/blob/main/DEVX_ROADMAP.md",
-            "external": true
           }
         ]
       },

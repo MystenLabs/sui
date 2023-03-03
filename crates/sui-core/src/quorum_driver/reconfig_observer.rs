@@ -3,10 +3,12 @@
 
 use async_trait::async_trait;
 use std::sync::Arc;
+use sui_protocol_config::ProtocolVersion;
 use sui_types::committee::Committee;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{info, warn};
 
+use crate::signature_verifier::{DefaultSignatureVerifier, SignatureVerifier};
 use crate::{
     authority::AuthorityStore,
     authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
@@ -18,15 +20,15 @@ use crate::{
 use super::QuorumDriver;
 
 #[async_trait]
-pub trait ReconfigObserver<A> {
-    async fn run(&mut self, quorum_driver: Arc<QuorumDriver<A>>);
-    fn clone_boxed(&self) -> Box<dyn ReconfigObserver<A> + Send + Sync>;
+pub trait ReconfigObserver<A, S = DefaultSignatureVerifier> {
+    async fn run(&mut self, quorum_driver: Arc<QuorumDriver<A, S>>);
+    fn clone_boxed(&self) -> Box<dyn ReconfigObserver<A, S> + Send + Sync>;
 }
 
 /// A ReconfigObserver that subscribes to a reconfig channel of new committee.
 /// This is used in TransactionOrchestrator.
 pub struct OnsiteReconfigObserver {
-    reconfig_rx: tokio::sync::broadcast::Receiver<Committee>,
+    reconfig_rx: tokio::sync::broadcast::Receiver<(Committee, ProtocolVersion)>,
     authority_store: Arc<AuthorityStore>,
     committee_store: Arc<CommitteeStore>,
     safe_client_metrics_base: SafeClientMetricsBase,
@@ -35,7 +37,7 @@ pub struct OnsiteReconfigObserver {
 
 impl OnsiteReconfigObserver {
     pub fn new(
-        reconfig_rx: tokio::sync::broadcast::Receiver<Committee>,
+        reconfig_rx: tokio::sync::broadcast::Receiver<(Committee, ProtocolVersion)>,
         authority_store: Arc<AuthorityStore>,
         committee_store: Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
@@ -50,9 +52,9 @@ impl OnsiteReconfigObserver {
         }
     }
 
-    async fn create_authority_aggregator_from_system_state(
+    async fn create_authority_aggregator_from_system_state<S: SignatureVerifier + Default>(
         &self,
-    ) -> AuthorityAggregator<NetworkAuthorityClient> {
+    ) -> AuthorityAggregator<NetworkAuthorityClient, S> {
         AuthorityAggregator::new_from_local_system_state(
             &self.authority_store,
             &self.committee_store,
@@ -71,8 +73,10 @@ impl OnsiteReconfigObserver {
 }
 
 #[async_trait]
-impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
-    fn clone_boxed(&self) -> Box<dyn ReconfigObserver<NetworkAuthorityClient> + Send + Sync> {
+impl<S: SignatureVerifier + Default> ReconfigObserver<NetworkAuthorityClient, S>
+    for OnsiteReconfigObserver
+{
+    fn clone_boxed(&self) -> Box<dyn ReconfigObserver<NetworkAuthorityClient, S> + Send + Sync> {
         Box::new(Self {
             reconfig_rx: self.reconfig_rx.resubscribe(),
             authority_store: self.authority_store.clone(),
@@ -82,7 +86,7 @@ impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
         })
     }
 
-    async fn run(&mut self, quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>) {
+    async fn run(&mut self, quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient, S>>) {
         // A tiny optimization: when a very stale node just starts, the
         // channel may fill up committees quickly. Here we skip directly to
         // the last known committee by looking at SuiSystemState.
@@ -94,7 +98,7 @@ impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
         }
         loop {
             match self.reconfig_rx.recv().await {
-                Ok(committee) => {
+                Ok((committee, _protocol_version)) => {
                     info!("Got reconfig message: {}", committee);
                     if committee.epoch > quorum_driver.current_epoch() {
                         let authority_agg =
@@ -120,13 +124,13 @@ impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
 pub struct DummyReconfigObserver;
 
 #[async_trait]
-impl<A> ReconfigObserver<A> for DummyReconfigObserver
+impl<A, S: SignatureVerifier> ReconfigObserver<A, S> for DummyReconfigObserver
 where
     A: AuthorityAPI + Send + Sync + 'static,
 {
-    fn clone_boxed(&self) -> Box<dyn ReconfigObserver<A> + Send + Sync> {
+    fn clone_boxed(&self) -> Box<dyn ReconfigObserver<A, S> + Send + Sync> {
         Box::new(Self {})
     }
 
-    async fn run(&mut self, _quorum_driver: Arc<QuorumDriver<A>>) {}
+    async fn run(&mut self, _quorum_driver: Arc<QuorumDriver<A, S>>) {}
 }

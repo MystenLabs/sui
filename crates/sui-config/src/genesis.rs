@@ -39,7 +39,8 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::object::Owner;
 use sui_types::sui_system_state::{
-    get_sui_system_state, get_sui_system_state_wrapper, SuiSystemState, SuiSystemStateWrapper,
+    get_sui_system_state, get_sui_system_state_version, get_sui_system_state_wrapper,
+    SuiSystemState, SuiSystemStateWrapper,
 };
 use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::MOVE_STDLIB_ADDRESS;
@@ -164,7 +165,7 @@ impl Genesis {
     }
 
     pub fn sui_system_object(&self) -> SuiSystemState {
-        get_sui_system_state(self.objects()).expect("Sui System State object must always exist")
+        get_sui_system_state(&self.objects()).expect("Sui System State object must always exist")
     }
 
     pub fn clock(&self) -> Clock {
@@ -469,7 +470,7 @@ impl Builder {
 
     fn committee(objects: &[Object]) -> Committee {
         let sui_system_object =
-            get_sui_system_state(objects).expect("Sui System State object must always exist");
+            get_sui_system_state(&objects).expect("Sui System State object must always exist");
         sui_system_object.get_current_epoch_committee().committee
     }
 
@@ -982,6 +983,7 @@ pub fn generate_genesis_system_object(
 ) -> Result<()> {
     let genesis_digest = genesis_ctx.digest();
     let protocol_config = ProtocolConfig::get_for_version(protocol_version);
+    let system_state_version = get_sui_system_state_version(protocol_version);
     let mut temporary_store = TemporaryStore::new(
         &*store,
         InputObjects::new(vec![]),
@@ -996,7 +998,7 @@ pub fn generate_genesis_system_object(
     let mut sui_addresses = Vec::new();
     let mut network_addresses = Vec::new();
     let mut p2p_addresses = Vec::new();
-    let mut consensus_addresses = Vec::new();
+    let mut primary_addresses = Vec::new();
     let mut worker_addresses = Vec::new();
     let mut names = Vec::new();
     let mut descriptions = Vec::new();
@@ -1017,7 +1019,7 @@ pub fn generate_genesis_system_object(
         sui_addresses.push(validator.sui_address());
         network_addresses.push(validator.network_address());
         p2p_addresses.push(validator.p2p_address());
-        consensus_addresses.push(validator.narwhal_primary_address());
+        primary_addresses.push(validator.narwhal_primary_address());
         worker_addresses.push(validator.narwhal_worker_address());
         names.push(validator.name().to_owned().into_bytes());
         descriptions.push(validator.description.clone().into_bytes());
@@ -1046,11 +1048,12 @@ pub fn generate_genesis_system_object(
             CallArg::Pure(bcs::to_bytes(&project_url).unwrap()),
             CallArg::Pure(bcs::to_bytes(&network_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&p2p_addresses).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&consensus_addresses).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&primary_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&worker_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&gas_prices).unwrap()),
             CallArg::Pure(bcs::to_bytes(&commission_rates).unwrap()),
             CallArg::Pure(bcs::to_bytes(&protocol_version.as_u64()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&system_state_version).unwrap()),
             CallArg::Pure(bcs::to_bytes(&epoch_start_timestamp_ms).unwrap()),
         ],
         SuiGasStatus::new_unmetered().create_move_gas_status(),
