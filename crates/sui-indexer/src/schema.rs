@@ -2,15 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 // @generated automatically by Diesel CLI.
 
-diesel::table! {
-    address_logs (last_processed_id) {
-        last_processed_id -> Int8,
-    }
+pub mod sql_types {
+    #[derive(diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "owner_change_type"))]
+    pub struct OwnerChangeType;
+
+    #[derive(diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "owner_type"))]
+    pub struct OwnerType;
 }
 
 diesel::table! {
-    addresses (id) {
-        id -> Int8,
+    addresses (account_address) {
         account_address -> Varchar,
         first_appearance_tx -> Varchar,
         first_appearance_time -> Nullable<Timestamp>,
@@ -57,7 +60,6 @@ diesel::table! {
         event_time -> Nullable<Timestamp>,
         event_type -> Varchar,
         event_content -> Varchar,
-        next_cursor_transaction_digest -> Nullable<Varchar>,
     }
 }
 
@@ -106,17 +108,55 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::OwnerType;
+
     objects (id) {
         id -> Int8,
         object_id -> Varchar,
         version -> Int8,
-        owner_type -> Varchar,
+        owner_type -> OwnerType,
         owner_address -> Nullable<Varchar>,
         initial_shared_version -> Nullable<Int8>,
         package_id -> Text,
         transaction_module -> Text,
         object_type -> Nullable<Text>,
         object_status -> Varchar,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::OwnerChangeType;
+    use super::sql_types::OwnerType;
+
+    owner_changes (epoch, object_id, version) {
+        object_id -> Varchar,
+        version -> Int8,
+        epoch -> Int8,
+        checkpoint -> Int8,
+        change_type -> OwnerChangeType,
+        owner_type -> OwnerType,
+        owner -> Nullable<Varchar>,
+        initial_shared_version -> Nullable<Int8>,
+        object_digest -> Varchar,
+        object_type -> Nullable<Varchar>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::OwnerType;
+
+    owner_index (object_id) {
+        object_id -> Varchar,
+        version -> Int8,
+        epoch -> Int8,
+        owner_type -> OwnerType,
+        owner -> Nullable<Varchar>,
+        initial_shared_version -> Nullable<Int8>,
+        object_digest -> Varchar,
+        object_type -> Nullable<Varchar>,
     }
 }
 
@@ -186,7 +226,6 @@ diesel::table! {
 }
 
 diesel::allow_tables_to_appear_in_same_query!(
-    address_logs,
     addresses,
     checkpoints,
     error_logs,
@@ -197,6 +236,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     object_events,
     object_logs,
     objects,
+    owner_changes,
+    owner_index,
     package_logs,
     packages,
     publish_event_logs,
