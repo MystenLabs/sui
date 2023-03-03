@@ -30,13 +30,13 @@ impl ProtocolVersion {
 
     // We create one additional "fake" version in simulator builds so that we can test upgrades.
     #[cfg(msim)]
-    const MAX_ALLOWED: Self = Self(MAX_PROTOCOL_VERSION + 1);
+    pub const MAX_ALLOWED: Self = Self(MAX_PROTOCOL_VERSION + 1);
 
     pub fn new(v: u64) -> Self {
         Self(v)
     }
 
-    pub fn as_u64(&self) -> u64 {
+    pub const fn as_u64(&self) -> u64 {
         self.0
     }
 
@@ -44,6 +44,12 @@ impl ProtocolVersion {
     // universally appropriate default value.
     pub fn max() -> Self {
         Self::MAX
+    }
+}
+
+impl From<u64> for ProtocolVersion {
+    fn from(v: u64) -> Self {
+        Self::new(v)
     }
 }
 
@@ -66,8 +72,8 @@ impl std::ops::Add<u64> for ProtocolVersion {
 /// to be able to inject arbitrary versions into SuiNode.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct SupportedProtocolVersions {
-    min: ProtocolVersion,
-    max: ProtocolVersion,
+    pub min: ProtocolVersion,
+    pub max: ProtocolVersion,
 }
 
 impl SupportedProtocolVersions {
@@ -85,8 +91,8 @@ impl SupportedProtocolVersions {
     }
 
     pub fn new_for_testing(min: u64, max: u64) -> Self {
-        let min = ProtocolVersion::new(min);
-        let max = ProtocolVersion::new(max);
+        let min = min.into();
+        let max = max.into();
         Self { min, max }
     }
 

@@ -16,7 +16,7 @@ use once_cell::sync::OnceCell;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Deref, DerefMut};
-use sui_protocol_config::ProtocolVersion;
+use sui_protocol_config::ProtocolConfig;
 
 pub trait Message {
     type DigestType: Clone + Debug;
@@ -88,8 +88,8 @@ impl<T: Message, S> Envelope<T, S> {
 }
 
 impl<T: Message + VersionedProtocolMessage, S> VersionedProtocolMessage for Envelope<T, S> {
-    fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult {
-        self.data.check_version_supported(current_protocol_version)
+    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
+        self.data.check_version_supported(protocol_config)
     }
 }
 
@@ -311,9 +311,8 @@ impl<T: Message, S> VerifiedEnvelope<T, S> {
 }
 
 impl<T: Message + VersionedProtocolMessage, S> VersionedProtocolMessage for VerifiedEnvelope<T, S> {
-    fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult {
-        self.inner()
-            .check_version_supported(current_protocol_version)
+    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
+        self.inner().check_version_supported(protocol_config)
     }
 }
 

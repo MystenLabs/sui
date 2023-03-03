@@ -24,7 +24,7 @@ use sui_config::{FullnodeConfigBuilder, NodeConfig, PersistedConfig, SUI_KEYSTOR
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNode;
 use sui_node::SuiNodeHandle;
-use sui_protocol_config::SupportedProtocolVersions;
+use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
 use sui_types::base_types::{AuthorityName, SuiAddress};
@@ -207,6 +207,7 @@ pub struct TestClusterBuilder {
     fullnode_rpc_port: Option<u16>,
     enable_fullnode_events: bool,
     epoch_duration_ms: Option<u64>,
+    initial_protocol_version: ProtocolVersion,
     supported_protocol_versions_config: ProtocolVersionsConfig,
 }
 
@@ -219,6 +220,7 @@ impl TestClusterBuilder {
             num_validators: None,
             enable_fullnode_events: false,
             epoch_duration_ms: None,
+            initial_protocol_version: SupportedProtocolVersions::SYSTEM_DEFAULT.max,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
         }
     }
@@ -255,6 +257,11 @@ impl TestClusterBuilder {
 
     pub fn with_supported_protocol_versions(mut self, c: SupportedProtocolVersions) -> Self {
         self.supported_protocol_versions_config = ProtocolVersionsConfig::Global(c);
+        self
+    }
+
+    pub fn with_protocol_version(mut self, v: ProtocolVersion) -> Self {
+        self.initial_protocol_version = v;
         self
     }
 
@@ -324,6 +331,7 @@ impl TestClusterBuilder {
                 NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDAOTR)).unwrap(),
             )
             .with_objects(self.additional_objects.clone())
+            .with_protocol_version(self.initial_protocol_version)
             .with_supported_protocol_versions_config(
                 self.supported_protocol_versions_config.clone(),
             );
