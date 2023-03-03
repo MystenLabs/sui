@@ -2152,7 +2152,7 @@
           "schema": {
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/BigInt"
             }
           }
         },
@@ -5279,7 +5279,7 @@
             "description": "The amounts each recipient will receive. Must be the same length as amounts",
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/BigInt"
             }
           },
           "coins": {
