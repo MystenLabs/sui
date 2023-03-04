@@ -147,9 +147,7 @@ export const DelegationStakingPool = object({
 
 export const CommitteeInfo = object({
   epoch: number(),
-  // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
-  protocol_version: optional(number()),
-  /* array of (validator public key, stake unit) tuple */
+  /** Array of (validator public key, stake unit) tuple */
   committee_info: optional(array(tuple([AuthorityName, number()]))),
 });
 
@@ -187,10 +185,6 @@ export const ValidatorSet = object({
     }),
   }),
   pending_removals: array(number()),
-  // TODO: Remove this after 0.28.0 is released
-  pending_delegation_switches: optional(
-    object({ contents: array(ValidatorPair) }),
-  ),
   staking_pool_mappings: object({
     id: string(),
     size: number(),
@@ -199,8 +193,7 @@ export const ValidatorSet = object({
 
 export const SuiSystemState = object({
   epoch: number(),
-  // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
-  protocol_version: optional(number()),
+  protocol_version: number(),
   validators: ValidatorSet,
   storage_fund: Balance,
   parameters: SystemParameters,

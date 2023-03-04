@@ -440,6 +440,4 @@ export abstract class Provider {
    * @return {CommitteeInfo} the committee information
    */
   abstract getCommitteeInfo(epoch?: number): Promise<CommitteeInfo>;
-
-  // TODO: add more interface methods
 }

@@ -21,8 +21,7 @@ export const CoinStruct = object({
   digest: TransactionDigest,
   balance: number(),
   lockedUntilEpoch: nullable(number()),
-  // TODO: remove optional when it is supported from all deployed networks
-  previousTransaction: optional(TransactionDigest),
+  previousTransaction: TransactionDigest,
 });
 
 export type CoinStruct = Infer<typeof CoinStruct>;
