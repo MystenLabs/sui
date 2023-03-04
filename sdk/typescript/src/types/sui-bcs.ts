@@ -261,7 +261,9 @@ export type TransactionData = {
   expiration?: TransactionExpiration;
 };
 
-export type TransactionDataBCS = { V1: Omit<TransactionData, 'messageVersion'> }
+export type TransactionDataBCS = {
+  V1: Omit<TransactionData, 'messageVersion'>;
+};
 
 export const TRANSACTION_DATA_TYPE_TAG = Array.from('TransactionData::').map(
   (e) => e.charCodeAt(0),
@@ -278,13 +280,13 @@ export function deserializeTransactionBytesToTransactionData(
     inner = deserialized.V1;
     messageVersion = 1;
   } else {
-    throw new Error(`Unknown message: ${ JSON.stringify(deserialized) }`);
+    throw new Error(`Unknown message: ${JSON.stringify(deserialized)}`);
   }
 
   return {
     messageVersion,
-    ...inner
-  }
+    ...inner,
+  };
 }
 
 // Move name of the Vector type.
@@ -350,8 +352,8 @@ const BCS_SPEC: TypeSchema = {
       Epoch: BCS.U64,
     },
     TransactionData: {
-      V1: 'TransactionDataV1'
-    }
+      V1: 'TransactionDataV1',
+    },
   },
   structs: {
     SuiObjectRef: {

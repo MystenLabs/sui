@@ -117,15 +117,14 @@ export function normalizeSuiObjectId(
   return normalizeSuiAddress(value, forceAdd0x);
 }
 
-export function prepareTxDataForBcs(
-  data: TransactionData,
-): TransactionDataBCS {
+export function prepareTxDataForBcs(data: TransactionData): TransactionDataBCS {
   switch (data.messageVersion) {
     case 1: {
       let { messageVersion: _, ...rest } = data;
       return { V1: rest };
     }
-    default: throw new Error(`Unknown message version ${ data.messageVersion }`);
+    default:
+      throw new Error(`Unknown message version ${data.messageVersion}`);
   }
 }
 
