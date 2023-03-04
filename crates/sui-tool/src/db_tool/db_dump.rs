@@ -102,6 +102,8 @@ pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usiz
     let mut data: HashMap<Vec<u8>, usize> = HashMap::new();
 
     for (key, value) in iter {
+        let value = value.migrate().into_inner();
+
         if let StoreData::Move(object) = value.data {
             if object_id != key.0 {
                 for (k, cnt) in data.iter() {
