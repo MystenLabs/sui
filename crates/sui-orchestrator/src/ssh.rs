@@ -165,13 +165,18 @@ impl SshConnection {
     ) -> SshResult<Self> {
         let tcp = TcpStream::connect(address)
             .await
-            .map_err(|error| SshError::ConnectionError { ip: address, error })?;
+            .map_err(|error| SshError::ConnectionError { address, error })?;
 
-        let mut session = Session::new()?;
+        let mut session =
+            Session::new().map_err(|error| SshError::SessionError { address, error })?;
         session.set_timeout(Self::DEFAULT_TIMEOUT.as_millis() as u32);
         session.set_tcp_stream(tcp);
-        session.handshake()?;
-        session.userauth_pubkey_file(username, None, private_key_file.as_ref(), None)?;
+        session
+            .handshake()
+            .map_err(|error| SshError::SessionError { address, error })?;
+        session
+            .userauth_pubkey_file(username, None, private_key_file.as_ref(), None)
+            .map_err(|error| SshError::SessionError { address, error })?;
 
         Ok(Self { session, address })
     }
@@ -187,16 +192,26 @@ impl SshConnection {
         self
     }
 
+    fn make_session_error(&self, error: ssh2::Error) -> SshError {
+        SshError::SessionError {
+            address: self.address.clone(),
+            error,
+        }
+    }
+
     fn make_connection_error(&self, error: std::io::Error) -> SshError {
         SshError::ConnectionError {
-            ip: self.address.clone(),
+            address: self.address.clone(),
             error,
         }
     }
 
     /// Execute a ssh command on the remote machine.
     pub fn execute(&self, command: String) -> SshResult<(String, String)> {
-        let channel = self.session.channel_session()?;
+        let channel = self
+            .session
+            .channel_session()
+            .map_err(|e| self.make_session_error(e))?;
         self.execute_impl(channel, command)
     }
 
@@ -207,14 +222,19 @@ impl SshConnection {
         command: String,
         path: P,
     ) -> SshResult<(String, String)> {
-        let channel = self.session.channel_session()?;
+        let channel = self
+            .session
+            .channel_session()
+            .map_err(|e| self.make_session_error(e))?;
         let command = format!("(cd {} && {command})", path.as_ref().display().to_string());
         self.execute_impl(channel, command)
     }
 
     /// Execute an ssh command on the remote machine and return both stdout and stderr.
     fn execute_impl(&self, mut channel: Channel, command: String) -> SshResult<(String, String)> {
-        channel.exec(&command)?;
+        channel
+            .exec(&command)
+            .map_err(|e| self.make_session_error(e))?;
 
         let mut stdout = String::new();
         channel
@@ -227,10 +247,15 @@ impl SshConnection {
             .read_to_string(&mut stderr)
             .map_err(|e| self.make_connection_error(e))?;
 
-        channel.close()?;
-        channel.wait_close()?;
+        channel.close().map_err(|e| self.make_session_error(e))?;
+        channel
+            .wait_close()
+            .map_err(|e| self.make_session_error(e))?;
 
-        let exit_status = channel.exit_status()?;
+        let exit_status = channel
+            .exit_status()
+            .map_err(|e| self.make_session_error(e))?;
+
         ensure!(
             exit_status == 0,
             SshError::NonZeroExitCode {
@@ -246,7 +271,11 @@ impl SshConnection {
     /// Upload a file to the remote machines through scp.
     pub fn upload<P: AsRef<Path>>(&self, path: P, content: &[u8]) -> SshResult<()> {
         let size = content.len() as u64;
-        let mut channel = self.session.scp_send(path.as_ref(), 0o644, size, None)?;
+        let mut channel = self
+            .session
+            .scp_send(path.as_ref(), 0o644, size, None)
+            .map_err(|e| self.make_session_error(e))?;
+
         channel
             .write_all(content)
             .map_err(|e| self.make_connection_error(e))?;
@@ -255,7 +284,11 @@ impl SshConnection {
 
     /// Download a file from the remote machines through scp.
     pub fn download<P: AsRef<Path>>(&self, path: P) -> SshResult<String> {
-        let (mut channel, _stats) = self.session.scp_recv(path.as_ref())?;
+        let (mut channel, _stats) = self
+            .session
+            .scp_recv(path.as_ref())
+            .map_err(|e| self.make_session_error(e))?;
+
         let mut content = String::new();
         channel
             .read_to_string(&mut content)

@@ -56,12 +56,15 @@ pub type SshResult<T> = Result<T, SshError>;
 
 #[derive(thiserror::Error, Debug)]
 pub enum SshError {
-    #[error("Failed to create ssh session: {0}")]
-    SessionError(#[from] ssh2::Error),
+    #[error("Failed to create ssh session with {address}: {error}")]
+    SessionError {
+        address: SocketAddr,
+        error: ssh2::Error,
+    },
 
-    #[error("Failed to connect to instance {ip}: {error}")]
+    #[error("Failed to connect to instance {address}: {error}")]
     ConnectionError {
-        ip: SocketAddr,
+        address: SocketAddr,
         error: std::io::Error,
     },
 

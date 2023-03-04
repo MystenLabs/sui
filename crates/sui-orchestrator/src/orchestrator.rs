@@ -222,8 +222,6 @@ impl Orchestrator {
     }
 
     pub async fn configure(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
-        crossterm::execute!(stdout(), Print("Generating configuration files...")).unwrap();
-
         // Select instances to configure.
         let instances = self.select_instances(parameters)?;
 
@@ -233,46 +231,81 @@ impl Orchestrator {
         let mut config = Config::new(&instances);
         config.print_files();
 
-        let handles = instances
-            .iter()
-            .cloned()
-            .map(|instance| {
-                let repo_name = self.settings.repository_name();
-                let config_files = config.files();
-                let genesis_command = config.genesis_command();
-                let ssh_manager = self.ssh_manager.clone();
+        // let handles = instances
+        //     .iter()
+        //     .cloned()
+        //     .map(|instance| {
+        //         let repo_name = self.settings.repository_name();
+        //         let config_files = config.files();
+        //         let genesis_command = config.genesis_command();
+        //         let ssh_manager = self.ssh_manager.clone();
 
-                tokio::spawn(async move {
-                    // Connect to the instance.
-                    let connection = ssh_manager
-                        .connect(instance.ssh_address())
-                        .await?
-                        .with_timeout(&Some(Duration::from_secs(180)));
+        //         tokio::spawn(async move {
+        //             // Connect to the instance.
+        //             let connection = ssh_manager
+        //                 .connect(instance.ssh_address())
+        //                 .await?
+        //                 .with_timeout(&Some(Duration::from_secs(180)));
 
-                    // Upload all configuration files.
-                    for source in config_files {
-                        let destination = source.file_name().expect("Config file is directory");
-                        let mut file = File::open(&source).expect("Cannot open config file");
-                        let mut buf = Vec::new();
-                        file.read_to_end(&mut buf).expect("Cannot read config file");
-                        connection.upload(destination, &buf)?;
-                    }
+        //             // Upload all configuration files.
+        //             for source in config_files {
+        //                 let destination = source.file_name().expect("Config file is directory");
+        //                 let mut file = File::open(&source).expect("Cannot open config file");
+        //                 let mut buf = Vec::new();
+        //                 file.read_to_end(&mut buf).expect("Cannot read config file");
+        //                 connection.upload(destination, &buf)?;
+        //             }
 
-                    // Generate the genesis files.
-                    let command = ["source $HOME/.cargo/env", &genesis_command].join(" && ");
-                    connection
-                        .execute_from_path(command, repo_name.clone())
-                        .map(|_| ())
-                        .map_err(TestbedError::from)
-                })
-            })
-            .collect::<Vec<_>>();
+        //             // Generate the genesis files.
+        //             let command = ["source $HOME/.cargo/env", &genesis_command].join(" && ");
+        //             connection
+        //                 .execute_from_path(command, repo_name.clone())
+        //                 .map(|_| ())
+        //                 .map_err(TestbedError::from)
+        //         })
+        //     })
+        //     .collect::<Vec<_>>();
 
-        try_join_all(handles)
-            .await
-            .unwrap()
-            .into_iter()
-            .collect::<TestbedResult<_>>()?;
+        // try_join_all(handles)
+        //     .await
+        //     .unwrap()
+        //     .into_iter()
+        //     .collect::<TestbedResult<_>>()?;
+
+        // NOTE: Our ssh library does not seem to be able to upload files in parallel reliably.
+        let total_instances = instances.len();
+        for (i, instance) in instances.iter().enumerate() {
+            crossterm::execute!(
+                stdout(),
+                MoveToColumn(0),
+                Print(format!(
+                    "[{}/{total_instances}] Uploading configuration files...",
+                    i + 1
+                ))
+            )
+            .unwrap();
+
+            // Connect to the instance.
+            let connection = self
+                .ssh_manager
+                .connect(instance.ssh_address())
+                .await?
+                .with_timeout(&Some(Duration::from_secs(180)));
+
+            // Upload all configuration files.
+            for source in config.files() {
+                let destination = source.file_name().expect("Config file is directory");
+                let mut file = File::open(&source).expect("Cannot open config file");
+                let mut buf = Vec::new();
+                file.read_to_end(&mut buf).expect("Cannot read config file");
+                connection.upload(destination, &buf)?;
+            }
+
+            // Generate the genesis files.
+            let command = ["source $HOME/.cargo/env", &config.genesis_command()].join(" && ");
+            let repo_name = self.settings.repository_name();
+            connection.execute_from_path(command, repo_name)?;
+        }
 
         println!(" [{}]", "Ok".green());
         Ok(())
