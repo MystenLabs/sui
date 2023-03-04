@@ -63,11 +63,10 @@ function MyTokens() {
 function TokenDetails({ coinType }: TokenDetailsProps) {
     const activeCoinType = coinType || SUI_TYPE_ARG;
     const accountAddress = useAppSelector(({ account }) => account.address);
-    const {
-        data: coinBalance,
-        isError,
-        errorUpdateCount,
-    } = useGetCoinBalance(activeCoinType, accountAddress);
+    const { data: coinBalance, isError } = useGetCoinBalance(
+        activeCoinType,
+        accountAddress
+    );
 
     const tokenBalance = coinBalance?.totalBalance || BigInt(0);
 
@@ -92,7 +91,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                         mode="standalone"
                     />
                 </div>
-                {isError || errorUpdateCount > 0 ? (
+                {isError ? (
                     <Alert>
                         <div>
                             <strong>Error updating balance</strong>
