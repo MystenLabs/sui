@@ -9,6 +9,7 @@ use crate::authority::authority_store_types::{
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use either::Either;
+use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::resolver::ModuleResolver;
 use once_cell::sync::OnceCell;
 use rocksdb::Options;
@@ -1417,6 +1418,23 @@ impl ModuleResolver for AuthorityStore {
                     .get(module_id.name().as_str())
                     .cloned()
             }))
+    }
+}
+
+impl GetModule for AuthorityStore {
+    type Error = SuiError;
+    type Item = CompiledModule;
+
+    fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
+        Ok(self
+            .get_module(id)?
+            .map(|bytes| CompiledModule::deserialize(&bytes).unwrap()))
+    }
+}
+
+impl ObjectStore for AuthorityStore {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        self.get_object(object_id)
     }
 }
 
