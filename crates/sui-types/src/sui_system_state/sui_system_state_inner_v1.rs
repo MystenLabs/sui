@@ -24,10 +24,6 @@ use super::SuiSystemStateTrait;
 const E_METADATA_INVALID_PUBKEY: u64 = 1;
 const E_METADATA_INVALID_NET_PUBKEY: u64 = 2;
 const E_METADATA_INVALID_WORKER_PUBKEY: u64 = 3;
-const E_METADATA_INVALID_NET_ADDR: u64 = 4;
-const E_METADATA_INVALID_P2P_ADDR: u64 = 5;
-const E_METADATA_INVALID_PRIMARY_ADDR: u64 = 6;
-const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 
 /// Rust version of the Move sui::sui_system::SystemParameters type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -171,33 +167,10 @@ impl ValidatorMetadataV1 {
                 )),
             }?;
 
-        let next_epoch_net_address = match self.next_epoch_net_address.clone() {
-            None => Ok::<Option<Multiaddr>, u64>(None),
-            Some(address) => Ok(Some(
-                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_NET_ADDR)?,
-            )),
-        }?;
-
-        let next_epoch_p2p_address = match self.next_epoch_p2p_address.clone() {
-            None => Ok::<Option<Multiaddr>, u64>(None),
-            Some(address) => Ok(Some(
-                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_P2P_ADDR)?,
-            )),
-        }?;
-
-        let next_epoch_primary_address = match self.next_epoch_primary_address.clone() {
-            None => Ok::<Option<Multiaddr>, u64>(None),
-            Some(address) => Ok(Some(
-                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_PRIMARY_ADDR)?,
-            )),
-        }?;
-
-        let next_epoch_worker_address = match self.next_epoch_worker_address.clone() {
-            None => Ok::<Option<Multiaddr>, u64>(None),
-            Some(address) => Ok(Some(
-                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?,
-            )),
-        }?;
+        let next_epoch_net_address = self.next_epoch_net_address.clone();
+        let next_epoch_p2p_address = self.next_epoch_p2p_address.clone();
+        let next_epoch_primary_address = self.next_epoch_primary_address.clone();
+        let next_epoch_worker_address = self.next_epoch_worker_address.clone();
 
         Ok(VerifiedValidatorMetadataV1 {
             sui_address: self.sui_address,
@@ -230,8 +203,8 @@ impl ValidatorMetadataV1 {
         Multiaddr::try_from(self.net_address.clone()).map_err(Into::into)
     }
 
-    pub fn p2p_address(&self) -> Result<Multiaddr> {
-        Multiaddr::try_from(self.p2p_address.clone()).map_err(Into::into)
+    pub fn p2p_address(&self) -> Multiaddr {
+        self.p2p_address.clone()
     }
 }
 
