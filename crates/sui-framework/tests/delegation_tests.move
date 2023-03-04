@@ -9,6 +9,7 @@ module sui::delegation_tests {
     use sui::staking_pool::{Self, StakedSui};
     use sui::test_utils::assert_eq;
     use sui::validator_set;
+    use std::vector;
 
 
     use sui::governance_test_utils::{
@@ -24,6 +25,93 @@ module sui::delegation_tests {
 
     const DELEGATOR_ADDR_1: address = @0x42;
     const DELEGATOR_ADDR_2: address = @0x43;
+
+    #[test]
+    fun test_split_join_staked_sui() {
+        let scenario_val = test_scenario::begin(DELEGATOR_ADDR_1);
+        let scenario = &mut scenario_val;
+        // All this is just to generate a dummy StakedSui object to split and join later
+        set_up_sui_system_state(scenario);
+        governance_test_utils::delegate_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_1, 60, scenario);
+
+        test_scenario::next_tx(scenario, DELEGATOR_ADDR_1);
+        {
+            let staked_sui = test_scenario::take_from_sender<StakedSui>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            staking_pool::split_staked_sui(&mut staked_sui, 20, ctx);
+            test_scenario::return_to_sender(scenario, staked_sui);
+        };
+
+        // Verify the correctness of the split and send the join txn
+        test_scenario::next_tx(scenario, DELEGATOR_ADDR_1);
+        {
+            let staked_sui_ids = test_scenario::ids_for_sender<StakedSui>(scenario);
+            assert!(vector::length(&staked_sui_ids) == 2, 101); // staked sui split to 2 coins
+            
+            let part1 = test_scenario::take_from_sender_by_id<StakedSui>(scenario, *vector::borrow(&staked_sui_ids, 0));
+            let part2 = test_scenario::take_from_sender_by_id<StakedSui>(scenario, *vector::borrow(&staked_sui_ids, 1));
+                
+            let amount1 = staking_pool::staked_sui_amount(&part1);
+            let amount2 = staking_pool::staked_sui_amount(&part2);
+            assert!(amount1 == 20 || amount1 == 40, 102);
+            assert!(amount2 == 20 || amount2 == 40, 103);
+            assert!(amount1 + amount2 == 60, 104);
+
+            staking_pool::join_staked_sui(&mut part1, part2);
+            assert!(staking_pool::staked_sui_amount(&part1) == 60, 105);
+            test_scenario::return_to_sender(scenario, part1);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = staking_pool::EIncompatibleStakedSui)]
+    fun test_join_different_epochs() {
+        let scenario_val = test_scenario::begin(DELEGATOR_ADDR_1);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(scenario);
+        // Create two instances of staked sui w/ different epoch activations
+        governance_test_utils::delegate_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_1, 60, scenario);
+        governance_test_utils::advance_epoch(scenario);
+        governance_test_utils::delegate_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_1, 60, scenario);
+
+        // Verify that these cannot be merged
+        test_scenario::next_tx(scenario, DELEGATOR_ADDR_1);
+        {
+            let staked_sui_ids = test_scenario::ids_for_sender<StakedSui>(scenario);
+            let part1 = test_scenario::take_from_sender_by_id<StakedSui>(scenario, *vector::borrow(&staked_sui_ids, 0));
+            let part2 = test_scenario::take_from_sender_by_id<StakedSui>(scenario, *vector::borrow(&staked_sui_ids, 1));
+
+            staking_pool::join_staked_sui(&mut part1, part2);
+
+            test_scenario::return_to_sender(scenario, part1);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = staking_pool::EIncompatibleStakedSui)]
+    fun test_join_different_locked_coins() {
+        let scenario_val = test_scenario::begin(DELEGATOR_ADDR_1);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(scenario);
+        // Create staked sui w/ locked coin and regular staked sui
+        governance_test_utils::delegate_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_1, 60, scenario);
+        governance_test_utils::delegate_locked_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_1, 60, 2, scenario);
+
+        // Verify that these cannot be merged
+        test_scenario::next_tx(scenario, DELEGATOR_ADDR_1);
+        {
+            let staked_sui_ids = test_scenario::ids_for_sender<StakedSui>(scenario);
+            let part1 = test_scenario::take_from_sender_by_id<StakedSui>(scenario, *vector::borrow(&staked_sui_ids, 0));
+            let part2 = test_scenario::take_from_sender_by_id<StakedSui>(scenario, *vector::borrow(&staked_sui_ids, 1));
+
+            staking_pool::join_staked_sui(&mut part1, part2);
+
+            test_scenario::return_to_sender(scenario, part1);
+        };
+        test_scenario::end(scenario_val);
+    }
 
     #[test]
     fun test_add_remove_delegation_flow() {

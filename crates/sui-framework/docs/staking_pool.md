@@ -25,6 +25,10 @@
 -  [Function `staked_sui_amount`](#0x2_staking_pool_staked_sui_amount)
 -  [Function `delegation_activation_epoch`](#0x2_staking_pool_delegation_activation_epoch)
 -  [Function `pool_active`](#0x2_staking_pool_pool_active)
+-  [Function `split`](#0x2_staking_pool_split)
+-  [Function `split_staked_sui`](#0x2_staking_pool_split_staked_sui)
+-  [Function `join_staked_sui`](#0x2_staking_pool_join_staked_sui)
+-  [Function `is_equal_staking_metadata`](#0x2_staking_pool_is_equal_staking_metadata)
 -  [Function `pool_token_exchange_rate_at_epoch`](#0x2_staking_pool_pool_token_exchange_rate_at_epoch)
 -  [Function `pending_stake_amount`](#0x2_staking_pool_pending_stake_amount)
 -  [Function `pending_stake_withdraw_amount`](#0x2_staking_pool_pending_stake_withdraw_amount)
@@ -237,7 +241,7 @@ A self-custodial object holding the staked SUI tokens.
 
 
 
-<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EDeactivationOfInactivePool">EDeactivationOfInactivePool</a>: u64 = 10;
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EDeactivationOfInactivePool">EDeactivationOfInactivePool</a>: u64 = 11;
 </code></pre>
 
 
@@ -256,6 +260,15 @@ A self-custodial object holding the staked SUI tokens.
 
 
 <pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EDestroyNonzeroBalance">EDestroyNonzeroBalance</a>: u64 = 5;
+</code></pre>
+
+
+
+<a name="0x2_staking_pool_EIncompatibleStakedSui"></a>
+
+
+
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EIncompatibleStakedSui">EIncompatibleStakedSui</a>: u64 = 12;
 </code></pre>
 
 
@@ -866,6 +879,145 @@ withdraws can be made to the pool.
 
 <pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pool_active">pool_active</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>): bool {
     <a href="_is_none">option::is_none</a>(&pool.deactivation_epoch)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_split"></a>
+
+## Function `split`
+
+Split StakedSui <code>self</code> to two parts, one with principal <code>split_amount</code>,
+and the remaining principal is left in <code>self</code>.
+All the other parameters of the StakedSui like <code>delegation_activation_epoch</code> or <code>pool_id</code> remain the same.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_split">split</a>(self: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, split_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_split">split</a>(self: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>, split_amount: u64, ctx: &<b>mut</b> TxContext): <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a> {
+    <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a> {
+        id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
+        pool_id: self.pool_id,
+        validator_address: self.validator_address,
+        delegation_activation_epoch: self.delegation_activation_epoch,
+        principal: <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> self.principal, split_amount),
+        sui_token_lock: self.sui_token_lock,
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_split_staked_sui"></a>
+
+## Function `split_staked_sui`
+
+Split the given StakedSui to the two parts, one with principal <code>split_amount</code>,
+transfer the newly split part to the sender address.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_split_staked_sui">split_staked_sui</a>(c: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, split_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_split_staked_sui">split_staked_sui</a>(c: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>, split_amount: u64, ctx: &<b>mut</b> TxContext) {
+    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="staking_pool.md#0x2_staking_pool_split">split</a>(c, split_amount, ctx), <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx));
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_join_staked_sui"></a>
+
+## Function `join_staked_sui`
+
+Consume the staked sui <code>other</code> and add its value to <code>self</code>.
+Aborts if some of the staking parameters are incompatible (pool id, delegation activation epoch, etc.)
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_join_staked_sui">join_staked_sui</a>(self: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, other: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_join_staked_sui">join_staked_sui</a>(self: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>, other: <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>) {
+    <b>assert</b>!(<a href="staking_pool.md#0x2_staking_pool_is_equal_staking_metadata">is_equal_staking_metadata</a>(self, &other), <a href="staking_pool.md#0x2_staking_pool_EIncompatibleStakedSui">EIncompatibleStakedSui</a>);
+    <b>let</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a> {
+        id,
+        pool_id: _,
+        validator_address: _,
+        delegation_activation_epoch: _,
+        principal,
+        sui_token_lock
+    } = other;
+
+    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    <b>if</b> (<a href="_is_some">option::is_some</a>(&sui_token_lock)) {
+        <a href="epoch_time_lock.md#0x2_epoch_time_lock_destroy_unchecked">epoch_time_lock::destroy_unchecked</a>(<a href="_destroy_some">option::destroy_some</a>(sui_token_lock));
+    } <b>else</b> {
+        <a href="_destroy_none">option::destroy_none</a>(sui_token_lock);
+    };
+    <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.principal, principal);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_is_equal_staking_metadata"></a>
+
+## Function `is_equal_staking_metadata`
+
+Returns true if all the staking parameters of the staked sui except the principal are identical
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_equal_staking_metadata">is_equal_staking_metadata</a>(self: &<a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, other: &<a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_equal_staking_metadata">is_equal_staking_metadata</a>(self: &<a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>, other: &<a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>): bool {
+    <b>if</b> ((self.pool_id != other.pool_id) ||
+        (self.validator_address != other.validator_address) ||
+        (self.delegation_activation_epoch != other.delegation_activation_epoch)) {
+        <b>return</b> <b>false</b>
+    };
+    <b>if</b> (<a href="_is_none">option::is_none</a>(&self.sui_token_lock) && <a href="_is_none">option::is_none</a>(&other.sui_token_lock)) {
+        <b>return</b> <b>true</b>
+    };
+    <b>if</b> (<a href="_is_some">option::is_some</a>(&self.sui_token_lock) && <a href="_is_some">option::is_some</a>(&other.sui_token_lock)) {
+        <a href="epoch_time_lock.md#0x2_epoch_time_lock_epoch">epoch_time_lock::epoch</a>(<a href="_borrow">option::borrow</a>(&self.sui_token_lock)) ==
+            <a href="epoch_time_lock.md#0x2_epoch_time_lock_epoch">epoch_time_lock::epoch</a>(<a href="_borrow">option::borrow</a>(&other.sui_token_lock))
+    } <b>else</b>
+        <b>false</b> // locked <a href="coin.md#0x2_coin">coin</a> in one and unlocked in another
 }
 </code></pre>
 
