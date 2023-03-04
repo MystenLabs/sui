@@ -326,7 +326,7 @@
                 ]
               },
               "effects": {
-                "messageVersion": 1,
+                "messageVersion": "v1",
                 "status": {
                   "status": "success"
                 },
@@ -1618,7 +1618,7 @@
                 ]
               },
               "effects": {
-                "messageVersion": 1,
+                "messageVersion": "v1",
                 "status": {
                   "status": "success"
                 },
@@ -2627,7 +2627,7 @@
                 ]
               },
               "effects": {
-                "messageVersion": 1,
+                "messageVersion": "v1",
                 "status": {
                   "status": "success"
                 },
@@ -6461,123 +6461,128 @@
         ]
       },
       "TransactionEffects": {
-        "description": "The response from processing a transaction or a certified transaction",
-        "type": "object",
-        "required": [
-          "executedEpoch",
-          "gasObject",
-          "gasUsed",
-          "messageVersion",
-          "status",
-          "transactionDigest"
-        ],
-        "properties": {
-          "created": {
-            "description": "ObjectRef and owner of new objects created.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/OwnedObjectRef"
-            }
-          },
-          "deleted": {
-            "description": "Object Refs of objects now deleted (the old refs).",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ObjectRef"
-            }
-          },
-          "dependencies": {
-            "description": "The set of transaction digests this transaction depends on.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TransactionDigest"
-            }
-          },
-          "eventsDigest": {
-            "description": "The digest of the events emitted during execution, can be None if the transaction does not emit any event.",
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/TransactionEventsDigest"
+        "oneOf": [
+          {
+            "description": "The response from processing a transaction or a certified transaction",
+            "type": "object",
+            "required": [
+              "executedEpoch",
+              "gasObject",
+              "gasUsed",
+              "messageVersion",
+              "status",
+              "transactionDigest"
+            ],
+            "properties": {
+              "created": {
+                "description": "ObjectRef and owner of new objects created.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/OwnedObjectRef"
+                }
               },
-              {
-                "type": "null"
+              "deleted": {
+                "description": "Object Refs of objects now deleted (the old refs).",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectRef"
+                }
+              },
+              "dependencies": {
+                "description": "The set of transaction digests this transaction depends on.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TransactionDigest"
+                }
+              },
+              "eventsDigest": {
+                "description": "The digest of the events emitted during execution, can be None if the transaction does not emit any event.",
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/TransactionEventsDigest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "executedEpoch": {
+                "description": "The epoch when this transaction was executed.",
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "gasObject": {
+                "description": "The updated gas object reference. Have a dedicated field for convenient access. It's also included in mutated.",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/OwnedObjectRef"
+                  }
+                ]
+              },
+              "gasUsed": {
+                "$ref": "#/components/schemas/GasCostSummary"
+              },
+              "messageVersion": {
+                "type": "string",
+                "enum": [
+                  "v1"
+                ]
+              },
+              "mutated": {
+                "description": "ObjectRef and owner of mutated objects, including gas object.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/OwnedObjectRef"
+                }
+              },
+              "sharedObjects": {
+                "description": "The object references of the shared objects used in this transaction. Empty if no shared objects were used.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectRef"
+                }
+              },
+              "status": {
+                "description": "The status of the execution",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ExecutionStatus"
+                  }
+                ]
+              },
+              "transactionDigest": {
+                "description": "The transaction digest",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/TransactionDigest"
+                  }
+                ]
+              },
+              "unwrapped": {
+                "description": "ObjectRef and owner of objects that are unwrapped in this transaction. Unwrapped objects are objects that were wrapped into other objects in the past, and just got extracted out.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/OwnedObjectRef"
+                }
+              },
+              "unwrappedThenDeleted": {
+                "description": "Object refs of objects previously wrapped in other objects but now deleted.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectRef"
+                }
+              },
+              "wrapped": {
+                "description": "Object refs of objects now wrapped in other objects.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectRef"
+                }
               }
-            ]
-          },
-          "executedEpoch": {
-            "description": "The epoch when this transaction was executed.",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "gasObject": {
-            "description": "The updated gas object reference. Have a dedicated field for convenient access. It's also included in mutated.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/OwnedObjectRef"
-              }
-            ]
-          },
-          "gasUsed": {
-            "$ref": "#/components/schemas/GasCostSummary"
-          },
-          "messageVersion": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "mutated": {
-            "description": "ObjectRef and owner of mutated objects, including gas object.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/OwnedObjectRef"
-            }
-          },
-          "sharedObjects": {
-            "description": "The object references of the shared objects used in this transaction. Empty if no shared objects were used.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ObjectRef"
-            }
-          },
-          "status": {
-            "description": "The status of the execution",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ExecutionStatus"
-              }
-            ]
-          },
-          "transactionDigest": {
-            "description": "The transaction digest",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/TransactionDigest"
-              }
-            ]
-          },
-          "unwrapped": {
-            "description": "ObjectRef and owner of objects that are unwrapped in this transaction. Unwrapped objects are objects that were wrapped into other objects in the past, and just got extracted out.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/OwnedObjectRef"
-            }
-          },
-          "unwrappedThenDeleted": {
-            "description": "Object refs of objects previously wrapped in other objects but now deleted.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ObjectRef"
-            }
-          },
-          "wrapped": {
-            "description": "Object refs of objects now wrapped in other objects.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ObjectRef"
             }
           }
-        }
+        ]
       },
       "TransactionEffectsDigest": {
         "$ref": "#/components/schemas/Sha3Digest"
