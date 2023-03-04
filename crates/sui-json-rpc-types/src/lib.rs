@@ -58,6 +58,7 @@ use sui_types::object::{
     Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner, PastObjectRead,
 };
 use sui_types::signature::GenericSignature;
+use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateInnerV1};
 use sui_types::{parse_sui_struct_tag, parse_sui_type_tag};
 use tracing::warn;
 
@@ -1810,7 +1811,7 @@ pub struct SuiTransactionEffects {
     /// It's also included in mutated.
     pub gas_object: OwnedObjectRef,
     /// The digest of the events emitted during execution,
-    /// can be None if the transaction does not emmit any event.
+    /// can be None if the transaction does not emit any event.
     pub events_digest: Option<TransactionEventsDigest>,
     /// The set of transaction digests this transaction depends on.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -2970,5 +2971,27 @@ impl From<CheckpointSequenceNumber> for CheckpointId {
 impl From<CheckpointDigest> for CheckpointId {
     fn from(digest: CheckpointDigest) -> Self {
         Self::Digest(digest)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[serde(untagged, rename = "SuiSystemState")]
+pub enum SuiSystemStateRpc {
+    V1(SuiSystemStateInnerV1),
+}
+
+impl From<SuiSystemState> for SuiSystemStateRpc {
+    fn from(state: SuiSystemState) -> Self {
+        match state {
+            SuiSystemState::V1(state) => Self::V1(state),
+        }
+    }
+}
+
+impl From<SuiSystemStateRpc> for SuiSystemState {
+    fn from(state: SuiSystemStateRpc) -> Self {
+        match state {
+            SuiSystemStateRpc::V1(state) => Self::V1(state),
+        }
     }
 }

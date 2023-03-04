@@ -13,6 +13,7 @@ use sui_core::{
     safe_client::SafeClientMetricsBase,
 };
 use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{committee::Committee, sui_system_state::SuiSystemStateTrait};
 use tracing::{debug, error, trace};
 
@@ -66,6 +67,7 @@ impl<S: SignatureVerifier + Default> ReconfigObserver<NetworkAuthorityClient, S>
             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
             match self.fullnode_client.read_api().get_sui_system_state().await {
                 Ok(sui_system_state) => {
+                    let sui_system_state: SuiSystemState = sui_system_state.into();
                     let epoch_id = sui_system_state.epoch();
                     if epoch_id > quorum_driver.current_epoch() {
                         debug!(epoch_id, "Got SuiSystemState in newer epoch");

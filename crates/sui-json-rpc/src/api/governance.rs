@@ -4,6 +4,7 @@
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
+use sui_json_rpc_types::SuiSystemStateRpc;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::SuiAddress;
 
@@ -11,7 +12,7 @@ use sui_types::committee::EpochId;
 use sui_types::governance::DelegatedStake;
 use sui_types::messages::CommitteeInfoResponse;
 
-use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
+use sui_types::sui_system_state::ValidatorMetadata;
 
 #[open_rpc(namespace = "sui", tag = "Governance Read API")]
 #[rpc(server, client, namespace = "sui")]
@@ -34,7 +35,7 @@ pub trait GovernanceReadApi {
 
     /// Return latest SUI system state object on-chain.
     #[method(name = "getSuiSystemState")]
-    async fn get_sui_system_state(&self) -> RpcResult<SuiSystemState>;
+    async fn get_sui_system_state(&self) -> RpcResult<SuiSystemStateRpc>;
 
     /// Return the reference gas price for the network
     #[method(name = "getReferenceGasPrice")]

@@ -1479,7 +1479,7 @@
       "description": "Return latest SUI system state object on-chain.",
       "params": [],
       "result": {
-        "name": "SuiSystemState",
+        "name": "SuiSystemStateRpc",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/SuiSystemState"
@@ -6466,7 +6466,7 @@
             }
           },
           "eventsDigest": {
-            "description": "The digest of the events emitted during execution, can be None if the transaction does not emmit any event.",
+            "description": "The digest of the events emitted during execution, can be None if the transaction does not emit any event.",
             "anyOf": [
               {
                 "$ref": "#/components/schemas/TransactionEventsDigest"
