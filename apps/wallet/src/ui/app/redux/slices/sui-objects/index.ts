@@ -96,19 +96,6 @@ export const batchFetchObject = createAsyncThunk<
     return allSuiObjects;
 });
 
-export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
-    'mintDemoNFT',
-    async (_, { extra: { api, background }, dispatch, getState }) => {
-        const activeAddress = activeAccountSelector(getState());
-        if (!activeAddress) {
-            throw new Error('Error, active address is not defined');
-        }
-        const signer = api.getSignerInstance(activeAddress, background);
-        await ExampleNFT.mintExampleNFT(signer);
-        await dispatch(fetchAllOwnedAndRequiredObjects());
-    }
-);
-
 interface SuiObjectsManualState {
     loading: boolean;
     error: false | { code?: string; message?: string; name?: string };

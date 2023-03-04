@@ -28,6 +28,7 @@ export const DEFAULT_GAS_BUDGET_FOR_STAKE = 15000;
 export const GAS_TYPE_ARG = '0x2::sui::SUI';
 export const GAS_SYMBOL = 'SUI';
 export const DEFAULT_NFT_TRANSFER_GAS_FEE = 450;
+export const DEFAULT_MINT_NFT_GAS_BUDGET = 2000;
 
 // TODO use sdk
 export class Coin {
