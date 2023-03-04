@@ -71,8 +71,11 @@ function NFTDetailsPage() {
 
     const selectedObject = useMemo(() => {
         if (!is(objectData?.details, SuiObject) || !objectData) return null;
-        const owner = getObjectOwner(objectData) as { AddressOwner: string };
-        return owner.AddressOwner === accountAddress
+        const objectOwner = getObjectOwner(objectData);
+        return objectOwner &&
+            objectOwner !== 'Immutable' &&
+            'AddressOwner' in objectOwner &&
+            objectOwner.AddressOwner === accountAddress
             ? objectData.details
             : null;
     }, [accountAddress, objectData]);
