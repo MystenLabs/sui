@@ -37,8 +37,8 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
             TestbedAction::Status => testbed.status(),
 
             // Deploy the specified number of instances on the testbed.
-            TestbedAction::Deploy { instances } => testbed
-                .deploy(instances)
+            TestbedAction::Deploy { instances, region } => testbed
+                .deploy(instances, region)
                 .await
                 .wrap_err("Failed to deploy testbed")?,
 
@@ -61,7 +61,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
         // Run benchmarks.
         Operation::Benchmark {
             shared_objects_ratio,
-            nodes,
+            committee,
             faults,
             duration,
             loads,
@@ -85,7 +85,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
 
             let generator = BenchmarkParametersGenerator::new(
                 shared_objects_ratio,
-                nodes,
+                committee,
                 LoadType::Fixed(loads),
             )
             .with_custom_duration(duration)
@@ -174,9 +174,9 @@ pub enum Operation {
         #[clap(long, value_name = "INT", default_value = "0")]
         shared_objects_ratio: u16,
 
-        /// Number of nodes to deploy.
+        /// The committee size to deploy.
         #[clap(long, value_name = "INT")]
-        nodes: usize,
+        committee: usize,
 
         /// The fixed loads (in tx/s) to submit to the nodes.
         #[clap(
@@ -243,12 +243,18 @@ pub enum TestbedAction {
         /// Number of instances to deploy.
         #[clap(long)]
         instances: usize,
+
+        /// The region where to deploy the instances. If this parameter is not specified, the
+        /// command deploys the specified number of instances in all regions listed in the
+        /// setting file
+        #[clap(long)]
+        region: Option<String>,
     },
 
-    /// Start the specified number of instances on an existing testbed.
+    /// Start at most the specified number of instances per region on an existing testbed.
     Start {
         /// Number of instances to deploy.
-        #[clap(long)]
+        #[clap(long, default_value = "200")]
         instances: usize,
     },
 

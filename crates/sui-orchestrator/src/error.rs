@@ -87,5 +87,5 @@ pub enum TestbedError {
     SshError(#[from] SshError),
 
     #[error("Not enough instances: missing {0} instances")]
-    InsufficientCapacity(String),
+    InsufficientCapacity(usize),
 }

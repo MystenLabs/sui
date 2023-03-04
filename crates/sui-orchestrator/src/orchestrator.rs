@@ -70,10 +70,7 @@ impl Orchestrator {
     ) -> TestbedResult<Vec<Instance>> {
         ensure!(
             self.instances.len() >= parameters.nodes,
-            TestbedError::InsufficientCapacity(format!(
-                "{}",
-                parameters.nodes - self.instances.len()
-            ))
+            TestbedError::InsufficientCapacity(parameters.nodes - self.instances.len())
         );
 
         let mut instances_by_regions = HashMap::new();

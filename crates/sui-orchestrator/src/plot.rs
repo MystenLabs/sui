@@ -22,6 +22,7 @@ pub struct MeasurementsCollectionId {
     faults: usize,
     duration: Duration,
     machine_specs: String,
+    commit: String,
 }
 
 impl Debug for MeasurementsCollectionId {
@@ -55,6 +56,7 @@ impl From<MeasurementsCollection> for MeasurementsCollectionId {
             faults: collection.parameters.faults,
             duration: collection.parameters.duration,
             machine_specs: collection.machine_specs,
+            commit: collection.commit,
         }
     }
 }

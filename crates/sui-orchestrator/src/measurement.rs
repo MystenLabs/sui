@@ -87,6 +87,7 @@ type ScraperId = usize;
 #[derive(Serialize, Deserialize, Clone)]
 pub struct MeasurementsCollection {
     pub machine_specs: String,
+    pub commit: String,
     pub parameters: BenchmarkParameters,
     scrapers: HashMap<ScraperId, Vec<Measurement>>,
 }
@@ -95,6 +96,7 @@ impl MeasurementsCollection {
     pub fn new(settings: &Settings, parameters: BenchmarkParameters) -> Self {
         Self {
             machine_specs: settings.specs.clone(),
+            commit: settings.repository.commit.clone(),
             parameters,
             scrapers: HashMap::new(),
         }

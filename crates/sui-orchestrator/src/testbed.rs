@@ -10,7 +10,6 @@ use tokio::time::sleep;
 
 use crate::{
     client::ServerProviderClient,
-    ensure,
     error::{TestbedError, TestbedResult},
     settings::Settings,
     ssh::SshConnection,
@@ -121,24 +120,32 @@ impl<C: ServerProviderClient> Testbed<C> {
 
     /// Populate the testbed by creating the specified amount of instances per region. The total
     /// number of instances created is thus the specified amount x the number of regions.
-    pub async fn deploy(&mut self, quantity: usize) -> TestbedResult<()> {
+    pub async fn deploy(&mut self, quantity: usize, region: Option<String>) -> TestbedResult<()> {
         crossterm::execute!(
             stdout(),
             Print(format!(
-                "Populating testbed with {quantity} instances per region..."
+                "Populating testbed with {quantity} instances per region...\n"
             ))
         )
         .unwrap();
 
-        try_join_all(
-            self.settings
-                .regions
-                .iter()
-                .map(|region| (0..quantity).map(|_| self.client.create_instance(region.clone())))
-                .flatten()
-                .collect::<Vec<_>>(),
-        )
-        .await?;
+        match region {
+            Some(x) => {
+                try_join_all((0..quantity).map(|_| self.client.create_instance(x.clone()))).await?
+            }
+            None => {
+                try_join_all(
+                    self.settings
+                        .regions
+                        .iter()
+                        .map(|region| {
+                            (0..quantity).map(|_| self.client.create_instance(region.clone()))
+                        })
+                        .flatten(),
+                )
+                .await?
+            }
+        };
 
         // Wait until the instances are booted.
         self.ready().await?;
@@ -151,8 +158,7 @@ impl<C: ServerProviderClient> Testbed<C> {
         try_join_all(
             self.instances
                 .drain(..)
-                .map(|instance| self.client.delete_instance(instance))
-                .collect::<Vec<_>>(),
+                .map(|instance| self.client.delete_instance(instance)),
         )
         .await
         .map_err(TestbedError::from)
@@ -164,26 +170,20 @@ impl<C: ServerProviderClient> Testbed<C> {
     pub async fn start(&mut self, quantity: usize) -> TestbedResult<()> {
         // Gather available instances.
         let mut available = Vec::new();
-        let mut missing = Vec::new();
-
         for region in &self.settings.regions {
-            let filtered: Vec<_> = self
-                .instances
-                .iter()
-                .filter(|x| x.is_inactive() && &x.region == region)
-                .take(quantity)
-                .collect();
-            if filtered.len() < quantity {
-                missing.push((region.clone(), quantity - filtered.len()))
-            } else {
-                available.extend(filtered);
-            }
+            available.extend(
+                self.instances
+                    .iter()
+                    .filter(|x| {
+                        x.is_inactive()
+                            && &x.region == region
+                            && x.plan.to_lowercase().replace(".", "")
+                                == self.settings.specs.to_lowercase().replace(".", "")
+                    })
+                    .take(quantity)
+                    .collect::<Vec<_>>(),
+            );
         }
-
-        ensure!(
-            missing.is_empty(),
-            TestbedError::InsufficientCapacity(format!("{missing:?}"))
-        );
 
         // Start instances.
         self.client.start_instances(available.into_iter()).await?;
@@ -251,7 +251,7 @@ mod test {
         let client = TestClient::default();
         let mut testbed = Testbed::new(settings, client).await.unwrap();
 
-        testbed.deploy(5).await.unwrap();
+        testbed.deploy(5, None).await.unwrap();
 
         assert_eq!(
             testbed.instances.len(),
@@ -278,7 +278,7 @@ mod test {
         let settings = Settings::new_for_test();
         let client = TestClient::default();
         let mut testbed = Testbed::new(settings, client).await.unwrap();
-        testbed.deploy(5).await.unwrap();
+        testbed.deploy(5, None).await.unwrap();
 
         let result = testbed.start(2).await;
 
@@ -305,7 +305,7 @@ mod test {
         let settings = Settings::new_for_test();
         let client = TestClient::default();
         let mut testbed = Testbed::new(settings, client).await.unwrap();
-        testbed.deploy(1).await.unwrap();
+        testbed.deploy(1, None).await.unwrap();
 
         let result = testbed.start(2).await;
         assert!(result.is_err());
@@ -316,7 +316,7 @@ mod test {
         let settings = Settings::new_for_test();
         let client = TestClient::default();
         let mut testbed = Testbed::new(settings, client).await.unwrap();
-        testbed.deploy(5).await.unwrap();
+        testbed.deploy(5, None).await.unwrap();
         testbed.start(2).await.unwrap();
 
         testbed.stop().await.unwrap();
