@@ -80,6 +80,7 @@
     "mockttp": "^2.7.0",
     "prettier": "^2.8.4",
     "size-limit": "^8.2.4",
+    "tmp": "^0.2.1",
     "ts-node": "^10.9.1",
     "ts-retry-promise": "^0.7.0",
     "tslib": "^2.5.0",
