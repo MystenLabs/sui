@@ -19,6 +19,9 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
         .await
         .wrap_err("Failed to crate testbed")?;
 
+    println!("\nNOT THE LATEST\n\n");
+    return Ok(());
+
     match opts.operation {
         Operation::Testbed { action } => match action {
             // Display the current status of the testbed.
