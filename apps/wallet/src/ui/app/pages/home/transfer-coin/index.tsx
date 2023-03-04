@@ -90,11 +90,9 @@ function TransferCoinPage() {
         onError: (error) => {
             toast.error(
                 <div className="max-w-xs overflow-hidden flex flex-col">
-                    {error instanceof Error ? (
-                        <small className="text-ellipsis overflow-hidden">
-                            {error.message}
-                        </small>
-                    ) : null}
+                    <small className="text-ellipsis overflow-hidden">
+                        {(error as Error).message || 'Something went wrong'}
+                    </small>
                 </div>
             );
         },
