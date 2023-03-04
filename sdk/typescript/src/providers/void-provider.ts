@@ -138,16 +138,6 @@ export class VoidProvider extends Provider {
     throw this.newError('getGasObjectsOwnedByAddress');
   }
 
-  /**
-   * @deprecated The method should not be used
-   */
-  async getCoinBalancesOwnedByAddress(
-    _address: string,
-    _typeArg?: string,
-  ): Promise<SuiObjectResponse[]> {
-    throw this.newError('getCoinBalancesOwnedByAddress');
-  }
-
   async selectCoinsWithBalanceGreaterThanOrEqual(
     _address: string,
     _amount: bigint,

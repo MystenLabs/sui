@@ -2,4 +2,4 @@
 "@mysten/sui.js": minor
 ---
 
-Redesign the API for getObject and getObjectBatch, which now take in a config option to custom which fields to include in the response
+Consolidate get_object and get_raw_object into a single get_object endpoint which now takes an additional config parameter with type `SuiObjectDataOptions` and has a new return type `SuiObjectResponse`. By default, only object_id, version, and digest are fetched.

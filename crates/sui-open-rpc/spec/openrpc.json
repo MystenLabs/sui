@@ -278,11 +278,11 @@
           "params": [
             {
               "name": "tx_bytes",
-              "value": "AADh/BfIFHCJ3EMY/dQA22c2TvNQyVJnbYV9w3+ufZMpihJFwxtCBojBaGy00TVtFxgN2C6TpIPFq18BopiHodleAgAAAAAAAAAgVX3EKq7+64wVTX3cRWuK6qMTLHQDUx3JjoP24ZjS19G2xC++ge7BYDahHiEkB6jbUsPeeFhbABa7s2QFdd6jvltUi2FtpjsM4H2Bbonve5o4IXe0Qiu6on9+Yl6jGaoKAgAAAAAAAAAgGEhmb/7SKRriSj+BdzU6BSINdlypxCGjaAg/GP5HLzm2xC++ge7BYDahHiEkB6jbUsPeeFhbABa7s2QFdd6jvgEAAAAAAAAA6AMAAAAAAAAA"
+              "value": "AADh/BfIFHCJ3EMY/dQA22c2TvNQyVJnbYV9w3+ufZMpihJFwxtCBojBaGy00TVtFxgN2C6TpIPFq18BopiHodleAgAAAAAAAAAgVX3EKq7+64wVTX3cRWuK6qMTLHQDUx3JjoP24ZjS19G2xC++ge7BYDahHiEkB6jbUsPeeFhbABa7s2QFdd6jvgFbVIthbaY7DOB9gW6J73uaOCF3tEIruqJ/fmJeoxmqCgIAAAAAAAAAIBhIZm/+0ika4ko/gXc1OgUiDXZcqcQho2gIPxj+Ry85tsQvvoHuwWA2oR4hJAeo21LD3nhYWwAWu7NkBXXeo74BAAAAAAAAAOgDAAAAAAAAAA=="
             },
             {
               "name": "signature",
-              "value": "AF1nj3dCaOh1prC9oqml+am/coSmiftAa9RVf2Fibu2qnD/44p4zhrnb/Y/np8Oqib6qZgO4N4EZa68lMSfBQgUlVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
+              "value": "ACkmGHf22aKnpQ3dEo2Cpi72hQwXC/RYGWcCgXDYN1JL5QtRjxGSkMUKBBpfoyA3YNZbqkfl6JnT2HuHa9vlAAwlVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
             },
             {
               "name": "request_type",
@@ -308,18 +308,20 @@
                   ],
                   "sender": "0xb6c42fbe81eec16036a11e212407a8db52c3de78585b0016bbb3640575dea3be",
                   "gasData": {
-                    "payment": {
-                      "objectId": "0x5b548b616da63b0ce07d816e89ef7b9a382177b4422bbaa27f7e625ea319aa0a",
-                      "version": 2,
-                      "digest": "2dnpKMuvbtsQSofMivyT1AdcA4WJanK8C5aSfJHt3Tya"
-                    },
+                    "payment": [
+                      {
+                        "objectId": "0x5b548b616da63b0ce07d816e89ef7b9a382177b4422bbaa27f7e625ea319aa0a",
+                        "version": 2,
+                        "digest": "2dnpKMuvbtsQSofMivyT1AdcA4WJanK8C5aSfJHt3Tya"
+                      }
+                    ],
                     "owner": "0xb6c42fbe81eec16036a11e212407a8db52c3de78585b0016bbb3640575dea3be",
                     "price": 1,
                     "budget": 1000
                   }
                 },
                 "txSignatures": [
-                  "AF1nj3dCaOh1prC9oqml+am/coSmiftAa9RVf2Fibu2qnD/44p4zhrnb/Y/np8Oqib6qZgO4N4EZa68lMSfBQgUlVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
+                  "ACkmGHf22aKnpQ3dEo2Cpi72hQwXC/RYGWcCgXDYN1JL5QtRjxGSkMUKBBpfoyA3YNZbqkfl6JnT2HuHa9vlAAwlVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
                 ]
               },
               "effects": {
@@ -1010,9 +1012,9 @@
               "data": [
                 {
                   "timestamp": 0,
-                  "txDigest": "CeNTDP1VLpBm5qidVShVuW48stHjR32jT9CHXhkRFxKw",
+                  "txDigest": "3n6uoPeN454coS8iX99BqaPjjqGwBr9objoU6vC928wt",
                   "id": {
-                    "txDigest": "CeNTDP1VLpBm5qidVShVuW48stHjR32jT9CHXhkRFxKw",
+                    "txDigest": "3n6uoPeN454coS8iX99BqaPjjqGwBr9objoU6vC928wt",
                     "eventSeq": 0
                   },
                   "event": {
@@ -1550,18 +1552,20 @@
                   ],
                   "sender": "0xbdda5e66040ca41c0b935b7d5083add6ab4e34a41e5c0d6d87ad3df5cc0fa664",
                   "gasData": {
-                    "payment": {
-                      "objectId": "0x5eeb1d449e2516166d57d71fdeb154d0dc9ecdb7b30057d0a932684cac352cdc",
-                      "version": 2,
-                      "digest": "2mSugTSEhVgVmbVxjz9r61odXT3pBhqb1C6xk4AGguYL"
-                    },
+                    "payment": [
+                      {
+                        "objectId": "0x5eeb1d449e2516166d57d71fdeb154d0dc9ecdb7b30057d0a932684cac352cdc",
+                        "version": 2,
+                        "digest": "2mSugTSEhVgVmbVxjz9r61odXT3pBhqb1C6xk4AGguYL"
+                      }
+                    ],
                     "owner": "0xbdda5e66040ca41c0b935b7d5083add6ab4e34a41e5c0d6d87ad3df5cc0fa664",
                     "price": 1,
                     "budget": 1000
                   }
                 },
                 "txSignatures": [
-                  "AC+zUWv9/i1Z0Kv2e3nVZgD0U4AXsxQpcZbG60ygDEC66FJaBGc1lRUM+OPXUBe14ITugxYwDeoEzQJVhqARmg5QKU4RyKWd3xUxrXzYXuLAWeHGehyEWP1S9XPAYKkWZw=="
+                  "AM3HQoNxjwG2wvC2PokID/9ZvBeelypLOXiaQOgB+s9oFvNUgL2k+mclY0n3LwgkJctHza0T3FIfHSP9isd2kgtQKU4RyKWd3xUxrXzYXuLAWeHGehyEWP1S9XPAYKkWZw=="
                 ]
               },
               "effects": {
@@ -2522,12 +2526,12 @@
           "params": [
             {
               "name": "tx_bytes",
-              "value": "AACj29kqg+8m0Si4j+Zr8m4ODQnNr3J9HYTMyql6Asw6mAQWcOFgnbcU6YWMlunkaYVfHPO/35foZbEMAEbik8CMAgAAAAAAAAAgMvS/bD6KxC7vE4XgFAPkmkspatyyLqJ9PJLkziJWrGSPLqvygft/cUSQXoDZoUEqKxN7oOKTKRGEbKUUTLt7w+wPQHg9msS/SrtNf4IGR/2F0ZGD3ufH/5VWl/4rcEyVAgAAAAAAAAAgQKOEbpKYt123JcHuMCe3g+ponho460dsbvxE7bXNPf6PLqvygft/cUSQXoDZoUEqKxN7oOKTKRGEbKUUTLt7wwEAAAAAAAAA6AMAAAAAAAAA"
+              "value": "AACj29kqg+8m0Si4j+Zr8m4ODQnNr3J9HYTMyql6Asw6mAQWcOFgnbcU6YWMlunkaYVfHPO/35foZbEMAEbik8CMAgAAAAAAAAAgMvS/bD6KxC7vE4XgFAPkmkspatyyLqJ9PJLkziJWrGSPLqvygft/cUSQXoDZoUEqKxN7oOKTKRGEbKUUTLt7wwHsD0B4PZrEv0q7TX+CBkf9hdGRg97nx/+VVpf+K3BMlQIAAAAAAAAAIECjhG6SmLddtyXB7jAnt4PqaJ4aOOtHbG78RO21zT3+jy6r8oH7f3FEkF6A2aFBKisTe6DikykRhGylFEy7e8MBAAAAAAAAAOgDAAAAAAAAAA=="
             },
             {
               "name": "signatures",
               "value": [
-                "ALUCaVNI++/Rkl3Tfq6HL4mBmeZZbd9p7lmL7CvD3vhTmaX6SlpdC+sZCXw7JJ+u+nanXasrxvTPxvVYtJT9kwjtuQRDnGhz4Cc2ybUGiC/e91XHYD8RKnE9a3Rnk6fI0g=="
+                "AMCu9GwKoPqYot/EdiAgD/tqA0YgY3e1N947aWzG0Gji08Fm3w8sXlfKt+278NA3NfPfoPET/glGPVWdvJfcXwrtuQRDnGhz4Cc2ybUGiC/e91XHYD8RKnE9a3Rnk6fI0g=="
               ]
             },
             {
@@ -2554,18 +2558,20 @@
                   ],
                   "sender": "0x8f2eabf281fb7f7144905e80d9a1412a2b137ba0e2932911846ca5144cbb7bc3",
                   "gasData": {
-                    "payment": {
-                      "objectId": "0xec0f40783d9ac4bf4abb4d7f820647fd85d19183dee7c7ff955697fe2b704c95",
-                      "version": 2,
-                      "digest": "5MKi5NebY3q1VSz5G75bfLTbHRTVyVV64rBB7ufriYBf"
-                    },
+                    "payment": [
+                      {
+                        "objectId": "0xec0f40783d9ac4bf4abb4d7f820647fd85d19183dee7c7ff955697fe2b704c95",
+                        "version": 2,
+                        "digest": "5MKi5NebY3q1VSz5G75bfLTbHRTVyVV64rBB7ufriYBf"
+                      }
+                    ],
                     "owner": "0x8f2eabf281fb7f7144905e80d9a1412a2b137ba0e2932911846ca5144cbb7bc3",
                     "price": 1,
                     "budget": 1000
                   }
                 },
                 "txSignatures": [
-                  "ALUCaVNI++/Rkl3Tfq6HL4mBmeZZbd9p7lmL7CvD3vhTmaX6SlpdC+sZCXw7JJ+u+nanXasrxvTPxvVYtJT9kwjtuQRDnGhz4Cc2ybUGiC/e91XHYD8RKnE9a3Rnk6fI0g=="
+                  "AMCu9GwKoPqYot/EdiAgD/tqA0YgY3e1N947aWzG0Gji08Fm3w8sXlfKt+278NA3NfPfoPET/glGPVWdvJfcXwrtuQRDnGhz4Cc2ybUGiC/e91XHYD8RKnE9a3Rnk6fI0g=="
                 ]
               },
               "effects": {
@@ -4892,7 +4898,7 @@
             ]
           },
           "showType": {
-            "description": "Whether to show the type of the object. Default to be True",
+            "description": "Whether to show the type of the object. Default to be False",
             "type": [
               "boolean",
               "null"
@@ -4909,7 +4915,7 @@
         ],
         "properties": {
           "bcs": {
-            "description": "Move object content or package content in BCS, default to be None unless SuiObjectDataOptions.showContent is set",
+            "description": "Move object content or package content in BCS, default to be None unless SuiObjectDataOptions.showBcs is set to true",
             "anyOf": [
               {
                 "$ref": "#/components/schemas/RawData"
@@ -4920,7 +4926,7 @@
             ]
           },
           "content": {
-            "description": "Move object content or package content, default to be None unless SuiObjectDataOptions.showContent is set",
+            "description": "Move object content or package content, default to be None unless SuiObjectDataOptions.showContent is set to true",
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Data"
@@ -4942,7 +4948,7 @@
             "$ref": "#/components/schemas/ObjectID"
           },
           "owner": {
-            "description": "The owner of this object. Default to be None unless SuiObjectDataOptions.showOwner is set",
+            "description": "The owner of this object. Default to be None unless SuiObjectDataOptions.showOwner is set to true",
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Owner"
@@ -4953,7 +4959,7 @@
             ]
           },
           "previousTransaction": {
-            "description": "The digest of the transaction that created or last mutated this object. Default to be None unless SuiObjectDataOptions.showPreviousTransaction is set",
+            "description": "The digest of the transaction that created or last mutated this object. Default to be None unless SuiObjectDataOptions.showPreviousTransaction is set to true",
             "anyOf": [
               {
                 "$ref": "#/components/schemas/TransactionDigest"
@@ -4973,7 +4979,7 @@
             "minimum": 0.0
           },
           "type": {
-            "description": "The type of the object. Default to be Some(T) unless SuiObjectDataOptions.showType is set to False",
+            "description": "The type of the object. Default to be None unless SuiObjectDataOptions.showType is set to true",
             "type": [
               "string",
               "null"

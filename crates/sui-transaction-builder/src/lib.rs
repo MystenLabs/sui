@@ -740,7 +740,13 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
     ) -> anyhow::Result<(ObjectRef, ObjectType)> {
         let object = self
             .0
-            .get_object_with_options(object_id, Some(SuiObjectDataOptions::default()))
+            .get_object_with_options(
+                object_id,
+                Some(SuiObjectDataOptions {
+                    show_type: Some(true),
+                    ..Default::default()
+                }),
+            )
             .await?
             .into_object()?;
 

@@ -194,6 +194,7 @@ impl SimpleFaucet {
                 Some(SuiObjectDataOptions {
                     show_content: Some(true),
                     show_owner: Some(true),
+                    show_type: Some(true),
                     ..Default::default()
                 }),
             )

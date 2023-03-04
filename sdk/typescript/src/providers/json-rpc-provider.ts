@@ -435,25 +435,6 @@ export class JsonRpcProvider extends Provider {
     return objects.filter((obj: SuiObjectInfo) => Coin.isSUI(obj));
   }
 
-  /**
-   * @deprecated The method should not be used
-   */
-  async getCoinBalancesOwnedByAddress(
-    address: SuiAddress,
-    typeArg?: string,
-  ): Promise<SuiObjectResponse[]> {
-    const objects = await this.getObjectsOwnedByAddress(address);
-    const coinIds = objects
-      .filter(
-        (obj: SuiObjectInfo) =>
-          Coin.isCoin(obj) &&
-          (typeArg === undefined || typeArg === Coin.getCoinTypeArg(obj)),
-      )
-      .map((c) => c.objectId);
-
-    return await this.getObjectBatch(coinIds);
-  }
-
   async selectCoinsWithBalanceGreaterThanOrEqual(
     address: SuiAddress,
     amount: bigint,
@@ -506,7 +487,7 @@ export class JsonRpcProvider extends Provider {
   }
 
   async getObjectRef(objectId: ObjectId): Promise<SuiObjectRef | undefined> {
-    const resp = await this.getObject(objectId, { showType: false });
+    const resp = await this.getObject(objectId);
     return getObjectReference(resp);
   }
 

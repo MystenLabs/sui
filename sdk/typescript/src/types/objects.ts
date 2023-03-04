@@ -115,7 +115,7 @@ export const SuiObjectData = object({
   version: SequenceNumber,
   digest: ObjectDigest,
   /**
-   * Type of the object, default to be set unless SuiObjectDataOptions.showType is set to false
+   * Type of the object, default to be undefined unless SuiObjectDataOptions.showType is set to true
    */
   type: optional(string()),
   /**
@@ -180,11 +180,11 @@ export function getObjectContentOptions(
       };
     case 'bcs_only':
       return {
-        showType: false,
         showBcs: true,
       };
     case 'bcs_with_metadata':
       return {
+        showType: true,
         showBcs: true,
         showOwner: true,
         showPreviousTransaction: true,
@@ -271,13 +271,23 @@ export function getObjectVersion(
 
 /* -------------------------------- SuiObject ------------------------------- */
 
+/**
+ * Deriving the object type from the object response
+ * @returns 'package' if the object is a package, move object type(e.g., 0x2::coin::Coin<0x2::sui::SUI>)
+ * if the object is a move object
+ */
 export function getObjectType(
   resp: SuiObjectResponse | SuiObjectData,
 ): ObjectType | undefined {
-  if ('status' in resp) {
-    return getSuiObjectData(resp)?.type;
+  const data = 'status' in resp ? getSuiObjectData(resp) : resp;
+
+  if (!data?.type && 'status' in resp) {
+    if (data?.content?.dataType === 'package') {
+      return 'package';
+    }
+    return getMoveObjectType(resp);
   }
-  return resp.type;
+  return data?.type;
 }
 
 export function getObjectPreviousTransactionDigest(

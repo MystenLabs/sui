@@ -79,6 +79,7 @@ impl ObjectChecker {
             .get_object_with_options(
                 object_id,
                 Some(SuiObjectDataOptions {
+                    show_type: Some(true),
                     show_owner: Some(true),
                     show_bcs: Some(true),
                     ..Default::default()

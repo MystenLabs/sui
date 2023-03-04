@@ -321,7 +321,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   }
 
   private async getCoinStructTag(coinId: string): Promise<TypeTag> {
-    const coin = await this.provider.getObject(coinId);
+    const coin = await this.provider.getObject(coinId, { showType: true });
     const coinTypeArg = Coin.getCoinTypeArg(coin);
     if (coinTypeArg == null) {
       throw new Error(`Object ${coinId} is not a valid coin type`);

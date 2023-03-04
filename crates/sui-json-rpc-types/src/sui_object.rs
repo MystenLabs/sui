@@ -49,15 +49,15 @@ pub struct SuiObjectData {
     pub version: SequenceNumber,
     /// Base64 string representing the object digest
     pub digest: ObjectDigest,
-    /// The type of the object. Default to be Some(T) unless SuiObjectDataOptions.showType is set to False
+    /// The type of the object. Default to be None unless SuiObjectDataOptions.showType is set to true
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     pub type_: Option<String>,
     // Default to be None because otherwise it will be repeated for the getObjectsOwnedByAddress endpoint
-    /// The owner of this object. Default to be None unless SuiObjectDataOptions.showOwner is set
+    /// The owner of this object. Default to be None unless SuiObjectDataOptions.showOwner is set to true
     #[serde(skip_serializing_if = "Option::is_none")]
     pub owner: Option<Owner>,
     /// The digest of the transaction that created or last mutated this object. Default to be None unless
-    /// SuiObjectDataOptions.showPreviousTransaction is set
+    /// SuiObjectDataOptions.showPreviousTransaction is set to true
     #[serde(skip_serializing_if = "Option::is_none")]
     pub previous_transaction: Option<TransactionDigest>,
     /// The amount of SUI we would rebate if this object gets deleted.
@@ -68,10 +68,10 @@ pub struct SuiObjectData {
     // TODO: uncomment the following in the next PR
     // /// The Display metadata for frontend UI rendering
     // pub display: Option<BTreeMap<String, String>>,
-    /// Move object content or package content, default to be None unless SuiObjectDataOptions.showContent is set
+    /// Move object content or package content, default to be None unless SuiObjectDataOptions.showContent is set to true
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<SuiParsedData>,
-    /// Move object content or package content in BCS, default to be None unless SuiObjectDataOptions.showContent is set
+    /// Move object content or package content in BCS, default to be None unless SuiObjectDataOptions.showBcs is set to true
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bcs: Option<SuiRawData>,
 }
@@ -179,7 +179,7 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", rename = "ObjectContentOptions")]
 pub struct SuiObjectDataOptions {
-    /// Whether to show the type of the object. Default to be True
+    /// Whether to show the type of the object. Default to be False
     pub show_type: Option<bool>,
     /// Whether to show the owner of the object. Default to be False
     pub show_owner: Option<bool>,
@@ -215,8 +215,7 @@ impl SuiObjectDataOptions {
     pub fn bcs_lossless() -> Self {
         Self {
             show_bcs: Some(true),
-            // Skip because this is inside the SuiRawData
-            show_type: Some(false),
+            show_type: Some(true),
             show_owner: Some(true),
             show_previous_transaction: Some(true),
             // uncomment the following in the next PR
@@ -245,7 +244,7 @@ impl SuiObjectDataOptions {
 impl Default for SuiObjectDataOptions {
     fn default() -> Self {
         Self {
-            show_type: Some(true),
+            show_type: Some(false),
             show_owner: Some(false),
             show_previous_transaction: Some(false),
             // uncomment the following in the next PR

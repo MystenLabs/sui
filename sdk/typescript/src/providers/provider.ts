@@ -157,14 +157,6 @@ export abstract class Provider {
   ): Promise<SuiObjectInfo[]>;
 
   /**
-   * @deprecated The method should not be used
-   */
-  abstract getCoinBalancesOwnedByAddress(
-    address: string,
-    typeArg?: string,
-  ): Promise<SuiObjectResponse[]>;
-
-  /**
    * Convenience method for select coin objects that has a balance greater than or equal to `amount`
    *
    * @param amount coin balance
