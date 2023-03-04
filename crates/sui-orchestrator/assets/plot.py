@@ -1,3 +1,4 @@
+import argparse
 from enum import Enum
 import glob
 import json
@@ -103,7 +104,7 @@ class Plotter:
             l = f'{id.nodes} nodes' if f == 0 else f'{id.nodes} ({f} faulty)'
             return f'{l} - {id.shared_objects_ratio}% shared objects'
         else:
-            return '[unknown]'
+            assert False
 
     def _axes_labels(self, plot_type):
         return ('Throughput (tx/s)', 'Latency (s)')
@@ -123,16 +124,13 @@ class Plotter:
             legend_anchor = (0, 1)
             legend_location = 'upper left'
             x_label, y_label = self._axes_labels(plot_type)
-            plot_name = 'latency'
+            plot_name = f'latency-{self.parameters.shared_objects_ratio}'
         else:
-            legend_anchor = (0.5, 1)
-            legend_location = 'upper center'
-            x_label, y_label = 'x values', 'y values'
-            plot_name = 'plot'
+            assert False
 
-        plt.legend(loc=legend_location,
-                   bbox_to_anchor=legend_anchor, ncol=legend_columns
-                   )
+        plt.legend(
+            loc=legend_location, bbox_to_anchor=legend_anchor, ncol=legend_columns
+        )
         plt.xlim(xmin=0)
         plt.ylim(bottom=0, top=y_max)
         plt.xlabel(x_label, fontweight='bold')
@@ -192,12 +190,37 @@ class Plotter:
 
 
 if __name__ == "__main__":
-    dir = '../../../results'
-    shared_objects_ratio = 0
-    nodes = [10, 20, 40]
-    faults = [0]
-    y_max = 1.5
-    legend_columns = 1
+    parser = argparse.ArgumentParser(
+        prog='Sui Plotter',
+        description='Simple script to plot measurement data'
+    )
+    parser.add_argument(
+        '--dir', default='../../../results', help='Data directory'
+    )
+    parser.add_argument(
+        '--shared-objects-ratio', nargs='+', type=int, required=True,
+        help='The ratio of shared objects to plot (in separate graphs)'
+    )
+    parser.add_argument(
+        '--nodes', nargs='+', type=int, required=True,
+        help='The committee sizes to plot on the same graph'
+    )
+    parser.add_argument(
+        '--faults', nargs='+', type=int, required=True,
+        help='The number of faults to plot on the same graph'
+    )
+    parser.add_argument(
+        '--y-max', type=int, default=None,
+        help='The maximum value of the y-axis'
+    )
+    parser.add_argument(
+        '--legend-columns', type=int, default=1,
+        help='The number of columns of the legend'
+    )
+    args = parser.parse_args()
 
-    parameters = PlotParameters(shared_objects_ratio, nodes, faults)
-    Plotter(dir, parameters).plot_latency_throughput(y_max, legend_columns)
+    for r in args.shared_objects_ratio:
+        parameters = PlotParameters(r, args.nodes, args.faults)
+        Plotter(args.dir, parameters).plot_latency_throughput(
+            args.y_max, args.legend_columns
+        )
