@@ -31,6 +31,10 @@ jobs:
   simtest:
     timeout-minutes: 120
     runs-on: [ubuntu-ghcloud]
+    env:
+      RUST_LOG: off
+      # Runs tests much faster - disables signing and verification
+      USE_MOCK_CRYPTO: 1
 
     steps:
     - name: Checkout sui repo main branch
@@ -44,12 +48,10 @@ jobs:
 
     - name: Build simtest
       run: |
-        export RUST_LOG=off
         ./scripts/simtest/cargo-simtest simtest build
 
     - name: Run simtest
       run: |
-        export RUST_LOG=off
         ./scripts/simtest/simtest-run.sh
 
   notify:
