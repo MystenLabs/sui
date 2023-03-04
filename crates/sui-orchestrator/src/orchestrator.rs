@@ -59,7 +59,7 @@ impl Orchestrator {
         self
     }
 
-    pub fn skip_logs_analysis(mut self, skip_logs_analysis: bool) -> Self {
+    pub fn skip_logs_processing(mut self, skip_logs_analysis: bool) -> Self {
         self.skip_logs_processing = skip_logs_analysis;
         self
     }

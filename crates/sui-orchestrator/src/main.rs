@@ -66,7 +66,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
             duration,
             loads,
             skip_testbed_update,
-            skip_logs_analysis,
+            skip_logs_processing,
             timeout,
             retries,
         } => {
@@ -93,7 +93,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
 
             orchestrator
                 .skip_testbed_updates(skip_testbed_update)
-                .skip_logs_analysis(skip_logs_analysis)
+                .skip_logs_processing(skip_logs_processing)
                 .run_benchmarks(generator)
                 .await
                 .wrap_err("Failed to run benchmarks")?;
@@ -202,7 +202,7 @@ pub enum Operation {
 
         /// Whether to skip downloading and analyzing log files.
         #[clap(long, action, default_value = "false")]
-        skip_logs_analysis: bool,
+        skip_logs_processing: bool,
 
         /// The timeout duration for ssh commands.
         #[clap(long, action, value_parser = parse_duration, default_value = "30")]
