@@ -230,7 +230,7 @@ module sui::validator_set {
         self: &mut ValidatorSet,
         computation_reward: &mut Balance<SUI>,
         storage_fund_reward: &mut Balance<SUI>,
-        validator_report_records: VecMap<address, VecSet<address>>,
+        validator_report_records: &mut VecMap<address, VecSet<address>>,
         reward_slashing_rate: u64,
         ctx: &mut TxContext,
     ) {
@@ -250,7 +250,7 @@ module sui::validator_set {
         let (slashed_validators, total_slashed_validator_stake) =
             compute_slashed_validators_and_total_stake(
                 self,
-                copy validator_report_records,
+                *validator_report_records,
             );
 
         // Compute the reward adjustments of slashed validators, to be taken into
@@ -298,11 +298,11 @@ module sui::validator_set {
 
         // Emit events after we have processed all the rewards distribution and pending delegations.
         emit_validator_epoch_events(new_epoch, &self.active_validators, &adjusted_staking_reward_amounts,
-            &validator_report_records, &slashed_validators);
+            validator_report_records, &slashed_validators);
 
         process_pending_validators(self);
 
-        process_pending_removals(self, ctx);
+        process_pending_removals(self, validator_report_records, ctx);
 
         self.total_stake = calculate_total_stakes(&self.active_validators);
 
@@ -535,6 +535,7 @@ module sui::validator_set {
     /// is removed from `validators` and its staking pool is put into the `inactive_validators` table.
     fun process_pending_removals(
         self: &mut ValidatorSet,
+        validator_report_records: &mut VecMap<address, VecSet<address>>,
         ctx: &mut TxContext,
     ) {
         let new_epoch = tx_context::epoch(ctx) + 1;
@@ -545,9 +546,39 @@ module sui::validator_set {
             let validator_pool_id = staking_pool_id(&validator);
             table::remove(&mut self.staking_pool_mappings, validator_pool_id);
             self.total_stake = self.total_stake - validator::total_stake_amount(&validator);
+
+            clean_report_records_leaving_validator(
+                validator_report_records, validator::sui_address(&validator));
+
             // Deactivate the validator and its staking pool
             validator::deactivate(&mut validator, new_epoch);
             table::add(&mut self.inactive_validators, validator_pool_id, validator);
+        }
+    }
+
+    fun clean_report_records_leaving_validator(
+        validator_report_records: &mut VecMap<address, VecSet<address>>,
+        leaving_validator_addr: address
+    ) {
+        // Remove the records about this validator
+        if (vec_map::contains(validator_report_records, &leaving_validator_addr)) {
+            vec_map::remove(validator_report_records, &leaving_validator_addr);
+        };
+        
+        // Remove the reports submitted by this validator
+        let reported_validators = vec_map::keys(validator_report_records);
+        let length = vector::length(&reported_validators);
+        let i = 0;
+        while (i < length) {
+            let reported_validator_addr = vector::borrow(&reported_validators, i);
+            let reporters = vec_map::get_mut(validator_report_records, reported_validator_addr);
+            if (vec_set::contains(reporters, &leaving_validator_addr)) {
+                vec_set::remove(reporters, &leaving_validator_addr);
+                if (vec_set::is_empty(reporters)) {
+                    vec_map::remove(validator_report_records, reported_validator_addr);
+                };
+            };
+            i = i + 1;
         }
     }
 
