@@ -56,6 +56,12 @@ pub struct MoveOption<T> {
     pub vec: Vec<T>,
 }
 
+impl<T> MoveOption<T> {
+    pub fn empty() -> Self {
+        Self { vec: vec![] }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct ValidatorMetadata {
     pub sui_address: SuiAddress,
@@ -350,6 +356,7 @@ impl<K> Default for LinkedTable<K> {
 pub struct StakingPool {
     pub id: ObjectID,
     pub starting_epoch: u64,
+    pub deactivation_epoch: MoveOption<u64>,
     pub sui_balance: u64,
     pub rewards_pool: Balance,
     pub pool_token_balance: u64,
@@ -374,6 +381,7 @@ pub struct ValidatorSet {
     pub pending_validators: TableVec,
     pub pending_removals: Vec<u64>,
     pub staking_pool_mappings: Table,
+    pub inactive_pools: Table,
 }
 
 /// Rust version of the Move sui::sui_system::SuiSystemStateInner type
@@ -595,6 +603,7 @@ impl Default for SuiSystemStateInnerV1 {
             pending_validators: TableVec::default(),
             pending_removals: vec![],
             staking_pool_mappings: Table::default(),
+            inactive_pools: Table::default(),
         };
         Self {
             epoch: 0,

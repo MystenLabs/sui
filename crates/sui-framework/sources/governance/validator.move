@@ -249,18 +249,9 @@ module sui::validator {
         }
     }
 
-    public(friend) fun destroy(self: Validator, ctx: &mut TxContext) {
-        let Validator {
-            metadata: _,
-            voting_power: _,
-            gas_price: _,
-            staking_pool,
-            commission_rate: _,
-            next_epoch_stake: _,
-            next_epoch_gas_price: _,
-            next_epoch_commission_rate: _,
-        } = self;
-        staking_pool::deactivate_staking_pool(staking_pool, ctx);
+    /// Deactivate this validator's staking pool
+    public(friend) fun deactivate(self: &mut Validator, ctx: &mut TxContext) {
+        staking_pool::deactivate_staking_pool(&mut self.staking_pool, ctx)
     }
 
     /// Process pending stake and pending withdraws, and update the gas price.
@@ -527,7 +518,7 @@ module sui::validator {
         self.metadata.next_epoch_protocol_pubkey_bytes = option::some(protocol_pubkey);
         self.metadata.next_epoch_proof_of_possession = option::some(proof_of_possession);
         validate_metadata(&self.metadata);
-    } 
+    }
 
     /// Update network public key of this validator, taking effects from next epoch
     public(friend) fun update_next_epoch_network_pubkey(self: &mut Validator, network_pubkey: vector<u8>) {

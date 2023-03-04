@@ -25,6 +25,9 @@ module sui::validator_set {
     #[test_only]
     friend sui::validator_set_tests;
 
+    #[test_only]
+    friend sui::delegation_tests;
+
     struct ValidatorSet has store {
         /// Total amount of stake from all active validators at the beginning of the epoch.
         total_stake: u64,
@@ -42,6 +45,11 @@ module sui::validator_set {
 
         /// Mappings from staking pool's ID to the sui address of a validator.
         staking_pool_mappings: Table<ID, address>,
+
+        /// Mapping from a staking pool ID to the inactive validator that has that pool as its staking pool.
+        /// When a validator is deactivated the validator is removed from `active_validators` it
+        /// is added to this table so that delegators can continue to withdraw their stake from it.
+        inactive_validators: Table<ID, Validator>,
     }
 
     /// Event emitted when a new delegation request is received.
@@ -72,6 +80,8 @@ module sui::validator_set {
     const ENonValidatorInReportRecords: u64 = 0;
     const EInvalidStakeAdjustmentAmount: u64 = 1;
     const EDuplicateValidator: u64 = 2;
+    const ENoPoolFound: u64 = 3;
+    const ENotAValidator: u64 = 4;
 
     // ==== initialization at genesis ====
 
@@ -91,6 +101,7 @@ module sui::validator_set {
             pending_validators: table_vec::empty(ctx),
             pending_removals: vector::empty(),
             staking_pool_mappings,
+            inactive_validators: table::new(ctx),
         };
         voting_power::set_voting_power(&mut validators.active_validators);
         validators
@@ -157,22 +168,30 @@ module sui::validator_set {
     }
 
     /// Called by `sui_system`, to withdraw some share of a delegation from the validator. The share to withdraw
-    /// is denoted by `principal_withdraw_amount`.
-    /// This request is added to the validator's staking pool's pending delegation withdraw entries, processed at the end
-    /// of the epoch.
+    /// is denoted by `principal_withdraw_amount`. One of two things occurs in this function:
+    /// 1. If the `staked_sui` is staked with an active validator, the request is added to the validator's
+    ///    staking pool's pending delegation withdraw entries, processed at the end of the epoch.
+    /// 2. If the `staked_sui` was staked with a validator that is no longer active,
+    ///    the delegation and any rewards corresponding to it will be immediately processed.
     public(friend) fun request_withdraw_delegation(
         self: &mut ValidatorSet,
         staked_sui: StakedSui,
         ctx: &mut TxContext,
     ) {
-        let validator_address = *table::borrow(&self.staking_pool_mappings, pool_id(&staked_sui));
-        let validator_index_opt = find_validator(&self.active_validators, validator_address);
-
-        assert!(option::is_some(&validator_index_opt), 0);
-
-        let validator_index = option::extract(&mut validator_index_opt);
-        let validator = vector::borrow_mut(&mut self.active_validators, validator_index);
-        validator::request_withdraw_delegation(validator, staked_sui, ctx);
+        let staking_pool_id = pool_id(&staked_sui);
+        // This is an active validator.
+        if (table::contains(&self.staking_pool_mappings, staking_pool_id)) {
+            let validator_address = *table::borrow(&self.staking_pool_mappings, staking_pool_id);
+            let validator_index_opt = find_validator(&self.active_validators, validator_address);
+            assert!(option::is_some(&validator_index_opt), 0);
+            let validator_index = option::extract(&mut validator_index_opt);
+            let validator = vector::borrow_mut(&mut self.active_validators, validator_index);
+            validator::request_withdraw_delegation(validator, staked_sui, ctx);
+        } else { // This is an inactive pool.
+            assert!(table::contains(&self.inactive_validators, staking_pool_id), ENoPoolFound);
+            let validator = table::borrow_mut(&mut self.inactive_validators, staking_pool_id);
+            validator::request_withdraw_delegation(validator, staked_sui, ctx);
+        }
     }
 
     // ==== validator config setting functions ====
@@ -449,7 +468,7 @@ module sui::validator_set {
         while (i < length) {
             let addr = *vector::borrow(validator_addresses, i);
             let index_opt = find_validator(validators, addr);
-            assert!(option::is_some(&index_opt), 0);
+            assert!(option::is_some(&index_opt), ENotAValidator);
             vector::push_back(&mut res, option::destroy_some(index_opt));
             i = i + 1;
         };
@@ -461,7 +480,7 @@ module sui::validator_set {
         validator_address: address,
     ): &mut Validator {
         let validator_index_opt = find_validator(validators, validator_address);
-        assert!(option::is_some(&validator_index_opt), 0);
+        assert!(option::is_some(&validator_index_opt), ENotAValidator);
         let validator_index = option::extract(&mut validator_index_opt);
         vector::borrow_mut(validators, validator_index)
     }
@@ -487,7 +506,7 @@ module sui::validator_set {
         validator_address: address,
     ): &Validator {
         let validator_index_opt = find_validator(validators, validator_address);
-        assert!(option::is_some(&validator_index_opt), 0);
+        assert!(option::is_some(&validator_index_opt), ENotAValidator);
         let validator_index = option::extract(&mut validator_index_opt);
         vector::borrow(validators, validator_index)
     }
@@ -513,7 +532,7 @@ module sui::validator_set {
     }
 
     /// Process the pending withdraw requests. For each pending request, the validator
-    /// is removed from `validators` and sent back to the address of the validator.
+    /// is removed from `validators` and its staking pool is put into the `inactive_validators` table.
     fun process_pending_removals(
         self: &mut ValidatorSet,
         ctx: &mut TxContext,
@@ -522,9 +541,12 @@ module sui::validator_set {
         while (!vector::is_empty(&self.pending_removals)) {
             let index = vector::pop_back(&mut self.pending_removals);
             let validator = vector::remove(&mut self.active_validators, index);
-            table::remove(&mut self.staking_pool_mappings, staking_pool_id(&validator));
+            let validator_pool_id = staking_pool_id(&validator);
+            table::remove(&mut self.staking_pool_mappings, validator_pool_id);
             self.total_stake = self.total_stake - validator::total_stake_amount(&validator);
-            validator::destroy(validator, ctx);
+            // Deactivate the validator and its staking pool
+            validator::deactivate(&mut validator, ctx);
+            table::add(&mut self.inactive_validators, validator_pool_id, validator);
         }
     }
 

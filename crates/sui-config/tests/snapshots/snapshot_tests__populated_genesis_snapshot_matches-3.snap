@@ -242,6 +242,8 @@ validators:
       staking_pool:
         id: "0xd5d9aa879b78dc1f516d71ab979189086eff752f65e4b0dea15829e3157962e1"
         starting_epoch: 0
+        deactivation_epoch:
+          vec: []
         sui_balance: 25000000000000000
         rewards_pool:
           value: 0
@@ -264,6 +266,9 @@ validators:
   staking_pool_mappings:
     id: "0x18b8140c8a6ea340142f128061016fc4bd8220ec88875a8e573a5f72a85a15c1"
     size: 1
+  inactive_pools:
+    id: "0x1ace65f54d65a96251b3f46bfa720ab65a7ebe0174caa9fa1dc0d65a56ae7872"
+    size: 0
 storage_fund:
   value: 0
 parameters:

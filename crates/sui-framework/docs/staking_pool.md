@@ -7,7 +7,6 @@
 
 -  [Resource `StakingPool`](#0x2_staking_pool_StakingPool)
 -  [Struct `PoolTokenExchangeRate`](#0x2_staking_pool_PoolTokenExchangeRate)
--  [Resource `InactiveStakingPool`](#0x2_staking_pool_InactiveStakingPool)
 -  [Resource `StakedSui`](#0x2_staking_pool_StakedSui)
 -  [Constants](#@Constants_0)
 -  [Function `new`](#0x2_staking_pool_new)
@@ -25,6 +24,7 @@
 -  [Function `pool_id`](#0x2_staking_pool_pool_id)
 -  [Function `staked_sui_amount`](#0x2_staking_pool_staked_sui_amount)
 -  [Function `delegation_activation_epoch`](#0x2_staking_pool_delegation_activation_epoch)
+-  [Function `pool_active`](#0x2_staking_pool_pool_active)
 -  [Function `pool_token_exchange_rate_at_epoch`](#0x2_staking_pool_pool_token_exchange_rate_at_epoch)
 -  [Function `pending_stake_amount`](#0x2_staking_pool_pending_stake_amount)
 -  [Function `pending_stake_withdraw_amount`](#0x2_staking_pool_pending_stake_withdraw_amount)
@@ -76,6 +76,13 @@ A staking pool embedded in each validator struct in the system state object.
 </dt>
 <dd>
  The epoch at which this pool started operating. Should be the epoch at which the validator became active.
+</dd>
+<dt>
+<code>deactivation_epoch: <a href="_Option">option::Option</a>&lt;u64&gt;</code>
+</dt>
+<dd>
+ The epoch at which this staking pool ceased to be active. <code>None</code> = {pre-active, active},
+ <code>Some(&lt;epoch_number&gt;)</code> if in-active, and it was de-activated at epoch <code>&lt;epoch_number&gt;</code>.
 </dd>
 <dt>
 <code>sui_balance: u64</code>
@@ -162,41 +169,6 @@ Struct representing the exchange rate of the delegation pool token to SUI.
 
 </details>
 
-<a name="0x2_staking_pool_InactiveStakingPool"></a>
-
-## Resource `InactiveStakingPool`
-
-An inactive staking pool associated with an inactive validator.
-Only withdraws can be made from this pool.
-
-
-<pre><code><b>struct</b> <a href="staking_pool.md#0x2_staking_pool_InactiveStakingPool">InactiveStakingPool</a> <b>has</b> key
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
-</dt>
-<dd>
-
-</dd>
-<dt>
-<code>pool: <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a></code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
-
 <a name="0x2_staking_pool_StakedSui"></a>
 
 ## Resource `StakedSui`
@@ -259,6 +231,24 @@ A self-custodial object holding the staked SUI tokens.
 <a name="@Constants_0"></a>
 
 ## Constants
+
+
+<a name="0x2_staking_pool_EDeactivationOfInactivePool"></a>
+
+
+
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EDeactivationOfInactivePool">EDeactivationOfInactivePool</a>: u64 = 10;
+</code></pre>
+
+
+
+<a name="0x2_staking_pool_EDelegationToInactivePool"></a>
+
+
+
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EDelegationToInactivePool">EDelegationToInactivePool</a>: u64 = 10;
+</code></pre>
+
 
 
 <a name="0x2_staking_pool_EDestroyNonzeroBalance"></a>
@@ -333,15 +323,6 @@ A self-custodial object holding the staked SUI tokens.
 
 
 
-<a name="0x2_staking_pool_EWithdrawalInSameEpoch"></a>
-
-
-
-<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EWithdrawalInSameEpoch">EWithdrawalInSameEpoch</a>: u64 = 10;
-</code></pre>
-
-
-
 <a name="0x2_staking_pool_EWrongDelegation"></a>
 
 
@@ -386,6 +367,7 @@ Create a new, empty staking pool.
     <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a> {
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
         starting_epoch,
+        deactivation_epoch: <a href="_none">option::none</a>(),
         sui_balance: 0,
         rewards_pool: <a href="balance.md#0x2_balance_zero">balance::zero</a>(),
         pool_token_balance: 0,
@@ -427,6 +409,7 @@ Request to delegate to a staking pool. The delegation starts counting at the beg
     ctx: &<b>mut</b> TxContext
 ) {
     <b>let</b> sui_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&stake);
+    <b>assert</b>!(<a href="staking_pool.md#0x2_staking_pool_pool_active">pool_active</a>(pool), <a href="staking_pool.md#0x2_staking_pool_EDelegationToInactivePool">EDelegationToInactivePool</a>);
     <b>assert</b>!(sui_amount &gt; 0, 0);
     <b>let</b> staked_sui = <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a> {
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
@@ -477,8 +460,12 @@ A proportional amount of pool tokens is burnt.
         pool, principal_withdraw_amount, pool_token_withdraw_amount, <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx)
     );
     <b>let</b> total_sui_withdraw_amount = principal_withdraw_amount + <a href="balance.md#0x2_balance_value">balance::value</a>(&rewards_withdraw);
+
     pool.pending_total_sui_withdraw = pool.pending_total_sui_withdraw + total_sui_withdraw_amount;
     pool.pending_pool_token_withdraw = pool.pending_pool_token_withdraw + pool_token_withdraw_amount;
+
+    // If the pool is inactive, we immediately process the withdrawal.
+    <b>if</b> (!<a href="staking_pool.md#0x2_staking_pool_pool_active">pool_active</a>(pool)) <a href="staking_pool.md#0x2_staking_pool_process_pending_delegation_withdraw">process_pending_delegation_withdraw</a>(pool);
 
     // TODO: implement withdraw bonding period here.
     <b>if</b> (<a href="_is_some">option::is_some</a>(&time_lock)) {
@@ -494,6 +481,8 @@ A proportional amount of pool tokens is burnt.
         <a href="_destroy_none">option::destroy_none</a>(time_lock);
     };
     total_sui_withdraw_amount
+
+    // payment_amount
 }
 </code></pre>
 
@@ -640,6 +629,7 @@ Called at epoch advancement times to add rewards (in SUI) to the staking pool.
 ## Function `process_pending_delegation_withdraw`
 
 Called at epoch boundaries to process pending delegation withdraws requested during the epoch.
+Also called immediately upon withdrawal if the pool is inactive.
 
 
 <pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_process_pending_delegation_withdraw">process_pending_delegation_withdraw</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>)
@@ -744,11 +734,12 @@ portion because the principal portion was already taken out of the delegator's s
 
 ## Function `deactivate_staking_pool`
 
-Deactivate a staking pool by wrapping it in an <code><a href="staking_pool.md#0x2_staking_pool_InactiveStakingPool">InactiveStakingPool</a></code> and sharing this newly created object.
-After this pool deactivation, the pool stops earning rewards. Only delegation withdraws can be made to the pool.
+Deactivate a staking pool by setting the <code>deactivation_epoch</code>. After
+this pool deactivation, the pool stops earning rewards. Only delegation
+withdraws can be made to the pool.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">deactivate_staking_pool</a>(pool: <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">deactivate_staking_pool</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -757,9 +748,10 @@ After this pool deactivation, the pool stops earning rewards. Only delegation wi
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">deactivate_staking_pool</a>(pool: <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, ctx: &<b>mut</b> TxContext) {
-    <b>let</b> inactive_pool = <a href="staking_pool.md#0x2_staking_pool_InactiveStakingPool">InactiveStakingPool</a> { id: <a href="object.md#0x2_object_new">object::new</a>(ctx), pool};
-    <a href="transfer.md#0x2_transfer_share_object">transfer::share_object</a>(inactive_pool);
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">deactivate_staking_pool</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, ctx: &<b>mut</b> TxContext) {
+    // We can't deactivate an already deactivated pool.
+    <b>assert</b>!(<a href="staking_pool.md#0x2_staking_pool_pool_active">pool_active</a>(pool), <a href="staking_pool.md#0x2_staking_pool_EDeactivationOfInactivePool">EDeactivationOfInactivePool</a>);
+    pool.deactivation_epoch = <a href="_some">option::some</a>(<a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx));
 }
 </code></pre>
 
@@ -782,7 +774,7 @@ After this pool deactivation, the pool stops earning rewards. Only delegation wi
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_sui_balance">sui_balance</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>) : u64 { pool.sui_balance }
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_sui_balance">sui_balance</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>): u64 { pool.sui_balance }
 </code></pre>
 
 
@@ -804,7 +796,7 @@ After this pool deactivation, the pool stops earning rewards. Only delegation wi
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pool_id">pool_id</a>(staked_sui: &<a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>) : ID { staked_sui.pool_id }
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pool_id">pool_id</a>(staked_sui: &<a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>): ID { staked_sui.pool_id }
 </code></pre>
 
 
@@ -857,6 +849,30 @@ After this pool deactivation, the pool stops earning rewards. Only delegation wi
 
 </details>
 
+<a name="0x2_staking_pool_pool_active"></a>
+
+## Function `pool_active`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pool_active">pool_active</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pool_active">pool_active</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>): bool {
+    <a href="_is_none">option::is_none</a>(&pool.deactivation_epoch)
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_staking_pool_pool_token_exchange_rate_at_epoch"></a>
 
 ## Function `pool_token_exchange_rate_at_epoch`
@@ -873,6 +889,8 @@ After this pool deactivation, the pool stops earning rewards. Only delegation wi
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pool_token_exchange_rate_at_epoch">pool_token_exchange_rate_at_epoch</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, epoch: u64): <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">PoolTokenExchangeRate</a> {
+    <b>let</b> clamped_epoch = <a href="_get_with_default">option::get_with_default</a>(&pool.deactivation_epoch, epoch);
+    <b>let</b> epoch = <a href="math.md#0x2_math_min">math::min</a>(clamped_epoch, epoch);
     *<a href="table.md#0x2_table_borrow">table::borrow</a>(&pool.exchange_rates, epoch)
 }
 </code></pre>

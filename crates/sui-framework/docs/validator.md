@@ -11,7 +11,7 @@
 -  [Function `verify_proof_of_possession`](#0x2_validator_verify_proof_of_possession)
 -  [Function `new_metadata`](#0x2_validator_new_metadata)
 -  [Function `new`](#0x2_validator_new)
--  [Function `destroy`](#0x2_validator_destroy)
+-  [Function `deactivate`](#0x2_validator_deactivate)
 -  [Function `adjust_stake_and_gas_price`](#0x2_validator_adjust_stake_and_gas_price)
 -  [Function `request_add_delegation`](#0x2_validator_request_add_delegation)
 -  [Function `request_withdraw_delegation`](#0x2_validator_request_withdraw_delegation)
@@ -594,13 +594,14 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
 
 </details>
 
-<a name="0x2_validator_destroy"></a>
+<a name="0x2_validator_deactivate"></a>
 
-## Function `destroy`
+## Function `deactivate`
+
+Deactivate this validator's staking pool
 
 
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_destroy">destroy</a>(self: <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_deactivate">deactivate</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -609,18 +610,8 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_destroy">destroy</a>(self: <a href="validator.md#0x2_validator_Validator">Validator</a>, ctx: &<b>mut</b> TxContext) {
-    <b>let</b> <a href="validator.md#0x2_validator_Validator">Validator</a> {
-        metadata: _,
-        <a href="voting_power.md#0x2_voting_power">voting_power</a>: _,
-        gas_price: _,
-        <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>,
-        commission_rate: _,
-        next_epoch_stake: _,
-        next_epoch_gas_price: _,
-        next_epoch_commission_rate: _,
-    } = self;
-    <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">staking_pool::deactivate_staking_pool</a>(<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>, ctx);
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_deactivate">deactivate</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, ctx: &<b>mut</b> TxContext) {
+    <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">staking_pool::deactivate_staking_pool</a>(&<b>mut</b> self.<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>, ctx)
 }
 </code></pre>
 

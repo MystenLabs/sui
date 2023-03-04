@@ -18,6 +18,8 @@ storage/
 Move.lock
 !crates/sui-framework/Move.lock
 !crates/sui-framework/deps/move-stdlib/Move.lock
+.trace
+.coverage_map.mvcov
 
 # Thumbnails
 ._*

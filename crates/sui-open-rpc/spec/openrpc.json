@@ -4717,6 +4717,23 @@
           }
         ]
       },
+      "MoveOption_for_uint64": {
+        "description": "Rust version of the Move std::option::Option type. Putting it in this file because it's only used here.",
+        "type": "object",
+        "required": [
+          "vec"
+        ],
+        "properties": {
+          "vec": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          }
+        }
+      },
       "MovePackage": {
         "type": "object",
         "required": [
@@ -5565,6 +5582,7 @@
         "description": "Rust version of the Move sui::staking_pool::StakingPool type",
         "type": "object",
         "required": [
+          "deactivation_epoch",
           "exchange_rates",
           "id",
           "pending_delegation",
@@ -5576,6 +5594,9 @@
           "sui_balance"
         ],
         "properties": {
+          "deactivation_epoch": {
+            "$ref": "#/components/schemas/MoveOption_for_uint64"
+          },
           "exchange_rates": {
             "$ref": "#/components/schemas/Table"
           },
@@ -7069,6 +7090,7 @@
         "type": "object",
         "required": [
           "active_validators",
+          "inactive_pools",
           "pending_removals",
           "pending_validators",
           "staking_pool_mappings",
@@ -7080,6 +7102,9 @@
             "items": {
               "$ref": "#/components/schemas/Validator"
             }
+          },
+          "inactive_pools": {
+            "$ref": "#/components/schemas/Table"
           },
           "pending_removals": {
             "type": "array",
