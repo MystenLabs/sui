@@ -35,3 +35,7 @@ sui-types = { path = "../sui-types" }
 sui-keys = { path = "../sui-keys" }
 
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[[bin]]
+name = "orchestrator"
+path = "src/main.rs"

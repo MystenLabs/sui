@@ -74,6 +74,9 @@ impl BenchmarkParameters {
 
 pub enum LoadType {
     Fixed(Vec<usize>),
+
+    // TODO: Use tps regression as additional signal.
+    #[allow(dead_code)]
     Search {
         starting_load: usize,
         latency_increase_tolerance: usize,

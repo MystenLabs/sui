@@ -123,6 +123,7 @@ impl VultrClient {
     }
 
     /// Delete all copies of the public key.
+    #[allow(dead_code)]
     pub async fn remove_key(&self) -> CloudProviderResult<()> {
         while let Some(key) = self.get_key().await? {
             let url = self.base_url.join(&format!("ssh-keys/{}", key.id)).unwrap();

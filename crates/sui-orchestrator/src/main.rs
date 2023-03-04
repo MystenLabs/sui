@@ -1,17 +1,29 @@
 use std::time::Duration;
 
-use clap::Parser;
-use color_eyre::eyre::{Context, Result};
-use sui_orchestrator::{
+use crate::{
     benchmark::{BenchmarkParametersGenerator, LoadType},
     client::{aws::AwsClient, vultr::VultrClient, ServerProviderClient},
     measurement::MeasurementsCollection,
+    orchestrator::Orchestrator,
     plot::Plotter,
     settings::{CloudProvider, Settings},
     ssh::SshConnectionManager,
     testbed::Testbed,
-    Orchestrator,
 };
+use clap::Parser;
+use color_eyre::eyre::{Context, Result};
+
+mod benchmark;
+mod client;
+mod config;
+mod error;
+mod logs;
+mod measurement;
+mod orchestrator;
+mod plot;
+mod settings;
+mod ssh;
+mod testbed;
 
 async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts) -> Result<()> {
     // Create a new testbed.

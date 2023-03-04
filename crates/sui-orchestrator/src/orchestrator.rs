@@ -6,34 +6,24 @@ use std::{
     time::Duration,
 };
 
-use benchmark::BenchmarkParameters;
-use client::Instance;
 use crossterm::{
     cursor::MoveToColumn,
     style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor, Stylize},
 };
 use futures::future::try_join_all;
-use logs::LogsParser;
-use measurement::MeasurementsCollection;
-use settings::Settings;
-use ssh::{SshCommand, SshConnectionManager};
 use tokio::time::{self, sleep, Instant};
 
 use crate::{
-    benchmark::BenchmarkParametersGenerator, config::Config, error::TestbedError,
-    error::TestbedResult,
+    benchmark::{BenchmarkParameters, BenchmarkParametersGenerator},
+    client::Instance,
+    config::Config,
+    ensure,
+    error::{TestbedError, TestbedResult},
+    logs::LogsParser,
+    measurement::MeasurementsCollection,
+    settings::Settings,
+    ssh::{SshCommand, SshConnectionManager},
 };
-
-pub mod benchmark;
-pub mod client;
-mod config;
-mod error;
-mod logs;
-pub mod measurement;
-pub mod plot;
-pub mod settings;
-pub mod ssh;
-pub mod testbed;
 
 pub struct Orchestrator {
     /// The testbed's settings.
@@ -43,8 +33,7 @@ pub struct Orchestrator {
     /// Handle ssh connections to instances.
     ssh_manager: SshConnectionManager,
     skip_testbed_update: bool,
-    skip_testbed_reconfiguration: bool,
-    skip_logs_analysis: bool,
+    skip_logs_processing: bool,
 }
 
 impl Orchestrator {
@@ -61,8 +50,7 @@ impl Orchestrator {
             instances,
             ssh_manager,
             skip_testbed_update: false,
-            skip_testbed_reconfiguration: false,
-            skip_logs_analysis: false,
+            skip_logs_processing: false,
         }
     }
 
@@ -71,13 +59,8 @@ impl Orchestrator {
         self
     }
 
-    pub fn skip_testbed_reconfiguration(mut self, skip_testbed_reconfiguration: bool) -> Self {
-        self.skip_testbed_reconfiguration = skip_testbed_reconfiguration;
-        self
-    }
-
     pub fn skip_logs_analysis(mut self, skip_logs_analysis: bool) -> Self {
-        self.skip_logs_analysis = skip_logs_analysis;
+        self.skip_logs_processing = skip_logs_analysis;
         self
     }
 
@@ -547,15 +530,9 @@ impl Orchestrator {
             self.update().await?;
         }
 
-        // Check whether to reconfigure the testbed before the first run.
-        let mut latest_comittee_status = if self.skip_testbed_reconfiguration {
-            (generator.nodes, generator.faults)
-        } else {
-            (0, 0)
-        };
-
         // Run all benchmarks.
         let mut i = 1;
+        let mut latest_comittee_status = (0, 0);
         while let Some(parameters) = generator.next_parameters() {
             crossterm::execute!(
                 stdout(),
@@ -596,7 +573,7 @@ impl Orchestrator {
             self.cleanup(false).await?;
 
             // Download the log files.
-            if !self.skip_logs_analysis {
+            if !self.skip_logs_processing {
                 let error_counter = self.download_logs(&parameters).await?;
                 error_counter.print_summary();
             }
