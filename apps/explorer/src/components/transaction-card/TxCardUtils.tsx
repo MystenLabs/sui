@@ -212,7 +212,7 @@ export const getDataOnTxDigests = (
                     coinType: transfer?.coinType || null,
                     kind: txKind,
                     From: getTransactionSender(txEff),
-                    timestamp_ms: txEff.timestamp_ms || txEff.timestampMs,
+                    timestamp_ms: txEff.timestampMs,
                     ...(recipient
                         ? {
                               To: recipient,

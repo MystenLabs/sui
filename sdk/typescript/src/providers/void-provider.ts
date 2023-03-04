@@ -4,7 +4,6 @@
 import { HttpHeaders } from '../rpc/client';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
-  CertifiedTransaction,
   TransactionDigest,
   GetTxnDigestsResponse,
   GatewayTxSeqNumber,
@@ -20,7 +19,7 @@ import {
   SuiEventEnvelope,
   SubscriptionId,
   ExecuteTransactionRequestType,
-  SuiExecuteTransactionResponse,
+  SuiTransactionResponse,
   SuiAddress,
   ObjectId,
   TransactionQuery,
@@ -178,7 +177,7 @@ export class VoidProvider extends Provider {
   // Transactions
   async getTransaction(
     _digest: TransactionDigest,
-  ): Promise<CertifiedTransaction> {
+  ): Promise<SuiTransactionResponse> {
     throw this.newError('getTransaction');
   }
 
@@ -186,7 +185,7 @@ export class VoidProvider extends Provider {
     _txnBytes: Uint8Array,
     _signature: SerializedSignature,
     _requestType: ExecuteTransactionRequestType,
-  ): Promise<SuiExecuteTransactionResponse> {
+  ): Promise<SuiTransactionResponse> {
     throw this.newError('executeTransaction with request Type');
   }
 

@@ -3,7 +3,7 @@
 
 import type {
     SignerWithProvider,
-    SuiExecuteTransactionResponse,
+    SuiTransactionResponse,
 } from '@mysten/sui.js';
 
 const DEFAULT_NFT_IMAGE =
@@ -21,7 +21,7 @@ export class ExampleNFT {
         name?: string,
         description?: string,
         imageUrl?: string
-    ): Promise<SuiExecuteTransactionResponse> {
+    ): Promise<SuiTransactionResponse> {
         return await signer.executeMoveCall({
             packageObjectId: '0x2',
             module: 'devnet_nft',
