@@ -23,14 +23,11 @@ export function useOwnedNFT(
         )
             return null;
         const objectOwner = getObjectOwner(objectData);
-        const owner =
-            objectOwner &&
+        return objectOwner &&
             objectOwner !== 'Immutable' &&
             'AddressOwner' in objectOwner &&
             objectOwner.AddressOwner === address
-                ? objectData.details
-                : null;
-
-        return owner;
+            ? objectData.details
+            : null;
     }, [address, objectData]);
 }
