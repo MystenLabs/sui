@@ -16,7 +16,7 @@ import {
   tuple,
 } from 'superstruct';
 import { SuiEvent } from './events';
-import { SuiGasData, SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
+import { SuiGasData, SuiMovePackage, SuiObjectRef } from './objects';
 import {
   ObjectId,
   ObjectOwner,
@@ -45,8 +45,7 @@ export const SuiChangeEpoch = object({
   epoch: EpochId,
   storage_charge: number(),
   computation_charge: number(),
-  // TODO: Make non-optional after v0.26.0 lands everywhere
-  storage_rebate: optional(number()),
+  storage_rebate: number(),
   epoch_start_timestamp_ms: optional(number()),
 });
 export type SuiChangeEpoch = Infer<typeof SuiChangeEpoch>;
@@ -173,11 +172,8 @@ export type OwnedObjectRef = Infer<typeof OwnedObjectRef>;
 export const TransactionEffects = object({
   /** The status of the execution */
   status: ExecutionStatus,
-  /**
-   * The epoch when this transaction was executed
-   * TODO: Changed it to non-optional once this is stable.
-   * */
-  executedEpoch: optional(EpochId),
+  /** The epoch when this transaction was executed */
+  executedEpoch: EpochId,
   gasUsed: GasCostSummary,
   /** The object references of the shared objects used in this transaction. Empty if no shared objects were used. */
   sharedObjects: optional(array(SuiObjectRef)),
@@ -240,21 +236,6 @@ export const DevInspectResults = object({
 });
 export type DevInspectResults = Infer<typeof DevInspectResults>;
 
-export const SuiEffectsFinalityInfo = union([
-  object({ certified: AuthorityQuorumSignInfo }),
-  object({ checkpointed: tuple([number(), number()]) }),
-]);
-export type SuiEffectsFinalityInfo = Infer<typeof SuiEffectsFinalityInfo>;
-
-export const SuiFinalizedEffects = object({
-  transactionEffectsDigest: string(),
-  effects: TransactionEffects,
-  finalityInfo: SuiEffectsFinalityInfo,
-});
-export type SuiFinalizedEffects = Infer<typeof SuiFinalizedEffects>;
-
-// TODO: Remove after devnet 0.28.0
-
 export type GatewayTxSeqNumber = number;
 
 export const GetTxnDigestsResponse = array(TransactionDigest);
@@ -293,44 +274,11 @@ export const TransactionBytes = object({
   inputObjects: unknown(),
 });
 
-export const SuiParsedMergeCoinResponse = object({
-  updatedCoin: SuiObject,
-  updatedGas: SuiObject,
-});
-export type SuiParsedMergeCoinResponse = Infer<
-  typeof SuiParsedMergeCoinResponse
->;
-
-export const SuiParsedSplitCoinResponse = object({
-  updatedCoin: SuiObject,
-  newCoins: array(SuiObject),
-  updatedGas: SuiObject,
-});
-export type SuiParsedSplitCoinResponse = Infer<
-  typeof SuiParsedSplitCoinResponse
->;
-
 export const SuiPackage = object({
   digest: string(),
   objectId: string(),
   version: number(),
 });
-
-export const SuiParsedPublishResponse = object({
-  createdObjects: array(SuiObject),
-  package: SuiPackage,
-  updatedGas: SuiObject,
-});
-export type SuiParsedPublishResponse = Infer<typeof SuiParsedPublishResponse>;
-
-export const SuiParsedTransactionResponse = union([
-  object({ SplitCoin: SuiParsedSplitCoinResponse }),
-  object({ MergeCoin: SuiParsedMergeCoinResponse }),
-  object({ Publish: SuiParsedPublishResponse }),
-]);
-export type SuiParsedTransactionResponse = Infer<
-  typeof SuiParsedTransactionResponse
->;
 
 export const SuiTransaction = object({
   data: SuiTransactionData,

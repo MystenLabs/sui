@@ -98,7 +98,6 @@ export abstract class SignerWithProvider implements Signer {
     );
 
     return {
-      // TODO: Should this include the intent, or just be the raw bytes that are signed?
       messageBytes: toB64(message),
       signature,
     };

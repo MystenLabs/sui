@@ -238,7 +238,6 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         gasPayment = publish.gasPayment;
         break;
     }
-    // TODO: support batch transaction
     return [{ Single: tx }, gasPayment];
   }
 
@@ -336,7 +335,6 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     gasObjectId: ObjectId | undefined,
     signerAddress: SuiAddress,
   ): Promise<TransactionData> {
-    // TODO: Allow people to add tip to the reference gas price by using originalTx.data.gasPrice
     originalTx.data.gasPrice = await this.provider.getReferenceGasPrice();
     if (gasObjectId === undefined) {
       gasObjectId = await this.selectGasPaymentForTransaction(

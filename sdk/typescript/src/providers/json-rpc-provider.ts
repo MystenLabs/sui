@@ -327,7 +327,6 @@ export class JsonRpcProvider extends Provider {
   async getNormalizedMoveModulesByPackage(
     packageId: string,
   ): Promise<SuiMoveNormalizedModules> {
-    // TODO: Add caching since package object does not change
     try {
       return await this.client.requestWithType(
         'sui_getNormalizedMoveModulesByPackage',
@@ -346,7 +345,6 @@ export class JsonRpcProvider extends Provider {
     packageId: string,
     moduleName: string,
   ): Promise<SuiMoveNormalizedModule> {
-    // TODO: Add caching since package object does not change
     try {
       return await this.client.requestWithType(
         'sui_getNormalizedMoveModule',
@@ -366,7 +364,6 @@ export class JsonRpcProvider extends Provider {
     moduleName: string,
     functionName: string,
   ): Promise<SuiMoveNormalizedFunction> {
-    // TODO: Add caching since package object does not change
     try {
       return await this.client.requestWithType(
         'sui_getNormalizedMoveFunction',
