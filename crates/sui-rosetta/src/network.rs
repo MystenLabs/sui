@@ -9,7 +9,7 @@ use strum::IntoEnumIterator;
 
 use fastcrypto::encoding::Hex;
 use sui_types::base_types::ObjectID;
-use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 
 use crate::errors::{Error, ErrorType};
 use crate::types::{
@@ -42,7 +42,12 @@ pub async fn status(
 ) -> Result<NetworkStatusResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
-    let system_state = context.client.read_api().get_sui_system_state().await?;
+    let system_state: SuiSystemState = context
+        .client
+        .read_api()
+        .get_sui_system_state()
+        .await?
+        .into();
 
     let peers = system_state
         .get_staking_pool_info()

@@ -7,11 +7,12 @@ use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
 use sui_json_rpc::api::{GovernanceReadApiClient, GovernanceReadApiServer};
 use sui_json_rpc::SuiRpcModule;
+use sui_json_rpc_types::SuiSystemStateRpc;
 use sui_open_rpc::Module;
 use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::governance::DelegatedStake;
 use sui_types::messages::CommitteeInfoResponse;
-use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
+use sui_types::sui_system_state::ValidatorMetadata;
 
 pub(crate) struct GovernanceReadApi {
     fullnode: HttpClient,
@@ -39,7 +40,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
         self.fullnode.get_committee_info(epoch).await
     }
 
-    async fn get_sui_system_state(&self) -> RpcResult<SuiSystemState> {
+    async fn get_sui_system_state(&self) -> RpcResult<SuiSystemStateRpc> {
         self.fullnode.get_sui_system_state().await
     }
 

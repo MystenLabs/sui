@@ -16,7 +16,7 @@ use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DryRunTransactionResponse, DynamicFieldPage,
     EventPage, GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
     SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter, SuiMoveNormalizedModule, SuiObjectInfo,
-    SuiTransactionResponse, TransactionsPage,
+    SuiSystemStateRpc, SuiTransactionResponse, TransactionsPage,
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{
@@ -30,7 +30,7 @@ use sui_types::messages::{
 };
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary};
 use sui_types::query::{EventQuery, TransactionQuery};
-use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
+use sui_types::sui_system_state::ValidatorMetadata;
 
 use futures::StreamExt;
 use sui_json_rpc::api::{CoinReadApiClient, EventReadApiClient, ReadApiClient, WriteApiClient};
@@ -191,7 +191,7 @@ impl ReadApi {
             .await?)
     }
 
-    pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemState> {
+    pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemStateRpc> {
         Ok(self.api.http.get_sui_system_state().await?)
     }
 
@@ -498,8 +498,8 @@ impl GovernanceApi {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }
 
-    /// Return [SuiSystemState]
-    pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemState> {
+    /// Return [SuiSystemStateRpc]
+    pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemStateRpc> {
         Ok(self.api.http.get_sui_system_state().await?)
     }
 }
