@@ -44,12 +44,14 @@ export function NFTDisplayCard({
     const { data: nftMeta, isLoading } = useGetNFTMeta(objectId);
     const { data: originByteNft, isLoading: originByteLoading } =
         useOriginbyteNft(objectId);
-    const nftName = nftMeta?.name;
+    const nftName =
+        typeof nftMeta?.name === 'string'
+            ? nftMeta?.name
+            : formatAddress(objectId);
 
     // display title is the either originByteNft field name or default nft name or fall back to it the object id
-    const displayTitle =
-        originByteNft?.fields.name || nftName || formatAddress(objectId);
-    const nftUrl = nftMeta?.url || null;
+    const displayTitle = originByteNft?.fields.name || nftName;
+    const nftUrl = nftMeta?.url;
     const fileExtensionType = useFileExtensionType(nftUrl!);
     return (
         <div className={nftDisplayCardStyles({ animateHover, wideView })}>

@@ -47,8 +47,11 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
                 gasBudget: DEFAULT_NFT_TRANSFER_GAS_FEE,
             });
         },
-
-        onSuccess: (response) => {
+        onSuccess: async (response) => {
+            await Promise.all([
+                queryClient.invalidateQueries(['object', objectId]),
+                queryClient.invalidateQueries(['objects-owned']),
+            ]);
             return navigate(
                 `/receipt?${new URLSearchParams({
                     txdigest: getTransactionDigest(response),
@@ -59,19 +62,12 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
         onError: (error) => {
             toast.error(
                 <div className="max-w-xs overflow-hidden flex flex-col">
-                    {error instanceof Error ? (
-                        <small className="text-ellipsis overflow-hidden">
-                            {error.message}
-                        </small>
-                    ) : null}
+                    <small className="text-ellipsis overflow-hidden">
+                        {(error as Error).message || 'Something went wrong'}
+                    </small>
                 </div>
             );
         },
-        onSettled: () =>
-            Promise.all([
-                queryClient.invalidateQueries(['object', objectId]),
-                queryClient.invalidateQueries(['objects-owned']),
-            ]),
     });
 
     const maxGasCoinBalance = coinBalance?.totalBalance || BigInt(0);
