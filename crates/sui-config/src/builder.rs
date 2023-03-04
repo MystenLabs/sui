@@ -390,6 +390,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                         default_end_of_epoch_broadcast_channel_capacity(),
                     checkpoint_executor_config: Default::default(),
                     supported_protocol_versions: Some(SupportedProtocolVersions::SYSTEM_DEFAULT),
+                    sync_db_path: None,
                 }
             })
             .collect();

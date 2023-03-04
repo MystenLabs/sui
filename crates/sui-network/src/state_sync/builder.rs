@@ -21,27 +21,34 @@ use super::{
 };
 use sui_types::storage::WriteStore;
 
-pub struct Builder<S> {
+pub struct Builder<S, R> {
     store: Option<S>,
+    sync_db: Option<R>,
     config: Option<StateSyncConfig>,
     metrics: Option<Metrics>,
 }
 
-impl Builder<()> {
+impl Builder<(), ()> {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             store: None,
+            sync_db: None,
             config: None,
             metrics: None,
         }
     }
 }
 
-impl<S> Builder<S> {
-    pub fn store<NewStore>(self, store: NewStore) -> Builder<NewStore> {
+impl<S, R> Builder<S, R> {
+    pub fn store<NewStore, NewSyncStore>(
+        self,
+        store: NewStore,
+        sync_db: Option<NewSyncStore>,
+    ) -> Builder<NewStore, NewSyncStore> {
         Builder {
             store: Some(store),
+            sync_db,
             config: self.config,
             metrics: self.metrics,
         }
@@ -58,12 +65,13 @@ impl<S> Builder<S> {
     }
 }
 
-impl<S> Builder<S>
+impl<S, R> Builder<S, R>
 where
     S: WriteStore + Clone + Send + Sync + 'static,
     <S as ReadStore>::Error: std::error::Error,
+    R: ReadStore,
 {
-    pub fn build(self) -> (UnstartedStateSync<S>, StateSyncServer<impl StateSync>) {
+    pub fn build(self) -> (UnstartedStateSync<S, R>, StateSyncServer<impl StateSync>) {
         let state_sync_config = self.config.clone().unwrap_or_default();
         let (builder, server) = self.build_internal();
         let mut state_sync_server = StateSyncServer::new(server);
@@ -105,9 +113,10 @@ where
         (builder, state_sync_server)
     }
 
-    pub(super) fn build_internal(self) -> (UnstartedStateSync<S>, Server<S>) {
+    pub(super) fn build_internal(self) -> (UnstartedStateSync<S, R>, Server<S>) {
         let Builder {
             store,
+            sync_db,
             config,
             metrics,
         } = self;
@@ -146,13 +155,14 @@ where
                 peer_heights,
                 checkpoint_event_sender,
                 metrics,
+                sync_db,
             },
             server,
         )
     }
 }
 
-pub struct UnstartedStateSync<S> {
+pub struct UnstartedStateSync<S, R> {
     pub(super) config: StateSyncConfig,
     pub(super) handle: Handle,
     pub(super) mailbox: mpsc::Receiver<StateSyncMessage>,
@@ -160,14 +170,16 @@ pub struct UnstartedStateSync<S> {
     pub(super) peer_heights: Arc<RwLock<PeerHeights>>,
     pub(super) checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
     pub(super) metrics: Metrics,
+    pub(super) sync_db: Option<R>,
 }
 
-impl<S> UnstartedStateSync<S>
+impl<S, R> UnstartedStateSync<S, R>
 where
     S: WriteStore + Clone + Send + Sync + 'static,
     <S as ReadStore>::Error: std::error::Error,
+    R: ReadStore + Clone + Send + Sync + 'static,
 {
-    pub(super) fn build(self, network: anemo::Network) -> (StateSyncEventLoop<S>, Handle) {
+    pub(super) fn build(self, network: anemo::Network) -> (StateSyncEventLoop<S, R>, Handle) {
         let Self {
             config,
             handle,
@@ -176,6 +188,7 @@ where
             peer_heights,
             checkpoint_event_sender,
             metrics,
+            sync_db,
         } = self;
 
         (
@@ -191,6 +204,7 @@ where
                 checkpoint_event_sender,
                 network,
                 metrics,
+                sync_db,
             },
             handle,
         )

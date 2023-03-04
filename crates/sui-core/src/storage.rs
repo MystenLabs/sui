@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use sui_types::base_types::TransactionDigest;
@@ -18,7 +19,12 @@ use sui_types::messages_checkpoint::EndOfEpochData;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::storage::ReadStore;
 use sui_types::storage::WriteStore;
+use typed_store::rocks::MetricConf;
 use typed_store::Map;
+
+use crate::authority::authority_store_tables::AuthorityPerpetualTables;
+use crate::authority::authority_store_tables::AuthorityPerpetualTablesReadOnly;
+use crate::checkpoints::CheckpointStoreReadOnly;
 
 use crate::authority::AuthorityStore;
 use crate::checkpoints::CheckpointStore;
@@ -250,5 +256,95 @@ impl WriteStore for RocksDbStore {
             .perpetual_tables
             .effects
             .insert(&transaction_effects.digest(), &transaction_effects)
+    }
+}
+
+#[derive(Clone)]
+pub struct RocksDbSyncStore {
+    perpetual_tables: Arc<AuthorityPerpetualTablesReadOnly>,
+    checkpoint_store: Arc<CheckpointStoreReadOnly>,
+}
+
+impl RocksDbSyncStore {
+    pub fn open_for_read(path: &PathBuf) -> RocksDbSyncStore {
+        RocksDbSyncStore {
+            perpetual_tables: Arc::new(AuthorityPerpetualTables::get_read_only_handle(
+                path.join("store").join("perpetual"),
+                None,
+                None,
+                MetricConf::with_db_name("perpetual_sync"),
+            )),
+            checkpoint_store: Arc::new(CheckpointStore::get_read_only_handle(
+                path.join("checkpoints"),
+                None,
+                None,
+                MetricConf::with_db_name("checkpoint_sync"),
+            )),
+        }
+    }
+}
+
+impl ReadStore for RocksDbSyncStore {
+    type Error = typed_store::rocks::TypedStoreError;
+
+    fn get_checkpoint_by_digest(
+        &self,
+        digest: &CheckpointDigest,
+    ) -> Result<Option<VerifiedCheckpoint>, Self::Error> {
+        self.checkpoint_store
+            .checkpoint_by_digest
+            .get(digest)
+            .map(|maybe_checkpoint| maybe_checkpoint.map(VerifiedCheckpoint::new_unchecked))
+    }
+
+    fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Result<Option<VerifiedCheckpoint>, Self::Error> {
+        self.checkpoint_store
+            .certified_checkpoints
+            .get(&sequence_number)
+            .map(|maybe_checkpoint| maybe_checkpoint.map(VerifiedCheckpoint::new_unchecked))
+    }
+
+    fn get_highest_verified_checkpoint(&self) -> Result<VerifiedCheckpoint, Self::Error> {
+        unimplemented!();
+    }
+
+    fn get_highest_synced_checkpoint(&self) -> Result<VerifiedCheckpoint, Self::Error> {
+        unimplemented!();
+    }
+
+    fn get_checkpoint_contents(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> Result<Option<CheckpointContents>, Self::Error> {
+        self.checkpoint_store.checkpoint_content.get(digest)
+    }
+
+    fn get_committee(&self, epoch: EpochId) -> Result<Option<Committee>, Self::Error> {
+        unimplemented!();
+    }
+
+    fn get_transaction(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<VerifiedCertificate>, Self::Error> {
+        if let Some(transaction) = self.perpetual_tables.certificates.get(digest)? {
+            return Ok(Some(transaction.into()));
+        }
+
+        if let Some(transaction) = self.perpetual_tables.synced_transactions.get(digest)? {
+            return Ok(Some(transaction.into()));
+        }
+
+        Ok(None)
+    }
+
+    fn get_transaction_effects(
+        &self,
+        digest: &TransactionEffectsDigest,
+    ) -> Result<Option<TransactionEffects>, Self::Error> {
+        self.perpetual_tables.effects.get(digest)
     }
 }

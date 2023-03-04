@@ -96,6 +96,12 @@ pub struct NodeConfig {
     /// order to test protocol upgrades.
     #[serde(skip)]
     pub supported_protocol_versions: Option<SupportedProtocolVersions>,
+
+    /// A database from which to read checkpoints and their
+    /// contents instead of doing sync over the network when
+    /// possible.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_db_path: Option<PathBuf>,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {

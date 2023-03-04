@@ -25,6 +25,7 @@ use sui_core::authority_server::ValidatorService;
 use sui_core::checkpoints::checkpoint_executor;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::storage::RocksDbStore;
+use sui_core::storage::RocksDbSyncStore;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
@@ -219,8 +220,13 @@ impl SuiNode {
             None
         };
 
+        let sync_db = config
+            .sync_db_path
+            .as_ref()
+            .map(|path| RocksDbSyncStore::open_for_read(path));
+
         let (p2p_network, discovery_handle, state_sync_handle) =
-            Self::create_p2p_network(&config, state_sync_store, &prometheus_registry)?;
+            Self::create_p2p_network(&config, state_sync_store, sync_db, &prometheus_registry)?;
 
         let state = AuthorityState::new(
             config.protocol_public_key(),
@@ -366,11 +372,12 @@ impl SuiNode {
     fn create_p2p_network(
         config: &NodeConfig,
         state_sync_store: RocksDbStore,
+        sync_db_opt: Option<RocksDbSyncStore>,
         prometheus_registry: &Registry,
     ) -> Result<(Network, discovery::Handle, state_sync::Handle)> {
         let (state_sync, state_sync_server) = state_sync::Builder::new()
             .config(config.p2p_config.state_sync.clone().unwrap_or_default())
-            .store(state_sync_store)
+            .store(state_sync_store, sync_db_opt)
             .with_metrics(prometheus_registry)
             .build();
 

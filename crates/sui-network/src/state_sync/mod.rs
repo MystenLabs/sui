@@ -52,6 +52,7 @@ use anemo::{types::PeerEvent, PeerId, Request, Response, Result};
 use futures::{FutureExt, StreamExt};
 use std::{
     collections::HashMap,
+    path::PathBuf,
     sync::{Arc, RwLock},
     time::{Duration, SystemTime},
 };
@@ -73,7 +74,7 @@ use tokio::{
     sync::{broadcast, mpsc},
     task::{AbortHandle, JoinSet},
 };
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/sui.StateSync.rs"));
@@ -257,7 +258,7 @@ enum StateSyncMessage {
     SyncedCheckpoint(Box<VerifiedCheckpoint>),
 }
 
-struct StateSyncEventLoop<S> {
+struct StateSyncEventLoop<S, R> {
     config: StateSyncConfig,
 
     mailbox: mpsc::Receiver<StateSyncMessage>,
@@ -273,12 +274,15 @@ struct StateSyncEventLoop<S> {
     checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
     network: anemo::Network,
     metrics: Metrics,
+
+    sync_db: Option<R>,
 }
 
-impl<S> StateSyncEventLoop<S>
+impl<S, R> StateSyncEventLoop<S, R>
 where
     S: WriteStore + Clone + Send + Sync + 'static,
     <S as ReadStore>::Error: std::error::Error,
+    R: ReadStore + Clone + Send + Sync + 'static,
 {
     // Note: A great deal of care is taken to ensure that all event handlers are non-asynchronous
     // and that the only "await" points are from the select macro picking which event to handle.
@@ -545,6 +549,7 @@ where
                 // The if condition should ensure that this is Some
                 highest_known_checkpoint.unwrap(),
                 self.weak_sender.clone(),
+                self.sync_db.clone(),
             )
             .map(|result| match result {
                 Ok(()) => {}
@@ -753,7 +758,7 @@ fn flag_bad_checkpoint_peer(
     Err(anyhow::anyhow!("unable to verify checkpoint {checkpoint}"))
 }
 
-async fn sync_to_checkpoint<S>(
+async fn sync_to_checkpoint<S, R>(
     network: anemo::Network,
     store: S,
     peer_heights: Arc<RwLock<PeerHeights>>,
@@ -764,10 +769,12 @@ async fn sync_to_checkpoint<S>(
     timeout: Duration,
     checkpoint: Checkpoint,
     sender: mpsc::WeakSender<StateSyncMessage>,
+    sync_store: Option<R>,
 ) -> Result<()>
 where
     S: WriteStore,
     <S as ReadStore>::Error: std::error::Error,
+    R: ReadStore + Clone,
 {
     metrics.set_highest_known_checkpoint(checkpoint.sequence_number());
 
@@ -781,6 +788,8 @@ where
             current.sequence_number(),
         ));
     }
+
+    error!("Has a sync DB store: {}", sync_store.is_some());
 
     // Define an epoch within which we are doing sync. After that we stop this
     // sync and start again a sync for the next epoch. If the last verified checkpoint
@@ -810,6 +819,7 @@ where
                 &network,
                 transaction_download_concurrency,
                 timeout,
+                sync_store.clone(),
             )
         })
         .pipe(futures::stream::iter)
@@ -953,12 +963,56 @@ where
     Ok(())
 }
 
-fn download_full_checkpoint(
+fn read_checkpoint_from_sync_db<R>(
+    next: u64,
+    sync_store: Option<R>,
+) -> Result<
+    Option<(
+        CertifiedCheckpointSummary,
+        CheckpointContents,
+        Vec<(CertifiedTransaction, TransactionEffects)>,
+    )>,
+    (),
+>
+where
+    R: ReadStore + Clone,
+{
+    // First try to read from store
+    if let Some(sync_store) = sync_store {
+        let Some(summary) = sync_store.get_checkpoint_by_sequence_number(next).map_err(|_| ())? else {
+                return Ok(None);
+            };
+        let Some(contents) = sync_store.get_checkpoint_contents(&summary.content_digest()).map_err(|_| ())? else {
+                return Ok(None);
+            };
+
+        let mut transactions_effects = Vec::new();
+        for item in contents.iter() {
+            let Some(transaction) = sync_store.get_transaction(&item.transaction).map_err(|_| ())? else {
+                    return Ok(None);
+                };
+            let Some(effects) = sync_store.get_transaction_effects(&item.effects).map_err(|_| ())? else {
+                    return Ok(None);
+                };
+
+            transactions_effects.push((transaction.into_inner(), effects));
+        }
+
+        return Ok(Some((summary.into_inner(), contents, transactions_effects)));
+    } else {
+        return Ok(None);
+    }
+
+    Err(())
+}
+
+fn download_full_checkpoint<R>(
     next: u64,
     peers: Vec<(PeerId, PeerStateSyncInfo)>,
     network: &anemo::Network,
     transaction_download_concurrency: usize,
     timeout: Duration,
+    sync_store: Option<R>,
 ) -> impl core::future::Future<
     Output = (
         Option<(
@@ -969,7 +1023,10 @@ fn download_full_checkpoint(
         u64,
         Option<PeerId>,
     ),
-> {
+>
+where
+    R: ReadStore + Clone,
+{
     let mut peers = peers
         .iter()
         // Filter out any peers who can't help with this particular checkpoint
@@ -984,6 +1041,11 @@ fn download_full_checkpoint(
 
     async move {
         let now = tokio::time::Instant::now();
+
+        // First try to read from DB
+        if let Ok(Some(result)) = read_checkpoint_from_sync_db(next, sync_store) {
+            return (Some(result), next, None);
+        }
 
         // Iterate through our selected peers trying each one in turn until we're able to
         // successfully get the target checkpoint
