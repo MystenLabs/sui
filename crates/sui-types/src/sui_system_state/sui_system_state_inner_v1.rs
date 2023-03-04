@@ -10,6 +10,7 @@ use crate::crypto::AuthorityPublicKeyBytes;
 use crate::dynamic_field::{derive_dynamic_field_id, Field};
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
+use crate::sui_serde::AsMultiaddr;
 use crate::sui_serde::Readable;
 use crate::id::ID;
 use crate::sui_system_state::epoch_start_sui_system_state::{
@@ -31,6 +32,10 @@ use super::SuiSystemStateTrait;
 const E_METADATA_INVALID_PUBKEY: u64 = 1;
 const E_METADATA_INVALID_NET_PUBKEY: u64 = 2;
 const E_METADATA_INVALID_WORKER_PUBKEY: u64 = 3;
+const E_METADATA_INVALID_NET_ADDR: u64 = 4;
+const E_METADATA_INVALID_P2P_ADDR: u64 = 5;
+const E_METADATA_INVALID_PRIMARY_ADDR: u64 = 6;
+const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 
 /// Rust version of the Move sui::sui_system::SystemParameters type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -65,13 +70,17 @@ pub struct ValidatorMetadataV1 {
     pub image_url: String,
     pub project_url: String,
     #[schemars(with = "String")]
-    pub net_address: Multiaddr,
+    #[serde_as(as = "Readable<AsMultiaddr, _>")]
+    pub net_address: Vec<u8>,
     #[schemars(with = "String")]
-    pub p2p_address: Multiaddr,
+    #[serde_as(as = "Readable<AsMultiaddr, _>")]
+    pub p2p_address: Vec<u8>,
     #[schemars(with = "String")]
-    pub primary_address: Multiaddr,
+    #[serde_as(as = "Readable<AsMultiaddr, _>")]
+    pub primary_address: Vec<u8>,
     #[schemars(with = "String")]
-    pub worker_address: Multiaddr,
+    #[serde_as(as = "Readable<AsMultiaddr, _>")]
+    pub worker_address: Vec<u8>,
     #[schemars(with = "Option<Base58>")]
     #[serde_as(as = "Readable<Option<Base58>, _>")]
     pub next_epoch_protocol_pubkey_bytes: Option<Vec<u8>>,
@@ -85,13 +94,17 @@ pub struct ValidatorMetadataV1 {
     #[serde_as(as = "Readable<Option<Base58>, _>")]
     pub next_epoch_worker_pubkey_bytes: Option<Vec<u8>>,
     #[schemars(with = "Option<String>")]
-    pub next_epoch_net_address: Option<Multiaddr>,
+    #[serde_as(as = "Readable<Option<AsMultiaddr>, _>")]
+    pub next_epoch_net_address: Option<Vec<u8>>,
     #[schemars(with = "Option<String>")]
-    pub next_epoch_p2p_address: Option<Multiaddr>,
+    #[serde_as(as = "Readable<Option<AsMultiaddr>, _>")]
+    pub next_epoch_p2p_address: Option<Vec<u8>>,
     #[schemars(with = "Option<String>")]
-    pub next_epoch_primary_address: Option<Multiaddr>,
+    #[serde_as(as = "Readable<Option<AsMultiaddr>, _>")]
+    pub next_epoch_primary_address: Option<Vec<u8>>,
     #[schemars(with = "Option<String>")]
-    pub next_epoch_worker_address: Option<Multiaddr>,
+    #[serde_as(as = "Readable<Option<AsMultiaddr>, _>")]
+    pub next_epoch_worker_address: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone)]
@@ -133,14 +146,18 @@ impl ValidatorMetadataV1 {
         let worker_pubkey =
             narwhal_crypto::NetworkPublicKey::from_bytes(self.worker_pubkey_bytes.as_ref())
                 .map_err(|_| E_METADATA_INVALID_WORKER_PUBKEY)?;
-        let net_address = self.net_address.clone();
-        let p2p_address = self.p2p_address.clone();
+        let net_address = Multiaddr::try_from(self.net_address.clone())
+            .map_err(|_| E_METADATA_INVALID_NET_ADDR)?;
+        let p2p_address = Multiaddr::try_from(self.p2p_address.clone())
+            .map_err(|_| E_METADATA_INVALID_P2P_ADDR)?;
         // Also make sure that the p2p address is a valid anemo address.
         // TODO: This will trigger a bunch of Move test failures today since we did not give proper
         // value for p2p address.
         // multiaddr_to_anemo_address(&p2p_address).ok_or(E_METADATA_INVALID_P2P_ADDR)?;
-        let primary_address = self.primary_address.clone();
-        let worker_address = self.worker_address.clone();
+        let primary_address = Multiaddr::try_from(self.primary_address.clone())
+            .map_err(|_| E_METADATA_INVALID_PRIMARY_ADDR)?;
+        let worker_address = Multiaddr::try_from(self.worker_address.clone())
+            .map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?;
 
         let next_epoch_protocol_pubkey = match self.next_epoch_protocol_pubkey_bytes.clone() {
             None => Ok::<Option<narwhal_crypto::PublicKey>, u64>(None),
@@ -167,10 +184,33 @@ impl ValidatorMetadataV1 {
                 )),
             }?;
 
-        let next_epoch_net_address = self.next_epoch_net_address.clone();
-        let next_epoch_p2p_address = self.next_epoch_p2p_address.clone();
-        let next_epoch_primary_address = self.next_epoch_primary_address.clone();
-        let next_epoch_worker_address = self.next_epoch_worker_address.clone();
+        let next_epoch_net_address = match self.next_epoch_net_address.clone() {
+            None => Ok::<Option<Multiaddr>, u64>(None),
+            Some(address) => Ok(Some(
+                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_NET_ADDR)?,
+            )),
+        }?;
+
+        let next_epoch_p2p_address = match self.next_epoch_p2p_address.clone() {
+            None => Ok::<Option<Multiaddr>, u64>(None),
+            Some(address) => Ok(Some(
+                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_P2P_ADDR)?,
+            )),
+        }?;
+
+        let next_epoch_primary_address = match self.next_epoch_primary_address.clone() {
+            None => Ok::<Option<Multiaddr>, u64>(None),
+            Some(address) => Ok(Some(
+                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_PRIMARY_ADDR)?,
+            )),
+        }?;
+
+        let next_epoch_worker_address = match self.next_epoch_worker_address.clone() {
+            None => Ok::<Option<Multiaddr>, u64>(None),
+            Some(address) => Ok(Some(
+                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?,
+            )),
+        }?;
 
         Ok(VerifiedValidatorMetadataV1 {
             sui_address: self.sui_address,
@@ -199,12 +239,12 @@ impl ValidatorMetadataV1 {
 }
 
 impl ValidatorMetadataV1 {
-    pub fn network_address(&self) -> Multiaddr {
-        self.net_address.clone()
+    pub fn network_address(&self) -> Result<Multiaddr> {
+        Multiaddr::try_from(self.net_address.clone()).map_err(Into::into)
     }
 
-    pub fn p2p_address(&self) -> Multiaddr {
-        self.p2p_address.clone()
+    pub fn p2p_address(&self) -> Result<Multiaddr> {
+        Multiaddr::try_from(self.p2p_address.clone()).map_err(Into::into)
     }
 }
 

@@ -554,8 +554,8 @@ impl Builder {
             );
             assert_eq!(validator.name(), onchain_validator.metadata.name);
             assert_eq!(
-                validator.network_address(),
-                &onchain_validator.metadata.net_address
+                validator.network_address().to_vec(),
+                onchain_validator.metadata.net_address
             );
         }
 
