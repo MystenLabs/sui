@@ -69,14 +69,14 @@ export function NFTDisplayCard({
                     borderRadius={borderRadius}
                     size={size}
                 />
-                {wideView ? (
+                {wideView && (
                     <div className="flex flex-col gap-1 flex-1 min-w-0 ml-1">
                         <Heading variant="heading6" color="gray-90" truncate>
                             {displayTitle}
                         </Heading>
 
                         <div className="text-gray-75 text-body font-medium">
-                            {nftMeta?.url ? (
+                            {nftUrl ? (
                                 `${fileExtensionType.name} ${fileExtensionType.type}`
                             ) : (
                                 <span className="uppercase font-normal text-bodySmall">
@@ -85,7 +85,8 @@ export function NFTDisplayCard({
                             )}
                         </div>
                     </div>
-                ) : showLabel ? (
+                )}
+                {showLabel && !wideView && (
                     <div
                         className={cx(
                             'flex-1 mt-2 text-steel-dark truncate overflow-hidden max-w-full',
@@ -96,7 +97,7 @@ export function NFTDisplayCard({
                     >
                         {displayTitle}
                     </div>
-                ) : null}
+                )}
             </Loading>
         </div>
     );
