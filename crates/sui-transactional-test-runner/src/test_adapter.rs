@@ -500,7 +500,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 sender,
                 gas_budget,
             }) => {
-                let obj_arg = SuiValue::Object(fake_id).into_call_args(&self)?;
+                let obj_arg = SuiValue::Object(fake_id).into_call_args(self)?;
                 let recipient = match self.accounts.get(&recipient) {
                     Some((recipient, _)) => *recipient,
                     None => panic!("Unbound account {}", recipient),

@@ -724,7 +724,7 @@ fn check_private_generics<E: fmt::Debug, S: StorageView<E>>(
         for ty in type_arguments {
             let abilities = context
                 .session
-                .get_type_abilities(&ty)
+                .get_type_abilities(ty)
                 .map_err(|e| context.convert_vm_error(e))?;
             if !abilities.has_store() {
                 let msg = format!(
