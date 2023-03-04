@@ -13,7 +13,7 @@ use crate::error::{SettingsError, SettingsResult};
 pub struct Repository {
     #[serde(deserialize_with = "parse_url")]
     pub url: Url,
-    pub branch: String,
+    pub commit: String,
 }
 
 fn parse_url<'de, D>(deserializer: D) -> Result<Url, D::Error>
@@ -129,7 +129,7 @@ impl Settings {
             specs: "small".into(),
             repository: Repository {
                 url: Url::parse("https://example.net/author/repo").unwrap(),
-                branch: "main".into(),
+                commit: "main".into(),
             },
             results_directory: "results".into(),
             logs_directory: "logs".into(),

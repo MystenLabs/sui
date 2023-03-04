@@ -204,7 +204,7 @@ impl Orchestrator {
     }
 
     pub async fn update(&self) -> TestbedResult<()> {
-        let branch = self.settings.repository.branch.clone();
+        let branch = self.settings.repository.commit.clone();
         crossterm::execute!(
             stdout(),
             Print(format!(

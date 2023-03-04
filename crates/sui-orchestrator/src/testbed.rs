@@ -72,7 +72,7 @@ impl<C: ServerProviderClient> Testbed<C> {
             "{} {} ({})",
             "Repo:".bold(),
             self.settings.repository.url,
-            self.settings.repository.branch
+            self.settings.repository.commit
         );
 
         let mut table = Table::new();
