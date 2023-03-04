@@ -30,7 +30,7 @@ function AppsPlayGround() {
         useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value ?? [];
     const mintMutation = useMutation({
         mutationKey: ['mint-nft'],
-        mutationFn: async () => {
+        mutationFn: () => {
             if (!signer) throw new Error('No signer found');
             trackEvent('MintDevnetNFT');
             return signer.executeMoveCall({
