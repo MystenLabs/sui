@@ -4,6 +4,7 @@
 use crate::ValidatorProxy;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_types::sui_system_state::SuiSystemStateTrait;
 use tokio::sync::oneshot::Sender;
 use tokio::sync::watch;
 use tokio::sync::watch::Receiver;
@@ -29,8 +30,8 @@ impl SystemStateObserver {
                     _ = interval.tick() => {
                         match proxy.get_latest_system_state_object().await {
                             Ok(result) => {
-                                if tx.send(result.reference_gas_price).is_ok() {
-                                    info!("Reference gas price = {:?}", result.reference_gas_price);
+                                if tx.send(result.reference_gas_price()).is_ok() {
+                                    info!("Reference gas price = {:?}", result.reference_gas_price()    );
                                 }
                             }
                             Err(err) => {

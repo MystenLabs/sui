@@ -26,7 +26,6 @@ use sui_core::{
 use sui_json_rpc_types::{SuiObjectRead, SuiTransactionEffects};
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::messages::TransactionEvents;
 use sui_types::{
     base_types::ObjectID,
@@ -45,6 +44,10 @@ use sui_types::{
 use sui_types::{
     base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo,
     messages::ExecuteTransactionRequestType, object::Owner,
+};
+use sui_types::{
+    base_types::{AuthorityName, SuiAddress},
+    sui_system_state::SuiSystemStateTrait,
 };
 use sui_types::{error::SuiError, sui_system_state::SuiSystemState};
 use tokio::{task::JoinSet, time::timeout};
@@ -270,7 +273,10 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
     async fn get_latest_system_state_object(&self) -> Result<SuiSystemState, anyhow::Error> {
         let auth_agg = self.qd.authority_aggregator().load();
-        auth_agg.get_latest_system_state_object_for_testing().await
+        auth_agg
+            .get_latest_system_state_object_for_testing()
+            .await
+            .map(SuiSystemState::new_for_benchmarking)
     }
 
     async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
@@ -477,10 +483,9 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     async fn get_validators(&self) -> Result<Vec<SuiAddress>, anyhow::Error> {
         let system_state = self.get_latest_system_state_object().await?;
         Ok(system_state
-            .validators
-            .active_validators
+            .get_validator_metadata_vec()
             .into_iter()
-            .map(|v| v.metadata.sui_address)
+            .map(|metadata| metadata.sui_address)
             .collect())
     }
 }

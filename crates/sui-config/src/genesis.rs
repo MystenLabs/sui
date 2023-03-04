@@ -40,7 +40,7 @@ use sui_types::messages_checkpoint::{
 use sui_types::object::Owner;
 use sui_types::sui_system_state::{
     get_sui_system_state, get_sui_system_state_version, get_sui_system_state_wrapper,
-    SuiSystemState, SuiSystemStateWrapper,
+    SuiSystemStateInnerGenesis, SuiSystemStateTrait, SuiSystemStateWrapper,
 };
 use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::MOVE_STDLIB_ADDRESS;
@@ -164,8 +164,10 @@ impl Genesis {
             .expect("Sui System State Wrapper object must always exist")
     }
 
-    pub fn sui_system_object(&self) -> SuiSystemState {
-        get_sui_system_state(&self.objects()).expect("Sui System State object must always exist")
+    pub fn sui_system_object(&self) -> SuiSystemStateInnerGenesis {
+        get_sui_system_state(&self.objects())
+            .expect("Sui System State object must always exist")
+            .into_genesis_version()
     }
 
     pub fn clock(&self) -> Clock {

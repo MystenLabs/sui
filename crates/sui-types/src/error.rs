@@ -421,6 +421,9 @@ pub enum SuiError {
     #[error("Failed to get the system state object content")]
     SuiSystemStateNotFound,
 
+    #[error("Found the sui system state object but it has an unexpected version")]
+    SuiSystemStateUnexpectedVersion,
+
     #[error("unknown error: {0}")]
     Unknown(String),
 }
