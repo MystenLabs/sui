@@ -3,6 +3,7 @@
 
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
+use sui_json_rpc_types::DelegatedStake;
 
 use sui_json_rpc_types::{DelegatedStake, SuiCommittee};
 use sui_open_rpc_macros::open_rpc;
