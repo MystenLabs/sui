@@ -233,7 +233,11 @@ impl SshConnection {
         let exit_status = channel.exit_status()?;
         ensure!(
             exit_status == 0,
-            SshError::NonZeroExitCode(exit_status, stderr.clone())
+            SshError::NonZeroExitCode {
+                address: self.address,
+                code: exit_status,
+                message: stderr.clone()
+            }
         );
 
         Ok((stdout, stderr))

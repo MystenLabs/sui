@@ -169,7 +169,6 @@ impl Orchestrator {
         .unwrap();
 
         let url = self.settings.repository.url.clone();
-        let name = self.settings.repository_name();
         let command = [
             "sudo apt-get update",
             "sudo apt-get -y upgrade",
@@ -191,7 +190,7 @@ impl Orchestrator {
             // Disable UFW.
             "sudo ufw disable",
             // Clone the repo.
-            &format!("(git clone {url} || (cd {name} ; git pull))"),
+            &format!("(git clone {url} || true)"),
         ]
         .join(" && ");
 
@@ -432,7 +431,7 @@ impl Orchestrator {
                         MoveToColumn(0),
                         Print(format!(
                             "[{:?}s] Scraping metrics...",
-                            now.duration_since(start).as_secs_f64().ceil()
+                            now.duration_since(start).as_secs_f64().ceil() as u64
                         ))
                     )
                     .unwrap();

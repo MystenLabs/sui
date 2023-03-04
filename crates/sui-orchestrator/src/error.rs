@@ -65,8 +65,12 @@ pub enum SshError {
         error: std::io::Error,
     },
 
-    #[error("Remote execution returned exit code ({0}): {1}")]
-    NonZeroExitCode(i32, String),
+    #[error("Remote execution on {address} returned exit code ({code}): {message}")]
+    NonZeroExitCode {
+        address: SocketAddr,
+        code: i32,
+        message: String,
+    },
 }
 
 pub type TestbedResult<T> = Result<T, TestbedError>;
