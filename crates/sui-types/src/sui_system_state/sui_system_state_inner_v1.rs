@@ -12,6 +12,8 @@ use crate::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartValidatorInfo,
 };
 use anyhow::Result;
+use enum_dispatch::enum_dispatch;
+use fastcrypto::encoding::Base58;
 use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
@@ -39,26 +41,50 @@ pub struct SystemParametersV1 {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct ValidatorMetadataV1 {
     pub sui_address: SuiAddress,
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Readable<Base58, _>")]
     pub protocol_pubkey_bytes: Vec<u8>,
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Readable<Base58, _>")]
     pub network_pubkey_bytes: Vec<u8>,
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Readable<Base58, _>")]
     pub worker_pubkey_bytes: Vec<u8>,
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Readable<Base58, _>")]
     pub proof_of_possession_bytes: Vec<u8>,
     pub name: String,
     pub description: String,
     pub image_url: String,
     pub project_url: String,
-    pub net_address: Vec<u8>,
-    pub p2p_address: Vec<u8>,
-    pub primary_address: Vec<u8>,
-    pub worker_address: Vec<u8>,
+    #[schemars(with = "String")]
+    pub net_address: Multiaddr,
+    #[schemars(with = "String")]
+    pub p2p_address: Multiaddr,
+    #[schemars(with = "String")]
+    pub primary_address: Multiaddr,
+    #[schemars(with = "String")]
+    pub worker_address: Multiaddr,
+    #[schemars(with = "Option<Base58>")]
+    #[serde_as(as = "Readable<Option<Base58>, _>")]
     pub next_epoch_protocol_pubkey_bytes: Option<Vec<u8>>,
+    #[schemars(with = "Option<Base58>")]
+    #[serde_as(as = "Readable<Option<Base58>, _>")]
     pub next_epoch_proof_of_possession: Option<Vec<u8>>,
+    #[schemars(with = "Option<Base58>")]
+    #[serde_as(as = "Readable<Option<Base58>, _>")]
     pub next_epoch_network_pubkey_bytes: Option<Vec<u8>>,
+    #[schemars(with = "Option<Base58>")]
+    #[serde_as(as = "Readable<Option<Base58>, _>")]
     pub next_epoch_worker_pubkey_bytes: Option<Vec<u8>>,
-    pub next_epoch_net_address: Option<Vec<u8>>,
-    pub next_epoch_p2p_address: Option<Vec<u8>>,
-    pub next_epoch_primary_address: Option<Vec<u8>>,
-    pub next_epoch_worker_address: Option<Vec<u8>>,
+    #[schemars(with = "Option<String>")]
+    pub next_epoch_net_address: Option<Multiaddr>,
+    #[schemars(with = "Option<String>")]
+    pub next_epoch_p2p_address: Option<Multiaddr>,
+    #[schemars(with = "Option<String>")]
+    pub next_epoch_primary_address: Option<Multiaddr>,
+    #[schemars(with = "Option<String>")]
+    pub next_epoch_worker_address: Option<Multiaddr>,
 }
 
 #[derive(Debug, Clone)]
