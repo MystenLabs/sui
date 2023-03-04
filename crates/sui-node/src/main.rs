@@ -49,8 +49,6 @@ async fn main() -> Result<()> {
     // TODO: re-enable after we figure out how to eliminate crashes in prod because of this.
     // ProtocolConfig::poison_get_for_min_version();
 
-    return Ok(());
-
     let args = Args::parse();
     let mut config = NodeConfig::load(&args.config_path)?;
     assert!(
