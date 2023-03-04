@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatAddress, type SuiObjectData as SuiObjectType } from '@mysten/sui.js';
+import {
+    formatAddress,
+    type SuiObjectData as SuiObjectType,
+} from '@mysten/sui.js';
 import { cva } from 'class-variance-authority';
 import cl from 'classnames';
 
