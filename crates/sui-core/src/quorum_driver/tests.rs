@@ -246,9 +246,11 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
 
     let tx2 = make_tx(&gas, sender, &keypair);
     let res = quorum_driver.submit_transaction(tx2).await.unwrap().await;
+
     // Aggregator waits for all responses when it sees a conflicting tx and because
-    // there are >= f+1 good responses and conflicting tx1. Neither transaction
-    // can be retried due to client double spend and this is a fatal error.
+    // there are not enough retryable errors to push the original tx or the most staked
+    // conflicting tx >= 2f+1 stake. Neither transaction can be retried due to client
+    // double spend and this is a fatal error.
     if let Err(QuorumDriverError::ObjectsDoubleUsed {
         conflicting_txes,
         retried_tx,
@@ -327,16 +329,14 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
 
     let res = quorum_driver.submit_transaction(tx3).await.unwrap().await;
 
-    // Aggregator waits for all responses when it sees a conflicting tx and because
-    // there are >= f+1 conflicting tx1, so it will retry that one, which should fail.
     if let Err(QuorumDriverError::ObjectsDoubleUsed {
         conflicting_txes,
         retried_tx,
         retried_tx_success,
     }) = res
     {
-        assert_eq!(retried_tx, Some(*tx.digest()));
-        assert_eq!(retried_tx_success, Some(false));
+        assert_eq!(retried_tx, None);
+        assert_eq!(retried_tx_success, None);
         assert_eq!(conflicting_txes.len(), 2);
         assert_eq!(conflicting_txes.get(tx.digest()).unwrap().1, 5000);
         assert_eq!(conflicting_txes.get(tx2.digest()).unwrap().1, 2500);
@@ -354,12 +354,8 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
     assert!(client0.handle_transaction(tx.clone()).await.is_ok());
     assert!(client1.handle_transaction(tx.clone()).await.is_ok());
     assert!(client2.handle_transaction(tx2.clone()).await.is_ok());
-    println!("tx2: {:?}", tx2.digest());
     let res = quorum_driver.submit_transaction(tx2).await.unwrap().await;
 
-    // Aggregator waits for all responses when it sees a conflicting tx and because
-    // there are >= f+1 good responses and conflicting tx1. Neither transaction
-    // can be retried due to client double spend and this is a fatal error.
     if let Err(QuorumDriverError::ObjectsDoubleUsed {
         conflicting_txes,
         retried_tx,
@@ -413,9 +409,6 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
         .unwrap()
         .await;
 
-    // Aggregator waits for all responses when it sees a conflicting tx and because
-    // there are no conflicting tx >= f+1 none can be retryed. Additionally the original
-    // transaction also does not have >= f+1 good stake so it cannot be retried.
     if let Err(QuorumDriverError::ObjectsDoubleUsed {
         conflicting_txes,
         retried_tx,

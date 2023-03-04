@@ -1129,9 +1129,9 @@ async fn test_handle_conflicting_transaction_response() {
             matches!(
                 e,
                 AggregatorProcessTransactionError::RetryableConflictingTransaction {
-                    tx_digest_to_retry,
+                    conflicting_tx_digest_to_retry,
                     ..
-                } if tx_digest_to_retry.is_none()
+                } if conflicting_tx_digest_to_retry.is_none()
             )
         },
         |e| {
@@ -1162,9 +1162,9 @@ async fn test_handle_conflicting_transaction_response() {
             matches!(
                 e,
                 AggregatorProcessTransactionError::RetryableConflictingTransaction {
-                    tx_digest_to_retry,
+                    conflicting_tx_digest_to_retry,
                     ..
-                } if tx_digest_to_retry.is_none()
+                } if conflicting_tx_digest_to_retry.is_none()
             )
         },
         |e| {
@@ -1194,9 +1194,9 @@ async fn test_handle_conflicting_transaction_response() {
             matches!(
                 e,
                 AggregatorProcessTransactionError::RetryableConflictingTransaction {
-                    tx_digest_to_retry,
+                    conflicting_tx_digest_to_retry,
                     ..
-                } if *tx_digest_to_retry == Some(*conflicting_tx2.digest())
+                } if *conflicting_tx_digest_to_retry == Some(*conflicting_tx2.digest())
             )
         },
         |e| {
@@ -1208,7 +1208,7 @@ async fn test_handle_conflicting_transaction_response() {
     )
     .await;
 
-    println!("Case 3 - Non-retryable Tx due to equivocation");
+    println!("Case 3 - Non-retryable Tx due to client double spend");
     // Validators return >= f+1 conflicting Tx2 & >= f+1 good stake for Tx1
     set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx1, 0);
     for (name, _) in authority_keys.iter().skip(2) {
@@ -1472,7 +1472,7 @@ async fn test_handle_conflicting_transaction_response() {
 
     println!("Case 5.1 - Retryable Transaction (WrongEpoch Error)");
     // Update committee store to epoch 2, now SafeClient will pass
-    let committee_2 = Committee::new(2, ProtocolVersion::MIN, authorities.clone()).unwrap();
+    let committee_2 = Committee::new(2, authorities.clone()).unwrap();
     agg.committee_store
         .insert_new_committee(&committee_2)
         .unwrap();
@@ -1513,7 +1513,7 @@ async fn assert_resp_err<E, F>(
         Err(received_agg_err) if agg_err_checker(&received_agg_err) => match received_agg_err {
             AggregatorProcessTransactionError::RetryableConflictingTransaction {
                 errors,
-                tx_digest_to_retry: _tx_digest_to_retry,
+                conflicting_tx_digest_to_retry: _,
                 conflicting_tx_digests,
             } => {
                 assert!(!conflicting_tx_digests.is_empty());

@@ -266,7 +266,7 @@ where
         match result {
             Ok(resp) => Ok(resp),
             Err(AggregatorProcessTransactionError::RetryableConflictingTransaction {
-                tx_digest_to_retry,
+                conflicting_tx_digest_to_retry,
                 errors,
                 conflicting_tx_digests,
             }) => {
@@ -280,7 +280,7 @@ where
                     conflicting_tx_digests
                 );
 
-                if let Some(conflicting_tx_digest) = tx_digest_to_retry {
+                if let Some(conflicting_tx_digest) = conflicting_tx_digest_to_retry {
                     // Safe to unwrap because tx_digest_to_retry is generated from conflicting_tx_digests
                     // in ProcessTransactionState::conflicting_tx_digest_with_most_stake()
                     let (validators, _) =
@@ -292,6 +292,9 @@ where
                             validators.iter().map(|(pub_key, _)| *pub_key).collect(),
                         )
                         .await;
+                    self.metrics
+                        .total_attempts_retrying_conflicting_transaction
+                        .inc();
 
                     match attempt_result {
                         Err(err) => {
@@ -302,12 +305,9 @@ where
                             );
                         }
                         Ok(success) => {
-                            self.metrics
-                                .total_attempts_retrying_conflicting_transaction
-                                .inc();
                             debug!(
                                 ?tx_digest,
-                                ?tx_digest_to_retry,
+                                ?conflicting_tx_digest_to_retry,
                                 "Retried conflicting transaction success: {}",
                                 success
                             );
@@ -321,16 +321,12 @@ where
                                 retried_tx: Some(conflicting_tx_digest),
                                 retried_tx_success: Some(success),
                             }));
-                            debug!(
-                                ?tx_digest,
-                                "Non retryable error when getting tx cert: {err:?}"
-                            );
                             return err;
                         }
                     }
                 } else {
-                    // If no conflicting transaction was returned that means we have >= f+1 good stake for
-                    // the original transaction. Will continue to retry the original transaction.
+                    // If no retryable conflicting transaction was returned that means we have >= 2f+1 good stake for
+                    // the original transaction + retryable stake. Will continue to retry the original transaction.
                     debug!(
                         ?errors,
                         "When getting tx cert, observed {} conflicting transactions. Tx {tx_digest:} is in retryable state. Conflicting Txes: {conflicting_tx_digests:?}", 
