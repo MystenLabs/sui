@@ -96,7 +96,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
             .wrap_err("Failed to plot data")?,
 
         // Print a summary of the specified measurements collection.
-        Operation::Summarize { path } => MeasurementsCollection::load(path)?.print_summary(),
+        Operation::Summarize { path } => MeasurementsCollection::load(path)?.dislay_summary(),
     }
     Ok(())
 }

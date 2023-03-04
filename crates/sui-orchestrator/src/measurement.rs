@@ -224,7 +224,7 @@ impl MeasurementsCollection {
         fs::write(file, json).unwrap();
     }
 
-    pub fn print_summary(&self) {
+    pub fn dislay_summary(&self) {
         let duration = self.benchmark_duration();
         let total_tps = self.aggregate_tps();
         let average_latency = self.aggregate_average_latency();

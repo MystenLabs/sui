@@ -180,8 +180,6 @@ impl Plotter {
             .configure_mesh()
             .x_desc("\nThroughput (tx/s)")
             .y_desc("\nLatency (s)")
-            .x_labels(5)
-            .y_labels(5)
             .x_label_formatter(&|x| format!("{}", x))
             .y_label_formatter(&|x| format!("{}", x))
             .draw()?;

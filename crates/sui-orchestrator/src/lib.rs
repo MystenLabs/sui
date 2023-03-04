@@ -432,7 +432,7 @@ impl Orchestrator {
                         MoveToColumn(0),
                         Print(format!(
                             "[{:?}s] Scraping metrics...",
-                            now.duration_since(start).as_secs()
+                            now.duration_since(start).as_secs_f64().ceil()
                         ))
                     )
                     .unwrap();
@@ -587,7 +587,7 @@ impl Orchestrator {
 
             // Wait for the benchmark to terminate. Then save the results and print a summary.
             let aggregator = self.collect_metrics(&parameters).await?;
-            aggregator.print_summary();
+            aggregator.dislay_summary();
             generator.register_result(aggregator);
 
             // Kill the nodes and clients (without deleting the log files).
