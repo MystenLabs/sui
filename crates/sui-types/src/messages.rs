@@ -1766,6 +1766,7 @@ pub trait TransactionDataAPI {
     // Note: this implies that TransactionKind itself must be versioned, so that it can be
     // shared across versions. This will be easy to do since it is already an enum.
     fn kind(&self) -> &TransactionKind;
+    fn kind_mut(&mut self) -> &mut TransactionKind;
 
     // kind is moved out of often enough that this is worth it to special case.
     fn into_kind(self) -> TransactionKind;
