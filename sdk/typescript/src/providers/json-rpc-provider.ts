@@ -442,13 +442,14 @@ export class JsonRpcProvider extends Provider {
     exclude: ObjectId[] = [],
   ): Promise<SuiObjectResponse[]> {
     const coinsStruct = await this.getCoins(address, typeArg);
-    const coinIds = coinsStruct.data.map((c) => c.coinObjectId);
-    const coins = await this.getObjectBatch(coinIds, { showContent: true });
-    return (await Coin.selectCoinsWithBalanceGreaterThanOrEqual(
-      coins,
-      amount,
-      exclude,
-    )) as SuiObjectResponse[];
+    const coinsWithBalanceGreaterAmount =
+      Coin.selectCoinsWithBalanceGreaterThanOrEqual(
+        coinsStruct.data,
+        amount,
+        exclude,
+      );
+    const coinIds = coinsWithBalanceGreaterAmount.map((c) => c.coinObjectId);
+    return this.getObjectBatch(coinIds);
   }
 
   async selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
@@ -458,13 +459,15 @@ export class JsonRpcProvider extends Provider {
     exclude: ObjectId[] = [],
   ): Promise<SuiObjectResponse[]> {
     const coinsStruct = await this.getCoins(address, typeArg);
-    const coinIds = coinsStruct.data.map((c) => c.coinObjectId);
-    const coins = await this.getObjectBatch(coinIds, { showContent: true });
-    return (await Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
-      coins,
-      amount,
-      exclude,
-    )) as SuiObjectResponse[];
+    const coins = coinsStruct.data;
+    const coinsWithBalanceGreaterAmount =
+      Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
+        coins,
+        amount,
+        exclude,
+      );
+    const coinIds = coinsWithBalanceGreaterAmount.map((c) => c.coinObjectId);
+    return this.getObjectBatch(coinIds);
   }
 
   async getObject(
