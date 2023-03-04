@@ -3,11 +3,12 @@
 
 use arc_swap::ArcSwap;
 use bytes::Bytes;
+use dashmap::mapref::one::Ref;
 use dashmap::try_result::TryResult;
 use dashmap::DashMap;
 use futures::future::{select, Either};
 use futures::FutureExt;
-use itertools::Itertools;
+use itertools::{any, Itertools};
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
 use parking_lot::{Mutex, RwLockReadGuard};
@@ -340,7 +341,7 @@ impl ConsensusAdapter {
     fn submission_position(&self, committee: &Committee, tx_digest: &TransactionDigest) -> usize {
         let positions = order_validators_for_submission(committee, tx_digest);
 
-        self.check_submission_wrt_connectivity(positions)
+        self.check_submission_wrt_connectivity_and_scores(positions)
     }
 
     /// This function runs the following algorithm to decide whether or not to submit a transaction
@@ -361,11 +362,14 @@ impl ConsensusAdapter {
     ///
     /// Recursively, if the authority further ahead of us in the positions is a low performing authority, we will
     /// move our positions up one, and submit at the same time. This allows low performing
-    /// node a chance to participate in consensus and redeem their scores while maintaining performance.
-    fn check_submission_wrt_connectivity(&self, positions: Vec<AuthorityName>) -> usize {
+    /// node a chance to participate in consensus and redeem their scores while maintaining performance
+    /// overall. We will only do this part for authorities that are not low performers themselves to
+    /// prevent extra amplification in the case that the positions look like [low_scoring_a1, low_scoring_a2, a3]
+    fn check_submission_wrt_connectivity_and_scores(&self, positions: Vec<AuthorityName>) -> usize {
         let filtered_positions = positions
             .into_iter()
             .filter(|authority| {
+                // Filter out any nodes that appear disconnected to us
                 self.authority == *authority
                     || self
                         .connection_monitor_status
@@ -373,9 +377,24 @@ impl ConsensusAdapter {
                         .unwrap_or(ConnectionStatus::Disconnected)
                         == ConnectionStatus::Connected
             })
+            .filter(|authority| {
+                // If we are a low scoring authority, we do not filter out ourselves from the list,
+                // nor do we filter out other low scoring authorities. If we are a high scoring
+                // authority, we will co-submit with any low scoring authorities in front of us.
+                let ourself_is_low_scoring = self.authority_is_low_scoring(&self.authority);
+                let authority_is_low_scoring = self.authority_is_low_scoring(authority);
+                ourself_is_low_scoring || !authority_is_low_scoring
+            })
             .collect();
 
         get_position_in_list(self.authority, filtered_positions)
+    }
+
+    fn authority_is_low_scoring(&self, authority: &AuthorityName) -> bool {
+        matches!(
+            self.low_scoring_authorities.load().try_get(authority),
+            TryResult::Present(_)
+        )
     }
 
     /// This method blocks until transaction is persisted in local database

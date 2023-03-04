@@ -191,6 +191,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             Arc::new(consensus_output.sub_dag.leader.clone()),
         ));
 
+        // TODO: spawn a separate task for this as an optimization
         update_low_scoring_authorities(
             self.low_scoring_authorities.clone(),
             self.committee.clone(),
