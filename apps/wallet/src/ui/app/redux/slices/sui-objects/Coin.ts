@@ -17,6 +17,7 @@ import type {
     SuiMoveObject,
     SuiTransactionResponse,
     SignerWithProvider,
+    CoinStruct,
 } from '@mysten/sui.js';
 
 const COIN_TYPE = '0x2::coin::Coin';
@@ -61,7 +62,7 @@ export class Coin {
     }
 
     public static computeGasBudgetForPay(
-        coins: SuiMoveObject[],
+        coins: CoinStruct[],
         amountToSend: bigint
     ): number {
         // TODO: improve the gas budget estimation
@@ -87,7 +88,7 @@ export class Coin {
      */
     public static async stakeCoin(
         signer: SignerWithProvider,
-        coins: SuiMoveObject[],
+        coins: CoinStruct[],
         amount: bigint,
         validator: SuiAddress,
         gasPrice: number
@@ -152,7 +153,7 @@ export class Coin {
 
     private static async coinManageForStake(
         signer: SignerWithProvider,
-        coins: SuiMoveObject[],
+        coins: CoinStruct[],
         amount: bigint,
         gasFee: bigint,
         transaction: ReturnType<typeof Sentry['startTransaction']>
@@ -177,8 +178,8 @@ export class Coin {
                 // NOTE: We reverse the order here so that the highest coin is in the front
                 // so that it is used as the gas coin.
                 inputCoins: [...inputCoins]
-                    .reverse()
-                    .map((coin) => Coin.getID(coin as SuiMoveObject)),
+                    .sort((a, b) => b.balance - a.balance)
+                    .map(({ coinObjectId }) => coinObjectId),
                 recipients: [address, address],
                 // TODO: Update SDK to accept bigint
                 amounts: [Number(amount), Number(gasFee)],

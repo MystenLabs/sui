@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import type { SuiAddress, PaginatedCoins, CoinStruct } from '@mysten/sui.js';
 // minimum number of coins to fetch per request
-const MIN_COINS_PER_REQUEST = 100;
+const MAX_COINS_PER_REQUEST = 100;
 
 // Fetch all coins for an address, this will keep calling the API until all coins are fetched
 export function useGetCoins(coinType: string, address?: SuiAddress | null) {
@@ -18,12 +18,12 @@ export function useGetCoins(coinType: string, address?: SuiAddress | null) {
             const allData: CoinStruct[] = [];
             // keep fetching until cursor is null or undefined
             do {
-                const { data, nextCursor } = (await rpc.getCoins(
+                const { data, nextCursor }: PaginatedCoins = await rpc.getCoins(
                     address!,
                     coinType,
                     cursor,
-                    MIN_COINS_PER_REQUEST
-                )) as PaginatedCoins;
+                    MAX_COINS_PER_REQUEST
+                );
                 if (!data || !data.length) {
                     break;
                 }
