@@ -23,7 +23,7 @@ use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, ObjectValueKind, Page,
     SuiEvent, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
-    SuiMoveStruct, SuiMoveValue, SuiObjectContentOptions, SuiObjectInfo, SuiObjectWithStatus,
+    SuiMoveStruct, SuiMoveValue, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
     SuiPastObjectResponse, SuiTransactionEvents, SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
@@ -112,8 +112,8 @@ impl ReadApiServer for ReadApi {
     async fn get_object_with_options(
         &self,
         object_id: ObjectID,
-        options: Option<SuiObjectContentOptions>,
-    ) -> RpcResult<SuiObjectWithStatus> {
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<SuiObjectResponse> {
         let object_read = self.state.get_object_read(&object_id).await.map_err(|e| {
             debug!(?object_id, "Failed to get object: {:?}", e);
             anyhow!("{e}")
@@ -126,7 +126,7 @@ impl ReadApiServer for ReadApi {
         &self,
         parent_object_id: ObjectID,
         name: DynamicFieldName,
-    ) -> RpcResult<SuiObjectWithStatus> {
+    ) -> RpcResult<SuiObjectResponse> {
         let id = self
             .state
             .get_dynamic_field_object_id(parent_object_id, &name)
@@ -135,7 +135,7 @@ impl ReadApiServer for ReadApi {
                 anyhow!("Cannot find dynamic field [{name:?}] for object [{parent_object_id}].")
             })?;
         // TODO(chris): add options to `get_dynamic_field_object` API as well
-        self.get_object_with_options(id, Some(SuiObjectContentOptions::full_content()))
+        self.get_object_with_options(id, Some(SuiObjectDataOptions::full_content()))
             .await
     }
 

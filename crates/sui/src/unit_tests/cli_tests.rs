@@ -20,7 +20,7 @@ use sui_config::{
     SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
 };
 use sui_json::SuiJsonValue;
-use sui_json_rpc_types::{SuiObjectContentOptions, SuiObjectData, SuiObjectWithStatus};
+use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiObjectResponse};
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
 use sui_types::base_types::SuiAddress;
@@ -198,7 +198,7 @@ async fn test_create_example_nft_command() {
     .unwrap();
 
     match result {
-        SuiClientCommandResult::CreateExampleNFT(SuiObjectWithStatus::Exists(obj)) => {
+        SuiClientCommandResult::CreateExampleNFT(SuiObjectResponse::Exists(obj)) => {
             assert_eq!(obj.owner.unwrap().get_owner_address().unwrap(), address);
             assert_eq!(
                 obj.type_.clone().unwrap(),
@@ -585,8 +585,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    let mut_obj1 = if let SuiClientCommandResult::Object(SuiObjectWithStatus::Exists(object)) = resp
-    {
+    let mut_obj1 = if let SuiClientCommandResult::Object(SuiObjectResponse::Exists(object)) = resp {
         object
     } else {
         panic!()
@@ -598,8 +597,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    let mut_obj2 = if let SuiClientCommandResult::Object(SuiObjectWithStatus::Exists(object)) = resp
-    {
+    let mut_obj2 = if let SuiClientCommandResult::Object(SuiObjectResponse::Exists(object)) = resp {
         object
     } else {
         panic!()
@@ -650,7 +648,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
 #[test]
 // Test for issue https://github.com/MystenLabs/sui/issues/1078
 fn test_bug_1078() {
-    let read = SuiClientCommandResult::Object(SuiObjectWithStatus::NotExists(ObjectID::random()));
+    let read = SuiClientCommandResult::Object(SuiObjectResponse::NotExists(ObjectID::random()));
     let mut writer = String::new();
     // fmt ObjectRead should not fail.
     write!(writer, "{}", read).unwrap();
@@ -831,10 +829,10 @@ async fn get_object(id: ObjectID, context: &WalletContext) -> Option<SuiObjectDa
     let client = context.get_client().await.unwrap();
     let response = client
         .read_api()
-        .get_object_with_options(id, Some(SuiObjectContentOptions::full_content()))
+        .get_object_with_options(id, Some(SuiObjectDataOptions::full_content()))
         .await
         .unwrap();
-    if let SuiObjectWithStatus::Exists(o) = response {
+    if let SuiObjectResponse::Exists(o) = response {
         Some(o)
     } else {
         None

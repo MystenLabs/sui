@@ -10,7 +10,7 @@ import {
 } from '@mysten/sui.js';
 
 import type {
-    SuiObjectWithStatus,
+    SuiObjectResponse,
     JsonRpcProvider,
     SuiMoveObject,
 } from '@mysten/sui.js';
@@ -22,7 +22,7 @@ export interface WithIds {
 type FetchFnParser<RpcResponse, DataModel> = (
     typedData: RpcResponse,
     suiObject: SuiObjectData,
-    rpcResponse: SuiObjectWithStatus
+    rpcResponse: SuiObjectResponse
 ) => DataModel | undefined;
 
 type SuiObjectParser<RpcResponse, DataModel> = {
@@ -129,9 +129,9 @@ export const NftParser: SuiObjectParser<NftRpcResponse, NftRaw> = {
     regex: NftRegex,
 };
 
-const isObjectExists = (o: SuiObjectWithStatus) => o.status === 'Exists';
+const isObjectExists = (o: SuiObjectResponse) => o.status === 'Exists';
 
-const isTypeMatchRegex = (d: SuiObjectWithStatus, regex: RegExp) => {
+const isTypeMatchRegex = (d: SuiObjectResponse, regex: RegExp) => {
     const { details } = d;
     if (is(details, SuiObjectData)) {
         const { content } = details;
@@ -142,7 +142,7 @@ const isTypeMatchRegex = (d: SuiObjectWithStatus, regex: RegExp) => {
     return false;
 };
 
-export const parseDomains = (domains: SuiObjectWithStatus[]) => {
+export const parseDomains = (domains: SuiObjectResponse[]) => {
     const response: Partial<NftDomains> = {};
     const urlDomain = domains.find((d) => isTypeMatchRegex(d, UrlDomainRegex));
     const displayDomain = domains.find((d) =>
@@ -173,9 +173,7 @@ export class NftClient {
         this.provider = provider;
     }
 
-    parseObjects = async (
-        objects: SuiObjectWithStatus[]
-    ): Promise<NftRaw[]> => {
+    parseObjects = async (objects: SuiObjectResponse[]): Promise<NftRaw[]> => {
         const parsedObjects = objects
             .filter(isObjectExists)
             .map((object) => {

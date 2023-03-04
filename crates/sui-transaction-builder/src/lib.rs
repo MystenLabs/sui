@@ -17,8 +17,8 @@ use sui_adapter::adapter::resolve_and_type_check;
 use sui_adapter::execution_mode::ExecutionMode;
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_json_rpc_types::{
-    RPCTransactionRequestParams, SuiData, SuiObjectContentOptions, SuiObjectInfo,
-    SuiObjectWithStatus, SuiTypeTag,
+    RPCTransactionRequestParams, SuiData, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
+    SuiTypeTag,
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SuiAddress};
@@ -52,8 +52,8 @@ pub trait DataReader {
     async fn get_object_with_options(
         &self,
         object_id: ObjectID,
-        options: Option<SuiObjectContentOptions>,
-    ) -> Result<SuiObjectWithStatus, anyhow::Error>;
+        options: Option<SuiObjectDataOptions>,
+    ) -> Result<SuiObjectResponse, anyhow::Error>;
 
     async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error>;
 }
@@ -89,10 +89,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             for obj in gas_objs {
                 let response = self
                     .0
-                    .get_object_with_options(
-                        obj.object_id,
-                        Some(SuiObjectContentOptions::bcs_only()),
-                    )
+                    .get_object_with_options(obj.object_id, Some(SuiObjectDataOptions::bcs_only()))
                     .await?;
                 let obj = response.object()?;
                 let gas: GasCoin = bcs::from_bytes(
@@ -338,7 +335,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
     ) -> Result<ObjectArg, anyhow::Error> {
         let response = self
             .0
-            .get_object_with_options(id, Some(SuiObjectContentOptions::bcs_lossless()))
+            .get_object_with_options(id, Some(SuiObjectDataOptions::bcs_lossless()))
             .await?;
 
         let obj: Object = response.into_object()?.try_into()?;
@@ -370,7 +367,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
     ) -> Result<Vec<CallArg>, anyhow::Error> {
         let object = self
             .0
-            .get_object_with_options(package_id, Some(SuiObjectContentOptions::bcs_lossless()))
+            .get_object_with_options(package_id, Some(SuiObjectDataOptions::bcs_lossless()))
             .await?
             .into_object()?;
         let package = object
@@ -457,10 +454,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
     ) -> anyhow::Result<TransactionData> {
         let coin = self
             .0
-            .get_object_with_options(
-                coin_object_id,
-                Some(SuiObjectContentOptions::bcs_lossless()),
-            )
+            .get_object_with_options(coin_object_id, Some(SuiObjectDataOptions::bcs_lossless()))
             .await?
             .into_object()?;
         let coin_object_ref = coin.object_ref();
@@ -498,10 +492,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
     ) -> anyhow::Result<TransactionData> {
         let coin = self
             .0
-            .get_object_with_options(
-                coin_object_id,
-                Some(SuiObjectContentOptions::bcs_lossless()),
-            )
+            .get_object_with_options(coin_object_id, Some(SuiObjectDataOptions::bcs_lossless()))
             .await?
             .into_object()?;
         let coin_object_ref = coin.object_ref();
@@ -539,7 +530,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
     ) -> anyhow::Result<TransactionData> {
         let coin = self
             .0
-            .get_object_with_options(primary_coin, Some(SuiObjectContentOptions::bcs_lossless()))
+            .get_object_with_options(primary_coin, Some(SuiObjectDataOptions::bcs_lossless()))
             .await?
             .into_object()?;
         let primary_coin_ref = coin.object_ref();
@@ -749,7 +740,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
     ) -> anyhow::Result<(ObjectRef, ObjectType)> {
         let object = self
             .0
-            .get_object_with_options(object_id, Some(SuiObjectContentOptions::default()))
+            .get_object_with_options(object_id, Some(SuiObjectDataOptions::default()))
             .await?
             .into_object()?;
 

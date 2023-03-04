@@ -12,7 +12,7 @@ import {
 
 import { parseObjectType } from '../../utils/objectUtils';
 
-import type { SuiObjectWithStatus, ObjectOwner } from '@mysten/sui.js';
+import type { SuiObjectResponse, ObjectOwner } from '@mysten/sui.js';
 
 export type DataType = {
     id: string;
@@ -44,7 +44,7 @@ export function instanceOfDataType(object: any): object is DataType {
  * TODO: We should redesign the rendering logic and data model
  * to make this more extensible and customizable for different Move types
  */
-export function translate(o: SuiObjectWithStatus): DataType {
+export function translate(o: SuiObjectResponse): DataType {
     switch (o.status) {
         case 'Exists': {
             return {

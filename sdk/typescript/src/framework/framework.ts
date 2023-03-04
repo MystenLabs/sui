@@ -3,7 +3,7 @@
 
 import {
   getObjectFields,
-  SuiObjectWithStatus,
+  SuiObjectResponse,
   SuiMoveObject,
   SuiObjectInfo,
   SuiObjectData,
@@ -31,7 +31,7 @@ export const PAY_JOIN_COIN_FUNC_NAME = 'join';
 export const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
 
 type ObjectData = ObjectDataFull | SuiObjectInfo;
-type ObjectDataFull = SuiObjectWithStatus | SuiMoveObject;
+type ObjectDataFull = SuiObjectResponse | SuiMoveObject;
 
 export const CoinMetadataStruct = object({
   decimals: number(),

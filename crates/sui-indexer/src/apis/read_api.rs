@@ -13,7 +13,7 @@ use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, Page,
     SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
-    SuiObjectContentOptions, SuiObjectInfo, SuiObjectWithStatus, SuiPastObjectResponse,
+    SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
     SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
@@ -172,8 +172,8 @@ where
     async fn get_object_with_options(
         &self,
         object_id: ObjectID,
-        options: Option<SuiObjectContentOptions>,
-    ) -> RpcResult<SuiObjectWithStatus> {
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<SuiObjectResponse> {
         self.fullnode
             .get_object_with_options(object_id, options)
             .await
@@ -183,7 +183,7 @@ where
         &self,
         parent_object_id: ObjectID,
         name: DynamicFieldName,
-    ) -> RpcResult<SuiObjectWithStatus> {
+    ) -> RpcResult<SuiObjectResponse> {
         self.fullnode
             .get_dynamic_field_object(parent_object_id, name)
             .await

@@ -5,7 +5,7 @@ import { getObjectType, type ObjectOwner } from '@mysten/sui.js';
 
 import { findIPFSvalue } from './stringUtils';
 
-import type { SuiObjectWithStatus } from '@mysten/sui.js';
+import type { SuiObjectResponse } from '@mysten/sui.js';
 
 export function parseImageURL(data: any): string {
     const url =
@@ -27,7 +27,7 @@ export function parseImageURL(data: any): string {
     }
 }
 
-export function parseObjectType(data: SuiObjectWithStatus): string {
+export function parseObjectType(data: SuiObjectResponse): string {
     // TODO: define better naming and typing here
     const dataType = getObjectType(data);
     if (dataType === 'package') {

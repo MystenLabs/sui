@@ -17,8 +17,8 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, EventPage, MoveCallParams, OwnedObjectRef,
     RPCTransactionRequestParams, SuiData, SuiEvent, SuiEventEnvelope, SuiExecutionStatus,
-    SuiGasCostSummary, SuiObjectContentOptions, SuiObjectData, SuiObjectInfo, SuiObjectRef,
-    SuiObjectWithStatus, SuiParsedData, SuiPastObjectResponse, SuiTransaction, SuiTransactionData,
+    SuiGasCostSummary, SuiObjectData, SuiObjectDataOptions, SuiObjectInfo, SuiObjectRef,
+    SuiObjectResponse, SuiParsedData, SuiPastObjectResponse, SuiTransaction, SuiTransactionData,
     SuiTransactionEffects, SuiTransactionEvents, SuiTransactionResponse, TransactionBytes,
     TransactionsPage, TransferObjectParams,
 };
@@ -212,7 +212,7 @@ impl RpcExampleProvider {
 
         let coin = GasCoin::new(object_id, 10000);
 
-        let result = SuiObjectWithStatus::Exists(SuiObjectData {
+        let result = SuiObjectResponse::Exists(SuiObjectData {
             content: Some(
                 SuiParsedData::try_from_object(
                     coin.to_object(SequenceNumber::from_u64(1)),
@@ -238,7 +238,7 @@ impl RpcExampleProvider {
                 "Get Object data",
                 vec![
                     ("object_id", json!(object_id)),
-                    ("options", json!(SuiObjectContentOptions::full_content())),
+                    ("options", json!(SuiObjectDataOptions::full_content())),
                 ],
                 json!(result),
             )],

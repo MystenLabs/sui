@@ -14,10 +14,10 @@ use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 
 use sui_json_rpc_types::{
-    Balance, CoinPage, SuiCoinMetadata, SuiEvent, SuiExecutionStatus, SuiObjectWithStatus,
+    Balance, CoinPage, SuiCoinMetadata, SuiEvent, SuiExecutionStatus, SuiObjectResponse,
     SuiTBlsSignObjectCommitmentType, SuiTransactionResponse, TransactionBytes,
 };
-use sui_json_rpc_types::{SuiObjectContentOptions, SuiObjectInfo};
+use sui_json_rpc_types::{SuiObjectDataOptions, SuiObjectInfo};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::balance::Supply;
 use sui_types::base_types::ObjectID;
@@ -340,14 +340,14 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
         let result = http_client
             .get_object_with_options(
                 oref.object_id,
-                Some(SuiObjectContentOptions {
+                Some(SuiObjectDataOptions {
                     show_owner: Some(true),
                     ..Default::default()
                 }),
             )
             .await?;
         assert!(
-            matches!(result, SuiObjectWithStatus::Exists(object) if oref.object_id == object.object_id && &object.owner.unwrap().get_owner_address()? == address)
+            matches!(result, SuiObjectResponse::Exists(object) if oref.object_id == object.object_id && &object.owner.unwrap().get_owner_address()? == address)
         );
     }
     Ok(())

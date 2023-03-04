@@ -22,7 +22,7 @@ use sui_json_rpc::{
     CLIENT_SDK_TYPE_HEADER, CLIENT_SDK_VERSION_HEADER, CLIENT_TARGET_API_VERSION_HEADER,
 };
 pub use sui_json_rpc_types as rpc_types;
-use sui_json_rpc_types::{SuiObjectContentOptions, SuiObjectInfo, SuiObjectWithStatus};
+use sui_json_rpc_types::{SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse};
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -272,8 +272,8 @@ impl DataReader for ReadApi {
     async fn get_object_with_options(
         &self,
         object_id: ObjectID,
-        options: Option<SuiObjectContentOptions>,
-    ) -> Result<SuiObjectWithStatus, anyhow::Error> {
+        options: Option<SuiObjectDataOptions>,
+    ) -> Result<SuiObjectResponse, anyhow::Error> {
         Ok(self.get_object_with_options(object_id, options).await?)
     }
 

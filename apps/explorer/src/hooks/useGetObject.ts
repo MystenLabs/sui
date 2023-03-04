@@ -3,7 +3,7 @@
 
 import { useRpcClient } from '@mysten/core';
 import {
-    type SuiObjectWithStatus,
+    type SuiObjectResponse,
     normalizeSuiAddress,
     getObjectContentOptions,
 } from '@mysten/sui.js';
@@ -21,7 +21,7 @@ export function useGetSystemObject() {
 
 export function useGetObject(
     objectId: string
-): UseQueryResult<SuiObjectWithStatus, unknown> {
+): UseQueryResult<SuiObjectResponse, unknown> {
     const rpc = useRpcClient();
     const normalizedObjId = normalizeSuiAddress(objectId);
     const response = useQuery(

@@ -16,9 +16,7 @@ use move_symbol_pool::Symbol;
 use sui_sdk::apis::ReadApi;
 use sui_sdk::error::Error;
 
-use sui_sdk::rpc_types::{
-    SuiObjectContentOptions, SuiRawData, SuiRawMoveObject, SuiRawMovePackage,
-};
+use sui_sdk::rpc_types::{SuiObjectDataOptions, SuiRawData, SuiRawMoveObject, SuiRawMovePackage};
 use sui_types::base_types::ObjectID;
 
 #[cfg(test)]
@@ -238,7 +236,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
         // batched object fetching should be added to the ReadApi & used here
         let obj_read = self
             .rpc_client
-            .get_object_with_options(obj_id, Some(SuiObjectContentOptions::bcs_only()))
+            .get_object_with_options(obj_id, Some(SuiObjectDataOptions::bcs_only()))
             .await
             .map_err(SourceVerificationError::DependencyObjectReadFailure)?;
 

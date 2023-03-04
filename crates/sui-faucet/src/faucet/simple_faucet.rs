@@ -14,8 +14,7 @@ use std::path::Path;
 
 use sui::client_commands::WalletContext;
 use sui_json_rpc_types::{
-    SuiObjectContentOptions, SuiObjectWithStatus, SuiPaySui, SuiTransactionKind,
-    SuiTransactionResponse,
+    SuiObjectDataOptions, SuiObjectResponse, SuiPaySui, SuiTransactionKind, SuiTransactionResponse,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_types::object::Owner;
@@ -192,7 +191,7 @@ impl SimpleFaucet {
             .read_api()
             .get_object_with_options(
                 coin_id,
-                Some(SuiObjectContentOptions {
+                Some(SuiObjectDataOptions {
                     show_content: Some(true),
                     show_owner: Some(true),
                     ..Default::default()
@@ -200,8 +199,8 @@ impl SimpleFaucet {
             )
             .await?;
         Ok(match gas_obj {
-            SuiObjectWithStatus::NotExists(_) | SuiObjectWithStatus::Deleted(_) => None,
-            SuiObjectWithStatus::Exists(obj) => match &obj.owner {
+            SuiObjectResponse::NotExists(_) | SuiObjectResponse::Deleted(_) => None,
+            SuiObjectResponse::Exists(obj) => match &obj.owner {
                 Some(Owner::AddressOwner(owner_addr)) if owner_addr == &self.active_address => {
                     GasCoin::try_from(&obj).ok()
                 }

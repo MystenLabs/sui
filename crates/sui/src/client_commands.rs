@@ -33,10 +33,10 @@ use sui_types::error::SuiError;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    DynamicFieldPage, SuiObjectData, SuiObjectInfo, SuiObjectWithStatus, SuiRawData,
+    DynamicFieldPage, SuiObjectData, SuiObjectInfo, SuiObjectResponse, SuiRawData,
     SuiTransactionResponse,
 };
-use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectContentOptions};
+use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::SuiClient;
 use sui_types::crypto::SignatureScheme;
@@ -534,13 +534,13 @@ impl SuiClientCommands {
                 if !bcs {
                     let object_read = client
                         .read_api()
-                        .get_object_with_options(id, Some(SuiObjectContentOptions::full_content()))
+                        .get_object_with_options(id, Some(SuiObjectDataOptions::full_content()))
                         .await?;
                     SuiClientCommandResult::Object(object_read)
                 } else {
                     let raw_object_read = client
                         .read_api()
-                        .get_object_with_options(id, Some(SuiObjectContentOptions::bcs_lossless()))
+                        .get_object_with_options(id, Some(SuiObjectDataOptions::bcs_lossless()))
                         .await?;
                     SuiClientCommandResult::RawObject(raw_object_read)
                 }
@@ -931,7 +931,7 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 let object_read = client
                     .read_api()
-                    .get_object_with_options(nft_id, Some(SuiObjectContentOptions::full_content()))
+                    .get_object_with_options(nft_id, Some(SuiObjectDataOptions::full_content()))
                     .await?;
                 SuiClientCommandResult::CreateExampleNFT(object_read)
             }
@@ -1150,13 +1150,10 @@ impl WalletContext {
         for oref in object_refs {
             let response = client
                 .read_api()
-                .get_object_with_options(
-                    oref.object_id,
-                    Some(SuiObjectContentOptions::full_content()),
-                )
+                .get_object_with_options(oref.object_id, Some(SuiObjectDataOptions::full_content()))
                 .await?;
             match response {
-                SuiObjectWithStatus::Exists(o) => {
+                SuiObjectResponse::Exists(o) => {
                     if matches!( o.type_.clone(), Some(v)  if *v == GasCoin::type_().to_string()) {
                         // Okay to unwrap() since we already checked type
                         let gas_coin = GasCoin::try_from(&o)?;
@@ -1176,7 +1173,7 @@ impl WalletContext {
             .read_api()
             .get_object_with_options(
                 *id,
-                Some(SuiObjectContentOptions {
+                Some(SuiObjectDataOptions {
                     show_owner: Some(true),
                     ..Default::default()
                 }),
@@ -1545,8 +1542,8 @@ impl SuiClientCommandResult {
 pub enum SuiClientCommandResult {
     Publish(SuiTransactionResponse),
     VerifySource,
-    Object(SuiObjectWithStatus),
-    RawObject(SuiObjectWithStatus),
+    Object(SuiObjectResponse),
+    RawObject(SuiObjectResponse),
     Call(SuiTransactionResponse),
     Transfer(
         // Skipping serialisation for elapsed time.
@@ -1569,7 +1566,7 @@ pub enum SuiClientCommandResult {
     ActiveAddress(Option<SuiAddress>),
     ActiveEnv(Option<String>),
     Envs(Vec<SuiEnv>, Option<String>),
-    CreateExampleNFT(SuiObjectWithStatus),
+    CreateExampleNFT(SuiObjectResponse),
     SerializeTransferSui(String),
     ExecuteSignedTx(SuiTransactionResponse),
     NewEnv(SuiEnv),

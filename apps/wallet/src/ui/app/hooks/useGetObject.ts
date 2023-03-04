@@ -3,7 +3,7 @@
 
 import { useRpcClient } from '@mysten/core';
 import {
-    type SuiObjectWithStatus,
+    type SuiObjectResponse,
     normalizeSuiAddress,
     getObjectContentOptions,
 } from '@mysten/sui.js';
@@ -11,7 +11,7 @@ import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 export function useGetObject(
     objectId: string
-): UseQueryResult<SuiObjectWithStatus, unknown> {
+): UseQueryResult<SuiObjectResponse, unknown> {
     const rpc = useRpcClient();
     const normalizedObjId = normalizeSuiAddress(objectId);
     const response = useQuery(

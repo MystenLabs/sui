@@ -5,7 +5,7 @@ import { SerializedSignature } from '../cryptography/signature';
 import { HttpHeaders } from '../rpc/client';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
-  SuiObjectWithStatus,
+  SuiObjectResponse,
   SuiObjectInfo,
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
@@ -46,7 +46,7 @@ import {
   CommitteeInfo,
   DryRunTransactionResponse,
   SuiTransactionResponse,
-  SuiObjectContentOptions,
+  SuiObjectDataOptions,
 } from '../types';
 
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
@@ -162,7 +162,7 @@ export abstract class Provider {
   abstract getCoinBalancesOwnedByAddress(
     address: string,
     typeArg?: string,
-  ): Promise<SuiObjectWithStatus[]>;
+  ): Promise<SuiObjectResponse[]>;
 
   /**
    * Convenience method for select coin objects that has a balance greater than or equal to `amount`
@@ -177,7 +177,7 @@ export abstract class Provider {
     amount: bigint,
     typeArg: string,
     exclude: ObjectId[],
-  ): Promise<SuiObjectWithStatus[]>;
+  ): Promise<SuiObjectResponse[]>;
 
   /**
    * Convenience method for select a minimal set of coin objects that has a balance greater than
@@ -194,15 +194,15 @@ export abstract class Provider {
     amount: bigint,
     typeArg: string,
     exclude: ObjectId[],
-  ): Promise<SuiObjectWithStatus[]>;
+  ): Promise<SuiObjectResponse[]>;
 
   /**
    * Get details about an object
    */
   abstract getObject(
     objectId: string,
-    options?: SuiObjectContentOptions,
-  ): Promise<SuiObjectWithStatus>;
+    options?: SuiObjectDataOptions,
+  ): Promise<SuiObjectResponse>;
 
   /**
    * Get object reference(id, tx digest, version id)
@@ -370,7 +370,7 @@ export abstract class Provider {
   abstract getDynamicFieldObject(
     parent_object_id: ObjectId,
     name: string | DynamicFieldName,
-  ): Promise<SuiObjectWithStatus>;
+  ): Promise<SuiObjectResponse>;
 
   /**
    * Getting the reference gas price for the network

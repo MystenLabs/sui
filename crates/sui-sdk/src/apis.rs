@@ -15,7 +15,7 @@ use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DryRunTransactionResponse, DynamicFieldPage,
     EventPage, SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter, SuiMoveNormalizedModule,
-    SuiObjectContentOptions, SuiObjectInfo, SuiObjectWithStatus, SuiPastObjectResponse,
+    SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
     SuiTransactionResponse, TransactionsPage,
 };
 use sui_types::balance::Supply;
@@ -81,8 +81,8 @@ impl ReadApi {
     pub async fn get_object_with_options(
         &self,
         object_id: ObjectID,
-        options: Option<SuiObjectContentOptions>,
-    ) -> SuiRpcResult<SuiObjectWithStatus> {
+        options: Option<SuiObjectDataOptions>,
+    ) -> SuiRpcResult<SuiObjectResponse> {
         Ok(self
             .api
             .http

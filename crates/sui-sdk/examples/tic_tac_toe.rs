@@ -13,7 +13,7 @@ use clap::Parser;
 use clap::Subcommand;
 use serde::Deserialize;
 
-use sui_json_rpc_types::SuiObjectContentOptions;
+use sui_json_rpc_types::SuiObjectDataOptions;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
     json::SuiJsonValue,
@@ -243,7 +243,7 @@ impl TicTacToe {
         let current_game = self
             .client
             .read_api()
-            .get_object_with_options(game_id, Some(SuiObjectContentOptions::bcs_only()))
+            .get_object_with_options(game_id, Some(SuiObjectDataOptions::bcs_only()))
             .await?;
         current_game
             .object()?

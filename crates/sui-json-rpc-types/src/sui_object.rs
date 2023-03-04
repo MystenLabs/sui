@@ -35,7 +35,7 @@ use crate::{SuiMoveStruct, SuiMoveValue};
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
 #[serde(tag = "status", content = "details", rename = "ObjectRead")]
-pub enum SuiObjectWithStatus {
+pub enum SuiObjectResponse {
     Exists(SuiObjectData),
     NotExists(ObjectID),
     Deleted(SuiObjectRef),
@@ -49,15 +49,15 @@ pub struct SuiObjectData {
     pub version: SequenceNumber,
     /// Base64 string representing the object digest
     pub digest: ObjectDigest,
-    /// The type of the object. Default to be Some(T) unless SuiObjectContentOptions.showType is set to False
+    /// The type of the object. Default to be Some(T) unless SuiObjectDataOptions.showType is set to False
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     pub type_: Option<String>,
     // Default to be None because otherwise it will be repeated for the getObjectsOwnedByAddress endpoint
-    /// The owner of this object. Default to be None unless SuiObjectContentOptions.showOwner is set
+    /// The owner of this object. Default to be None unless SuiObjectDataOptions.showOwner is set
     #[serde(skip_serializing_if = "Option::is_none")]
     pub owner: Option<Owner>,
     /// The digest of the transaction that created or last mutated this object. Default to be None unless
-    /// SuiObjectContentOptions.showPreviousTransaction is set
+    /// SuiObjectDataOptions.showPreviousTransaction is set
     #[serde(skip_serializing_if = "Option::is_none")]
     pub previous_transaction: Option<TransactionDigest>,
     /// The amount of SUI we would rebate if this object gets deleted.
@@ -68,10 +68,10 @@ pub struct SuiObjectData {
     // TODO: uncomment the following in the next PR
     // /// The Display metadata for frontend UI rendering
     // pub display: Option<BTreeMap<String, String>>,
-    /// Move object content or package content, default to be None unless SuiObjectContentOptions.showContent is set
+    /// Move object content or package content, default to be None unless SuiObjectDataOptions.showContent is set
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<SuiParsedData>,
-    /// Move object content or package content in BCS, default to be None unless SuiObjectContentOptions.showContent is set
+    /// Move object content or package content in BCS, default to be None unless SuiObjectDataOptions.showContent is set
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bcs: Option<SuiRawData>,
 }
@@ -178,7 +178,7 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", rename = "ObjectContentOptions")]
-pub struct SuiObjectContentOptions {
+pub struct SuiObjectDataOptions {
     /// Whether to show the type of the object. Default to be True
     pub show_type: Option<bool>,
     /// Whether to show the owner of the object. Default to be False
@@ -197,7 +197,7 @@ pub struct SuiObjectContentOptions {
     pub show_storage_rebate: Option<bool>,
 }
 
-impl SuiObjectContentOptions {
+impl SuiObjectDataOptions {
     pub fn bcs_only() -> Self {
         Self {
             show_bcs: Some(true),
@@ -242,7 +242,7 @@ impl SuiObjectContentOptions {
     }
 }
 
-impl Default for SuiObjectContentOptions {
+impl Default for SuiObjectDataOptions {
     fn default() -> Self {
         Self {
             show_type: Some(true),
@@ -257,11 +257,11 @@ impl Default for SuiObjectContentOptions {
     }
 }
 
-impl TryFrom<(ObjectRead, Option<SuiObjectContentOptions>)> for SuiObjectWithStatus {
+impl TryFrom<(ObjectRead, Option<SuiObjectDataOptions>)> for SuiObjectResponse {
     type Error = anyhow::Error;
 
     fn try_from(
-        (object_read, options): (ObjectRead, Option<SuiObjectContentOptions>),
+        (object_read, options): (ObjectRead, Option<SuiObjectDataOptions>),
     ) -> Result<Self, Self::Error> {
         match object_read {
             ObjectRead::NotExists(id) => Ok(Self::NotExists(id)),
@@ -278,7 +278,7 @@ impl
         ObjectRef,
         Object,
         Option<MoveStructLayout>,
-        Option<SuiObjectContentOptions>,
+        Option<SuiObjectDataOptions>,
     )> for SuiObjectData
 {
     type Error = anyhow::Error;
@@ -288,11 +288,11 @@ impl
             ObjectRef,
             Object,
             Option<MoveStructLayout>,
-            Option<SuiObjectContentOptions>,
+            Option<SuiObjectDataOptions>,
         ),
     ) -> Result<Self, Self::Error> {
         let options = options.unwrap_or_default();
-        let default_options = SuiObjectContentOptions::default();
+        let default_options = SuiObjectDataOptions::default();
         // It is safe to unwrap because default value are all Some(bool)
         let show_type = options
             .show_type
@@ -372,7 +372,7 @@ impl
     }
 }
 
-impl SuiObjectWithStatus {
+impl SuiObjectResponse {
     /// Returns a reference to the object if there is any, otherwise an Err if
     /// the object does not exist or is deleted.
     pub fn object(&self) -> UserInputResult<&SuiObjectData> {
@@ -820,7 +820,7 @@ impl TryFrom<PastObjectRead> for SuiPastObjectResponse {
                     object_ref,
                     o,
                     layout,
-                    Some(SuiObjectContentOptions::full_content()),
+                    Some(SuiObjectDataOptions::full_content()),
                 )
                     .try_into()?,
             )),

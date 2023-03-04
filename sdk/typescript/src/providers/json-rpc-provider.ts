@@ -42,7 +42,7 @@ import {
   normalizeSuiObjectId,
   CoinMetadataStruct,
   PaginatedCoins,
-  SuiObjectWithStatus,
+  SuiObjectResponse,
   GetOwnedObjectsResponse,
   DelegatedStake,
   ValidatorMetaData,
@@ -56,7 +56,7 @@ import {
   CheckPointContentsDigest,
   CommitteeInfo,
   DryRunTransactionResponse,
-  SuiObjectContentOptions,
+  SuiObjectDataOptions,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -441,7 +441,7 @@ export class JsonRpcProvider extends Provider {
   async getCoinBalancesOwnedByAddress(
     address: SuiAddress,
     typeArg?: string,
-  ): Promise<SuiObjectWithStatus[]> {
+  ): Promise<SuiObjectResponse[]> {
     const objects = await this.getObjectsOwnedByAddress(address);
     const coinIds = objects
       .filter(
@@ -459,7 +459,7 @@ export class JsonRpcProvider extends Provider {
     amount: bigint,
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = [],
-  ): Promise<SuiObjectWithStatus[]> {
+  ): Promise<SuiObjectResponse[]> {
     const coinsStruct = await this.getCoins(address, typeArg);
     const coinIds = coinsStruct.data.map((c) => c.coinObjectId);
     const coins = await this.getObjectBatch(coinIds, { showContent: true });
@@ -467,7 +467,7 @@ export class JsonRpcProvider extends Provider {
       coins,
       amount,
       exclude,
-    )) as SuiObjectWithStatus[];
+    )) as SuiObjectResponse[];
   }
 
   async selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
@@ -475,7 +475,7 @@ export class JsonRpcProvider extends Provider {
     amount: bigint,
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = [],
-  ): Promise<SuiObjectWithStatus[]> {
+  ): Promise<SuiObjectResponse[]> {
     const coinsStruct = await this.getCoins(address, typeArg);
     const coinIds = coinsStruct.data.map((c) => c.coinObjectId);
     const coins = await this.getObjectBatch(coinIds, { showContent: true });
@@ -483,13 +483,13 @@ export class JsonRpcProvider extends Provider {
       coins,
       amount,
       exclude,
-    )) as SuiObjectWithStatus[];
+    )) as SuiObjectResponse[];
   }
 
   async getObject(
     objectId: ObjectId,
-    options?: SuiObjectContentOptions,
-  ): Promise<SuiObjectWithStatus> {
+    options?: SuiObjectDataOptions,
+  ): Promise<SuiObjectResponse> {
     try {
       if (!objectId || !isValidSuiObjectId(normalizeSuiObjectId(objectId))) {
         throw new Error('Invalid Sui Object id');
@@ -497,7 +497,7 @@ export class JsonRpcProvider extends Provider {
       return await this.client.requestWithType(
         'sui_getObject',
         [objectId, options],
-        SuiObjectWithStatus,
+        SuiObjectResponse,
         this.options.skipDataValidation,
       );
     } catch (err) {
@@ -512,8 +512,8 @@ export class JsonRpcProvider extends Provider {
 
   async getObjectBatch(
     objectIds: ObjectId[],
-    options?: SuiObjectContentOptions,
-  ): Promise<SuiObjectWithStatus[]> {
+    options?: SuiObjectDataOptions,
+  ): Promise<SuiObjectResponse[]> {
     try {
       const requests = objectIds.map((id) => {
         if (!id || !isValidSuiObjectId(normalizeSuiObjectId(id))) {
@@ -526,7 +526,7 @@ export class JsonRpcProvider extends Provider {
       });
       return await this.client.batchRequestWithType(
         requests,
-        SuiObjectWithStatus,
+        SuiObjectResponse,
         this.options.skipDataValidation,
       );
     } catch (err) {
@@ -893,12 +893,12 @@ export class JsonRpcProvider extends Provider {
   async getDynamicFieldObject(
     parent_object_id: ObjectId,
     name: string | DynamicFieldName,
-  ): Promise<SuiObjectWithStatus> {
+  ): Promise<SuiObjectResponse> {
     try {
       const resp = await this.client.requestWithType(
         'sui_getDynamicFieldObject',
         [parent_object_id, name],
-        SuiObjectWithStatus,
+        SuiObjectResponse,
         this.options.skipDataValidation,
       );
       return resp;

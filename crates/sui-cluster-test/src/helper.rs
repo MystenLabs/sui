@@ -5,7 +5,7 @@ use anyhow::bail;
 use tracing::{debug, trace};
 
 use sui_json_rpc_types::{
-    SuiData, SuiEvent, SuiObjectContentOptions, SuiObjectData, SuiObjectWithStatus,
+    SuiData, SuiEvent, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
 };
 use sui_sdk::SuiClient;
 use sui_types::event::BalanceChangeType;
@@ -78,7 +78,7 @@ impl ObjectChecker {
             .read_api()
             .get_object_with_options(
                 object_id,
-                Some(SuiObjectContentOptions {
+                Some(SuiObjectDataOptions {
                     show_owner: Some(true),
                     show_bcs: Some(true),
                     ..Default::default()
@@ -90,20 +90,20 @@ impl ObjectChecker {
         trace!("getting object {object_id}, info :: {object_info:?}");
 
         match object_info {
-            SuiObjectWithStatus::NotExists(_) => {
+            SuiObjectResponse::NotExists(_) => {
                 panic!(
                     "Node can't find gas object {} with client {:?}",
                     object_id,
                     client.read_api()
                 )
             }
-            SuiObjectWithStatus::Deleted(_) => {
+            SuiObjectResponse::Deleted(_) => {
                 if !self.is_deleted {
                     panic!("Gas object {} was deleted", object_id);
                 }
                 Ok(CheckerResultObject::new(None, None))
             }
-            SuiObjectWithStatus::Exists(object) => {
+            SuiObjectResponse::Exists(object) => {
                 if self.is_deleted {
                     panic!("Expect Gas object {} deleted, but it is not", object_id);
                 }
