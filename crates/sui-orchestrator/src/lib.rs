@@ -85,6 +85,14 @@ impl Orchestrator {
         &self,
         parameters: &BenchmarkParameters,
     ) -> TestbedResult<Vec<Instance>> {
+        ensure!(
+            self.instances.len() >= parameters.nodes,
+            TestbedError::InsufficientCapacity(format!(
+                "{}",
+                parameters.nodes - self.instances.len()
+            ))
+        );
+
         let mut instances_by_regions = HashMap::new();
         for instance in &self.instances {
             if instance.is_active() {
@@ -106,11 +114,6 @@ impl Orchestrator {
                 }
             }
         }
-
-        ensure!(
-            instances.len() == parameters.nodes,
-            TestbedError::InsufficientCapacity(format!("{}", parameters.nodes - instances.len()))
-        );
         Ok(instances)
     }
 
@@ -203,11 +206,11 @@ impl Orchestrator {
     }
 
     pub async fn update(&self) -> TestbedResult<()> {
-        let branch = self.settings.repository.commit.clone();
+        let commit = self.settings.repository.commit.clone();
         crossterm::execute!(
             stdout(),
             Print(format!(
-                "Updating {} instances (branch '{branch}')...",
+                "Updating {} instances (commit '{commit}')...",
                 self.instances.len()
             ))
         )
@@ -215,7 +218,7 @@ impl Orchestrator {
 
         let command = [
             &format!("git fetch -f"),
-            &format!("git checkout -f {branch}"),
+            &format!("git checkout -f {commit}"),
             &format!("git pull -f"),
             "source $HOME/.cargo/env",
             &format!("cargo build --release"),
