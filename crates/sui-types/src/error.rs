@@ -711,8 +711,7 @@ pub fn convert_vm_error<
                     Location::Module(id) => {
                         let offset = error.offsets().first().copied().map(|(f, i)| (f.0, i));
                         debug_assert!(
-                            error.major_status() == StatusCode::MEMORY_LIMIT_EXCEEDED
-                                || offset.is_some(),
+                            offset.is_some(),
                             "Move should set the location on all execution errors. Error {error}"
                         );
                         let (function, instruction) = offset.unwrap_or((0, 0));

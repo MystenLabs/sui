@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, fmt};
 use move_binary_format::{
     access::ModuleAccess,
     errors::{Location, PartialVMResult, VMResult},
-    file_format::{AbilitySet, LocalIndex, Visibility},
+    file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
     CompiledModule,
 };
 use move_core_types::{
@@ -274,17 +274,16 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>>(
     is_init: bool,
 ) -> Result<Vec<Value>, ExecutionError> {
     // check that the function is either an entry function or a valid public function
-    let (function_kind, signature, return_value_kinds) =
-        check_visibility_and_signature(context, module_id, function, &type_arguments, is_init)?;
+    let LoadedFunctionInfo {
+        kind,
+        signature,
+        return_value_kinds,
+        index,
+        last_instr,
+    } = check_visibility_and_signature(context, module_id, function, &type_arguments, is_init)?;
     // build the arguments, storing meta data about by-mut-ref args
-    let (tx_context_kind, by_mut_ref, serialized_arguments) = build_move_args(
-        context,
-        module_id,
-        function,
-        function_kind,
-        &signature,
-        &arguments,
-    )?;
+    let (tx_context_kind, by_mut_ref, serialized_arguments) =
+        build_move_args(context, module_id, function, kind, &signature, &arguments)?;
     // invoke the VM
     let SerializedReturnValues {
         mutable_reference_outputs,
@@ -308,12 +307,12 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>>(
     {
         assert_invariant!(i1 == i2, "lost mutable input");
         let arg_idx = i1 as usize;
-        let used_in_non_entry_move_call = function_kind == FunctionKind::NonEntry;
+        let used_in_non_entry_move_call = kind == FunctionKind::NonEntry;
         let value = make_value(value_info, bytes, used_in_non_entry_move_call)?;
         context.restore_arg(arguments[arg_idx], value)?;
     }
 
-    context.take_user_events(module_id)?;
+    context.take_user_events(module_id, index, last_instr)?;
     assert_invariant!(
         return_value_kinds.len() == return_values.len(),
         "lost return value"
@@ -518,6 +517,19 @@ enum ValueKind {
     Raw(Type, AbilitySet),
 }
 
+struct LoadedFunctionInfo {
+    /// The kind of the function, e.g. public or private or init
+    kind: FunctionKind,
+    /// The signature information of the function
+    signature: LoadedFunctionInstantiation,
+    /// Object or type information for the return values
+    return_value_kinds: Vec<ValueKind>,
+    /// Definitio index of the function
+    index: FunctionDefinitionIndex,
+    /// The length of the function used for setting error information, or 0 if native
+    last_instr: CodeOffset,
+}
+
 /// Checks that the function to be called is either
 /// - an entry function
 /// - a public function that does not return references
@@ -528,7 +540,7 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>>(
     function: &IdentStr,
     type_arguments: &[TypeTag],
     from_init: bool,
-) -> Result<(FunctionKind, LoadedFunctionInstantiation, Vec<ValueKind>), ExecutionError> {
+) -> Result<LoadedFunctionInfo, ExecutionError> {
     for (idx, ty) in type_arguments.iter().enumerate() {
         context
             .session
@@ -547,41 +559,44 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>>(
             "The modules init should be able to be loaded"
         );
     }
-    let function_kind = {
-        let module = context
-            .vm
-            .load_module(module_id, context.state_view)
-            .map_err(|e| context.convert_vm_error(e))?;
-        let module_id = module.self_id();
-        let Some(fdef) = module.function_defs.iter().find(|fdef| {
-            module.identifier_at(module.function_handle_at(fdef.function).name) == function
-        }) else {
+    let module = context
+        .vm
+        .load_module(module_id, context.state_view)
+        .map_err(|e| context.convert_vm_error(e))?;
+    let Some((index, fdef)) = module.function_defs.iter().enumerate().find(|(_index, fdef)| {
+        module.identifier_at(module.function_handle_at(fdef.function).name) == function
+    }) else {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::FunctionNotFound,
+            format!(
+                "Could not resolve function '{}' in module {}",
+                function, &module_id,
+            ),
+        ));
+    };
+
+    let last_instr: CodeOffset = fdef
+        .code
+        .as_ref()
+        .map(|code| code.code.len() - 1)
+        .unwrap_or(0) as CodeOffset;
+    // TODO dev inspect
+    let function_kind = match (fdef.visibility, fdef.is_entry) {
+        (Visibility::Private | Visibility::Friend, true) => FunctionKind::PrivateEntry,
+        (Visibility::Public, true) => FunctionKind::PublicEntry,
+        (Visibility::Public, false) => FunctionKind::NonEntry,
+        (Visibility::Private, false) if from_init => {
+            assert_invariant!(
+                function == INIT_FN_NAME,
+                "module init specified non-init function"
+            );
+            FunctionKind::Init
+        }
+        (Visibility::Private | Visibility::Friend, false) => {
             return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::FunctionNotFound,
-                format!(
-                    "Could not resolve function '{}' in module {}",
-                    function, &module_id,
-                ),
+                ExecutionErrorKind::NonEntryFunctionInvoked,
+                "Can only call `entry` or `public` functions",
             ));
-        };
-        // TODO dev inspect
-        match (fdef.visibility, fdef.is_entry) {
-            (Visibility::Private | Visibility::Friend, true) => FunctionKind::PrivateEntry,
-            (Visibility::Public, true) => FunctionKind::PublicEntry,
-            (Visibility::Public, false) => FunctionKind::NonEntry,
-            (Visibility::Private, false) if from_init => {
-                assert_invariant!(
-                    function == INIT_FN_NAME,
-                    "module init specified non-init function"
-                );
-                FunctionKind::Init
-            }
-            (Visibility::Private | Visibility::Friend, false) => {
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::NonEntryFunctionInvoked,
-                    "Can only call `entry` or `public` functions",
-                ));
-            }
         }
     };
     let signature = context
@@ -602,7 +617,13 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>>(
         }
     };
     check_private_generics(context, module_id, function, &signature.type_arguments)?;
-    Ok((function_kind, signature, return_value_kinds))
+    Ok(LoadedFunctionInfo {
+        kind: function_kind,
+        signature,
+        return_value_kinds,
+        index: FunctionDefinitionIndex(index as u16),
+        last_instr,
+    })
 }
 
 /// substitutes the type arguments into the parameter and return types

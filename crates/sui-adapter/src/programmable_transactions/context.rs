@@ -7,7 +7,10 @@ use std::{
     marker::PhantomData,
 };
 
-use move_binary_format::errors::{Location, VMError};
+use move_binary_format::{
+    errors::{Location, VMError},
+    file_format::{CodeOffset, FunctionDefinitionIndex},
+};
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use sui_framework::natives::object_runtime::{max_event_error, ObjectRuntime, RuntimeResults};
@@ -159,13 +162,20 @@ where
 
     /// Takes the user events from the runtime and tags them with the Move module of the function
     /// that was invoked for the command
-    pub fn take_user_events(&mut self, module_id: &ModuleId) -> Result<(), ExecutionError> {
+    pub fn take_user_events(
+        &mut self,
+        module_id: &ModuleId,
+        function: FunctionDefinitionIndex,
+        last_offset: CodeOffset,
+    ) -> Result<(), ExecutionError> {
         let object_runtime: &mut ObjectRuntime = self.session.get_native_extensions().get_mut();
         let events = object_runtime.take_user_events();
         let num_events = self.user_events.len() + events.len();
         let max_events = self.protocol_config.max_num_event_emit();
         if num_events as u64 > max_events {
-            let err = max_event_error(max_events).finish(Location::Module(module_id.clone()));
+            let err = max_event_error(max_events)
+                .at_code_offset(function, last_offset)
+                .finish(Location::Module(module_id.clone()));
             return Err(self.convert_vm_error(err));
         }
         let new_events = events

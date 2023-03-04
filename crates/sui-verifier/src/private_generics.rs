@@ -97,7 +97,7 @@ fn verify_private_transfer(
         return Ok(());
     }
     let fident = view.identifier_at(fhandle.name);
-    if !TRANSFER_FUNCTIONS.iter().any(|f| f == &fident) {
+    if !TRANSFER_FUNCTIONS.contains(&fident) {
         // should be unreachable
         // these are private and the module itself is skipped
         debug_assert!(
