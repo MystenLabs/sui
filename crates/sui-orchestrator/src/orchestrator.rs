@@ -157,7 +157,7 @@ impl Orchestrator {
             "sudo apt-get -y upgrade",
             "sudo apt-get -y autoremove",
             // Disable "pending kernel upgrade" message.
-            "sudo apt -y remove needrestart",
+            "sudo apt-get -y remove needrestart",
             // The following dependencies prevent the error: [error: linker `cc` not found].
             "sudo apt-get -y install build-essential",
             // Install typical sui dependencies.

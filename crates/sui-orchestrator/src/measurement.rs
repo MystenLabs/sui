@@ -222,7 +222,7 @@ impl MeasurementsCollection {
     pub fn save<P: AsRef<Path>>(&self, path: P) {
         let json = serde_json::to_string_pretty(self).expect("Cannot serialize metrics");
         let mut file = PathBuf::from(path.as_ref());
-        file.push(format!("results-{:?}.json", self.parameters));
+        file.push(format!("measurements-{:?}.json", self.parameters));
         fs::write(file, json).unwrap();
     }
 
