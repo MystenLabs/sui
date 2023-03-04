@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
+import { SUI_FRAMEWORK_ADDRESS } from '@mysten/sui.js';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import cl from 'classnames';
 import { useMemo } from 'react';
@@ -33,7 +34,7 @@ function AppsPlayGround() {
             if (!signer) throw new Error('No signer found');
             trackEvent('MintDevnetNFT');
             return signer.executeMoveCall({
-                packageObjectId: '0x2',
+                packageObjectId: SUI_FRAMEWORK_ADDRESS,
                 module: 'devnet_nft',
                 function: 'mint',
                 typeArguments: [],
