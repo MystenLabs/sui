@@ -138,13 +138,17 @@ export function SendTokenForm({
     const coinSymbol = (coinType && CoinAPI.getCoinSymbol(coinType)) || '';
     const [coinDecimals, coinDecimalsQueryResult] = useCoinDecimals(coinType);
     const [gasDecimals, gasQueryResult] = useCoinDecimals(SUI_TYPE_ARG);
-    const maxSuiSingleCoinBalance = useMemo(() => {
-        const maxCoin = suiCoins?.reduce(
-            (max, { balance }) => (max < balance ? balance : max),
-            0
-        );
-        return BigInt(maxCoin || 0);
-    }, [suiCoins]);
+    const maxSuiSingleCoinBalance = useMemo(
+        () =>
+            suiCoins?.reduce(
+                (max, c) =>
+                    max < CoinAPI.getBalanceFromCoinStruct(c)
+                        ? CoinAPI.getBalanceFromCoinStruct(c)
+                        : max,
+                BigInt(0)
+            ) || BigInt(0),
+        [suiCoins]
+    );
 
     const validationSchemaStepOne = useMemo(
         () =>
