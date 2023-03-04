@@ -8,9 +8,9 @@ use axum_extra::extract::WithRejection;
 use futures::StreamExt;
 use std::collections::HashMap;
 
+use sui_sdk::rpc_types::DelegationStatus;
 use sui_sdk::{SuiClient, SUI_COIN_TYPE};
 use sui_types::base_types::SuiAddress;
-use sui_types::governance::DelegationStatus;
 
 use crate::errors::Error;
 use crate::types::{
@@ -69,11 +69,12 @@ async fn get_sub_account_balances(
                 .await?;
             delegations
                 .into_iter()
-                .fold(HashMap::new(), |mut balances, delegation| {
-                    if let DelegationStatus::Active(_) = delegation.delegation_status {
-                        *balances
-                            .entry(delegation.staked_sui.sui_token_lock())
-                            .or_default() += delegation.staked_sui.principal() as u128;
+                .fold(HashMap::new(), |mut balances, stakes| {
+                    for delegation in &stakes.delegations {
+                        if let DelegationStatus::Active { .. } = delegation.status {
+                            *balances.entry(delegation.token_lock).or_default() +=
+                                delegation.principal as u128;
+                        }
                     }
                     balances
                 })
@@ -85,11 +86,12 @@ async fn get_sub_account_balances(
                 .await?;
             delegations
                 .into_iter()
-                .fold(HashMap::new(), |mut balances, delegation| {
-                    if let DelegationStatus::Pending = delegation.delegation_status {
-                        *balances
-                            .entry(delegation.staked_sui.sui_token_lock())
-                            .or_default() += delegation.staked_sui.principal() as u128;
+                .fold(HashMap::new(), |mut balances, stakes| {
+                    for delegation in &stakes.delegations {
+                        if let DelegationStatus::Pending = delegation.status {
+                            *balances.entry(delegation.token_lock).or_default() +=
+                                delegation.principal as u128;
+                        }
                     }
                     balances
                 })

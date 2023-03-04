@@ -10,7 +10,6 @@ use crate::base_types::{ObjectID, SuiAddress};
 use crate::committee::EpochId;
 use crate::id::{ID, UID};
 use crate::SUI_FRAMEWORK_ADDRESS;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -28,27 +27,7 @@ pub const ADD_DELEGATION_LOCKED_COIN_FUN_NAME: &IdentStr =
     ident_str!("request_add_delegation_mul_locked_coin");
 pub const WITHDRAW_DELEGATION_FUN_NAME: &IdentStr = ident_str!("request_withdraw_delegation");
 
-// TODO: this no longer exists at Move level, we need to remove this and update the governance API.
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
-pub struct Delegation {
-    pub id: UID,
-    pub staked_sui_id: ID,
-    pub pool_tokens: Balance,
-    pub principal_sui_amount: u64,
-}
-
-impl Delegation {
-    pub fn type_() -> StructTag {
-        StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
-            module: STAKING_POOL_MODULE_NAME.to_owned(),
-            name: DELEGATION_STRUCT_NAME.to_owned(),
-            type_params: vec![],
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct StakedSui {
     id: UID,
     pool_id: ID,
@@ -72,6 +51,14 @@ impl StakedSui {
         self.id.id.bytes
     }
 
+    pub fn pool_id(&self) -> ObjectID {
+        self.pool_id.bytes
+    }
+
+    pub fn request_epoch(&self) -> EpochId {
+        self.delegation_request_epoch
+    }
+
     pub fn principal(&self) -> u64 {
         self.principal.value()
     }
@@ -79,17 +66,4 @@ impl StakedSui {
     pub fn sui_token_lock(&self) -> Option<EpochId> {
         self.sui_token_lock
     }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
-pub struct DelegatedStake {
-    pub staked_sui: StakedSui,
-    pub delegation_status: DelegationStatus,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
-pub enum DelegationStatus {
-    Pending,
-    // TODO: remove the `Delegation` object here.
-    Active(Delegation),
 }
