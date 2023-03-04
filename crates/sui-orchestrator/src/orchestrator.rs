@@ -10,7 +10,6 @@ use crossterm::{
     cursor::MoveToColumn,
     style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor, Stylize},
 };
-use futures::future::try_join_all;
 use tokio::time::{self, sleep, Instant};
 
 use crate::{
@@ -33,6 +32,7 @@ pub struct Orchestrator {
     /// Handle ssh connections to instances.
     ssh_manager: SshConnectionManager,
     skip_testbed_update: bool,
+    skip_testbed_configuration: bool,
     skip_logs_processing: bool,
 }
 
@@ -50,12 +50,18 @@ impl Orchestrator {
             instances,
             ssh_manager,
             skip_testbed_update: false,
+            skip_testbed_configuration: false,
             skip_logs_processing: false,
         }
     }
 
     pub fn skip_testbed_updates(mut self, skip_testbed_update: bool) -> Self {
         self.skip_testbed_update = skip_testbed_update;
+        self
+    }
+
+    pub fn skip_testbed_configuration(mut self, skip_testbed_configuration: bool) -> Self {
+        self.skip_testbed_configuration = skip_testbed_configuration;
         self
     }
 
@@ -231,48 +237,7 @@ impl Orchestrator {
         let mut config = Config::new(&instances);
         config.print_files();
 
-        // let handles = instances
-        //     .iter()
-        //     .cloned()
-        //     .map(|instance| {
-        //         let repo_name = self.settings.repository_name();
-        //         let config_files = config.files();
-        //         let genesis_command = config.genesis_command();
-        //         let ssh_manager = self.ssh_manager.clone();
-
-        //         tokio::spawn(async move {
-        //             // Connect to the instance.
-        //             let connection = ssh_manager
-        //                 .connect(instance.ssh_address())
-        //                 .await?
-        //                 .with_timeout(&Some(Duration::from_secs(180)));
-
-        //             // Upload all configuration files.
-        //             for source in config_files {
-        //                 let destination = source.file_name().expect("Config file is directory");
-        //                 let mut file = File::open(&source).expect("Cannot open config file");
-        //                 let mut buf = Vec::new();
-        //                 file.read_to_end(&mut buf).expect("Cannot read config file");
-        //                 connection.upload(destination, &buf)?;
-        //             }
-
-        //             // Generate the genesis files.
-        //             let command = ["source $HOME/.cargo/env", &genesis_command].join(" && ");
-        //             connection
-        //                 .execute_from_path(command, repo_name.clone())
-        //                 .map(|_| ())
-        //                 .map_err(TestbedError::from)
-        //         })
-        //     })
-        //     .collect::<Vec<_>>();
-
-        // try_join_all(handles)
-        //     .await
-        //     .unwrap()
-        //     .into_iter()
-        //     .collect::<TestbedResult<_>>()?;
-
-        // NOTE: Our ssh library does not seem to be able to upload files in parallel reliably.
+        // NOTE: Our ssh library does not seem to be able to transfers files in parallel reliably.
         let total_instances = instances.len();
         for (i, instance) in instances.iter().enumerate() {
             crossterm::execute!(
@@ -478,64 +443,59 @@ impl Orchestrator {
         &self,
         parameters: &BenchmarkParameters,
     ) -> TestbedResult<LogsParser> {
-        crossterm::execute!(stdout(), Print("Downloading logs...")).unwrap();
-
+        // Select the instances to run.
         let instances = self.select_instances(parameters)?;
 
-        let handles = instances
-            .iter()
-            .cloned()
-            .enumerate()
-            .map(|(i, instance)| {
-                let ssh_manager = self.ssh_manager.clone();
-                let log_directory = self.settings.logs_directory.clone();
-                let parameters = parameters.clone();
+        // NOTE: Our ssh library does not seem to be able to transfers files in parallel reliably.
+        let mut log_parsers = Vec::new();
+        let total_instances = instances.len();
+        for (i, instance) in instances.iter().enumerate() {
+            crossterm::execute!(
+                stdout(),
+                MoveToColumn(0),
+                Print(format!(
+                    "[{}/{total_instances}] Downloading log files...",
+                    i + 1
+                ))
+            )
+            .unwrap();
 
-                tokio::spawn(async move {
-                    let mut error_counter = LogsParser::default();
+            let mut log_parser = LogsParser::default();
 
-                    // Connect to the instance.
-                    let connection = ssh_manager.connect(instance.ssh_address()).await?;
+            // Connect to the instance.
+            let connection = self.ssh_manager.connect(instance.ssh_address()).await?;
 
-                    // Create a log sub-directory for this run.
-                    let path: PathBuf = [&log_directory, &format!("logs-{parameters:?}").into()]
-                        .iter()
-                        .collect();
-                    fs::create_dir_all(&path).expect("Failed to create log directory");
+            // Create a log sub-directory for this run.
+            let log_directory = &self.settings.logs_directory;
+            let path: PathBuf = [log_directory, &format!("logs-{parameters:?}").into()]
+                .iter()
+                .collect();
+            fs::create_dir_all(&path).expect("Failed to create log directory");
 
-                    // Download the node log files.
-                    let node_log_content = connection.download("node.log")?;
-                    error_counter.set_node_errors(&node_log_content);
+            // Download the node log files.
+            let node_log_content = connection.download("node.log")?;
+            log_parser.set_node_errors(&node_log_content);
 
-                    let node_log_file = [path.clone(), format!("node-{i}.log").into()]
-                        .iter()
-                        .collect::<PathBuf>();
-                    fs::write(&node_log_file, node_log_content.as_bytes())
-                        .expect("Cannot write log file");
+            let node_log_file = [path.clone(), format!("node-{i}.log").into()]
+                .iter()
+                .collect::<PathBuf>();
+            fs::write(&node_log_file, node_log_content.as_bytes()).expect("Cannot write log file");
 
-                    // Download the clients log files.
-                    let client_log_content = connection.download("client.log")?;
-                    error_counter.set_client_errors(&client_log_content);
+            // Download the clients log files.
+            let client_log_content = connection.download("client.log")?;
+            log_parser.set_client_errors(&client_log_content);
 
-                    let client_log_file = [path, format!("client-{i}.log").into()]
-                        .iter()
-                        .collect::<PathBuf>();
-                    fs::write(&client_log_file, client_log_content.as_bytes())
-                        .expect("Cannot write log file");
+            let client_log_file = [path, format!("client-{i}.log").into()]
+                .iter()
+                .collect::<PathBuf>();
+            fs::write(&client_log_file, client_log_content.as_bytes())
+                .expect("Cannot write log file");
 
-                    Ok(error_counter)
-                })
-            })
-            .collect::<Vec<_>>();
-
-        let error_counters: Vec<LogsParser> = try_join_all(handles)
-            .await
-            .unwrap()
-            .into_iter()
-            .collect::<TestbedResult<_>>()?;
+            log_parsers.push(log_parser)
+        }
 
         println!(" [{}]", "Ok".green());
-        Ok(LogsParser::aggregate(error_counters))
+        Ok(LogsParser::aggregate(log_parsers))
     }
 
     pub async fn run_benchmarks(
@@ -562,20 +522,15 @@ impl Orchestrator {
 
         // Run all benchmarks.
         let mut i = 1;
-        let mut latest_comittee_status = (0, 0);
+        let mut latest_comittee_size = 0;
         while let Some(parameters) = generator.next_parameters() {
             crossterm::execute!(
                 stdout(),
                 SetForegroundColor(Color::Green),
                 SetAttribute(Attribute::Bold),
                 Print(format!("\nStarting benchmark {i}\n")),
-                ResetColor
-            )
-            .unwrap();
-            crossterm::execute!(
-                stdout(),
+                ResetColor,
                 Print(format!("{}: {parameters}\n\n", "Parameters".bold())),
-                ResetColor
             )
             .unwrap();
 
@@ -583,9 +538,9 @@ impl Orchestrator {
             self.cleanup(true).await?;
 
             // Configure all instances (if needed).
-            if latest_comittee_status != (parameters.nodes, parameters.faults) {
+            if !self.skip_testbed_configuration && latest_comittee_size != parameters.nodes {
                 self.configure(&parameters).await?;
-                latest_comittee_status = (parameters.nodes, parameters.faults);
+                latest_comittee_size = parameters.nodes;
             }
 
             // Deploy the validators.

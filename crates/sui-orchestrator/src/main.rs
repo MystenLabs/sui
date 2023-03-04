@@ -66,6 +66,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
             duration,
             loads,
             skip_testbed_update,
+            skip_testbed_configuration,
             skip_logs_processing,
             timeout,
             retries,
@@ -93,6 +94,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
 
             orchestrator
                 .skip_testbed_updates(skip_testbed_update)
+                .skip_testbed_configuration(skip_testbed_configuration)
                 .skip_logs_processing(skip_logs_processing)
                 .run_benchmarks(generator)
                 .await
@@ -199,6 +201,10 @@ pub enum Operation {
         /// Whether to skip testbed updates before running benchmarks.
         #[clap(long, action, default_value = "false")]
         skip_testbed_update: bool,
+
+        /// Whether to skip testbed configuration before running benchmarks.
+        #[clap(long, action, default_value = "false")]
+        skip_testbed_configuration: bool,
 
         /// Whether to skip downloading and analyzing log files.
         #[clap(long, action, default_value = "false")]
