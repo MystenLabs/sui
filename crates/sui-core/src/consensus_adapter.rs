@@ -3,12 +3,11 @@
 
 use arc_swap::ArcSwap;
 use bytes::Bytes;
-use dashmap::mapref::one::Ref;
 use dashmap::try_result::TryResult;
 use dashmap::DashMap;
 use futures::future::{select, Either};
 use futures::FutureExt;
-use itertools::{any, Itertools};
+use itertools::Itertools;
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
 use parking_lot::{Mutex, RwLockReadGuard};

@@ -205,6 +205,7 @@ pub struct AuthorityMetrics {
     pub consensus_handler_processed_batches: IntCounter,
     pub consensus_handler_processed_bytes: IntCounter,
     pub consensus_handler_processed: IntCounterVec,
+    pub consensus_handler_num_low_scoring_authorities: IntGauge,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -410,7 +411,12 @@ impl AuthorityMetrics {
                 registry
             ).unwrap(),
             consensus_handler_processed: register_int_counter_vec_with_registry!("consensus_handler_processed", "Number of transactions processed by consensus handler", &["class"], registry)
-                .unwrap()
+                .unwrap(),
+            consensus_handler_num_low_scoring_authorities: register_int_gauge_with_registry!(
+                "consensus_handler_num_low_scoring_authorities", 
+                "Number of low scoring authorities based on reputation scores from consensus", 
+                registry
+            ).unwrap()
         }
     }
 }

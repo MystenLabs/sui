@@ -27,7 +27,7 @@ use sui_types::messages::{
 };
 use sui_types::storage::ParentSync;
 
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, instrument, warn};
 
 pub struct ConsensusHandler<T> {
     /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
@@ -125,6 +125,9 @@ fn update_low_scoring_authorities(
     let remaining_stake = rest.iter().map(|a| committee.weight(a)).sum::<u64>();
     let quorum_threshold = committee.threshold::<true>();
     if remaining_stake < quorum_threshold {
+        warn!(
+            "Too many low reputation-scoring authorities, temporarily disabling scoring mechanism"
+        );
         return;
     }
 
@@ -197,6 +200,17 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             self.committee.clone(),
             consensus_output.sub_dag.reputation_score.clone(),
         );
+
+        if consensus_output.sub_dag.reputation_score.final_of_schedule {
+            self.metrics
+                .consensus_handler_num_low_scoring_authorities
+                .set(self.low_scoring_authorities.len() as i64);
+
+            let _ = self
+                .low_scoring_authorities
+                .iter()
+                .map(|s| debug!("low scoring authority {} with score {}", s.key(), s.value()));
+        };
 
         for (cert, batches) in consensus_output.batches {
             let author = cert.header.author.clone();
