@@ -950,16 +950,15 @@ impl AuthorityState {
             *certificate.digest(),
             epoch_store.protocol_config(),
         );
-        let transaction_data = certificate.data().intent_message.value.clone();
-        let signer = transaction_data.sender();
-        let gas = transaction_data.gas();
+        let transaction_data = &certificate.data().intent_message.value;
+        let (kind, signer, gas) = transaction_data.execution_parts();
         let (inner_temp_store, effects, _execution_error) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
                 shared_object_refs,
                 temporary_store,
-                transaction_data.kind,
+                kind,
                 signer,
-                gas,
+                &gas,
                 *certificate.digest(),
                 transaction_dependencies,
                 epoch_store.move_vm(),
@@ -1006,8 +1005,7 @@ impl AuthorityState {
             transaction_digest,
             epoch_store.protocol_config(),
         );
-        let signer = transaction.sender();
-        let gas = transaction.gas();
+        let (kind, signer, gas) = transaction.execution_parts();
         let move_vm = Arc::new(
             adapter::new_move_vm(
                 epoch_store.native_functions().clone(),
@@ -1019,9 +1017,9 @@ impl AuthorityState {
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
                 shared_object_refs,
                 temporary_store,
-                transaction.kind,
+                kind,
                 signer,
-                gas,
+                &gas,
                 transaction_digest,
                 transaction_dependencies,
                 &move_vm,
@@ -1110,7 +1108,7 @@ impl AuthorityState {
                 temporary_store,
                 transaction_kind,
                 sender,
-                gas_object_ref,
+                &[gas_object_ref],
                 transaction_digest,
                 transaction_dependencies,
                 &move_vm,

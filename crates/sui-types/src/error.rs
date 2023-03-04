@@ -118,6 +118,8 @@ pub enum UserInputError {
     DuplicateObjectRefInput,
 
     // Gas related errors
+    #[error("Transaction gas payment missing.")]
+    MissingGasPayment,
     #[error("Gas object is not an owned object with owner: {:?}.", owner)]
     GasObjectNotOwnedObject { owner: Owner },
     #[error("Gas budget: {:?} is higher than max: {:?}.", gas_budget, max_budget)]

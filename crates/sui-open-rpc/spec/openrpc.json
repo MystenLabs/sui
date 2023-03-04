@@ -123,12 +123,14 @@
           "result": {
             "name": "Result",
             "value": {
-              "txBytes": "AQICAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIKZGV2bmV0X25mdARtaW50AAMAC0V4YW1wbGUgTkZUACtBbiBORlQgY3JlYXRlZCBieSB0aGUgU3VpIENvbW1hbmQgTGluZSBUb29sAEJpcGZzOi8vYmFma3JlaWJuZ3FobDNnYWE3ZGFvYjRpMnZjY3ppYXkyampscDQzNWNmNjZ2aG9ubzducnZ3dzUzdHkAskuOwWj+SJb1twzLEPGnBeBh0P36GJYY0osNRO/vkstnLw2+Ep8eORE/n2Fk6ihn+N7M88PFGPFG3pVU8D8nqAEAAAAAAAAAID1bEYXznnHvNX4r2eE5YlFrCkFAMnZDeyXw/76JfPR2mweBXwRJfi4F0iysOqBhQQsghozGGRVMQqHGG+mQJxf0S1gfIyIsEJFrF6NptNoDnQdZUrWANvKntWFEZZJAPAEAAAAAAAAAIMB3fp0kb/OXSsXxs1CqFsQuoNcRezDIyENs56klSzDSmweBXwRJfi4F0iysOqBhQQsghozGGRVMQqHGG+mQJxcBAAAAAAAAAOgDAAAAAAAAAA==",
-              "gas": {
-                "objectId": "0xf44b581f23222c10916b17a369b4da039d075952b58036f2a7b561446592403c",
-                "version": 1,
-                "digest": "DxJxf3yJYN74x3saUWa3pxQ2HWETkpwv1pKWHjbZ3n2u"
-              },
+              "txBytes": "AQICAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIKZGV2bmV0X25mdARtaW50AAMAC0V4YW1wbGUgTkZUACtBbiBORlQgY3JlYXRlZCBieSB0aGUgU3VpIENvbW1hbmQgTGluZSBUb29sAEJpcGZzOi8vYmFma3JlaWJuZ3FobDNnYWE3ZGFvYjRpMnZjY3ppYXkyampscDQzNWNmNjZ2aG9ubzducnZ3dzUzdHkAskuOwWj+SJb1twzLEPGnBeBh0P36GJYY0osNRO/vkstnLw2+Ep8eORE/n2Fk6ihn+N7M88PFGPFG3pVU8D8nqAEAAAAAAAAAID1bEYXznnHvNX4r2eE5YlFrCkFAMnZDeyXw/76JfPR2mweBXwRJfi4F0iysOqBhQQsghozGGRVMQqHGG+mQJxcB9EtYHyMiLBCRaxejabTaA50HWVK1gDbyp7VhRGWSQDwBAAAAAAAAACDAd36dJG/zl0rF8bNQqhbELqDXEXswyMhDbOepJUsw0psHgV8ESX4uBdIsrDqgYUELIIaMxhkVTEKhxhvpkCcXAQAAAAAAAADoAwAAAAAAAAA=",
+              "gas": [
+                {
+                  "objectId": "0xf44b581f23222c10916b17a369b4da039d075952b58036f2a7b561446592403c",
+                  "version": 1,
+                  "digest": "DxJxf3yJYN74x3saUWa3pxQ2HWETkpwv1pKWHjbZ3n2u"
+                }
+              ],
               "inputObjects": [
                 {
                   "MovePackage": "0x0000000000000000000000000000000000000000000000000000000000000002"
@@ -276,11 +278,11 @@
           "params": [
             {
               "name": "tx_bytes",
-              "value": "AABVfcQqrv7rjBVNfdxFa4rqoxMsdANTHcmOg/bhmNLX0XupHdx+cXz3CMk3Bg8EBIc27DP7F0bZmaXljNXGd+2AAgAAAAAAAAAgzMqpegLMOpgEFnDhYJ23FOmFjJbp5GmFXxzzv9+X6GVPuIgKC69cF+3DB1mtlwVnAyS6rhgBhRo36LTApC3mdU+C8chYe5jWTAC/tGw4Q72L9sz6fGWoYThpjNH9ysPcAgAAAAAAAAAg6NjHzoY/MT2j29kqg+8m0Si4j+Zr8m4ODQnNr3J9HYRPuIgKC69cF+3DB1mtlwVnAyS6rhgBhRo36LTApC3mdQEAAAAAAAAA6AMAAAAAAAAA"
+              "value": "AABVfcQqrv7rjBVNfdxFa4rqoxMsdANTHcmOg/bhmNLX0XupHdx+cXz3CMk3Bg8EBIc27DP7F0bZmaXljNXGd+2AAgAAAAAAAAAgzMqpegLMOpgEFnDhYJ23FOmFjJbp5GmFXxzzv9+X6GVPuIgKC69cF+3DB1mtlwVnAyS6rhgBhRo36LTApC3mdQFPgvHIWHuY1kwAv7RsOEO9i/bM+nxlqGE4aYzR/crD3AIAAAAAAAAAIOjYx86GPzE9o9vZKoPvJtEouI/ma/JuDg0Jza9yfR2ET7iICguvXBftwwdZrZcFZwMkuq4YAYUaN+i0wKQt5nUBAAAAAAAAAOgDAAAAAAAAAA=="
             },
             {
               "name": "signature",
-              "value": "AH6XTo1HVHf4m92sObAgdmoNTFLiCFSzj7eOJobK8KjO3xa0NIv6WEOBVcC19elqJ+OmstR38vGS8P6j+eG4Aw5tqSk/XTlS5stFH/W02Kxeyb0TWYjhlUjBKhMcXPgTNg=="
+              "value": "AFu0kJTBYifF9LBGPjq2ASBTRY0qWCXF+ZvrNNh5Q7x61G6C4sDkbMTNVZz+tKUL7g9lt7qKpUNAwIeEj+FNqQNtqSk/XTlS5stFH/W02Kxeyb0TWYjhlUjBKhMcXPgTNg=="
             },
             {
               "name": "request_type",
@@ -306,18 +308,20 @@
                   ],
                   "sender": "0x4fb8880a0baf5c17edc30759ad9705670324baae1801851a37e8b4c0a42de675",
                   "gasData": {
-                    "payment": {
-                      "objectId": "0x4f82f1c8587b98d64c00bfb46c3843bd8bf6ccfa7c65a86138698cd1fdcac3dc",
-                      "version": 2,
-                      "digest": "GfwJqw63FK6AVQnKKkQprvrk3cVLziMBqhMfNkDuCHj9"
-                    },
+                    "payment": [
+                      {
+                        "objectId": "0x4f82f1c8587b98d64c00bfb46c3843bd8bf6ccfa7c65a86138698cd1fdcac3dc",
+                        "version": 2,
+                        "digest": "GfwJqw63FK6AVQnKKkQprvrk3cVLziMBqhMfNkDuCHj9"
+                      }
+                    ],
                     "owner": "0x4fb8880a0baf5c17edc30759ad9705670324baae1801851a37e8b4c0a42de675",
                     "price": 1,
                     "budget": 1000
                   }
                 },
                 "txSignatures": [
-                  "AH6XTo1HVHf4m92sObAgdmoNTFLiCFSzj7eOJobK8KjO3xa0NIv6WEOBVcC19elqJ+OmstR38vGS8P6j+eG4Aw5tqSk/XTlS5stFH/W02Kxeyb0TWYjhlUjBKhMcXPgTNg=="
+                  "AFu0kJTBYifF9LBGPjq2ASBTRY0qWCXF+ZvrNNh5Q7x61G6C4sDkbMTNVZz+tKUL7g9lt7qKpUNAwIeEj+FNqQNtqSk/XTlS5stFH/W02Kxeyb0TWYjhlUjBKhMcXPgTNg=="
                 ]
               },
               "effects": {
@@ -1009,9 +1013,9 @@
               "data": [
                 {
                   "timestamp": 0,
-                  "txDigest": "HzTi7BC8QyKBMEbcLMUF7H219B1LXC1EaE7hhCCQArJa",
+                  "txDigest": "2ve3efqQ6e8ULjiAYmiUSwP52ThMAT36akEAm8fadVW9",
                   "id": {
-                    "txDigest": "HzTi7BC8QyKBMEbcLMUF7H219B1LXC1EaE7hhCCQArJa",
+                    "txDigest": "2ve3efqQ6e8ULjiAYmiUSwP52ThMAT36akEAm8fadVW9",
                     "eventSeq": 0
                   },
                   "event": {
@@ -1594,18 +1598,20 @@
                   ],
                   "sender": "0xf6f0ade7cd7d4c2ca2c1ad25115b06135dd146bd595eb56e4a30e1cd1aad862c",
                   "gasData": {
-                    "payment": {
-                      "objectId": "0x4b2e27c1eed56c33b579034150ea46bccf7653e00b6f24b63bd04da68bc160c7",
-                      "version": 2,
-                      "digest": "6AyFnAuKAKCqm1cD94EyGzBqJCDDJ716ojjmsKF2rqoi"
-                    },
+                    "payment": [
+                      {
+                        "objectId": "0x4b2e27c1eed56c33b579034150ea46bccf7653e00b6f24b63bd04da68bc160c7",
+                        "version": 2,
+                        "digest": "6AyFnAuKAKCqm1cD94EyGzBqJCDDJ716ojjmsKF2rqoi"
+                      }
+                    ],
                     "owner": "0xf6f0ade7cd7d4c2ca2c1ad25115b06135dd146bd595eb56e4a30e1cd1aad862c",
                     "price": 1,
                     "budget": 1000
                   }
                 },
                 "txSignatures": [
-                  "AGslC3jrqZbH8FVkZXU3usnxIf7DDSdoxmPnV3548G/pwcwY8/Frtaktfjba1lQG73/cbIcTM/3fhW5bnpvMbQfrrHXjLu++Rq9ubpXx7Qa15+TAMzHp1FEJlaxEOtOHYQ=="
+                  "AJo91z4VIKmfpcos3Zpw46nlO8z0V9UTO1efgPS5vzQ44fB1fbj8zMEiXYjE3F9wv0OKDUyP+qSlPMKI5mnOZQ7rrHXjLu++Rq9ubpXx7Qa15+TAMzHp1FEJlaxEOtOHYQ=="
                 ]
               },
               "effects": {
@@ -2567,12 +2573,12 @@
           "params": [
             {
               "name": "tx_bytes",
-              "value": "AAAy9L9sPorELu8TheAUA+SaSylq3LIuon08kuTOIlasZFy6vcNs8bny7ISBomyn2BFpVZeUAouPAuQwKlWV2IiaAgAAAAAAAAAgLEOAXQ1vVAKnrQ2lvexUnHzeoGvEodM5oiUh7qkzuInTBWxU38/Wzpg7ga1fbxcalrZhjj8rLo7egQ86U3GPP2fG0xxslw5WfwPvZ9gRpPhDZluN4/KC+kiz4BA7qbvtAgAAAAAAAAAgagYVO5/EhuEB8OnicDrIZm0GrsxN3355JqNhlwxlpbHTBWxU38/Wzpg7ga1fbxcalrZhjj8rLo7egQ86U3GPPwEAAAAAAAAA6AMAAAAAAAAA"
+              "value": "AAAy9L9sPorELu8TheAUA+SaSylq3LIuon08kuTOIlasZFy6vcNs8bny7ISBomyn2BFpVZeUAouPAuQwKlWV2IiaAgAAAAAAAAAgLEOAXQ1vVAKnrQ2lvexUnHzeoGvEodM5oiUh7qkzuInTBWxU38/Wzpg7ga1fbxcalrZhjj8rLo7egQ86U3GPPwFnxtMcbJcOVn8D72fYEaT4Q2ZbjePygvpIs+AQO6m77QIAAAAAAAAAIGoGFTufxIbhAfDp4nA6yGZtBq7MTd9+eSajYZcMZaWx0wVsVN/P1s6YO4GtX28XGpa2YY4/Ky6O3oEPOlNxjz8BAAAAAAAAAOgDAAAAAAAAAA=="
             },
             {
               "name": "signatures",
               "value": [
-                "ANz1nc//IojONTcCQoBBkZPEoxhksBhL7jqy/JOSIMX9DPjIcAAEOJceXRDhHWGf1sxYS2QXeO/fVrJACZ7VFASRFyzRWy5Z5Iom1zB2m6Vx2RU7g7aQu+hOm3dBh5doKQ=="
+                "AIjKQn7yiaqBMGefXtWroKrwYD+/B9EpoAejS4Rm4i/7svy7RIGne3Qc2SPyWLmU186Q45gG9ILez8ONbrLYGQ2RFyzRWy5Z5Iom1zB2m6Vx2RU7g7aQu+hOm3dBh5doKQ=="
               ]
             },
             {
@@ -2599,18 +2605,20 @@
                   ],
                   "sender": "0xd3056c54dfcfd6ce983b81ad5f6f171a96b6618e3f2b2e8ede810f3a53718f3f",
                   "gasData": {
-                    "payment": {
-                      "objectId": "0x67c6d31c6c970e567f03ef67d811a4f843665b8de3f282fa48b3e0103ba9bbed",
-                      "version": 2,
-                      "digest": "88sbZ6JronTqbQUL25HUPouw9wJJRiSKtUjry81YgPDS"
-                    },
+                    "payment": [
+                      {
+                        "objectId": "0x67c6d31c6c970e567f03ef67d811a4f843665b8de3f282fa48b3e0103ba9bbed",
+                        "version": 2,
+                        "digest": "88sbZ6JronTqbQUL25HUPouw9wJJRiSKtUjry81YgPDS"
+                      }
+                    ],
                     "owner": "0xd3056c54dfcfd6ce983b81ad5f6f171a96b6618e3f2b2e8ede810f3a53718f3f",
                     "price": 1,
                     "budget": 1000
                   }
                 },
                 "txSignatures": [
-                  "ANz1nc//IojONTcCQoBBkZPEoxhksBhL7jqy/JOSIMX9DPjIcAAEOJceXRDhHWGf1sxYS2QXeO/fVrJACZ7VFASRFyzRWy5Z5Iom1zB2m6Vx2RU7g7aQu+hOm3dBh5doKQ=="
+                  "AIjKQn7yiaqBMGefXtWroKrwYD+/B9EpoAejS4Rm4i/7svy7RIGne3Qc2SPyWLmU186Q45gG9ILez8ONbrLYGQ2RFyzRWy5Z5Iom1zB2m6Vx2RU7g7aQu+hOm3dBh5doKQ=="
                 ]
               },
               "effects": {
@@ -4533,7 +4541,10 @@
             "$ref": "#/components/schemas/SuiAddress"
           },
           "payment": {
-            "$ref": "#/components/schemas/ObjectRef"
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectRef"
+            }
           },
           "price": {
             "type": "integer",
@@ -6379,12 +6390,11 @@
         ],
         "properties": {
           "gas": {
-            "description": "the gas object to be used",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ObjectRef"
-              }
-            ]
+            "description": "the gas objects to be used",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectRef"
+            }
           },
           "inputObjects": {
             "description": "objects to be used in this transaction",

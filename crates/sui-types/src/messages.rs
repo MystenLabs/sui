@@ -217,15 +217,13 @@ pub struct PayAllSui {
 }
 
 impl PayAllSui {
-    pub fn validity_check(
-        &self,
-        config: &ProtocolConfig,
-        gas_payment: &ObjectRef,
-    ) -> UserInputResult {
+    pub fn validity_check(&self, config: &ProtocolConfig, gas: &[ObjectRef]) -> UserInputResult {
         fp_ensure!(!self.coins.is_empty(), UserInputError::EmptyInputCoins);
+        fp_ensure!(gas.len() == 1, UserInputError::UnexpectedGasPaymentObject);
         fp_ensure!(
             // unwrap() is safe because coins are not empty.
-            self.coins.first().unwrap() == gas_payment,
+            // gas is > 0 (validity_check) and == 1 (above)
+            self.coins.first().unwrap() == &gas[0],
             UserInputError::UnexpectedGasPaymentObject
         );
         fp_ensure!(
@@ -260,15 +258,13 @@ pub struct PaySui {
 }
 
 impl PaySui {
-    pub fn validity_check(
-        &self,
-        config: &ProtocolConfig,
-        gas_payment: &ObjectRef,
-    ) -> UserInputResult {
+    pub fn validity_check(&self, config: &ProtocolConfig, gas: &[ObjectRef]) -> UserInputResult {
         fp_ensure!(!self.coins.is_empty(), UserInputError::EmptyInputCoins);
+        fp_ensure!(gas.len() == 1, UserInputError::UnexpectedGasPaymentObject);
         fp_ensure!(
             // unwrap() is safe because coins are not empty.
-            self.coins.first().unwrap() == gas_payment,
+            // gas is > 0 (validity_check) and == 1 (above)
+            self.coins.first().unwrap() == &gas[0],
             UserInputError::UnexpectedGasPaymentObject
         );
         fp_ensure!(
@@ -785,7 +781,7 @@ impl ProgrammableTransaction {
         fp_ensure!(
             self.commands.len() < config.max_programmable_tx_commands() as usize,
             UserInputError::SizeLimitExceeded {
-                limit: "maximum commands in a progammable transaction".to_string(),
+                limit: "maximum commands in a programmable transaction".to_string(),
                 value: config.max_programmable_tx_commands().to_string()
             }
         );
@@ -1057,17 +1053,13 @@ impl SingleTransactionKind {
         Ok(input_objects)
     }
 
-    pub fn validity_check(
-        &self,
-        config: &ProtocolConfig,
-        gas_payment: &ObjectRef,
-    ) -> UserInputResult {
+    pub fn validity_check(&self, config: &ProtocolConfig, gas: &[ObjectRef]) -> UserInputResult {
         match self {
             SingleTransactionKind::Publish(publish) => publish.validity_check(config)?,
             SingleTransactionKind::Call(call) => call.validity_check(config)?,
             SingleTransactionKind::Pay(p) => p.validity_check(config)?,
-            SingleTransactionKind::PaySui(p) => p.validity_check(config, gas_payment)?,
-            SingleTransactionKind::PayAllSui(pa) => pa.validity_check(config, gas_payment)?,
+            SingleTransactionKind::PaySui(p) => p.validity_check(config, gas)?,
+            SingleTransactionKind::PayAllSui(pa) => pa.validity_check(config, gas)?,
             SingleTransactionKind::ProgrammableTransaction(p) => p.validity_check(config)?,
             SingleTransactionKind::TransferObject(_)
             | SingleTransactionKind::TransferSui(_)
@@ -1288,7 +1280,7 @@ impl Display for TransactionKind {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct GasData {
-    pub payment: ObjectRef,
+    pub payment: Vec<ObjectRef>,
     pub owner: SuiAddress,
     pub price: u64,
     pub budget: u64,
@@ -1324,16 +1316,54 @@ impl TransactionData {
             gas_data: GasData {
                 price: DUMMY_GAS_PRICE,
                 owner: sender,
-                payment: gas_payment,
+                payment: vec![gas_payment],
                 budget: gas_budget,
             },
             expiration: TransactionExpiration::None,
         }
     }
+
+    pub fn new_system_transaction(kind: TransactionKind) -> Self {
+        // assert transaction kind if a system transaction?
+        // assert!(kind.is_system_tx());
+        let sender = SuiAddress::default();
+        TransactionData {
+            kind,
+            sender,
+            gas_data: GasData {
+                price: DUMMY_GAS_PRICE,
+                owner: sender,
+                payment: vec![(ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN)],
+                budget: 0,
+            },
+            expiration: TransactionExpiration::None,
+        }
+    }
+
     pub fn new(
         kind: TransactionKind,
         sender: SuiAddress,
         gas_payment: ObjectRef,
+        gas_budget: u64,
+        gas_price: u64,
+    ) -> Self {
+        TransactionData {
+            kind,
+            sender,
+            gas_data: GasData {
+                price: gas_price,
+                owner: sender,
+                payment: vec![gas_payment],
+                budget: gas_budget,
+            },
+            expiration: TransactionExpiration::None,
+        }
+    }
+
+    pub fn new_with_gas_coins(
+        kind: TransactionKind,
+        sender: SuiAddress,
+        gas_payment: Vec<ObjectRef>,
         gas_budget: u64,
         gas_price: u64,
     ) -> Self {
@@ -1401,6 +1431,27 @@ impl TransactionData {
             arguments,
         }));
         Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+    }
+
+    pub fn new_move_call_with_gas_coins(
+        sender: SuiAddress,
+        package: ObjectID,
+        module: Identifier,
+        function: Identifier,
+        type_arguments: Vec<TypeTag>,
+        gas_payment: Vec<ObjectRef>,
+        arguments: Vec<CallArg>,
+        gas_budget: u64,
+        gas_price: u64,
+    ) -> Self {
+        let kind = TransactionKind::Single(SingleTransactionKind::Call(MoveCall {
+            package,
+            module,
+            function,
+            type_arguments,
+            arguments,
+        }));
+        Self::new_with_gas_coins(kind, sender, gas_payment, gas_budget, gas_price)
     }
 
     pub fn new_transfer_with_dummy_gas_price(
@@ -1597,11 +1648,7 @@ impl TransactionData {
         self.gas_data.owner
     }
 
-    pub fn gas(&self) -> ObjectRef {
-        self.gas_data.payment
-    }
-
-    pub fn gas_payment_object_ref(&self) -> &ObjectRef {
+    pub fn gas(&self) -> &[ObjectRef] {
         &self.gas_data.payment
     }
 
@@ -1633,15 +1680,25 @@ impl TransactionData {
         let mut inputs = self.kind.input_objects()?;
 
         if !self.kind.is_system_tx() && !self.kind.is_pay_sui_tx() {
-            inputs.push(InputObjectKind::ImmOrOwnedMoveObject(
-                *self.gas_payment_object_ref(),
-            ));
+            inputs.extend(
+                self.gas()
+                    .iter()
+                    .map(|obj_ref| InputObjectKind::ImmOrOwnedMoveObject(*obj_ref)),
+            );
         }
         Ok(inputs)
     }
 
+    pub fn execution_parts(&self) -> (TransactionKind, SuiAddress, Vec<ObjectRef>) {
+        (
+            self.kind.clone(),
+            self.sender,
+            self.gas_data.payment.clone(),
+        )
+    }
+
     pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
-        Self::validity_check_impl(config, &self.kind, self.gas_payment_object_ref())?;
+        Self::validity_check_impl(config, &self.kind, self.gas())?;
         self.check_sponsorship()
     }
 
@@ -1678,7 +1735,7 @@ impl TransactionData {
     pub fn validity_check_impl(
         config: &ProtocolConfig,
         kind: &TransactionKind,
-        gas_payment: &ObjectRef,
+        gas: &[ObjectRef],
     ) -> UserInputResult {
         match kind {
             TransactionKind::Batch(b) => {
@@ -1718,10 +1775,10 @@ impl TransactionData {
                     }
                 );
                 for s in b {
-                    s.validity_check(config, gas_payment)?
+                    s.validity_check(config, gas)?
                 }
             }
-            TransactionKind::Single(s) => s.validity_check(config, gas_payment)?,
+            TransactionKind::Single(s) => s.validity_check(config, gas)?,
         }
         Ok(())
     }
@@ -1825,8 +1882,8 @@ impl<S> Envelope<SenderSignedData, S> {
         self.data().intent_message.value.sender
     }
 
-    pub fn gas_payment_object_ref(&self) -> &ObjectRef {
-        self.data().intent_message.value.gas_payment_object_ref()
+    pub fn gas(&self) -> &[ObjectRef] {
+        self.data().intent_message.value.gas()
     }
 
     pub fn contains_shared_object(&self) -> bool {
@@ -1963,14 +2020,7 @@ impl VerifiedTransaction {
     fn new_system_transaction(system_transaction: SingleTransactionKind) -> Self {
         system_transaction
             .pipe(TransactionKind::Single)
-            .pipe(|kind| {
-                TransactionData::new_with_dummy_gas_price(
-                    kind,
-                    SuiAddress::default(),
-                    (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
-                    0,
-                )
-            })
+            .pipe(TransactionData::new_system_transaction)
             .pipe(|data| {
                 SenderSignedData::new_from_sender_signature(
                     data,

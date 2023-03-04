@@ -14,9 +14,10 @@ use serde_with::serde_as;
 use sui_protocol_config::ProtocolConfig;
 use tracing::trace;
 
-use crate::coin::Coin;
+use crate::coin::{check_coins, update_input_coins, Coin};
 use crate::committee::EpochId;
 use crate::event::BalanceChangeType;
+use crate::gas_coin::GasCoin;
 use crate::messages::TransactionEvents;
 use crate::storage::{ObjectStore, SingleTxContext};
 use crate::sui_system_state::{
@@ -567,7 +568,7 @@ impl<S> TemporaryStore<S> {
         transaction_dependencies: Vec<TransactionDigest>,
         gas_cost_summary: GasCostSummary,
         status: ExecutionStatus,
-        gas_object_ref: ObjectRef,
+        gas: &[ObjectRef],
         epoch: EpochId,
     ) -> (InnerTemporaryStore, TransactionEffects) {
         let mut modified_at_versions = vec![];
@@ -587,6 +588,9 @@ impl<S> TemporaryStore<S> {
 
         // In the case of special transactions that don't require a gas object,
         // we don't really care about the effects to gas, just use the input for it.
+        // Gas coins are guaranteed to be at least size 1 and if more than 1
+        // the first coin is where all the others are merged.
+        let gas_object_ref = gas[0];
         let updated_gas_object_info = if gas_object_ref.0 == ObjectID::ZERO {
             (gas_object_ref, Owner::AddressOwner(SuiAddress::default()))
         } else {
@@ -727,6 +731,7 @@ impl<S> TemporaryStore<S> {
         gas_object_id: ObjectID,
         gas_status: &mut SuiGasStatus<'_>,
         result: &mut Result<T, ExecutionError>,
+        gas: &[ObjectRef],
     ) {
         // We must call `read_object` instead of getting it from `temporary_store.objects`
         // because a `TransferSui` transaction may have already mutated the gas object and put
@@ -748,6 +753,10 @@ impl<S> TemporaryStore<S> {
             // and re-ensure all mutable objects' versions are incremented.
             if result.is_ok() {
                 self.reset();
+                let gas_object_id = match self.smash_gas(sender, gas) {
+                    Ok(obj_ref) => obj_ref.0,
+                    Err(_) => gas[0].0, // this cannot fail, but we use gas[0] anyway
+                };
                 self.ensure_active_inputs_mutated(sender, &gas_object_id);
                 *result = Err(err);
             }
@@ -773,6 +782,26 @@ impl<S> TemporaryStore<S> {
         };
         self.write_object(&ctx, gas_object, WriteKind::Mutate);
         self.gas_charged = Some((sender, gas_object_id, cost_summary));
+    }
+
+    pub fn smash_gas(
+        &mut self,
+        sender: SuiAddress,
+        gas: &[ObjectRef],
+    ) -> Result<ObjectRef, ExecutionError> {
+        if gas.len() > 1 {
+            let mut gas_coins: Vec<Object> = gas
+                .iter()
+                .map(|obj_ref| self.objects().get(&obj_ref.0).unwrap().clone())
+                .collect();
+            // this should not fail as we checked gas coins are correct already
+            let (mut coins, _) = check_coins(&gas_coins, Some(GasCoin::type_()))?;
+            let mut merged_coin = coins.swap_remove(0);
+            merged_coin.merge_coins(&mut coins)?;
+            let ctx = SingleTxContext::gas(sender);
+            update_input_coins(&ctx, self, &mut gas_coins, &merged_coin, None);
+        }
+        Ok(gas[0])
     }
 
     pub fn delete_object(

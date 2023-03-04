@@ -1124,7 +1124,7 @@ async fn test_handle_sponsored_transaction() {
         tx_kind.clone(),
         sender,
         GasData {
-            payment: gas_object.compute_object_reference(),
+            payment: vec![gas_object.compute_object_reference()],
             owner: sponsor,
             price: DUMMY_GAS_PRICE,
             budget: 10000,
@@ -1143,7 +1143,7 @@ async fn test_handle_sponsored_transaction() {
         tx_kind.clone(),
         sender,
         GasData {
-            payment: gas_object.compute_object_reference(),
+            payment: vec![gas_object.compute_object_reference()],
             owner: sender, // <-- wrong
             price: DUMMY_GAS_PRICE,
             budget: 10000,
@@ -1171,7 +1171,7 @@ async fn test_handle_sponsored_transaction() {
         tx_kind.clone(),
         sender,
         GasData {
-            payment: gas_object.compute_object_reference(),
+            payment: vec![gas_object.compute_object_reference()],
             owner: dbg_addr(42), // <-- wrong
             price: DUMMY_GAS_PRICE,
             budget: 10000,
@@ -1199,7 +1199,7 @@ async fn test_handle_sponsored_transaction() {
         tx_kind,
         sender,
         GasData {
-            payment: gas_object.compute_object_reference(),
+            payment: vec![gas_object.compute_object_reference()],
             owner: third_party,
             price: DUMMY_GAS_PRICE,
             budget: 10000,
@@ -1955,36 +1955,6 @@ async fn test_type_argument_dependencies() {
         UserInputError::try_from(result.unwrap_err()).unwrap(),
         UserInputError::DependentPackageNotFound { .. }
     ));
-}
-
-#[tokio::test]
-async fn test_handle_confirmation_transaction_unknown_sender() {
-    let recipient = dbg_addr(2);
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let authority_state = init_state().await;
-
-    let object = Object::with_id_owner_for_testing(
-        ObjectID::random(),
-        SuiAddress::random_for_testing_only(),
-    );
-    let gas_object = Object::with_id_owner_for_testing(
-        ObjectID::random(),
-        SuiAddress::random_for_testing_only(),
-    );
-
-    let certified_transfer_transaction = init_certified_transfer_transaction(
-        sender,
-        &sender_key,
-        recipient,
-        object.compute_object_reference(),
-        gas_object.compute_object_reference(),
-        &authority_state,
-    );
-
-    assert!(authority_state
-        .try_execute_for_test(&certified_transfer_transaction)
-        .await
-        .is_err());
 }
 
 #[tokio::test]
@@ -3974,18 +3944,32 @@ pub async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>
 }
 
 #[cfg(test)]
+pub async fn init_state_with_objects_and_object_basics<I: IntoIterator<Item = Object>>(
+    objects: I,
+) -> (Arc<AuthorityState>, ObjectRef) {
+    let state = init_state().await;
+    for obj in objects {
+        state.insert_genesis_object(obj).await;
+    }
+    publish_object_basics(state).await
+}
+
+#[cfg(test)]
 pub async fn init_state_with_ids_and_object_basics<
     I: IntoIterator<Item = (SuiAddress, ObjectID)>,
 >(
     objects: I,
 ) -> (Arc<AuthorityState>, ObjectRef) {
-    use sui_framework_build::compiled_package::BuildConfig;
-
     let state = init_state().await;
     for (address, object_id) in objects {
         let obj = Object::with_id_owner_for_testing(object_id, address);
         state.insert_genesis_object(obj).await;
     }
+    publish_object_basics(state).await
+}
+
+async fn publish_object_basics(state: Arc<AuthorityState>) -> (Arc<AuthorityState>, ObjectRef) {
+    use sui_framework_build::compiled_package::BuildConfig;
 
     // add object_basics package object to genesis, since lots of test use it
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -4256,6 +4240,50 @@ pub async fn call_move_(
     Ok(signed_effects.into_data())
 }
 
+pub async fn call_move_with_gas_coins(
+    authority: &AuthorityState,
+    fullnode: Option<&AuthorityState>,
+    gas_object_ids: &[ObjectID],
+    gas_budget: u64,
+    sender: &SuiAddress,
+    sender_key: &AccountKeyPair,
+    package: &ObjectID,
+    module: &'_ str,
+    function: &'_ str,
+    type_args: Vec<TypeTag>,
+    test_args: Vec<TestCallArg>,
+    with_shared: bool, // Move call includes shared objects
+) -> SuiResult<TransactionEffects> {
+    let mut gas_object_refs = vec![];
+    for obj_id in gas_object_ids {
+        let gas_object = authority.get_object(obj_id).await.unwrap();
+        let gas_ref = gas_object.unwrap().compute_object_reference();
+        gas_object_refs.push(gas_ref);
+    }
+    let mut args = vec![];
+    for arg in test_args.into_iter() {
+        args.push(arg.to_call_arg(authority).await);
+    }
+    let data = TransactionData::new_move_call_with_gas_coins(
+        *sender,
+        *package,
+        Identifier::new(module).unwrap(),
+        Identifier::new(function).unwrap(),
+        type_args,
+        gas_object_refs,
+        args,
+        gas_budget,
+        DUMMY_GAS_PRICE,
+    );
+
+    let transaction = to_sender_signed_transaction(data, sender_key);
+    let signed_effects =
+        send_and_confirm_transaction_(authority, fullnode, transaction, with_shared)
+            .await?
+            .1;
+    Ok(signed_effects.into_data())
+}
+
 pub async fn create_move_object(
     package_id: &ObjectID,
     authority: &AuthorityState,
@@ -4276,6 +4304,34 @@ pub async fn create_move_object(
             TestCallArg::Pure(bcs::to_bytes(&(16_u64)).unwrap()),
             TestCallArg::Pure(bcs::to_bytes(sender).unwrap()),
         ],
+    )
+    .await
+}
+
+pub async fn create_move_object_with_gas_coins(
+    package_id: &ObjectID,
+    authority: &AuthorityState,
+    gas_object_ids: &[ObjectID],
+    gas_budget: u64,
+    sender: &SuiAddress,
+    sender_key: &AccountKeyPair,
+) -> SuiResult<TransactionEffects> {
+    call_move_with_gas_coins(
+        authority,
+        None,
+        gas_object_ids,
+        gas_budget,
+        sender,
+        sender_key,
+        package_id,
+        "object_basics",
+        "create",
+        vec![],
+        vec![
+            TestCallArg::Pure(bcs::to_bytes(&(16_u64)).unwrap()),
+            TestCallArg::Pure(bcs::to_bytes(sender).unwrap()),
+        ],
+        false,
     )
     .await
 }
@@ -4905,4 +4961,130 @@ fn test_choose_next_system_packages() {
             capabilities
         )
     );
+}
+
+#[tokio::test]
+async fn test_gas_smashing() {
+    // run a create move object transaction with a given set o gas coins and a budget
+    async fn create_obj(
+        sender: SuiAddress,
+        sender_key: AccountKeyPair,
+        gas_coins: Vec<Object>,
+        gas_budget: u64,
+    ) -> (Arc<AuthorityState>, TransactionEffects) {
+        let object_ids: Vec<_> = gas_coins.iter().map(|obj| obj.id()).collect();
+        let (authority_state, pkg_ref) = init_state_with_objects_and_object_basics(gas_coins).await;
+        let effects = create_move_object_with_gas_coins(
+            &pkg_ref.0,
+            &authority_state,
+            &object_ids,
+            gas_budget,
+            &sender,
+            &sender_key,
+        )
+        .await
+        .unwrap();
+        (authority_state, effects)
+    }
+
+    // make a `coin_num` coins distributing `gas_amount` across them
+    fn make_gas_coins(owner: SuiAddress, gas_amount: u64, coin_num: u64) -> Vec<Object> {
+        let mut objects = vec![];
+        let coin_balance = gas_amount / coin_num;
+        for _ in 1..coin_num {
+            let gas_object_id = ObjectID::random();
+            objects.push(Object::with_id_owner_gas_for_testing(
+                gas_object_id,
+                owner,
+                coin_balance,
+            ));
+        }
+        // in case integer division dropped something, make a coin with whatever is left
+        let amount_left = gas_amount - (coin_balance * (coin_num - 1));
+        let gas_object_id = ObjectID::random();
+        objects.push(Object::with_id_owner_gas_for_testing(
+            gas_object_id,
+            owner,
+            amount_left,
+        ));
+        objects
+    }
+
+    // run an object creation transaction with the given amount of gas and coins
+    async fn run_and_check_ok(reference_gas_used: u64, coin_num: u64, budget: u64) -> u64 {
+        let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+        let gas_coins = make_gas_coins(sender, reference_gas_used, coin_num);
+        let gas_coin_ids: Vec<_> = gas_coins.iter().map(|obj| obj.id()).collect();
+        let (state, effects) = create_obj(sender, sender_key, gas_coins, budget).await;
+        // transaction is good
+        assert!(effects.status.is_ok());
+        // gas object in effects is first coin in vector of coins
+        assert_eq!(gas_coin_ids[0], effects.gas_object.0 .0);
+        // object is created and gas at position 0 mutated
+        assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
+        // extra coin are deleted
+        assert_eq!(effects.deleted.len() as u64, coin_num - 1);
+        for gas_coin_id in &gas_coin_ids[1..] {
+            assert!(effects
+                .deleted
+                .iter()
+                .any(|deleted| deleted.0 == *gas_coin_id));
+        }
+        // balance on first coin is correct
+        let balance = sui_types::gas::get_gas_balance(
+            &state.get_object(&gas_coin_ids[0]).await.unwrap().unwrap(),
+        )
+        .unwrap();
+        let gas_used = effects.gas_cost_summary().gas_used();
+        assert!(reference_gas_used > balance);
+        assert_eq!(reference_gas_used, balance + gas_used);
+        gas_used
+    }
+
+    // run an object creation transaction with the given amount of gas and coins, failure case
+    async fn run_and_check_err(reference_gas_used: u64, coin_num: u64, budget: u64) -> u64 {
+        let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+        let gas_coins = make_gas_coins(sender, reference_gas_used, coin_num);
+        let gas_coin_ids: Vec<_> = gas_coins.iter().map(|obj| obj.id()).collect();
+        let (state, effects) = create_obj(sender, sender_key, gas_coins, budget).await;
+        // transaction is good
+        assert!(effects.status.is_err());
+        // gas object in effects is first coin in vector of coins
+        assert_eq!(gas_coin_ids[0], effects.gas_object.0 .0);
+        // object is created and gas at position 0 mutated
+        assert_eq!((effects.created.len(), effects.mutated.len()), (0, 1));
+        // extra coin are deleted
+        assert_eq!(effects.deleted.len() as u64, coin_num - 1);
+        for gas_coin_id in &gas_coin_ids[1..] {
+            assert!(effects
+                .deleted
+                .iter()
+                .any(|deleted| deleted.0 == *gas_coin_id));
+        }
+        // balance on first coin is correct
+        let balance = sui_types::gas::get_gas_balance(
+            &state.get_object(&gas_coin_ids[0]).await.unwrap().unwrap(),
+        )
+        .unwrap();
+        let gas_used = effects.gas_cost_summary().gas_used();
+        assert!(reference_gas_used > balance);
+        assert_eq!(reference_gas_used, balance + gas_used);
+        gas_used
+    }
+
+    // 1. get the cost of the transaction so we can play with multiple gas coins
+    // 100,000 should be enough money for that transaction.
+    let gas_used = run_and_check_ok(100_000, 1, 100_000).await;
+
+    // add something to the gas used to account for multiple gas coins being charged for
+    let reference_gas_used = gas_used + 1_000;
+    let three_coin_gas = run_and_check_ok(reference_gas_used, 3, reference_gas_used).await;
+    run_and_check_ok(reference_gas_used, 10, reference_gas_used - 100).await;
+
+    // make less then required to succeed
+    let reference_gas_used = gas_used - 10;
+    run_and_check_err(reference_gas_used, 2, reference_gas_used - 10).await;
+    run_and_check_err(reference_gas_used, 30, reference_gas_used).await;
+    // use a small amount less than what 3 coins above reported (with success)
+    run_and_check_err(three_coin_gas, 3, three_coin_gas - 1).await;
 }

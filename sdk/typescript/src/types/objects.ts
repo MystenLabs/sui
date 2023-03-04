@@ -31,7 +31,7 @@ export const SuiObjectRef = object({
 export type SuiObjectRef = Infer<typeof SuiObjectRef>;
 
 export const SuiGasData = object({
-  payment: SuiObjectRef,
+  payment: array(SuiObjectRef),
   /** Gas Object's owner */
   owner: string(),
   price: number(),
