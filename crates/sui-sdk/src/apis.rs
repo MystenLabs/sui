@@ -13,10 +13,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc_types::{
-    Balance, Checkpoint, CheckpointId, Coin, CoinPage, DryRunTransactionResponse, DynamicFieldPage,
-    EventPage, SuiCoinMetadata, SuiCommittee, SuiEventEnvelope, SuiEventFilter,
-    SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
-    SuiPastObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake, DryRunTransactionResponse,
+    DynamicFieldPage, EventPage, GetRawObjectDataResponse, SuiCoinMetadata, SuiCommittee,
+    SuiEventEnvelope, SuiEventFilter, SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectInfo,
+    SuiObjectResponse, SuiPastObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
     SuiTransactionResponseOptions, TransactionsPage,
 };
 use sui_types::balance::Supply;

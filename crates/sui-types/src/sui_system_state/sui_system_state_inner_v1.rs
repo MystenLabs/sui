@@ -8,13 +8,21 @@ use crate::committee::{
     Committee, CommitteeWithNetworkMetadata, NetworkMetadata, ProtocolVersion, StakeUnit,
 };
 use crate::crypto::AuthorityPublicKeyBytes;
+use crate::dynamic_field::{derive_dynamic_field_id, Field};
+use crate::error::SuiError;
+use crate::storage::ObjectStore;
+use crate::sui_serde::Readable;
 use crate::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartValidatorInfo,
 };
+use crate::{balance::Balance, id::UID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
 use anyhow::Result;
+use enum_dispatch::enum_dispatch;
+use fastcrypto::encoding::Base58;
 use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::collections::BTreeMap;
 
 use super::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary};
@@ -23,46 +31,67 @@ use super::SuiSystemStateTrait;
 const E_METADATA_INVALID_PUBKEY: u64 = 1;
 const E_METADATA_INVALID_NET_PUBKEY: u64 = 2;
 const E_METADATA_INVALID_WORKER_PUBKEY: u64 = 3;
-const E_METADATA_INVALID_NET_ADDR: u64 = 4;
-const E_METADATA_INVALID_P2P_ADDR: u64 = 5;
-const E_METADATA_INVALID_PRIMARY_ADDR: u64 = 6;
-const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 
 /// Rust version of the Move sui::sui_system::SystemParameters type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "SystemParameters")]
+#[serde(rename_all = "camelCase", rename = "SystemParameters")]
 pub struct SystemParametersV1 {
     pub min_validator_stake: u64,
     pub max_validator_count: u64,
     pub governance_start_epoch: u64,
 }
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "ValidatorMetadata")]
+#[serde(rename_all = "camelCase", rename = "ValidatorMetadata")]
 pub struct ValidatorMetadataV1 {
     pub sui_address: SuiAddress,
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Readable<Base58, _>")]
     pub protocol_pubkey_bytes: Vec<u8>,
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Readable<Base58, _>")]
     pub network_pubkey_bytes: Vec<u8>,
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Readable<Base58, _>")]
     pub worker_pubkey_bytes: Vec<u8>,
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Readable<Base58, _>")]
     pub proof_of_possession_bytes: Vec<u8>,
     pub name: String,
     pub description: String,
     pub image_url: String,
     pub project_url: String,
-    pub net_address: Vec<u8>,
-    pub p2p_address: Vec<u8>,
-    pub primary_address: Vec<u8>,
-    pub worker_address: Vec<u8>,
+    #[schemars(with = "String")]
+    pub net_address: Multiaddr,
+    #[schemars(with = "String")]
+    pub p2p_address: Multiaddr,
+    #[schemars(with = "String")]
+    pub primary_address: Multiaddr,
+    #[schemars(with = "String")]
+    pub worker_address: Multiaddr,
+    #[schemars(with = "Option<Base58>")]
+    #[serde_as(as = "Readable<Option<Base58>, _>")]
     pub next_epoch_protocol_pubkey_bytes: Option<Vec<u8>>,
+    #[schemars(with = "Option<Base58>")]
+    #[serde_as(as = "Readable<Option<Base58>, _>")]
     pub next_epoch_proof_of_possession: Option<Vec<u8>>,
+    #[schemars(with = "Option<Base58>")]
+    #[serde_as(as = "Readable<Option<Base58>, _>")]
     pub next_epoch_network_pubkey_bytes: Option<Vec<u8>>,
+    #[schemars(with = "Option<Base58>")]
+    #[serde_as(as = "Readable<Option<Base58>, _>")]
     pub next_epoch_worker_pubkey_bytes: Option<Vec<u8>>,
-    pub next_epoch_net_address: Option<Vec<u8>>,
-    pub next_epoch_p2p_address: Option<Vec<u8>>,
-    pub next_epoch_primary_address: Option<Vec<u8>>,
-    pub next_epoch_worker_address: Option<Vec<u8>>,
+    #[schemars(with = "Option<String>")]
+    pub next_epoch_net_address: Option<Multiaddr>,
+    #[schemars(with = "Option<String>")]
+    pub next_epoch_p2p_address: Option<Multiaddr>,
+    #[schemars(with = "Option<String>")]
+    pub next_epoch_primary_address: Option<Multiaddr>,
+    #[schemars(with = "Option<String>")]
+    pub next_epoch_worker_address: Option<Multiaddr>,
 }
 
 #[derive(Debug, Clone)]
@@ -104,18 +133,14 @@ impl ValidatorMetadataV1 {
         let worker_pubkey =
             narwhal_crypto::NetworkPublicKey::from_bytes(self.worker_pubkey_bytes.as_ref())
                 .map_err(|_| E_METADATA_INVALID_WORKER_PUBKEY)?;
-        let net_address = Multiaddr::try_from(self.net_address.clone())
-            .map_err(|_| E_METADATA_INVALID_NET_ADDR)?;
-        let p2p_address = Multiaddr::try_from(self.p2p_address.clone())
-            .map_err(|_| E_METADATA_INVALID_P2P_ADDR)?;
+        let net_address = self.net_address.clone();
+        let p2p_address = self.p2p_address.clone();
         // Also make sure that the p2p address is a valid anemo address.
         // TODO: This will trigger a bunch of Move test failures today since we did not give proper
         // value for p2p address.
         // multiaddr_to_anemo_address(&p2p_address).ok_or(E_METADATA_INVALID_P2P_ADDR)?;
-        let primary_address = Multiaddr::try_from(self.primary_address.clone())
-            .map_err(|_| E_METADATA_INVALID_PRIMARY_ADDR)?;
-        let worker_address = Multiaddr::try_from(self.worker_address.clone())
-            .map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?;
+        let primary_address = self.primary_address.clone();
+        let worker_address = self.worker_address.clone();
 
         let next_epoch_protocol_pubkey = match self.next_epoch_protocol_pubkey_bytes.clone() {
             None => Ok::<Option<narwhal_crypto::PublicKey>, u64>(None),
@@ -142,33 +167,10 @@ impl ValidatorMetadataV1 {
                 )),
             }?;
 
-        let next_epoch_net_address = match self.next_epoch_net_address.clone() {
-            None => Ok::<Option<Multiaddr>, u64>(None),
-            Some(address) => Ok(Some(
-                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_NET_ADDR)?,
-            )),
-        }?;
-
-        let next_epoch_p2p_address = match self.next_epoch_p2p_address.clone() {
-            None => Ok::<Option<Multiaddr>, u64>(None),
-            Some(address) => Ok(Some(
-                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_P2P_ADDR)?,
-            )),
-        }?;
-
-        let next_epoch_primary_address = match self.next_epoch_primary_address.clone() {
-            None => Ok::<Option<Multiaddr>, u64>(None),
-            Some(address) => Ok(Some(
-                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_PRIMARY_ADDR)?,
-            )),
-        }?;
-
-        let next_epoch_worker_address = match self.next_epoch_worker_address.clone() {
-            None => Ok::<Option<Multiaddr>, u64>(None),
-            Some(address) => Ok(Some(
-                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?,
-            )),
-        }?;
+        let next_epoch_net_address = self.next_epoch_net_address.clone();
+        let next_epoch_p2p_address = self.next_epoch_p2p_address.clone();
+        let next_epoch_primary_address = self.next_epoch_primary_address.clone();
+        let next_epoch_worker_address = self.next_epoch_worker_address.clone();
 
         Ok(VerifiedValidatorMetadataV1 {
             sui_address: self.sui_address,
@@ -197,19 +199,19 @@ impl ValidatorMetadataV1 {
 }
 
 impl ValidatorMetadataV1 {
-    pub fn network_address(&self) -> Result<Multiaddr> {
-        Multiaddr::try_from(self.net_address.clone()).map_err(Into::into)
+    pub fn network_address(&self) -> Multiaddr {
+        self.net_address.clone()
     }
 
-    pub fn p2p_address(&self) -> Result<Multiaddr> {
-        Multiaddr::try_from(self.p2p_address.clone()).map_err(Into::into)
+    pub fn p2p_address(&self) -> Multiaddr {
+        self.p2p_address.clone()
     }
 }
 
 /// Rust version of the Move sui::validator::Validator type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "Validator")]
+#[serde(rename_all = "camelCase", rename = "Validator")]
 pub struct ValidatorV1 {
     pub metadata: ValidatorMetadataV1,
     pub voting_power: u64,
@@ -338,7 +340,7 @@ impl ValidatorV1 {
 /// Rust version of the Move sui::staking_pool::StakingPool type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "StakingPool")]
+#[serde(rename_all = "camelCase", rename = "StakingPool")]
 pub struct StakingPoolV1 {
     pub id: ObjectID,
     pub activation_epoch: Option<u64>,
@@ -352,10 +354,22 @@ pub struct StakingPoolV1 {
     pub pending_pool_token_withdraw: u64,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct PoolTokenExchangeRate {
+    sui_amount: u64,
+    pool_token_amount: u64,
+}
+
+impl PoolTokenExchangeRate {
+    pub fn rate(&self) -> f64 {
+        self.pool_token_amount as f64 / self.sui_amount as f64
+    }
+}
+
 /// Rust version of the Move sui::validator_set::ValidatorSet type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "ValidatorSet")]
+#[serde(rename_all = "camelCase", rename = "ValidatorSet")]
 pub struct ValidatorSetV1 {
     pub total_stake: u64,
     pub active_validators: Vec<ValidatorV1>,
@@ -369,6 +383,7 @@ pub struct ValidatorSetV1 {
 /// Rust version of the Move sui::sui_system::SuiSystemStateInner type
 /// We want to keep it named as SuiSystemState in Rust since this is the primary interface type.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiSystemStateInnerV1 {
     pub epoch: u64,
     pub protocol_version: u64,
@@ -385,7 +400,7 @@ pub struct SuiSystemStateInnerV1 {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "StakeSubsidy")]
+#[serde(rename_all = "camelCase", rename = "StakeSubsidy")]
 pub struct StakeSubsidyV1 {
     pub epoch_counter: u64,
     pub balance: Balance,
@@ -559,6 +574,21 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                 .map(|e| (e.key, e.value.contents))
                 .collect(),
         }
+    }
+
+    fn staking_pool_mappings(&self) -> &Table {
+        &self.validators.staking_pool_mappings
+    }
+
+    fn get_staking_pool(&self, pool_id: &ObjectID) -> Option<&StakingPool> {
+        // TODO: search deleted pool when it's available
+        self.validators.active_validators.iter().find_map(|v| {
+            if &v.staking_pool.id == pool_id {
+                Some(&v.staking_pool)
+            } else {
+                None
+            }
+        })
     }
 }
 

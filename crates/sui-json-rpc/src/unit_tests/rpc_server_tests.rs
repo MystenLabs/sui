@@ -14,6 +14,9 @@ use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 
 use sui_json_rpc_types::{
+    Balance, CoinPage, DelegatedStake, DelegationStatus, SuiObjectResponse, SuiCoinMetadata,
+    SuiEvent, SuiExecutionStatus, SuiObjectInfo, SuiTBlsSignObjectCommitmentType,
+    SuiTransactionResponse, TransactionBytes,
     Balance, CoinPage, SuiCoinMetadata, SuiEvent, SuiExecutionStatus, SuiObjectResponse,
     SuiTBlsSignObjectCommitmentType, SuiTransactionEffectsAPI, SuiTransactionResponse,
     SuiTransactionResponseOptions, TransactionBytes,
@@ -33,7 +36,6 @@ use sui_types::{parse_sui_struct_tag, parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS}
 use test_utils::network::TestClusterBuilder;
 
 use sui_macros::sim_test;
-use sui_types::governance::{DelegatedStake, DelegationStatus};
 
 use tokio::time::{sleep, Duration};
 
@@ -1036,10 +1038,10 @@ async fn test_delegation() -> Result<(), anyhow::Error> {
     // Check DelegatedStake object
     let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
     assert_eq!(1, staked_sui.len());
-    assert_eq!(1000000, staked_sui[0].staked_sui.principal());
-    assert!(staked_sui[0].staked_sui.sui_token_lock().is_none());
+    assert_eq!(1000000, staked_sui[0].delegations[0].principal);
+    assert!(staked_sui[0].delegations[0].token_lock.is_none());
     assert!(matches!(
-        staked_sui[0].delegation_status,
+        staked_sui[0].delegations[0].status,
         DelegationStatus::Pending
     ));
     Ok(())
@@ -1098,10 +1100,10 @@ async fn test_delegation_multiple_coins() -> Result<(), anyhow::Error> {
     // Check DelegatedStake object
     let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
     assert_eq!(1, staked_sui.len());
-    assert_eq!(1000000, staked_sui[0].staked_sui.principal());
-    assert!(staked_sui[0].staked_sui.sui_token_lock().is_none());
+    assert_eq!(1000000, staked_sui[0].delegations[0].principal);
+    assert!(staked_sui[0].delegations[0].token_lock.is_none());
     assert!(matches!(
-        staked_sui[0].delegation_status,
+        staked_sui[0].delegations[0].status,
         DelegationStatus::Pending
     ));
 
@@ -1199,11 +1201,11 @@ async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
     // Check StakedSui object
     let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
     assert_eq!(1, staked_sui.len());
-    assert_eq!(1000000, staked_sui[0].staked_sui.principal());
-    assert_eq!(Some(20), staked_sui[0].staked_sui.sui_token_lock());
+    assert_eq!(1000000, staked_sui[0].delegations[0].principal);
+    assert_eq!(Some(20), staked_sui[0].delegations[0].token_lock);
 
     assert!(matches!(
-        staked_sui[0].delegation_status,
+        staked_sui[0].delegations[0].status,
         DelegationStatus::Pending
     ));
 

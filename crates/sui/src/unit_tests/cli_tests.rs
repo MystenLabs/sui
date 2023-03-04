@@ -57,6 +57,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         write_config: None,
         force: false,
         from_config: None,
+        epoch_duration_ms: None,
     }
     .execute()
     .await?;
@@ -93,6 +94,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         write_config: None,
         force: false,
         from_config: None,
+        epoch_duration_ms: None,
     }
     .execute()
     .await;
@@ -1268,7 +1270,13 @@ async fn test_delegation_with_none_amount() -> Result<(), anyhow::Error> {
     assert_eq!(1, stake.len());
     assert_eq!(
         coins.first().unwrap().balance,
-        stake.first().unwrap().staked_sui.principal()
+        stake
+            .first()
+            .unwrap()
+            .delegations
+            .first()
+            .unwrap()
+            .principal
     );
     Ok(())
 }
@@ -1321,7 +1329,16 @@ async fn test_delegation_with_u64_amount() -> Result<(), anyhow::Error> {
         .await?;
 
     assert_eq!(1, stake.len());
-    assert_eq!(10000, stake.first().unwrap().staked_sui.principal());
+    assert_eq!(
+        10000,
+        stake
+            .first()
+            .unwrap()
+            .delegations
+            .first()
+            .unwrap()
+            .principal
+    );
     Ok(())
 }
 
