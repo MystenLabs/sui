@@ -48,7 +48,7 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
             });
         },
         onSuccess: async (response) => {
-            await Promise.all([
+            Promise.all([
                 queryClient.invalidateQueries(['object', objectId]),
                 queryClient.invalidateQueries(['objects-owned']),
             ]);
