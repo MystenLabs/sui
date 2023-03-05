@@ -77,7 +77,7 @@ impl From<Object> for StoreObjectPair {
             Data::Package(package) => StoreData::Package(package),
             Data::Move(move_obj) => {
                 // TODO: add real heuristic to decide if object needs to be stored indirectly
-                if cfg!(test) {
+                if cfg!(test) || cfg!(msim) {
                     let move_object = StoreMoveObject {
                         type_: move_obj.type_.clone(),
                         has_public_transfer: move_obj.has_public_transfer(),
