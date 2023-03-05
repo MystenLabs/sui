@@ -6,12 +6,12 @@ written: object(103)
 
 task 2 'publish'. lines 13-18:
 Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::transfer' on an object of type 'a::m::S'. The transferred object's type must be defined in the current module, or must have the 'store' type ability"), command: None } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::transfer' on an object of type 'a::m::S'. The transferred object's type must be defined in the current module, or must have the 'store' type ability"), command: Some(0) } }
 
 task 3 'publish'. lines 20-25:
 Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::freeze_object' on an object of type 'a::m::S'. The transferred object's type must be defined in the current module, or must have the 'store' type ability"), command: None } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::freeze_object' on an object of type 'a::m::S'. The transferred object's type must be defined in the current module, or must have the 'store' type ability"), command: Some(0) } }
 
 task 4 'publish'. lines 27-32:
 Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::share_object' on an object of type 'a::m::S'. The transferred object's type must be defined in the current module, or must have the 'store' type ability"), command: None } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::share_object' on an object of type 'a::m::S'. The transferred object's type must be defined in the current module, or must have the 'store' type ability"), command: Some(0) } }
