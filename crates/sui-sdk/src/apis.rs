@@ -69,11 +69,12 @@ impl ReadApi {
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
+        options: SuiObjectDataOptions,
     ) -> SuiRpcResult<SuiPastObjectResponse> {
         Ok(self
             .api
             .http
-            .try_get_past_object(object_id, version)
+            .try_get_past_object(object_id, version, Some(options))
             .await?)
     }
 

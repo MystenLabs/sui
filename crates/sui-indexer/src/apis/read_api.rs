@@ -309,8 +309,11 @@ where
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
+        options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiPastObjectResponse> {
-        self.fullnode.try_get_past_object(object_id, version).await
+        self.fullnode
+            .try_get_past_object(object_id, version, options)
+            .await
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber> {

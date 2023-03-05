@@ -2827,6 +2827,13 @@
           "schema": {
             "$ref": "#/components/schemas/SequenceNumber"
           }
+        },
+        {
+          "name": "options",
+          "description": "options for specifying the content to be returned",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectContentOptions"
+          }
         }
       ],
       "result": {
@@ -2847,6 +2854,18 @@
             {
               "name": "version",
               "value": 4
+            },
+            {
+              "name": "options",
+              "value": {
+                "showType": true,
+                "showOwner": true,
+                "showPreviousTransaction": true,
+                "showDisplay": false,
+                "showContent": true,
+                "showBcs": false,
+                "showStorageRebate": true
+              }
             }
           ],
           "result": {

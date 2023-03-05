@@ -7,8 +7,8 @@ use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use std::collections::BTreeMap;
 use sui_json_rpc_types::{
-    SuiObjectData, SuiParsedData, SuiTransactionDataAPI, SuiTransactionEffectsAPI,
-    SuiTransactionResponse,
+    SuiObjectData, SuiObjectDataOptions, SuiParsedData, SuiTransactionDataAPI,
+    SuiTransactionEffectsAPI, SuiTransactionResponse,
 };
 use sui_sdk::SuiClient;
 use tokio::task::JoinHandle;
@@ -150,9 +150,11 @@ where
         // TODO: Use multi get objects
         // TODO: Error handling.
         let new_objects = join_all(all_mutated.map(|(id, version)| {
-            self.rpc_client
-                .read_api()
-                .try_get_parsed_past_object(id, version)
+            self.rpc_client.read_api().try_get_parsed_past_object(
+                id,
+                version,
+                SuiObjectDataOptions::full_content(),
+            )
         }))
         .await
         .into_iter()
