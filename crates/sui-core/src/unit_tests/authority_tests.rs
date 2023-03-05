@@ -36,6 +36,7 @@ use sui_json_rpc_types::{
     SuiExecutionResult, SuiExecutionStatus, SuiGasCostSummary, SuiTransactionEffectsAPI,
 };
 use sui_types::error::UserInputError;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::{
     make_committee_key, mock_certified_checkpoint, to_sender_signed_transaction,
     to_sender_signed_transaction_with_multi_signers,
@@ -1117,10 +1118,12 @@ async fn test_handle_sponsored_transaction() {
         .unwrap()
         .unwrap();
 
-    let tx_kind = TransactionKind::Single(SingleTransactionKind::TransferObject(TransferObject {
-        recipient,
-        object_ref: object.compute_object_reference(),
-    }));
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.transfer_object(recipient, object.compute_object_reference());
+        builder.finish()
+    };
+    let tx_kind = TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt));
 
     let data = TransactionData::new_with_gas_data(
         tx_kind.clone(),
@@ -1750,7 +1753,6 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
-    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
     let object = authority_state
         .get_object(&object_id)
         .await
@@ -1764,14 +1766,20 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
         200,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let result = authority_state
-        .handle_transaction(&epoch_store, transaction)
-        .await;
+    let result = send_and_confirm_transaction(&authority_state, transaction)
+        .await
+        .unwrap()
+        .1
+        .into_data();
 
-    assert!(matches!(
-        UserInputError::try_from(result.unwrap_err()).unwrap(),
-        UserInputError::GasBalanceTooLowToCoverGasBudget { .. }
-    ));
+    let ExecutionStatus::Failure { error, command } = result.status() else {
+        panic!("expected transaction to fail")
+    };
+    assert_eq!(command, &Some(0));
+    assert_eq!(
+        error,
+        &ExecutionFailureStatus::InvalidTransferSuiInsufficientBalance
+    )
 }
 
 #[tokio::test]

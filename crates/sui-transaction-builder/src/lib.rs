@@ -187,10 +187,9 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             .select_gas(signer, gas, gas_budget, input_coins, gas_price)
             .await?;
 
-        let data = TransactionData::new_pay(
+        TransactionData::new_pay(
             signer, coin_refs, recipients, amounts, gas, gas_budget, gas_price,
-        );
-        Ok(data)
+        )
     }
 
     pub async fn pay_sui(
@@ -217,7 +216,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         // [0] is safe because input_coins is non-empty and coins are of same length as input_coins.
         let gas_object_ref = coin_refs[0];
         let gas_price = self.0.get_reference_gas_price().await?;
-        Ok(TransactionData::new_pay_sui(
+        TransactionData::new_pay_sui(
             signer,
             coin_refs,
             recipients,
@@ -225,7 +224,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             gas_object_ref,
             gas_budget,
             gas_price,
-        ))
+        )
     }
 
     pub async fn pay_all_sui(

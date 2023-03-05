@@ -17,6 +17,7 @@ use crate::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointTimestamp,
 };
 use crate::object::{MoveObject, Object, ObjectFormatOptions, Owner};
+use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{AuthenticatorTrait, GenericSignature};
 use crate::storage::{DeleteKind, WriteKind};
 use crate::{
@@ -1599,11 +1600,12 @@ impl TransactionData {
         gas_budget: u64,
         gas_price: u64,
     ) -> Self {
-        let kind = TransactionKind::Single(SingleTransactionKind::TransferObject(TransferObject {
-            recipient,
-            object_ref,
-        }));
-        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.transfer_object(recipient, object_ref);
+            builder.finish()
+        };
+        Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
     }
 
     pub fn new_transfer_sui_with_dummy_gas_price(
@@ -1631,11 +1633,12 @@ impl TransactionData {
         gas_budget: u64,
         gas_price: u64,
     ) -> Self {
-        let kind = TransactionKind::Single(SingleTransactionKind::TransferSui(TransferSui {
-            recipient,
-            amount,
-        }));
-        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.transfer_sui(recipient, amount);
+            builder.finish()
+        };
+        Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
     }
 
     pub fn new_pay_with_dummy_gas_price(
@@ -1645,7 +1648,7 @@ impl TransactionData {
         amounts: Vec<u64>,
         gas_payment: ObjectRef,
         gas_budget: u64,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         Self::new_pay(
             sender,
             coins,
@@ -1665,13 +1668,19 @@ impl TransactionData {
         gas_payment: ObjectRef,
         gas_budget: u64,
         gas_price: u64,
-    ) -> Self {
-        let kind = TransactionKind::Single(SingleTransactionKind::Pay(Pay {
-            coins,
-            recipients,
-            amounts,
-        }));
-        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+    ) -> anyhow::Result<Self> {
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.pay(coins, recipients, amounts)?;
+            builder.finish()
+        };
+        Ok(Self::new_programmable(
+            sender,
+            vec![gas_payment],
+            pt,
+            gas_budget,
+            gas_price,
+        ))
     }
 
     pub fn new_pay_sui_with_dummy_gas_price(
@@ -1681,7 +1690,7 @@ impl TransactionData {
         amounts: Vec<u64>,
         gas_payment: ObjectRef,
         gas_budget: u64,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         Self::new_pay_sui(
             sender,
             coins,
@@ -1695,34 +1704,39 @@ impl TransactionData {
 
     pub fn new_pay_sui(
         sender: SuiAddress,
-        coins: Vec<ObjectRef>,
+        mut coins: Vec<ObjectRef>,
         recipients: Vec<SuiAddress>,
         amounts: Vec<u64>,
         gas_payment: ObjectRef,
         gas_budget: u64,
         gas_price: u64,
-    ) -> Self {
-        let kind = TransactionKind::Single(SingleTransactionKind::PaySui(PaySui {
-            coins,
-            recipients,
-            amounts,
-        }));
-        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+    ) -> anyhow::Result<Self> {
+        coins.insert(0, gas_payment);
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.pay_sui(recipients, amounts)?;
+            builder.finish()
+        };
+        Ok(Self::new_programmable(
+            sender, coins, pt, gas_budget, gas_price,
+        ))
     }
 
     pub fn new_pay_all_sui(
         sender: SuiAddress,
-        coins: Vec<ObjectRef>,
+        mut coins: Vec<ObjectRef>,
         recipient: SuiAddress,
         gas_payment: ObjectRef,
         gas_budget: u64,
         gas_price: u64,
     ) -> Self {
-        let kind = TransactionKind::Single(SingleTransactionKind::PayAllSui(PayAllSui {
-            coins,
-            recipient,
-        }));
-        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+        coins.insert(0, gas_payment);
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.pay_all_sui(recipient);
+            builder.finish()
+        };
+        Self::new_programmable(sender, coins, pt, gas_budget, gas_price)
     }
 
     pub fn new_module_with_dummy_gas_price(
@@ -1749,7 +1763,7 @@ impl TransactionData {
 
     pub fn new_programmable_with_dummy_gas_price(
         sender: SuiAddress,
-        gas_payment: ObjectRef,
+        gas_payment: Vec<ObjectRef>,
         pt: ProgrammableTransaction,
         gas_budget: u64,
     ) -> Self {
@@ -1758,13 +1772,13 @@ impl TransactionData {
 
     pub fn new_programmable(
         sender: SuiAddress,
-        gas_payment: ObjectRef,
+        gas_payment: Vec<ObjectRef>,
         pt: ProgrammableTransaction,
         gas_budget: u64,
         gas_price: u64,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt));
-        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+        Self::new_with_gas_coins(kind, sender, gas_payment, gas_budget, gas_price)
     }
 
     pub fn execution_parts(&self) -> (TransactionKind, SuiAddress, Vec<ObjectRef>) {
@@ -1931,13 +1945,13 @@ impl TransactionDataAPI for TransactionDataV1 {
                 SingleTransactionKind::Call(_)
                 | SingleTransactionKind::TransferObject(_)
                 | SingleTransactionKind::Pay(_)
-                | SingleTransactionKind::Publish(_) => true,
+                | SingleTransactionKind::Publish(_)
+                | SingleTransactionKind::ProgrammableTransaction(_) => true,
                 SingleTransactionKind::TransferSui(_)
                 | SingleTransactionKind::PaySui(_)
                 | SingleTransactionKind::PayAllSui(_)
                 | SingleTransactionKind::ChangeEpoch(_)
                 | SingleTransactionKind::ConsensusCommitPrologue(_)
-                | SingleTransactionKind::ProgrammableTransaction(_)
                 | SingleTransactionKind::Genesis(_) => false,
             },
         };

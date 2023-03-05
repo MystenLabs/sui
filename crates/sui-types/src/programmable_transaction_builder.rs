@@ -14,27 +14,28 @@ use crate::{
     messages::{
         Argument, CallArg, Command, MoveCall, MoveModulePublish, ObjectArg, Pay, PayAllSui, PaySui,
         ProgrammableMoveCall, ProgrammableTransaction, SingleTransactionKind, TransactionData,
-        TransactionDataAPI, TransactionKind, TransferObject, TransferSui,
+        TransactionKind, TransferObject, TransferSui,
     },
 };
 
-pub fn migrate_transaction_data(mut m: TransactionData) -> anyhow::Result<TransactionData> {
+pub fn migrate_transaction_data(m: TransactionData) -> anyhow::Result<TransactionData> {
     let mut builder = ProgrammableTransactionBuilder::new();
-    match m.kind().clone() {
+    let TransactionData::V1(mut v1) = m;
+    match v1.kind {
         TransactionKind::Single(SingleTransactionKind::PaySui(PaySui {
-            coins: _coins,
+            coins,
             recipients,
             amounts,
         })) => {
             builder.pay_sui(recipients, amounts)?;
-            anyhow::bail!("blocked by gas smashing")
+            v1.gas_data.payment.extend(coins);
         }
         TransactionKind::Single(SingleTransactionKind::PayAllSui(PayAllSui {
-            coins: _coins,
+            coins,
             recipient,
         })) => {
             builder.pay_all_sui(recipient);
-            anyhow::bail!("blocked by gas smashing")
+            v1.gas_data.payment.extend(coins);
         }
         TransactionKind::Single(t) => builder.single_transaction(t)?,
         TransactionKind::Batch(ts) => {
@@ -44,8 +45,8 @@ pub fn migrate_transaction_data(mut m: TransactionData) -> anyhow::Result<Transa
         }
     };
     let pt = builder.finish();
-    *m.kind_mut() = TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt));
-    Ok(m)
+    v1.kind = TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt));
+    Ok(TransactionData::V1(v1))
 }
 
 #[derive(Default)]
