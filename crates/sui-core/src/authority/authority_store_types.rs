@@ -12,6 +12,8 @@ use sui_types::error::SuiError;
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Data, MoveObject, Object, Owner};
 
+pub type ObjectContentDigest = ObjectDigest;
+
 /// Forked version of [`sui_types::object::Object`]
 /// Used for efficient storing of move objects in the database
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
@@ -35,7 +37,7 @@ pub enum StoreData {
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct IndirectObjectMetadata {
     version: SequenceNumber,
-    pub digest: ObjectDigest,
+    pub digest: ObjectContentDigest,
 }
 
 /// Separately stored move object
@@ -62,8 +64,10 @@ where
 }
 
 impl StoreMoveObject {
-    pub fn digest(&self) -> ObjectDigest {
-        ObjectDigest::new(sha3_hash(self))
+    pub fn digest(&self) -> ObjectContentDigest {
+        // expected to be called on constructed object with default ref count 1
+        assert_eq!(self.ref_count, 1);
+        ObjectContentDigest::new(sha3_hash(self))
     }
 }
 
@@ -77,7 +81,7 @@ impl From<Object> for StoreObjectPair {
             Data::Package(package) => StoreData::Package(package),
             Data::Move(move_obj) => {
                 // TODO: add real heuristic to decide if object needs to be stored indirectly
-                if cfg!(test) {
+                if cfg!(test) || cfg!(msim) {
                     let move_object = StoreMoveObject {
                         type_: move_obj.type_.clone(),
                         has_public_transfer: move_obj.has_public_transfer(),

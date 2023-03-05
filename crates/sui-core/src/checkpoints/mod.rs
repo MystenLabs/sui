@@ -248,15 +248,6 @@ impl CheckpointStore {
         self.get_checkpoint_by_digest(&highest_executed.1)
     }
 
-    pub fn get_highest_pruned_checkpoint_seq_number(
-        &self,
-    ) -> Result<Option<CheckpointSequenceNumber>, TypedStoreError> {
-        self.watermarks
-            .get(&CheckpointWatermark::HighestPruned)?
-            .map(|(sequence_number, _)| Ok(sequence_number))
-            .transpose()
-    }
-
     pub fn get_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
@@ -332,17 +323,6 @@ impl CheckpointStore {
         }
     }
 
-    pub fn update_highest_pruned_checkpoint(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-        digest: CheckpointDigest,
-    ) -> Result<(), TypedStoreError> {
-        self.watermarks.insert(
-            &CheckpointWatermark::HighestPruned,
-            &(sequence_number, digest),
-        )
-    }
-
     pub fn insert_checkpoint_contents(
         &self,
         contents: CheckpointContents,
@@ -395,7 +375,6 @@ pub enum CheckpointWatermark {
     HighestVerified,
     HighestSynced,
     HighestExecuted,
-    HighestPruned,
 }
 
 pub struct CheckpointBuilder {
