@@ -12,8 +12,8 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
-use sui_config::genesis::Genesis;
 use sui_config::NetworkConfig;
+use sui_config::{genesis::Genesis, ValidatorInfo};
 use sui_core::signature_verifier::IgnoreSignatureVerifier;
 use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
@@ -21,7 +21,6 @@ use sui_core::{
     quorum_driver::{
         QuorumDriver, QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics,
     },
-    validator_info::make_committee,
 };
 use sui_json_rpc_types::{SuiObjectRead, SuiTransactionEffects};
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
@@ -164,7 +163,7 @@ impl LocalValidatorAggregatorProxy {
             .unwrap();
 
         let validator_info = genesis.validator_set();
-        let committee = make_committee(0, &validator_info).unwrap();
+        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info)).unwrap();
         let clients = make_authority_clients(
             &validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
@@ -192,7 +191,7 @@ impl LocalValidatorAggregatorProxy {
             .unwrap();
 
         let validator_info = configs.validator_set();
-        let committee = make_committee(0, &validator_info).unwrap();
+        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info)).unwrap();
         let clients = make_authority_clients(
             &validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
