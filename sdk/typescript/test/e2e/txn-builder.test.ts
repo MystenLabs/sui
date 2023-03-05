@@ -69,7 +69,7 @@ describe('Transaction Builders', () => {
   it('MoveCall Shared Object', async () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
 
-    const [{ sui_address: validator_address }] =
+    const [{ suiAddress: validatorAddress }] =
       await toolbox.getActiveValidators();
 
     const tx = new Transaction();
