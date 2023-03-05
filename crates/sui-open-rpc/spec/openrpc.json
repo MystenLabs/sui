@@ -3286,6 +3286,7 @@
       "DynamicFieldInfo": {
         "type": "object",
         "required": [
+          "bcsName",
           "digest",
           "name",
           "objectId",
@@ -3294,6 +3295,9 @@
           "version"
         ],
         "properties": {
+          "bcsName": {
+            "$ref": "#/components/schemas/Base58"
+          },
           "digest": {
             "$ref": "#/components/schemas/ObjectDigest"
           },
