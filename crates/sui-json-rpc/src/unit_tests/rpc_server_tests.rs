@@ -15,7 +15,8 @@ use sui_json::SuiJsonValue;
 
 use sui_json_rpc_types::{
     Balance, CoinPage, SuiCoinMetadata, SuiEvent, SuiExecutionStatus, SuiObjectResponse,
-    SuiTBlsSignObjectCommitmentType, SuiTransactionResponse, TransactionBytes,
+    SuiTBlsSignObjectCommitmentType, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    TransactionBytes,
 };
 use sui_json_rpc_types::{SuiObjectDataOptions, SuiObjectInfo};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
@@ -84,8 +85,8 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
 
     let SuiTransactionResponse { effects, .. } = tx_response;
     assert_eq!(
-        dryrun_response.effects.transaction_digest,
-        effects.transaction_digest
+        dryrun_response.effects.transaction_digest(),
+        effects.transaction_digest()
     );
     Ok(())
 }
@@ -135,10 +136,10 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
 
     let SuiTransactionResponse { effects, .. } = tx_response;
     let events = http_client
-        .get_transaction(effects.transaction_digest)
+        .get_transaction(*effects.transaction_digest())
         .await?
         .events;
-    assert_eq!(SuiExecutionStatus::Success, effects.status);
+    assert_eq!(SuiExecutionStatus::Success, *effects.status());
 
     let package_id = events
         .data
@@ -183,7 +184,7 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
     let SuiTransactionResponse {
         effects, events, ..
     } = tx_response;
-    assert_eq!(SuiExecutionStatus::Success, effects.status);
+    assert_eq!(SuiExecutionStatus::Success, *effects.status());
 
     let randomness_object_id = events
         .data
@@ -240,7 +241,7 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
         )
         .await?;
     let SuiTransactionResponse { effects, .. } = tx_response;
-    assert_eq!(SuiExecutionStatus::Success, effects.status);
+    assert_eq!(SuiExecutionStatus::Success, *effects.status());
 
     Ok(())
 }
@@ -274,7 +275,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
-    matches!(tx_response, SuiTransactionResponse {effects, ..} if effects.created.len() == 6);
+    matches!(tx_response, SuiTransactionResponse {effects, ..} if effects.created().len() == 6);
     Ok(())
 }
 
@@ -325,7 +326,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
-    matches!(tx_response, SuiTransactionResponse {effects, ..} if effects.created.len() == 1);
+    matches!(tx_response, SuiTransactionResponse {effects, ..} if effects.created().len() == 1);
     Ok(())
 }
 
@@ -577,7 +578,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
 
     let SuiTransactionResponse { effects, .. } = tx_response;
 
-    assert_eq!(SuiExecutionStatus::Success, effects.status);
+    assert_eq!(SuiExecutionStatus::Success, *effects.status());
 
     let result: Supply = http_client.get_total_supply(coin_name.clone()).await?;
     assert_eq!(100000, result.value);
@@ -628,7 +629,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
 
     for r in response.iter().skip(1) {
         assert!(tx_responses.iter().any(
-            |resp| matches!(resp, SuiTransactionResponse {effects, ..} if effects.transaction_digest == r.effects.transaction_digest)
+            |resp| matches!(resp, SuiTransactionResponse {effects, ..} if effects.transaction_digest() == r.effects.transaction_digest())
         ))
     }
 
@@ -640,7 +641,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     for tx_digest in tx {
         let response: SuiTransactionResponse = http_client.get_transaction(tx_digest).await?;
         assert!(tx_responses.iter().any(
-            |resp| matches!(resp, SuiTransactionResponse {effects, ..} if effects.transaction_digest == response.effects.transaction_digest)
+            |resp| matches!(resp, SuiTransactionResponse {effects, ..} if effects.transaction_digest() == response.effects.transaction_digest())
         ))
     }
 
@@ -774,7 +775,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
             client.read_api().get_transaction(tx_digest).await.unwrap();
         assert!(tx_responses
             .iter()
-            .any(|resp| resp.effects.transaction_digest == response.effects.transaction_digest))
+            .any(|resp| resp.effects.transaction_digest() == response.effects.transaction_digest()))
     }
 
     Ok(())
@@ -828,7 +829,7 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         .event_api()
         .get_events(
             EventQuery::All,
-            Some((tx_responses[2].effects.transaction_digest, 0).into()),
+            Some((*tx_responses[2].effects.transaction_digest(), 0).into()),
             Some(3),
             false,
         )
@@ -836,14 +837,14 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         .unwrap();
     assert_eq!(3, page1.data.len());
     assert_eq!(
-        Some((tx_responses[5].effects.transaction_digest, 0).into()),
+        Some((*tx_responses[5].effects.transaction_digest(), 0).into()),
         page1.next_cursor
     );
     let page2 = client
         .event_api()
         .get_events(
             EventQuery::All,
-            Some((tx_responses[5].effects.transaction_digest, 0).into()),
+            Some((*tx_responses[5].effects.transaction_digest(), 0).into()),
             Some(20),
             false,
         )
@@ -860,7 +861,7 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         .unwrap();
     assert_eq!(3, page1.data.len());
     assert_eq!(
-        Some((tx_responses[16].effects.transaction_digest, 0).into()),
+        Some((*tx_responses[16].effects.transaction_digest(), 0).into()),
         page1.next_cursor
     );
 
@@ -868,7 +869,7 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         .event_api()
         .get_events(
             EventQuery::All,
-            Some((tx_responses[16].effects.transaction_digest, 0).into()),
+            Some((*tx_responses[16].effects.transaction_digest(), 0).into()),
             None,
             true,
         )

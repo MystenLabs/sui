@@ -10,7 +10,7 @@ import {
   union,
   unknown,
 } from 'superstruct';
-import { CallArg, TransactionData } from './sui-bcs';
+import { CallArg, TransactionData, TransactionDataBCS } from './sui-bcs';
 import { sha256Hash } from '../cryptography/hash';
 import { BCS, fromB58, toB58 } from '@mysten/bcs';
 
@@ -116,6 +116,17 @@ export function normalizeSuiObjectId(
   return normalizeSuiAddress(value, forceAdd0x);
 }
 
+export function prepareTxDataForBcs(data: TransactionData): TransactionDataBCS {
+  switch (data.messageVersion) {
+    case 1: {
+      let { messageVersion: _, ...rest } = data;
+      return { V1: rest };
+    }
+    default:
+      throw new Error(`Unknown message version ${data.messageVersion}`);
+  }
+}
+
 /**
  * Generate transaction digest.
  *
@@ -128,7 +139,8 @@ export function generateTransactionDigest(
   data: TransactionData,
   bcs: BCS,
 ): string {
-  const txBytes = bcs.ser('TransactionData', data).toBytes();
+  let dataBcs = prepareTxDataForBcs(data);
+  const txBytes = bcs.ser('TransactionData', dataBcs).toBytes();
   const hash = sha256Hash('TransactionData', txBytes);
 
   return toB58(hash);

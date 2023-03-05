@@ -2,6 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur)"
 ---
+version: 1
 max_tx_size: 65536
 max_tx_in_batch: 10
 max_modules_in_publish: 128
@@ -49,4 +50,14 @@ reward_slashing_rate: 5000
 storage_gas_price: 1
 max_transactions_per_checkpoint: 1000
 buffer_stake_for_protocol_upgrade_bps: 7500
+copy_bytes_to_address_cost_per_byte: 10
+address_to_vec_cost_per_byte: 10
+address_vec_reverse_cost_per_byte: 10
+copy_convert_to_u256_cost_per_byte: 10
+u256_to_bytes_to_vec_cost_per_byte: 10
+u256_bytes_vec_reverse_cost_per_byte: 10
+copy_convert_to_address_cost_per_byte: 10
+event_value_size_derivation_cost_per_byte: 1000
+event_tag_size_derivation_cost_per_byte: 1000
+event_emit_cost_per_byte: 1000
 

@@ -18,7 +18,7 @@ use sui_types::{
     messages::{
         CertifiedTransaction, CommitteeInfoRequest, CommitteeInfoResponse,
         HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest,
-        Transaction, TransactionInfoRequest, TransactionInfoResponse,
+        Transaction, TransactionEffectsAPI, TransactionInfoRequest, TransactionInfoResponse,
     },
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
 };
@@ -164,8 +164,8 @@ impl LocalAuthorityClient {
             }
             .into_inner();
 
-        let events = if let Some(digest) = signed_effects.events_digest {
-            state.get_transaction_events(digest).await?
+        let events = if let Some(digest) = signed_effects.events_digest() {
+            state.get_transaction_events(*digest).await?
         } else {
             TransactionEvents::default()
         };

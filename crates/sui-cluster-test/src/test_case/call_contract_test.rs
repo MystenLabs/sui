@@ -10,7 +10,7 @@ use tracing::info;
 
 use sui::client_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL};
 use sui_json::SuiJsonValue;
-use sui_json_rpc_types::SuiEvent;
+use sui_json_rpc_types::{SuiEvent, SuiTransactionEffectsAPI};
 use sui_types::id::ID;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -64,7 +64,7 @@ impl TestCaseImpl for CallContractTest {
         // Retrieve created nft
         let nft_id = response
             .effects
-            .created
+            .created()
             .first()
             .expect("Failed to create NFT")
             .reference
@@ -120,7 +120,7 @@ impl TestCaseImpl for CallContractTest {
         )).unwrap_or_else(|| panic!("Expect such a MoveEvent in events {:?}", events));
 
         // Verify fullnode observes the txn
-        ctx.let_fullnode_sync(vec![response.effects.transaction_digest], 5)
+        ctx.let_fullnode_sync(vec![*response.effects.transaction_digest()], 5)
             .await;
 
         let object = ObjectChecker::new(nft_id)

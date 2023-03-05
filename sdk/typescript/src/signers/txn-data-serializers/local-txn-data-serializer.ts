@@ -19,6 +19,7 @@ import {
   bcsForVersion,
   GasData,
   RpcApiVersion,
+  prepareTxDataForBcs,
 } from '../../types';
 import {
   MoveCallTransaction,
@@ -354,6 +355,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
       );
     }
     return {
+      messageVersion: 1,
       kind: tx,
       sender: signerAddress,
       gasData: {
@@ -375,7 +377,8 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     size: number = 8192,
   ): Promise<Uint8Array> {
     const bcs = bcsForVersion(await this.provider.getRpcApiVersion());
-    const dataBytes = bcs.ser('TransactionData', tx, size).toBytes();
+    let txBcs = prepareTxDataForBcs(tx);
+    const dataBytes = bcs.ser('TransactionData', txBcs, size).toBytes();
     return dataBytes;
   }
 

@@ -4,7 +4,7 @@
 use crate::{helper::ObjectChecker, TestCaseImpl, TestContext};
 use async_trait::async_trait;
 use sui::client_commands::WalletContext;
-use sui_json_rpc_types::SuiExecutionStatus;
+use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionEffectsAPI};
 use sui_types::object::Owner;
 use test_utils::transaction::{increment_counter, publish_basics_package_and_make_counter};
 use tracing::info;
@@ -34,22 +34,22 @@ impl TestCaseImpl for SharedCounterTest {
         let response =
             increment_counter(wallet_context, address, None, package_ref.0, counter_id).await;
         assert_eq!(
-            response.effects.status,
+            *response.effects.status(),
             SuiExecutionStatus::Success,
             "Increment counter txn failed: {:?}",
-            response.effects.status
+            response.effects.status()
         );
 
         response
             .effects
-            .shared_objects
+            .shared_objects()
             .iter()
             .find(|o| o.object_id == counter_id)
             .expect("Expect obj {counter_id} in shared_objects");
 
         let counter_version = response
             .effects
-            .mutated
+            .mutated()
             .iter()
             .find_map(|obj| {
                 let Owner::Shared { initial_shared_version } = obj.owner else {
@@ -67,7 +67,7 @@ impl TestCaseImpl for SharedCounterTest {
             .expect("Expect obj {counter_id} in mutated");
 
         // Verify fullnode observes the txn
-        ctx.let_fullnode_sync(vec![response.effects.transaction_digest], 5)
+        ctx.let_fullnode_sync(vec![*response.effects.transaction_digest()], 5)
             .await;
 
         let counter_object = ObjectChecker::new(counter_id)

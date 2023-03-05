@@ -49,7 +49,10 @@ use sui_types::{
     crypto::{get_key_pair_from_rng, AccountKeyPair},
     event::Event,
     gas,
-    messages::{ExecutionStatus, TransactionData, TransactionEffects, VerifiedTransaction},
+    messages::{
+        ExecutionStatus, TransactionData, TransactionDataAPI, TransactionEffectsAPI,
+        VerifiedTransaction,
+    },
     object::{self, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
     object::{MoveObject, Owner},
     MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
@@ -600,6 +603,8 @@ impl<'a> SuiTestAdapter<'a> {
 
         let (
             inner,
+            effects,
+            /*
             TransactionEffects {
                 status,
                 created,
@@ -612,6 +617,7 @@ impl<'a> SuiTestAdapter<'a> {
                 gas_object: _,
                 ..
             },
+            */
             execution_error,
         ) = execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
             shared_object_refs,
@@ -628,12 +634,25 @@ impl<'a> SuiTestAdapter<'a> {
             &PROTOCOL_CONSTANTS,
         );
 
-        let mut created_ids: Vec<_> = created.iter().map(|((id, _, _), _)| *id).collect();
-        let unwrapped_ids: Vec<_> = unwrapped.iter().map(|((id, _, _), _)| *id).collect();
-        let mut written_ids: Vec<_> = mutated.iter().map(|((id, _, _), _)| *id).collect();
-        let mut deleted_ids: Vec<_> = deleted
+        let mut created_ids: Vec<_> = effects
+            .created()
             .iter()
-            .chain(&wrapped)
+            .map(|((id, _, _), _)| *id)
+            .collect();
+        let unwrapped_ids: Vec<_> = effects
+            .unwrapped()
+            .iter()
+            .map(|((id, _, _), _)| *id)
+            .collect();
+        let mut written_ids: Vec<_> = effects
+            .mutated()
+            .iter()
+            .map(|((id, _, _), _)| *id)
+            .collect();
+        let mut deleted_ids: Vec<_> = effects
+            .deleted()
+            .iter()
+            .chain(effects.wrapped())
             .map(|(id, _, _)| *id)
             .collect();
 
@@ -664,7 +683,7 @@ impl<'a> SuiTestAdapter<'a> {
         written_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
 
-        match status {
+        match effects.status() {
             ExecutionStatus::Success { .. } => Ok(TxnSummary {
                 created: created_ids,
                 written: written_ids,

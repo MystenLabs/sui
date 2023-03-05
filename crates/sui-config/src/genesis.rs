@@ -31,9 +31,9 @@ use sui_types::gas::SuiGasStatus;
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::intent::{Intent, IntentMessage, IntentScope};
 use sui_types::message_envelope::Message;
-use sui_types::messages::Transaction;
-use sui_types::messages::{CallArg, TransactionEffects};
-use sui_types::messages::{InputObjects, TransactionEvents};
+use sui_types::messages::{
+    CallArg, InputObjects, Transaction, TransactionEffects, TransactionEvents,
+};
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
 };

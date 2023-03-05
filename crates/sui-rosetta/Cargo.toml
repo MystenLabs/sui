@@ -41,6 +41,7 @@ sui-node = { path = "../sui-node" }
 sui-config = { path = "../sui-config" }
 sui-keys = { path = "../sui-keys" }
 sui-storage = { path = "../sui-storage" }
+sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 mysten-metrics = { path = "../mysten-metrics" }
 chrono = "0.4.23"
 

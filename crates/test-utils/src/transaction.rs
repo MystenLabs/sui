@@ -11,7 +11,9 @@ use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_config::ValidatorInfo;
 use sui_core::authority_client::AuthorityAPI;
 pub use sui_core::test_utils::{compile_basics_package, wait_for_all_txes, wait_for_tx};
-use sui_json_rpc_types::{SuiObjectResponse, SuiTransactionResponse};
+use sui_json_rpc_types::{
+    SuiObjectResponse, SuiTransactionDataAPI, SuiTransactionEffectsAPI, SuiTransactionResponse,
+};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::json::SuiJsonValue;
 use sui_types::base_types::ObjectRef;
@@ -23,7 +25,7 @@ use sui_types::intent::Intent;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
     CallArg, ObjectArg, ObjectInfoRequest, ObjectInfoResponse, Transaction, TransactionData,
-    TransactionEffects, TransactionEvents, VerifiedTransaction,
+    TransactionEffects, TransactionEffectsAPI, TransactionEvents, VerifiedTransaction,
 };
 use sui_types::messages::{ExecuteTransactionRequestType, HandleCertificateResponse};
 use sui_types::object::{Object, Owner};
@@ -55,7 +57,7 @@ pub async fn publish_package(
     configs: &[ValidatorInfo],
 ) -> ObjectRef {
     let (effects, _) = publish_package_for_effects(gas_object, path, configs).await;
-    parse_package_ref(&effects.created).unwrap()
+    parse_package_ref(effects.created()).unwrap()
 }
 
 pub async fn publish_package_for_effects(
@@ -118,7 +120,7 @@ pub async fn publish_package_with_wallet(
 
     assert!(resp.confirmed_local_execution.unwrap());
     resp.effects
-        .created
+        .created()
         .iter()
         .find(|obj_ref| obj_ref.owner == Owner::Immutable)
         .unwrap()
@@ -199,7 +201,7 @@ pub async fn publish_basics_package_and_make_counter(
 
     let counter_ref = response
         .effects
-        .created
+        .created()
         .iter()
         .find(|obj_ref| matches!(obj_ref.owner, Owner::Shared { .. }))
         .unwrap()
@@ -287,7 +289,7 @@ pub async fn transfer_sui(
     .await?;
 
     let digest = if let SuiClientCommandResult::TransferSui(response) = res {
-        response.effects.transaction_digest
+        *response.effects.transaction_digest()
     } else {
         panic!("transfer command did not return WalletCommandResult::TransferSui");
     };
@@ -333,10 +335,10 @@ pub async fn transfer_coin(
 
     let (digest, gas, gas_used) = if let SuiClientCommandResult::Transfer(_, response) = res {
         (
-            response.effects.transaction_digest,
-            response.transaction.data.gas_data.payment,
-            response.effects.gas_used.computation_cost + response.effects.gas_used.storage_cost
-                - response.effects.gas_used.storage_rebate,
+            *response.effects.transaction_digest(),
+            response.transaction.data.gas_data().payment.clone(),
+            response.effects.gas_used().computation_cost + response.effects.gas_used().storage_cost
+                - response.effects.gas_used().storage_rebate,
         )
     } else {
         panic!("transfer command did not return WalletCommandResult::Transfer");

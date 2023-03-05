@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect } from 'vitest';
-import { bcs, generateTransactionDigest } from '../../../src';
+import { bcs, generateTransactionDigest, TransactionData } from '../../../src';
 
 describe('Test common functions', () => {
   describe('Calculate transaction digest', () => {
     it('Test calculate transaction digest for ED25519', () => {
-      const transactionData = {
+      const transactionData: TransactionData = {
+        messageVersion: 1,
         kind: {
           Single: {
             TransferSui: {
@@ -36,7 +37,7 @@ describe('Test common functions', () => {
 
       const transactionDigest = generateTransactionDigest(transactionData, bcs);
       expect(transactionDigest).toEqual(
-        'HFQ3HBaF3k6ZvWEfeVi3vLhmX3oKyvKg1nxiTpUKdMyZ',
+        'EgZ8XyQ1BKgWsa7r8baN5HPRoKcvm5ZskJUPxdqBjCeN',
       );
     });
   });

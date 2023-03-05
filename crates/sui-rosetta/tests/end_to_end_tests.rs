@@ -13,7 +13,7 @@ use sui_rosetta::types::{
     SubAccount, SubAccountType, SuiEnv,
 };
 use sui_sdk::json::SuiJsonValue;
-use sui_sdk::rpc_types::SuiExecutionStatus;
+use sui_sdk::rpc_types::{SuiExecutionStatus, SuiTransactionEffectsAPI};
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_type_tag, SUI_FRAMEWORK_OBJECT_ID};
 use test_utils::network::TestClusterBuilder;
@@ -246,5 +246,5 @@ async fn test_delegation() {
 
     println!("Sui TX: {tx:?}");
 
-    assert_eq!(SuiExecutionStatus::Success, tx.effects.status)
+    assert_eq!(SuiExecutionStatus::Success, *tx.effects.status())
 }

@@ -34,7 +34,7 @@ use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     DynamicFieldPage, SuiObjectData, SuiObjectInfo, SuiObjectResponse, SuiRawData,
-    SuiTransactionResponse,
+    SuiTransactionEffectsAPI, SuiTransactionResponse,
 };
 use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
@@ -598,8 +598,11 @@ impl SuiClientCommands {
                     .await?;
                 let effects = &response.effects;
                 let time_total = time_start.elapsed().as_micros();
-                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
-                    return Err(anyhow!("Error transferring object: {:#?}", effects.status));
+                if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
+                    return Err(anyhow!(
+                        "Error transferring object: {:#?}",
+                        effects.status()
+                    ));
                 }
                 SuiClientCommandResult::Transfer(time_total, response)
             }
@@ -629,8 +632,8 @@ impl SuiClientCommands {
                     )
                     .await?;
                 let effects = &response.effects;
-                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
-                    return Err(anyhow!("Error transferring SUI: {:#?}", effects.status));
+                if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
+                    return Err(anyhow!("Error transferring SUI: {:#?}", effects.status()));
                 }
                 SuiClientCommandResult::TransferSui(response)
             }
@@ -676,10 +679,10 @@ impl SuiClientCommands {
                     )
                     .await?;
                 let effects = &response.effects;
-                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
+                if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!(
                         "Error executing Pay transaction: {:#?}",
-                        effects.status
+                        effects.status()
                     ));
                 }
                 SuiClientCommandResult::Pay(response)
@@ -725,10 +728,10 @@ impl SuiClientCommands {
                     )
                     .await?;
                 let effects = &response.effects;
-                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
+                if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!(
                         "Error executing PaySui transaction: {:#?}",
-                        effects.status
+                        effects.status()
                     ));
                 }
                 SuiClientCommandResult::PaySui(response)
@@ -762,10 +765,10 @@ impl SuiClientCommands {
                     )
                     .await?;
                 let effects = &response.effects;
-                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
+                if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!(
                         "Error executing PayAllSui transaction: {:#?}",
-                        effects.status
+                        effects.status()
                     ));
                 }
                 SuiClientCommandResult::PayAllSui(response)
@@ -923,7 +926,7 @@ impl SuiClientCommands {
                 .await?;
                 let nft_id = response
                     .effects
-                    .created
+                    .created()
                     .first()
                     .ok_or_else(|| anyhow!("Failed to create NFT"))?
                     .reference
@@ -1462,8 +1465,8 @@ pub async fn call_move(
 
     let response = context.execute_transaction(transaction).await?;
     let effects = &response.effects;
-    if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
-        return Err(anyhow!("Error calling module: {:#?}", effects.status));
+    if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
+        return Err(anyhow!("Error calling module: {:#?}", effects.status()));
     }
     Ok(response)
 }
