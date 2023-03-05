@@ -69,15 +69,6 @@ fn main() -> Result<()> {
         )
         .method(
             Method::builder()
-                .name("committee_info")
-                .route_name("CommitteeInfo")
-                .input_type("sui_types::messages::CommitteeInfoRequest")
-                .output_type("sui_types::messages::CommitteeInfoResponse")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            Method::builder()
                 .name("get_system_state_object")
                 .route_name("GetSystemStateObject")
                 .input_type("sui_types::messages::SystemStateRequest")

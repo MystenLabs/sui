@@ -794,10 +794,10 @@
         }
       ],
       "result": {
-        "name": "CommitteeInfoResponse",
+        "name": "SuiCommittee",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/CommitteeInfoResponse"
+          "$ref": "#/components/schemas/CommitteeInfo"
         }
       }
     },
@@ -3197,14 +3197,20 @@
           }
         }
       },
-      "CommitteeInfoResponse": {
+      "CommitteeInfo": {
+        "description": "RPC representation of the [Committee] type.",
         "type": "object",
         "required": [
-          "committee_info",
-          "epoch"
+          "epoch",
+          "validators"
         ],
         "properties": {
-          "committee_info": {
+          "epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "validators": {
             "type": "array",
             "items": {
               "type": "array",
@@ -3221,11 +3227,6 @@
               "maxItems": 2,
               "minItems": 2
             }
-          },
-          "epoch": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
           }
         }
       },

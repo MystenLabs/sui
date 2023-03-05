@@ -4,7 +4,7 @@
 
 use super::{base_types::*, committee::Committee, error::*, event::Event};
 use crate::certificate_proof::CertificateProof;
-use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
+use crate::committee::{EpochId, ProtocolVersion};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
     Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignatureInner, ToFromBytes,
@@ -4022,27 +4022,6 @@ pub struct QuorumDriverRequest {
 pub struct QuorumDriverResponse {
     pub effects_cert: VerifiedCertifiedTransactionEffects,
     pub events: TransactionEvents,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct CommitteeInfoRequest {
-    pub epoch: Option<EpochId>,
-}
-
-#[derive(Serialize, Deserialize, Clone, schemars::JsonSchema, Debug)]
-pub struct CommitteeInfoResponse {
-    pub epoch: EpochId,
-    pub committee_info: Vec<(AuthorityName, StakeUnit)>,
-    // TODO: We could also return the certified checkpoint that contains this committee.
-    // This would allows a client to verify the authenticity of the committee.
-}
-
-pub type CommitteeInfoResponseDigest = [u8; 32];
-
-impl CommitteeInfoResponse {
-    pub fn digest(&self) -> CommitteeInfoResponseDigest {
-        sha3_hash(self)
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

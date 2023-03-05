@@ -504,7 +504,7 @@ impl FullNodeProxy {
 
         let resp = sui_client.read_api().get_committee_info(None).await?;
         let epoch = resp.epoch;
-        let committee_vec = resp.committee_info;
+        let committee_vec = resp.validators;
         let committee_map =
             BTreeMap::from_iter(committee_vec.into_iter().map(|(name, stake)| (name, stake)));
         let committee = Committee::new(epoch, committee_map)?;
