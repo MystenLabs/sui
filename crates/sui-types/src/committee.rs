@@ -5,7 +5,6 @@
 use super::base_types::*;
 use crate::crypto::{random_committee_key_pairs, sha3_hash, AuthorityKeyPair, AuthorityPublicKey};
 use crate::error::{SuiError, SuiResult};
-use crate::messages::CommitteeInfo;
 use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
 use rand::rngs::ThreadRng;
@@ -308,19 +307,6 @@ impl Committee {
         )
         .unwrap();
         (committee, key_pairs)
-    }
-}
-
-impl TryFrom<CommitteeInfo> for Committee {
-    type Error = SuiError;
-    fn try_from(committee_info: CommitteeInfo) -> Result<Self, Self::Error> {
-        Self::new(
-            committee_info.epoch,
-            committee_info
-                .committee_info
-                .into_iter()
-                .collect::<BTreeMap<_, _>>(),
-        )
     }
 }
 
