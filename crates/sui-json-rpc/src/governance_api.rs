@@ -15,7 +15,7 @@ use jsonrpsee::RpcModule;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{DelegatedStake, Stake, StakeStatus};
 use sui_open_rpc::Module;
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::governance::StakedSui;
 use sui_types::sui_system_state::sui_system_state_inner_v1::{PoolTokenExchangeRate, ValidatorV1};
