@@ -68,6 +68,7 @@
 -  [Function `effectuate_staged_metadata`](#0x2_validator_effectuate_staged_metadata)
 -  [Function `validate_metadata`](#0x2_validator_validate_metadata)
 -  [Function `validate_metadata_bcs`](#0x2_validator_validate_metadata_bcs)
+-  [Function `new_from_metadata`](#0x2_validator_new_from_metadata)
 
 
 <pre><code><b>use</b> <a href="">0x1::ascii</a>;
@@ -550,7 +551,6 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
         sui_address,
         protocol_pubkey_bytes
     );
-    <b>let</b> stake_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&stake);
 
     <b>let</b> metadata = <a href="validator.md#0x2_validator_new_metadata">new_metadata</a>(
         sui_address,
@@ -569,24 +569,16 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
     );
 
     <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&metadata);
-    <b>let</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a> = <a href="staking_pool.md#0x2_staking_pool_new">staking_pool::new</a>(starting_epoch, ctx);
-    // Add the <a href="validator.md#0x2_validator">validator</a>'s starting stake <b>to</b> the staking pool.
-    <a href="staking_pool.md#0x2_staking_pool_request_add_delegation">staking_pool::request_add_delegation</a>(&<b>mut</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>, stake, coin_locked_until_epoch, sui_address, sui_address, starting_epoch, ctx);
-    // We immediately process this delegation <b>as</b> they are at <a href="validator.md#0x2_validator">validator</a> setup time and this is the <a href="validator.md#0x2_validator">validator</a> staking <b>with</b> itself.
-    <a href="staking_pool.md#0x2_staking_pool_process_pending_delegation">staking_pool::process_pending_delegation</a>(&<b>mut</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>);
-    <a href="validator.md#0x2_validator_Validator">Validator</a> {
+
+    <a href="validator.md#0x2_validator_new_from_metadata">new_from_metadata</a>(
         metadata,
-        // Initialize the voting power <b>to</b> be the same <b>as</b> the stake amount.
-        // At the epoch change <b>where</b> this <a href="validator.md#0x2_validator">validator</a> is actually added <b>to</b> the
-        // active <a href="validator.md#0x2_validator">validator</a> set, the voting power will be updated accordingly.
-        <a href="voting_power.md#0x2_voting_power">voting_power</a>: stake_amount,
+        stake,
+        coin_locked_until_epoch,
         gas_price,
-        <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>,
         commission_rate,
-        next_epoch_stake: stake_amount,
-        next_epoch_gas_price: gas_price,
-        next_epoch_commission_rate: commission_rate,
-    }
+        starting_epoch,
+        ctx
+    )
 }
 </code></pre>
 
@@ -2079,6 +2071,59 @@ Aborts if validator metadata is valid
 
 <pre><code><b>pragma</b> opaque;
 <b>aborts_if</b> [abstract] <b>true</b>;
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_new_from_metadata"></a>
+
+## Function `new_from_metadata`
+
+Create a new validator from the given <code><a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a></code>, called by both <code>new</code> and <code>new_for_testing</code>.
+
+
+<pre><code><b>fun</b> <a href="validator.md#0x2_validator_new_from_metadata">new_from_metadata</a>(metadata: <a href="validator.md#0x2_validator_ValidatorMetadata">validator::ValidatorMetadata</a>, stake: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, coin_locked_until_epoch: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;, gas_price: u64, commission_rate: u64, starting_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator.md#0x2_validator_new_from_metadata">new_from_metadata</a>(
+    metadata: <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a>,
+    stake: Balance&lt;SUI&gt;,
+    coin_locked_until_epoch: Option&lt;EpochTimeLock&gt;,
+    gas_price: u64,
+    commission_rate: u64,
+    starting_epoch: u64,
+    ctx: &<b>mut</b> TxContext
+): <a href="validator.md#0x2_validator_Validator">Validator</a> {
+    <b>let</b> sui_address = metadata.sui_address;
+    <b>let</b> stake_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&stake);
+
+    <b>let</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a> = <a href="staking_pool.md#0x2_staking_pool_new">staking_pool::new</a>(starting_epoch, ctx);
+    // Add the <a href="validator.md#0x2_validator">validator</a>'s starting stake <b>to</b> the staking pool.
+    <a href="staking_pool.md#0x2_staking_pool_request_add_delegation">staking_pool::request_add_delegation</a>(&<b>mut</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>, stake, coin_locked_until_epoch, sui_address, sui_address, starting_epoch, ctx);
+    // We immediately process this delegation <b>as</b> they are at <a href="validator.md#0x2_validator">validator</a> setup time and this is the <a href="validator.md#0x2_validator">validator</a> staking <b>with</b> itself.
+    <a href="staking_pool.md#0x2_staking_pool_process_pending_delegation">staking_pool::process_pending_delegation</a>(&<b>mut</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>);
+    <a href="validator.md#0x2_validator_Validator">Validator</a> {
+        metadata,
+        // Initialize the voting power <b>to</b> be the same <b>as</b> the stake amount.
+        // At the epoch change <b>where</b> this <a href="validator.md#0x2_validator">validator</a> is actually added <b>to</b> the
+        // active <a href="validator.md#0x2_validator">validator</a> set, the voting power will be updated accordingly.
+        <a href="voting_power.md#0x2_voting_power">voting_power</a>: stake_amount,
+        gas_price,
+        <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>,
+        commission_rate,
+        next_epoch_stake: stake_amount,
+        next_epoch_gas_price: gas_price,
+        next_epoch_commission_rate: commission_rate,
+    }
+}
 </code></pre>
 
 
