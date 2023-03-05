@@ -189,8 +189,8 @@ from the item type (<code>T</code>) owner on purchase attempt.
 </dt>
 <dd>
  The ID of the Kiosk the object is being sold from.
- Can be used by the TransferPolicy implementors to ban
- some Kiosks or the opposite - relax some rules.
+ Can be used by the TransferPolicy implementors to
+ create an allowlist of Kiosks which can trade the type.
 </dd>
 </dl>
 
