@@ -159,6 +159,8 @@ pub trait ReadApi {
         object_id: ObjectID,
         /// the version of the queried object. If None, default to the latest known version
         version: SequenceNumber,
+        /// options for specifying the content to be returned
+        options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiPastObjectResponse>;
 
     /// Return the sequence number of the latest checkpoint that has been executed

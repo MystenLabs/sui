@@ -26,9 +26,7 @@ use sui_types::error::{UserInputError, UserInputResult};
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::MoveModulePublish;
 use sui_types::move_package::{disassemble_modules, MovePackage};
-use sui_types::object::{
-    Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner, PastObjectRead,
-};
+use sui_types::object::{Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner};
 use sui_types::parse_sui_struct_tag;
 
 use crate::{SuiMoveStruct, SuiMoveValue};
@@ -817,30 +815,6 @@ impl SuiPastObjectResponse {
                 asked_version,
                 latest_version,
             } => Err(UserInputError::ObjectSequenceNumberTooHigh {
-                object_id,
-                asked_version,
-                latest_version,
-            }),
-        }
-    }
-}
-
-impl TryFrom<PastObjectRead> for SuiPastObjectResponse {
-    type Error = anyhow::Error;
-
-    fn try_from(value: PastObjectRead) -> Result<Self, Self::Error> {
-        match value {
-            PastObjectRead::ObjectNotExists(id) => Ok(Self::ObjectNotExists(id)),
-            PastObjectRead::VersionFound(object_ref, o, layout) => Ok(Self::VersionFound(
-                (object_ref, o, layout, SuiObjectDataOptions::full_content()).try_into()?,
-            )),
-            PastObjectRead::ObjectDeleted(oref) => Ok(Self::ObjectDeleted(oref.into())),
-            PastObjectRead::VersionNotFound(id, seq_num) => Ok(Self::VersionNotFound(id, seq_num)),
-            PastObjectRead::VersionTooHigh {
-                object_id,
-                asked_version,
-                latest_version,
-            } => Ok(Self::VersionTooHigh {
                 object_id,
                 asked_version,
                 latest_version,

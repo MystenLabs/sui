@@ -276,7 +276,11 @@ impl RpcExampleProvider {
             "sui_tryGetPastObject",
             vec![ExamplePairing::new(
                 "Get Past Object data",
-                vec![("object_id", json!(object_id)), ("version", json!(4))],
+                vec![
+                    ("object_id", json!(object_id)),
+                    ("version", json!(4)),
+                    ("options", json!(SuiObjectDataOptions::full_content())),
+                ],
                 json!(result),
             )],
         )

@@ -37,7 +37,7 @@ use sui_types::messages_checkpoint::{
     CheckpointSummary,
 };
 use sui_types::move_package::normalize_modules;
-use sui_types::object::{Data, Object, ObjectRead};
+use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
 
 use sui_types::dynamic_field::DynamicFieldName;
@@ -133,6 +133,48 @@ impl ReadApiServer for ReadApi {
                 ))
             }
             ObjectRead::Deleted(oref) => Ok(SuiObjectResponse::Deleted(oref.into())),
+        }
+    }
+
+    async fn try_get_past_object(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<SuiPastObjectResponse> {
+        let past_read = self
+            .state
+            .get_past_object_read(&object_id, version)
+            .await
+            .map_err(|e| anyhow!("{e}"))?;
+        let options = options.unwrap_or_default();
+        match past_read {
+            PastObjectRead::ObjectNotExists(id) => Ok(SuiPastObjectResponse::ObjectNotExists(id)),
+            PastObjectRead::VersionFound(object_ref, o, layout) => {
+                let display_fields = if options.show_display {
+                    get_display_fields(self, &o, &layout).await?
+                } else {
+                    None
+                };
+                Ok(SuiPastObjectResponse::VersionFound(
+                    (object_ref, o, layout, options, display_fields).try_into()?,
+                ))
+            }
+            PastObjectRead::ObjectDeleted(oref) => {
+                Ok(SuiPastObjectResponse::ObjectDeleted(oref.into()))
+            }
+            PastObjectRead::VersionNotFound(id, seq_num) => {
+                Ok(SuiPastObjectResponse::VersionNotFound(id, seq_num))
+            }
+            PastObjectRead::VersionTooHigh {
+                object_id,
+                asked_version,
+                latest_version,
+            } => Ok(SuiPastObjectResponse::VersionTooHigh {
+                object_id,
+                asked_version,
+                latest_version,
+            }),
         }
     }
 
@@ -394,19 +436,6 @@ impl ReadApiServer for ReadApi {
         let next_cursor = data.get(limit).cloned();
         data.truncate(limit);
         Ok(Page { data, next_cursor })
-    }
-
-    async fn try_get_past_object(
-        &self,
-        object_id: ObjectID,
-        version: SequenceNumber,
-    ) -> RpcResult<SuiPastObjectResponse> {
-        Ok(self
-            .state
-            .get_past_object_read(&object_id, version)
-            .await
-            .map_err(|e| anyhow!("{e}"))?
-            .try_into()?)
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber> {
