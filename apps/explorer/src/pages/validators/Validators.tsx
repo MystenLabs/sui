@@ -54,7 +54,7 @@ export function validatorsTableData(
                 },
                 stake: totalStake,
                 apy: calculateAPY(validator, epoch),
-                commission: +validator.commission_rate / 100,
+                commission: +validator.commissionRate / 100,
                 img: img,
                 address: validator.sui_address,
                 lastReward: event?.fields.stake_rewards || 0,

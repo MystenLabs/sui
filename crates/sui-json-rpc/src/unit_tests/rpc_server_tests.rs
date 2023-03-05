@@ -13,15 +13,15 @@ use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 
+use sui_json_rpc_types::SuiObjectInfo;
 use sui_json_rpc_types::{
-    Balance, CoinPage, DelegatedStake, DelegationStatus, SuiObjectResponse, SuiCoinMetadata,
-    SuiEvent, SuiExecutionStatus, SuiObjectInfo, SuiTBlsSignObjectCommitmentType,
+    Balance, CoinPage, DelegatedStake, DelegationStatus, SuiCoinMetadata, SuiEvent,
+    SuiExecutionStatus, SuiObjectDataOptions, SuiObjectResponse, SuiTBlsSignObjectCommitmentType,
     SuiTransactionResponse, TransactionBytes,
     Balance, CoinPage, SuiCoinMetadata, SuiEvent, SuiExecutionStatus, SuiObjectResponse,
     SuiTBlsSignObjectCommitmentType, SuiTransactionEffectsAPI, SuiTransactionResponse,
     SuiTransactionResponseOptions, TransactionBytes,
 };
-use sui_json_rpc_types::{SuiObjectDataOptions, SuiObjectInfo};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::balance::Supply;
 use sui_types::base_types::ObjectID;

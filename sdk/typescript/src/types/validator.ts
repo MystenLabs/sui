@@ -14,8 +14,8 @@ import {
   tuple,
   optional,
 } from 'superstruct';
-import { SuiAddress } from './common';
-import { AuthorityName } from './transactions';
+import { ObjectId, SuiAddress } from './common';
+import { AuthorityName, EpochId } from './transactions';
 
 /* -------------- Types for the SuiSystemState Rust definition -------------- */
 
@@ -28,33 +28,19 @@ export const Balance = object({
   value: number(),
 });
 
-export const StakedSui = object({
-  id: object({
-    id: string(),
-  }),
-  pool_id: string(),
-  validator_address: string(),
-  delegation_request_epoch: number(),
-  principal: Balance,
-  sui_token_lock: union([number(), literal(null)]),
-});
-
-export const ActiveFields = object({
-  id: object({
-    id: string(),
-  }),
-  staked_sui_id: SuiAddress,
-  principal_sui_amount: number(),
-  pool_tokens: Balance,
-});
-
-export const ActiveDelegationStatus = object({
-  Active: ActiveFields,
+export const DelegationObject = object({
+  stakedSuiId: ObjectId,
+  delegationRequestEpoch: EpochId,
+  principal: number(),
+  tokenLock: nullable(EpochId),
+  status: union([literal('Active'), literal('Pending')]),
+  estimatedReward: optional(number()),
 });
 
 export const DelegatedStake = object({
-  staked_sui: StakedSui,
-  delegation_status: union([literal('Pending'), ActiveDelegationStatus]),
+  validatorAddress: SuiAddress,
+  stakingPool: ObjectId,
+  delegations: array(DelegationObject),
 });
 
 export const ParametersFields = object({
@@ -70,8 +56,8 @@ export const Parameters = object({
 
 export const StakeSubsidyFields = object({
   balance: object({ value: number() }),
-  current_epoch_amount: number(),
-  epoch_counter: number(),
+  currentEpochAmount: number(),
+  epochCounter: number(),
 });
 
 export const StakeSubsidy = object({
@@ -101,19 +87,19 @@ export const Contents = object({
 });
 
 export const DelegationStakingPoolFields = object({
-  exchange_rates: object({
+  exchangeRates: object({
     id: string(),
     size: number(),
   }),
   id: string(),
-  pending_delegation: number(),
-  pending_pool_token_withdraw: number(),
-  pending_total_sui_withdraw: number(),
-  pool_token_balance: number(),
-  rewards_pool: object({ value: number() }),
-  activation_epoch: object({ vec: array(number()) }),
-  deactivation_epoch: object({ vec: array() }),
-  sui_balance: number(),
+  pendingDelegation: number(),
+  pendingPoolTokenWithdraw: number(),
+  pendingTotalSuiWithdraw: number(),
+  poolTokenBalance: number(),
+  rewardsPool: object({ value: number() }),
+  startingEpoch: number(),
+  deactivationEpoch: object({ vec: array() }),
+  suiBalance: number(),
 });
 
 export const DelegationStakingPool = object({

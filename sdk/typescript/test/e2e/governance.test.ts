@@ -62,7 +62,7 @@ async function addDelegation(signer: RawSigner) {
     signer.provider,
     [coins.data[0].coinObjectId],
     BigInt(DEFAULT_STAKED_AMOUNT),
-    validators[0].sui_address,
+    validators[0].suiAddress,
   );
 
   tx.setGasBudget(DEFAULT_GAS_BUDGET);
