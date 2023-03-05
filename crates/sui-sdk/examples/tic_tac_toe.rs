@@ -243,7 +243,7 @@ impl TicTacToe {
         let current_game = self
             .client
             .read_api()
-            .get_object_with_options(game_id, Some(SuiObjectDataOptions::bcs_only()))
+            .get_object_with_options(game_id, SuiObjectDataOptions::new().with_bcs())
             .await?;
         current_game
             .object()?

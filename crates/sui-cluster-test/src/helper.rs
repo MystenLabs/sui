@@ -78,12 +78,10 @@ impl ObjectChecker {
             .read_api()
             .get_object_with_options(
                 object_id,
-                Some(SuiObjectDataOptions {
-                    show_type: Some(true),
-                    show_owner: Some(true),
-                    show_bcs: Some(true),
-                    ..Default::default()
-                }),
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_bcs(),
             )
             .await
             .or_else(|err| bail!("Failed to get object info (id: {}), err: {err}", object_id))?;

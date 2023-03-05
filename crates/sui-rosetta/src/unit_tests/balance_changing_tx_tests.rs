@@ -648,7 +648,7 @@ async fn get_balance(client: &SuiClient, address: SuiAddress) -> u64 {
         if coin.type_ == GasCoin::type_().to_string() {
             let object = client
                 .read_api()
-                .get_object_with_options(coin.object_id, Some(SuiObjectDataOptions::bcs_only()))
+                .get_object_with_options(coin.object_id, SuiObjectDataOptions::new().with_bcs())
                 .await
                 .unwrap();
             let coin: GasCoin = object

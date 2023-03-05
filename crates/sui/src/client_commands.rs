@@ -534,13 +534,13 @@ impl SuiClientCommands {
                 if !bcs {
                     let object_read = client
                         .read_api()
-                        .get_object_with_options(id, Some(SuiObjectDataOptions::full_content()))
+                        .get_object_with_options(id, SuiObjectDataOptions::full_content())
                         .await?;
                     SuiClientCommandResult::Object(object_read)
                 } else {
                     let raw_object_read = client
                         .read_api()
-                        .get_object_with_options(id, Some(SuiObjectDataOptions::bcs_lossless()))
+                        .get_object_with_options(id, SuiObjectDataOptions::bcs_lossless())
                         .await?;
                     SuiClientCommandResult::RawObject(raw_object_read)
                 }
@@ -934,7 +934,7 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 let object_read = client
                     .read_api()
-                    .get_object_with_options(nft_id, Some(SuiObjectDataOptions::full_content()))
+                    .get_object_with_options(nft_id, SuiObjectDataOptions::full_content())
                     .await?;
                 SuiClientCommandResult::CreateExampleNFT(object_read)
             }
@@ -1130,7 +1130,7 @@ impl WalletContext {
         let client = self.get_client().await?;
         Ok(client
             .read_api()
-            .get_object_with_options(object_id, None)
+            .get_object_with_options(object_id, SuiObjectDataOptions::new())
             .await?
             .into_object()?
             .object_ref())
@@ -1153,7 +1153,7 @@ impl WalletContext {
         for oref in object_refs {
             let response = client
                 .read_api()
-                .get_object_with_options(oref.object_id, Some(SuiObjectDataOptions::full_content()))
+                .get_object_with_options(oref.object_id, SuiObjectDataOptions::full_content())
                 .await?;
             match response {
                 SuiObjectResponse::Exists(o) => {
@@ -1174,13 +1174,7 @@ impl WalletContext {
         let client = self.get_client().await?;
         let object = client
             .read_api()
-            .get_object_with_options(
-                *id,
-                Some(SuiObjectDataOptions {
-                    show_owner: Some(true),
-                    ..Default::default()
-                }),
-            )
+            .get_object_with_options(*id, SuiObjectDataOptions::new().with_owner())
             .await?
             .into_object()?;
         Ok(object

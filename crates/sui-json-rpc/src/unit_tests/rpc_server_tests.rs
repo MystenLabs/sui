@@ -341,10 +341,7 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
         let result = http_client
             .get_object_with_options(
                 oref.object_id,
-                Some(SuiObjectDataOptions {
-                    show_owner: Some(true),
-                    ..Default::default()
-                }),
+                Some(SuiObjectDataOptions::new().with_owner()),
             )
             .await?;
         assert!(

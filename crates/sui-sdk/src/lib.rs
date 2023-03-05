@@ -272,7 +272,7 @@ impl DataReader for ReadApi {
     async fn get_object_with_options(
         &self,
         object_id: ObjectID,
-        options: Option<SuiObjectDataOptions>,
+        options: SuiObjectDataOptions,
     ) -> Result<SuiObjectResponse, anyhow::Error> {
         Ok(self.get_object_with_options(object_id, options).await?)
     }

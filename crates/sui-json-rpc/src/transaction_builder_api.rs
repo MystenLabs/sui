@@ -66,7 +66,7 @@ impl DataReader for AuthorityStateDataReader {
     async fn get_object_with_options(
         &self,
         object_id: ObjectID,
-        options: Option<SuiObjectDataOptions>,
+        options: SuiObjectDataOptions,
     ) -> Result<SuiObjectResponse, anyhow::Error> {
         let result = self.0.get_object_read(&object_id).await?;
         Ok((result, options).try_into()?)

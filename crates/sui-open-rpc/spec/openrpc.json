@@ -830,35 +830,6 @@
       }
     },
     {
-      "name": "sui_getDisplayDeprecated",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "description": "Return the Display string of a object",
-      "params": [
-        {
-          "name": "object_id",
-          "description": "the id of the object",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        }
-      ],
-      "result": {
-        "name": "BTreeMap<String,String>",
-        "required": true,
-        "schema": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
-        }
-      }
-    },
-    {
       "name": "sui_getDynamicFieldObject",
       "tags": [
         {
@@ -1288,6 +1259,7 @@
                 "showType": true,
                 "showOwner": true,
                 "showPreviousTransaction": true,
+                "showDisplay": false,
                 "showContent": true,
                 "showBcs": false,
                 "showStorageRebate": true
@@ -4870,45 +4842,38 @@
         "properties": {
           "showBcs": {
             "description": "Whether to show the content in BCS format. Default to be False",
-            "type": [
-              "boolean",
-              "null"
-            ]
+            "default": false,
+            "type": "boolean"
           },
           "showContent": {
             "description": "Whether to show the content(i.e., package content or Move struct content) of the object. Default to be False",
-            "type": [
-              "boolean",
-              "null"
-            ]
+            "default": false,
+            "type": "boolean"
+          },
+          "showDisplay": {
+            "description": "Whether to show the Display metadata of the object for frontend rendering. Default to be False",
+            "default": false,
+            "type": "boolean"
           },
           "showOwner": {
             "description": "Whether to show the owner of the object. Default to be False",
-            "type": [
-              "boolean",
-              "null"
-            ]
+            "default": false,
+            "type": "boolean"
           },
           "showPreviousTransaction": {
             "description": "Whether to show the previous transaction digest of the object. Default to be False",
-            "type": [
-              "boolean",
-              "null"
-            ]
+            "default": false,
+            "type": "boolean"
           },
           "showStorageRebate": {
             "description": "Whether to show the storage rebate of the object. Default to be False",
-            "type": [
-              "boolean",
-              "null"
-            ]
+            "default": false,
+            "type": "boolean"
           },
           "showType": {
             "description": "Whether to show the type of the object. Default to be False",
-            "type": [
-              "boolean",
-              "null"
-            ]
+            "default": false,
+            "type": "boolean"
           }
         }
       },
@@ -4949,6 +4914,16 @@
                 "$ref": "#/components/schemas/ObjectDigest"
               }
             ]
+          },
+          "display": {
+            "description": "The Display metadata for frontend UI rendering, default to be None unless SuiObjectDataOptions.showContent is set to true This can also be None if the struct type does not have Display defined See more details in <https://forums.sui.io/t/nft-object-display-proposal/4872>",
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
           },
           "objectId": {
             "$ref": "#/components/schemas/ObjectID"
