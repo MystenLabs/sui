@@ -189,7 +189,7 @@ pub enum UserInputError {
 pub enum SuiError {
     #[error("Error checking transaction input objects: {:?}", error)]
     UserInputError { error: UserInputError },
-    #[error("Expecting a singler owner, shared ownership found")]
+    #[error("Expecting a single owner, shared ownership found")]
     UnexpectedOwnerType,
 
     #[error("Input {object_id} already has {queue_len} transactions pending, above threshold of {threshold}")]

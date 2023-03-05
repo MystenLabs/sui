@@ -16,6 +16,7 @@ use crate::gas_coin::GasCoin;
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
+use crate::parse_sui_struct_tag;
 use crate::signature::GenericSignature;
 use crate::sui_serde::HexAccountAddress;
 use crate::sui_serde::Readable;
@@ -98,6 +99,28 @@ pub enum ObjectType {
     Struct(StructTag),
 }
 
+impl From<&Object> for ObjectType {
+    fn from(o: &Object) -> Self {
+        o.data
+            .type_()
+            .map(|tag| ObjectType::Struct(tag.clone()))
+            .unwrap_or(ObjectType::Package)
+    }
+}
+
+impl FromStr for ObjectType {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "Package" {
+            Ok(ObjectType::Package)
+        } else {
+            let tag = parse_sui_struct_tag(s)?;
+            Ok(ObjectType::Struct(tag))
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub struct ObjectInfo {
     pub object_id: ObjectID,
@@ -111,16 +134,11 @@ pub struct ObjectInfo {
 impl ObjectInfo {
     pub fn new(oref: &ObjectRef, o: &Object) -> Self {
         let (object_id, version, digest) = *oref;
-        let type_ = o
-            .data
-            .type_()
-            .map(|tag| ObjectType::Struct(tag.clone()))
-            .unwrap_or(ObjectType::Package);
         Self {
             object_id,
             version,
             digest,
-            type_,
+            type_: o.into(),
             owner: o.owner,
             previous_transaction: o.previous_transaction,
         }
@@ -767,7 +785,7 @@ impl fmt::Display for ObjectID {
 impl fmt::Display for ObjectType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ObjectType::Package => write!(f, "Package"),
+            ObjectType::Package => write!(f, "package"),
             ObjectType::Struct(t) => write!(f, "{}", t),
         }
     }

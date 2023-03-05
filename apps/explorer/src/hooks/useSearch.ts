@@ -9,7 +9,7 @@ import {
     isValidSuiObjectId,
     normalizeSuiObjectId,
     is,
-    SuiObject,
+    SuiObjectData,
     type JsonRpcProvider,
     getTransactionDigest,
 } from '@mysten/sui.js';
@@ -47,13 +47,13 @@ const getResultsForObject = async (rpc: JsonRpcProvider, query: string) => {
     if (!isValidSuiObjectId(normalized)) return null;
 
     const { details, status } = await rpc.getObject(normalized);
-    if (is(details, SuiObject) && status === 'Exists') {
+    if (is(details, SuiObjectData) && status === 'Exists') {
         return {
             label: 'object',
             results: [
                 {
-                    id: details.reference.objectId,
-                    label: details.reference.objectId,
+                    id: details.objectId,
+                    label: details.objectId,
                     type: 'object',
                 },
             ],

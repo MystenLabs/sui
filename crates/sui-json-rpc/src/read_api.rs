@@ -21,14 +21,15 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::RpcModule;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
-    GetRawObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page, SuiEvent,
-    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct,
-    SuiMoveValue, SuiObjectInfo, SuiTransactionEvents, SuiTransactionResponse, TransactionsPage,
+    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, ObjectValueKind, Page,
+    SuiEvent, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
+    SuiMoveStruct, SuiMoveValue, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
+    SuiPastObjectResponse, SuiTransactionEvents, SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
-use sui_types::base_types::SequenceNumber;
-use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
+use sui_types::base_types::{
+    ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
+};
 use sui_types::crypto::sha3_hash;
 use sui_types::messages::TransactionData;
 use sui_types::messages_checkpoint::{
@@ -108,23 +109,24 @@ impl ReadApiServer for ReadApi {
         Ok(DynamicFieldPage { data, next_cursor })
     }
 
-    async fn get_object(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
-        Ok(self
-            .state
-            .get_object_read(&object_id)
-            .await
-            .map_err(|e| {
-                debug!(?object_id, "Failed to get object: {:?}", e);
-                anyhow!("{e}")
-            })?
-            .try_into()?)
+    async fn get_object_with_options(
+        &self,
+        object_id: ObjectID,
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<SuiObjectResponse> {
+        let object_read = self.state.get_object_read(&object_id).await.map_err(|e| {
+            debug!(?object_id, "Failed to get object: {:?}", e);
+            anyhow!("{e}")
+        })?;
+
+        Ok((object_read, options).try_into()?)
     }
 
     async fn get_dynamic_field_object(
         &self,
         parent_object_id: ObjectID,
         name: DynamicFieldName,
-    ) -> RpcResult<GetObjectDataResponse> {
+    ) -> RpcResult<SuiObjectResponse> {
         let id = self
             .state
             .get_dynamic_field_object_id(parent_object_id, &name)
@@ -132,7 +134,9 @@ impl ReadApiServer for ReadApi {
             .ok_or_else(|| {
                 anyhow!("Cannot find dynamic field [{name:?}] for object [{parent_object_id}].")
             })?;
-        self.get_object(id).await
+        // TODO(chris): add options to `get_dynamic_field_object` API as well
+        self.get_object_with_options(id, Some(SuiObjectDataOptions::full_content()))
+            .await
     }
 
     async fn get_total_transaction_number(&self) -> RpcResult<u64> {
@@ -382,7 +386,7 @@ impl ReadApiServer for ReadApi {
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
-    ) -> RpcResult<GetPastObjectDataResponse> {
+    ) -> RpcResult<SuiPastObjectResponse> {
         Ok(self
             .state
             .get_past_object_read(&object_id, version)
@@ -445,15 +449,6 @@ impl ReadApiServer for ReadApi {
             .state
             .get_checkpoint_contents_by_sequence_number(sequence_number)
             .map_err(|e| anyhow!("Checkpoint contents based on seq number: {sequence_number} were not found with error: {e}"))?)
-    }
-
-    async fn get_raw_object(&self, object_id: ObjectID) -> RpcResult<GetRawObjectDataResponse> {
-        Ok(self
-            .state
-            .get_object_read(&object_id)
-            .await
-            .map_err(|e| anyhow!("{e}"))?
-            .try_into()?)
     }
 
     async fn get_display_deprecated(

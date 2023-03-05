@@ -68,34 +68,39 @@ function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
             } else {
                 ids = objects.data.map(({ objectId }) => objectId);
             }
-            return rpc.getObjectBatch(ids).then((results) => {
-                setResults(
-                    results
-                        .filter(({ status }) => status === 'Exists')
-                        .map(
-                            (resp) => {
-                                const contents = getObjectFields(resp);
-                                const url = parseImageURL(contents);
+            return rpc
+                .getObjectBatch(ids, {
+                    showType: true,
+                    showContent: true,
+                })
+                .then((results) => {
+                    setResults(
+                        results
+                            .filter(({ status }) => status === 'Exists')
+                            .map(
+                                (resp) => {
+                                    const contents = getObjectFields(resp);
+                                    const url = parseImageURL(contents);
 
-                                const name = extractName(contents);
-                                const objType = parseObjectType(resp);
-                                const balanceValue = Coin.getBalance(resp);
-                                return {
-                                    id: getObjectId(resp),
-                                    Type: objType,
-                                    _isCoin: Coin.isCoin(resp),
-                                    display: url
-                                        ? transformURL(url)
-                                        : undefined,
-                                    balance: balanceValue,
-                                    name: name,
-                                };
-                            }
-                            // TODO - add back version
-                        )
-                );
-                setIsLoaded(true);
-            });
+                                    const name = extractName(contents);
+                                    const objType = parseObjectType(resp);
+                                    const balanceValue = Coin.getBalance(resp);
+                                    return {
+                                        id: getObjectId(resp),
+                                        Type: objType,
+                                        _isCoin: Coin.isCoin(resp),
+                                        display: url
+                                            ? transformURL(url)
+                                            : undefined,
+                                        balance: balanceValue,
+                                        name: name,
+                                    };
+                                }
+                                // TODO - add back version
+                            )
+                    );
+                    setIsLoaded(true);
+                });
         }).catch(() => setIsFail(true));
     }, [id, byAddress, rpc]);
 

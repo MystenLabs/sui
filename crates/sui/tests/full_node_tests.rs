@@ -116,22 +116,8 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
     assert_eq!(sender, sender_);
     assert_eq!(sponsor, receiver);
     let context: &WalletContext = &test_cluster.wallet;
-    let object_ref: ObjectRef = context
-        .get_object_ref(object_ref.0)
-        .await
-        .unwrap()
-        .into_object()
-        .unwrap()
-        .reference
-        .to_object_ref();
-    let gas_obj: ObjectRef = context
-        .get_object_ref(sent_coin)
-        .await
-        .unwrap()
-        .into_object()
-        .unwrap()
-        .reference
-        .to_object_ref();
+    let object_ref = context.get_object_ref(object_ref.0).await?;
+    let gas_obj = context.get_object_ref(sent_coin).await?;
     info!("updated obj ref: {:?}", object_ref);
     info!("updated gas ref: {:?}", gas_obj);
 
@@ -161,18 +147,7 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
 
     context.execute_transaction(tx).await.unwrap();
 
-    assert_eq!(
-        sponsor,
-        context
-            .get_object_ref(sent_coin)
-            .await
-            .unwrap()
-            .into_object()
-            .unwrap()
-            .owner
-            .get_owner_address()
-            .unwrap(),
-    );
+    assert_eq!(sponsor, context.get_object_owner(&sent_coin).await.unwrap(),);
     Ok(())
 }
 
@@ -532,8 +507,8 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                 let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
 
                 let mut coins = context.gas_objects(sender).await.unwrap();
-                let object_to_split = coins.swap_remove(0).1.reference.to_object_ref();
-                let gas_obj = coins.swap_remove(0).1.reference.to_object_ref();
+                let object_to_split = coins.swap_remove(0).1.object_ref();
+                let gas_obj = coins.swap_remove(0).1.object_ref();
                 (sender, object_to_split, gas_obj)
             };
 

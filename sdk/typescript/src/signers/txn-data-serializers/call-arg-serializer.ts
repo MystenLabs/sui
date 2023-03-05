@@ -151,7 +151,7 @@ export class CallArgSerializer {
   }
 
   async newObjectArg(objectId: string): Promise<ObjectArg> {
-    const object = await this.provider.getObject(objectId);
+    const object = await this.provider.getObject(objectId, { showOwner: true });
     const initialSharedVersion = getSharedObjectInitialVersion(object);
 
     const mutable = true; // Defaulted to True to match current behavior.

@@ -11,7 +11,7 @@ use crate::models::packages::Package;
 use crate::models::transactions::Transaction;
 use async_trait::async_trait;
 use sui_json_rpc_types::{
-    Checkpoint as RpcCheckpoint, CheckpointId, SuiParsedObject, SuiTransactionResponse,
+    Checkpoint as RpcCheckpoint, CheckpointId, SuiObjectData, SuiTransactionResponse,
 };
 
 #[async_trait]
@@ -80,7 +80,7 @@ pub trait IndexerStore {
 pub struct CheckpointData {
     pub checkpoint: RpcCheckpoint,
     pub transactions: Vec<SuiTransactionResponse>,
-    pub objects: Vec<SuiParsedObject>,
+    pub objects: Vec<SuiObjectData>,
 }
 
 // Per checkpoint indexing

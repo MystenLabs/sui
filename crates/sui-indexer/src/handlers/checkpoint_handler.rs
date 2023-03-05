@@ -6,7 +6,7 @@ use futures::future::join_all;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use std::collections::BTreeMap;
-use sui_json_rpc_types::{SuiParsedData, SuiParsedObject, SuiTransactionResponse};
+use sui_json_rpc_types::{SuiObjectData, SuiParsedData, SuiTransactionResponse};
 use sui_sdk::SuiClient;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
@@ -254,13 +254,17 @@ where
 
     fn index_packages(
         transactions: &[SuiTransactionResponse],
-        objects: &[SuiParsedObject],
+        objects: &[SuiObjectData],
     ) -> Result<Vec<Package>, IndexerError> {
         let object_map = objects
             .iter()
             .filter_map(|o| {
-                if let SuiParsedData::Package(p) = &o.data {
-                    Some((o.reference.object_id, p))
+                if let SuiParsedData::Package(p) = &o
+                    .content
+                    .as_ref()
+                    .expect("Expect the content field to be non-empty from data fetching")
+                {
+                    Some((o.object_id, p))
                 } else {
                     None
                 }

@@ -8,7 +8,7 @@ import {
   GetTxnDigestsResponse,
   GatewayTxSeqNumber,
   SuiObjectInfo,
-  GetObjectDataResponse,
+  SuiObjectResponse,
   SuiObjectRef,
   SuiMoveFunctionArgTypes,
   SuiMoveNormalizedFunction,
@@ -19,7 +19,6 @@ import {
   SuiEventEnvelope,
   SubscriptionId,
   ExecuteTransactionRequestType,
-  SuiTransactionResponse,
   SuiAddress,
   ObjectId,
   TransactionQuery,
@@ -45,6 +44,7 @@ import {
   CommitteeInfo,
   Checkpoint,
   DryRunTransactionResponse,
+  SuiTransactionResponse,
 } from '../types';
 import { Provider } from './provider';
 
@@ -138,22 +138,12 @@ export class VoidProvider extends Provider {
     throw this.newError('getGasObjectsOwnedByAddress');
   }
 
-  /**
-   * @deprecated The method should not be used
-   */
-  async getCoinBalancesOwnedByAddress(
-    _address: string,
-    _typeArg?: string,
-  ): Promise<GetObjectDataResponse[]> {
-    throw this.newError('getCoinBalancesOwnedByAddress');
-  }
-
   async selectCoinsWithBalanceGreaterThanOrEqual(
     _address: string,
     _amount: bigint,
     _typeArg: string,
     _exclude: ObjectId[] = [],
-  ): Promise<GetObjectDataResponse[]> {
+  ): Promise<SuiObjectResponse[]> {
     throw this.newError('selectCoinsWithBalanceGreaterThanOrEqual');
   }
 
@@ -162,11 +152,11 @@ export class VoidProvider extends Provider {
     _amount: bigint,
     _typeArg: string,
     _exclude: ObjectId[],
-  ): Promise<GetObjectDataResponse[]> {
+  ): Promise<SuiObjectResponse[]> {
     throw this.newError('selectCoinSetWithCombinedBalanceGreaterThanOrEqual');
   }
 
-  async getObject(_objectId: string): Promise<GetObjectDataResponse> {
+  async getObject(_objectId: string): Promise<SuiObjectResponse> {
     throw this.newError('getObject');
   }
 
@@ -213,7 +203,7 @@ export class VoidProvider extends Provider {
   getDynamicFieldObject(
     _parent_object_id: ObjectId,
     _name: string | DynamicFieldName,
-  ): Promise<GetObjectDataResponse> {
+  ): Promise<SuiObjectResponse> {
     throw this.newError('getDynamicFieldObject');
   }
 

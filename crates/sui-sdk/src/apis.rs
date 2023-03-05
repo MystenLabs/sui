@@ -14,8 +14,8 @@ use std::time::{Duration, Instant};
 use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DryRunTransactionResponse, DynamicFieldPage,
-    EventPage, GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
-    SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter, SuiMoveNormalizedModule, SuiObjectInfo,
+    EventPage, SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter, SuiMoveNormalizedModule,
+    SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
     SuiSystemStateRpc, SuiTransactionResponse, TransactionsPage,
 };
 use sui_types::balance::Supply;
@@ -66,18 +66,11 @@ impl ReadApi {
             .await?)
     }
 
-    pub async fn get_parsed_object(
-        &self,
-        object_id: ObjectID,
-    ) -> SuiRpcResult<GetObjectDataResponse> {
-        Ok(self.api.http.get_object(object_id).await?)
-    }
-
     pub async fn try_get_parsed_past_object(
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
-    ) -> SuiRpcResult<GetPastObjectDataResponse> {
+    ) -> SuiRpcResult<SuiPastObjectResponse> {
         Ok(self
             .api
             .http
@@ -85,8 +78,16 @@ impl ReadApi {
             .await?)
     }
 
-    pub async fn get_object(&self, object_id: ObjectID) -> SuiRpcResult<GetRawObjectDataResponse> {
-        Ok(self.api.http.get_raw_object(object_id).await?)
+    pub async fn get_object_with_options(
+        &self,
+        object_id: ObjectID,
+        options: Option<SuiObjectDataOptions>,
+    ) -> SuiRpcResult<SuiObjectResponse> {
+        Ok(self
+            .api
+            .http
+            .get_object_with_options(object_id, options)
+            .await?)
     }
 
     pub async fn get_total_transaction_number(&self) -> SuiRpcResult<u64> {

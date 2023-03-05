@@ -274,12 +274,6 @@ export const TransactionBytes = object({
   inputObjects: unknown(),
 });
 
-export const SuiPackage = object({
-  digest: string(),
-  objectId: string(),
-  version: number(),
-});
-
 export const SuiTransaction = object({
   data: SuiTransactionData,
   txSignatures: array(string()),
@@ -290,8 +284,8 @@ export const SuiTransactionResponse = object({
   transaction: SuiTransaction,
   effects: TransactionEffects,
   events: TransactionEvents,
-  timestampMs: optional(union([number(), literal(null)])),
-  checkpoint: union([number(), literal(null)]),
+  timestampMs: optional(number()),
+  checkpoint: optional(number()),
   confirmedLocalExecution: optional(boolean()),
 });
 export type SuiTransactionResponse = Infer<typeof SuiTransactionResponse>;
@@ -299,6 +293,10 @@ export type SuiTransactionResponse = Infer<typeof SuiTransactionResponse>;
 /* -------------------------------------------------------------------------- */
 /*                              Helper functions                              */
 /* -------------------------------------------------------------------------- */
+
+export function getTransaction(tx: SuiTransactionResponse): SuiTransaction {
+  return tx.transaction;
+}
 
 export function getTransactionDigest(
   tx: SuiTransactionResponse,
@@ -467,10 +465,7 @@ export function getTransactionEffects(
 export function getEvents(
   data: SuiTransactionResponse,
 ): SuiEvent[] | undefined {
-  if ('events' in data) {
-    return data.events;
-  }
-  return undefined;
+  return data.events;
 }
 
 export function getCreatedObjects(
@@ -493,5 +488,5 @@ export function getTimestampFromTransactionResponse(
 export function getNewlyCreatedCoinRefsAfterSplit(
   data: SuiTransactionResponse,
 ): SuiObjectRef[] | undefined {
-  return data.effects.created?.map((c) => c.reference);
+  return getTransactionEffects(data)?.created?.map((c) => c.reference);
 }

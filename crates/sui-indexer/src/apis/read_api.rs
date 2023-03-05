@@ -11,10 +11,10 @@ use std::collections::BTreeMap;
 use sui_json_rpc::api::{cap_page_limit, ReadApiClient, ReadApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
-    GetRawObjectDataResponse, MoveFunctionArgType, Page, SuiMoveNormalizedFunction,
-    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionResponse,
-    TransactionsPage,
+    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, Page,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
+    SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
+    SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TxSequenceNumber};
@@ -169,15 +169,21 @@ where
             .await
     }
 
-    async fn get_object(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
-        self.fullnode.get_object(object_id).await
+    async fn get_object_with_options(
+        &self,
+        object_id: ObjectID,
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<SuiObjectResponse> {
+        self.fullnode
+            .get_object_with_options(object_id, options)
+            .await
     }
 
     async fn get_dynamic_field_object(
         &self,
         parent_object_id: ObjectID,
         name: DynamicFieldName,
-    ) -> RpcResult<GetObjectDataResponse> {
+    ) -> RpcResult<SuiObjectResponse> {
         self.fullnode
             .get_dynamic_field_object(parent_object_id, name)
             .await
@@ -303,7 +309,7 @@ where
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
-    ) -> RpcResult<GetPastObjectDataResponse> {
+    ) -> RpcResult<SuiPastObjectResponse> {
         self.fullnode.try_get_past_object(object_id, version).await
     }
 
@@ -357,10 +363,6 @@ where
         sequence_number: CheckpointSequenceNumber,
     ) -> RpcResult<CheckpointContents> {
         self.fullnode.get_checkpoint_contents(sequence_number).await
-    }
-
-    async fn get_raw_object(&self, object_id: ObjectID) -> RpcResult<GetRawObjectDataResponse> {
-        self.fullnode.get_raw_object(object_id).await
     }
 
     async fn get_display_deprecated(
