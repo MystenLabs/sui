@@ -179,6 +179,7 @@ impl SuiNode {
                 None,
                 genesis,
                 &committee_store,
+                config.indirect_objects_threshold,
             )
             .await?,
         );

@@ -2765,7 +2765,7 @@ async fn test_authority_persist() {
 
     // Create an authority
     let store = Arc::new(
-        AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis)
+        AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis, 0)
             .await
             .unwrap(),
     );
@@ -2791,7 +2791,7 @@ async fn test_authority_persist() {
     let (genesis, authority_key) = init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
     let committee = genesis.committee().unwrap();
     let store = Arc::new(
-        AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis)
+        AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis, 0)
             .await
             .unwrap(),
     );
@@ -4769,7 +4769,7 @@ async fn test_tallying_rule_score_updates() {
         .build();
     let genesis = network_config.genesis;
     let store = Arc::new(
-        AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis)
+        AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis, 0)
             .await
             .unwrap(),
     );

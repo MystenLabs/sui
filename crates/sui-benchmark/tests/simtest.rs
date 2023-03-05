@@ -17,7 +17,8 @@ mod test {
         LocalValidatorAggregatorProxy, ValidatorProxy,
     };
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
-    use sui_core::checkpoints::{CheckpointStore, CheckpointWatermark};
+    use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
+    use sui_core::checkpoints::CheckpointStore;
     use sui_macros::{register_fail_points, sim_test};
     use sui_simulator::{configs::*, SimConfig};
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
@@ -172,24 +173,21 @@ mod test {
         test_simulated_load(test_cluster.clone(), 30).await;
 
         let swarm_dir = test_cluster.swarm.dir().join(AUTHORITIES_DB_NAME);
-        let validator_path = std::fs::read_dir(swarm_dir).unwrap().next().unwrap();
+        let random_validator_path = std::fs::read_dir(swarm_dir).unwrap().next().unwrap();
+        let validator_path = random_validator_path.unwrap().path();
+        let store = AuthorityPerpetualTables::open_readonly(&validator_path.join("store"));
+        let checkpoint_store = CheckpointStore::open_readonly(&validator_path.join("checkpoints"));
 
-        let db_path = validator_path.unwrap().path().join("checkpoints");
-        let store = CheckpointStore::open_readonly(&db_path);
-        let (pruned, digest) = store
-            .watermarks
-            .get(&CheckpointWatermark::HighestPruned)
-            .unwrap()
-            .unwrap();
+        let pruned = store.pruned_checkpoint.get(&()).unwrap().unwrap();
         assert!(pruned > 0);
-        let pruned_checkpoint: VerifiedCheckpoint = store
-            .checkpoint_by_digest
-            .get(&digest)
+        let pruned_checkpoint: VerifiedCheckpoint = checkpoint_store
+            .certified_checkpoints
+            .get(&pruned)
             .unwrap()
             .unwrap()
             .into();
         let pruned_epoch = pruned_checkpoint.epoch();
-        let expected_checkpoint = store
+        let expected_checkpoint = checkpoint_store
             .epoch_last_checkpoint_map
             .get(&pruned_epoch)
             .unwrap()
