@@ -73,7 +73,7 @@ jobs:
 
     - name: Get link to logs
       run: |
-        gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ inputs.run_id }}/jobs' --jq '.jobs.[0].html_url')
+        gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
         echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV        
 
     - name: Post to slack
