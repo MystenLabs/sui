@@ -15,12 +15,11 @@ use sui_json::SuiJsonValue;
 
 use sui_json_rpc_types::SuiObjectInfo;
 use sui_json_rpc_types::{
-    Balance, CoinPage, DelegatedStake, DelegationStatus, SuiCoinMetadata, SuiEvent,
-    SuiExecutionStatus, SuiObjectDataOptions, SuiObjectResponse, SuiTBlsSignObjectCommitmentType,
-    SuiTransactionResponse, TransactionBytes,
-    Balance, CoinPage, SuiCoinMetadata, SuiEvent, SuiExecutionStatus, SuiObjectResponse,
+    Balance, Balance, CoinPage, CoinPage, DelegatedStake, StakeStatus, SuiCoinMetadata,
+    SuiCoinMetadata, SuiEvent, SuiEvent, SuiExecutionStatus, SuiExecutionStatus,
+    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponse, SuiTBlsSignObjectCommitmentType,
     SuiTBlsSignObjectCommitmentType, SuiTransactionEffectsAPI, SuiTransactionResponse,
-    SuiTransactionResponseOptions, TransactionBytes,
+    SuiTransactionResponse, TransactionBytes, TransactionBytes,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::balance::Supply;
@@ -1038,11 +1037,11 @@ async fn test_delegation() -> Result<(), anyhow::Error> {
     // Check DelegatedStake object
     let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
     assert_eq!(1, staked_sui.len());
-    assert_eq!(1000000, staked_sui[0].delegations[0].principal);
-    assert!(staked_sui[0].delegations[0].token_lock.is_none());
+    assert_eq!(1000000, staked_sui[0].stakes[0].principal);
+    assert!(staked_sui[0].stakes[0].token_lock.is_none());
     assert!(matches!(
-        staked_sui[0].delegations[0].status,
-        DelegationStatus::Pending
+        staked_sui[0].stakes[0].status,
+        StakeStatus::Pending
     ));
     Ok(())
 }
@@ -1100,11 +1099,11 @@ async fn test_delegation_multiple_coins() -> Result<(), anyhow::Error> {
     // Check DelegatedStake object
     let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
     assert_eq!(1, staked_sui.len());
-    assert_eq!(1000000, staked_sui[0].delegations[0].principal);
-    assert!(staked_sui[0].delegations[0].token_lock.is_none());
+    assert_eq!(1000000, staked_sui[0].stakes[0].principal);
+    assert!(staked_sui[0].stakes[0].token_lock.is_none());
     assert!(matches!(
-        staked_sui[0].delegations[0].status,
-        DelegationStatus::Pending
+        staked_sui[0].stakes[0].status,
+        StakeStatus::Pending
     ));
 
     // Coins should be merged into one and returned to the sender.
@@ -1201,12 +1200,12 @@ async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
     // Check StakedSui object
     let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
     assert_eq!(1, staked_sui.len());
-    assert_eq!(1000000, staked_sui[0].delegations[0].principal);
-    assert_eq!(Some(20), staked_sui[0].delegations[0].token_lock);
+    assert_eq!(1000000, staked_sui[0].stakes[0].principal);
+    assert_eq!(Some(20), staked_sui[0].stakes[0].token_lock);
 
     assert!(matches!(
-        staked_sui[0].delegations[0].status,
-        DelegationStatus::Pending
+        staked_sui[0].stakes[0].status,
+        StakeStatus::Pending
     ));
 
     Ok(())

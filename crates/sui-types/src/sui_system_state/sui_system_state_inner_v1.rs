@@ -8,22 +8,13 @@ use crate::committee::{
     Committee, CommitteeWithNetworkMetadata, NetworkMetadata, ProtocolVersion, StakeUnit,
 };
 use crate::crypto::AuthorityPublicKeyBytes;
-use crate::dynamic_field::{derive_dynamic_field_id, Field};
-use crate::error::SuiError;
-use crate::storage::ObjectStore;
-use crate::sui_serde::AsMultiaddr;
-use crate::sui_serde::Readable;
 use crate::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartValidatorInfo,
 };
-use crate::{balance::Balance, id::UID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
 use anyhow::Result;
-use enum_dispatch::enum_dispatch;
-use fastcrypto::encoding::Base58;
 use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use std::collections::BTreeMap;
 
 use super::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary};
@@ -39,71 +30,34 @@ const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 
 /// Rust version of the Move sui::sui_system::SystemParameters type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename_all = "camelCase", rename = "SystemParameters")]
 pub struct SystemParametersV1 {
     pub min_validator_stake: u64,
     pub max_validator_count: u64,
     pub governance_start_epoch: u64,
 }
 
-#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename_all = "camelCase", rename = "ValidatorMetadata")]
 pub struct ValidatorMetadataV1 {
     pub sui_address: SuiAddress,
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Readable<Base58, _>")]
     pub protocol_pubkey_bytes: Vec<u8>,
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Readable<Base58, _>")]
     pub network_pubkey_bytes: Vec<u8>,
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Readable<Base58, _>")]
     pub worker_pubkey_bytes: Vec<u8>,
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Readable<Base58, _>")]
     pub proof_of_possession_bytes: Vec<u8>,
     pub name: String,
     pub description: String,
     pub image_url: String,
     pub project_url: String,
-    #[schemars(with = "String")]
-    #[serde_as(as = "Readable<AsMultiaddr, _>")]
     pub net_address: Vec<u8>,
-    #[schemars(with = "String")]
-    #[serde_as(as = "Readable<AsMultiaddr, _>")]
     pub p2p_address: Vec<u8>,
-    #[schemars(with = "String")]
-    #[serde_as(as = "Readable<AsMultiaddr, _>")]
     pub primary_address: Vec<u8>,
-    #[schemars(with = "String")]
-    #[serde_as(as = "Readable<AsMultiaddr, _>")]
     pub worker_address: Vec<u8>,
-    #[schemars(with = "Option<Base58>")]
-    #[serde_as(as = "Readable<Option<Base58>, _>")]
     pub next_epoch_protocol_pubkey_bytes: Option<Vec<u8>>,
-    #[schemars(with = "Option<Base58>")]
-    #[serde_as(as = "Readable<Option<Base58>, _>")]
     pub next_epoch_proof_of_possession: Option<Vec<u8>>,
-    #[schemars(with = "Option<Base58>")]
-    #[serde_as(as = "Readable<Option<Base58>, _>")]
     pub next_epoch_network_pubkey_bytes: Option<Vec<u8>>,
-    #[schemars(with = "Option<Base58>")]
-    #[serde_as(as = "Readable<Option<Base58>, _>")]
     pub next_epoch_worker_pubkey_bytes: Option<Vec<u8>>,
-    #[schemars(with = "Option<String>")]
-    #[serde_as(as = "Readable<Option<AsMultiaddr>, _>")]
     pub next_epoch_net_address: Option<Vec<u8>>,
-    #[schemars(with = "Option<String>")]
-    #[serde_as(as = "Readable<Option<AsMultiaddr>, _>")]
     pub next_epoch_p2p_address: Option<Vec<u8>>,
-    #[schemars(with = "Option<String>")]
-    #[serde_as(as = "Readable<Option<AsMultiaddr>, _>")]
     pub next_epoch_primary_address: Option<Vec<u8>>,
-    #[schemars(with = "Option<String>")]
-    #[serde_as(as = "Readable<Option<AsMultiaddr>, _>")]
     pub next_epoch_worker_address: Option<Vec<u8>>,
 }
 
@@ -250,8 +204,6 @@ impl ValidatorMetadataV1 {
 
 /// Rust version of the Move sui::validator::Validator type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename_all = "camelCase", rename = "Validator")]
 pub struct ValidatorV1 {
     pub metadata: ValidatorMetadataV1,
     pub voting_power: u64,
@@ -379,8 +331,6 @@ impl ValidatorV1 {
 
 /// Rust version of the Move sui::staking_pool::StakingPool type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename_all = "camelCase", rename = "StakingPool")]
 pub struct StakingPoolV1 {
     pub id: ObjectID,
     pub activation_epoch: Option<u64>,
@@ -408,22 +358,19 @@ impl PoolTokenExchangeRate {
 
 /// Rust version of the Move sui::validator_set::ValidatorSet type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename_all = "camelCase", rename = "ValidatorSet")]
 pub struct ValidatorSetV1 {
     pub total_stake: u64,
     pub active_validators: Vec<ValidatorV1>,
     pub pending_active_validators: TableVec,
     pub pending_removals: Vec<u64>,
     pub staking_pool_mappings: Table,
-    pub inactive_pools: Table,
+    pub inactive_validators: Table,
     pub validator_candidates: Table,
 }
 
 /// Rust version of the Move sui::sui_system::SuiSystemStateInner type
 /// We want to keep it named as SuiSystemState in Rust since this is the primary interface type.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
 pub struct SuiSystemStateInnerV1 {
     pub epoch: u64,
     pub protocol_version: u64,
@@ -439,8 +386,6 @@ pub struct SuiSystemStateInnerV1 {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename_all = "camelCase", rename = "StakeSubsidy")]
 pub struct StakeSubsidyV1 {
     pub epoch_counter: u64,
     pub balance: Balance,
@@ -550,7 +495,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                             id: staking_pool_mappings_id,
                             size: staking_pool_mappings_size,
                         },
-                    inactive_pools:
+                    inactive_validators:
                         Table {
                             id: inactive_pools_id,
                             size: inactive_pools_size,
@@ -615,21 +560,6 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                 .collect(),
         }
     }
-
-    fn staking_pool_mappings(&self) -> &Table {
-        &self.validators.staking_pool_mappings
-    }
-
-    fn get_staking_pool(&self, pool_id: &ObjectID) -> Option<&StakingPool> {
-        // TODO: search deleted pool when it's available
-        self.validators.active_validators.iter().find_map(|v| {
-            if &v.staking_pool.id == pool_id {
-                Some(&v.staking_pool)
-            } else {
-                None
-            }
-        })
-    }
 }
 
 // The default implementation for tests
@@ -641,7 +571,7 @@ impl Default for SuiSystemStateInnerV1 {
             pending_active_validators: TableVec::default(),
             pending_removals: vec![],
             staking_pool_mappings: Table::default(),
-            inactive_pools: Table::default(),
+            inactive_validators: Table::default(),
             validator_candidates: Table::default(),
         };
         Self {

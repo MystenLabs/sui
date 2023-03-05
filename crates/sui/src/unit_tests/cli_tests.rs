@@ -1270,13 +1270,7 @@ async fn test_delegation_with_none_amount() -> Result<(), anyhow::Error> {
     assert_eq!(1, stake.len());
     assert_eq!(
         coins.first().unwrap().balance,
-        stake
-            .first()
-            .unwrap()
-            .delegations
-            .first()
-            .unwrap()
-            .principal
+        stake.first().unwrap().stakes.first().unwrap().principal
     );
     Ok(())
 }
@@ -1331,13 +1325,7 @@ async fn test_delegation_with_u64_amount() -> Result<(), anyhow::Error> {
     assert_eq!(1, stake.len());
     assert_eq!(
         10000,
-        stake
-            .first()
-            .unwrap()
-            .delegations
-            .first()
-            .unwrap()
-            .principal
+        stake.first().unwrap().stakes.first().unwrap().principal
     );
     Ok(())
 }

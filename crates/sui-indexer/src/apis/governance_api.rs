@@ -11,8 +11,6 @@ use sui_json_rpc_types::DelegatedStake;
 use sui_json_rpc_types::SuiCommittee;
 use sui_open_rpc::Module;
 use sui_types::base_types::{EpochId, SuiAddress};
-use sui_types::governance::DelegatedStake;
-use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadataV1;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
 pub(crate) struct GovernanceReadApi {

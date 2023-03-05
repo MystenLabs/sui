@@ -63,6 +63,10 @@ impl StakedSui {
         self.principal.value()
     }
 
+    pub fn validator_address(&self) -> SuiAddress {
+        self.validator_address
+    }
+
     pub fn sui_token_lock(&self) -> Option<EpochId> {
         self.sui_token_lock
     }

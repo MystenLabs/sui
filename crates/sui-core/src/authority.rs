@@ -78,7 +78,7 @@ use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::{MoveObject, Owner, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::storage::{ObjectKey, WriteKind};
-use sui_types::sui_system_state::{SuiSystemState, Table};
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::temporary_store::InnerTemporaryStore;
 pub use sui_types::temporary_store::TemporaryStore;
 use sui_types::{
@@ -2001,14 +2001,15 @@ impl AuthorityState {
         }
     }
 
-    pub async fn read_table_value<K, V>(&self, table: &Table, key: &K) -> Option<V>
+    /// This function read the dynamic fields of a Table and return the deserialized value for the key.
+    pub async fn read_table_value<K, V>(&self, table: ObjectID, key: &K) -> Option<V>
     where
         K: DeserializeOwned + Serialize,
         V: DeserializeOwned,
     {
         let key_bcs = bcs::to_bytes(key).ok()?;
         let df = self
-            .get_dynamic_fields_iterator(table.id, None)
+            .get_dynamic_fields_iterator(table, None)
             .ok()?
             .find(|df| key_bcs == df.bcs_name)?;
         let field: Field<K, V> = self.get_move_object(&df.object_id).await.ok()?;

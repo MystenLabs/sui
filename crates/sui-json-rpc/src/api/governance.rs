@@ -3,15 +3,12 @@
 
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
-use sui_json_rpc_types::DelegatedStake;
 
-use sui_json_rpc_types::SuiCommittee;
+use sui_json_rpc_types::{DelegatedStake, SuiCommittee};
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::SuiAddress;
 
 use sui_types::committee::EpochId;
-use sui_types::messages::CommitteeInfoResponse;
-use sui_types::governance::DelegatedStake;
 
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
