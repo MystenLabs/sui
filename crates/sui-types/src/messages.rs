@@ -3018,7 +3018,7 @@ impl TransactionEffects {
 
     pub fn summary_for_debug(&self) -> TransactionEffectsDebugSummary {
         TransactionEffectsDebugSummary {
-            bcs_size: bcs::to_bytes(self).unwrap().len(),
+            bcs_size: bcs::serialized_size(self).unwrap(),
             status: self.status.clone(),
             gas_used: self.gas_used.clone(),
             transaction_digest: self.transaction_digest,
