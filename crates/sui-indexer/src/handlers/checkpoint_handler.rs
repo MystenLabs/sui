@@ -125,15 +125,11 @@ where
             .get_checkpoint(seq.into())
             .await?;
 
-        let transactions = join_all(
-            checkpoint
-                .transactions
-                .iter()
-                .map(|tx_digest| self.rpc_client.read_api().get_transaction(*tx_digest)),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()?;
+        let transactions = self
+            .rpc_client
+            .read_api()
+            .multi_get_transactions(checkpoint.transactions.to_vec())
+            .await?;
 
         let all_mutated = transactions
             .iter()
