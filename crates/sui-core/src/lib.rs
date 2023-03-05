@@ -30,7 +30,6 @@ pub mod test_utils;
 pub mod transaction_input_checker;
 mod transaction_manager;
 pub mod transaction_orchestrator;
-pub mod validator_info;
 
 #[cfg(test)]
 #[path = "unit_tests/pay_sui_tests.rs"]
