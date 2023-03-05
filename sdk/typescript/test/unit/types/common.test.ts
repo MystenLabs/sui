@@ -37,7 +37,7 @@ describe('Test common functions', () => {
 
       const transactionDigest = generateTransactionDigest(transactionData, bcs);
       expect(transactionDigest).toEqual(
-        'HFQ3HBaF3k6ZvWEfeVi3vLhmX3oKyvKg1nxiTpUKdMyZ',
+        'EgZ8XyQ1BKgWsa7r8baN5HPRoKcvm5ZskJUPxdqBjCeN',
       );
     });
   });
