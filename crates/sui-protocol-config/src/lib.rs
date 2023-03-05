@@ -741,7 +741,7 @@ impl Drop for OverrideGuard {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(msim)))]
 mod test {
     use super::*;
     use insta::assert_yaml_snapshot;
