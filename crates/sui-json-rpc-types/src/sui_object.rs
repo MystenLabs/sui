@@ -20,7 +20,7 @@ use serde_with::serde_as;
 
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{
-    ObjectDigest, ObjectID, ObjectRef, ObjectType, SequenceNumber, TransactionDigest,
+    ObjectDigest, ObjectID, ObjectInfo, ObjectRef, ObjectType, SequenceNumber, TransactionDigest,
 };
 use sui_types::error::{UserInputError, UserInputResult};
 use sui_types::gas_coin::GasCoin;
@@ -834,6 +834,37 @@ impl From<MoveModulePublish> for SuiMovePackage {
         Self {
             // In case of failed publish transaction, disassemble can fail, we can only return empty module map in that case.
             disassembled: disassemble_modules(m.modules.iter()).unwrap_or_default(),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, JsonSchema, Ord, PartialOrd, Eq, PartialEq, Debug)]
+#[serde(rename = "ObjectInfo", rename_all = "camelCase")]
+pub struct SuiObjectInfo {
+    pub object_id: ObjectID,
+    pub version: SequenceNumber,
+    pub digest: ObjectDigest,
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub owner: Owner,
+    pub previous_transaction: TransactionDigest,
+}
+
+impl SuiObjectInfo {
+    pub fn to_object_ref(&self) -> ObjectRef {
+        (self.object_id, self.version, self.digest)
+    }
+}
+
+impl From<ObjectInfo> for SuiObjectInfo {
+    fn from(info: ObjectInfo) -> Self {
+        Self {
+            object_id: info.object_id,
+            version: info.version,
+            digest: info.digest,
+            type_: format!("{}", info.type_),
+            owner: info.owner,
+            previous_transaction: info.previous_transaction,
         }
     }
 }
