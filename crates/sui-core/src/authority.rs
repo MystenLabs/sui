@@ -1489,28 +1489,6 @@ impl AuthorityState {
         })
     }
 
-    pub fn handle_committee_info_request(
-        &self,
-        request: &CommitteeInfoRequest,
-    ) -> SuiResult<CommitteeInfoResponse> {
-        let (epoch, committee) = match request.epoch {
-            Some(epoch) => (
-                epoch,
-                self.committee_store
-                    .get_committee(&epoch)?
-                    .ok_or(SuiError::MissingCommitteeAtEpoch(epoch))?,
-            ),
-            None => {
-                let committee = self.committee_store.get_latest_committee();
-                (committee.epoch, committee)
-            }
-        };
-        Ok(CommitteeInfoResponse {
-            epoch,
-            committee_info: committee.voting_rights,
-        })
-    }
-
     fn check_protocol_version(
         supported_protocol_versions: SupportedProtocolVersions,
         current_version: ProtocolVersion,

@@ -491,17 +491,6 @@ impl Validator for ValidatorService {
         return Ok(tonic::Response::new(response));
     }
 
-    async fn committee_info(
-        &self,
-        request: tonic::Request<CommitteeInfoRequest>,
-    ) -> Result<tonic::Response<CommitteeInfoResponse>, tonic::Status> {
-        let request = request.into_inner();
-
-        let response = self.state.handle_committee_info_request(&request)?;
-
-        return Ok(tonic::Response::new(response));
-    }
-
     async fn get_system_state_object(
         &self,
         _request: tonic::Request<SystemStateRequest>,

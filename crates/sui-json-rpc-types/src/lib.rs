@@ -27,11 +27,11 @@ use serde_json::{json, Value};
 use serde_with::serde_as;
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
-    ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
-    TransactionEffectsDigest,
+    AuthorityName, ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
+    TransactionDigest, TransactionEffectsDigest,
 };
 use sui_types::coin::CoinMetadata;
-use sui_types::committee::EpochId;
+use sui_types::committee::{Committee, EpochId, StakeUnit};
 use sui_types::crypto::SuiAuthorityStrongQuorumSignInfo;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::DynamicFieldInfo;
@@ -2518,6 +2518,23 @@ impl From<SuiSystemStateRpc> for SuiSystemState {
     fn from(state: SuiSystemStateRpc) -> Self {
         match state {
             SuiSystemStateRpc::V1(state) => Self::V1(state),
+        }
+    }
+}
+
+/// RPC representation of the [Committee] type.
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename = "CommitteeInfo")]
+pub struct SuiCommittee {
+    pub epoch: EpochId,
+    pub validators: Vec<(AuthorityName, StakeUnit)>,
+}
+
+impl From<Committee> for SuiCommittee {
+    fn from(committee: Committee) -> Self {
+        Self {
+            epoch: committee.epoch,
+            validators: committee.voting_rights,
         }
     }
 }

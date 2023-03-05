@@ -14,9 +14,10 @@ use std::time::{Duration, Instant};
 use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DryRunTransactionResponse, DynamicFieldPage,
-    EventPage, SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter, SuiMoveNormalizedModule,
-    SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
-    SuiSystemStateRpc, SuiTransactionEffectsAPI, SuiTransactionResponse, TransactionsPage,
+    EventPage, SuiCoinMetadata, SuiCommittee, SuiEventEnvelope, SuiEventFilter,
+    SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
+    SuiPastObjectResponse, SuiSystemStateRpc, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    TransactionsPage,
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{
@@ -25,9 +26,7 @@ use sui_types::base_types::{
 use sui_types::committee::EpochId;
 use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use sui_types::event::EventID;
-use sui_types::messages::{
-    CommitteeInfoResponse, ExecuteTransactionRequestType, TransactionData, VerifiedTransaction,
-};
+use sui_types::messages::{ExecuteTransactionRequestType, TransactionData, VerifiedTransaction};
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary};
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::sui_system_state::ValidatorMetadata;
@@ -109,10 +108,7 @@ impl ReadApi {
         Ok(self.api.http.get_transaction(digest).await?)
     }
 
-    pub async fn get_committee_info(
-        &self,
-        epoch: Option<EpochId>,
-    ) -> SuiRpcResult<CommitteeInfoResponse> {
+    pub async fn get_committee_info(&self, epoch: Option<EpochId>) -> SuiRpcResult<SuiCommittee> {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }
 
@@ -492,10 +488,7 @@ impl GovernanceApi {
 
     /// Return the committee information for the asked `epoch`.
     /// `epoch`: The epoch of interest. If None, default to the latest epoch
-    pub async fn get_committee_info(
-        &self,
-        epoch: Option<EpochId>,
-    ) -> SuiRpcResult<CommitteeInfoResponse> {
+    pub async fn get_committee_info(&self, epoch: Option<EpochId>) -> SuiRpcResult<SuiCommittee> {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }
 

@@ -149,7 +149,7 @@ export const DelegationStakingPool = object({
 export const CommitteeInfo = object({
   epoch: number(),
   /** Array of (validator public key, stake unit) tuple */
-  committee_info: optional(array(tuple([AuthorityName, number()]))),
+  validators: optional(array(tuple([AuthorityName, number()]))),
 });
 
 export const SystemParameters = object({
