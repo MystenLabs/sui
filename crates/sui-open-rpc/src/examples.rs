@@ -230,6 +230,7 @@ impl RpcExampleProvider {
             digest: ObjectDigest::new(self.rng.gen()),
             type_: Some(GasCoin::type_().to_string()),
             bcs: None,
+            display: None,
         });
 
         Examples::new(
@@ -268,6 +269,7 @@ impl RpcExampleProvider {
             digest: ObjectDigest::new(self.rng.gen()),
             type_: Some(GasCoin::type_().to_string()),
             bcs: None,
+            display: None,
         });
 
         Examples::new(

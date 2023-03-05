@@ -364,13 +364,6 @@ where
     ) -> RpcResult<CheckpointContents> {
         self.fullnode.get_checkpoint_contents(sequence_number).await
     }
-
-    async fn get_display_deprecated(
-        &self,
-        object_id: ObjectID,
-    ) -> RpcResult<BTreeMap<String, String>> {
-        self.fullnode.get_display_deprecated(object_id).await
-    }
 }
 
 impl<S> SuiRpcModule for ReadApi<S>

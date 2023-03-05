@@ -80,12 +80,12 @@ impl ReadApi {
     pub async fn get_object_with_options(
         &self,
         object_id: ObjectID,
-        options: Option<SuiObjectDataOptions>,
+        options: SuiObjectDataOptions,
     ) -> SuiRpcResult<SuiObjectResponse> {
         Ok(self
             .api
             .http
-            .get_object_with_options(object_id, options)
+            .get_object_with_options(object_id, Some(options))
             .await?)
     }
 

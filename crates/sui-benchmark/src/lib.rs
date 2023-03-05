@@ -522,7 +522,7 @@ impl ValidatorProxy for FullNodeProxy {
         match self
             .sui_client
             .read_api()
-            .get_object_with_options(object_id, Some(SuiObjectDataOptions::bcs_lossless()))
+            .get_object_with_options(object_id, SuiObjectDataOptions::bcs_lossless())
             .await?
         {
             SuiObjectResponse::Exists(sui_object) => sui_object.try_into(),

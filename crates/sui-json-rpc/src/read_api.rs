@@ -7,7 +7,7 @@ use jsonrpsee::core::RpcResult;
 use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
-use move_core_types::value::{MoveStruct, MoveValue};
+use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_types::collection_types::VecMap;
@@ -37,7 +37,7 @@ use sui_types::messages_checkpoint::{
     CheckpointSummary,
 };
 use sui_types::move_package::normalize_modules;
-use sui_types::object::{Data, ObjectRead};
+use sui_types::object::{Data, Object, ObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
 
 use sui_types::dynamic_field::DynamicFieldName;
@@ -118,8 +118,22 @@ impl ReadApiServer for ReadApi {
             debug!(?object_id, "Failed to get object: {:?}", e);
             anyhow!("{e}")
         })?;
+        let options = options.unwrap_or_default();
 
-        Ok((object_read, options).try_into()?)
+        match object_read {
+            ObjectRead::NotExists(id) => Ok(SuiObjectResponse::NotExists(id)),
+            ObjectRead::Exists(object_ref, o, layout) => {
+                let display_fields = if options.show_display {
+                    get_display_fields(self, &o, &layout).await?
+                } else {
+                    None
+                };
+                Ok(SuiObjectResponse::Exists(
+                    (object_ref, o, layout, options, display_fields).try_into()?,
+                ))
+            }
+            ObjectRead::Deleted(oref) => Ok(SuiObjectResponse::Deleted(oref.into())),
+        }
     }
 
     async fn get_dynamic_field_object(
@@ -450,15 +464,6 @@ impl ReadApiServer for ReadApi {
             .get_checkpoint_contents_by_sequence_number(sequence_number)
             .map_err(|e| anyhow!("Checkpoint contents based on seq number: {sequence_number} were not found with error: {e}"))?)
     }
-
-    async fn get_display_deprecated(
-        &self,
-        object_id: ObjectID,
-    ) -> RpcResult<BTreeMap<String, String>> {
-        let (object_type, move_struct) = get_object_type_and_struct(self, object_id).await?;
-        let display_object = get_display_object(self, object_type).await?;
-        Ok(get_rendered_fields(display_object.fields, &move_struct).map_err(|e| anyhow!("{e}"))?)
-    }
 }
 
 impl SuiRpcModule for ReadApi {
@@ -471,11 +476,28 @@ impl SuiRpcModule for ReadApi {
     }
 }
 
-async fn get_display_object(
+async fn get_display_fields(
     fullnode_api: &ReadApi,
-    object_type: StructTag,
-) -> RpcResult<DisplayObject> {
+    original_object: &Object,
+    original_layout: &Option<MoveStructLayout>,
+) -> RpcResult<Option<BTreeMap<String, String>>> {
+    let (object_type, layout) = get_object_type_and_struct(original_object, original_layout)?;
+    if let Some(display_object) = get_display_object_by_type(fullnode_api, &object_type).await? {
+        return Ok(Some(get_rendered_fields(display_object.fields, &layout)?));
+    }
+    Ok(None)
+}
+
+async fn get_display_object_by_type(
+    fullnode_api: &ReadApi,
+    object_type: &StructTag,
+) -> RpcResult<Option<DisplayObject>> {
     let display_object_id = get_display_object_id(fullnode_api, object_type).await?;
+    if display_object_id.is_none() {
+        return Ok(None);
+    }
+    // safe to unwrap because `is_none` is checked above
+    let display_object_id = display_object_id.unwrap();
     if let ObjectRead::Exists(_, display_object, _) = fullnode_api
         .state
         .get_object_read(&display_object_id)
@@ -486,8 +508,11 @@ async fn get_display_object(
             .data
             .try_as_move()
             .ok_or_else(|| anyhow!("Failed to extract Move object from {display_object_id}"))?;
-        Ok(bcs::from_bytes::<DisplayObject>(move_object.contents())
-            .map_err(|e| anyhow!("Failed to deserialize DisplayObject {display_object_id}: {e}"))?)
+        Ok(Some(
+            bcs::from_bytes::<DisplayObject>(move_object.contents()).map_err(|e| {
+                anyhow!("Failed to deserialize DisplayObject {display_object_id}: {e}")
+            })?,
+        ))
     } else {
         Err(anyhow!("Display object {display_object_id} does not exist"))?
     }
@@ -495,58 +520,52 @@ async fn get_display_object(
 
 async fn get_display_object_id(
     fullnode_api: &ReadApi,
-    object_type: StructTag,
-) -> RpcResult<ObjectID> {
+    object_type: &StructTag,
+) -> RpcResult<Option<ObjectID>> {
     let display_created_event = fullnode_api
         .state
         .query_events(
-            EventQuery::MoveEvent(DisplayCreatedEvent::type_(&object_type).to_string()),
+            EventQuery::MoveEvent(DisplayCreatedEvent::type_(object_type).to_string()),
             /* cursor */ None,
             /* limit */ 1,
             /* descending */ false,
         )
         .await?;
     if display_created_event.is_empty() {
-        return Err(anyhow!(
-            "Failed to find DisplayCreated event for {object_type}"
-        ))?;
+        return Ok(None);
     }
     if let SuiEvent::MoveEvent { bcs, .. } = display_created_event[0].clone().1.event {
         let display_object_id = bcs::from_bytes::<DisplayCreatedEvent>(&bcs)
             .map_err(|e| anyhow!("Failed to deserialize DisplayCreatedEvent: {e}"))?
             .id
             .bytes;
-        Ok(display_object_id)
+        Ok(Some(display_object_id))
     } else {
         Err(anyhow!("Failed to extract display object id from event"))?
     }
 }
 
-async fn get_object_type_and_struct(
-    fullnode_api: &ReadApi,
-    object_id: ObjectID,
+fn get_object_type_and_struct(
+    o: &Object,
+    layout: &Option<MoveStructLayout>,
 ) -> RpcResult<(StructTag, MoveStruct)> {
-    let object_read = fullnode_api
-        .state
-        .get_object_read(&object_id)
-        .await
-        .map_err(|e| anyhow!("Failed to fetch {object_id}: {e}"))?;
-    if let ObjectRead::Exists(_, o, layout) = object_read {
-        let layout = layout.ok_or_else(|| anyhow!("Failed to extract layout"))?;
-        let object_type = o
-            .type_()
-            .ok_or_else(|| anyhow!("Failed to extract object type"))?
-            .clone();
-        let move_struct = o
-            .data
-            .try_as_move()
-            .ok_or_else(|| anyhow!("Failed to extract Move object from {object_id}"))?
-            .to_move_struct(&layout)
-            .map_err(|err| anyhow!("{err}"))?;
-        Ok((object_type, move_struct))
-    } else {
-        Err(anyhow!("Object {object_id} does not exist"))?
-    }
+    let object_type = o
+        .type_()
+        .ok_or_else(|| anyhow!("Failed to extract object type"))?
+        .clone();
+    let move_struct = get_move_struct(o, layout)?;
+    Ok((object_type, move_struct))
+}
+
+fn get_move_struct(o: &Object, layout: &Option<MoveStructLayout>) -> RpcResult<MoveStruct> {
+    let layout = layout
+        .as_ref()
+        .ok_or_else(|| anyhow!("Failed to extract layout"))?;
+    Ok(o.data
+        .try_as_move()
+        .ok_or_else(|| anyhow!("Failed to extract Move object"))?
+        .to_move_struct(layout)
+        .map_err(|err| anyhow!("{err}"))?)
 }
 
 pub async fn get_move_module(

@@ -236,7 +236,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
         // batched object fetching should be added to the ReadApi & used here
         let obj_read = self
             .rpc_client
-            .get_object_with_options(obj_id, Some(SuiObjectDataOptions::bcs_only()))
+            .get_object_with_options(obj_id, SuiObjectDataOptions::new().with_bcs())
             .await
             .map_err(SourceVerificationError::DependencyObjectReadFailure)?;
 

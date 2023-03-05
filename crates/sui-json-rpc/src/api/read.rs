@@ -200,13 +200,4 @@ pub trait ReadApi {
         &self,
         digest: CheckpointContentsDigest,
     ) -> RpcResult<CheckpointContents>;
-
-    // TODO: this will be replaced by the new queryObjects API
-    /// Return the Display string of a object
-    #[method(name = "getDisplayDeprecated")]
-    async fn get_display_deprecated(
-        &self,
-        /// the id of the object
-        object_id: ObjectID,
-    ) -> RpcResult<BTreeMap<String, String>>;
 }
