@@ -6,7 +6,6 @@ import {
     getObjectFields,
     getObjectType,
     getSuiObjectData,
-    getObjectContentOptions,
 } from '@mysten/sui.js';
 
 import type {
@@ -195,10 +194,11 @@ export class NftClient {
         if (ids.length === 0) {
             return new Array<NftRaw>();
         }
-        const objects = await this.provider.getObjectBatch(
-            ids,
-            getObjectContentOptions('full_content')
-        );
+        const objects = await this.provider.getObjectBatch(ids, {
+            showType: true,
+            showContent: true,
+            showOwner: true,
+        });
         return this.parseObjects(objects);
     };
 
@@ -207,10 +207,11 @@ export class NftClient {
         const objectIds = bagObjects.data.map(
             (bagObject) => bagObject.objectId
         );
-        return this.provider.getObjectBatch(
-            objectIds,
-            getObjectContentOptions('full_content')
-        );
+        return this.provider.getObjectBatch(objectIds, {
+            showType: true,
+            showContent: true,
+            showOwner: true,
+        });
     };
 
     getNftsById = async (params: WithIds): Promise<Nft[]> => {

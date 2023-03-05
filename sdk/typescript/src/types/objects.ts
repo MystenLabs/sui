@@ -163,35 +163,6 @@ export const SuiObjectDataOptions = object({
   showStorageRebate: optional(boolean()),
 });
 export type SuiObjectDataOptions = Infer<typeof SuiObjectDataOptions>;
-/**
- * Util functions for constructing content options
- */
-export function getObjectContentOptions(
-  flavor: 'full_content' | 'bcs_only' | 'bcs_with_metadata',
-): SuiObjectDataOptions {
-  switch (flavor) {
-    case 'full_content':
-      return {
-        showType: true,
-        showContent: true,
-        showOwner: true,
-        showPreviousTransaction: true,
-        showStorageRebate: true,
-      };
-    case 'bcs_only':
-      return {
-        showBcs: true,
-      };
-    case 'bcs_with_metadata':
-      return {
-        showType: true,
-        showBcs: true,
-        showOwner: true,
-        showPreviousTransaction: true,
-        showStorageRebate: true,
-      };
-  }
-}
 
 export const ObjectStatus = union([
   literal('Exists'),

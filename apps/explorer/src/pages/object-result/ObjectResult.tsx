@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '@mysten/core';
-import { getTransactionSender, getObjectContentOptions } from '@mysten/sui.js';
+import { getTransactionSender } from '@mysten/sui.js';
 import { useEffect, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
@@ -45,7 +45,13 @@ function ObjectResultAPI({ objID }: { objID: string }) {
     const rpc = useRpcClient();
 
     useEffect(() => {
-        rpc.getObject(objID, getObjectContentOptions('full_content'))
+        rpc.getObject(objID, {
+            showType: true,
+            showContent: true,
+            showOwner: true,
+            showPreviousTransaction: true,
+            showStorageRebate: true,
+        })
             .then((objState) => {
                 const resp: DataType = translate(objState) as DataType;
 

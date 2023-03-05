@@ -2,12 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '@mysten/core';
-import {
-    Coin,
-    getObjectFields,
-    getObjectId,
-    getObjectContentOptions,
-} from '@mysten/sui.js';
+import { Coin, getObjectFields, getObjectId } from '@mysten/sui.js';
 import {
     useCallback,
     useEffect,
@@ -74,7 +69,10 @@ function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
                 ids = objects.data.map(({ objectId }) => objectId);
             }
             return rpc
-                .getObjectBatch(ids, getObjectContentOptions('full_content'))
+                .getObjectBatch(ids, {
+                    showType: true,
+                    showContent: true,
+                })
                 .then((results) => {
                     setResults(
                         results

@@ -10,7 +10,6 @@ import {
     getTransactionDigest,
     getObjectVersion,
     SUI_SYSTEM_STATE_OBJECT_ID,
-    getObjectContentOptions,
 } from '@mysten/sui.js';
 import {
     createAsyncThunk,
@@ -63,7 +62,13 @@ export const fetchAllOwnedAndRequiredObjects = createAsyncThunk<
         objectIDs.push(SUI_SYSTEM_STATE_OBJECT_ID);
         const allObjRes = await api.instance.fullNode.getObjectBatch(
             objectIDs,
-            getObjectContentOptions('full_content')
+            {
+                showType: true,
+                showContent: true,
+                showOwner: true,
+                showPreviousTransaction: true,
+                showStorageRebate: true,
+            }
         );
         for (const objRes of allObjRes) {
             const suiObj = getSuiObjectData(objRes);
@@ -81,10 +86,11 @@ export const batchFetchObject = createAsyncThunk<
     AppThunkConfig
 >('sui-objects/batch', async (objectIDs, { extra: { api } }) => {
     const allSuiObjects: SuiObjectData[] = [];
-    const allObjRes = await api.instance.fullNode.getObjectBatch(
-        objectIDs,
-        getObjectContentOptions('full_content')
-    );
+    const allObjRes = await api.instance.fullNode.getObjectBatch(objectIDs, {
+        showType: true,
+        showContent: true,
+        showOwner: true,
+    });
     for (const objRes of allObjRes) {
         const suiObj = getSuiObjectData(objRes);
         if (suiObj) {
