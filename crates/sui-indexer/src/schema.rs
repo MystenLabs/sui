@@ -64,6 +64,19 @@ diesel::table! {
 }
 
 diesel::table! {
+    move_calls (id) {
+        id -> Int8,
+        transaction_digest -> Varchar,
+        checkpoint_sequence_number -> Int8,
+        epoch -> Int8,
+        sender -> Text,
+        move_package -> Text,
+        move_module -> Text,
+        move_function -> Text,
+    }
+}
+
+diesel::table! {
     object_logs (last_processed_id) {
         last_processed_id -> Int8,
     }
@@ -173,6 +186,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     checkpoints,
     error_logs,
     events,
+    move_calls,
     object_logs,
     objects,
     owner_changes,
