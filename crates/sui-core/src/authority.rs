@@ -23,7 +23,7 @@ use prometheus::{
     IntCounterVec, IntGauge, Registry,
 };
 use serde::de::DeserializeOwned;
-use std::collections::BTreeMap;
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
@@ -1293,6 +1293,12 @@ impl AuthorityState {
 
         let name_type = DynamicFieldInfo::try_extract_field_name(&move_object.type_, &type_)?;
 
+        let bcs_name = bcs::to_bytes(&name_value.clone().undecorate()).map_err(|e| {
+            SuiError::ObjectSerializationError {
+                error: format!("{e}"),
+            }
+        })?;
+
         let name = DynamicFieldName {
             type_: name_type,
             value: SuiMoveValue::from(name_value).to_json_value(),
@@ -1313,6 +1319,7 @@ impl AuthorityState {
 
                 DynamicFieldInfo {
                     name,
+                    bcs_name,
                     type_,
                     object_type: object_type.to_string(),
                     object_id,
@@ -1322,6 +1329,7 @@ impl AuthorityState {
             }
             DynamicFieldType::DynamicField { .. } => DynamicFieldInfo {
                 name,
+                bcs_name,
                 type_,
                 object_type: move_object.type_.type_params[1].to_string(),
                 object_id: o.id(),
@@ -1995,18 +2003,18 @@ impl AuthorityState {
         }
     }
 
-    pub async fn read_table<K, V>(&self, table: &Table) -> SuiResult<BTreeMap<K, V>>
+    pub async fn read_table_value<K, V>(&self, table: &Table, key: &K) -> Option<V>
     where
-        K: DeserializeOwned + Ord,
+        K: DeserializeOwned + Serialize,
         V: DeserializeOwned,
     {
-        let dynamic_field = self.get_dynamic_fields(table.id, None, usize::MAX)?;
-        let mut result = BTreeMap::new();
-        for df in dynamic_field {
-            let field: Field<K, V> = self.get_move_object(&df.object_id).await?;
-            result.insert(field.name, field.value);
-        }
-        Ok(result)
+        let key_bcs = bcs::to_bytes(key).ok()?;
+        let df = self
+            .get_dynamic_fields_iterator(table.id, None)
+            .ok()?
+            .find(|df| key_bcs == df.bcs_name)?;
+        let field: Field<K, V> = self.get_move_object(&df.object_id).await.ok()?;
+        Some(field.value)
     }
 
     /// This function aims to serve rpc reads on past objects and
@@ -2154,8 +2162,19 @@ impl AuthorityState {
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> SuiResult<Vec<DynamicFieldInfo>> {
+        Ok(self
+            .get_dynamic_fields_iterator(owner, cursor)?
+            .take(limit)
+            .collect())
+    }
+
+    pub fn get_dynamic_fields_iterator(
+        &self,
+        owner: ObjectID,
+        cursor: Option<ObjectID>,
+    ) -> SuiResult<impl Iterator<Item = DynamicFieldInfo> + '_> {
         if let Some(indexes) = &self.indexes {
-            indexes.get_dynamic_fields(owner, cursor, limit)
+            indexes.get_dynamic_fields_iterator(owner, cursor)
         } else {
             Err(SuiError::IndexStoreNotAvailable)
         }
