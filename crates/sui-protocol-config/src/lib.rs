@@ -3,13 +3,14 @@
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_with::skip_serializing_none;
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
-pub const MIN_PROTOCOL_VERSION: u64 = 1;
-pub const MAX_PROTOCOL_VERSION: u64 = 1;
+const MIN_PROTOCOL_VERSION: u64 = 1;
+const MAX_PROTOCOL_VERSION: u64 = 1;
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
@@ -104,7 +105,8 @@ impl SupportedProtocolVersions {
 /// This way, if the constant is accessed in a protocol version in which it is not defined, the
 /// validator will crash. (Crashing is necessary because this type of error would almost always
 /// result in forking if not prevented here).
-#[derive(Clone)]
+#[skip_serializing_none]
+#[derive(Clone, Serialize)]
 pub struct ProtocolConfig {
     // ==== Transaction input limits ====
     /// Maximum serialized size of a transaction (in bytes).
@@ -724,5 +726,28 @@ impl Drop for OverrideGuard {
         CONFIG_OVERRIDE.with(|ovr| {
             *ovr.borrow_mut() = None;
         });
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use insta::assert_yaml_snapshot;
+
+    #[test]
+    fn snaphost_tests() {
+        println!("\n============================================================================");
+        println!("!                                                                          !");
+        println!("! IMPORTANT: never update snapshots from this test. only add new versions! !");
+        println!("! (it is actually ok to update them up until mainnet launches)             !");
+        println!("!                                                                          !");
+        println!("============================================================================\n");
+        for i in MIN_PROTOCOL_VERSION..=MAX_PROTOCOL_VERSION {
+            let cur = ProtocolVersion::new(i);
+            assert_yaml_snapshot!(
+                format!("version_{}", cur.as_u64()),
+                ProtocolConfig::get_for_version(cur)
+            );
+        }
     }
 }
