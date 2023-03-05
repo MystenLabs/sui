@@ -210,7 +210,6 @@ module sui::validator {
             sui_address,
             protocol_pubkey_bytes
         );
-        let stake_amount = balance::value(&stake);
 
         let metadata = new_metadata(
             sui_address,
@@ -229,24 +228,16 @@ module sui::validator {
         );
 
         validate_metadata(&metadata);
-        let staking_pool = staking_pool::new(starting_epoch, ctx);
-        // Add the validator's starting stake to the staking pool.
-        staking_pool::request_add_delegation(&mut staking_pool, stake, coin_locked_until_epoch, sui_address, sui_address, starting_epoch, ctx);
-        // We immediately process this delegation as they are at validator setup time and this is the validator staking with itself.
-        staking_pool::process_pending_delegation(&mut staking_pool);
-        Validator {
+
+        new_from_metadata(
             metadata,
-            // Initialize the voting power to be the same as the stake amount.
-            // At the epoch change where this validator is actually added to the
-            // active validator set, the voting power will be updated accordingly.
-            voting_power: stake_amount,
+            stake,
+            coin_locked_until_epoch,
             gas_price,
-            staking_pool,
             commission_rate,
-            next_epoch_stake: stake_amount,
-            next_epoch_gas_price: gas_price,
-            next_epoch_commission_rate: commission_rate,
-        }
+            starting_epoch,
+            ctx
+        )
     }
 
     /// Deactivate this validator's staking pool
@@ -593,9 +584,41 @@ module sui::validator {
         &self.staking_pool
     }
 
+    /// Create a new validator from the given `ValidatorMetadata`, called by both `new` and `new_for_testing`.
+    fun new_from_metadata(
+        metadata: ValidatorMetadata,
+        stake: Balance<SUI>,
+        coin_locked_until_epoch: Option<EpochTimeLock>,
+        gas_price: u64,
+        commission_rate: u64,
+        starting_epoch: u64,
+        ctx: &mut TxContext
+    ): Validator {
+        let sui_address = metadata.sui_address;
+        let stake_amount = balance::value(&stake);
+
+        let staking_pool = staking_pool::new(starting_epoch, ctx);
+        // Add the validator's starting stake to the staking pool.
+        staking_pool::request_add_delegation(&mut staking_pool, stake, coin_locked_until_epoch, sui_address, sui_address, starting_epoch, ctx);
+        // We immediately process this delegation as they are at validator setup time and this is the validator staking with itself.
+        staking_pool::process_pending_delegation(&mut staking_pool);
+        Validator {
+            metadata,
+            // Initialize the voting power to be the same as the stake amount.
+            // At the epoch change where this validator is actually added to the
+            // active validator set, the voting power will be updated accordingly.
+            voting_power: stake_amount,
+            gas_price,
+            staking_pool,
+            commission_rate,
+            next_epoch_stake: stake_amount,
+            next_epoch_gas_price: gas_price,
+            next_epoch_commission_rate: commission_rate,
+        }
+    }
+
     // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.
-    // Creates a validator - bypassing the proof of possession in check in the process.
-    // TODO: Refactor to share code with new().
+    // Creates a validator - bypassing the proof of possession check and other metadata validation in the process.
     #[test_only]
     public(friend) fun new_for_testing(
         sui_address: address,
@@ -618,23 +641,8 @@ module sui::validator {
         starting_epoch: u64,
         ctx: &mut TxContext
     ): Validator {
-        assert!(
-            // TODO: These constants are arbitrary, will adjust once we know more.
-            vector::length(&net_address) <= 128
-                && vector::length(&p2p_address) <= 128
-                && vector::length(&name) <= 128
-                && vector::length(&description) <= 150
-                && vector::length(&protocol_pubkey_bytes) <= 128,
-            0
-        );
-        let stake_amount = balance::value(&stake);
-        let staking_pool = staking_pool::new(starting_epoch, ctx);
-        // Add the validator's starting stake to the staking pool.
-        staking_pool::request_add_delegation(&mut staking_pool, stake, coin_locked_until_epoch, sui_address, sui_address, starting_epoch, ctx);
-        // We immediately process this delegation as they are at validator setup time and this is the validator staking with itself.
-        staking_pool::process_pending_delegation(&mut staking_pool);
-        Validator {
-            metadata: new_metadata(
+        new_from_metadata(
+            new_metadata(
                 sui_address,
                 protocol_pubkey_bytes,
                 network_pubkey_bytes,
@@ -649,13 +657,12 @@ module sui::validator {
                 primary_address,
                 worker_address,
             ),
-            voting_power: stake_amount,
+            stake,
+            coin_locked_until_epoch,
             gas_price,
-            staking_pool,
             commission_rate,
-            next_epoch_stake: stake_amount,
-            next_epoch_gas_price: gas_price,
-            next_epoch_commission_rate: commission_rate,
-        }
+            starting_epoch,
+            ctx
+        )
     }
 }
