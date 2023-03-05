@@ -69,7 +69,7 @@ fee from the <code><a href="kiosk.md#0x2_kiosk">kiosk</a></code> deals and store
  the <code><a href="kiosk.md#0x2_kiosk_allow_transfer">kiosk::allow_transfer</a></code> and allow the trade.
 </dd>
 <dt>
-<code>amount: u16</code>
+<code>amount_bp: u16</code>
 </dt>
 <dd>
  Percentage of the trade amount which is required for the
@@ -244,7 +244,7 @@ function on a wrong type.
     <a href="coin.md#0x2_coin">coin</a>: &<b>mut</b> Coin&lt;SUI&gt;
 ) {
     <b>let</b> (paid, _from) = <a href="kiosk.md#0x2_kiosk_allow_transfer">kiosk::allow_transfer</a>(&policy.cap, transfer_request);
-    <b>let</b> amount = (((paid <b>as</b> u128) * (policy.amount <b>as</b> u128) / (<a href="royalty.md#0x2_royalty_MAX_AMOUNT">MAX_AMOUNT</a> <b>as</b> u128)) <b>as</b> u64);
+    <b>let</b> amount = (((paid <b>as</b> u128) * (policy.amount_bp <b>as</b> u128) / (<a href="royalty.md#0x2_royalty_MAX_AMOUNT">MAX_AMOUNT</a> <b>as</b> u128)) <b>as</b> u64);
 
     <b>let</b> royalty_payment = <a href="balance.md#0x2_balance_split">balance::split</a>(<a href="coin.md#0x2_coin_balance_mut">coin::balance_mut</a>(<a href="coin.md#0x2_coin">coin</a>), amount);
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> policy.<a href="balance.md#0x2_balance">balance</a>, royalty_payment);
@@ -291,7 +291,7 @@ Create new <code><a href="royalty.md#0x2_royalty_RoyaltyPolicy">RoyaltyPolicy</a
 percentage of the trade amount for the transfer to be approved.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="royalty.md#0x2_royalty_new_royalty_policy">new_royalty_policy</a>&lt;T: store, key&gt;(cap: <a href="kiosk.md#0x2_kiosk_TransferPolicyCap">kiosk::TransferPolicyCap</a>&lt;T&gt;, amount: u16, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="royalty.md#0x2_royalty_RoyaltyPolicy">royalty::RoyaltyPolicy</a>&lt;T&gt;, <a href="royalty.md#0x2_royalty_RoyaltyCollectorCap">royalty::RoyaltyCollectorCap</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="royalty.md#0x2_royalty_new_royalty_policy">new_royalty_policy</a>&lt;T: store, key&gt;(cap: <a href="kiosk.md#0x2_kiosk_TransferPolicyCap">kiosk::TransferPolicyCap</a>&lt;T&gt;, amount_bp: u16, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="royalty.md#0x2_royalty_RoyaltyPolicy">royalty::RoyaltyPolicy</a>&lt;T&gt;, <a href="royalty.md#0x2_royalty_RoyaltyCollectorCap">royalty::RoyaltyCollectorCap</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -302,13 +302,13 @@ percentage of the trade amount for the transfer to be approved.
 
 <pre><code><b>public</b> <b>fun</b> <a href="royalty.md#0x2_royalty_new_royalty_policy">new_royalty_policy</a>&lt;T: key + store&gt;(
     cap: TransferPolicyCap&lt;T&gt;,
-    amount: u16,
+    amount_bp: u16,
     ctx: &<b>mut</b> TxContext
 ): (<a href="royalty.md#0x2_royalty_RoyaltyPolicy">RoyaltyPolicy</a>&lt;T&gt;, <a href="royalty.md#0x2_royalty_RoyaltyCollectorCap">RoyaltyCollectorCap</a>&lt;T&gt;) {
-    <b>assert</b>!(<a href="royalty.md#0x2_royalty_amount">amount</a> &lt;= <a href="royalty.md#0x2_royalty_MAX_AMOUNT">MAX_AMOUNT</a> && amount != 0, <a href="royalty.md#0x2_royalty_EIncorrectAmount">EIncorrectAmount</a>);
+    <b>assert</b>!(amount_bp &lt;= <a href="royalty.md#0x2_royalty_MAX_AMOUNT">MAX_AMOUNT</a> && amount_bp != 0, <a href="royalty.md#0x2_royalty_EIncorrectAmount">EIncorrectAmount</a>);
 
     <b>let</b> policy = <a href="royalty.md#0x2_royalty_RoyaltyPolicy">RoyaltyPolicy</a> {
-        cap, amount,
+        cap, amount_bp,
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
         owner: sender(ctx),
         <a href="balance.md#0x2_balance">balance</a>: <a href="balance.md#0x2_balance_zero">balance::zero</a>(),
@@ -351,7 +351,7 @@ Change the amount in the <code><a href="royalty.md#0x2_royalty_RoyaltyPolicy">Ro
     amount: u16,
 ) {
     <b>assert</b>!(amount &gt; 0 && <a href="royalty.md#0x2_royalty_amount">amount</a> &lt;= <a href="royalty.md#0x2_royalty_MAX_AMOUNT">MAX_AMOUNT</a>, <a href="royalty.md#0x2_royalty_EIncorrectAmount">EIncorrectAmount</a>);
-    policy.amount = amount
+    policy.amount_bp = amount
 }
 </code></pre>
 
@@ -448,7 +448,7 @@ return the <code>TransferPolicyCap</code> and the remaining balance.
     cap: <a href="royalty.md#0x2_royalty_RoyaltyCollectorCap">RoyaltyCollectorCap</a>&lt;T&gt;,
     ctx: &<b>mut</b> TxContext
 ): (TransferPolicyCap&lt;T&gt;, Coin&lt;SUI&gt;) {
-    <b>let</b> <a href="royalty.md#0x2_royalty_RoyaltyPolicy">RoyaltyPolicy</a> { id, amount: _, owner: _, cap: transfer_cap, <a href="balance.md#0x2_balance">balance</a> } = policy;
+    <b>let</b> <a href="royalty.md#0x2_royalty_RoyaltyPolicy">RoyaltyPolicy</a> { id, amount_bp: _, owner: _, cap: transfer_cap, <a href="balance.md#0x2_balance">balance</a> } = policy;
     <b>let</b> <a href="royalty.md#0x2_royalty_RoyaltyCollectorCap">RoyaltyCollectorCap</a> { id: cap_id, policy_id: _ } = cap;
 
     <a href="object.md#0x2_object_delete">object::delete</a>(cap_id);
@@ -479,7 +479,7 @@ Get the <code>amount</code> field.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="royalty.md#0x2_royalty_amount">amount</a>&lt;T: key + store&gt;(self: &<a href="royalty.md#0x2_royalty_RoyaltyPolicy">RoyaltyPolicy</a>&lt;T&gt;): u16 {
-    self.amount
+    self.amount_bp
 }
 </code></pre>
 

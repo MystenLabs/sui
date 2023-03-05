@@ -89,8 +89,8 @@ module sui::kiosk {
         /// calculate the fee / transfer policy enforcement.
         paid: u64,
         /// The ID of the Kiosk the object is being sold from.
-        /// Can be used by the TransferPolicy implementors to ban
-        /// some Kiosks or the opposite - relax some rules.
+        /// Can be used by the TransferPolicy implementors to
+        /// create an allowlist of Kiosks which can trade the type.
         from: ID,
     }
 

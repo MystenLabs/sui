@@ -34,7 +34,7 @@ module sui::royalty {
         /// - 10_000 = 100%
         /// - 100 = 1%
         /// - 1 = 0.01%
-        amount: u16,
+        amount_bp: u16,
         /// Accumulated balance - the owner of the Policy can withdraw
         /// at any time.
         balance: Balance<SUI>,
@@ -80,7 +80,7 @@ module sui::royalty {
         coin: &mut Coin<SUI>
     ) {
         let (paid, _from) = kiosk::allow_transfer(&policy.cap, transfer_request);
-        let amount = (((paid as u128) * (policy.amount as u128) / (MAX_AMOUNT as u128)) as u64);
+        let amount = (((paid as u128) * (policy.amount_bp as u128) / (MAX_AMOUNT as u128)) as u64);
 
         let royalty_payment = balance::split(coin::balance_mut(coin), amount);
         balance::join(&mut policy.balance, royalty_payment);
@@ -100,13 +100,13 @@ module sui::royalty {
     /// percentage of the trade amount for the transfer to be approved.
     public fun new_royalty_policy<T: key + store>(
         cap: TransferPolicyCap<T>,
-        amount: u16,
+        amount_bp: u16,
         ctx: &mut TxContext
     ): (RoyaltyPolicy<T>, RoyaltyCollectorCap<T>) {
-        assert!(amount <= MAX_AMOUNT && amount != 0, EIncorrectAmount);
+        assert!(amount_bp <= MAX_AMOUNT && amount_bp != 0, EIncorrectAmount);
 
         let policy = RoyaltyPolicy {
-            cap, amount,
+            cap, amount_bp,
             id: object::new(ctx),
             owner: sender(ctx),
             balance: balance::zero(),
@@ -129,7 +129,7 @@ module sui::royalty {
         amount: u16,
     ) {
         assert!(amount > 0 && amount <= MAX_AMOUNT, EIncorrectAmount);
-        policy.amount = amount
+        policy.amount_bp = amount
     }
 
     /// Change the `owner` field to the tx sender.
@@ -166,7 +166,7 @@ module sui::royalty {
         cap: RoyaltyCollectorCap<T>,
         ctx: &mut TxContext
     ): (TransferPolicyCap<T>, Coin<SUI>) {
-        let RoyaltyPolicy { id, amount: _, owner: _, cap: transfer_cap, balance } = policy;
+        let RoyaltyPolicy { id, amount_bp: _, owner: _, cap: transfer_cap, balance } = policy;
         let RoyaltyCollectorCap { id: cap_id, policy_id: _ } = cap;
 
         object::delete(cap_id);
@@ -179,7 +179,7 @@ module sui::royalty {
 
     /// Get the `amount` field.
     public fun amount<T: key + store>(self: &RoyaltyPolicy<T>): u16 {
-        self.amount
+        self.amount_bp
     }
 
     /// Get the `balance` field.
