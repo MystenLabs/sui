@@ -8,7 +8,7 @@ use axum_extra::extract::WithRejection;
 use futures::StreamExt;
 use std::collections::HashMap;
 
-use sui_sdk::rpc_types::DelegationStatus;
+use sui_sdk::rpc_types::StakeStatus;
 use sui_sdk::{SuiClient, SUI_COIN_TYPE};
 use sui_types::base_types::SuiAddress;
 
@@ -70,8 +70,8 @@ async fn get_sub_account_balances(
             delegations
                 .into_iter()
                 .fold(HashMap::new(), |mut balances, stakes| {
-                    for delegation in &stakes.delegations {
-                        if let DelegationStatus::Active { .. } = delegation.status {
+                    for delegation in &stakes.stakes {
+                        if let StakeStatus::Active { .. } = delegation.status {
                             *balances.entry(delegation.token_lock).or_default() +=
                                 delegation.principal as u128;
                         }
@@ -87,8 +87,8 @@ async fn get_sub_account_balances(
             delegations
                 .into_iter()
                 .fold(HashMap::new(), |mut balances, stakes| {
-                    for delegation in &stakes.delegations {
-                        if let DelegationStatus::Pending = delegation.status {
+                    for delegation in &stakes.stakes {
+                        if let StakeStatus::Pending = delegation.status {
                             *balances.entry(delegation.token_lock).or_default() +=
                                 delegation.principal as u128;
                         }

@@ -32,7 +32,6 @@ use sui_types::query::{EventQuery, TransactionQuery};
 
 use futures::StreamExt;
 use sui_json_rpc::api::{CoinReadApiClient, EventReadApiClient, ReadApiClient, WriteApiClient};
-use sui_types::governance::DelegatedStake;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
 #[derive(Debug)]

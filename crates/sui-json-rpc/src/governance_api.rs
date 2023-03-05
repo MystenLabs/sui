@@ -13,17 +13,14 @@ use crate::SuiRpcModule;
 use async_trait::async_trait;
 use jsonrpsee::RpcModule;
 use sui_core::authority::AuthorityState;
-use sui_json_rpc_types::{DelegatedStake, Delegation, DelegationStatus};
+use sui_json_rpc_types::{DelegatedStake, Stake, StakeStatus};
 use sui_open_rpc::Module;
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::governance::StakedSui;
-use sui_types::governance::{DelegatedStake, Delegation, DelegationStatus, StakedSui};
-use sui_types::messages::{CommitteeInfoRequest, CommitteeInfoResponse};
+use sui_types::sui_system_state::sui_system_state_inner_v1::{PoolTokenExchangeRate, ValidatorV1};
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::sui_system_state::{
-    PoolTokenExchangeRate, SuiSystemState, SuiSystemStateTrait, ValidatorMetadata,
-};
 
 pub struct GovernanceReadApi {
     state: Arc<AuthorityState>,
@@ -50,62 +47,44 @@ impl GovernanceReadApi {
         let pools = stakes
             .into_iter()
             .fold(BTreeMap::<_, Vec<_>>::new(), |mut pools, s| {
-                pools.entry(s.pool_id()).or_default().push(s);
+                pools
+                    .entry((s.pool_id(), s.validator_address()))
+                    .or_default()
+                    .push(s);
                 pools
             });
 
-        let system_state = self.get_system_state()?;
-
+        let system_state: SuiSystemStateSummary =
+            self.get_system_state()?.into_sui_system_state_summary();
         let mut delegated_stakes = vec![];
-        for (pool_id, stakes) in pools {
-            let validator_address: SuiAddress = self
-                .state
-                .read_table_value(system_state.staking_pool_mappings(), &pool_id)
-                .await
-                .ok_or_else(|| {
-                    Error::UnexpectedError(format!(
-                        "Cannot find validator mapping for staking pool {pool_id}"
-                    ))
-                })?;
-            let pool = system_state.get_staking_pool(&pool_id).ok_or_else(|| {
-                Error::UnexpectedError(format!("Cannot find staking pool [{pool_id}]"))
-            })?;
+        for ((pool_id, validator_address), stakes) in pools {
+            let rate_table = self
+                .get_exchange_rate_table(&system_state, &pool_id)
+                .await?;
 
-            let current_rate: PoolTokenExchangeRate = self
-                .state
-                .read_table_value(&pool.exchange_rates, &system_state.epoch())
-                .await
-                .ok_or_else(|| {
-                    Error::UnexpectedError(format!(
-                        "Cannot find exchange rate for pool [{pool_id}] at epoch {}",
-                        system_state.epoch()
-                    ))
-                })?;
+            let current_rate = self
+                .get_exchange_rate(rate_table, system_state.epoch)
+                .await?;
 
             let mut delegations = vec![];
             for stake in stakes {
                 // delegation will be active in next epoch
-                let status = if system_state.epoch() >= stake.request_epoch() {
-                    let stake_rate: PoolTokenExchangeRate = self
-                        .state
-                        .read_table_value(&pool.exchange_rates, &stake.request_epoch())
-                        .await
-                        .ok_or_else(|| {
-                            Error::UnexpectedError(format!(
-                                "Cannot find exchange rate for pool [{pool_id}] at epoch {}",
-                                system_state.epoch()
-                            ))
-                        })?;
+                let status = if system_state.epoch >= stake.request_epoch() {
+                    let stake_rate = self
+                        .get_exchange_rate(rate_table, stake.request_epoch())
+                        .await?;
                     let estimated_reward = (((stake_rate.rate() / current_rate.rate()) - 1.0)
                         * stake.principal() as f64)
                         .round() as u64;
-                    DelegationStatus::Active { estimated_reward }
+                    StakeStatus::Active { estimated_reward }
                 } else {
-                    DelegationStatus::Pending
+                    StakeStatus::Pending
                 };
-                delegations.push(Delegation {
+                delegations.push(Stake {
                     staked_sui_id: stake.id(),
-                    delegation_request_epoch: stake.request_epoch(),
+                    stake_request_epoch: stake.request_epoch(),
+                    // TODO: this might change when we implement warm up period.
+                    stake_active_epoch: stake.request_epoch() + 1,
                     principal: stake.principal(),
                     token_lock: stake.sui_token_lock(),
                     status,
@@ -115,7 +94,7 @@ impl GovernanceReadApi {
             delegated_stakes.push(DelegatedStake {
                 validator_address,
                 staking_pool: pool_id,
-                delegations,
+                stakes: delegations,
             })
         }
         Ok(delegated_stakes)
@@ -123,6 +102,52 @@ impl GovernanceReadApi {
 
     fn get_system_state(&self) -> Result<SuiSystemState, Error> {
         Ok(self.state.database.get_sui_system_state_object()?)
+    }
+
+    async fn get_exchange_rate_table(
+        &self,
+        system_state: &SuiSystemStateSummary,
+        pool_id: &ObjectID,
+    ) -> Result<ObjectID, Error> {
+        let active_rate = system_state.active_validators.iter().find_map(|v| {
+            if &v.staking_pool_id == pool_id {
+                Some(v.exchange_rates_id)
+            } else {
+                None
+            }
+        });
+
+        if let Some(active_rate) = active_rate {
+            return Ok(active_rate);
+        } else {
+            // try find from inactive pool
+            let inactive_validators = system_state.inactive_pools_id;
+            let inactive_validators = self
+                .state
+                .read_table_value::<ObjectID, ValidatorV1>(inactive_validators, pool_id)
+                .await;
+            if let Some(inactive_validators) = inactive_validators {
+                return Ok(inactive_validators.staking_pool.exchange_rates.id);
+            }
+        }
+        Err(Error::UnexpectedError(format!(
+            "Cannot find exchange rate table for pool [{pool_id}]."
+        )))
+    }
+
+    async fn get_exchange_rate(
+        &self,
+        table: ObjectID,
+        epoch: EpochId,
+    ) -> Result<PoolTokenExchangeRate, Error> {
+        self.state
+            .read_table_value(table, &epoch)
+            .await
+            .ok_or_else(|| {
+                Error::UnexpectedError(format!(
+                    "Cannot find exchange rate for epoch [{epoch}], from rate table object [{table}]."
+                ))
+            })
     }
 }
 
