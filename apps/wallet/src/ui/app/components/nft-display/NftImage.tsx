@@ -47,7 +47,6 @@ export interface NftImageProps extends VariantProps<typeof nftImageStyles> {
     showLabel?: boolean;
 }
 
-//TODO: create a fallback image for broken images urls
 export function NftImage({
     src,
     name,
