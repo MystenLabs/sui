@@ -409,6 +409,7 @@ pub enum OperationType {
     EpochChange,
     Genesis,
     ConsensusCommitPrologue,
+    ProgrammableTransaction,
 }
 
 impl From<&SuiTransactionKind> for OperationType {
@@ -425,6 +426,9 @@ impl From<&SuiTransactionKind> for OperationType {
             SuiTransactionKind::Genesis(_) => OperationType::Genesis,
             SuiTransactionKind::ConsensusCommitPrologue(_) => {
                 OperationType::ConsensusCommitPrologue
+            }
+            SuiTransactionKind::ProgrammableTransaction(_) => {
+                OperationType::ProgrammableTransaction
             }
         }
     }
