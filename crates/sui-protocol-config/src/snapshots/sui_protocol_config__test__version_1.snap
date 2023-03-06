@@ -13,7 +13,7 @@ max_pure_argument_size: 16384
 max_object_vec_argument_size: 128
 max_coins: 1024
 max_pay_recipients: 1024
-max_programmable_tx_commands: 128
+max_programmable_tx_commands: 1024
 move_binary_format_version: 6
 max_move_object_size: 256000
 max_move_package_size: 102400
