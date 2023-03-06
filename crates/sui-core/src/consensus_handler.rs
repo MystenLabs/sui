@@ -75,11 +75,11 @@ fn update_hash(
     previous_hash.hash(&mut hasher);
     v.hash(&mut hasher);
     let hash = hasher.finish();
-    // Log hash every 100th transaction of the subdag
-    if index.transaction_index % 100 == 0 {
+    // Log hash every 1000th transaction of the subdag
+    if index.transaction_index % 1000 == 0 {
         debug!(
-            "Integrity hash for consensus output at subdag {} is {:016x}",
-            index.sub_dag_index, hash
+            "Integrity hash for consensus output at subdag {} transaction {} is {:016x}",
+            index.sub_dag_index, index.transaction_index, hash
         );
     }
     let last_seen = ExecutionIndicesWithHash { index, hash };
