@@ -11,7 +11,7 @@
 -  [Function `verify_proof_of_possession`](#0x2_validator_verify_proof_of_possession)
 -  [Function `new_metadata`](#0x2_validator_new_metadata)
 -  [Function `new`](#0x2_validator_new)
--  [Function `destroy`](#0x2_validator_destroy)
+-  [Function `deactivate`](#0x2_validator_deactivate)
 -  [Function `adjust_stake_and_gas_price`](#0x2_validator_adjust_stake_and_gas_price)
 -  [Function `request_add_delegation`](#0x2_validator_request_add_delegation)
 -  [Function `request_withdraw_delegation`](#0x2_validator_request_withdraw_delegation)
@@ -28,7 +28,7 @@
 -  [Function `project_url`](#0x2_validator_project_url)
 -  [Function `network_address`](#0x2_validator_network_address)
 -  [Function `p2p_address`](#0x2_validator_p2p_address)
--  [Function `consensus_address`](#0x2_validator_consensus_address)
+-  [Function `primary_address`](#0x2_validator_primary_address)
 -  [Function `worker_address`](#0x2_validator_worker_address)
 -  [Function `protocol_pubkey_bytes`](#0x2_validator_protocol_pubkey_bytes)
 -  [Function `proof_of_possession`](#0x2_validator_proof_of_possession)
@@ -36,7 +36,7 @@
 -  [Function `worker_pubkey_bytes`](#0x2_validator_worker_pubkey_bytes)
 -  [Function `next_epoch_network_address`](#0x2_validator_next_epoch_network_address)
 -  [Function `next_epoch_p2p_address`](#0x2_validator_next_epoch_p2p_address)
--  [Function `next_epoch_consensus_address`](#0x2_validator_next_epoch_consensus_address)
+-  [Function `next_epoch_primary_address`](#0x2_validator_next_epoch_primary_address)
 -  [Function `next_epoch_worker_address`](#0x2_validator_next_epoch_worker_address)
 -  [Function `next_epoch_protocol_pubkey_bytes`](#0x2_validator_next_epoch_protocol_pubkey_bytes)
 -  [Function `next_epoch_proof_of_possession`](#0x2_validator_next_epoch_proof_of_possession)
@@ -60,7 +60,7 @@
 -  [Function `update_project_url`](#0x2_validator_update_project_url)
 -  [Function `update_next_epoch_network_address`](#0x2_validator_update_next_epoch_network_address)
 -  [Function `update_next_epoch_p2p_address`](#0x2_validator_update_next_epoch_p2p_address)
--  [Function `update_next_epoch_consensus_address`](#0x2_validator_update_next_epoch_consensus_address)
+-  [Function `update_next_epoch_primary_address`](#0x2_validator_update_next_epoch_primary_address)
 -  [Function `update_next_epoch_worker_address`](#0x2_validator_update_next_epoch_worker_address)
 -  [Function `update_next_epoch_protocol_pubkey`](#0x2_validator_update_next_epoch_protocol_pubkey)
 -  [Function `update_next_epoch_network_pubkey`](#0x2_validator_update_next_epoch_network_pubkey)
@@ -68,6 +68,7 @@
 -  [Function `effectuate_staged_metadata`](#0x2_validator_effectuate_staged_metadata)
 -  [Function `validate_metadata`](#0x2_validator_validate_metadata)
 -  [Function `validate_metadata_bcs`](#0x2_validator_validate_metadata_bcs)
+-  [Function `new_from_metadata`](#0x2_validator_new_from_metadata)
 
 
 <pre><code><b>use</b> <a href="">0x1::ascii</a>;
@@ -174,7 +175,7 @@
  The address of the validator used for p2p activities such as state sync (could also contain extra info such as port, DNS and etc.).
 </dd>
 <dt>
-<code>consensus_address: <a href="">vector</a>&lt;u8&gt;</code>
+<code>primary_address: <a href="">vector</a>&lt;u8&gt;</code>
 </dt>
 <dd>
  The address of the narwhal primary
@@ -223,7 +224,7 @@
 
 </dd>
 <dt>
-<code>next_epoch_consensus_address: <a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;</code>
+<code>next_epoch_primary_address: <a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;</code>
 </dt>
 <dd>
 
@@ -314,21 +315,21 @@
 ## Constants
 
 
+<a name="0x2_validator_ECommissionRateTooHigh"></a>
+
+Commission rate set by the validator is higher than the threshold
+
+
+<pre><code><b>const</b> <a href="validator.md#0x2_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>: u64 = 8;
+</code></pre>
+
+
+
 <a name="0x2_validator_EInvalidProofOfPossession"></a>
 
 
 
 <pre><code><b>const</b> <a href="validator.md#0x2_validator_EInvalidProofOfPossession">EInvalidProofOfPossession</a>: u64 = 0;
-</code></pre>
-
-
-
-<a name="0x2_validator_EMetadataInvalidConsensusAddr"></a>
-
-Invalid consensus_address field in ValidatorMetadata
-
-
-<pre><code><b>const</b> <a href="validator.md#0x2_validator_EMetadataInvalidConsensusAddr">EMetadataInvalidConsensusAddr</a>: u64 = 6;
 </code></pre>
 
 
@@ -363,6 +364,16 @@ Invalid p2p_address field in ValidatorMetadata
 
 
 
+<a name="0x2_validator_EMetadataInvalidPrimaryAddr"></a>
+
+Invalid primary_address field in ValidatorMetadata
+
+
+<pre><code><b>const</b> <a href="validator.md#0x2_validator_EMetadataInvalidPrimaryAddr">EMetadataInvalidPrimaryAddr</a>: u64 = 6;
+</code></pre>
+
+
+
 <a name="0x2_validator_EMetadataInvalidPubKey"></a>
 
 Invalid pubkey_bytes field in ValidatorMetadata
@@ -389,6 +400,15 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
 
 
 <pre><code><b>const</b> <a href="validator.md#0x2_validator_EMetadataInvalidWorkerPubKey">EMetadataInvalidWorkerPubKey</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="0x2_validator_MAX_COMMISSION_RATE"></a>
+
+
+
+<pre><code><b>const</b> <a href="validator.md#0x2_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>: u64 = 10000;
 </code></pre>
 
 
@@ -445,7 +465,7 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new_metadata">new_metadata</a>(sui_address: <b>address</b>, protocol_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="_String">string::String</a>, description: <a href="_String">string::String</a>, image_url: <a href="url.md#0x2_url_Url">url::Url</a>, project_url: <a href="url.md#0x2_url_Url">url::Url</a>, net_address: <a href="">vector</a>&lt;u8&gt;, p2p_address: <a href="">vector</a>&lt;u8&gt;, consensus_address: <a href="">vector</a>&lt;u8&gt;, worker_address: <a href="">vector</a>&lt;u8&gt;): <a href="validator.md#0x2_validator_ValidatorMetadata">validator::ValidatorMetadata</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new_metadata">new_metadata</a>(sui_address: <b>address</b>, protocol_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="_String">string::String</a>, description: <a href="_String">string::String</a>, image_url: <a href="url.md#0x2_url_Url">url::Url</a>, project_url: <a href="url.md#0x2_url_Url">url::Url</a>, net_address: <a href="">vector</a>&lt;u8&gt;, p2p_address: <a href="">vector</a>&lt;u8&gt;, primary_address: <a href="">vector</a>&lt;u8&gt;, worker_address: <a href="">vector</a>&lt;u8&gt;): <a href="validator.md#0x2_validator_ValidatorMetadata">validator::ValidatorMetadata</a>
 </code></pre>
 
 
@@ -466,7 +486,7 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
     project_url: Url,
     net_address: <a href="">vector</a>&lt;u8&gt;,
     p2p_address: <a href="">vector</a>&lt;u8&gt;,
-    consensus_address: <a href="">vector</a>&lt;u8&gt;,
+    primary_address: <a href="">vector</a>&lt;u8&gt;,
     worker_address: <a href="">vector</a>&lt;u8&gt;,
 ): <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a> {
     <b>let</b> metadata = <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a> {
@@ -481,7 +501,7 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
         project_url,
         net_address,
         p2p_address,
-        consensus_address,
+        primary_address,
         worker_address,
         next_epoch_protocol_pubkey_bytes: <a href="_none">option::none</a>(),
         next_epoch_network_pubkey_bytes: <a href="_none">option::none</a>(),
@@ -489,7 +509,7 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
         next_epoch_proof_of_possession: <a href="_none">option::none</a>(),
         next_epoch_net_address: <a href="_none">option::none</a>(),
         next_epoch_p2p_address: <a href="_none">option::none</a>(),
-        next_epoch_consensus_address: <a href="_none">option::none</a>(),
+        next_epoch_primary_address: <a href="_none">option::none</a>(),
         next_epoch_worker_address: <a href="_none">option::none</a>(),
     };
     metadata
@@ -506,7 +526,7 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new">new</a>(sui_address: <b>address</b>, protocol_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, description: <a href="">vector</a>&lt;u8&gt;, image_url: <a href="">vector</a>&lt;u8&gt;, project_url: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, p2p_address: <a href="">vector</a>&lt;u8&gt;, consensus_address: <a href="">vector</a>&lt;u8&gt;, worker_address: <a href="">vector</a>&lt;u8&gt;, stake: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, coin_locked_until_epoch: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;, gas_price: u64, commission_rate: u64, starting_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new">new</a>(sui_address: <b>address</b>, protocol_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, description: <a href="">vector</a>&lt;u8&gt;, image_url: <a href="">vector</a>&lt;u8&gt;, project_url: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, p2p_address: <a href="">vector</a>&lt;u8&gt;, primary_address: <a href="">vector</a>&lt;u8&gt;, worker_address: <a href="">vector</a>&lt;u8&gt;, stake: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, coin_locked_until_epoch: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;, gas_price: u64, commission_rate: u64, starting_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
 </code></pre>
 
 
@@ -527,7 +547,7 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
     project_url: <a href="">vector</a>&lt;u8&gt;,
     net_address: <a href="">vector</a>&lt;u8&gt;,
     p2p_address: <a href="">vector</a>&lt;u8&gt;,
-    consensus_address: <a href="">vector</a>&lt;u8&gt;,
+    primary_address: <a href="">vector</a>&lt;u8&gt;,
     worker_address: <a href="">vector</a>&lt;u8&gt;,
     stake: Balance&lt;SUI&gt;,
     coin_locked_until_epoch: Option&lt;EpochTimeLock&gt;,
@@ -545,12 +565,12 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
             && <a href="_length">vector::length</a>(&protocol_pubkey_bytes) &lt;= 128,
         0
     );
+    <b>assert</b>!(<a href="validator.md#0x2_validator_commission_rate">commission_rate</a> &lt;= <a href="validator.md#0x2_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>, <a href="validator.md#0x2_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>);
     <a href="validator.md#0x2_validator_verify_proof_of_possession">verify_proof_of_possession</a>(
         proof_of_possession,
         sui_address,
         protocol_pubkey_bytes
     );
-    <b>let</b> stake_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&stake);
 
     <b>let</b> metadata = <a href="validator.md#0x2_validator_new_metadata">new_metadata</a>(
         sui_address,
@@ -564,29 +584,21 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
         <a href="url.md#0x2_url_new_unsafe_from_bytes">url::new_unsafe_from_bytes</a>(project_url),
         net_address,
         p2p_address,
-        consensus_address,
+        primary_address,
         worker_address,
     );
 
     <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&metadata);
-    <b>let</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a> = <a href="staking_pool.md#0x2_staking_pool_new">staking_pool::new</a>(starting_epoch, ctx);
-    // Add the <a href="validator.md#0x2_validator">validator</a>'s starting stake <b>to</b> the staking pool.
-    <a href="staking_pool.md#0x2_staking_pool_request_add_delegation">staking_pool::request_add_delegation</a>(&<b>mut</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>, stake, coin_locked_until_epoch, sui_address, sui_address, starting_epoch, ctx);
-    // We immediately process this delegation <b>as</b> they are at <a href="validator.md#0x2_validator">validator</a> setup time and this is the <a href="validator.md#0x2_validator">validator</a> staking <b>with</b> itself.
-    <a href="staking_pool.md#0x2_staking_pool_process_pending_delegation">staking_pool::process_pending_delegation</a>(&<b>mut</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>);
-    <a href="validator.md#0x2_validator_Validator">Validator</a> {
+
+    <a href="validator.md#0x2_validator_new_from_metadata">new_from_metadata</a>(
         metadata,
-        // Initialize the voting power <b>to</b> be the same <b>as</b> the stake amount.
-        // At the epoch change <b>where</b> this <a href="validator.md#0x2_validator">validator</a> is actually added <b>to</b> the
-        // active <a href="validator.md#0x2_validator">validator</a> set, the voting power will be updated accordingly.
-        <a href="voting_power.md#0x2_voting_power">voting_power</a>: stake_amount,
+        stake,
+        coin_locked_until_epoch,
         gas_price,
-        <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>,
         commission_rate,
-        next_epoch_stake: stake_amount,
-        next_epoch_gas_price: gas_price,
-        next_epoch_commission_rate: commission_rate,
-    }
+        starting_epoch,
+        ctx
+    )
 }
 </code></pre>
 
@@ -594,13 +606,14 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
 
 </details>
 
-<a name="0x2_validator_destroy"></a>
+<a name="0x2_validator_deactivate"></a>
 
-## Function `destroy`
+## Function `deactivate`
+
+Deactivate this validator's staking pool
 
 
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_destroy">destroy</a>(self: <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_deactivate">deactivate</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -609,18 +622,8 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_destroy">destroy</a>(self: <a href="validator.md#0x2_validator_Validator">Validator</a>, ctx: &<b>mut</b> TxContext) {
-    <b>let</b> <a href="validator.md#0x2_validator_Validator">Validator</a> {
-        metadata: _,
-        <a href="voting_power.md#0x2_voting_power">voting_power</a>: _,
-        gas_price: _,
-        <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>,
-        commission_rate: _,
-        next_epoch_stake: _,
-        next_epoch_gas_price: _,
-        next_epoch_commission_rate: _,
-    } = self;
-    <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">staking_pool::deactivate_staking_pool</a>(<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>, ctx);
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_deactivate">deactivate</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, ctx: &<b>mut</b> TxContext) {
+    <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">staking_pool::deactivate_staking_pool</a>(&<b>mut</b> self.<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>, ctx)
 }
 </code></pre>
 
@@ -763,6 +766,7 @@ Request to set new gas price for the next epoch.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_request_set_commission_rate">request_set_commission_rate</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, new_commission_rate: u64) {
+    <b>assert</b>!(new_commission_rate &lt;= <a href="validator.md#0x2_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>, <a href="validator.md#0x2_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>);
     self.next_epoch_commission_rate = new_commission_rate;
 }
 </code></pre>
@@ -1040,13 +1044,13 @@ Called by <code><a href="validator_set.md#0x2_validator_set">validator_set</a></
 
 </details>
 
-<a name="0x2_validator_consensus_address"></a>
+<a name="0x2_validator_primary_address"></a>
 
-## Function `consensus_address`
+## Function `primary_address`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_consensus_address">consensus_address</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="">vector</a>&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_primary_address">primary_address</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="">vector</a>&lt;u8&gt;
 </code></pre>
 
 
@@ -1055,8 +1059,8 @@ Called by <code><a href="validator_set.md#0x2_validator_set">validator_set</a></
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_consensus_address">consensus_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &<a href="">vector</a>&lt;u8&gt; {
-    &self.metadata.consensus_address
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_primary_address">primary_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &<a href="">vector</a>&lt;u8&gt; {
+    &self.metadata.primary_address
 }
 </code></pre>
 
@@ -1232,13 +1236,13 @@ Called by <code><a href="validator_set.md#0x2_validator_set">validator_set</a></
 
 </details>
 
-<a name="0x2_validator_next_epoch_consensus_address"></a>
+<a name="0x2_validator_next_epoch_primary_address"></a>
 
-## Function `next_epoch_consensus_address`
+## Function `next_epoch_primary_address`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_consensus_address">next_epoch_consensus_address</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_primary_address">next_epoch_primary_address</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;
 </code></pre>
 
 
@@ -1247,8 +1251,8 @@ Called by <code><a href="validator_set.md#0x2_validator_set">validator_set</a></
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_consensus_address">next_epoch_consensus_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &Option&lt;<a href="">vector</a>&lt;u8&gt;&gt; {
-    &self.metadata.next_epoch_consensus_address
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_primary_address">next_epoch_primary_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &Option&lt;<a href="">vector</a>&lt;u8&gt;&gt; {
+    &self.metadata.next_epoch_primary_address
 }
 </code></pre>
 
@@ -1839,14 +1843,14 @@ Update p2p address of this validator, taking effects from next epoch
 
 </details>
 
-<a name="0x2_validator_update_next_epoch_consensus_address"></a>
+<a name="0x2_validator_update_next_epoch_primary_address"></a>
 
-## Function `update_next_epoch_consensus_address`
+## Function `update_next_epoch_primary_address`
 
 Update consensus address of this validator, taking effects from next epoch
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_consensus_address">update_next_epoch_consensus_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, consensus_address: <a href="">vector</a>&lt;u8&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_primary_address">update_next_epoch_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, primary_address: <a href="">vector</a>&lt;u8&gt;)
 </code></pre>
 
 
@@ -1855,8 +1859,8 @@ Update consensus address of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_consensus_address">update_next_epoch_consensus_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, consensus_address: <a href="">vector</a>&lt;u8&gt;) {
-    self.metadata.next_epoch_consensus_address = <a href="_some">option::some</a>(consensus_address);
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_primary_address">update_next_epoch_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, primary_address: <a href="">vector</a>&lt;u8&gt;) {
+    self.metadata.next_epoch_primary_address = <a href="_some">option::some</a>(primary_address);
     <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
 </code></pre>
@@ -2001,9 +2005,9 @@ advancing an epoch.
         self.metadata.next_epoch_p2p_address = <a href="_none">option::none</a>();
     };
 
-    <b>if</b> (<a href="_is_some">option::is_some</a>(<a href="validator.md#0x2_validator_next_epoch_consensus_address">next_epoch_consensus_address</a>(self))) {
-        self.metadata.consensus_address = <a href="_extract">option::extract</a>(&<b>mut</b> self.metadata.next_epoch_consensus_address);
-        self.metadata.next_epoch_consensus_address = <a href="_none">option::none</a>();
+    <b>if</b> (<a href="_is_some">option::is_some</a>(<a href="validator.md#0x2_validator_next_epoch_primary_address">next_epoch_primary_address</a>(self))) {
+        self.metadata.primary_address = <a href="_extract">option::extract</a>(&<b>mut</b> self.metadata.next_epoch_primary_address);
+        self.metadata.next_epoch_primary_address = <a href="_none">option::none</a>();
     };
 
     <b>if</b> (<a href="_is_some">option::is_some</a>(<a href="validator.md#0x2_validator_next_epoch_worker_address">next_epoch_worker_address</a>(self))) {
@@ -2088,6 +2092,59 @@ Aborts if validator metadata is valid
 
 <pre><code><b>pragma</b> opaque;
 <b>aborts_if</b> [abstract] <b>true</b>;
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_new_from_metadata"></a>
+
+## Function `new_from_metadata`
+
+Create a new validator from the given <code><a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a></code>, called by both <code>new</code> and <code>new_for_testing</code>.
+
+
+<pre><code><b>fun</b> <a href="validator.md#0x2_validator_new_from_metadata">new_from_metadata</a>(metadata: <a href="validator.md#0x2_validator_ValidatorMetadata">validator::ValidatorMetadata</a>, stake: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, coin_locked_until_epoch: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;, gas_price: u64, commission_rate: u64, starting_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator.md#0x2_validator_new_from_metadata">new_from_metadata</a>(
+    metadata: <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a>,
+    stake: Balance&lt;SUI&gt;,
+    coin_locked_until_epoch: Option&lt;EpochTimeLock&gt;,
+    gas_price: u64,
+    commission_rate: u64,
+    starting_epoch: u64,
+    ctx: &<b>mut</b> TxContext
+): <a href="validator.md#0x2_validator_Validator">Validator</a> {
+    <b>let</b> sui_address = metadata.sui_address;
+    <b>let</b> stake_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&stake);
+
+    <b>let</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a> = <a href="staking_pool.md#0x2_staking_pool_new">staking_pool::new</a>(starting_epoch, ctx);
+    // Add the <a href="validator.md#0x2_validator">validator</a>'s starting stake <b>to</b> the staking pool.
+    <a href="staking_pool.md#0x2_staking_pool_request_add_delegation">staking_pool::request_add_delegation</a>(&<b>mut</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>, stake, coin_locked_until_epoch, sui_address, sui_address, starting_epoch, ctx);
+    // We immediately process this delegation <b>as</b> they are at <a href="validator.md#0x2_validator">validator</a> setup time and this is the <a href="validator.md#0x2_validator">validator</a> staking <b>with</b> itself.
+    <a href="staking_pool.md#0x2_staking_pool_process_pending_delegation">staking_pool::process_pending_delegation</a>(&<b>mut</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>);
+    <a href="validator.md#0x2_validator_Validator">Validator</a> {
+        metadata,
+        // Initialize the voting power <b>to</b> be the same <b>as</b> the stake amount.
+        // At the epoch change <b>where</b> this <a href="validator.md#0x2_validator">validator</a> is actually added <b>to</b> the
+        // active <a href="validator.md#0x2_validator">validator</a> set, the voting power will be updated accordingly.
+        <a href="voting_power.md#0x2_voting_power">voting_power</a>: stake_amount,
+        gas_price,
+        <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>,
+        commission_rate,
+        next_epoch_stake: stake_amount,
+        next_epoch_gas_price: gas_price,
+        next_epoch_commission_rate: commission_rate,
+    }
+}
 </code></pre>
 
 

@@ -150,7 +150,7 @@ export function TransactionCard({
             />
         );
 
-    const timestamp = txn.timestamp_ms || txn.timestampMs;
+    const timestamp = txn.timestampMs;
 
     return (
         <Link
@@ -203,7 +203,6 @@ export function TransactionCard({
                                         </Text>
                                     )}
                                 </div>
-
                                 {transferAmountComponent}
                             </div>
                             <div className="flex flex-col w-full gap-1.5">

@@ -91,8 +91,8 @@ fn arb_header() -> impl Strategy<Value = Header> {
 proptest! {
     #[test]
     fn header_deserializes_to_correct_id(header in arb_header()) {
-        let serialized = bincode::serialize(&header).unwrap();
-        let deserialized: Header = bincode::deserialize(&serialized).unwrap();
+        let serialized = bcs::to_bytes(&header).unwrap();
+        let deserialized: Header = bcs::from_bytes(&serialized).unwrap();
         // We may not have header.digest() == Hash::digest(header), due to the naughty cases above.
         //
         // Indeed, the naughty headers are specially crafted so that their `digest` is populated with a wrong digest.

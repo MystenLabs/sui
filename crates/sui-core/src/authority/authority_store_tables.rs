@@ -195,7 +195,7 @@ impl AuthorityPerpetualTables {
     }
 }
 
-impl ObjectStore for &AuthorityPerpetualTables {
+impl ObjectStore for AuthorityPerpetualTables {
     /// Read an object and return it, or Ok(None) if the object was not found.
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         let obj_entry = self

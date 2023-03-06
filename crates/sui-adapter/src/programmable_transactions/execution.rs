@@ -5,7 +5,8 @@ use std::{collections::BTreeMap, fmt};
 
 use move_binary_format::{
     access::ModuleAccess,
-    file_format::{AbilitySet, LocalIndex, Visibility},
+    errors::{Location, PartialVMResult, VMResult},
+    file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
     CompiledModule,
 };
 use move_core_types::{
@@ -29,7 +30,8 @@ use sui_types::{
     gas::SuiGasStatus,
     id::UID,
     messages::{
-        Argument, Command, EntryArgumentErrorKind, ProgrammableMoveCall, ProgrammableTransaction,
+        Argument, Command, CommandArgumentError, EntryArgumentErrorKind, ProgrammableMoveCall,
+        ProgrammableTransaction,
     },
     SUI_FRAMEWORK_ADDRESS,
 };
@@ -37,6 +39,7 @@ use sui_verifier::{
     entry_points_verifier::{
         TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID, RESOLVED_UTF8_STR,
     },
+    private_generics::{EVENT_MODULE, TRANSFER_MODULE},
     INIT_FN_NAME,
 };
 
@@ -126,8 +129,9 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
                 None => {
                     // empty args covered above
                     let (idx, arg) = arg_iter.next().unwrap();
-                    let obj: ObjectValue = context.take_arg(CommandKind::MakeMoveVec, idx, arg)?;
-                    res.extend(obj.to_bcs_bytes());
+                    let obj: ObjectValue =
+                        context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
+                    obj.write_bcs_bytes(&mut res);
                     let tag = TypeTag::Struct(Box::new(obj.type_.clone()));
                     (obj.used_in_non_entry_move_call, tag)
                 }
@@ -136,20 +140,12 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
                 .session
                 .load_type(&tag)
                 .map_err(|e| context.convert_vm_error(e))?;
-            let elem_abilities = context
-                .session
-                .get_type_abilities(&elem_ty)
-                .map_err(|e| context.convert_vm_error(e))?;
             for (idx, arg) in arg_iter {
-                let value: Value = if elem_abilities.has_copy() {
-                    context.clone_arg(idx, arg)?
-                } else {
-                    context.take_arg(CommandKind::MakeMoveVec, idx, arg)?
-                };
+                let value: Value = context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
                 check_param_type(context, idx, &value, &elem_ty)?;
                 used_in_non_entry_move_call =
                     used_in_non_entry_move_call || value.was_used_in_non_entry_move_call();
-                res.extend(value.to_bcs_bytes());
+                value.write_bcs_bytes(&mut res);
             }
             let ty = Type::Vector(Box::new(elem_ty));
             let abilities = context
@@ -169,9 +165,10 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
             let objs: Vec<ObjectValue> = objs
                 .into_iter()
                 .enumerate()
-                .map(|(idx, arg)| context.take_arg(CommandKind::TransferObjects, idx, arg))
+                .map(|(idx, arg)| context.by_value_arg(CommandKind::TransferObjects, idx, arg))
                 .collect::<Result<_, _>>()?;
-            let addr: SuiAddress = context.clone_arg(objs.len(), addr_arg)?;
+            let addr: SuiAddress =
+                context.by_value_arg(CommandKind::TransferObjects, objs.len(), addr_arg)?;
             for obj in objs {
                 obj.ensure_public_transfer_eligible()?;
                 context.transfer_object(obj, addr)?;
@@ -181,9 +178,14 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
         Command::SplitCoin(coin_arg, amount_arg) => {
             let mut obj: ObjectValue = context.borrow_arg_mut(0, coin_arg)?;
             let ObjectContents::Coin(coin) = &mut obj.contents else {
-                panic!("not a coin")
+                let e = ExecutionErrorKind::command_argument_error(
+                    CommandArgumentError::TypeMismatch,
+                    0,
+                );
+                let msg = format!("Expected a coin but got an object of type {}", obj.type_);
+                return Err(ExecutionError::new_with_source(e, msg));
             };
-            let amount: u64 = context.clone_arg(1, amount_arg)?;
+            let amount: u64 = context.by_value_arg(CommandKind::SplitCoin, 1, amount_arg)?;
             let new_coin_id = context.fresh_id()?;
             let new_coin = coin.split_coin(amount, UID::new(new_coin_id))?;
             let coin_type = obj.type_.clone();
@@ -193,22 +195,43 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
         Command::MergeCoins(target_arg, coin_args) => {
             let mut target: ObjectValue = context.borrow_arg_mut(0, target_arg)?;
             let ObjectContents::Coin(target_coin) = &mut target.contents else {
-                panic!("not a coin")
+                let e = ExecutionErrorKind::command_argument_error(
+                    CommandArgumentError::TypeMismatch,
+                    0,
+                );
+                let msg = format!("Expected a coin but got an object of type {}", target.type_);
+                return Err(ExecutionError::new_with_source(e, msg));
             };
             let coins: Vec<ObjectValue> = coin_args
                 .into_iter()
                 .enumerate()
-                .map(|(idx, arg)| context.take_arg(CommandKind::MergeCoins, idx + 1, arg))
+                .map(|(idx, arg)| context.by_value_arg(CommandKind::MergeCoins, idx + 1, arg))
                 .collect::<Result<_, _>>()?;
-            for coin in coins {
+            for (idx, coin) in coins.into_iter().enumerate() {
+                if target.type_ != coin.type_ {
+                    let e = ExecutionErrorKind::command_argument_error(
+                        CommandArgumentError::TypeMismatch,
+                        (idx + 1) as u16,
+                    );
+                    let msg = format!(
+                        "Expected a coin of type {} but got an object of type {}",
+                        target.type_, coin.type_
+                    );
+                    return Err(ExecutionError::new_with_source(e, msg));
+                }
                 let ObjectContents::Coin(Coin { id, balance }) = coin.contents else {
-                    panic!("not a coin")
+                    invariant_violation!(
+                        "Target coin was a coin, and we already checked for the same type. \
+                        This should be a coin"
+                    );
                 };
                 context.delete_id(*id.object_id())?;
                 let Some(new_value) = target_coin.balance.value().checked_add(balance.value())
-                    else {
-                        panic!("coin overflow")
-                    };
+                else {
+                    return Err(ExecutionError::from_kind(
+                        ExecutionErrorKind::TotalCoinBalanceOverflow,
+                    ));
+                };
                 target_coin.balance = Balance::new(new_value);
             }
             context.restore_arg(target_arg, Value::Object(target))?;
@@ -251,17 +274,16 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>>(
     is_init: bool,
 ) -> Result<Vec<Value>, ExecutionError> {
     // check that the function is either an entry function or a valid public function
-    let (function_kind, signature, return_value_kinds) =
-        check_visibility_and_signature(context, module_id, function, &type_arguments, is_init)?;
+    let LoadedFunctionInfo {
+        kind,
+        signature,
+        return_value_kinds,
+        index,
+        last_instr,
+    } = check_visibility_and_signature(context, module_id, function, &type_arguments, is_init)?;
     // build the arguments, storing meta data about by-mut-ref args
-    let (tx_context_kind, by_mut_ref, serialized_arguments) = build_move_args(
-        context,
-        module_id,
-        function,
-        function_kind,
-        &signature,
-        &arguments,
-    )?;
+    let (tx_context_kind, by_mut_ref, serialized_arguments) =
+        build_move_args(context, module_id, function, kind, &signature, &arguments)?;
     // invoke the VM
     let SerializedReturnValues {
         mutable_reference_outputs,
@@ -285,12 +307,12 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>>(
     {
         assert_invariant!(i1 == i2, "lost mutable input");
         let arg_idx = i1 as usize;
-        let used_in_non_entry_move_call = function_kind == FunctionKind::NonEntry;
+        let used_in_non_entry_move_call = kind == FunctionKind::NonEntry;
         let value = make_value(value_info, bytes, used_in_non_entry_move_call)?;
         context.restore_arg(arguments[arg_idx], value)?;
     }
 
-    context.take_user_events(module_id)?;
+    context.take_user_events(module_id, index, last_instr)?;
     assert_invariant!(
         return_value_kinds.len() == return_values.len(),
         "lost return value"
@@ -495,6 +517,19 @@ enum ValueKind {
     Raw(Type, AbilitySet),
 }
 
+struct LoadedFunctionInfo {
+    /// The kind of the function, e.g. public or private or init
+    kind: FunctionKind,
+    /// The signature information of the function
+    signature: LoadedFunctionInstantiation,
+    /// Object or type information for the return values
+    return_value_kinds: Vec<ValueKind>,
+    /// Definitio index of the function
+    index: FunctionDefinitionIndex,
+    /// The length of the function used for setting error information, or 0 if native
+    last_instr: CodeOffset,
+}
+
 /// Checks that the function to be called is either
 /// - an entry function
 /// - a public function that does not return references
@@ -505,54 +540,70 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>>(
     function: &IdentStr,
     type_arguments: &[TypeTag],
     from_init: bool,
-) -> Result<(FunctionKind, LoadedFunctionInstantiation, Vec<ValueKind>), ExecutionError> {
+) -> Result<LoadedFunctionInfo, ExecutionError> {
     for (idx, ty) in type_arguments.iter().enumerate() {
         context
             .session
             .load_type(ty)
             .map_err(|e| convert_type_argument_error(idx, e, context.vm, context.state_view))?;
     }
-    let function_kind = {
-        let module = context
-            .vm
-            .load_module(module_id, context.state_view)
-            .map_err(|e| context.convert_vm_error(e))?;
-        let module_id = module.self_id();
-        let Some(fdef) = module.function_defs.iter().find(|fdef| {
-            module.identifier_at(module.function_handle_at(fdef.function).name) == function
-        }) else {
+    if from_init {
+        // the session is weird and does not load the module on publishing. This is a temporary
+        // work around, since loading the function through the session will cause the module
+        // to be loaded through the sessions data store.
+        let result = context
+            .session
+            .load_function(module_id, function, type_arguments);
+        assert_invariant!(
+            result.is_ok(),
+            "The modules init should be able to be loaded"
+        );
+    }
+    let module = context
+        .vm
+        .load_module(module_id, context.state_view)
+        .map_err(|e| context.convert_vm_error(e))?;
+    let Some((index, fdef)) = module.function_defs.iter().enumerate().find(|(_index, fdef)| {
+        module.identifier_at(module.function_handle_at(fdef.function).name) == function
+    }) else {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::FunctionNotFound,
+            format!(
+                "Could not resolve function '{}' in module {}",
+                function, &module_id,
+            ),
+        ));
+    };
+
+    let last_instr: CodeOffset = fdef
+        .code
+        .as_ref()
+        .map(|code| code.code.len() - 1)
+        .unwrap_or(0) as CodeOffset;
+    // TODO dev inspect
+    let function_kind = match (fdef.visibility, fdef.is_entry) {
+        (Visibility::Private | Visibility::Friend, true) => FunctionKind::PrivateEntry,
+        (Visibility::Public, true) => FunctionKind::PublicEntry,
+        (Visibility::Public, false) => FunctionKind::NonEntry,
+        (Visibility::Private, false) if from_init => {
+            assert_invariant!(
+                function == INIT_FN_NAME,
+                "module init specified non-init function"
+            );
+            FunctionKind::Init
+        }
+        (Visibility::Private | Visibility::Friend, false) => {
             return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::FunctionNotFound,
-                format!(
-                    "Could not resolve function '{}' in module {}",
-                    function, &module_id,
-                ),
+                ExecutionErrorKind::NonEntryFunctionInvoked,
+                "Can only call `entry` or `public` functions",
             ));
-        };
-        // TODO dev inspect
-        match (fdef.visibility, fdef.is_entry) {
-            (Visibility::Private | Visibility::Friend, true) => FunctionKind::PrivateEntry,
-            (Visibility::Public, true) => FunctionKind::PublicEntry,
-            (Visibility::Public, false) => FunctionKind::NonEntry,
-            (Visibility::Private, false) if from_init => {
-                assert_invariant!(
-                    function == INIT_FN_NAME,
-                    "module init specified non-init function"
-                );
-                FunctionKind::Init
-            }
-            (Visibility::Private | Visibility::Friend, false) => {
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::NonEntryFunctionInvoked,
-                    "Can only call `entry` or `public` functions",
-                ));
-            }
         }
     };
     let signature = context
         .session
         .load_function(module_id, function, type_arguments)
         .map_err(|e| context.convert_vm_error(e))?;
+    let signature = subst_signature(signature).map_err(|e| context.convert_vm_error(e))?;
     let return_value_kinds = match function_kind {
         FunctionKind::PrivateEntry | FunctionKind::PublicEntry | FunctionKind::Init => {
             assert_invariant!(
@@ -565,7 +616,40 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>>(
             check_non_entry_signature(context, module_id, function, &signature)?
         }
     };
-    Ok((function_kind, signature, return_value_kinds))
+    check_private_generics(context, module_id, function, &signature.type_arguments)?;
+    Ok(LoadedFunctionInfo {
+        kind: function_kind,
+        signature,
+        return_value_kinds,
+        index: FunctionDefinitionIndex(index as u16),
+        last_instr,
+    })
+}
+
+/// substitutes the type arguments into the parameter and return types
+fn subst_signature(
+    signature: LoadedFunctionInstantiation,
+) -> VMResult<LoadedFunctionInstantiation> {
+    let LoadedFunctionInstantiation {
+        type_arguments,
+        parameters,
+        return_,
+    } = signature;
+    let parameters = parameters
+        .into_iter()
+        .map(|ty| ty.subst(&type_arguments))
+        .collect::<PartialVMResult<Vec<_>>>()
+        .map_err(|err| err.finish(Location::Undefined))?;
+    let return_ = return_
+        .into_iter()
+        .map(|ty| ty.subst(&type_arguments))
+        .collect::<PartialVMResult<Vec<_>>>()
+        .map_err(|err| err.finish(Location::Undefined))?;
+    Ok(LoadedFunctionInstantiation {
+        type_arguments,
+        parameters,
+        return_,
+    })
 }
 
 /// Checks that the non-entry function does not return references. And marks the return values
@@ -579,9 +663,12 @@ fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>>(
     signature
         .return_
         .iter()
-        .map(|return_type| {
+        .enumerate()
+        .map(|(idx, return_type)| {
             if let Type::Reference(_) | Type::MutableReference(_) = return_type {
-                panic!("references not supported")
+                return Err(ExecutionError::from_kind(
+                    ExecutionErrorKind::InvalidPublicFunctionReturnType { idx: idx as u16 },
+                ));
             };
             let abilities = context
                 .session
@@ -618,6 +705,40 @@ fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>>(
             })
         })
         .collect()
+}
+
+fn check_private_generics<E: fmt::Debug, S: StorageView<E>>(
+    context: &mut ExecutionContext<E, S>,
+    module_id: &ModuleId,
+    function: &IdentStr,
+    type_arguments: &[Type],
+) -> Result<(), ExecutionError> {
+    let ident = (module_id.address(), module_id.name());
+    if ident == (&SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::NonEntryFunctionInvoked,
+            format!("Cannot directly call functions in sui::{}", EVENT_MODULE),
+        ));
+    }
+    if ident == (&SUI_FRAMEWORK_ADDRESS, TRANSFER_MODULE) {
+        for ty in type_arguments {
+            let abilities = context
+                .session
+                .get_type_abilities(ty)
+                .map_err(|e| context.convert_vm_error(e))?;
+            if !abilities.has_store() {
+                let msg = format!(
+                    "Cannot directly call sui::{}::{} unless the object type has the store ability",
+                    TRANSFER_MODULE, function
+                );
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::NonEntryFunctionInvoked,
+                    msg,
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 type ArgInfo = (
@@ -706,15 +827,7 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>>(
             }
             Type::Reference(inner) => (context.borrow_arg(idx, arg)?, inner),
             t => {
-                let abilities = context
-                    .session
-                    .get_type_abilities(t)
-                    .map_err(|e| context.convert_vm_error(e))?;
-                let value = if abilities.has_copy() {
-                    context.clone_arg(idx, arg)?
-                } else {
-                    context.take_arg(command_kind, idx, arg)?
-                };
+                let value = context.by_value_arg(command_kind, idx, arg)?;
                 (value, t)
             }
         };
@@ -723,10 +836,17 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>>(
             FunctionKind::PrivateEntry | FunctionKind::Init
         ) && value.was_used_in_non_entry_move_call()
         {
-            panic!("private entry taint failed")
+            return Err(command_argument_error(
+                CommandArgumentError::InvalidArgumentToPrivateEntryFunction,
+                idx,
+            ));
         }
         check_param_type(context, idx, &value, non_ref_param_ty)?;
-        let bytes = value.to_bcs_bytes();
+        let bytes = {
+            let mut v = vec![];
+            value.write_bcs_bytes(&mut v);
+            v
+        };
         // Any means this was just some bytes passed in as an argument (as opposed to being
         // generated from a Move function). Meaning we will need to run validation
         if matches!(value, Value::Raw(RawValueType::Any, _)) {
@@ -758,13 +878,13 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>>(
             if !is_entry_primitive_type(context, param_ty)? {
                 let msg = format!(
                     "Non-primitive argument at index {}. If it is an object, it must be \
-                    populated by an object ID",
+                    populated by an object",
                     idx,
                 );
                 return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::entry_argument_error(
-                        idx as LocalIndex,
-                        EntryArgumentErrorKind::UnsupportedPureArg,
+                    ExecutionErrorKind::command_argument_error(
+                        CommandArgumentError::InvalidUsageOfPureArg,
+                        idx as u16,
                     ),
                     msg,
                 ));
@@ -785,7 +905,10 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>>(
         }
     };
     if ty != param_ty {
-        panic!("type mismatch")
+        Err(command_argument_error(
+            CommandArgumentError::TypeMismatch,
+            idx,
+        ))
     } else {
         Ok(())
     }

@@ -16,9 +16,12 @@ serde_json = "1.0.88"
 serde_yaml = "0.8.26"
 git-version = "0.3.5"
 const-str = "0.5.3"
+once_cell = { version = "1.16", optional = true }
 
+sui-core = { path = "../sui-core", optional = true }
 sui-framework = { path = "../sui-framework" }
 sui-framework-build = { path = "../sui-framework-build" }
+sui-protocol-config = { path = "../sui-protocol-config" }
 sui-types = { path = "../sui-types" }
 
 
@@ -27,14 +30,19 @@ colored = "2.0.0"
 
 telemetry-subscribers.workspace = true
 
+move-binary-format.workspace = true
 move-core-types.workspace = true
+move-disassembler.workspace = true
+move-ir-types.workspace = true
 move-prover.workspace = true
 move-prover-boogie-backend.workspace = true
 move-stackless-bytecode.workspace = true
 move-unit-test.workspace = true
+move-vm-runtime.workspace = true
+move-vm-test-utils.workspace = true
+move-stdlib = { workspace = true, features = ["testing"] }
 move-cli.workspace = true
 move-package.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl = "^0.5"
@@ -66,6 +74,6 @@ build = []
 coverage = []
 disassemble = []
 prove = []
-unit_test = []
+unit_test = ["build", "dep:once_cell", "dep:sui-core"]
 calibrate = []
 all = ["build", "coverage", "disassemble", "prove", "unit_test", "calibrate"]

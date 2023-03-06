@@ -16,6 +16,7 @@ use crate::crypto::{
     Signature, SuiAuthoritySignature, SuiSignature,
 };
 use crate::intent::{Intent, IntentMessage};
+use crate::OBJECT_START_VERSION;
 use crate::{gas_coin::GasCoin, object::Object, SUI_FRAMEWORK_ADDRESS};
 use sui_protocol_config::ProtocolConfig;
 
@@ -43,9 +44,9 @@ fn test_signatures_serde() {
     let foo = Foo("hello".into());
     let s = Signature::new(&foo, &sec1);
 
-    let serialized = bincode::serialize(&s).unwrap();
+    let serialized = bcs::to_bytes(&s).unwrap();
     println!("{:?}", serialized);
-    let deserialized: Signature = bincode::deserialize(&serialized).unwrap();
+    let deserialized: Signature = bcs::from_bytes(&serialized).unwrap();
     assert_eq!(deserialized.as_ref(), s.as_ref());
 }
 
@@ -196,9 +197,9 @@ fn test_object_id_serde_json() {
 #[test]
 fn test_object_id_serde_not_human_readable() {
     let obj_id = ObjectID::random();
-    let serialized = bincode::serialize(&obj_id).unwrap();
+    let serialized = bcs::to_bytes(&obj_id).unwrap();
     assert_eq!(obj_id.0.to_vec(), serialized);
-    let deserialized: ObjectID = bincode::deserialize(&serialized).unwrap();
+    let deserialized: ObjectID = bcs::from_bytes(&serialized).unwrap();
     assert_eq!(deserialized, obj_id);
 }
 
@@ -356,6 +357,7 @@ fn test_move_package_size_for_gas_metering() {
     let module = file_format::empty_module();
     let package = Object::new_package(
         vec![module],
+        OBJECT_START_VERSION,
         TransactionDigest::genesis(),
         ProtocolConfig::get_for_max_version().max_move_package_size(),
     )

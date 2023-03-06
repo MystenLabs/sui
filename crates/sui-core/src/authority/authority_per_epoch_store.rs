@@ -25,8 +25,8 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     AuthorityCapabilities, CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey,
     ConsensusTransactionKind, SenderSignedData, SharedInputObject, TransactionData,
-    TransactionEffects, TrustedExecutableTransaction, VerifiedCertificate,
-    VerifiedExecutableTransaction, VerifiedSignedTransaction,
+    TransactionDataAPI, TransactionEffects, TransactionEffectsAPI, TrustedExecutableTransaction,
+    VerifiedCertificate, VerifiedExecutableTransaction, VerifiedSignedTransaction,
 };
 use sui_types::signature::GenericSignature;
 use tracing::{debug, info, trace, warn};
@@ -56,7 +56,7 @@ use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;
 use sui_adapter::adapter;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
@@ -64,7 +64,7 @@ use sui_types::messages_checkpoint::{
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp,
 };
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
-use sui_types::sui_system_state::SuiSystemState;
+use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 use tokio::time::Instant;
@@ -288,6 +288,12 @@ pub struct EpochStartConfiguration {
     pub epoch_digest: CheckpointDigest,
 }
 
+impl EpochStartConfiguration {
+    pub fn protocol_version(&self) -> ProtocolVersion {
+        ProtocolVersion::new(self.system_state.protocol_version())
+    }
+}
+
 impl AuthorityEpochTables {
     pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
         Self::open_tables_transactional(
@@ -399,7 +405,7 @@ impl AuthorityPerEpochStore {
             .current_voting_right
             .set(committee.weight(&name) as i64);
         metrics.epoch_total_votes.set(committee.total_votes as i64);
-        let protocol_version = committee.protocol_version;
+        let protocol_version = epoch_start_configuration.protocol_version();
         let protocol_config = ProtocolConfig::get_for_version(protocol_version);
         let execution_component = ExecutionComponents::new(&protocol_config, store, cache_metrics);
         Arc::new(Self {
@@ -499,7 +505,11 @@ impl AuthorityPerEpochStore {
     }
 
     pub fn reference_gas_price(&self) -> u64 {
-        self.system_state_object().reference_gas_price
+        self.system_state_object().reference_gas_price()
+    }
+
+    pub fn protocol_version(&self) -> ProtocolVersion {
+        self.epoch_start_configuration.protocol_version()
     }
 
     pub fn module_cache(&self) -> &Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>> {
@@ -791,6 +801,7 @@ impl AuthorityPerEpochStore {
             // from the cert.
             let initial_versions: HashMap<_, _> = tx_data
                 .shared_input_objects()
+                .into_iter()
                 .map(SharedInputObject::into_id_and_version)
                 .collect();
 
@@ -890,7 +901,7 @@ impl AuthorityPerEpochStore {
         self.set_assigned_shared_object_versions(
             certificate,
             &effects
-                .shared_objects
+                .shared_objects()
                 .iter()
                 .map(|(id, version, _)| (*id, *version))
                 .collect(),
@@ -1990,11 +2001,11 @@ impl EpochStartConfiguration {
     }
 
     pub fn epoch_id(&self) -> EpochId {
-        self.system_state.epoch
+        self.system_state.epoch()
     }
 
     pub fn epoch_start_timestamp_ms(&self) -> CheckpointTimestamp {
-        self.system_state.epoch_start_timestamp_ms
+        self.system_state.epoch_start_timestamp_ms()
     }
 
     pub fn epoch_digest(&self) -> CheckpointDigest {

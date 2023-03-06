@@ -224,7 +224,7 @@ export type ValidatorMetadata = {
   /** The p2p address of the validator (could also contain extra info such as port, DNS and etc.).  */
   p2pAddress: number[];
   /** The address of the narwhal primary  */
-  consensusAddress: number[];
+  primaryAddress: number[];
   /** The address of the narwhal worker  */
   workerAddress: number[];
   /** Total amount of validator stake that would be active in the next epoch.  */
@@ -249,7 +249,7 @@ export type ValidatorMetadata = {
   /** Next epoch's p2p address of the validator*/
   nextEpochP2pAddress: number[];
   /** Next epoch's consensus address of the validator*/
-  nextEpochConsensusAddress: number[];
+  nextEpochPrimaryAddress: number[];
   /** Next epoch's worker address of the validator*/
   nextEpochWorkerAddress: number[];
 };

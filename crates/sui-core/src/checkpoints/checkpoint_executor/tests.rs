@@ -110,7 +110,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     let tempdir = tempdir().unwrap();
     let checkpoint_store = CheckpointStore::new(tempdir.path());
 
-    let (authority_state, mut executor, accumulator, checkpoint_sender, first_committee): (
+    let (authority_state, mut executor, _accumulator, checkpoint_sender, first_committee): (
         Arc<AuthorityState>,
         CheckpointExecutor,
         Arc<StateAccumulator>,
@@ -174,7 +174,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
         .unwrap();
     // sync end of epoch checkpoint
     let last_executed_checkpoint = next_epoch_checkpoints.last().cloned().unwrap();
-    let (end_of_epoch_1_checkpoint, _third_committee) = sync_end_of_epoch_checkpoint(
+    let (_end_of_epoch_1_checkpoint, _third_committee) = sync_end_of_epoch_checkpoint(
         &checkpoint_store,
         &checkpoint_sender,
         last_executed_checkpoint.clone(),
@@ -196,17 +196,6 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     .await
     .unwrap();
 
-    let first_epoch = 0;
-
-    accumulator
-        .digest_epoch(
-            &first_epoch,
-            end_of_epoch_0_checkpoint.sequence_number(),
-            epoch_store.clone(),
-        )
-        .await
-        .unwrap();
-
     // We should have synced up to epoch boundary
     assert_eq!(
         checkpoint_store
@@ -216,6 +205,8 @@ pub async fn test_checkpoint_executor_cross_epoch() {
         num_to_sync_per_epoch as u64,
     );
 
+    let first_epoch = 0;
+
     // Ensure root state hash for epoch exists at end of epoch
     assert!(authority_state
         .database
@@ -224,10 +215,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
         .contains_key(&first_epoch)
         .unwrap());
 
-    let system_state = SuiSystemState {
-        epoch: 1,
-        ..Default::default()
-    };
+    let system_state = SuiSystemState::new_for_testing(1);
 
     let new_epoch_store = authority_state
         .reconfigure(
@@ -260,15 +248,6 @@ pub async fn test_checkpoint_executor_cross_epoch() {
 
     let second_epoch = 1;
     assert!(second_epoch == new_epoch_store.epoch());
-
-    accumulator
-        .digest_epoch(
-            &second_epoch,
-            end_of_epoch_1_checkpoint.sequence_number(),
-            new_epoch_store.clone(),
-        )
-        .await
-        .unwrap();
 
     assert!(authority_state
         .database

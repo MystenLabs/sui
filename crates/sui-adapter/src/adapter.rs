@@ -36,7 +36,10 @@ use move_vm_runtime::{
 };
 
 use sui_cost_tables::bytecode_tables::GasStatus;
-use sui_framework::natives::object_runtime::{self, ObjectRuntime};
+use sui_framework::natives::{
+    object_runtime::{self, ObjectRuntime},
+    NativesCostTable,
+};
 use sui_json::primitive_type;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
@@ -45,7 +48,7 @@ use sui_types::{
     error::{ExecutionErrorKind, SuiError},
     event::Event,
     messages::{CallArg, EntryArgumentErrorKind, InputObjectKind, ObjectArg},
-    object::{self, Data, MoveObject, Object, Owner, ID_END_INDEX},
+    object::{self, Data, MoveObject, Object, Owner, ID_END_INDEX, OBJECT_START_VERSION},
     storage::{ChildObjectResolver, DeleteKind, ObjectChange, ParentSync, Storage, WriteKind},
 };
 use sui_types::{error::convert_vm_error, storage::SingleTxContext};
@@ -105,6 +108,7 @@ pub fn new_session<
         is_metered,
         protocol_config,
     ));
+    extensions.add(NativesCostTable::from_protocol_config(protocol_config));
     vm.new_session_with_extensions(state_view, extensions)
 }
 
@@ -429,6 +433,7 @@ pub fn store_package_and_init_modules<
     // The call to unwrap() will go away once we remove address owner from Immutable objects.
     let package_object = Object::new_package(
         modules,
+        OBJECT_START_VERSION,
         ctx.digest(),
         protocol_config.max_move_package_size(),
     )?;

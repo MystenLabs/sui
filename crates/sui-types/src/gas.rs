@@ -7,6 +7,7 @@ use crate::messages::TransactionEffects;
 use crate::{
     error::{ExecutionError, ExecutionErrorKind},
     gas_coin::GasCoin,
+    messages::TransactionEffectsAPI,
     object::{Object, Owner},
 };
 use itertools::MultiUnzip;
@@ -98,9 +99,9 @@ impl GasCostSummary {
             transactions
                 .map(|e| {
                     (
-                        e.gas_used.storage_cost,
-                        e.gas_used.computation_cost,
-                        e.gas_used.storage_rebate,
+                        e.gas_cost_summary().storage_cost,
+                        e.gas_cost_summary().computation_cost,
+                        e.gas_cost_summary().storage_rebate,
                     )
                 })
                 .multiunzip();
@@ -468,6 +469,7 @@ pub fn check_gas_balance(
     gas_budget: u64,
     gas_price: u64,
     extra_amount: u64,
+    more_gas_objs: Vec<Object>,
     extra_objs: Vec<Object>,
     cost_table: &SuiCostTable,
 ) -> UserInputResult {
@@ -494,16 +496,14 @@ pub fn check_gas_balance(
         });
     }
 
-    // TODO: remove this check if gas payment with multiple coins is supported.
-    // This check is necessary now because, when transactions failed due to execution error,
-    // balance of gas budget will be reverted to pre-transaction state.
-    // Meanwhile we need to make sure that the pre-transaction balance is sufficient
-    // to pay for gas cost before execution error occurs.
-    let gas_balance = get_gas_balance(gas_object)?;
+    let mut gas_balance = get_gas_balance(gas_object)? as u128;
+    let gas_budget_amount = (gas_budget as u128) * (gas_price as u128);
+    for extra_obj in more_gas_objs {
+        gas_balance += get_gas_balance(&extra_obj)? as u128;
+    }
+    ok_or_gas_balance_error!(gas_balance, gas_budget_amount)?;
 
-    ok_or_gas_balance_error!(gas_balance as u128, gas_budget as u128)?;
-
-    let mut total_balance = gas_balance as u128;
+    let mut total_balance = gas_balance;
     for extra_obj in extra_objs {
         total_balance += get_gas_balance(&extra_obj)? as u128;
     }

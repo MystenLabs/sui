@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFormatCoin, CoinFormat } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 
-import { useFormatCoin, CoinFormat } from '~/hooks/useFormatCoin';
 import { Text } from '~/ui/Text';
 
 type StakeColumnProps = {

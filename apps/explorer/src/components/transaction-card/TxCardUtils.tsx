@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFormatCoin } from '@mysten/core';
 import {
     getExecutionStatusType,
     getTotalGasUsed,
@@ -26,7 +27,6 @@ import { TxTimeType } from '../tx-time/TxTimeType';
 
 import styles from './RecentTxCard.module.css';
 
-import { useFormatCoin } from '~/hooks/useFormatCoin';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
 import { TransactionType } from '~/ui/TransactionType';
 
@@ -93,10 +93,7 @@ export function TxAddresses({ content }: { content: LinkObj[] }) {
 }
 
 // Generate table data from the transaction data
-export const genTableDataFromTxData = (
-    results: TxnData[],
-    truncateLength: number
-) => ({
+export const genTableDataFromTxData = (results: TxnData[]) => ({
     data: results.map((txn) => ({
         date: <TxTimeType timestamp={txn.timestamp_ms} />,
         transactionId: (
@@ -215,7 +212,7 @@ export const getDataOnTxDigests = (
                     coinType: transfer?.coinType || null,
                     kind: txKind,
                     From: getTransactionSender(txEff),
-                    timestamp_ms: txEff.timestamp_ms || txEff.timestampMs,
+                    timestamp_ms: txEff.timestampMs,
                     ...(recipient
                         ? {
                               To: recipient,

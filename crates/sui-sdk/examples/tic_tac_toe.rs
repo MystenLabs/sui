@@ -13,10 +13,11 @@ use clap::Parser;
 use clap::Subcommand;
 use serde::Deserialize;
 
+use sui_json_rpc_types::SuiObjectDataOptions;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
     json::SuiJsonValue,
-    rpc_types::SuiData,
+    rpc_types::{SuiData, SuiTransactionEffectsAPI},
     types::{
         base_types::{ObjectID, SuiAddress},
         id::UID,
@@ -113,7 +114,7 @@ impl TicTacToe {
         // We know `create_game` move function will create 1 object.
         let game_id = response
             .effects
-            .created
+            .created()
             .first()
             .unwrap()
             .reference
@@ -207,7 +208,7 @@ impl TicTacToe {
             assert!(response.confirmed_local_execution.unwrap());
 
             // Print any execution error.
-            let status = response.effects.status;
+            let status = response.effects.status();
             if status.is_err() {
                 eprintln!("{:?}", status);
             }
@@ -239,10 +240,16 @@ impl TicTacToe {
     // Retrieve the latest game state from the server.
     async fn fetch_game_state(&self, game_id: ObjectID) -> Result<TicTacToeState, anyhow::Error> {
         // Get the raw BCS serialised move object data
-        let current_game = self.client.read_api().get_object(game_id).await?;
+        let current_game = self
+            .client
+            .read_api()
+            .get_object_with_options(game_id, SuiObjectDataOptions::new().with_bcs())
+            .await?;
         current_game
             .object()?
-            .data
+            .bcs
+            .as_ref()
+            .unwrap()
             .try_as_move()
             .unwrap()
             .deserialize()

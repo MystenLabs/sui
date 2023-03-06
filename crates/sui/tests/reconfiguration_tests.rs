@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_core::safe_client::SafeClientMetricsBase;
+use sui_core::signature_verifier::DefaultSignatureVerifier;
 use sui_core::test_utils::make_transfer_sui_transaction;
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
@@ -18,7 +19,8 @@ use sui_types::crypto::{generate_proof_of_possession, get_account_key_pair};
 use sui_types::gas::GasCostSummary;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
-    CallArg, CertifiedTransactionEffects, ObjectArg, TransactionData, VerifiedTransaction,
+    CallArg, CertifiedTransactionEffects, ObjectArg, TransactionData, TransactionEffectsAPI,
+    VerifiedTransaction,
 };
 use sui_types::object::Object;
 use sui_types::utils::to_sender_signed_transaction;
@@ -55,7 +57,7 @@ async fn advance_epoch_tx_test() {
             // Check that the validator didn't commit the transaction yet.
             assert!(state
                 .get_signed_effects_and_maybe_resign(
-                    &effects.transaction_digest,
+                    effects.transaction_digest(),
                     &state.epoch_store_for_testing()
                 )
                 .unwrap()
@@ -101,7 +103,7 @@ async fn reconfig_with_revert_end_to_end_test() {
         &keypair,
         None,
     );
-    let net = AuthorityAggregator::new_from_local_system_state(
+    let net = AuthorityAggregator::<_, DefaultSignatureVerifier>::new_from_local_system_state(
         &authorities[0].with(|node| node.state().db()),
         &authorities[0].with(|node| node.state().committee_store().clone()),
         SafeClientMetricsBase::new(&registry),
@@ -256,7 +258,7 @@ async fn test_passive_reconfig() {
         .unwrap_or(4);
 
     timeout(Duration::from_secs(60), async move {
-        while let Ok(committee) = epoch_rx.recv().await {
+        while let Ok((committee, _)) = epoch_rx.recv().await {
             info!("received epoch {}", committee.epoch);
             if committee.epoch >= target_epoch {
                 break;
@@ -285,7 +287,7 @@ async fn test_validator_resign_effects() {
         None,
     );
     let registry = Registry::new();
-    let mut net = AuthorityAggregator::new_from_local_system_state(
+    let mut net = AuthorityAggregator::<_, DefaultSignatureVerifier>::new_from_local_system_state(
         &authorities[0].with(|node| node.state().db()),
         &authorities[0].with(|node| node.state().committee_store().clone()),
         SafeClientMetricsBase::new(&registry),
@@ -315,7 +317,6 @@ async fn test_validator_resign_effects() {
 
 // TODO: This test is currently flaky. Need to re-enable it once we fix the issue.
 #[sim_test]
-#[ignore]
 async fn test_reconfig_with_committee_change_basic() {
     // This test exercise the full flow of a validator joining the network, catch up and then leave.
 
@@ -403,7 +404,7 @@ async fn test_reconfig_with_committee_change_basic() {
     let effects = execute_transaction(&authorities, transaction)
         .await
         .unwrap();
-    assert!(effects.status.is_ok());
+    assert!(effects.status().is_ok());
 
     trigger_reconfiguration(&authorities).await;
     // Check that a new validator has joined the committee.
@@ -469,7 +470,7 @@ async fn test_reconfig_with_committee_change_basic() {
     let effects = execute_transaction(&authorities, transaction)
         .await
         .unwrap();
-    assert!(effects.status.is_ok());
+    assert!(effects.status().is_ok());
 
     authorities.push(handle);
     trigger_reconfiguration(&authorities).await;
@@ -542,7 +543,7 @@ async fn execute_transaction(
     transaction: VerifiedTransaction,
 ) -> anyhow::Result<CertifiedTransactionEffects> {
     let registry = Registry::new();
-    let net = AuthorityAggregator::new_from_local_system_state(
+    let net = AuthorityAggregator::<_, DefaultSignatureVerifier>::new_from_local_system_state(
         &authorities[0].with(|node| node.state().db()),
         &authorities[0].with(|node| node.state().committee_store().clone()),
         SafeClientMetricsBase::new(&registry),

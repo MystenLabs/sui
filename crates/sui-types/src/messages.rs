@@ -1,9 +1,10 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use super::{base_types::*, committee::Committee, error::*, event::Event};
 use crate::certificate_proof::CertificateProof;
-use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
+use crate::committee::{EpochId, ProtocolVersion};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
     Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignatureInner, ToFromBytes,
@@ -23,6 +24,7 @@ use crate::{
     SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use byteorder::{BigEndian, ReadBytesExt};
+use enum_dispatch::enum_dispatch;
 use fastcrypto::encoding::Base64;
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
@@ -48,6 +50,7 @@ use std::{
 use strum::IntoStaticStr;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use tap::Pipe;
+use thiserror::Error;
 use tracing::debug;
 
 pub const DUMMY_GAS_PRICE: u64 = 1;
@@ -215,15 +218,13 @@ pub struct PayAllSui {
 }
 
 impl PayAllSui {
-    pub fn validity_check(
-        &self,
-        config: &ProtocolConfig,
-        gas_payment: &ObjectRef,
-    ) -> UserInputResult {
+    pub fn validity_check(&self, config: &ProtocolConfig, gas: &[ObjectRef]) -> UserInputResult {
         fp_ensure!(!self.coins.is_empty(), UserInputError::EmptyInputCoins);
+        fp_ensure!(gas.len() == 1, UserInputError::UnexpectedGasPaymentObject);
         fp_ensure!(
             // unwrap() is safe because coins are not empty.
-            self.coins.first().unwrap() == gas_payment,
+            // gas is > 0 (validity_check) and == 1 (above)
+            self.coins.first().unwrap() == &gas[0],
             UserInputError::UnexpectedGasPaymentObject
         );
         fp_ensure!(
@@ -258,15 +259,13 @@ pub struct PaySui {
 }
 
 impl PaySui {
-    pub fn validity_check(
-        &self,
-        config: &ProtocolConfig,
-        gas_payment: &ObjectRef,
-    ) -> UserInputResult {
+    pub fn validity_check(&self, config: &ProtocolConfig, gas: &[ObjectRef]) -> UserInputResult {
         fp_ensure!(!self.coins.is_empty(), UserInputError::EmptyInputCoins);
+        fp_ensure!(gas.len() == 1, UserInputError::UnexpectedGasPaymentObject);
         fp_ensure!(
             // unwrap() is safe because coins are not empty.
-            self.coins.first().unwrap() == gas_payment,
+            // gas is > 0 (validity_check) and == 1 (above)
+            self.coins.first().unwrap() == &gas[0],
             UserInputError::UnexpectedGasPaymentObject
         );
         fp_ensure!(
@@ -339,6 +338,11 @@ pub struct ChangeEpoch {
     pub storage_rebate: u64,
     /// Unix timestamp when epoch started
     pub epoch_start_timestamp_ms: u64,
+    /// System packages (specifically framework and move stdlib) that are written before the new
+    /// epoch starts. This tracks framework upgrades on chain. When executing the ChangeEpoch txn,
+    /// the validator must write out the modules below.  Modules are given in their serialized form,
+    /// and include the ObjectID within their serialized form.
+    pub system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>)>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -406,6 +410,29 @@ pub enum SingleTransactionKind {
     /// A transaction that allows the interleaving of native commands and Move calls
     ProgrammableTransaction(ProgrammableTransaction),
     // .. more transaction types go here
+}
+
+impl VersionedProtocolMessage for SingleTransactionKind {
+    fn check_version_supported(&self, _current_protocol_version: ProtocolVersion) -> SuiResult {
+        // This code does nothing right now - it exists to cause a compiler error when new
+        // enumerants are added to SingleTransactionKind.
+        //
+        // When we add new cases here, check that current_protocol_version does not pre-date the
+        // addition of that enumerant.
+        match &self {
+            SingleTransactionKind::TransferObject(_)
+            | SingleTransactionKind::Publish(_)
+            | SingleTransactionKind::Call(_)
+            | SingleTransactionKind::TransferSui(_)
+            | SingleTransactionKind::Pay(_)
+            | SingleTransactionKind::PaySui(_)
+            | SingleTransactionKind::PayAllSui(_)
+            | SingleTransactionKind::ChangeEpoch(_)
+            | SingleTransactionKind::Genesis(_)
+            | SingleTransactionKind::ConsensusCommitPrologue(_)
+            | SingleTransactionKind::ProgrammableTransaction(_) => Ok(()),
+        }
+    }
 }
 
 impl CallArg {
@@ -770,15 +797,10 @@ impl ProgrammableTransaction {
     }
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
-        if !cfg!(test) {
-            return Err(UserInputError::Unsupported(
-                "Programmable transactions are not yet available".to_owned(),
-            ));
-        }
         fp_ensure!(
             self.commands.len() < config.max_programmable_tx_commands() as usize,
             UserInputError::SizeLimitExceeded {
-                limit: "maximum commands in a progammable transaction".to_string(),
+                limit: "maximum commands in a programmable transaction".to_string(),
                 value: config.max_programmable_tx_commands().to_string()
             }
         );
@@ -786,6 +808,30 @@ impl ProgrammableTransaction {
             c.validity_check(config)?
         }
         Ok(())
+    }
+
+    fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
+        self.inputs
+            .iter()
+            .filter_map(|arg| match arg {
+                CallArg::Pure(_) | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
+                CallArg::Object(ObjectArg::SharedObject {
+                    id,
+                    initial_shared_version,
+                    mutable,
+                }) => Some(vec![SharedInputObject {
+                    id: *id,
+                    initial_shared_version: *initial_shared_version,
+                    mutable: *mutable,
+                }]),
+                CallArg::ObjVec(_) => {
+                    panic!(
+                        "not supported in programmable transactions, \
+                        should be unreachable if the input checker was run"
+                    )
+                }
+            })
+            .flatten()
     }
 }
 
@@ -893,7 +939,10 @@ impl SingleTransactionKind {
             Self::Call(_) | Self::ChangeEpoch(_) | Self::ConsensusCommitPrologue(_) => {
                 Either::Left(self.all_move_call_shared_input_objects())
             }
-            _ => Either::Right(iter::empty()),
+            Self::ProgrammableTransaction(pt) => {
+                Either::Right(Either::Left(pt.shared_input_objects()))
+            }
+            _ => Either::Right(Either::Right(iter::empty())),
         }
     }
 
@@ -954,7 +1003,8 @@ impl SingleTransactionKind {
         }
     }
 
-    pub fn move_call(&self) -> Option<&MoveCall> {
+    /// Actively being replaced by programmable transactions
+    pub fn legacy_move_call(&self) -> Option<&MoveCall> {
         match &self {
             Self::Call(call @ MoveCall { .. }) => Some(call),
             _ => None,
@@ -1022,17 +1072,13 @@ impl SingleTransactionKind {
         Ok(input_objects)
     }
 
-    pub fn validity_check(
-        &self,
-        config: &ProtocolConfig,
-        gas_payment: &ObjectRef,
-    ) -> UserInputResult {
+    pub fn validity_check(&self, config: &ProtocolConfig, gas: &[ObjectRef]) -> UserInputResult {
         match self {
             SingleTransactionKind::Publish(publish) => publish.validity_check(config)?,
             SingleTransactionKind::Call(call) => call.validity_check(config)?,
             SingleTransactionKind::Pay(p) => p.validity_check(config)?,
-            SingleTransactionKind::PaySui(p) => p.validity_check(config, gas_payment)?,
-            SingleTransactionKind::PayAllSui(pa) => pa.validity_check(config, gas_payment)?,
+            SingleTransactionKind::PaySui(p) => p.validity_check(config, gas)?,
+            SingleTransactionKind::PayAllSui(pa) => pa.validity_check(config, gas)?,
             SingleTransactionKind::ProgrammableTransaction(p) => p.validity_check(config)?,
             SingleTransactionKind::TransferObject(_)
             | SingleTransactionKind::TransferSui(_)
@@ -1156,6 +1202,22 @@ pub enum TransactionKind {
     // .. more transaction types go here
 }
 
+impl VersionedProtocolMessage for TransactionKind {
+    fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult {
+        // If we add new cases here, check that current_protocol_version does not pre-date the
+        // addition of that enumerant.
+        match &self {
+            TransactionKind::Single(s) => s.check_version_supported(current_protocol_version),
+            TransactionKind::Batch(v) => {
+                for s in v {
+                    s.check_version_supported(current_protocol_version)?
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
 impl TransactionKind {
     pub fn single_transactions(&self) -> impl Iterator<Item = &SingleTransactionKind> {
         match self {
@@ -1230,6 +1292,53 @@ impl TransactionKind {
             TransactionKind::Single(SingleTransactionKind::Genesis(_))
         )
     }
+
+    pub fn validity_check(&self, config: &ProtocolConfig, gas: &[ObjectRef]) -> UserInputResult {
+        match self {
+            TransactionKind::Batch(b) => {
+                fp_ensure!(
+                    !b.is_empty(),
+                    UserInputError::InvalidBatchTransaction {
+                        error: "Batch Transaction cannot be empty".to_string(),
+                    }
+                );
+                fp_ensure!(
+                    b.len() <= config.max_tx_in_batch() as usize,
+                    UserInputError::SizeLimitExceeded {
+                        limit: "maximum transactions in a batch".to_string(),
+                        value: config.max_tx_in_batch().to_string()
+                    }
+                );
+                // Check that all transaction kinds can be in a batch.
+                let valid = b.iter().all(|s| match s {
+                    SingleTransactionKind::Call(_)
+                    | SingleTransactionKind::TransferObject(_)
+                    | SingleTransactionKind::Pay(_) => true,
+                    SingleTransactionKind::TransferSui(_)
+                    | SingleTransactionKind::PaySui(_)
+                    | SingleTransactionKind::PayAllSui(_)
+                    | SingleTransactionKind::ChangeEpoch(_)
+                    | SingleTransactionKind::Genesis(_)
+                    | SingleTransactionKind::Publish(_)
+                    | SingleTransactionKind::ConsensusCommitPrologue(_)
+                    | SingleTransactionKind::ProgrammableTransaction(_) => false,
+                });
+                fp_ensure!(
+                    valid,
+                    UserInputError::InvalidBatchTransaction {
+                        error: "Batch transaction contains non-batchable transactions. Only Call,
+                        Pay and TransferObject are allowed"
+                            .to_string()
+                    }
+                );
+                for s in b {
+                    s.validity_check(config, gas)?
+                }
+            }
+            TransactionKind::Single(s) => s.validity_check(config, gas)?,
+        }
+        Ok(())
+    }
 }
 
 impl Display for TransactionKind {
@@ -1253,7 +1362,7 @@ impl Display for TransactionKind {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct GasData {
-    pub payment: ObjectRef,
+    pub payment: Vec<ObjectRef>,
     pub owner: SuiAddress,
     pub price: u64,
     pub budget: u64,
@@ -1268,8 +1377,44 @@ pub enum TransactionExpiration {
     Epoch(EpochId),
 }
 
+#[enum_dispatch(TransactionDataAPI)]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct TransactionData {
+pub enum TransactionData {
+    V1(TransactionDataV1),
+}
+
+impl VersionedProtocolMessage for TransactionData {
+    fn message_version(&self) -> Option<u64> {
+        Some(match self {
+            Self::V1(_) => 1,
+        })
+    }
+
+    fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult {
+        let (message_version, supported) = match self {
+            Self::V1(_) => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
+            // Suppose we add V2 at protocol version 7, then we must change this to:
+            // Self::V1 => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
+            // Self::V2 => (2, SupportedProtocolVersions::new_for_message(7, u64::MAX)),
+            //
+            // Suppose we remove support for V1 after protocol version 12: we can do it like so:
+            // Self::V1 => (1, SupportedProtocolVersions::new_for_message(1, 12)),
+        };
+
+        if supported.is_version_supported(current_protocol_version) {
+            Ok(())
+        } else {
+            Err(SuiError::WrongMessageVersion {
+                message_version,
+                supported,
+                current_protocol_version,
+            })
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct TransactionDataV1 {
     pub kind: TransactionKind,
     pub sender: SuiAddress,
     pub gas_data: GasData,
@@ -1283,18 +1428,36 @@ impl TransactionData {
         gas_payment: ObjectRef,
         gas_budget: u64,
     ) -> Self {
-        TransactionData {
+        TransactionData::V1(TransactionDataV1 {
             kind,
             sender,
             gas_data: GasData {
                 price: DUMMY_GAS_PRICE,
                 owner: sender,
-                payment: gas_payment,
+                payment: vec![gas_payment],
                 budget: gas_budget,
             },
             expiration: TransactionExpiration::None,
-        }
+        })
     }
+
+    pub fn new_system_transaction(kind: TransactionKind) -> Self {
+        // assert transaction kind if a system transaction?
+        // assert!(kind.is_system_tx());
+        let sender = SuiAddress::default();
+        TransactionData::V1(TransactionDataV1 {
+            kind,
+            sender,
+            gas_data: GasData {
+                price: DUMMY_GAS_PRICE,
+                owner: sender,
+                payment: vec![(ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN)],
+                budget: 0,
+            },
+            expiration: TransactionExpiration::None,
+        })
+    }
+
     pub fn new(
         kind: TransactionKind,
         sender: SuiAddress,
@@ -1302,7 +1465,27 @@ impl TransactionData {
         gas_budget: u64,
         gas_price: u64,
     ) -> Self {
-        TransactionData {
+        TransactionData::V1(TransactionDataV1 {
+            kind,
+            sender,
+            gas_data: GasData {
+                price: gas_price,
+                owner: sender,
+                payment: vec![gas_payment],
+                budget: gas_budget,
+            },
+            expiration: TransactionExpiration::None,
+        })
+    }
+
+    pub fn new_with_gas_coins(
+        kind: TransactionKind,
+        sender: SuiAddress,
+        gas_payment: Vec<ObjectRef>,
+        gas_budget: u64,
+        gas_price: u64,
+    ) -> Self {
+        TransactionData::V1(TransactionDataV1 {
             kind,
             sender,
             gas_data: GasData {
@@ -1312,16 +1495,16 @@ impl TransactionData {
                 budget: gas_budget,
             },
             expiration: TransactionExpiration::None,
-        }
+        })
     }
 
     pub fn new_with_gas_data(kind: TransactionKind, sender: SuiAddress, gas_data: GasData) -> Self {
-        TransactionData {
+        TransactionData::V1(TransactionDataV1 {
             kind,
             sender,
             gas_data,
             expiration: TransactionExpiration::None,
-        }
+        })
     }
 
     pub fn new_move_call_with_dummy_gas_price(
@@ -1366,6 +1549,27 @@ impl TransactionData {
             arguments,
         }));
         Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+    }
+
+    pub fn new_move_call_with_gas_coins(
+        sender: SuiAddress,
+        package: ObjectID,
+        module: Identifier,
+        function: Identifier,
+        type_arguments: Vec<TypeTag>,
+        gas_payment: Vec<ObjectRef>,
+        arguments: Vec<CallArg>,
+        gas_budget: u64,
+        gas_price: u64,
+    ) -> Self {
+        let kind = TransactionKind::Single(SingleTransactionKind::Call(MoveCall {
+            package,
+            module,
+            function,
+            type_arguments,
+            arguments,
+        }));
+        Self::new_with_gas_coins(kind, sender, gas_payment, gas_budget, gas_price)
     }
 
     pub fn new_transfer_with_dummy_gas_price(
@@ -1541,12 +1745,112 @@ impl TransactionData {
         Self::new(kind, sender, gas_payment, gas_budget, gas_price)
     }
 
-    pub fn sender(&self) -> SuiAddress {
+    pub fn new_programmable_with_dummy_gas_price(
+        sender: SuiAddress,
+        gas_payment: ObjectRef,
+        pt: ProgrammableTransaction,
+        gas_budget: u64,
+    ) -> Self {
+        Self::new_programmable(sender, gas_payment, pt, gas_budget, DUMMY_GAS_PRICE)
+    }
+
+    pub fn new_programmable(
+        sender: SuiAddress,
+        gas_payment: ObjectRef,
+        pt: ProgrammableTransaction,
+        gas_budget: u64,
+        gas_price: u64,
+    ) -> Self {
+        let kind = TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt));
+        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+    }
+
+    pub fn execution_parts(&self) -> (TransactionKind, SuiAddress, Vec<ObjectRef>) {
+        (
+            self.kind().clone(),
+            self.sender(),
+            self.gas_data().payment.clone(),
+        )
+    }
+}
+
+#[enum_dispatch]
+pub trait TransactionDataAPI {
+    fn sender(&self) -> SuiAddress;
+
+    // Note: this implies that TransactionKind itself must be versioned, so that it can be
+    // shared across versions. This will be easy to do since it is already an enum.
+    fn kind(&self) -> &TransactionKind;
+
+    // Used by programmable_transaction_builder
+    fn kind_mut(&mut self) -> &mut TransactionKind;
+
+    // kind is moved out of often enough that this is worth it to special case.
+    fn into_kind(self) -> TransactionKind;
+
+    /// Transaction signer and Gas owner
+    fn signers(&self) -> Vec<SuiAddress>;
+
+    fn gas_data(&self) -> &GasData;
+
+    fn gas_owner(&self) -> SuiAddress;
+
+    fn gas(&self) -> &[ObjectRef];
+
+    fn gas_price(&self) -> u64;
+
+    fn gas_budget(&self) -> u64;
+
+    fn expiration(&self) -> &TransactionExpiration;
+
+    fn contains_shared_object(&self) -> bool;
+
+    fn shared_input_objects(&self) -> Vec<SharedInputObject>;
+
+    /// Actively being replaced by programmable transactions
+    fn legacy_move_calls(&self) -> Vec<&MoveCall>;
+
+    fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>>;
+
+    fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult;
+
+    /// Check if the transaction is compliant with sponsorship.
+    fn check_sponsorship(&self) -> UserInputResult;
+
+    fn is_system_tx(&self) -> bool;
+    fn is_change_epoch_tx(&self) -> bool;
+    fn is_genesis_tx(&self) -> bool;
+
+    #[cfg(test)]
+    fn sender_mut(&mut self) -> &mut SuiAddress;
+
+    #[cfg(test)]
+    fn gas_data_mut(&mut self) -> &mut GasData;
+
+    // TODO: this should be #[cfg(test)], but for some reason it is not visible in
+    // authority_tests.rs even though that entire module is #[cfg(test)]
+    fn expiration_mut(&mut self) -> &mut TransactionExpiration;
+}
+
+impl TransactionDataAPI for TransactionDataV1 {
+    fn sender(&self) -> SuiAddress {
         self.sender
     }
 
+    fn kind(&self) -> &TransactionKind {
+        &self.kind
+    }
+
+    fn kind_mut(&mut self) -> &mut TransactionKind {
+        &mut self.kind
+    }
+
+    fn into_kind(self) -> TransactionKind {
+        self.kind
+    }
+
     /// Transaction signer and Gas owner
-    pub fn signers(&self) -> Vec<SuiAddress> {
+    fn signers(&self) -> Vec<SuiAddress> {
         let mut signers = vec![self.sender];
         if self.gas_owner() != self.sender {
             signers.push(self.gas_owner());
@@ -1554,58 +1858,60 @@ impl TransactionData {
         signers
     }
 
-    pub fn gas_data(&self) -> &GasData {
+    fn gas_data(&self) -> &GasData {
         &self.gas_data
     }
 
-    pub fn gas_owner(&self) -> SuiAddress {
+    fn gas_owner(&self) -> SuiAddress {
         self.gas_data.owner
     }
 
-    pub fn gas(&self) -> ObjectRef {
-        self.gas_data.payment
-    }
-
-    pub fn gas_payment_object_ref(&self) -> &ObjectRef {
+    fn gas(&self) -> &[ObjectRef] {
         &self.gas_data.payment
     }
 
-    pub fn gas_price(&self) -> u64 {
+    fn gas_price(&self) -> u64 {
         self.gas_data.price
     }
 
-    pub fn gas_budget(&self) -> u64 {
+    fn gas_budget(&self) -> u64 {
         self.gas_data.budget
     }
 
-    pub fn contains_shared_object(&self) -> bool {
-        self.shared_input_objects().next().is_some()
+    fn expiration(&self) -> &TransactionExpiration {
+        &self.expiration
     }
 
-    pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
-        self.kind.shared_input_objects()
+    fn contains_shared_object(&self) -> bool {
+        self.kind.shared_input_objects().next().is_some()
     }
 
-    pub fn move_calls(&self) -> Vec<&MoveCall> {
+    fn shared_input_objects(&self) -> Vec<SharedInputObject> {
+        self.kind.shared_input_objects().collect()
+    }
+
+    fn legacy_move_calls(&self) -> Vec<&MoveCall> {
         self.kind
             .single_transactions()
-            .flat_map(|s| s.move_call())
+            .flat_map(|s| s.legacy_move_call())
             .collect()
     }
 
-    pub fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>> {
+    fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>> {
         let mut inputs = self.kind.input_objects()?;
 
         if !self.kind.is_system_tx() && !self.kind.is_pay_sui_tx() {
-            inputs.push(InputObjectKind::ImmOrOwnedMoveObject(
-                *self.gas_payment_object_ref(),
-            ));
+            inputs.extend(
+                self.gas()
+                    .iter()
+                    .map(|obj_ref| InputObjectKind::ImmOrOwnedMoveObject(*obj_ref)),
+            );
         }
         Ok(inputs)
     }
 
-    pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
-        Self::validity_check_impl(config, &self.kind, self.gas_payment_object_ref())?;
+    fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
+        self.kind().validity_check(config, self.gas())?;
         self.check_sponsorship()
     }
 
@@ -1639,57 +1945,34 @@ impl TransactionData {
         Err(UserInputError::UnsupportedSponsoredTransactionKind)
     }
 
-    pub fn validity_check_impl(
-        config: &ProtocolConfig,
-        kind: &TransactionKind,
-        gas_payment: &ObjectRef,
-    ) -> UserInputResult {
-        match kind {
-            TransactionKind::Batch(b) => {
-                fp_ensure!(
-                    !b.is_empty(),
-                    UserInputError::InvalidBatchTransaction {
-                        error: "Batch Transaction cannot be empty".to_string(),
-                    }
-                );
-                fp_ensure!(
-                    b.len() <= config.max_tx_in_batch() as usize,
-                    UserInputError::SizeLimitExceeded {
-                        limit: "maximum transactions in a batch".to_string(),
-                        value: config.max_tx_in_batch().to_string()
-                    }
-                );
-                // Check that all transaction kinds can be in a batch.
-                let valid = b.iter().all(|s| match s {
-                    SingleTransactionKind::Call(_)
-                    | SingleTransactionKind::TransferObject(_)
-                    | SingleTransactionKind::Pay(_) => true,
-                    SingleTransactionKind::TransferSui(_)
-                    | SingleTransactionKind::PaySui(_)
-                    | SingleTransactionKind::PayAllSui(_)
-                    | SingleTransactionKind::ChangeEpoch(_)
-                    | SingleTransactionKind::Genesis(_)
-                    | SingleTransactionKind::Publish(_)
-                    | SingleTransactionKind::ConsensusCommitPrologue(_)
-                    | SingleTransactionKind::ProgrammableTransaction(_) => false,
-                });
-                fp_ensure!(
-                    valid,
-                    UserInputError::InvalidBatchTransaction {
-                        error: "Batch transaction contains non-batchable transactions. Only Call,
-                        Pay and TransferObject are allowed"
-                            .to_string()
-                    }
-                );
-                for s in b {
-                    s.validity_check(config, gas_payment)?
-                }
-            }
-            TransactionKind::Single(s) => s.validity_check(config, gas_payment)?,
-        }
-        Ok(())
+    fn is_change_epoch_tx(&self) -> bool {
+        self.kind.is_change_epoch_tx()
+    }
+
+    fn is_system_tx(&self) -> bool {
+        self.kind.is_system_tx()
+    }
+
+    fn is_genesis_tx(&self) -> bool {
+        self.kind.is_genesis_tx()
+    }
+
+    #[cfg(test)]
+    fn sender_mut(&mut self) -> &mut SuiAddress {
+        &mut self.sender
+    }
+
+    #[cfg(test)]
+    fn gas_data_mut(&mut self) -> &mut GasData {
+        &mut self.gas_data
+    }
+
+    fn expiration_mut(&mut self) -> &mut TransactionExpiration {
+        &mut self.expiration
     }
 }
+
+impl TransactionDataV1 {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct SenderSignedData {
@@ -1743,6 +2026,31 @@ impl SenderSignedData {
     }
 }
 
+impl VersionedProtocolMessage for SenderSignedData {
+    fn message_version(&self) -> Option<u64> {
+        self.transaction_data().message_version()
+    }
+
+    fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult {
+        self.transaction_data()
+            .check_version_supported(current_protocol_version)?;
+
+        // This code does nothing right now. Its purpose is to cause a compiler error when a
+        // new signature type is added.
+        //
+        // When adding a new signature type, check if current_protocol_version
+        // predates support for the new type. If it does, return
+        // SuiError::WrongMessageVersion
+        for sig in &self.tx_signatures {
+            match sig {
+                GenericSignature::MultiSig(_) | GenericSignature::Signature(_) => (),
+            }
+        }
+
+        Ok(())
+    }
+}
+
 impl Message for SenderSignedData {
     type DigestType = TransactionDigest;
     const SCOPE: IntentScope = IntentScope::SenderSignedTransaction;
@@ -1752,7 +2060,7 @@ impl Message for SenderSignedData {
     }
 
     fn verify(&self) -> SuiResult {
-        if self.intent_message.value.kind.is_system_tx() {
+        if self.intent_message.value.is_system_tx() {
             return Ok(());
         }
 
@@ -1786,11 +2094,11 @@ impl Message for SenderSignedData {
 
 impl<S> Envelope<SenderSignedData, S> {
     pub fn sender_address(&self) -> SuiAddress {
-        self.data().intent_message.value.sender
+        self.data().intent_message.value.sender()
     }
 
-    pub fn gas_payment_object_ref(&self) -> &ObjectRef {
-        self.data().intent_message.value.gas_payment_object_ref()
+    pub fn gas(&self) -> &[ObjectRef] {
+        self.data().intent_message.value.gas()
     }
 
     pub fn contains_shared_object(&self) -> bool {
@@ -1798,7 +2106,11 @@ impl<S> Envelope<SenderSignedData, S> {
     }
 
     pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
-        self.data().intent_message.value.kind.shared_input_objects()
+        self.data()
+            .intent_message
+            .value
+            .shared_input_objects()
+            .into_iter()
     }
 
     pub fn input_objects_in_compiled_modules(
@@ -1824,7 +2136,7 @@ impl<S> Envelope<SenderSignedData, S> {
     }
 
     pub fn is_system_tx(&self) -> bool {
-        self.data().intent_message.value.kind.is_system_tx()
+        self.data().intent_message.value.is_system_tx()
     }
 }
 
@@ -1889,6 +2201,7 @@ impl VerifiedTransaction {
         computation_charge: u64,
         storage_rebate: u64,
         epoch_start_timestamp_ms: u64,
+        system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>)>,
     ) -> Self {
         ChangeEpoch {
             epoch: next_epoch,
@@ -1897,6 +2210,7 @@ impl VerifiedTransaction {
             computation_charge,
             storage_rebate,
             epoch_start_timestamp_ms,
+            system_packages,
         }
         .pipe(SingleTransactionKind::ChangeEpoch)
         .pipe(Self::new_system_transaction)
@@ -1925,14 +2239,7 @@ impl VerifiedTransaction {
     fn new_system_transaction(system_transaction: SingleTransactionKind) -> Self {
         system_transaction
             .pipe(TransactionKind::Single)
-            .pipe(|kind| {
-                TransactionData::new_with_dummy_gas_price(
-                    kind,
-                    SuiAddress::default(),
-                    (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
-                    0,
-                )
-            })
+            .pipe(TransactionData::new_system_transaction)
             .pipe(|data| {
                 SenderSignedData::new_from_sender_signature(
                     data,
@@ -2299,6 +2606,22 @@ pub enum ExecutionFailureStatus {
     TotalPaymentAmountOverflow,
     /// The total balance of coins is larger than the maximum value of u64.
     TotalCoinBalanceOverflow,
+
+    //
+    // Programmable Transaction Errors
+    //
+    CommandArgumentError {
+        arg_idx: u16,
+        kind: CommandArgumentError,
+    },
+    UnusedValueWithoutDrop {
+        result_idx: u16,
+        secondary_idx: u16,
+    },
+    InvalidPublicFunctionReturnType {
+        idx: u16,
+    },
+    ArityMismatch,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }
@@ -2357,6 +2680,53 @@ pub struct InvalidSharedByValue {
     pub object: ObjectID,
 }
 
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash, Error)]
+pub enum CommandArgumentError {
+    #[error("The type of the value does not match the expected type")]
+    TypeMismatch,
+    #[error("The argument cannot be deserialized into a value of the specified type")]
+    InvalidBCSBytes,
+    #[error("The argument cannot be instantiated from raw bytes")]
+    InvalidUsageOfPureArg,
+    #[error(
+        "Invalid argument to private entry function. \
+        These functions cannot take arguments from other Move functions"
+    )]
+    InvalidArgumentToPrivateEntryFunction,
+    #[error("Out of bounds access to input or result vector {idx}")]
+    IndexOutOfBounds { idx: u16 },
+    #[error(
+        "Out of bounds secondary access to result vector \
+        {result_idx} at secondary index {secondary_idx}"
+    )]
+    SecondaryIndexOutOfBounds { result_idx: u16, secondary_idx: u16 },
+    #[error(
+        "Invalid usage of result {result_idx}, \
+        expected a single result but found multiple return values"
+    )]
+    InvalidResultArity { result_idx: u16 },
+    #[error(
+        "Invalid taking of the Gas coin. \
+        It can only be used by-value with TransferObjects"
+    )]
+    InvalidGasCoinUsage,
+    #[error(
+        "Invalid usage of borrowed value. \
+        Mutably borrowed values require unique usage. \
+        Immutably borrowed values cannot be taken or borrowed mutably"
+    )]
+    InvalidUsageOfBorrowedValue,
+    #[error(
+        "Invalid usage of already taken value. \
+        There is now no value available at this location"
+    )]
+    InvalidUsageOfTakenValue,
+    #[error("Immutable and shared objects cannot be passed by-value.")]
+    InvalidObjectByValue,
+    #[error("Immutable objects cannot be passed by mutable reference, &mut.")]
+    InvalidObjectByMutRef,
+}
+
 impl ExecutionFailureStatus {
     pub fn entry_argument_error(argument_idx: LocalIndex, kind: EntryArgumentErrorKind) -> Self {
         EntryArgumentError { argument_idx, kind }.into()
@@ -2380,6 +2750,10 @@ impl ExecutionFailureStatus {
     pub fn invalid_shared_by_value(object: ObjectID) -> Self {
         InvalidSharedByValue { object }.into()
     }
+
+    pub fn command_argument_error(kind: CommandArgumentError, arg_idx: u16) -> Self {
+        Self::CommandArgumentError { arg_idx, kind }
+    }
 }
 
 impl Display for ExecutionFailureStatus {
@@ -2392,11 +2766,8 @@ impl Display for ExecutionFailureStatus {
                 )
             }
             ExecutionFailureStatus::CoinTooLarge => {
-                write!(
-                    f,
-                    "Coin exceeds maximum value for a single coin"
-                )
-            },
+                write!(f, "Coin exceeds maximum value for a single coin")
+            }
             ExecutionFailureStatus::EmptyInputCoins => {
                 write!(f, "Expected a non-empty list of input Coin objects")
             }
@@ -2417,8 +2788,22 @@ impl Display for ExecutionFailureStatus {
             ExecutionFailureStatus::InvalidTransactionUpdate => {
                 write!(f, "Invalid Transaction Update.")
             }
-            ExecutionFailureStatus::MoveObjectTooBig { object_size, max_object_size } => write!(f, "Move object with size {object_size} is larger than the maximum object size {max_object_size}"),
-            ExecutionFailureStatus::MovePackageTooBig { object_size, max_object_size } => write!(f, "Move package with size {object_size} is larger than the maximum object size {max_object_size}"),
+            ExecutionFailureStatus::MoveObjectTooBig {
+                object_size,
+                max_object_size,
+            } => write!(
+                f,
+                "Move object with size {object_size} is larger \
+                than the maximum object size {max_object_size}"
+            ),
+            ExecutionFailureStatus::MovePackageTooBig {
+                object_size,
+                max_object_size,
+            } => write!(
+                f,
+                "Move package with size {object_size} is larger than the \
+                maximum object size {max_object_size}"
+            ),
             ExecutionFailureStatus::FunctionNotFound => write!(f, "Function Not Found."),
             ExecutionFailureStatus::InvariantViolation => write!(f, "INVARIANT VIOLATION."),
             ExecutionFailureStatus::InvalidTransferObject => write!(
@@ -2534,19 +2919,40 @@ impl Display for ExecutionFailureStatus {
             ),
             ExecutionFailureStatus::VMInvariantViolation => {
                 write!(f, "MOVE VM INVARIANT VIOLATION.")
-            },
+            }
             ExecutionFailureStatus::TotalPaymentAmountOverflow => {
-                write!(
-                    f,
-                    "The total amount of coins to be paid overflows of u64"
-                )
-            },
+                write!(f, "The total amount of coins to be paid overflows of u64")
+            }
             ExecutionFailureStatus::TotalCoinBalanceOverflow => {
+                write!(f, "The total balance of coins overflows u64")
+            }
+            ExecutionFailureStatus::CommandArgumentError { arg_idx, kind } => {
+                write!(f, "Invalid command argument at {arg_idx}. {kind}")
+            }
+            ExecutionFailureStatus::UnusedValueWithoutDrop {
+                result_idx,
+                secondary_idx,
+            } => {
                 write!(
                     f,
-                    "The total balance of coins overflows u64"
+                    "Unused result without the drop ability. \
+                    Command result {result_idx}, return value {secondary_idx}"
                 )
-            },
+            }
+            ExecutionFailureStatus::InvalidPublicFunctionReturnType { idx } => {
+                write!(
+                    f,
+                    "Invalid public Move function signature. \
+                    Unsupported return type for return value {idx}"
+                )
+            }
+            ExecutionFailureStatus::ArityMismatch => {
+                write!(
+                    f,
+                    "Arity mismatch for Move function. \
+                    The number of arguments does not match the number of parameters"
+                )
+            }
         }
     }
 }
@@ -2690,7 +3096,7 @@ impl ExecutionStatus {
         matches!(self, ExecutionStatus::Failure { .. })
     }
 
-    pub fn unwrap(self) {
+    pub fn unwrap(&self) {
         match self {
             ExecutionStatus::Success => {}
             ExecutionStatus::Failure { .. } => {
@@ -2739,9 +3145,54 @@ impl From<InvalidSharedByValue> for ExecutionFailureStatus {
     }
 }
 
+pub trait VersionedProtocolMessage {
+    /// Return version of message. Some messages depend on their enclosing messages to know the
+    /// version number, so not every implementor implements this.
+    fn message_version(&self) -> Option<u64> {
+        None
+    }
+
+    /// Check that the version of the message is the correct one to use at this protocol version.
+    fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult;
+}
+
+/// The response from processing a transaction or a certified transaction
+#[enum_dispatch(TransactionEffectsAPI)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub enum TransactionEffects {
+    V1(TransactionEffectsV1),
+}
+
+impl VersionedProtocolMessage for TransactionEffects {
+    fn message_version(&self) -> Option<u64> {
+        Some(match self {
+            Self::V1(_) => 1,
+        })
+    }
+
+    fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult {
+        let (message_version, supported) = match self {
+            Self::V1(_) => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
+            // Suppose we add V2 at protocol version 7, then we must change this to:
+            // Self::V1 => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
+            // Self::V2 => (2, SupportedProtocolVersions::new_for_message(7, u64::MAX)),
+        };
+
+        if supported.is_version_supported(current_protocol_version) {
+            Ok(())
+        } else {
+            Err(SuiError::WrongMessageVersion {
+                message_version,
+                supported,
+                current_protocol_version,
+            })
+        }
+    }
+}
+
 /// The response from processing a transaction or a certified transaction
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct TransactionEffects {
+pub struct TransactionEffectsV1 {
     /// The status of the execution
     pub status: ExecutionStatus,
     /// The epoch when this transaction was executed.
@@ -2775,18 +3226,173 @@ pub struct TransactionEffects {
     /// It's also included in mutated.
     pub gas_object: (ObjectRef, Owner),
     /// The digest of the events emitted during execution,
-    /// can be None if the transaction does not emmit any event.
+    /// can be None if the transaction does not emit any event.
     pub events_digest: Option<TransactionEventsDigest>,
     /// The set of transaction digests this transaction depends on.
     pub dependencies: Vec<TransactionDigest>,
 }
 
 impl TransactionEffects {
+    /// Creates a TransactionEffects message from the results of execution, choosing the correct
+    /// format for the current protocol version.
+    pub fn new_from_execution(
+        _protocol_version: ProtocolVersion,
+        status: ExecutionStatus,
+        executed_epoch: EpochId,
+        gas_used: GasCostSummary,
+        modified_at_versions: Vec<(ObjectID, SequenceNumber)>,
+        shared_objects: Vec<ObjectRef>,
+        transaction_digest: TransactionDigest,
+        created: Vec<(ObjectRef, Owner)>,
+        mutated: Vec<(ObjectRef, Owner)>,
+        unwrapped: Vec<(ObjectRef, Owner)>,
+        deleted: Vec<ObjectRef>,
+        unwrapped_then_deleted: Vec<ObjectRef>,
+        wrapped: Vec<ObjectRef>,
+        gas_object: (ObjectRef, Owner),
+        events_digest: Option<TransactionEventsDigest>,
+        dependencies: Vec<TransactionDigest>,
+    ) -> Self {
+        // TODO: when there are multiple versions, use protocol_version to construct the
+        // appropriate one.
+
+        Self::V1(TransactionEffectsV1 {
+            status,
+            executed_epoch,
+            gas_used,
+            modified_at_versions,
+            shared_objects,
+            transaction_digest,
+            created,
+            mutated,
+            unwrapped,
+            deleted,
+            unwrapped_then_deleted,
+            wrapped,
+            gas_object,
+            events_digest,
+            dependencies,
+        })
+    }
+
+    pub fn execution_digests(&self) -> ExecutionDigests {
+        ExecutionDigests {
+            transaction: *self.transaction_digest(),
+            effects: self.digest(),
+        }
+    }
+}
+
+// testing helpers.
+impl TransactionEffects {
+    pub fn new_with_tx(tx: &Transaction) -> TransactionEffects {
+        Self::new_with_tx_and_gas(
+            tx,
+            (
+                random_object_ref(),
+                Owner::AddressOwner(tx.data().intent_message.value.sender()),
+            ),
+        )
+    }
+
+    pub fn new_with_tx_and_gas(tx: &Transaction, gas_object: (ObjectRef, Owner)) -> Self {
+        TransactionEffects::V1(TransactionEffectsV1 {
+            transaction_digest: *tx.digest(),
+            gas_object,
+            ..Default::default()
+        })
+    }
+}
+
+#[enum_dispatch]
+pub trait TransactionEffectsAPI {
+    fn status(&self) -> &ExecutionStatus;
+    fn into_status(self) -> ExecutionStatus;
+    fn executed_epoch(&self) -> EpochId;
+    fn modified_at_versions(&self) -> &[(ObjectID, SequenceNumber)];
+    fn shared_objects(&self) -> &[ObjectRef];
+    fn created(&self) -> &[(ObjectRef, Owner)];
+    fn mutated(&self) -> &[(ObjectRef, Owner)];
+    fn unwrapped(&self) -> &[(ObjectRef, Owner)];
+    fn deleted(&self) -> &[ObjectRef];
+    fn unwrapped_then_deleted(&self) -> &[ObjectRef];
+    fn wrapped(&self) -> &[ObjectRef];
+    fn gas_object(&self) -> &(ObjectRef, Owner);
+    fn events_digest(&self) -> Option<&TransactionEventsDigest>;
+    fn dependencies(&self) -> &[TransactionDigest];
+
+    fn all_mutated(&self) -> Vec<(&ObjectRef, &Owner, WriteKind)>;
+
+    fn all_deleted(&self) -> Vec<(&ObjectRef, DeleteKind)>;
+
+    fn transaction_digest(&self) -> &TransactionDigest;
+
+    fn mutated_excluding_gas(&self) -> Vec<&(ObjectRef, Owner)>;
+
+    fn gas_cost_summary(&self) -> &GasCostSummary;
+
+    fn summary_for_debug(&self) -> TransactionEffectsDebugSummary;
+
+    // All of these should be #[cfg(test)], but they are used by tests in other crates, and
+    // dependencies don't get built with cfg(test) set as far as I can tell.
+    fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus;
+    fn gas_cost_summary_mut_for_testing(&mut self) -> &mut GasCostSummary;
+    fn transaction_digest_mut_for_testing(&mut self) -> &mut TransactionDigest;
+    fn dependencies_mut_for_testing(&mut self) -> &mut Vec<TransactionDigest>;
+    fn shared_objects_mut_for_testing(&mut self) -> &mut Vec<ObjectRef>;
+    fn modified_at_versions_mut_for_testing(&mut self) -> &mut Vec<(ObjectID, SequenceNumber)>;
+}
+
+impl TransactionEffectsAPI for TransactionEffectsV1 {
+    fn status(&self) -> &ExecutionStatus {
+        &self.status
+    }
+    fn into_status(self) -> ExecutionStatus {
+        self.status
+    }
+    fn modified_at_versions(&self) -> &[(ObjectID, SequenceNumber)] {
+        &self.modified_at_versions
+    }
+    fn shared_objects(&self) -> &[ObjectRef] {
+        &self.shared_objects
+    }
+    fn created(&self) -> &[(ObjectRef, Owner)] {
+        &self.created
+    }
+    fn mutated(&self) -> &[(ObjectRef, Owner)] {
+        &self.mutated
+    }
+    fn unwrapped(&self) -> &[(ObjectRef, Owner)] {
+        &self.unwrapped
+    }
+    fn deleted(&self) -> &[ObjectRef] {
+        &self.deleted
+    }
+    fn unwrapped_then_deleted(&self) -> &[ObjectRef] {
+        &self.unwrapped_then_deleted
+    }
+    fn wrapped(&self) -> &[ObjectRef] {
+        &self.wrapped
+    }
+    fn gas_object(&self) -> &(ObjectRef, Owner) {
+        &self.gas_object
+    }
+    fn events_digest(&self) -> Option<&TransactionEventsDigest> {
+        self.events_digest.as_ref()
+    }
+    fn dependencies(&self) -> &[TransactionDigest] {
+        &self.dependencies
+    }
+
+    fn executed_epoch(&self) -> EpochId {
+        self.executed_epoch
+    }
+
     /// Return an iterator that iterates through all mutated objects, including mutated,
     /// created and unwrapped objects. In other words, all objects that still exist
     /// in the object state after this transaction.
     /// It doesn't include deleted/wrapped objects.
-    pub fn all_mutated(&self) -> impl Iterator<Item = (&ObjectRef, &Owner, WriteKind)> + Clone {
+    fn all_mutated(&self) -> Vec<(&ObjectRef, &Owner, WriteKind)> {
         self.mutated
             .iter()
             .map(|(r, o)| (r, o, WriteKind::Mutate))
@@ -2796,12 +3402,13 @@ impl TransactionEffects {
                     .iter()
                     .map(|(r, o)| (r, o, WriteKind::Unwrap)),
             )
+            .collect()
     }
 
     /// Return an iterator that iterates through all deleted objects, including deleted,
     /// unwrapped_then_deleted, and wrapped objects. In other words, all objects that
     /// do not exist in the object state after this transaction.
-    pub fn all_deleted(&self) -> impl Iterator<Item = (&ObjectRef, DeleteKind)> + Clone {
+    fn all_deleted(&self) -> Vec<(&ObjectRef, DeleteKind)> {
         self.deleted
             .iter()
             .map(|r| (r, DeleteKind::Normal))
@@ -2811,27 +3418,28 @@ impl TransactionEffects {
                     .map(|r| (r, DeleteKind::UnwrapThenDelete)),
             )
             .chain(self.wrapped.iter().map(|r| (r, DeleteKind::Wrap)))
-    }
-
-    pub fn execution_digests(&self) -> ExecutionDigests {
-        ExecutionDigests {
-            transaction: self.transaction_digest,
-            effects: self.digest(),
-        }
+            .collect()
     }
 
     /// Return an iterator of mutated objects, but excluding the gas object.
-    pub fn mutated_excluding_gas(&self) -> impl Iterator<Item = &(ObjectRef, Owner)> {
-        self.mutated.iter().filter(|o| *o != &self.gas_object)
+    fn mutated_excluding_gas(&self) -> Vec<&(ObjectRef, Owner)> {
+        self.mutated
+            .iter()
+            .filter(|o| *o != &self.gas_object)
+            .collect()
     }
 
-    pub fn gas_cost_summary(&self) -> &GasCostSummary {
+    fn transaction_digest(&self) -> &TransactionDigest {
+        &self.transaction_digest
+    }
+
+    fn gas_cost_summary(&self) -> &GasCostSummary {
         &self.gas_used
     }
 
-    pub fn summary_for_debug(&self) -> TransactionEffectsDebugSummary {
+    fn summary_for_debug(&self) -> TransactionEffectsDebugSummary {
         TransactionEffectsDebugSummary {
-            bcs_size: bcs::to_bytes(self).unwrap().len(),
+            bcs_size: bcs::serialized_size(self).unwrap(),
             status: self.status.clone(),
             gas_used: self.gas_used.clone(),
             transaction_digest: self.transaction_digest,
@@ -2842,6 +3450,25 @@ impl TransactionEffects {
             wrapped_object_count: self.wrapped.len(),
             dependency_count: self.dependencies.len(),
         }
+    }
+
+    fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus {
+        &mut self.status
+    }
+    fn gas_cost_summary_mut_for_testing(&mut self) -> &mut GasCostSummary {
+        &mut self.gas_used
+    }
+    fn transaction_digest_mut_for_testing(&mut self) -> &mut TransactionDigest {
+        &mut self.transaction_digest
+    }
+    fn dependencies_mut_for_testing(&mut self) -> &mut Vec<TransactionDigest> {
+        &mut self.dependencies
+    }
+    fn shared_objects_mut_for_testing(&mut self) -> &mut Vec<ObjectRef> {
+        &mut self.shared_objects
+    }
+    fn modified_at_versions_mut_for_testing(&mut self) -> &mut Vec<(ObjectID, SequenceNumber)> {
+        &mut self.modified_at_versions
     }
 }
 
@@ -2869,7 +3496,7 @@ impl Message for TransactionEffects {
     }
 }
 
-impl Display for TransactionEffects {
+impl Display for TransactionEffectsV1 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
         writeln!(writer, "Status : {:?}", self.status)?;
@@ -2909,7 +3536,13 @@ impl Display for TransactionEffects {
 
 impl Default for TransactionEffects {
     fn default() -> Self {
-        TransactionEffects {
+        TransactionEffects::V1(Default::default())
+    }
+}
+
+impl Default for TransactionEffectsV1 {
+    fn default() -> Self {
+        TransactionEffectsV1 {
             status: ExecutionStatus::Success,
             executed_epoch: 0,
             gas_used: GasCostSummary {
@@ -3119,7 +3752,7 @@ impl Display for CertifiedTransaction {
             "Signed Authorities Bitmap : {:?}",
             self.auth_sig().signers_map
         )?;
-        write!(writer, "{}", &self.data().intent_message.value.kind)?;
+        write!(writer, "{}", &self.data().intent_message.value.kind())?;
         write!(f, "{}", writer)
     }
 }
@@ -3175,8 +3808,13 @@ pub struct AuthorityCapabilities {
     /// (Currently, we just set this to the current time in milliseconds since the epoch, but this
     /// should not be interpreted as a timestamp.)
     pub generation: u64,
+
     /// ProtocolVersions that the authority supports.
     pub supported_protocol_versions: SupportedProtocolVersions,
+
+    /// The ObjectRefs of all versions of system packages that the validator possesses.
+    /// Used to determine whether to do a framework/movestdlib upgrade.
+    pub available_system_packages: Vec<ObjectRef>,
 }
 
 impl Debug for AuthorityCapabilities {
@@ -3188,6 +3826,7 @@ impl Debug for AuthorityCapabilities {
                 "supported_protocol_versions",
                 &self.supported_protocol_versions,
             )
+            .field("available_system_packages", &self.available_system_packages)
             .finish()
     }
 }
@@ -3196,6 +3835,7 @@ impl AuthorityCapabilities {
     pub fn new(
         authority: AuthorityName,
         supported_protocol_versions: SupportedProtocolVersions,
+        available_system_packages: Vec<ObjectRef>,
     ) -> Self {
         let generation = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -3207,6 +3847,7 @@ impl AuthorityCapabilities {
             authority,
             generation,
             supported_protocol_versions,
+            available_system_packages,
         }
     }
 }
@@ -3396,37 +4037,6 @@ pub struct QuorumDriverRequest {
 pub struct QuorumDriverResponse {
     pub effects_cert: VerifiedCertifiedTransactionEffects,
     pub events: TransactionEvents,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct CommitteeInfoRequest {
-    pub epoch: Option<EpochId>,
-}
-
-#[derive(Serialize, Deserialize, Clone, schemars::JsonSchema, Debug)]
-pub struct CommitteeInfoResponse {
-    pub epoch: EpochId,
-    pub protocol_version: ProtocolVersion,
-    pub committee_info: Vec<(AuthorityName, StakeUnit)>,
-    // TODO: We could also return the certified checkpoint that contains this committee.
-    // This would allows a client to verify the authenticity of the committee.
-}
-
-pub type CommitteeInfoResponseDigest = [u8; 32];
-
-impl CommitteeInfoResponse {
-    pub fn digest(&self) -> CommitteeInfoResponseDigest {
-        sha3_hash(self)
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct CommitteeInfo {
-    pub epoch: EpochId,
-    pub protocol_version: ProtocolVersion,
-    pub committee_info: Vec<(AuthorityName, StakeUnit)>,
-    // TODO: We could also return the certified checkpoint that contains this committee.
-    // This would allows a client to verify the authenticity of the committee.
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

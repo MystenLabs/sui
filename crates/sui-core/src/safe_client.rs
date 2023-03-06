@@ -4,6 +4,7 @@
 
 use crate::authority_client::AuthorityAPI;
 use crate::epoch::committee_store::CommitteeStore;
+use crate::signature_verifier::{DefaultSignatureVerifier, SignatureVerifier};
 use mysten_metrics::histogram::{Histogram, HistogramVec};
 use prometheus::core::GenericCounter;
 use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
@@ -12,7 +13,7 @@ use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
-use sui_types::sui_system_state::SuiSystemState;
+use sui_types::sui_system_state::SuiSystemStateInnerBenchmark;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 use sui_types::{
     error::{SuiError, SuiResult},
@@ -132,14 +133,15 @@ impl SafeClientMetrics {
 /// See `SafeClientMetrics::new` for description of each metrics.
 /// The metrics are per validator client.
 #[derive(Clone)]
-pub struct SafeClient<C> {
+pub struct SafeClient<C, S = DefaultSignatureVerifier> {
     authority_client: C,
     committee_store: Arc<CommitteeStore>,
     address: AuthorityPublicKeyBytes,
     metrics: SafeClientMetrics,
+    verifier: S,
 }
 
-impl<C> SafeClient<C> {
+impl<C, S: SignatureVerifier + Default> SafeClient<C, S> {
     pub fn new(
         authority_client: C,
         committee_store: Arc<CommitteeStore>,
@@ -151,9 +153,12 @@ impl<C> SafeClient<C> {
             committee_store,
             address,
             metrics,
+            verifier: Default::default(),
         }
     }
+}
 
+impl<C, S: SignatureVerifier> SafeClient<C, S> {
     pub fn authority_client(&self) -> &C {
         &self.authority_client
     }
@@ -188,7 +193,7 @@ impl<C> SafeClient<C> {
         );
         // Checks it concerns the right tx
         fp_ensure!(
-            signed_effects.data().transaction_digest == *digest,
+            *signed_effects.data().transaction_digest() == *digest,
             SuiError::ByzantineAuthoritySuspicion {
                 authority: self.address,
                 reason: "Unexpected tx digest in the signed effects".to_string()
@@ -205,7 +210,7 @@ impl<C> SafeClient<C> {
             );
         }
         let committee = self.get_committee(&signed_effects.epoch())?;
-        signed_effects.verify(&committee)
+        self.verifier.verify_one(signed_effects, &committee)
     }
 
     fn check_transaction_info(
@@ -224,10 +229,10 @@ impl<C> SafeClient<C> {
         match status {
             TransactionStatus::Signed(signed) => {
                 let committee = self.get_committee(&signed.epoch)?;
-                Ok(VerifiedTransactionInfoResponse::Signed(
-                    SignedTransaction::new_from_data_and_sig(transaction.into_message(), signed)
-                        .verify(&committee)?,
-                ))
+                let signed_transaction =
+                    SignedTransaction::new_from_data_and_sig(transaction.into_message(), signed);
+                let transaction = self.verifier.verify_one(signed_transaction, &committee)?;
+                Ok(VerifiedTransactionInfoResponse::Signed(transaction))
             }
             TransactionStatus::Executed(cert_opt, effects, events) => {
                 let signed_effects = self.check_signed_effects(digest, effects, None)?;
@@ -235,6 +240,7 @@ impl<C> SafeClient<C> {
                     Some(cert) => {
                         let committee = self.get_committee(&cert.epoch)?;
                         Ok(VerifiedTransactionInfoResponse::ExecutedWithCert(
+                            // todo - use self.verifier
                             CertifiedTransaction::new_from_data_and_sig(
                                 transaction.into_message(),
                                 cert,
@@ -281,7 +287,7 @@ impl<C> SafeClient<C> {
     }
 }
 
-impl<C> SafeClient<C>
+impl<C, S: SignatureVerifier> SafeClient<C, S>
 where
     C: AuthorityAPI + Send + Sync + Clone + 'static,
 {
@@ -389,33 +395,6 @@ where
         Ok(transaction_info)
     }
 
-    pub async fn handle_committee_info_request(
-        &self,
-        request: CommitteeInfoRequest,
-    ) -> SuiResult<CommitteeInfoResponse> {
-        let requested_epoch = request.epoch;
-        let committee_info = self
-            .authority_client
-            .handle_committee_info_request(request)
-            .await?;
-        self.verify_committee_info_response(requested_epoch, &committee_info)?;
-        Ok(committee_info)
-    }
-
-    fn verify_committee_info_response(
-        &self,
-        requested_epoch: Option<EpochId>,
-        committee_info: &CommitteeInfoResponse,
-    ) -> SuiResult {
-        if let Some(epoch) = requested_epoch {
-            fp_ensure!(
-                committee_info.epoch == epoch,
-                SuiError::from("Committee info response epoch doesn't match requested epoch")
-            );
-        }
-        Ok(())
-    }
-
     fn verify_checkpoint_sequence(
         &self,
         expected_seq: Option<CheckpointSequenceNumber>,
@@ -488,7 +467,9 @@ where
         Ok(resp)
     }
 
-    pub async fn handle_system_state_object(&self) -> Result<SuiSystemState, SuiError> {
+    pub async fn handle_system_state_object(
+        &self,
+    ) -> Result<SuiSystemStateInnerBenchmark, SuiError> {
         self.authority_client
             .handle_system_state_object(SystemStateRequest { _unused: false })
             .await

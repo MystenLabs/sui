@@ -48,7 +48,7 @@ pub fn process_certificates(c: &mut Criterion) {
 
         let data_size: usize = certificates
             .iter()
-            .map(|cert| bincode::serialize(&cert).unwrap().len())
+            .map(|cert| bcs::to_bytes(&cert).unwrap().len())
             .sum();
         consensus_group.throughput(Throughput::Bytes(data_size as u64));
 
@@ -60,6 +60,7 @@ pub fn process_certificates(c: &mut Criterion) {
             last_successful_leader_election_timestamp: Instant::now(),
             last_leader_election: Default::default(),
             max_inserted_certificate_round: 0,
+            num_sub_dags_per_schedule: 100,
         };
         consensus_group.bench_with_input(
             BenchmarkId::new("batched", certificates.len()),

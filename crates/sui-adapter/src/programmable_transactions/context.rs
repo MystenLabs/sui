@@ -9,7 +9,7 @@ use std::{
 
 use move_binary_format::{
     errors::{Location, VMError},
-    file_format::LocalIndex,
+    file_format::{CodeOffset, FunctionDefinitionIndex},
 };
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
@@ -21,8 +21,8 @@ use sui_types::{
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
     gas::SuiGasStatus,
-    messages::{Argument, CallArg, EntryArgumentErrorKind, ObjectArg},
-    object::{MoveObject, Object, Owner},
+    messages::{Argument, CallArg, CommandArgumentError, ObjectArg},
+    object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
     storage::{ObjectChange, SingleTxContext, Storage, WriteKind},
 };
 
@@ -162,13 +162,20 @@ where
 
     /// Takes the user events from the runtime and tags them with the Move module of the function
     /// that was invoked for the command
-    pub fn take_user_events(&mut self, module_id: &ModuleId) -> Result<(), ExecutionError> {
+    pub fn take_user_events(
+        &mut self,
+        module_id: &ModuleId,
+        function: FunctionDefinitionIndex,
+        last_offset: CodeOffset,
+    ) -> Result<(), ExecutionError> {
         let object_runtime: &mut ObjectRuntime = self.session.get_native_extensions().get_mut();
         let events = object_runtime.take_user_events();
         let num_events = self.user_events.len() + events.len();
         let max_events = self.protocol_config.max_num_event_emit();
-        if num_events as u64 >= max_events {
-            let err = max_event_error(max_events).finish(Location::Module(module_id.clone()));
+        if num_events as u64 > max_events {
+            let err = max_event_error(max_events)
+                .at_code_offset(function, last_offset)
+                .finish(Location::Module(module_id.clone()));
             return Err(self.convert_vm_error(err));
         }
         let new_events = events
@@ -186,26 +193,37 @@ where
         Ok(())
     }
 
-    /// Take the argument value, setting its value to None, making it unavailable
+    /// Get the argument value. Cloning the value if it is copyable, and setting its value to None
+    /// if it is not (making it unavailable).
     /// Errors if out of bounds, if the argument is borrowed, if it is unavailable (already taken),
     /// or if it is an object that cannot be taken by value (shared or immutable)
-    pub fn take_arg<V: TryFromValue>(
+    pub fn by_value_arg<V: TryFromValue>(
         &mut self,
         command_kind: CommandKind<'_>,
         arg_idx: usize,
         arg: Argument,
     ) -> Result<V, ExecutionError> {
+        self.by_value_arg_(command_kind, arg)
+            .map_err(|e| command_argument_error(e, arg_idx))
+    }
+    fn by_value_arg_<V: TryFromValue>(
+        &mut self,
+        command_kind: CommandKind<'_>,
+        arg: Argument,
+    ) -> Result<V, CommandArgumentError> {
         if matches!(arg, Argument::GasCoin) && !matches!(command_kind, CommandKind::TransferObjects)
         {
-            panic!("cannot take gas")
+            return Err(CommandArgumentError::InvalidGasCoinUsage);
         }
         if self.arg_is_borrowed(&arg) {
-            panic!("taken borrowed value")
+            return Err(CommandArgumentError::InvalidUsageOfBorrowedValue);
         }
-        let (input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::Take)?;
-        if val_opt.is_none() {
-            panic!("taken value")
-        }
+        let (input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::ByValue)?;
+        let is_copyable = if let Some(val) = val_opt {
+            val.is_copyable()
+        } else {
+            return Err(CommandArgumentError::InvalidUsageOfTakenValue);
+        };
         if matches!(
             input_metadata_opt,
             Some(InputObjectMetadata {
@@ -213,20 +231,14 @@ where
                 ..
             })
         ) {
-            let error = format!(
-                "Immutable and shared objects cannot be passed by-value, \
-                                violation found in argument {}",
-                arg_idx
-            );
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::entry_argument_error(
-                    arg_idx as LocalIndex,
-                    EntryArgumentErrorKind::InvalidObjectByValue,
-                ),
-                error,
-            ));
+            return Err(CommandArgumentError::InvalidObjectByValue);
         }
-        V::try_from_value(val_opt.take().unwrap())
+        let val = if is_copyable {
+            val_opt.as_ref().unwrap().clone()
+        } else {
+            val_opt.take().unwrap()
+        };
+        V::try_from_value(val)
     }
 
     /// Mimic a mutable borrow by taking the argument value, setting its value to None,
@@ -239,13 +251,20 @@ where
         arg_idx: usize,
         arg: Argument,
     ) -> Result<V, ExecutionError> {
+        self.borrow_arg_mut_(arg)
+            .map_err(|e| command_argument_error(e, arg_idx))
+    }
+    fn borrow_arg_mut_<V: TryFromValue>(
+        &mut self,
+        arg: Argument,
+    ) -> Result<V, CommandArgumentError> {
         if self.arg_is_borrowed(&arg) {
-            panic!("mutable args can only be used once in a given command")
+            return Err(CommandArgumentError::InvalidUsageOfBorrowedValue);
         }
         self.borrowed.insert(arg, /* is_mut */ true);
         let (input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::BorrowMut)?;
         if val_opt.is_none() {
-            panic!("taken value")
+            return Err(CommandArgumentError::InvalidUsageOfTakenValue);
         }
         if matches!(
             input_metadata_opt,
@@ -254,38 +273,9 @@ where
                 ..
             })
         ) {
-            let error = format!(
-                "Argument {} is expected to be mutable, immutable object found",
-                arg_idx
-            );
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::entry_argument_error(
-                    arg_idx as LocalIndex,
-                    EntryArgumentErrorKind::InvalidObjectByMuteRef,
-                ),
-                error,
-            ));
+            return Err(CommandArgumentError::InvalidObjectByMutRef);
         }
         V::try_from_value(val_opt.take().unwrap())
-    }
-
-    /// Clone the argument value without setting its value to None
-    /// Errors if out of bounds, if the argument is mutably borrowed,
-    /// or if it is unavailable (already taken)
-    pub fn clone_arg<V: TryFromValue>(
-        &mut self,
-        _arg_idx: usize,
-        arg: Argument,
-    ) -> Result<V, ExecutionError> {
-        if self.arg_is_mut_borrowed(&arg) {
-            panic!("mutable args can only be used once in a given command")
-        }
-        let (_input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::Clone)?;
-        if val_opt.is_none() {
-            panic!("taken value")
-        }
-        let val = val_opt.as_ref().unwrap().clone();
-        V::try_from_value(val)
     }
 
     /// Mimics an immutable borrow by cloning the argument value without setting its value to None
@@ -293,29 +283,36 @@ where
     /// or if it is unavailable (already taken)
     pub fn borrow_arg<V: TryFromValue>(
         &mut self,
-        _arg_idx: usize,
+        arg_idx: usize,
         arg: Argument,
     ) -> Result<V, ExecutionError> {
+        self.borrow_arg_(arg)
+            .map_err(|e| command_argument_error(e, arg_idx))
+    }
+    fn borrow_arg_<V: TryFromValue>(&mut self, arg: Argument) -> Result<V, CommandArgumentError> {
         if self.arg_is_mut_borrowed(&arg) {
-            panic!("mutable args can only be used once in a given command")
+            return Err(CommandArgumentError::InvalidUsageOfBorrowedValue);
         }
         self.borrowed.insert(arg, /* is_mut */ false);
         let (_input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::BorrowImm)?;
         if val_opt.is_none() {
-            panic!("taken value")
+            return Err(CommandArgumentError::InvalidUsageOfTakenValue);
         }
         V::try_from_value(val_opt.as_ref().unwrap().clone())
     }
 
     /// Restore an argument after being mutably borrowed
     pub fn restore_arg(&mut self, arg: Argument, value: Value) -> Result<(), ExecutionError> {
+        let was_mut_opt = self.borrowed.remove(&arg);
         assert_invariant!(
-            self.arg_is_mut_borrowed(&arg),
+            was_mut_opt.is_some() && was_mut_opt.unwrap(),
             "Should never restore a non-mut borrowed value. \
             The take+restore is an implementation detail of mutable references"
         );
         // restore is exclusively used for mut
-        let (_, value_opt) = self.borrow_mut(arg, UsageKind::BorrowMut)?;
+        let Ok((_, value_opt)) = self.borrow_mut_impl(arg, None) else {
+            invariant_violation!("Should be able to borrow argument to restore it")
+        };
         let old_value = value_opt.replace(value);
         assert_invariant!(
             old_value.is_none(),
@@ -343,6 +340,7 @@ where
         // wrap the modules in an object, write it to the store
         let package_object = Object::new_package(
             modules,
+            OBJECT_START_VERSION,
             self.tx_context.digest(),
             self.protocol_config.max_move_package_size(),
         )?;
@@ -394,20 +392,17 @@ where
                 inner: ResultValue { value, .. },
             } = input;
             let Some(object_metadata) = object_metadata_opt else { return };
-            let Some(Value::Object(object_value)) = value else { return };
-            if object_metadata.is_mutable_input {
-                add_additional_write(&mut additional_writes, object_metadata.owner, object_value);
-            }
+            let is_mutable_input = object_metadata.is_mutable_input;
+            let owner = object_metadata.owner;
             input_object_metadata.insert(object_metadata.id, object_metadata);
+            let Some(Value::Object(object_value)) = value else { return };
+            if is_mutable_input {
+                add_additional_write(&mut additional_writes, owner, object_value);
+            }
         };
-        // gas can be unused
         let gas_id = gas.object_metadata.as_ref().unwrap().id;
         add_input_object_write(gas);
-        // all other inputs must be used at least once
         for input in inputs {
-            if input.inner.last_usage_kind.is_none() {
-                panic!("unused input")
-            }
             add_input_object_write(input)
         }
         // check for unused values
@@ -420,20 +415,32 @@ where
                 match value {
                     None => (),
                     Some(Value::Object(_)) => {
-                        panic!("unused value without drop {i} {j}")
+                        return Err(ExecutionErrorKind::UnusedValueWithoutDrop {
+                            result_idx: i as u16,
+                            secondary_idx: j as u16,
+                        }
+                        .into())
                     }
                     Some(Value::Raw(RawValueType::Any, _)) => (),
                     Some(Value::Raw(RawValueType::Loaded { abilities, .. }, _)) => {
                         // - nothing to check for drop
                         // - if it does not have drop, but has copy,
-                        //   the last usage must be a take/clone in order to "lie" and say that the
+                        //   the last usage must be by value in order to "lie" and say that the
                         //   last usage is actually a take instead of a clone
                         // - Otherwise, an error
                         if abilities.has_drop() {
                         } else if abilities.has_copy()
-                            && !matches!(last_usage_kind, Some(UsageKind::Take | UsageKind::Clone))
+                            && !matches!(last_usage_kind, Some(UsageKind::ByValue))
                         {
-                            panic!("unused value without drop {i} {j}")
+                            let msg = "The value has copy, but not drop. \
+                                Its last usage must be by-value so it can be taken.";
+                            return Err(ExecutionError::new_with_source(
+                                ExecutionErrorKind::UnusedValueWithoutDrop {
+                                    result_idx: i as u16,
+                                    secondary_idx: j as u16,
+                                },
+                                msg,
+                            ));
                         }
                     }
                 }
@@ -450,8 +457,11 @@ where
         let (change_set, events, mut native_context_extensions) = session
             .finish_with_extensions()
             .map_err(|e| convert_vm_error(e, vm, state_view))?;
-        // Sui Move programs should never touch global state, so ChangeSet should be empty
-        assert_invariant!(change_set.accounts().is_empty(), "Change set must be empty");
+        // Sui Move programs should never touch global state, so resources should be empty
+        assert_invariant!(
+            change_set.resources().next().is_none(),
+            "Change set must be empty"
+        );
         // Sui Move no longer uses Move's internal event system
         assert_invariant!(events.is_empty(), "Events must be empty");
         let object_runtime: ObjectRuntime = native_context_extensions.remove();
@@ -604,7 +614,7 @@ where
         &mut self,
         arg: Argument,
         usage: UsageKind,
-    ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), ExecutionError> {
+    ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), CommandArgumentError> {
         self.borrow_mut_impl(arg, Some(usage))
     }
 
@@ -614,30 +624,33 @@ where
         &mut self,
         arg: Argument,
         update_last_usage: Option<UsageKind>,
-    ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), ExecutionError> {
+    ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), CommandArgumentError> {
         let (metadata, result_value) = match arg {
             Argument::GasCoin => (self.gas.object_metadata.as_ref(), &mut self.gas.inner),
             Argument::Input(i) => {
                 let Some(input_value) = self.inputs.get_mut(i as usize) else {
-                    panic!("out of bounds")
+                    return Err(CommandArgumentError::IndexOutOfBounds { idx: i });
                 };
                 (input_value.object_metadata.as_ref(), &mut input_value.inner)
             }
             Argument::Result(i) => {
                 let Some(command_result) = self.results.get_mut(i as usize) else {
-                    panic!("out of bounds")
+                    return Err(CommandArgumentError::IndexOutOfBounds { idx: i });
                 };
                 if command_result.len() != 1 {
-                    panic!("expected a single result")
+                    return Err(CommandArgumentError::InvalidResultArity { result_idx: i });
                 }
                 (None, &mut command_result[0])
             }
             Argument::NestedResult(i, j) => {
                 let Some(command_result) = self.results.get_mut(i as usize) else {
-                    panic!("out of bounds")
+                    return Err(CommandArgumentError::IndexOutOfBounds { idx: i });
                 };
                 let Some(result_value) = command_result.get_mut(j as usize) else {
-                    panic!("out of bounds")
+                    return Err(CommandArgumentError::SecondaryIndexOutOfBounds {
+                        result_idx: i,
+                        secondary_idx: j,
+                    });
                 };
                 (None, result_value)
             }
@@ -758,17 +771,20 @@ fn refund_max_gas_budget(
     gas_status: &SuiGasStatus,
     gas_id: ObjectID,
 ) -> Result<(), ExecutionError> {
-    let Some(AdditionalWrite { bytes,.. }) =  additional_writes.get_mut(&gas_id) else {
+    let Some(AdditionalWrite { bytes,.. }) = additional_writes.get_mut(&gas_id) else {
         invariant_violation!("Gas object cannot be wrapped or destroyed")
     };
-    let Ok(mut coin) =  Coin::from_bcs_bytes(bytes) else {
+    let Ok(mut coin) = Coin::from_bcs_bytes(bytes) else {
         invariant_violation!("Gas object must be a coin")
     };
     let Some(new_balance) = coin
         .balance
         .value()
         .checked_add(gas_status.max_gax_budget_in_balance()) else {
-            panic!("coin overflow")
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::TotalCoinBalanceOverflow,
+                "Gas coin too large after returning the max gas budget",
+            ));
         };
     coin.balance = Balance::new(new_balance);
     *bytes = coin.to_bcs_bytes();
@@ -805,7 +821,10 @@ unsafe fn create_written_object(
         .map(|metadata| metadata.version)
         .or_else(|| loaded_child_version_opt.copied());
 
-    debug_assert!((write_kind == WriteKind::Mutate) == old_obj_ver.is_some());
+    debug_assert!(
+        (write_kind == WriteKind::Mutate) == old_obj_ver.is_some(),
+        "Inconsistent state: write_kind: {write_kind:?}, old ver: {old_obj_ver:?}"
+    );
 
     MoveObject::new_from_execution(
         tag,

@@ -8,8 +8,8 @@ use jsonrpsee::core::RpcResult;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    BigInt, GetRawObjectDataResponse, SuiObjectInfo, SuiTransactionBuilderMode, SuiTypeTag,
-    TransactionBytes,
+    BigInt, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiTransactionBuilderMode,
+    SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc::Module;
 use sui_transaction_builder::{DataReader, TransactionBuilder};
@@ -63,12 +63,13 @@ impl DataReader for AuthorityStateDataReader {
         Ok(refs)
     }
 
-    async fn get_object(
+    async fn get_object_with_options(
         &self,
         object_id: ObjectID,
-    ) -> Result<GetRawObjectDataResponse, anyhow::Error> {
+        options: SuiObjectDataOptions,
+    ) -> Result<SuiObjectResponse, anyhow::Error> {
         let result = self.0.get_object_read(&object_id).await?;
-        Ok(result.try_into()?)
+        Ok((result, options).try_into()?)
     }
 
     async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error> {

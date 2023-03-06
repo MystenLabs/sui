@@ -45,6 +45,7 @@ pub mod messages_checkpoint;
 pub mod move_package;
 pub mod multisig;
 pub mod object;
+pub mod programmable_transaction_builder;
 pub mod query;
 pub mod quorum_driver_types;
 pub mod signature;
@@ -93,6 +94,10 @@ pub fn parse_sui_struct_tag(s: &str) -> anyhow::Result<StructTag> {
 pub fn parse_sui_type_tag(s: &str) -> anyhow::Result<TypeTag> {
     use move_command_line_common::types::ParsedType;
     ParsedType::parse(s)?.into_type_tag(&resolve_address)
+}
+
+pub fn is_system_package(id: ObjectID) -> bool {
+    matches!(id, MOVE_STDLIB_OBJECT_ID | SUI_FRAMEWORK_OBJECT_ID)
 }
 
 fn resolve_address(addr: &str) -> Option<AccountAddress> {

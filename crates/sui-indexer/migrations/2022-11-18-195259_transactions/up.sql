@@ -2,6 +2,7 @@ CREATE TABLE transactions (
     id BIGSERIAL PRIMARY KEY,
     transaction_digest VARCHAR(255) NOT NULL,
     sender VARCHAR(255) NOT NULL,
+    recipients TEXT[] NOT NULL,
     checkpoint_sequence_number BIGINT NOT NULL,
     transaction_time TIMESTAMP,
     transaction_kinds TEXT[] NOT NULL,
@@ -11,6 +12,8 @@ CREATE TABLE transactions (
     deleted TEXT[] NOT NULL,
     unwrapped TEXT[] NOT NULL,
     wrapped TEXT[] NOT NULL,
+    -- each move call is <package>::<module>::<function>
+    move_calls TEXT[] NOT NULL,
     -- gas object related
     gas_object_id VARCHAR(255) NOT NULL,
     gas_object_sequence BIGINT NOT NULL,

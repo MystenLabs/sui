@@ -36,13 +36,15 @@ use std::{
 };
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter::new_move_vm, execution_mode};
+use sui_core::transaction_input_checker::check_objects;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::clock::Clock;
 use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiCostTable;
 use sui_types::id::UID;
 use sui_types::in_memory_storage::InMemoryStorage;
+use sui_types::messages::Command;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
@@ -50,13 +52,15 @@ use sui_types::{
     event::Event,
     gas,
     messages::{
-        ExecutionStatus, InputObjects, TransactionData, TransactionEffects, VerifiedTransaction,
+        ExecutionStatus, TransactionData, TransactionDataAPI, TransactionEffectsAPI,
+        VerifiedTransaction,
     },
     object::{self, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
     object::{MoveObject, Owner},
     MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
     SUI_FRAMEWORK_ADDRESS,
 };
+use sui_types::{clock::Clock, object::OBJECT_START_VERSION};
 use sui_types::{gas::SuiGasStatus, temporary_store::TemporaryStore};
 
 pub(crate) type FakeID = u64;
@@ -126,12 +130,14 @@ fn create_genesis_module_objects() -> Genesis {
     let packages = vec![
         Object::new_package(
             std_modules.clone(),
+            OBJECT_START_VERSION,
             TransactionDigest::genesis(),
             PROTOCOL_CONSTANTS.max_move_package_size(),
         )
         .unwrap(),
         Object::new_package(
             sui_modules.clone(),
+            OBJECT_START_VERSION,
             TransactionDigest::genesis(),
             PROTOCOL_CONSTANTS.max_move_package_size(),
         )
@@ -303,13 +309,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             buf
         };
         let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
-        let data = |sender, gas_payment| {
-            TransactionData::new_module_with_dummy_gas_price(
-                sender,
-                gas_payment,
-                vec![module_bytes],
-                gas_budget,
-            )
+        let data = |sender, gas| {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.command(Command::Publish(vec![module_bytes]));
+            let pt = builder.finish();
+            TransactionData::new_programmable_with_dummy_gas_price(sender, gas, pt, gas_budget)
         };
         let transaction = self.sign_txn(sender, data);
         let summary = self.execute_txn(transaction, gas_budget)?;
@@ -379,17 +383,19 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let package_id = ObjectID::from(*module_id.address());
 
         let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
-        let data = |sender, gas_payment| {
-            TransactionData::new_move_call_with_dummy_gas_price(
-                sender,
-                package_id,
-                module_id.name().to_owned(),
-                function.to_owned(),
-                type_args,
-                gas_payment,
-                arguments,
-                gas_budget,
-            )
+        let data = |sender, gas| {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder
+                .move_call(
+                    package_id,
+                    module_id.name().to_owned(),
+                    function.to_owned(),
+                    type_args,
+                    arguments,
+                )
+                .unwrap();
+            let pt = builder.finish();
+            TransactionData::new_programmable_with_dummy_gas_price(sender, gas, pt, gas_budget)
         };
         let transaction = self.sign_txn(sender, data);
         let summary = self.execute_txn(transaction, gas_budget)?;
@@ -494,16 +500,23 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 sender,
                 gas_budget,
             }) => {
-                let obj = get_obj!(fake_id);
-                let obj_ref = obj.compute_object_reference();
+                let obj_arg = SuiValue::Object(fake_id).into_call_args(self)?;
                 let recipient = match self.accounts.get(&recipient) {
                     Some((recipient, _)) => *recipient,
                     None => panic!("Unbound account {}", recipient),
                 };
                 let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
                 let transaction = self.sign_txn(sender, |sender, gas| {
-                    TransactionData::new_transfer_with_dummy_gas_price(
-                        recipient, obj_ref, sender, gas, gas_budget,
+                    let mut builder = ProgrammableTransactionBuilder::new();
+                    let rec_arg = builder.pure(recipient).unwrap();
+                    let obj_arg = builder.input(obj_arg).unwrap();
+                    builder.command(sui_types::messages::Command::TransferObjects(
+                        vec![obj_arg],
+                        rec_arg,
+                    ));
+                    let pt = builder.finish();
+                    TransactionData::new_programmable_with_dummy_gas_price(
+                        sender, gas, pt, gas_budget,
                     )
                 });
                 let summary = self.execute_txn(transaction, gas_budget)?;
@@ -563,9 +576,12 @@ impl<'a> SuiTestAdapter<'a> {
             gas::start_gas_metering(gas_budget, 1, 1, SuiCostTable::new(&PROTOCOL_CONSTANTS))
                 .unwrap()
         };
-
+        transaction
+            .data()
+            .transaction_data()
+            .validity_check(&PROTOCOL_CONSTANTS)?;
         let transaction_digest = TransactionDigest::new(self.rng.gen());
-        let objects_by_kind = transaction
+        let (input_objects, objects) = transaction
             .data()
             .intent_message
             .value
@@ -577,8 +593,12 @@ impl<'a> SuiTestAdapter<'a> {
                 let obj = self.storage.get_object(&id)?.clone();
                 Some((kind, obj))
             })
-            .collect::<Vec<_>>();
-        let input_objects = InputObjects::new(objects_by_kind);
+            .unzip();
+        let input_objects = check_objects(
+            transaction.data().transaction_data(),
+            input_objects,
+            objects,
+        )?;
         let transaction_dependencies = input_objects.transaction_dependencies();
         let shared_object_refs: Vec<_> = input_objects.filter_shared_objects();
         let temporary_store = TemporaryStore::new(
@@ -587,11 +607,13 @@ impl<'a> SuiTestAdapter<'a> {
             transaction_digest,
             &PROTOCOL_CONSTANTS,
         );
-        let transaction_data = transaction.into_inner().into_data().intent_message.value;
-        let signer = transaction_data.sender();
-        let gas = transaction_data.gas();
+        let transaction_data = &transaction.into_inner().into_data().intent_message.value;
+        let (kind, signer, gas) = transaction_data.execution_parts();
+
         let (
             inner,
+            effects,
+            /*
             TransactionEffects {
                 status,
                 created,
@@ -604,13 +626,14 @@ impl<'a> SuiTestAdapter<'a> {
                 gas_object: _,
                 ..
             },
+            */
             execution_error,
         ) = execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
             shared_object_refs,
             temporary_store,
-            transaction_data.kind,
+            kind,
             signer,
-            gas,
+            &gas,
             transaction_digest,
             transaction_dependencies,
             &self.vm,
@@ -620,12 +643,25 @@ impl<'a> SuiTestAdapter<'a> {
             &PROTOCOL_CONSTANTS,
         );
 
-        let mut created_ids: Vec<_> = created.iter().map(|((id, _, _), _)| *id).collect();
-        let unwrapped_ids: Vec<_> = unwrapped.iter().map(|((id, _, _), _)| *id).collect();
-        let mut written_ids: Vec<_> = mutated.iter().map(|((id, _, _), _)| *id).collect();
-        let mut deleted_ids: Vec<_> = deleted
+        let mut created_ids: Vec<_> = effects
+            .created()
             .iter()
-            .chain(&wrapped)
+            .map(|((id, _, _), _)| *id)
+            .collect();
+        let unwrapped_ids: Vec<_> = effects
+            .unwrapped()
+            .iter()
+            .map(|((id, _, _), _)| *id)
+            .collect();
+        let mut written_ids: Vec<_> = effects
+            .mutated()
+            .iter()
+            .map(|((id, _, _), _)| *id)
+            .collect();
+        let mut deleted_ids: Vec<_> = effects
+            .deleted()
+            .iter()
+            .chain(effects.wrapped())
             .map(|(id, _, _)| *id)
             .collect();
 
@@ -656,7 +692,7 @@ impl<'a> SuiTestAdapter<'a> {
         written_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
 
-        match status {
+        match effects.status() {
             ExecutionStatus::Success { .. } => Ok(TxnSummary {
                 created: created_ids,
                 written: written_ids,

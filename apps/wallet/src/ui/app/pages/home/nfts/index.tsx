@@ -32,9 +32,9 @@ function NftsPage() {
                         {nfts.map((nft) => (
                             <Link
                                 to={`/nft-details?${new URLSearchParams({
-                                    objectId: nft.reference.objectId,
+                                    objectId: nft.objectId,
                                 }).toString()}`}
-                                key={nft.reference.objectId}
+                                key={nft.objectId}
                                 className="no-underline"
                             >
                                 <ErrorBoundary>

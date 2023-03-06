@@ -8,6 +8,10 @@ use chrono::prelude::*;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::KeyPair;
+use itertools::izip;
+use itertools::Itertools;
+use move_binary_format::compatibility::Compatibility;
+use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag};
@@ -32,6 +36,9 @@ use sui_types::intent::Intent;
 use sui_types::intent::IntentScope;
 use sui_types::message_envelope::Message;
 use sui_types::parse_sui_struct_tag;
+use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::MOVE_STDLIB_OBJECT_ID;
+use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
@@ -51,7 +58,7 @@ use sui_json_rpc_types::{
     SuiEventEnvelope, SuiMoveValue, SuiTransactionEvents,
 };
 use sui_macros::nondeterministic;
-use sui_protocol_config::SupportedProtocolVersions;
+use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::indexes::{ObjectIndexChanges, MAX_GET_OWNED_OBJECT_SIZE};
 use sui_storage::write_ahead_log::WriteAheadLog;
 use sui_storage::{
@@ -150,6 +157,13 @@ pub type ReconfigConsensusMessage = (
     Vec<(ConsensusWorkerId, NetworkKeyPair)>,
     ConsensusWorkerCache,
 );
+
+pub type VerifiedTransactionBatch = Vec<(
+    VerifiedTransaction,
+    TransactionEffects,
+    TransactionEvents,
+    Option<(EpochId, CheckpointSequenceNumber)>,
+)>;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 pub struct AuthorityMetrics {
@@ -549,7 +563,7 @@ impl AuthorityState {
         }
 
         // Checks to see if the transaction has expired
-        if match &transaction.inner().data().transaction_data().expiration {
+        if match &transaction.inner().data().transaction_data().expiration() {
             TransactionExpiration::None => false,
             TransactionExpiration::Epoch(epoch) => *epoch < epoch_store.epoch(),
         } {
@@ -598,7 +612,7 @@ impl AuthorityState {
         let digest = *transaction.digest();
         debug!("execute_certificate_with_effects");
         fp_ensure!(
-            effects.data().transaction_digest == digest,
+            *effects.data().transaction_digest() == digest,
             SuiError::ErrorWhileProcessingCertificate {
                 err: "effects/tx digest mismatch".to_string()
             }
@@ -842,7 +856,7 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         let input_object_count = inner_temporary_store.objects.len();
-        let shared_object_count = effects.shared_objects.len();
+        let shared_object_count = effects.shared_objects().len();
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
@@ -894,7 +908,7 @@ impl AuthorityState {
             .observe(shared_object_count as f64);
         self.metrics
             .batch_size
-            .observe(certificate.data().intent_message.value.kind.batch_size() as f64);
+            .observe(certificate.data().intent_message.value.kind().batch_size() as f64);
 
         Ok(())
     }
@@ -936,16 +950,15 @@ impl AuthorityState {
             *certificate.digest(),
             epoch_store.protocol_config(),
         );
-        let transaction_data = certificate.data().intent_message.value.clone();
-        let signer = transaction_data.sender();
-        let gas = transaction_data.gas();
+        let transaction_data = &certificate.data().intent_message.value;
+        let (kind, signer, gas) = transaction_data.execution_parts();
         let (inner_temp_store, effects, _execution_error) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
                 shared_object_refs,
                 temporary_store,
-                transaction_data.kind,
+                kind,
                 signer,
-                gas,
+                &gas,
                 *certificate.digest(),
                 transaction_dependencies,
                 epoch_store.move_vm(),
@@ -992,8 +1005,7 @@ impl AuthorityState {
             transaction_digest,
             epoch_store.protocol_config(),
         );
-        let signer = transaction.sender();
-        let gas = transaction.gas();
+        let (kind, signer, gas) = transaction.execution_parts();
         let move_vm = Arc::new(
             adapter::new_move_vm(
                 epoch_store.native_functions().clone(),
@@ -1005,9 +1017,9 @@ impl AuthorityState {
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
                 shared_object_refs,
                 temporary_store,
-                transaction.kind,
+                kind,
                 signer,
-                gas,
+                &gas,
                 transaction_digest,
                 transaction_dependencies,
                 &move_vm,
@@ -1016,7 +1028,7 @@ impl AuthorityState {
                 epoch_store.protocol_config(),
             );
         Ok(DryRunTransactionResponse {
-            effects: effects.into(),
+            effects: effects.try_into()?,
             events: SuiTransactionEvents::try_from(
                 inner_temp_store.events,
                 epoch_store.module_cache().as_ref(),
@@ -1035,6 +1047,9 @@ impl AuthorityState {
         if !self.is_fullnode(&epoch_store) {
             return Err(anyhow!("dev-inspect is only supported on fullnodes"));
         }
+
+        transaction_kind.check_version_supported(epoch_store.protocol_version())?;
+
         let gas_price = gas_price.unwrap_or_else(|| epoch_store.reference_gas_price());
 
         let protocol_config = epoch_store.protocol_config();
@@ -1068,7 +1083,7 @@ impl AuthorityState {
             gas_budget,
         );
         let transaction_digest = TransactionDigest::new(sha3_hash(&data));
-        let transaction_kind = data.kind;
+        let transaction_kind = data.into_kind();
         let transaction_dependencies = input_objects.transaction_dependencies();
         let temporary_store = TemporaryStore::new(
             self.database.clone(),
@@ -1096,7 +1111,7 @@ impl AuthorityState {
                 temporary_store,
                 transaction_kind,
                 sender,
-                gas_object_ref,
+                &[gas_object_ref],
                 transaction_digest,
                 transaction_dependencies,
                 &move_vm,
@@ -1141,11 +1156,12 @@ impl AuthorityState {
                 .map(|o| o.object_id()),
             effects
                 .all_mutated()
+                .into_iter()
                 .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
             cert.data()
                 .intent_message
                 .value
-                .move_calls()
+                .legacy_move_calls()
                 .iter()
                 .map(|mc| (mc.package, mc.module.clone(), mc.function.clone())),
             changes,
@@ -1160,14 +1176,14 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Result<ObjectIndexChanges, SuiError> {
         let modified_at_version = effects
-            .modified_at_versions
+            .modified_at_versions()
             .iter()
             .cloned()
             .collect::<HashMap<_, _>>();
 
         let mut deleted_owners = vec![];
         let mut deleted_dynamic_fields = vec![];
-        for (id, _, _) in &effects.deleted {
+        for (id, _, _) in effects.deleted() {
             let old_version = modified_at_version.get(id).unwrap();
 
             match self.get_owner_at_version(id, *old_version)? {
@@ -1187,11 +1203,11 @@ impl AuthorityState {
             // For mutated objects, retrieve old owner and delete old index if there is a owner change.
             if let WriteKind::Mutate = kind {
                 let Some(old_version) = modified_at_version.get(id) else{
-                        error!("Error processing object owner index for tx [{:?}], cannot find modified at version for mutated object [{id}].", effects.transaction_digest);
+                        error!("Error processing object owner index for tx [{:?}], cannot find modified at version for mutated object [{id}].", effects.transaction_digest());
                         continue;
                     };
                 let Some(old_object) = self.database.get_object_by_key(id, *old_version)? else {
-                        error!("Error processing object owner index for tx [{:?}], cannot find object [{id}] at version [{old_version}].", effects.transaction_digest);
+                        error!("Error processing object owner index for tx [{:?}], cannot find object [{id}] at version [{old_version}].", effects.transaction_digest());
                         continue;
                     };
                 if &old_object.owner != owner {
@@ -1227,7 +1243,7 @@ impl AuthorityState {
                             digest: oref.2,
                             type_,
                             owner: *owner,
-                            previous_transaction: effects.transaction_digest,
+                            previous_transaction: *effects.transaction_digest(),
                         },
                     ));
                 }
@@ -1473,29 +1489,6 @@ impl AuthorityState {
         })
     }
 
-    pub fn handle_committee_info_request(
-        &self,
-        request: &CommitteeInfoRequest,
-    ) -> SuiResult<CommitteeInfoResponse> {
-        let (epoch, committee) = match request.epoch {
-            Some(epoch) => (
-                epoch,
-                self.committee_store
-                    .get_committee(&epoch)?
-                    .ok_or(SuiError::MissingCommitteeAtEpoch(epoch))?,
-            ),
-            None => {
-                let committee = self.committee_store.get_latest_committee();
-                (committee.epoch, committee)
-            }
-        };
-        Ok(CommitteeInfoResponse {
-            epoch,
-            protocol_version: committee.protocol_version,
-            committee_info: committee.voting_rights,
-        })
-    }
-
     fn check_protocol_version(
         supported_protocol_versions: SupportedProtocolVersions,
         current_version: ProtocolVersion,
@@ -1532,15 +1525,12 @@ impl AuthorityState {
         event_store: Option<Arc<EventStoreType>>,
         checkpoint_store: Arc<CheckpointStore>,
         prometheus_registry: &Registry,
-        pruning_config: &AuthorityStorePruningConfig,
+        pruning_config: AuthorityStorePruningConfig,
         genesis_objects: &[Object],
         epoch_duration_ms: u64,
         state_snapshot_config: &StateSnapshotConfig,
     ) -> Arc<Self> {
-        Self::check_protocol_version(
-            supported_protocol_versions,
-            epoch_store.committee().protocol_version,
-        );
+        Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
         let event_handler = event_store.map(|es| {
             let handler = EventHandler::new(es);
@@ -1557,14 +1547,14 @@ impl AuthorityState {
         ));
         let (tx_execution_shutdown, rx_execution_shutdown) = oneshot::channel();
 
+        let _authority_per_epoch_pruner =
+            AuthorityPerEpochStorePruner::new(epoch_store.get_parent_path(), &pruning_config);
         let _objects_pruner = AuthorityStorePruner::new(
             store.perpetual_tables.clone(),
             checkpoint_store.clone(),
             pruning_config,
             epoch_duration_ms,
         );
-        let _authority_per_epoch_pruner =
-            AuthorityPerEpochStorePruner::new(epoch_store.get_parent_path(), pruning_config);
 
         let state = Arc::new(AuthorityState {
             name,
@@ -1668,7 +1658,7 @@ impl AuthorityState {
             None,
             checkpoint_store,
             &registry,
-            &AuthorityStorePruningConfig::default(),
+            AuthorityStorePruningConfig::default(),
             genesis.objects(),
             10000,
             &StateSnapshotConfig::default(),
@@ -1794,7 +1784,10 @@ impl AuthorityState {
         new_committee: Committee,
         epoch_start_configuration: EpochStartConfiguration,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
-        Self::check_protocol_version(supported_protocol_versions, new_committee.protocol_version);
+        Self::check_protocol_version(
+            supported_protocol_versions,
+            epoch_start_configuration.protocol_version(),
+        );
 
         self.committee_store.insert_new_committee(&new_committee)?;
         let db = self.db();
@@ -2133,6 +2126,46 @@ impl AuthorityState {
         }
     }
 
+    pub async fn multi_get_transactions(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Result<VerifiedTransactionBatch, anyhow::Error> {
+        let transactions = self.database.multi_get_transactions(digests)?;
+        let effects = self.database.multi_get_executed_effects(digests)?;
+        let checkpoints = self.database.multi_get_transaction_checkpoint(digests)?;
+
+        let mut events_digests: Vec<TransactionEventsDigest> = vec![];
+
+        for effect in effects.iter() {
+            match effect {
+                Some(eff) => events_digests.push(*eff.events_digest().unwrap()),
+                _ => continue,
+            }
+        }
+
+        let events = self.database.multi_get_events(events_digests.as_slice())?;
+
+        let mut missed_digests = vec![];
+        let mut response: VerifiedTransactionBatch = vec![];
+
+        for data in izip!(digests, transactions, effects, events, checkpoints) {
+            match data {
+                (_, Some(tx), Some(effect), Some(event), cp) => {
+                    response.push((tx, effect, event, cp))
+                }
+                (digest, _, _, _, _) => missed_digests.push(*digest),
+            }
+        }
+
+        if !missed_digests.is_empty() {
+            Err(anyhow!(SuiError::TransactionsNotFound {
+                digests: missed_digests
+            }))
+        } else {
+            Ok(response)
+        }
+    }
+
     pub async fn get_transaction_events(
         &self,
         digest: TransactionEventsDigest,
@@ -2381,8 +2414,8 @@ impl AuthorityState {
         {
             if let Some(transaction) = self.database.get_transaction(transaction_digest)? {
                 let cert_sig = epoch_store.get_transaction_cert_sig(transaction_digest)?;
-                let events = if let Some(digest) = effects.events_digest {
-                    self.database.get_events(&digest)?
+                let events = if let Some(digest) = effects.events_digest() {
+                    self.database.get_events(digest)?
                 } else {
                     TransactionEvents::default()
                 };
@@ -2426,7 +2459,7 @@ impl AuthorityState {
         effects: TransactionEffects,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Result<VerifiedSignedTransactionEffects, SuiError> {
-        let tx_digest = effects.transaction_digest;
+        let tx_digest = *effects.transaction_digest();
         let signed_effects = match epoch_store.get_effects_signature(&tx_digest)? {
             Some(sig) if sig.epoch == epoch_store.epoch() => {
                 SignedTransactionEffects::new_from_data_and_sig(effects, sig)
@@ -2653,68 +2686,260 @@ impl AuthorityState {
         self.database.get_latest_parent_entry(object_id)
     }
 
-    fn choose_next_protocol_version(epoch_store: &Arc<AuthorityPerEpochStore>) -> ProtocolVersion {
-        let protocol_config = epoch_store.protocol_config();
-        let committee = epoch_store.committee();
+    /// Get the set of system packages that are compiled in to this build, if those packages are
+    /// compatible with the current versions of those packages on-chain.
+    pub async fn get_available_system_packages(&self) -> Vec<ObjectRef> {
+        let Some(move_stdlib) = self.compare_system_package(
+            MOVE_STDLIB_OBJECT_ID,
+            sui_framework::get_move_stdlib(),
+        ) .await else {
+            return vec![];
+        };
 
-        // Determine which protocol version to propose for the following epoch.
-        let current_protocol_version = committee.protocol_version;
-        let next_protocol_version = current_protocol_version + 1;
+        let Some(sui_framework) = self.compare_system_package(
+            SUI_FRAMEWORK_OBJECT_ID,
+            sui_framework_injection::get_modules(self.name),
+        ).await else {
+            return vec![];
+        };
 
-        let mut stake_aggregator: StakeAggregator<(), true> =
-            StakeAggregator::new(Arc::new(committee.clone()));
+        vec![move_stdlib, sui_framework]
+    }
 
-        for cap in epoch_store.get_capabilities().into_iter() {
-            let authority = cap.authority;
+    /// Check whether the framework defined by `modules` is compatible with the framework that is
+    /// already on-chain at `id`.
+    ///
+    /// - Returns `None` if the current package at `id` cannot be loaded, or the compatibility check
+    ///   fails (This is grounds not to upgrade).
+    /// - Panics if the object at `id` can be loaded but is not a package -- this is an invariant
+    ///   violation.
+    /// - Returns the digest of the current framework (and version) if it is equivalent to the new
+    ///   framework (indicates support for a protocol upgrade without a framework upgrade).
+    /// - Returns the digest of the new framework (and version) if it is compatible (indicates
+    ///   support for a protocol upgrade with a framework upgrade).
+    async fn compare_system_package(
+        &self,
+        id: ObjectID,
+        modules: Vec<CompiledModule>,
+    ) -> Option<ObjectRef> {
+        let cur_object = match self.get_object(&id).await {
+            Ok(Some(cur_object)) => cur_object,
 
-            if cap
-                .supported_protocol_versions
-                .is_version_supported(next_protocol_version)
-            {
-                info!(
-                    "validator {:?} supports {:?}",
-                    authority.concise(),
-                    next_protocol_version
-                );
-                stake_aggregator.insert_generic(authority, ());
-            } else {
-                info!(
-                    "validator {:?} does not support {:?}",
-                    authority, next_protocol_version
-                );
+            Ok(None) => {
+                error!("No framework package at {id}");
+                return None;
+            }
+
+            Err(e) => {
+                error!("Error loading framework object at {id}: {e:?}");
+                return None;
+            }
+        };
+
+        let cur_ref = cur_object.compute_object_reference();
+        let cur_pkg = cur_object
+            .data
+            .try_as_package()
+            .expect("Framework not package");
+
+        let mut new_object = match Object::new_system_package(
+            modules,
+            // Start at the same version as the current package, and increment if compatibility is
+            // successful
+            cur_object.version(),
+            cur_object.previous_transaction,
+        ) {
+            Ok(object) => object,
+            Err(e) => {
+                error!("Failed to create new framework package for {id}: {e:?}");
+                return None;
+            }
+        };
+
+        if cur_ref == new_object.compute_object_reference() {
+            return Some(cur_ref);
+        }
+
+        let check_struct_and_pub_function_linking = true;
+        let check_struct_layout = true;
+        let check_friend_linking = false;
+        let compatibility = Compatibility::new(
+            check_struct_and_pub_function_linking,
+            check_struct_layout,
+            check_friend_linking,
+        );
+
+        let new_pkg = new_object
+            .data
+            .try_as_package_mut()
+            .expect("Created as package");
+
+        let cur_normalized = cur_pkg.normalize().expect("Normalize existing package");
+        let mut new_normalized = new_pkg.normalize().ok()?;
+
+        for (name, cur_module) in cur_normalized {
+            let Some(new_module) = new_normalized.remove(&name) else {
+                return None;
+            };
+
+            if let Err(e) = compatibility.check(&cur_module, &new_module) {
+                error!("Compatibility check failed, for new version of {id}: {e:?}");
+                return None;
             }
         }
 
-        let total_votes = stake_aggregator.total_votes();
-        let quorum_threshold = committee.quorum_threshold();
-        let f = committee.total_votes - committee.quorum_threshold();
-        let buffer_bps = protocol_config.buffer_stake_for_protocol_upgrade_bps();
-        let buffer_stake = (f * buffer_bps) / 10000;
-        let effective_threshold = quorum_threshold + buffer_stake;
+        new_pkg.increment_version();
+        Some(new_object.compute_object_reference())
+    }
 
-        info!(
-            ?total_votes,
-            ?quorum_threshold,
-            ?next_protocol_version,
-            ?buffer_bps,
-            ?effective_threshold,
-            "support for next protocol version"
-        );
+    /// Return the new versions and module bytes for the packages that have been committed to for a
+    /// framework upgrade, in `system_packages`.  Loads the module contents from the binary, and
+    /// performs the following checks:
+    ///
+    /// - Whether its contents matches what is on-chain already, in which case no upgrade is
+    ///   required, and its contents are omitted from the output.
+    /// - Whether the contents in the binary can form a package whose digest matches the input,
+    ///   meaning the framework will be upgraded, and this authority can satisfy that upgrade, in
+    ///   which case the contents are included in the output.
+    ///
+    /// If the current version of the framework can't be loaded, the binary does not contain the
+    /// bytes for that framework ID, or the resulting package fails the digest check, `None` is
+    /// returned indicating that this authority cannot run the upgrade that the network voted on.
+    async fn get_system_package_bytes(
+        &self,
+        system_packages: Vec<ObjectRef>,
+    ) -> Option<Vec<(SequenceNumber, Vec<Vec<u8>>)>> {
+        let ids: Vec<_> = system_packages.iter().map(|(id, _, _)| *id).collect();
+        let objects = self.get_objects(&ids).await.expect("read cannot fail");
 
-        // Note that even if we don't support the next version, we vote with the majority. This
-        // is needed to ensure that the final checkpoint can be certified. Otherwise, a validator
-        // might vote that they support it, then be reverted to an earlier build, and decide not
-        // to adhere to their vote.
-        if total_votes >= effective_threshold {
-            next_protocol_version
-        } else {
-            current_protocol_version
+        let mut res = Vec::with_capacity(system_packages.len());
+        for (system_package, object) in system_packages.into_iter().zip(objects.iter()) {
+            let cur_object = object
+                .as_ref()
+                .unwrap_or_else(|| panic!("system package {:?} must exist", system_package.0));
+
+            if cur_object.compute_object_reference() == system_package {
+                // Skip this one because it doesn't need to be upgraded.
+                info!("Framework {} does not need updating", system_package.0);
+                continue;
+            }
+
+            let bytes = match system_package.0 {
+                MOVE_STDLIB_OBJECT_ID => sui_framework::get_move_stdlib_bytes(),
+                SUI_FRAMEWORK_OBJECT_ID => sui_framework_injection::get_bytes(self.name),
+                _ => panic!("Unrecognised framework: {}", system_package.0),
+            };
+
+            let new_object = Object::new_system_package(
+                bytes
+                    .iter()
+                    .map(|m| CompiledModule::deserialize(m).unwrap())
+                    .collect(),
+                system_package.1,
+                cur_object.previous_transaction,
+            )
+            .unwrap();
+
+            let new_ref = new_object.compute_object_reference();
+            if new_ref != system_package {
+                error!("Framework mismatch -- binary: {new_ref:?}\n  upgrade: {system_package:?}");
+                return None;
+            }
+
+            res.push((system_package.1, bytes));
         }
+
+        Some(res)
+    }
+
+    fn choose_protocol_version_and_system_packages(
+        current_protocol_version: ProtocolVersion,
+        committee: &Committee,
+        protocol_config: &ProtocolConfig,
+        capabilities: Vec<AuthorityCapabilities>,
+    ) -> (ProtocolVersion, Vec<ObjectRef>) {
+        let next_protocol_version = current_protocol_version + 1;
+
+        // For each validator, gather the protocol version and system packages that it would like
+        // to upgrade to in the next epoch.
+        let mut desired_upgrades: Vec<_> = capabilities
+            .into_iter()
+            .filter_map(|mut cap| {
+                // A validator that lists no packages is voting against any change at all.
+                if cap.available_system_packages.is_empty() {
+                    return None;
+                }
+
+                cap.available_system_packages.sort();
+
+                info!(
+                    "validator {:?} supports {:?} with system packages: {:?}",
+                    cap.authority.concise(),
+                    cap.supported_protocol_versions,
+                    cap.available_system_packages,
+                );
+
+                // A validator that only supports the current protocol version is also voting
+                // against any change, because framework upgrades always require a protocol version
+                // bump.
+                cap.supported_protocol_versions
+                    .is_version_supported(next_protocol_version)
+                    .then_some((cap.available_system_packages, cap.authority))
+            })
+            .collect();
+
+        // There can only be one set of votes that have a majority, find one if it exists.
+        desired_upgrades.sort();
+        desired_upgrades
+            .into_iter()
+            .group_by(|(packages, _authority)| packages.clone())
+            .into_iter()
+            .find_map(|(packages, group)| {
+                // should have been filtered out earlier.
+                assert!(!packages.is_empty());
+
+                let mut stake_aggregator: StakeAggregator<(), true> =
+                    StakeAggregator::new(Arc::new(committee.clone()));
+
+                for (_, authority) in group {
+                    stake_aggregator.insert_generic(authority, ());
+                }
+
+                let total_votes = stake_aggregator.total_votes();
+                let quorum_threshold = committee.quorum_threshold();
+                let f = committee.total_votes - committee.quorum_threshold();
+                let buffer_bps = protocol_config.buffer_stake_for_protocol_upgrade_bps();
+                // multiple by buffer_bps / 10000, rounded up.
+                let buffer_stake = (f * buffer_bps + 9999) / 10000;
+                let effective_threshold = quorum_threshold + buffer_stake;
+
+                info!(
+                    ?total_votes,
+                    ?quorum_threshold,
+                    ?buffer_bps,
+                    ?effective_threshold,
+                    ?next_protocol_version,
+                    ?packages,
+                    "support for upgrade"
+                );
+
+                let has_support = total_votes >= effective_threshold;
+                has_support.then_some((next_protocol_version, packages))
+            })
+            // if there was no majority, there is no upgrade
+            .unwrap_or((current_protocol_version, vec![]))
     }
 
     /// Creates and execute the advance epoch transaction to effects without committing it to the database.
     /// The effects of the change epoch tx are only written to the database after a certified checkpoint has been
     /// formed and executed by CheckpointExecutor.
+    ///
+    /// When a framework upgraded has been decided on, but the validator does not have the new
+    /// versions of the packages locally, the validator cannot form the ChangeEpochTx. In this case
+    /// it returns Err, indicating that the checkpoint builder should give up trying to make the
+    /// final checkpoint. As long as the network is able to create a certified checkpoint (which
+    /// should be ensured by the capabilities vote), it will arrive via state sync and be executed
+    /// by CheckpointExecutor.
     pub async fn create_and_execute_advance_epoch_tx(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -2724,7 +2949,32 @@ impl AuthorityState {
     ) -> anyhow::Result<(SuiSystemState, TransactionEffects)> {
         let next_epoch = epoch_store.epoch() + 1;
 
-        let next_epoch_protocol_version = Self::choose_next_protocol_version(epoch_store);
+        let (next_epoch_protocol_version, next_epoch_system_packages) =
+            Self::choose_protocol_version_and_system_packages(
+                epoch_store.protocol_version(),
+                epoch_store.committee(),
+                epoch_store.protocol_config(),
+                epoch_store.get_capabilities(),
+            );
+
+        let Some(next_epoch_system_package_bytes) = self.get_system_package_bytes(
+            next_epoch_system_packages.clone()
+        ).await else {
+            error!(
+                "upgraded system packages {:?} are not locally available, cannot create \
+                ChangeEpochTx. validator binary must be upgraded to the correct version!",
+                next_epoch_system_packages
+            );
+            // the checkpoint builder will keep retrying forever when it hits this error.
+            // Eventually, one of two things will happen:
+            // - The operator will upgrade this binary to one that has the new packages locally,
+            //   and this function will succeed.
+            // - The final checkpoint will be certified by other validators, we will receive it via
+            //   state sync, and execute it. This will upgrade the framework packages, reconfigure,
+            //   and most likely shut down in the new epoch (this validator likely doesn't support
+            //   the new protocol version, or else it should have had the packages.)
+            return Err(anyhow!("missing system packages: cannot form ChangeEpochTx"));
+        };
 
         let tx = VerifiedTransaction::new_change_epoch(
             next_epoch,
@@ -2733,6 +2983,7 @@ impl AuthorityState {
             gas_cost_summary.computation_cost,
             gas_cost_summary.storage_rebate,
             epoch_start_timestamp_ms,
+            next_epoch_system_package_bytes,
         );
 
         let executable_tx = VerifiedExecutableTransaction::new_from_checkpoint(
@@ -2746,6 +2997,7 @@ impl AuthorityState {
         info!(
             ?next_epoch,
             ?next_epoch_protocol_version,
+            ?next_epoch_system_packages,
             computation_cost=?gas_cost_summary.computation_cost,
             storage_cost=?gas_cost_summary.storage_cost,
             storage_rebase=?gas_cost_summary.storage_rebate,
@@ -2780,9 +3032,9 @@ impl AuthorityState {
             "Effects summary of the change epoch transaction: {:?}",
             effects.summary_for_debug()
         );
-        epoch_store.record_is_safe_mode_metric(system_obj.safe_mode);
+        epoch_store.record_is_safe_mode_metric(system_obj.safe_mode());
         // The change epoch transaction cannot fail to execute.
-        assert!(effects.status.is_ok());
+        assert!(effects.status().is_ok());
         Ok((system_obj, effects))
     }
 
@@ -2834,7 +3086,7 @@ impl AuthorityState {
         let new_epoch = new_committee.epoch;
         info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
         assert_eq!(
-            epoch_start_configuration.system_state.epoch,
+            epoch_start_configuration.system_state.epoch(),
             new_committee.epoch
         );
         let new_epoch_store = cur_epoch_store.new_at_next_epoch(
@@ -2871,5 +3123,80 @@ impl AuthorityState {
             .unwrap()
             .send(())
             .unwrap();
+    }
+}
+
+#[cfg(msim)]
+pub mod sui_framework_injection {
+    use super::*;
+    use std::cell::RefCell;
+
+    // Thread local cache because all simtests run in a single unique thread.
+    thread_local! {
+        static OVERRIDE: RefCell<FrameworkOverrideConfig> = RefCell::new(FrameworkOverrideConfig::Default);
+    }
+
+    type Framework = Vec<CompiledModule>;
+
+    type FrameworkUpgradeCallback =
+        Box<dyn Fn(AuthorityName) -> Option<Framework> + Send + Sync + 'static>;
+
+    enum FrameworkOverrideConfig {
+        Default,
+        Global(Framework),
+        PerValidator(FrameworkUpgradeCallback),
+    }
+
+    fn compiled_modules_to_bytes(modules: &[CompiledModule]) -> Vec<Vec<u8>> {
+        modules
+            .iter()
+            .map(|m| {
+                let mut buf = Vec::new();
+                m.serialize(&mut buf).unwrap();
+                buf
+            })
+            .collect()
+    }
+
+    pub fn set_override(modules: Vec<CompiledModule>) {
+        OVERRIDE.with(|bs| *bs.borrow_mut() = FrameworkOverrideConfig::Global(modules));
+    }
+
+    pub fn set_override_cb(func: FrameworkUpgradeCallback) {
+        OVERRIDE.with(|bs| *bs.borrow_mut() = FrameworkOverrideConfig::PerValidator(func));
+    }
+
+    pub fn get_bytes(name: AuthorityName) -> Vec<Vec<u8>> {
+        OVERRIDE.with(|cfg| match &*cfg.borrow() {
+            FrameworkOverrideConfig::Default => sui_framework::get_sui_framework_bytes(),
+            FrameworkOverrideConfig::Global(framework) => compiled_modules_to_bytes(framework),
+            FrameworkOverrideConfig::PerValidator(func) => func(name)
+                .map(|fw| compiled_modules_to_bytes(&fw))
+                .unwrap_or_else(sui_framework::get_sui_framework_bytes),
+        })
+    }
+
+    pub fn get_modules(name: AuthorityName) -> Vec<CompiledModule> {
+        OVERRIDE.with(|cfg| match &*cfg.borrow() {
+            FrameworkOverrideConfig::Default => sui_framework::get_sui_framework(),
+            FrameworkOverrideConfig::Global(framework) => framework.clone(),
+            FrameworkOverrideConfig::PerValidator(func) => {
+                func(name).unwrap_or_else(sui_framework::get_sui_framework)
+            }
+        })
+    }
+}
+
+#[cfg(not(msim))]
+pub mod sui_framework_injection {
+    use super::*;
+    use move_binary_format::CompiledModule;
+
+    pub fn get_bytes(_name: AuthorityName) -> Vec<Vec<u8>> {
+        sui_framework::get_sui_framework_bytes()
+    }
+
+    pub fn get_modules(_name: AuthorityName) -> Vec<CompiledModule> {
+        sui_framework::get_sui_framework()
     }
 }

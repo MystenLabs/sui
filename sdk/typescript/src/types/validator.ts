@@ -31,7 +31,7 @@ export const ValidatorMetaData = object({
   project_url: string(),
   p2p_address: array(number()),
   net_address: array(number()),
-  consensus_address: array(number()),
+  primary_address: array(number()),
   worker_address: array(number()),
   next_epoch_protocol_pubkey_bytes: nullable(array(number())),
   next_epoch_proof_of_possession: nullable(array(number())),
@@ -39,7 +39,7 @@ export const ValidatorMetaData = object({
   next_epoch_worker_pubkey_bytes: nullable(array(number())),
   next_epoch_net_address: nullable(array(number())),
   next_epoch_p2p_address: nullable(array(number())),
-  next_epoch_consensus_address: nullable(array(number())),
+  next_epoch_primary_address: nullable(array(number())),
   next_epoch_worker_address: nullable(array(number())),
 });
 
@@ -137,6 +137,7 @@ export const DelegationStakingPoolFields = object({
   pool_token_balance: number(),
   rewards_pool: object({ value: number() }),
   starting_epoch: number(),
+  deactivation_epoch: object({ vec: array() }),
   sui_balance: number(),
 });
 
@@ -147,15 +148,14 @@ export const DelegationStakingPool = object({
 
 export const CommitteeInfo = object({
   epoch: number(),
-  // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
-  protocol_version: optional(number()),
-  /* array of (validator public key, stake unit) tuple */
-  committee_info: optional(array(tuple([AuthorityName, number()]))),
+  /** Array of (validator public key, stake unit) tuple */
+  validators: optional(array(tuple([AuthorityName, number()]))),
 });
 
 export const SystemParameters = object({
   min_validator_stake: number(),
   max_validator_candidate_count: number(),
+  governance_start_epoch: number(),
   storage_gas_price: optional(number()),
 });
 
@@ -186,11 +186,11 @@ export const ValidatorSet = object({
     }),
   }),
   pending_removals: array(number()),
-  // TODO: Remove this after 0.28.0 is released
-  pending_delegation_switches: optional(
-    object({ contents: array(ValidatorPair) }),
-  ),
   staking_pool_mappings: object({
+    id: string(),
+    size: number(),
+  }),
+  inactive_pools: object({
     id: string(),
     size: number(),
   }),
@@ -198,8 +198,7 @@ export const ValidatorSet = object({
 
 export const SuiSystemState = object({
   epoch: number(),
-  // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
-  protocol_version: optional(number()),
+  protocol_version: number(),
   validators: ValidatorSet,
   storage_fund: Balance,
   parameters: SystemParameters,

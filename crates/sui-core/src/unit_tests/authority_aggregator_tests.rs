@@ -301,6 +301,12 @@ async fn execute_transaction_with_fault_configs(
         .is_ok()
 }
 
+fn effects_with_tx(digest: TransactionDigest) -> TransactionEffects {
+    let mut effects = TransactionEffects::default();
+    *effects.transaction_digest_mut_for_testing() = digest;
+    effects
+}
+
 /// The intent of this is to test whether client side timeouts
 /// have any impact on the server execution. Turns out because
 /// we spawn a tokio task on the server, client timing out and
@@ -623,7 +629,7 @@ fn get_agg<A>(
     clients: BTreeMap<AuthorityName, A>,
     epoch: EpochId,
 ) -> AuthorityAggregator<A> {
-    let committee = Committee::new(epoch, ProtocolVersion::MIN, authorities).unwrap();
+    let committee = Committee::new(epoch, authorities).unwrap();
     let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
 
     AuthorityAggregator::new_with_timeouts(
@@ -700,7 +706,7 @@ async fn test_handle_transaction_response() {
     // Case 2
     // Validators return signed-tx with epoch 0, client expects 1
     // Update client to epoch 1
-    let committee_1 = Committee::new(1, ProtocolVersion::MIN, authorities.clone()).unwrap();
+    let committee_1 = Committee::new(1, authorities.clone()).unwrap();
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
@@ -712,10 +718,7 @@ async fn test_handle_transaction_response() {
 
     // Case 3
     // Val-0 returns tx-cert
-    let effects = TransactionEffects {
-        transaction_digest: *cert_epoch_0.digest(),
-        ..Default::default()
-    };
+    let effects = effects_with_tx(*cert_epoch_0.digest());
     let (name_0, key_0) = &authority_keys[0];
     let resp = HandleTransactionResponse {
         status: TransactionStatus::Executed(
@@ -751,7 +754,7 @@ async fn test_handle_transaction_response() {
     )
     .await;
 
-    let committee_1 = Committee::new(1, ProtocolVersion::MIN, authorities.clone()).unwrap();
+    let committee_1 = Committee::new(1, authorities.clone()).unwrap();
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
@@ -764,10 +767,7 @@ async fn test_handle_transaction_response() {
 
     // Case 5
     // Validators return tx-cert with epoch 0, client expects 1
-    let effects = TransactionEffects {
-        transaction_digest: *cert_epoch_0.digest(),
-        ..Default::default()
-    };
+    let effects = effects_with_tx(*cert_epoch_0.digest());
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter(),
@@ -804,13 +804,10 @@ async fn test_handle_transaction_response() {
 
     // Case 6
     // Validators 2 and 3 returns tx-cert with epoch 1, but different signed effects from 0 and 1
-    let effects = TransactionEffects {
-        transaction_digest: *cert_epoch_0.digest(),
-        status: ExecutionStatus::Failure {
-            error: ExecutionFailureStatus::InsufficientGas,
-            command: None,
-        },
-        ..Default::default()
+    let mut effects = effects_with_tx(*cert_epoch_0.digest());
+    *effects.status_mut_for_testing() = ExecutionStatus::Failure {
+        error: ExecutionFailureStatus::InsufficientGas,
+        command: None,
     };
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
@@ -836,10 +833,7 @@ async fn test_handle_transaction_response() {
 
     // Case 7
     // Validators return tx-cert with epoch 1, client expects 0
-    let effects = TransactionEffects {
-        transaction_digest: *cert_epoch_1.digest(),
-        ..Default::default()
-    };
+    let effects = effects_with_tx(*cert_epoch_1.digest());
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter(),

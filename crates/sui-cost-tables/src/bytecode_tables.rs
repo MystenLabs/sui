@@ -475,6 +475,9 @@ impl<'b> GasMeter for GasStatus<'b> {
     }
 
     fn remaining_gas(&self) -> InternalGas {
+        if !self.charge {
+            return InternalGas::new(u64::MAX);
+        }
         self.gas_left
     }
 }

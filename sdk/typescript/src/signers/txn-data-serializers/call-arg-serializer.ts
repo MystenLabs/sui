@@ -15,7 +15,6 @@ import {
   OBJECT_MODULE_NAME,
   SuiJsonValue,
   SuiMoveNormalizedType,
-  SuiObjectRef,
   SUI_FRAMEWORK_ADDRESS,
 } from '../../types';
 import {
@@ -134,15 +133,12 @@ export class CallArgSerializer {
   }
 
   private async extractNormalizedFunctionParams(
-    // TODO: Restrict to just `ObjectId` once 0.24.0 has deployed
-    packageId: ObjectId | SuiObjectRef,
+    packageId: ObjectId,
     module: string,
     functionName: string,
   ) {
     const normalized = await this.provider.getNormalizedMoveFunction(
-      normalizeSuiObjectId(
-        typeof packageId === 'string' ? packageId : packageId.objectId,
-      ),
+      normalizeSuiObjectId(packageId),
       module,
       functionName,
     );
@@ -155,7 +151,7 @@ export class CallArgSerializer {
   }
 
   async newObjectArg(objectId: string): Promise<ObjectArg> {
-    const object = await this.provider.getObject(objectId);
+    const object = await this.provider.getObject(objectId, { showOwner: true });
     const initialSharedVersion = getSharedObjectInitialVersion(object);
 
     const mutable = true; // Defaulted to True to match current behavior.

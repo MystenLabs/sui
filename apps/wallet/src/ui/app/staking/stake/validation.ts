@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { formatBalance } from '@mysten/core';
 import BigNumber from 'bignumber.js';
 import { mixed, object } from 'yup';
-
-import { formatBalance } from '../../hooks/useFormatCoin';
 
 export function createValidationSchema(
     coinBalance: bigint,

@@ -3,15 +3,18 @@
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_with::skip_serializing_none;
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
-pub const MIN_PROTOCOL_VERSION: u64 = 1;
-pub const MAX_PROTOCOL_VERSION: u64 = 1;
+const MIN_PROTOCOL_VERSION: u64 = 1;
+const MAX_PROTOCOL_VERSION: u64 = 1;
 
-#[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(
+    Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
+)]
 pub struct ProtocolVersion(u64);
 
 impl ProtocolVersion {
@@ -62,7 +65,7 @@ impl std::ops::Add<u64> for ProtocolVersion {
 /// Models the set of protocol versions supported by a validator.
 /// The `sui-node` binary will always use the SYSTEM_DEFAULT constant, but for testing we need
 /// to be able to inject arbitrary versions into SuiNode.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct SupportedProtocolVersions {
     min: ProtocolVersion,
     max: ProtocolVersion,
@@ -73,6 +76,14 @@ impl SupportedProtocolVersions {
         min: ProtocolVersion::MIN,
         max: ProtocolVersion::MAX,
     };
+
+    /// Use by VersionedProtocolMessage implementors to describe in which range of versions a
+    /// message variant is supported.
+    pub fn new_for_message(min: u64, max: u64) -> Self {
+        let min = ProtocolVersion::new(min);
+        let max = ProtocolVersion::new(max);
+        Self { min, max }
+    }
 
     pub fn new_for_testing(min: u64, max: u64) -> Self {
         let min = ProtocolVersion::new(min);
@@ -102,8 +113,11 @@ impl SupportedProtocolVersions {
 /// This way, if the constant is accessed in a protocol version in which it is not defined, the
 /// validator will crash. (Crashing is necessary because this type of error would almost always
 /// result in forking if not prevented here).
-#[derive(Clone)]
+#[skip_serializing_none]
+#[derive(Clone, Serialize)]
 pub struct ProtocolConfig {
+    pub version: ProtocolVersion,
+
     // ==== Transaction input limits ====
     /// Maximum serialized size of a transaction (in bytes).
     max_tx_size: Option<usize>,
@@ -277,6 +291,26 @@ pub struct ProtocolConfig {
     /// can happen automatically. 10000bps would indicate that complete unanimity is required (all
     /// 3f+1 must vote), while 0bps would indicate that 2f+1 is sufficient.
     buffer_stake_for_protocol_upgrade_bps: Option<u64>,
+
+    /// === Native Function Costs ===
+
+    /// Cost params for the Move native function `address::from_bytes(bytes: vector<u8>)`
+    copy_bytes_to_address_cost_per_byte: Option<u64>,
+
+    /// Cost params for the Move native function `address::to_u256(address): u256`
+    address_to_vec_cost_per_byte: Option<u64>,
+    address_vec_reverse_cost_per_byte: Option<u64>,
+    copy_convert_to_u256_cost_per_byte: Option<u64>,
+
+    /// Cost params for the Move native function `address::from_u256(u256): address`
+    u256_to_bytes_to_vec_cost_per_byte: Option<u64>,
+    u256_bytes_vec_reverse_cost_per_byte: Option<u64>,
+    copy_convert_to_address_cost_per_byte: Option<u64>,
+
+    /// Cost params for the Move native function `event::emit<T: copy + drop>(event: T)`
+    event_value_size_derivation_cost_per_byte: Option<u64>,
+    event_tag_size_derivation_cost_per_byte: Option<u64>,
+    event_emit_cost_per_byte: Option<u64>,
 }
 
 const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protocol version";
@@ -434,6 +468,46 @@ impl ProtocolConfig {
             .expect(CONSTANT_ERR_MSG)
     }
 
+    pub fn copy_bytes_to_address_cost_per_byte(&self) -> u64 {
+        self.copy_bytes_to_address_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn address_to_vec_cost_per_byte(&self) -> u64 {
+        self.address_to_vec_cost_per_byte.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn address_vec_reverse_cost_per_byte(&self) -> u64 {
+        self.address_vec_reverse_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn copy_convert_to_u256_cost_per_byte(&self) -> u64 {
+        self.copy_convert_to_u256_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn u256_to_bytes_to_vec_cost_per_byte(&self) -> u64 {
+        self.u256_to_bytes_to_vec_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn u256_bytes_vec_reverse_cost_per_byte(&self) -> u64 {
+        self.u256_bytes_vec_reverse_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn copy_convert_to_address_cost_per_byte(&self) -> u64 {
+        self.copy_convert_to_address_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn event_value_size_derivation_cost_per_byte(&self) -> u64 {
+        self.event_value_size_derivation_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn event_tag_size_derivation_cost_per_byte(&self) -> u64 {
+        self.event_tag_size_derivation_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn event_emit_cost_per_byte(&self) -> u64 {
+        self.event_emit_cost_per_byte.expect(CONSTANT_ERR_MSG)
+    }
+
     // When adding a new constant, create a new getter for it as follows, so that the validator
     // will crash if the constant is accessed before the protocol in which it is defined.
     //
@@ -459,7 +533,8 @@ impl ProtocolConfig {
         assert!(version.0 >= ProtocolVersion::MIN.0, "{:?}", version);
         assert!(version.0 <= ProtocolVersion::MAX_ALLOWED.0, "{:?}", version);
 
-        let ret = Self::get_for_version_impl(version);
+        let mut ret = Self::get_for_version_impl(version);
+        ret.version = version;
 
         CONFIG_OVERRIDE.with(|ovr| {
             if let Some(override_fn) = &*ovr.borrow() {
@@ -526,6 +601,7 @@ impl ProtocolConfig {
         // To change the values here you must create a new protocol version with the new values!
         match version.0 {
             1 => Self {
+                version, // will be overwitten before being returned
                 max_tx_size: Some(64 * 1024),
                 max_tx_in_batch: Some(10),
                 max_modules_in_publish: Some(128),
@@ -575,6 +651,29 @@ impl ProtocolConfig {
                 // require 2f+1 + 0.75 * f stake for automatic protocol upgrades.
                 // TODO: tune based on experience in testnet
                 buffer_stake_for_protocol_upgrade_bps: Some(7500),
+
+                /// === Native Function Costs ===
+                // Copying bytes is a simple low-cost operation
+                copy_bytes_to_address_cost_per_byte: Some(10),
+                // Copying bytes is a simple low-cost operation
+                address_to_vec_cost_per_byte: Some(10),
+                // Reversing bytes is a simple low-cost operation
+                address_vec_reverse_cost_per_byte: Some(10),
+                // Copying bytes and converting to Value::u256 are simple low-cost operation
+                copy_convert_to_u256_cost_per_byte: Some(10),
+                // Copying bytes snd converting sre simple low-cost operations
+                u256_to_bytes_to_vec_cost_per_byte: Some(10),
+                // Reversing bytes is a simple low-cost operation
+                u256_bytes_vec_reverse_cost_per_byte: Some(10),
+                // Copying bytes and converting sre simple low-cost operations
+                copy_convert_to_address_cost_per_byte: Some(10),
+                // Deriving event value size can be expensive due to recursion overhead
+                event_value_size_derivation_cost_per_byte: Some(1_000),
+                // Converting type to typetag be expensive due to recursion overhead
+                event_tag_size_derivation_cost_per_byte: Some(1_000),
+                // Emitting an event is cheap since its a vector push
+                event_emit_cost_per_byte: Some(1_000),
+
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
@@ -639,5 +738,28 @@ impl Drop for OverrideGuard {
         CONFIG_OVERRIDE.with(|ovr| {
             *ovr.borrow_mut() = None;
         });
+    }
+}
+
+#[cfg(all(test, not(msim)))]
+mod test {
+    use super::*;
+    use insta::assert_yaml_snapshot;
+
+    #[test]
+    fn snaphost_tests() {
+        println!("\n============================================================================");
+        println!("!                                                                          !");
+        println!("! IMPORTANT: never update snapshots from this test. only add new versions! !");
+        println!("! (it is actually ok to update them up until mainnet launches)             !");
+        println!("!                                                                          !");
+        println!("============================================================================\n");
+        for i in MIN_PROTOCOL_VERSION..=MAX_PROTOCOL_VERSION {
+            let cur = ProtocolVersion::new(i);
+            assert_yaml_snapshot!(
+                format!("version_{}", cur.as_u64()),
+                ProtocolConfig::get_for_version(cur)
+            );
+        }
     }
 }

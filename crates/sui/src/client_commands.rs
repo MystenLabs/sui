@@ -19,7 +19,6 @@ use fastcrypto::{
     encoding::{Base64, Encoding},
     traits::ToFromBytes,
 };
-use move_cli::base;
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
 use prettytable::Table;
@@ -27,17 +26,17 @@ use prettytable::{row, table};
 use serde::Serialize;
 use serde_json::{json, Value};
 use sui_framework::build_move_package;
+use sui_move::build::resolve_lock_file_path;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 use sui_types::error::SuiError;
 
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
-use sui_json_rpc_types::SuiExecutionStatus;
 use sui_json_rpc_types::{
-    DynamicFieldPage, GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiRawData,
-    SuiTransactionResponse,
+    DynamicFieldPage, SuiObjectData, SuiObjectInfo, SuiObjectResponse, SuiRawData,
+    SuiTransactionEffectsAPI, SuiTransactionResponse,
 };
-use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
+use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::SuiClient;
 use sui_types::crypto::SignatureScheme;
@@ -45,7 +44,7 @@ use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::intent::Intent;
 use sui_types::signature::GenericSignature;
 use sui_types::{
-    base_types::{ObjectID, SuiAddress},
+    base_types::{ObjectID, ObjectRef, SuiAddress},
     gas_coin::GasCoin,
     messages::{Transaction, VerifiedTransaction},
     object::Owner,
@@ -467,7 +466,8 @@ impl SuiClientCommands {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
 
-                let build_config = resolve_lock_file_path(build_config, package_path.clone())?;
+                let build_config =
+                    resolve_lock_file_path(build_config, Some(package_path.clone()))?;
 
                 let compiled_package = build_move_package(
                     &package_path,
@@ -532,10 +532,16 @@ impl SuiClientCommands {
                 // Fetch the object ref
                 let client = context.get_client().await?;
                 if !bcs {
-                    let object_read = client.read_api().get_parsed_object(id).await?;
+                    let object_read = client
+                        .read_api()
+                        .get_object_with_options(id, SuiObjectDataOptions::full_content())
+                        .await?;
                     SuiClientCommandResult::Object(object_read)
                 } else {
-                    let raw_object_read = client.read_api().get_object(id).await?;
+                    let raw_object_read = client
+                        .read_api()
+                        .get_object_with_options(id, SuiObjectDataOptions::bcs_lossless())
+                        .await?;
                     SuiClientCommandResult::RawObject(raw_object_read)
                 }
             }
@@ -592,8 +598,11 @@ impl SuiClientCommands {
                     .await?;
                 let effects = &response.effects;
                 let time_total = time_start.elapsed().as_micros();
-                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
-                    return Err(anyhow!("Error transferring object: {:#?}", effects.status));
+                if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
+                    return Err(anyhow!(
+                        "Error transferring object: {:#?}",
+                        effects.status()
+                    ));
                 }
                 SuiClientCommandResult::Transfer(time_total, response)
             }
@@ -623,8 +632,8 @@ impl SuiClientCommands {
                     )
                     .await?;
                 let effects = &response.effects;
-                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
-                    return Err(anyhow!("Error transferring SUI: {:#?}", effects.status));
+                if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
+                    return Err(anyhow!("Error transferring SUI: {:#?}", effects.status()));
                 }
                 SuiClientCommandResult::TransferSui(response)
             }
@@ -670,10 +679,10 @@ impl SuiClientCommands {
                     )
                     .await?;
                 let effects = &response.effects;
-                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
+                if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!(
                         "Error executing Pay transaction: {:#?}",
-                        effects.status
+                        effects.status()
                     ));
                 }
                 SuiClientCommandResult::Pay(response)
@@ -719,10 +728,10 @@ impl SuiClientCommands {
                     )
                     .await?;
                 let effects = &response.effects;
-                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
+                if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!(
                         "Error executing PaySui transaction: {:#?}",
-                        effects.status
+                        effects.status()
                     ));
                 }
                 SuiClientCommandResult::PaySui(response)
@@ -756,10 +765,10 @@ impl SuiClientCommands {
                     )
                     .await?;
                 let effects = &response.effects;
-                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
+                if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!(
                         "Error executing PayAllSui transaction: {:#?}",
-                        effects.status
+                        effects.status()
                     ));
                 }
                 SuiClientCommandResult::PayAllSui(response)
@@ -917,13 +926,16 @@ impl SuiClientCommands {
                 .await?;
                 let nft_id = response
                     .effects
-                    .created
+                    .created()
                     .first()
                     .ok_or_else(|| anyhow!("Failed to create NFT"))?
                     .reference
                     .object_id;
                 let client = context.get_client().await?;
-                let object_read = client.read_api().get_parsed_object(nft_id).await?;
+                let object_read = client
+                    .read_api()
+                    .get_object_with_options(nft_id, SuiObjectDataOptions::full_content())
+                    .await?;
                 SuiClientCommandResult::CreateExampleNFT(object_read)
             }
 
@@ -1007,7 +1019,8 @@ impl SuiClientCommands {
                     ));
                 }
 
-                let build_config = resolve_lock_file_path(build_config, package_path.clone())?;
+                let build_config =
+                    resolve_lock_file_path(build_config, Some(package_path.clone()))?;
 
                 let compiled_package = build_move_package(
                     &package_path,
@@ -1044,18 +1057,6 @@ impl SuiClientCommands {
         config.active_env = env;
         Ok(())
     }
-}
-
-/// Resolve Move.lock file path in package directory (where Move.toml is).
-fn resolve_lock_file_path(
-    build_config: MoveBuildConfig,
-    package_path: PathBuf,
-) -> Result<MoveBuildConfig, anyhow::Error> {
-    let package_root = base::reroot_path(Some(package_path))?;
-    let lock_file_path = package_root.join("Move.lock");
-    let mut build_config = build_config;
-    build_config.lock_file = Some(lock_file_path);
-    Ok(build_config)
 }
 
 pub struct WalletContext {
@@ -1125,19 +1126,21 @@ impl WalletContext {
     }
 
     /// Get the latest object reference given a object id
-    pub async fn get_object_ref(
-        &self,
-        object_id: ObjectID,
-    ) -> Result<GetRawObjectDataResponse, anyhow::Error> {
+    pub async fn get_object_ref(&self, object_id: ObjectID) -> Result<ObjectRef, anyhow::Error> {
         let client = self.get_client().await?;
-        Ok(client.read_api().get_object(object_id).await?)
+        Ok(client
+            .read_api()
+            .get_object_with_options(object_id, SuiObjectDataOptions::new())
+            .await?
+            .into_object()?
+            .object_ref())
     }
 
     /// Get all the gas objects (and conveniently, gas amounts) for the address
     pub async fn gas_objects(
         &self,
         address: SuiAddress,
-    ) -> Result<Vec<(u64, SuiParsedObject, SuiObjectInfo)>, anyhow::Error> {
+    ) -> Result<Vec<(u64, SuiObjectData, SuiObjectInfo)>, anyhow::Error> {
         let client = self.get_client().await?;
         let object_refs = client
             .read_api()
@@ -1145,12 +1148,16 @@ impl WalletContext {
             .await?;
 
         // TODO: We should ideally fetch the objects from local cache
+        // TODO: replace with multi-get
         let mut values_objects = Vec::new();
         for oref in object_refs {
-            let response = client.read_api().get_parsed_object(oref.object_id).await?;
+            let response = client
+                .read_api()
+                .get_object_with_options(oref.object_id, SuiObjectDataOptions::full_content())
+                .await?;
             match response {
-                GetObjectDataResponse::Exists(o) => {
-                    if matches!( o.data.type_(), Some(v)  if *v == GasCoin::type_().to_string()) {
+                SuiObjectResponse::Exists(o) => {
+                    if matches!( o.type_.clone(), Some(v)  if *v == GasCoin::type_().to_string()) {
                         // Okay to unwrap() since we already checked type
                         let gas_coin = GasCoin::try_from(&o)?;
                         values_objects.push((gas_coin.value(), o, oref));
@@ -1165,8 +1172,15 @@ impl WalletContext {
 
     pub async fn get_object_owner(&self, id: &ObjectID) -> Result<SuiAddress, anyhow::Error> {
         let client = self.get_client().await?;
-        let object = client.read_api().get_object(*id).await?.into_object()?;
-        Ok(object.owner.get_owner_address()?)
+        let object = client
+            .read_api()
+            .get_object_with_options(*id, SuiObjectDataOptions::new().with_owner())
+            .await?
+            .into_object()?;
+        Ok(object
+            .owner
+            .ok_or_else(|| anyhow!("Owner field is None"))?
+            .get_owner_address()?)
     }
 
     pub async fn try_get_object_owner(
@@ -1186,9 +1200,9 @@ impl WalletContext {
         address: SuiAddress,
         budget: u64,
         forbidden_gas_objects: BTreeSet<ObjectID>,
-    ) -> Result<(u64, SuiParsedObject), anyhow::Error> {
+    ) -> Result<(u64, SuiObjectData), anyhow::Error> {
         for o in self.gas_objects(address).await.unwrap() {
-            if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.id()) {
+            if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.object_id) {
                 return Ok((o.0, o.1));
             }
         }
@@ -1225,11 +1239,11 @@ impl Display for SuiClientCommandResult {
             }
             SuiClientCommandResult::RawObject(raw_object_read) => {
                 let raw_object = match raw_object_read.object() {
-                    Ok(v) => match &v.data {
-                        SuiRawData::MoveObject(o) => {
+                    Ok(v) => match &v.bcs {
+                        Some(SuiRawData::MoveObject(o)) => {
                             format!("{:?}\nNumber of bytes: {}", o.bcs_bytes, o.bcs_bytes.len())
                         }
-                        SuiRawData::Package(p) => {
+                        Some(SuiRawData::Package(p)) => {
                             let mut temp = String::new();
                             let mut bcs_bytes = 0usize;
                             for m in &p.module_map {
@@ -1238,6 +1252,7 @@ impl Display for SuiClientCommandResult {
                             }
                             format!("{}Number of bytes: {}", temp, bcs_bytes)
                         }
+                        None => "Bcs field is None".to_string().red().to_string(),
                     },
                     Err(err) => format!("{err}").red().to_string(),
                 };
@@ -1444,8 +1459,8 @@ pub async fn call_move(
 
     let response = context.execute_transaction(transaction).await?;
     let effects = &response.effects;
-    if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
-        return Err(anyhow!("Error calling module: {:#?}", effects.status));
+    if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
+        return Err(anyhow!("Error calling module: {:#?}", effects.status()));
     }
     Ok(response)
 }
@@ -1524,8 +1539,8 @@ impl SuiClientCommandResult {
 pub enum SuiClientCommandResult {
     Publish(SuiTransactionResponse),
     VerifySource,
-    Object(GetObjectDataResponse),
-    RawObject(GetRawObjectDataResponse),
+    Object(SuiObjectResponse),
+    RawObject(SuiObjectResponse),
     Call(SuiTransactionResponse),
     Transfer(
         // Skipping serialisation for elapsed time.
@@ -1548,7 +1563,7 @@ pub enum SuiClientCommandResult {
     ActiveAddress(Option<SuiAddress>),
     ActiveEnv(Option<String>),
     Envs(Vec<SuiEnv>, Option<String>),
-    CreateExampleNFT(GetObjectDataResponse),
+    CreateExampleNFT(SuiObjectResponse),
     SerializeTransferSui(String),
     ExecuteSignedTx(SuiTransactionResponse),
     NewEnv(SuiEnv),

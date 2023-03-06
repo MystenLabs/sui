@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useRpcClient } from '@mysten/core';
 import {
     getExecutionStatusType,
     getTransactionKindName,
@@ -17,7 +18,7 @@ import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 import ReceiptCard from '_components/receipt-card';
 import { checkStakingTxn } from '_helpers';
-import { useRpc, useAppSelector } from '_hooks';
+import { useAppSelector } from '_hooks';
 
 function ReceiptPage() {
     const [searchParams] = useSearchParams();
@@ -27,7 +28,7 @@ function ReceiptPage() {
     // get tx results from url params
     const transactionId = searchParams.get('txdigest');
     const fromParam = searchParams.get('from');
-    const rpc = useRpc();
+    const rpc = useRpcClient();
 
     const { data, isLoading, isError } = useQuery(
         ['transactions-by-id', transactionId],

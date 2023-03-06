@@ -63,6 +63,7 @@ export function WalletKitProvider({
   // Automatically trigger the autoconnect logic when we mount, and whenever wallets change:
   const { wallets } = useSyncExternalStore(
     walletKitRef.current.subscribe,
+    walletKitRef.current.getState,
     walletKitRef.current.getState
   );
   useEffect(() => {
@@ -97,7 +98,11 @@ export function useWalletKit(): UseWalletKit {
     );
   }
 
-  const state = useSyncExternalStore(walletKit.subscribe, walletKit.getState);
+  const state = useSyncExternalStore(
+    walletKit.subscribe,
+    walletKit.getState,
+    walletKit.getState
+  );
 
   return useMemo(
     () => ({

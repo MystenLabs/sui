@@ -5,11 +5,13 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use std::sync::Arc;
 use sui_core::authority_aggregator::AuthorityAggregator;
+use sui_core::signature_verifier::SignatureVerifier;
 use sui_core::{
     authority_client::NetworkAuthorityClient,
     quorum_driver::{reconfig_observer::ReconfigObserver, QuorumDriver},
 };
 use sui_network::default_mysten_network_config;
+use sui_types::sui_system_state::SuiSystemStateTrait;
 use tracing::{error, info, trace};
 
 /// A ReconfigObserver that polls validators periodically
@@ -34,10 +36,10 @@ impl EmbeddedReconfigObserver {
 }
 
 impl EmbeddedReconfigObserver {
-    pub async fn get_committee(
+    pub async fn get_committee<S: SignatureVerifier + Default>(
         &self,
-        auth_agg: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
-    ) -> anyhow::Result<Arc<AuthorityAggregator<NetworkAuthorityClient>>> {
+        auth_agg: Arc<AuthorityAggregator<NetworkAuthorityClient, S>>,
+    ) -> anyhow::Result<Arc<AuthorityAggregator<NetworkAuthorityClient, S>>> {
         // auth_agg and cur_epoch is consistently in each iteration,
         // assuming no other ReconfigObserver is working at the same time.
         let cur_epoch = auth_agg.committee.epoch();
@@ -72,12 +74,14 @@ impl EmbeddedReconfigObserver {
 }
 
 #[async_trait]
-impl ReconfigObserver<NetworkAuthorityClient> for EmbeddedReconfigObserver {
-    fn clone_boxed(&self) -> Box<dyn ReconfigObserver<NetworkAuthorityClient> + Send + Sync> {
+impl<S: SignatureVerifier + Default> ReconfigObserver<NetworkAuthorityClient, S>
+    for EmbeddedReconfigObserver
+{
+    fn clone_boxed(&self) -> Box<dyn ReconfigObserver<NetworkAuthorityClient, S> + Send + Sync> {
         Box::new(self.clone())
     }
 
-    async fn run(&mut self, quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>) {
+    async fn run(&mut self, quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient, S>>) {
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
             let auth_agg = quorum_driver.authority_aggregator().load();

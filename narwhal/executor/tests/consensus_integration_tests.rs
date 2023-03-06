@@ -16,7 +16,7 @@ use telemetry_subscribers::TelemetryGuards;
 use test_utils::{cluster::Cluster, temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 
-use types::{Certificate, PreSubscribedBroadcastSender, TransactionProto};
+use types::{Certificate, PreSubscribedBroadcastSender, Round, TransactionProto};
 
 #[tokio::test]
 async fn test_recovery() {
@@ -55,13 +55,15 @@ async fn test_recovery() {
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
-    let gc_depth = 50;
+    const GC_DEPTH: Round = 50;
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
-        gc_depth,
+        GC_DEPTH,
         metrics.clone(),
+        NUM_SUB_DAGS_PER_SCHEDULE,
     );
 
     let _consensus_handle = Consensus::spawn(
@@ -164,7 +166,7 @@ async fn test_internal_consensus_output() {
         let tx = string_transaction(i);
 
         // serialise and send
-        let tr = bincode::serialize(&tx).unwrap();
+        let tr = bcs::to_bytes(&tx).unwrap();
         let txn = TransactionProto {
             transaction: Bytes::from(tr),
         };
@@ -178,7 +180,7 @@ async fn test_internal_consensus_output() {
         let result = receiver.recv().await.unwrap();
 
         // deserialise transaction
-        let output_transaction = bincode::deserialize::<String>(&result).unwrap();
+        let output_transaction = bcs::from_bytes::<String>(&result).unwrap();
 
         // we always remove the first transaction and check with the one
         // sequenced. We want the transactions to be sequenced in the
