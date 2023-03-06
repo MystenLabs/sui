@@ -230,6 +230,11 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
             timeout,
             retries,
         } => {
+            // TODO: Fix the load generator to support benchmarks with faults.
+            if faults != 0 {
+                unimplemented!("Benchmarks with faults are yet not supported")
+            }
+
             // Create a new orchestrator to instruct the testbed.
             let username = testbed.username();
             let private_key_file = settings.ssh_private_key_file.clone().into();

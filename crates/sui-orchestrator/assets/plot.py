@@ -9,6 +9,9 @@ import matplotlib.ticker as tick
 from glob import glob
 from itertools import cycle
 
+# A simple python script to plot measurements results. This script requires
+# matplotlib as dependency: `pip install matplotlib`.
+
 
 def aggregate_tps(measurement):
     tps = []
