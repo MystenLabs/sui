@@ -52,7 +52,7 @@ export function NFTDisplayCard({
     // display title is the either originByteNft field name or default nft name or fall back to it the object id
     const displayTitle = originByteNft?.fields.name || nftName;
     const nftUrl = nftMeta?.url;
-    const fileExtensionType = useFileExtensionType(nftUrl!);
+    const fileExtensionType = useFileExtensionType(nftUrl || '');
     return (
         <div className={nftDisplayCardStyles({ animateHover, wideView })}>
             <Loading loading={isLoading || originByteLoading}>
