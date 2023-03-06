@@ -35,6 +35,11 @@ impl<T> MoveOption<T> {
     pub fn empty() -> Self {
         Self { vec: vec![] }
     }
+
+    pub fn into_option(self) -> Option<T> {
+        let Self { mut vec } = self;
+        vec.pop()
+    }
 }
 
 /// Rust version of the Move sui::table::Table type.

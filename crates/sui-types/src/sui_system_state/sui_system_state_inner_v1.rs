@@ -15,6 +15,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
+use super::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary};
 use super::SuiSystemStateTrait;
 
 const E_METADATA_INVALID_PUBKEY: u64 = 1;
@@ -437,6 +438,66 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
 
     fn safe_mode(&self) -> bool {
         self.safe_mode
+    }
+
+    fn into_sui_system_state_summary(self) -> SuiSystemStateSummary {
+        SuiSystemStateSummary {
+            epoch: self.epoch,
+            protocol_version: self.protocol_version,
+            storage_fund: self.storage_fund.value(),
+            reference_gas_price: self.reference_gas_price,
+            safe_mode: self.safe_mode,
+            epoch_start_timestamp_ms: self.epoch_start_timestamp_ms,
+            min_validator_stake: self.parameters.min_validator_stake,
+            max_validator_candidate_count: self.parameters.max_validator_candidate_count,
+            governance_start_epoch: self.parameters.governance_start_epoch,
+            stake_subsidy_epoch_counter: self.stake_subsidy.epoch_counter,
+            stake_subsidy_balance: self.stake_subsidy.balance.value(),
+            stake_subsidy_current_epoch_amount: self.stake_subsidy.current_epoch_amount,
+            total_stake: self.validators.total_stake,
+            active_validators: self
+                .validators
+                .active_validators
+                .into_iter()
+                .map(|v| SuiValidatorSummary {
+                    sui_address: v.metadata.sui_address,
+                    protocol_pubkey_bytes: v.metadata.protocol_pubkey_bytes,
+                    network_pubkey_bytes: v.metadata.network_pubkey_bytes,
+                    worker_pubkey_bytes: v.metadata.worker_pubkey_bytes,
+                    proof_of_possession_bytes: v.metadata.proof_of_possession_bytes,
+                    name: v.metadata.name,
+                    description: v.metadata.description,
+                    image_url: v.metadata.image_url,
+                    project_url: v.metadata.project_url,
+                    net_address: v.metadata.net_address,
+                    p2p_address: v.metadata.p2p_address,
+                    primary_address: v.metadata.primary_address,
+                    worker_address: v.metadata.worker_address,
+                    next_epoch_protocol_pubkey_bytes: v.metadata.next_epoch_protocol_pubkey_bytes,
+                    next_epoch_proof_of_possession: v.metadata.next_epoch_proof_of_possession,
+                    next_epoch_network_pubkey_bytes: v.metadata.next_epoch_network_pubkey_bytes,
+                    next_epoch_worker_pubkey_bytes: v.metadata.next_epoch_worker_pubkey_bytes,
+                    next_epoch_net_address: v.metadata.next_epoch_net_address,
+                    next_epoch_p2p_address: v.metadata.next_epoch_p2p_address,
+                    next_epoch_primary_address: v.metadata.next_epoch_primary_address,
+                    next_epoch_worker_address: v.metadata.next_epoch_worker_address,
+                    voting_power: v.voting_power,
+                    gas_price: v.gas_price,
+                    commission_rate: v.commission_rate,
+                    next_epoch_stake: v.next_epoch_stake,
+                    next_epoch_gas_price: v.next_epoch_gas_price,
+                    next_epoch_commission_rate: v.next_epoch_commission_rate,
+                    starting_epoch: v.staking_pool.starting_epoch,
+                    deactivation_epoch: v.staking_pool.deactivation_epoch.into_option(),
+                    sui_balance: v.staking_pool.sui_balance,
+                    rewards_pool: v.staking_pool.rewards_pool.value(),
+                    pool_token_balance: v.staking_pool.pool_token_balance,
+                    pending_delegation: v.staking_pool.pending_delegation,
+                    pending_total_sui_withdraw: v.staking_pool.pending_total_sui_withdraw,
+                    pending_pool_token_withdraw: v.staking_pool.pending_pool_token_withdraw,
+                })
+                .collect(),
+        }
     }
 }
 

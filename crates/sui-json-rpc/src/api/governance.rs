@@ -12,6 +12,7 @@ use sui_types::committee::EpochId;
 use sui_types::governance::DelegatedStake;
 
 use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadata;
+use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
 #[open_rpc(namespace = "sui", tag = "Governance Read API")]
 #[rpc(server, client, namespace = "sui")]
@@ -32,9 +33,14 @@ pub trait GovernanceReadApi {
         epoch: Option<EpochId>,
     ) -> RpcResult<SuiCommittee>;
 
-    /// Return latest SUI system state object on-chain.
-    #[method(name = "getSuiSystemState")]
+    /// (Deprecated) Return latest SUI system state object on-chain.
+    /// This is now deprecated in favor of get_latest_sui_system_state.
+    #[method(name = "getSuiSystemState", deprecated)]
     async fn get_sui_system_state(&self) -> RpcResult<SuiSystemStateRpc>;
+
+    /// Return the latest SUI system state object on-chain.
+    #[method(name = "getLatestSuiSystemState")]
+    async fn get_latest_sui_system_state(&self) -> RpcResult<SuiSystemStateSummary>;
 
     /// Return the reference gas price for the network
     #[method(name = "getReferenceGasPrice")]

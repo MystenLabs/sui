@@ -21,8 +21,10 @@ use std::collections::{BTreeMap, HashMap};
 use tracing::error;
 
 use self::sui_system_state_inner_v1::{SuiSystemStateInnerV1, ValidatorMetadata};
+use self::sui_system_state_summary::SuiSystemStateSummary;
 
 pub mod sui_system_state_inner_v1;
+pub mod sui_system_state_summary;
 
 const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 
@@ -75,6 +77,7 @@ pub trait SuiSystemStateTrait {
     fn get_validator_metadata_vec(&self) -> Vec<ValidatorMetadata>;
     fn get_current_epoch_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId>;
     fn get_staking_pool_info(&self) -> BTreeMap<SuiAddress, (Vec<u8>, u64)>;
+    fn into_sui_system_state_summary(self) -> SuiSystemStateSummary;
 }
 
 /// SuiSystemState provides an abstraction over multiple versions of the inner SuiSystemStateInner object.
