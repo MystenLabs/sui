@@ -12,7 +12,7 @@ use crate::schema::move_calls::dsl as move_calls_dsl;
 use crate::schema::packages::{author, module_names, package_content, package_id};
 use crate::schema::transactions::{dsl, transaction_digest};
 use crate::schema::{
-    addresses, events, move_calls, objects, owner_changes, packages, transactions,
+    addresses, events, move_calls, objects, packages, transactions,
 };
 use crate::store::indexer_store::TemporaryCheckpointStore;
 use crate::store::{IndexerStore, TemporaryEpochStore};
@@ -465,7 +465,6 @@ impl IndexerStore for PgIndexerStore {
             transactions,
             events,
             objects,
-            owner_changes,
             addresses,
             packages,
             move_calls,
@@ -494,10 +493,16 @@ impl IndexerStore for PgIndexerStore {
 
                 diesel::insert_into(objects::table)
                     .values(objects)
-                    .execute(conn)?;
-
-                diesel::insert_into(owner_changes::table)
-                    .values(owner_changes)
+                    .on_conflict(objects::object_id)
+                    .do_update()
+                    .set((
+                        objects::epoch.eq(excluded(objects::epoch)),
+                        objects::checkpoint.eq(excluded(objects::checkpoint)),
+                        objects::version.eq(excluded(objects::version)),
+                        objects::object_digest.eq(excluded(objects::object_digest)),
+                        objects::owner_address.eq(excluded(objects::owner_address)),
+                        objects::previous_transaction.eq(excluded(objects::previous_transaction)),
+                    ))
                     .execute(conn)?;
 
                 // Only insert once for address, skip if conflict

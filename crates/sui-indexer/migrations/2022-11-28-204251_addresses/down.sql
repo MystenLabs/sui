@@ -1,1 +1,4 @@
 DROP TABLE IF EXISTS addresses;
+
+DROP DOMAIN IF EXISTS address;
+DROP DOMAIN IF EXISTS base58digest;

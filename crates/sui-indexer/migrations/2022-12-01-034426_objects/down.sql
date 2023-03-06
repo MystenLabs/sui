@@ -1,4 +1,5 @@
-DROP TABLE objects;
-DROP TABLE object_logs;
+DROP TABLE IF EXISTS objects;
+DROP TABLE IF EXISTS objects_history;
 
-DROP TYPE owner_type;
+DROP TYPE IF EXISTS owner_type;
+DROP TYPE IF EXISTS change_type;

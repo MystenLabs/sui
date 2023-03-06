@@ -7,7 +7,7 @@ use crate::models::checkpoints::Checkpoint;
 use crate::models::events::Event;
 use crate::models::move_calls::MoveCall;
 use crate::models::objects::Object;
-use crate::models::owners::OwnerChange;
+use crate::models::owners::ObjectOwner;
 use crate::models::packages::Package;
 use crate::models::transactions::Transaction;
 use async_trait::async_trait;
@@ -107,7 +107,6 @@ pub struct TemporaryCheckpointStore {
     pub transactions: Vec<Transaction>,
     pub events: Vec<Event>,
     pub objects: Vec<Object>,
-    pub owner_changes: Vec<OwnerChange>,
     pub addresses: Vec<Address>,
     pub packages: Vec<Package>,
     pub move_calls: Vec<MoveCall>,
@@ -115,5 +114,5 @@ pub struct TemporaryCheckpointStore {
 
 // Per epoch indexing
 pub struct TemporaryEpochStore {
-    pub owner_index: Vec<OwnerChange>,
+    pub owner_index: Vec<ObjectOwner>,
 }

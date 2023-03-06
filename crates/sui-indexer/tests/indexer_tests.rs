@@ -7,7 +7,6 @@ use std::time::Duration;
 use sui_indexer::errors::IndexerError;
 use sui_indexer::models::checkpoints::Checkpoint;
 use sui_indexer::models::objects::Object;
-use sui_indexer::models::owners::OwnerChange;
 use sui_indexer::models::transactions::Transaction;
 use sui_indexer::store::{IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore};
 use sui_indexer::Indexer;
@@ -51,7 +50,6 @@ impl InMemoryIndexerStore {
 #[derive(Default, Clone, Debug)]
 struct Tables {
     pub objects: Vec<Object>,
-    pub owner_changes: Vec<OwnerChange>,
     pub checkpoints: Vec<Checkpoint>,
 }
 
@@ -171,14 +169,12 @@ impl IndexerStore for InMemoryIndexerStore {
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError> {
         let TemporaryCheckpointStore {
             objects,
-            owner_changes,
             checkpoint,
             ..
         } = data;
 
         let mut tables = self.tables.write().unwrap();
         tables.objects.extend(objects.clone());
-        tables.owner_changes.extend(owner_changes.clone());
         tables.checkpoints.push(checkpoint.clone());
         Ok(0)
     }

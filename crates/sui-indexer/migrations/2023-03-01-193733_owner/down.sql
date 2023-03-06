@@ -1,6 +1,3 @@
-DROP TABLE owner_changes;
-DROP TABLE owner_index;
-
-DROP TYPE owner_change_type;
-
+DROP TABLE IF EXISTS owner;
+DROP TABLE IF EXISTS owner_history;
 

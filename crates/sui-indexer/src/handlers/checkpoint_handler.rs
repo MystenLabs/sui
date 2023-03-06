@@ -18,6 +18,7 @@ use crate::errors::IndexerError;
 use crate::metrics::IndexerCheckpointHandlerMetrics;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::events::Event;
+use crate::models::objects::Object;
 use crate::models::move_calls::MoveCall;
 use crate::models::packages::Package;
 use crate::models::transactions::Transaction;
@@ -26,6 +27,7 @@ use sui_sdk::error::Error;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 const HANDLER_RETRY_INTERVAL_IN_SECS: u64 = 10;
+const MULTI_GET_CHUNK_SIZE: usize = 500;
 
 pub struct CheckpointHandler<S> {
     state: S,
@@ -126,11 +128,19 @@ where
             .get_checkpoint(seq.into())
             .await?;
 
-        let transactions = self
-            .rpc_client
-            .read_api()
-            .multi_get_transactions(checkpoint.transactions.to_vec())
-            .await?;
+        let transactions = join_all(checkpoint.transactions.chunks(MULTI_GET_CHUNK_SIZE).map(
+            |digests| {
+                self.rpc_client
+                    .read_api()
+                    .multi_get_transactions(digests.to_vec())
+            },
+        ))
+        .await
+        .into_iter()
+        .try_fold(vec![], |mut acc, chunk| {
+            acc.extend(chunk?);
+            Ok::<_, Error>(acc)
+        })?;
 
         let all_mutated = transactions
             .iter()
@@ -145,7 +155,6 @@ where
             .map(|o| (o.reference.object_id, o.reference.version));
 
         // TODO: Use multi get objects
-        // TODO: Error handling.
         let new_objects = join_all(all_mutated.map(|(id, version)| {
             self.rpc_client.read_api().try_get_parsed_past_object(
                 id,
@@ -155,9 +164,10 @@ where
         }))
         .await
         .into_iter()
-        .flatten()
-        .flat_map(|o| o.into_object())
-        .collect();
+        .try_fold(vec![], |mut acc, response| {
+            acc.push(response?.into_object()?);
+            Ok::<_, Error>(acc)
+        })?;
 
         Ok(CheckpointData {
             checkpoint,
@@ -219,7 +229,10 @@ where
             .collect::<Result<Vec<_>, _>>()?;
 
         // Index objects
-        let db_objects = objects.iter().map(|o| o.clone().into()).collect::<Vec<_>>();
+        let db_objects = objects
+            .iter()
+            .map(|o| Object::from(&checkpoint.epoch, &checkpoint.sequence_number, o))
+            .collect::<Vec<_>>();
 
         // Index addresses
         let addresses = db_transactions
@@ -276,7 +289,6 @@ where
                 transactions: db_transactions,
                 events,
                 objects: db_objects,
-                owner_changes: vec![],
                 addresses,
                 packages,
                 move_calls,

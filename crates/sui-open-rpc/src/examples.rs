@@ -228,7 +228,7 @@ impl RpcExampleProvider {
             object_id,
             version: SequenceNumber::from_u64(1),
             digest: ObjectDigest::new(self.rng.gen()),
-            type_: Some(GasCoin::type_().to_string()),
+            type_: Some(ObjectType::Struct(GasCoin::type_())),
             bcs: None,
             display: None,
         });
@@ -267,7 +267,7 @@ impl RpcExampleProvider {
             object_id,
             version: SequenceNumber::from_u64(4),
             digest: ObjectDigest::new(self.rng.gen()),
-            type_: Some(GasCoin::type_().to_string()),
+            type_: Some(ObjectType::Struct(GasCoin::type_())),
             bcs: None,
             display: None,
         });
