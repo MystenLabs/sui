@@ -63,4 +63,9 @@ module sui::clock {
             timestamp_ms,
         }
     }
+
+    #[test_only]
+    public fun share_for_testing(clock: Clock) {
+        transfer::share_object(clock)
+    }
 }
