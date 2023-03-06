@@ -107,10 +107,10 @@ impl AuthorityAPI for LocalAuthorityClient {
         &self,
         _request: SystemStateRequest,
     ) -> Result<SuiSystemStateInnerBenchmark, SuiError> {
-        let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        Ok(epoch_store
-            .system_state_object()
-            .clone()
+        Ok(self
+            .state
+            .database
+            .get_sui_system_state_object()?
             .into_benchmark_version())
     }
 }

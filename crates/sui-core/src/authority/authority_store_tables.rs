@@ -166,7 +166,7 @@ impl AuthorityPerpetualTables {
             .epoch_start_configuration
             .get(&())?
             .expect("Must have current epoch.")
-            .epoch_id())
+            .epoch())
     }
 
     pub async fn set_epoch_start_configuration(
