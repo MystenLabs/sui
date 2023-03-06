@@ -49,7 +49,7 @@ def aggregate_stdev_latency(measurement):
 class PlotType(Enum):
     L_GRAPH = 1
     HEALTH = 2
-    SLA = 3  # TODO
+    SCALABILITY = 3
 
 
 class PlotError(Exception):
@@ -80,13 +80,14 @@ class PlotParameters:
 
 
 class MeasurementId:
-    def __init__(self, measurement):
+    def __init__(self, measurement, max_latency=None):
         self.shared_objects_ratio = measurement['parameters']['shared_objects_ratio']
         self.nodes = measurement['parameters']['nodes']
         self.faults = measurement['parameters']['faults']
         self.duration = measurement['parameters']['duration']
         self.machine_specs = measurement['machine_specs']
         self.commit = measurement['commit']
+        self.max_latency = max_latency
 
 
 class Plotter:
@@ -105,9 +106,12 @@ class Plotter:
         return plot_directory
 
     def _legend_entry(self, plot_type, id):
+        f = '' if id.faults == 0 else f' ({id.faults} faulty)'
         if plot_type == PlotType.L_GRAPH or plot_type == PlotType.HEALTH:
-            f = id.faults
-            l = f'{id.nodes} nodes' if f == 0 else f'{id.nodes} ({f} faulty)'
+            l = f'{id.nodes} nodes{f}'
+            return f'{l} - {id.shared_objects_ratio}% shared objects'
+        elif plot_type == PlotType.SCALABILITY:
+            l = f'{id.max_latency}s max latency{f}'
             return f'{l} - {id.shared_objects_ratio}% shared objects'
         else:
             assert False
@@ -117,6 +121,8 @@ class Plotter:
             return ('Throughput (tx/s)', 'Latency (s)')
         elif plot_type == PlotType.HEALTH:
             return ('Input Load (tx/s)', 'Throughput (tx/s)')
+        elif plot_type == PlotType.SCALABILITY:
+            return ('Committee size', 'Throughput (tx/s)')
         else:
             assert False
 
@@ -141,14 +147,20 @@ class Plotter:
             legend_location = 'upper left'
             x_label, y_label = self._axes_labels(plot_type)
             plot_name = f'health-{self.parameters.shared_objects_ratio}'
+        elif plot_type == PlotType.SCALABILITY:
+            legend_anchor = (0, 0)
+            legend_location = 'lower left'
+            x_label, y_label = self._axes_labels(plot_type)
+            plot_name = f'scalability-{self.parameters.shared_objects_ratio}'
         else:
             assert False
 
-        plt.legend(
-            loc=legend_location,
-            bbox_to_anchor=legend_anchor,
-            ncol=self.legend_columns
-        )
+        if data:
+            plt.legend(
+                loc=legend_location,
+                bbox_to_anchor=legend_anchor,
+                ncol=self.legend_columns
+            )
         plt.xlim(xmin=0)
         plt.ylim(bottom=0, top=self.y_max)
         plt.xlabel(x_label, fontweight='bold')
@@ -201,7 +213,7 @@ class Plotter:
                 e_values += [aggregate_stdev_latency(measurement)]
 
             if x_values:
-                id = MeasurementId(measurement)
+                id = MeasurementId(measurements[0])
                 plot_data += [(id, x_values, y_values, e_values)]
 
         self._plot(plot_data, PlotType.L_GRAPH)
@@ -229,6 +241,40 @@ class Plotter:
 
         self._plot(plot_data, PlotType.HEALTH)
 
+    def plot_scalability(self, max_latencies):
+        plot_lines_data = []
+        shared_objects_ratio = self.parameters.shared_objects_ratio
+        for f in self.parameters.faults:
+            for l in max_latencies:
+                filenames = []
+                for n in self.parameters.nodes:
+                    filename = self._file_format(
+                        shared_objects_ratio, f, n, '*'
+                    )
+                    measurements = self._load_measurement_data(filename)
+                    measurements = [
+                        x for x in measurements if aggregate_average_latency(x) <= l
+                    ]
+                    if measurements:
+                        filenames += [
+                            max(measurements, key=lambda x: aggregate_tps(x))
+                        ]
+                plot_lines_data += [(filenames, l)]
+
+        plot_data = []
+        for measurements, max_latency in plot_lines_data:
+            x_values, y_values, e_values = [], [], []
+            for measurement in measurements:
+                x_values += [measurement['parameters']['nodes']]
+                y_values += [aggregate_tps(measurement)]
+                e_values += [0]
+
+            if x_values:
+                id = MeasurementId(measurements[0], max_latency)
+                plot_data += [(id, x_values, y_values, e_values)]
+
+        self._plot(plot_data, PlotType.SCALABILITY)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -247,8 +293,12 @@ if __name__ == "__main__":
         help='The committee sizes to plot on the same graph'
     )
     parser.add_argument(
-        '--faults', nargs='+', type=int, required=True,
+        '--faults', nargs='+', type=int, default=[0],
         help='The number of faults to plot on the same graph'
+    )
+    parser.add_argument(
+        '--max-latencies', nargs='+', type=float, default=[2],
+        help='The latency cap (in seconds) for scalability graphs'
     )
     parser.add_argument(
         '--y-max', type=float, default=None,
@@ -267,3 +317,4 @@ if __name__ == "__main__":
         )
         plotter.plot_latency_throughput()
         plotter.plot_health()
+        plotter.plot_scalability(args.max_latencies)
