@@ -558,6 +558,55 @@ impl CheckpointBuilder {
         Ok(())
     }
 
+    #[allow(clippy::type_complexity)]
+    fn split_checkpoint_chunks(
+        &self,
+        effects_and_transaction_sizes: Vec<(TransactionEffects, usize)>,
+        signatures: Vec<Vec<GenericSignature>>,
+    ) -> anyhow::Result<Vec<Vec<(TransactionEffects, Vec<GenericSignature>)>>> {
+        let _guard = monitored_scope("CheckpointBuilder::split_checkpoint_chunks");
+        let mut chunks = Vec::new();
+        let mut chunk = Vec::new();
+        let mut chunk_size: usize = 0;
+        for ((effects, transaction_size), signatures) in effects_and_transaction_sizes
+            .into_iter()
+            .zip(signatures.into_iter())
+        {
+            // Roll over to a new chunk after either max count or max size is reached.
+            let size = transaction_size
+                + bcs::serialized_size(&effects)?
+                + bcs::serialized_size(&signatures)?;
+            if chunk.len() == self.max_transactions_per_checkpoint
+                || (chunk_size + size) > self.max_checkpoint_size
+            {
+                if chunk.is_empty() {
+                    // Always allow at least one tx in a checkpoint.
+                    warn!("Size of single transaction ({size}) exceeds max checkpoint size ({}); allowing excessively large checkpoint to go through.", self.max_checkpoint_size);
+                } else {
+                    chunks.push(chunk);
+                    chunk = Vec::new();
+                    chunk_size = 0;
+                }
+            }
+
+            chunk.push((effects, signatures));
+            chunk_size += size;
+        }
+
+        if !chunk.is_empty() || chunks.is_empty() {
+            // We intentionally create an empty checkpoint if there is no content provided
+            // to make a 'heartbeat' checkpoint.
+            // Important: if some conditions are added here later, we need to make sure we always
+            // have at least one chunk if last_pending_of_epoch is set
+            chunks.push(chunk);
+            // Note: empty checkpoints are ok - they shouldn't happen at all on a network with even
+            // modest load. Even if they do happen, it is still useful as it allows fullnodes to
+            // distinguish between "no transactions have happened" and "i am not receiving new
+            // checkpoints".
+        }
+        Ok(chunks)
+    }
+
     async fn create_checkpoints(
         &self,
         all_effects: Vec<TransactionEffects>,
@@ -624,52 +673,7 @@ impl CheckpointBuilder {
             signatures.len()
         );
 
-        struct CheckpointTransaction {
-            effects: TransactionEffects,
-            signatures: Vec<GenericSignature>,
-        }
-        let mut chunks: Vec<Vec<CheckpointTransaction>> = Vec::new();
-        let mut chunk: Vec<CheckpointTransaction> = Vec::new();
-        let mut chunk_size: usize = 0;
-        for ((effects, transaction_size), signatures) in all_effects_and_transaction_sizes
-            .into_iter()
-            .zip(signatures.into_iter())
-        {
-            // Roll over to a new chunk after either max count or max size is reached.
-            let size = transaction_size
-                + bcs::serialized_size(&effects)?
-                + bcs::serialized_size(&signatures)?;
-            if chunk.len() == self.max_transactions_per_checkpoint
-                || (chunk_size + size) > self.max_checkpoint_size
-            {
-                if chunk.is_empty() {
-                    // Always allow at least one tx in a checkpoint.
-                    warn!("Size of single transaction ({size}) exceeds max checkpoint size ({}); allowing excessively large checkpoint to go through.", self.max_checkpoint_size);
-                } else {
-                    chunks.push(chunk);
-                    chunk = Vec::new();
-                    chunk_size = 0;
-                }
-            }
-
-            chunk.push(CheckpointTransaction {
-                effects,
-                signatures,
-            });
-            chunk_size += size;
-        }
-
-        if !chunk.is_empty() || chunks.is_empty() {
-            // We intentionally create an empty checkpoint if there is no content provided
-            // to make a 'heartbeat' checkpoint.
-            // Important: if some conditions are added here later, we need to make sure we always
-            // have at least one chunk if last_pending_of_epoch is set
-            chunks.push(chunk);
-            // Note: empty checkpoints are ok - they shouldn't happen at all on a network with even
-            // modest load. Even if they do happen, it is still useful as it allows fullnodes to
-            // distinguish between "no transactions have happened" and "i am not receiving new
-            // checkpoints".
-        }
+        let chunks = self.split_checkpoint_chunks(all_effects_and_transaction_sizes, signatures)?;
         let chunks_count = chunks.len();
 
         let mut checkpoints = Vec::with_capacity(chunks_count);
@@ -705,10 +709,7 @@ impl CheckpointBuilder {
                 }
             }
 
-            let (mut effects, mut signatures): (Vec<_>, Vec<_>) = transactions
-                .into_iter()
-                .map(|tx| (tx.effects, tx.signatures))
-                .unzip();
+            let (mut effects, mut signatures): (Vec<_>, Vec<_>) = transactions.into_iter().unzip();
             let epoch_rolling_gas_cost_summary =
                 self.get_epoch_total_gas_cost(last_checkpoint.as_ref().map(|(_, c)| c), &effects);
 
