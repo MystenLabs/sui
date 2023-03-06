@@ -410,7 +410,7 @@ pub async fn wait_for_nodes_transition_to_epoch<'a>(
                 let epoch = node.current_epoch_for_testing();
                 if epoch != expected_epoch {
                     let (committee, _) = rx.recv().await.unwrap();
-                    assert_eq!(committee.epoch, expected_epoch);
+                    assert_eq!(committee.epoch(), expected_epoch);
                 }
             })
         })

@@ -8955,6 +8955,8 @@ dependencies = [
  "anemo-tower",
  "anyhow",
  "async-trait",
+ "ed25519-consensus",
+ "fastcrypto",
  "futures",
  "governor",
  "multiaddr",

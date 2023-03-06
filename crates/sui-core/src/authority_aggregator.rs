@@ -39,7 +39,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::string::ToString;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_types::committee::{CommitteeWithNetAddresses, StakeUnit};
+use sui_types::committee::{CommitteeWithNetworkMetadata, StakeUnit};
 use tokio::time::{sleep, timeout};
 
 use crate::authority::AuthorityStore;
@@ -335,7 +335,7 @@ impl<A, S: SignatureVerifier + Default> AuthorityAggregator<A, S> {
     /// all previous epoch's committee info.
     pub fn recreate_with_net_addresses(
         &self,
-        committee: CommitteeWithNetAddresses,
+        committee: CommitteeWithNetworkMetadata,
         network_config: &Config,
         disallow_missing_intermediate_committees: bool,
     ) -> SuiResult<AuthorityAggregator<NetworkAuthorityClient, S>> {
@@ -442,7 +442,7 @@ impl<S: SignatureVerifier + Default> AuthorityAggregator<NetworkAuthorityClient,
     }
 
     pub fn new_from_committee(
-        committee: CommitteeWithNetAddresses,
+        committee: CommitteeWithNetworkMetadata,
         committee_store: &Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
         auth_agg_metrics: AuthAggMetrics,

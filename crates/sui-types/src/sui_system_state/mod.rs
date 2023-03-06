@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{AuthorityName, SuiAddress};
-use crate::committee::{CommitteeWithNetAddresses, EpochId, ProtocolVersion};
+use crate::committee::{CommitteeWithNetworkMetadata, EpochId, ProtocolVersion};
 use crate::dynamic_field::{derive_dynamic_field_id, Field};
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
@@ -66,7 +66,7 @@ pub trait SuiSystemStateTrait {
     fn protocol_version(&self) -> u64;
     fn epoch_start_timestamp_ms(&self) -> u64;
     fn safe_mode(&self) -> bool;
-    fn get_current_epoch_committee(&self) -> CommitteeWithNetAddresses;
+    fn get_current_epoch_committee(&self) -> CommitteeWithNetworkMetadata;
     fn get_current_epoch_narwhal_committee(&self) -> NarwhalCommittee;
     fn get_current_epoch_narwhal_worker_cache(
         &self,
