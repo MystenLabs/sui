@@ -101,7 +101,7 @@ diesel::table! {
     use super::sql_types::OwnerType;
     use super::sql_types::ChangeType;
 
-    objects_history (object_id, version) {
+    objects_history (epoch, object_id, version) {
         epoch -> Int8,
         checkpoint -> Int8,
         object_id -> Varchar,

@@ -116,13 +116,6 @@ impl ReadApi {
         Ok(self.api.http.multi_get_transactions(digests).await?)
     }
 
-    pub async fn multi_get_transactions(
-        &self,
-        digests: Vec<TransactionDigest>,
-    ) -> SuiRpcResult<Vec<SuiTransactionResponse>> {
-        Ok(self.api.http.multi_get_transactions(digests).await?)
-    }
-
     pub async fn get_committee_info(&self, epoch: Option<EpochId>) -> SuiRpcResult<SuiCommittee> {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }

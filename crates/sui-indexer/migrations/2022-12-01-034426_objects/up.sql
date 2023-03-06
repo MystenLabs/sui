@@ -38,8 +38,15 @@ CREATE TABLE objects_history
     transaction_module     VARCHAR      NOT NULL,
     object_type            VARCHAR      NOT NULL,
     object_status          change_type  NOT NULL,
-    CONSTRAINT objects_history_pk PRIMARY KEY (object_id, version)
-);
+    CONSTRAINT objects_history_pk PRIMARY KEY (epoch, object_id, version)
+) PARTITION BY RANGE (epoch);
+-- TODO: Add trigger to automatically create partitions at new epoch when we have Epoch Table
+CREATE TABLE objects_history_partition_0 PARTITION OF objects_history FOR VALUES FROM (0) TO (1);
+CREATE TABLE objects_history_partition_1 PARTITION OF objects_history FOR VALUES FROM (1) TO (2);
+CREATE TABLE objects_history_partition_2 PARTITION OF objects_history FOR VALUES FROM (2) TO (3);
+CREATE TABLE objects_history_partition_3 PARTITION OF objects_history FOR VALUES FROM (3) TO (4);
+CREATE TABLE objects_history_partition_4 PARTITION OF objects_history FOR VALUES FROM (4) TO (5);
+CREATE TABLE objects_history_partition_5 PARTITION OF objects_history FOR VALUES FROM (5) TO (6);
 
 CREATE OR REPLACE FUNCTION objects_modified_func() RETURNS TRIGGER AS
 $body$
