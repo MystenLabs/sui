@@ -81,7 +81,7 @@ All instances listed with a green number are available and ready for use; instan
 Running benchmarks involves installing on the remote machines the version of the Sui codebase specified in the settings as well as running one Sui validator and one load generator per instance. For instance, the following command benchmarks a committee of 10 validators when submitted to a constant load of 200 tx/s for a duration of 3 minutes.
 
 ```bash
-cargo run --bin orchestrator -- benchmark --nodes 10 --loads 200 --duration 180s
+cargo run --bin orchestrator -- benchmark --committee 10 --loads 200 --duration 180s
 ```
 
 Since a network of 10 validators runs with 10 loads generators (each validator is collocated with a load generator), each load generator submits a fixed load of 20 tx/s. Performance measurements are collected by regularly scraping the prometheus metrics exposed by the load generators.
