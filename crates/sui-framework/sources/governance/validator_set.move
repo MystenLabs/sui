@@ -537,6 +537,7 @@ module sui::validator_set {
         self: &mut ValidatorSet,
         ctx: &mut TxContext,
     ) {
+        let new_epoch = tx_context::epoch(ctx) + 1;
         sort_removal_list(&mut self.pending_removals);
         while (!vector::is_empty(&self.pending_removals)) {
             let index = vector::pop_back(&mut self.pending_removals);
@@ -545,7 +546,7 @@ module sui::validator_set {
             table::remove(&mut self.staking_pool_mappings, validator_pool_id);
             self.total_stake = self.total_stake - validator::total_stake_amount(&validator);
             // Deactivate the validator and its staking pool
-            validator::deactivate(&mut validator, ctx);
+            validator::deactivate(&mut validator, new_epoch);
             table::add(&mut self.inactive_validators, validator_pool_id, validator);
         }
     }
