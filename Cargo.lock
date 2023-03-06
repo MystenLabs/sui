@@ -3471,8 +3471,6 @@ dependencies = [
  "narwhal-crypto",
  "narwhal-test-utils",
  "narwhal-types",
- "parking_lot 0.12.1",
- "prometheus",
  "rand",
  "serde",
  "thiserror",
