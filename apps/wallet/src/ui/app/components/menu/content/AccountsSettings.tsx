@@ -25,10 +25,9 @@ export function AccountsSettings() {
 
     const [isConnectLedgerModalOpen, setConnectLedgerModalOpen] =
         useState(false);
-    // const { on: isLedgerIntegrationEnabled } = useFeature(
-    //     FEATURES.WALLET_LEDGER_INTEGRATION
-    // );
-    const isLedgerIntegrationEnabled = true;
+    const { on: isLedgerIntegrationEnabled } = useFeature(
+        FEATURES.WALLET_LEDGER_INTEGRATION
+    );
 
     return (
         <MenuLayout title="Accounts" back={backUrl}>
