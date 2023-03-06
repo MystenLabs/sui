@@ -566,15 +566,6 @@ async fn parents_above_commit_round_exist() {
         NUM_SUB_DAGS_PER_SCHEDULE,
     );
 
-    // Populate DAG with the rounds up to round 7 so we trigger commits
-    let mut all_subdags = Vec::new();
-    for (i, certificate) in certificates.iter().filter(|c| c.round() <= 7).enumerate() {
-        let (outcome, committed_subdags) = bullshark
-            .process_certificate(&mut state, certificate.clone())
-            .unwrap();
-        all_subdags.extend(committed_subdags);
-    }
-
     // Generate the string representation of the DAG
     let mut result = String::new();
 
@@ -583,39 +574,38 @@ async fn parents_above_commit_round_exist() {
     for i in 0..4 {
         result += &format!("{:^30} ", format!("V{}", i));
     }
+    println!("{}", result);
 
-    for (round, node) in state.dag.iter() {
-        result += &format!("{:>10} ", format!("Round {}", round));
-        let mut cert_strings: Vec<_> = vec![format!("{:^30} ", ""); 4];
-        for (authority, (_, certificate)) in node.iter() {
-            if let Some(index) = keys.iter().position(|k| k == authority) {
-                cert_strings.insert(index, format!("{:^30} ", certificate.digest().to_string()));
-                let tresult = match outcome {
-                    Outcome::CertificateBelowCommitRound => result.yellow(),
-                    Outcome::NoLeaderElectedForOddRound => result.blue(),
-                    Outcome::LeaderBelowCommitRound => result.magenta(),
-                    Outcome::LeaderNotFound => result.white(),
-                    Outcome::NotEnoughSupportForLeader => result.red(),
-                    Outcome::Commit => result.green(),
-                };
-            }
+    // Populate DAG with the rounds up to round 7 so we trigger commits
+    let mut all_subdags = Vec::new();
+    for (i, certificate) in certificates.iter().filter(|c| c.round() <= 7).enumerate() {
+        if i % 4 == 0 {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let mut result = String::new();
+            result += "\n";
+            result += &format!("{:>10} ", format!("Round {}", certificate.round()));
+            print!("{}", result);
         }
-        result += &cert_strings.join("");
+        let (outcome, committed_subdags) = bullshark
+            .process_certificate(&mut state, certificate.clone())
+            .unwrap();
+        all_subdags.extend(committed_subdags);
 
-        // let mut result = String::new();
-        // result += &format!("{:^30} ", certificate.digest().to_string());
-        // let tresult = match outcome {
-        //     Outcome::CertificateBelowCommitRound => result.yellow(),
-        //     Outcome::NoLeaderElectedForOddRound => result.blue(),
-        //     Outcome::LeaderBelowCommitRound => result.magenta(),
-        //     Outcome::LeaderNotFound => result.white(),
-        //     Outcome::NotEnoughSupportForLeader => result.red(),
-        //     Outcome::Commit => result.green(),
-        // };
-        // print!("{}", tresult.to_string());
-
-        // print!("\n\n");
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let mut result = String::new();
+        result += &format!("{:^30} ", certificate.digest().to_string());
+        let tresult = match outcome {
+            Outcome::CertificateBelowCommitRound => result.yellow(),
+            Outcome::NoLeaderElectedForOddRound => result.blue(),
+            Outcome::LeaderBelowCommitRound => result.magenta(),
+            Outcome::LeaderNotFound => result.white(),
+            Outcome::NotEnoughSupportForLeader => result.red(),
+            Outcome::Commit => result.green(),
+        };
+        print!("{}", tresult.to_string());
+        tokio::time::sleep(Duration::from_millis(100)).await;
     }
+    print!("\n\n");
 
     // ensure the leaders of rounds 2, 4, and 6 have been committed
     assert_eq!(all_subdags.drain(0..).len(), 3);
