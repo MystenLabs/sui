@@ -80,9 +80,9 @@ function TransferCoinPage() {
         },
         onSuccess: (response) => {
             queryClient.invalidateQueries(['get-coins']);
-            const txDigest = getTransactionDigest(response);
+            queryClient.invalidateQueries(['coin-balance']);
             const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
-                txDigest
+                getTransactionDigest(response)
             )}&from=transactions`;
             return navigate(receiptUrl);
         },

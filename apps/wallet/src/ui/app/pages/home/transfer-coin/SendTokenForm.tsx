@@ -205,7 +205,7 @@ export function SendTokenForm({
                     gasInputBudgetEst,
                 }: FormValues) => {
                     if (!gasInputBudgetEst || !coins || !suiCoins) return;
-                    const coinsIDs = coins
+                    const coinsIDs = [...coins]
                         .sort((a, b) => b.balance - a.balance)
                         .map(({ coinObjectId }) => coinObjectId);
 
