@@ -193,18 +193,18 @@ export class Coin {
             }
 
             const changeEvent = events.find((event) => {
-                if ('coinBalanceChange' in event) {
-                    return event.coinBalanceChange.amount === Number(amount);
+                if (event.type === 'coinBalanceChange') {
+                    return event.content.amount === Number(amount);
                 }
 
                 return false;
             });
 
-            if (!changeEvent || !('coinBalanceChange' in changeEvent)) {
+            if (!changeEvent || !(changeEvent.type === 'coinBalanceChange')) {
                 throw new Error('Missing coin balance event');
             }
 
-            return changeEvent.coinBalanceChange.coinObjectId;
+            return changeEvent.content.coinObjectId;
         } finally {
             span.finish();
         }

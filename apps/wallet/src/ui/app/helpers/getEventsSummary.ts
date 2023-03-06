@@ -26,13 +26,13 @@ export function getEventsSummary(
         // A net positive amount means the user received coins
         // A net negative amount means the user sent coins
         if (
-            'coinBalanceChange' in event &&
-            event?.coinBalanceChange?.changeType &&
-            ['Receive', 'Pay'].includes(event?.coinBalanceChange?.changeType) &&
-            event?.coinBalanceChange?.transactionModule !== 'gas'
+            event.type === 'coinBalanceChange' &&
+            event?.content?.changeType &&
+            ['Receive', 'Pay'].includes(event?.content?.changeType) &&
+            event?.content?.transactionModule !== 'gas'
         ) {
-            const { coinBalanceChange } = event;
-            const { coinType, amount, owner, sender } = coinBalanceChange;
+            const { content } = event;
+            const { coinType, amount, owner, sender } = content;
             const { AddressOwner } = owner as { AddressOwner: string };
 
             // ChangeEpoch txn includes coinBalanceChange event for other addresses
@@ -48,13 +48,13 @@ export function getEventsSummary(
         }
 
         // return objectIDs of the transfer objects
-        if ('transferObject' in event) {
-            const { transferObject } = event;
-            const { AddressOwner } = transferObject.recipient as {
+        if (event.type === 'transferObject') {
+            const { content } = event;
+            const { AddressOwner } = content.recipient as {
                 AddressOwner: string;
             };
             if (AddressOwner === address) {
-                objectIDs.push(transferObject?.objectId);
+                objectIDs.push(content?.objectId);
             }
         }
     });

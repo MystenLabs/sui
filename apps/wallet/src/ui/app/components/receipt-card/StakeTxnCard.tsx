@@ -32,11 +32,13 @@ export function StakeTxnCard({ txnEffects, events }: StakeTxnCardProps) {
 
         const event = events.find(
             (event) =>
-                'moveEvent' in event &&
-                event.moveEvent.type === REQUEST_DELEGATION_EVENT
+                event.type === 'moveEvent' &&
+                event.content.type === REQUEST_DELEGATION_EVENT
         );
         if (!event) return null;
-        const { moveEvent } = event as { moveEvent: MoveEvent };
+        const { moveEvent } = event.content as unknown as {
+            moveEvent: MoveEvent;
+        };
         return moveEvent;
     }, [events]);
 
