@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { BCS } from '@mysten/bcs';
 import {
   is,
   any,
@@ -66,7 +67,7 @@ export type MoveCallCommand = Infer<typeof MoveCallCommand>;
 export const TransferObjectsCommand = object({
   kind: literal('TransferObjects'),
   objects: array(ObjectCommandArgument),
-  address: ObjectCommandArgument,
+  address: PureCommandArgument(BCS.ADDRESS),
 });
 export type TransferObjectsCommand = Infer<typeof TransferObjectsCommand>;
 
@@ -149,6 +150,7 @@ export const Commands = {
     };
   },
   TransferObjects(
+    // TODO: Do validation of objects being an Array.
     objects: CommandArgument[],
     address: CommandArgument,
   ): TransferObjectsCommand {

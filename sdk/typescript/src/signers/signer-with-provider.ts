@@ -122,14 +122,16 @@ export abstract class SignerWithProvider implements Signer {
       transactionBytes =
         transaction instanceof Uint8Array ? transaction : transaction.data;
     } else {
-      // transactionBytes = await convertToTransactionBuilder(transaction).build({
-      //   provider: this.provider,
-      // });
       transactionBytes = await this.serializer.serializeToBytes(
         await this.getAddress(),
         transaction,
         'Commit',
       );
+      // transactionBytes = await convertToTransactionBuilder(
+      //   await this.getAddress(),
+      //   transaction,
+      //   this.provider,
+      // );
     }
 
     const intentMessage = messageWithIntent(

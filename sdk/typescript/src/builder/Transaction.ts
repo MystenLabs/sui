@@ -9,6 +9,7 @@ import {
   getSharedObjectInitialVersion,
   normalizeSuiObjectId,
   SuiObjectRef,
+  SUI_TYPE_ARG,
 } from '../types';
 import {
   Commands,
@@ -198,7 +199,30 @@ export class Transaction {
 
   /** Build the transaction to BCS bytes. */
   async build({ provider }: { provider?: Provider } = {}): Promise<Uint8Array> {
-    // TODO: Automatic gas object selection.
+    if (!this.#transactionData.sender) {
+      throw new Error('Missing transaction sender');
+    }
+
+    if (!this.#transactionData.gasConfig.budget) {
+      throw new Error('Missing gas budget');
+    }
+
+    if (!this.#transactionData.gasConfig.payment) {
+      const coins = await expectProvider(provider).getCoins(
+        this.#transactionData.sender,
+        SUI_TYPE_ARG,
+        null,
+        null,
+      );
+
+      // TODO: Pick coins better, this is just a temporary hack.
+      this.#transactionData.gasConfig.payment = coins.data.map((coin) => ({
+        objectId: coin.coinObjectId,
+        digest: coin.digest,
+        version: coin.version,
+      }));
+    }
+
     if (!this.#transactionData.gasConfig.price) {
       this.#transactionData.gasConfig.price = String(
         await expectProvider(provider).getReferenceGasPrice(),
