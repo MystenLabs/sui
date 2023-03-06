@@ -6,13 +6,13 @@ import { LockLocked16 as LockedLockIcon } from '@mysten/icons';
 import { useState } from 'react';
 
 import { Account } from './Account';
+import { ConnectLedgerModal } from './ConnectLedgerModal';
 import { MenuLayout } from './MenuLayout';
 import { useNextMenuUrl } from '_components/menu/hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { useAccounts } from '_src/ui/app/hooks/useAccounts';
 import { useDeriveNextAccountMutation } from '_src/ui/app/hooks/useDeriveNextAccountMutation';
 import { Button } from '_src/ui/app/shared/ButtonUI';
-import { ConnectLedgerModal } from './ConnectLedgerModal';
 
 export function AccountsSettings() {
     const backUrl = useNextMenuUrl(true, '/');

@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import ExternalLink from '_components/external-link';
 import { Button } from '_src/ui/app/shared/ButtonUI';
-import { Link } from '_src/ui/app/shared/Link';
 import { ModalDialog } from '_src/ui/app/shared/ModalDialog';
 import { Text } from '_src/ui/app/shared/text';
-import ExternalLink from '_components/external-link';
 
 type ConnectLedgerModalProps = {
     isOpen: boolean;
@@ -24,16 +23,23 @@ export function ConnectLedgerModal({
             title="Connect Ledger Wallet"
             onClose={onClose}
             body={
-                <>
-                    <LedgerLogo />
-                    <div className="break-words text-center">
-                        <Text variant="p2" color="steel-dark" weight="normal">
+                <div className="flex flex-col items-center">
+                    <div className="mt-4.5">
+                        <LedgerLogo />
+                    </div>
+                    <div className="break-words text-center mt-4.5">
+                        <Text variant="p2" color="steel-darker" weight="normal">
                             Connect your ledger to your computer, unlock it, and
                             launch the Sui app. Click Continue when done.
                         </Text>
-                        <div className="mt-3">
-                            <Text variant="p2" color="steel-dark">
+                        <div className="mt-2">
+                            <Text
+                                variant="p2"
+                                color="steel-dark"
+                                weight="normal"
+                            >
                                 <span>Need more help?</span>{' '}
+                                {/* TODO: Replace this link with the correct URL once the tutorial is ready */}
                                 <ExternalLink
                                     href="https://mystenlabs.com"
                                     className="text-hero-dark"
@@ -44,7 +50,7 @@ export function ConnectLedgerModal({
                             </Text>
                         </div>
                     </div>
-                </>
+                </div>
             }
             footer={
                 <div className="flex flex-row self-center gap-3">
@@ -68,6 +74,10 @@ export function ConnectLedgerModal({
     );
 }
 
+// TODO: We should probably use a loader like @svgr/webpack so that we can provide SVG files
+// and have them be automatically importable in React components. From playing around with
+// this, there seems to be an issue where TypeScript bindings aren't correctly generated
+// (see https://github.com/gregberge/svgr/pull/573)
 function LedgerLogo() {
     return (
         <svg
