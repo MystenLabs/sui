@@ -19,7 +19,7 @@ export function useGetNFTMeta(objectID: string) {
         if (!data.data) return null;
 
         const { details } = data.data || {};
-        if (!is(details, SuiObject) || !data) return null;
+        if (!is(details, SuiObjectData) || !data) return null;
         const fields = getObjectFields(data.data);
         if (!fields?.url) return null;
         return {
