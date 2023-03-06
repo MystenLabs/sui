@@ -8,14 +8,15 @@ use crate::committee::{
     Committee, CommitteeWithNetworkMetadata, NetworkMetadata, ProtocolVersion, StakeUnit,
 };
 use crate::crypto::AuthorityPublicKeyBytes;
-use anemo::PeerId;
+use crate::sui_system_state::epoch_start_sui_system_state::{
+    EpochStartSystemState, EpochStartValidatorInfo,
+};
 use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
-use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use super::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary};
 use super::SuiSystemStateTrait;
@@ -315,6 +316,26 @@ pub struct StakeSubsidy {
 }
 
 impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
+    fn epoch(&self) -> u64 {
+        self.epoch
+    }
+
+    fn reference_gas_price(&self) -> u64 {
+        self.reference_gas_price
+    }
+
+    fn protocol_version(&self) -> u64 {
+        self.protocol_version
+    }
+
+    fn epoch_start_timestamp_ms(&self) -> u64 {
+        self.epoch_start_timestamp_ms
+    }
+
+    fn safe_mode(&self) -> bool {
+        self.safe_mode
+    }
+
     fn get_current_epoch_committee(&self) -> CommitteeWithNetworkMetadata {
         let mut voting_rights = BTreeMap::new();
         let mut network_metadata = BTreeMap::new();
@@ -329,90 +350,6 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                 // TODO: Make sure we actually verify it.
                 .unwrap(),
             network_metadata,
-        }
-    }
-
-    #[allow(clippy::mutable_key_type)]
-    fn get_current_epoch_narwhal_committee(&self) -> NarwhalCommittee {
-        let narwhal_committee = self
-            .validators
-            .active_validators
-            .iter()
-            .map(|validator| {
-                let verified_metadata = validator
-                    .metadata
-                    .verify()
-                    .expect("Metadata should have been verified upon request");
-                let authority = narwhal_config::Authority {
-                    stake: validator.voting_power as narwhal_config::Stake,
-                    primary_address: verified_metadata.primary_address,
-                    network_key: verified_metadata.network_pubkey,
-                };
-                (verified_metadata.protocol_pubkey, authority)
-            })
-            .collect();
-
-        narwhal_config::Committee {
-            authorities: narwhal_committee,
-            epoch: self.epoch as narwhal_config::Epoch,
-        }
-    }
-
-    fn get_current_epoch_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId> {
-        let mut result = HashMap::new();
-        let _: () = self
-            .validators
-            .active_validators
-            .iter()
-            .map(|validator| {
-                let name = validator.authority_name();
-
-                let network_key = narwhal_crypto::NetworkPublicKey::from_bytes(
-                    &validator.metadata.network_pubkey_bytes,
-                )
-                .expect("Can't get narwhal network key");
-
-                let peer_id = PeerId(network_key.0.to_bytes());
-
-                result.insert(name, peer_id);
-            })
-            .collect();
-
-        result
-    }
-
-    #[allow(clippy::mutable_key_type)]
-    fn get_current_epoch_narwhal_worker_cache(
-        &self,
-        transactions_address: &Multiaddr,
-    ) -> WorkerCache {
-        let workers: BTreeMap<narwhal_crypto::PublicKey, WorkerIndex> = self
-            .validators
-            .active_validators
-            .iter()
-            .map(|validator| {
-                let verified_metadata = validator
-                    .metadata
-                    .verify()
-                    .expect("Metadata should have been verified upon request");
-                let workers = [(
-                    0,
-                    narwhal_config::WorkerInfo {
-                        name: verified_metadata.worker_pubkey,
-                        transactions: transactions_address.clone(),
-                        worker_address: verified_metadata.worker_address,
-                    },
-                )]
-                .into_iter()
-                .collect();
-                let worker_index = WorkerIndex(workers);
-
-                (verified_metadata.protocol_pubkey, worker_index)
-            })
-            .collect();
-        WorkerCache {
-            workers,
-            epoch: self.epoch,
         }
     }
 
@@ -442,24 +379,36 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             .collect()
     }
 
-    fn epoch(&self) -> u64 {
-        self.epoch
-    }
-
-    fn reference_gas_price(&self) -> u64 {
-        self.reference_gas_price
-    }
-
-    fn protocol_version(&self) -> u64 {
-        self.protocol_version
-    }
-
-    fn epoch_start_timestamp_ms(&self) -> u64 {
-        self.epoch_start_timestamp_ms
-    }
-
-    fn safe_mode(&self) -> bool {
-        self.safe_mode
+    fn into_epoch_start_state(self) -> EpochStartSystemState {
+        EpochStartSystemState {
+            epoch: self.epoch,
+            protocol_version: self.protocol_version,
+            reference_gas_price: self.reference_gas_price,
+            safe_mode: self.safe_mode,
+            epoch_start_timestamp_ms: self.epoch_start_timestamp_ms,
+            active_validators: self
+                .validators
+                .active_validators
+                .iter()
+                .map(|validator| {
+                    let metadata = validator
+                        .metadata
+                        .verify()
+                        .expect("Validator metadata must have been verified on-chain");
+                    EpochStartValidatorInfo {
+                        sui_address: metadata.sui_address,
+                        protocol_pubkey: metadata.protocol_pubkey,
+                        narwhal_network_pubkey: metadata.network_pubkey,
+                        narwhal_worker_pubkey: metadata.worker_pubkey,
+                        sui_net_address: metadata.net_address,
+                        p2p_address: metadata.p2p_address,
+                        narwhal_primary_address: metadata.primary_address,
+                        narwhal_worker_address: metadata.worker_address,
+                        voting_power: validator.voting_power,
+                    }
+                })
+                .collect(),
+        }
     }
 
     fn into_sui_system_state_summary(self) -> SuiSystemStateSummary {

@@ -71,10 +71,10 @@ impl AuthorityStore {
     ) -> SuiResult<Self> {
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
         if perpetual_tables.database_is_empty()? {
-            let epoch_start_configuration = EpochStartConfiguration {
-                system_state: SuiSystemState::new_genesis(genesis.sui_system_object()),
-                epoch_digest: genesis.checkpoint().digest(),
-            };
+            let epoch_start_configuration = EpochStartConfiguration::new(
+                genesis.sui_system_object().into_epoch_start_state(),
+                genesis.checkpoint().digest(),
+            );
             perpetual_tables
                 .set_epoch_start_configuration(&epoch_start_configuration)
                 .await?;
