@@ -1012,10 +1012,12 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         );
 
         let mut fetch_queue = BinaryHeap::new();
+        const MAX_SKIP_ROUNDS: usize = 1000;
         for (origin, rounds) in &skip_rounds {
-            if rounds.len() > 50 {
+            if rounds.len() > MAX_SKIP_ROUNDS {
                 warn!(
-                    "{} rounds are available locally for origin {}. elapsed = {}ms",
+                    "Peer has sent {} rounds to skip on origin {}, indicating peer's problem with \
+                    committing or keeping track of GC rounds. elapsed = {}ms",
                     rounds.len(),
                     origin,
                     time_start.elapsed().as_millis(),
