@@ -3,6 +3,7 @@
 #![allow(clippy::mutable_key_type)]
 
 use crate::{Batch, Certificate, CertificateDigest, Round};
+use config::Committee;
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
 use serde::{Deserialize, Serialize};
@@ -78,6 +79,19 @@ pub struct ReputationScores {
 }
 
 impl ReputationScores {
+    /// Creating a new ReputationScores instance pre-populating the authorities entries with
+    /// zero score value.
+    pub fn new(committee: &Committee) -> Self {
+        let scores_per_authority = committee
+            .authorities()
+            .map(|a| (a.0.clone(), 0_u64))
+            .collect();
+
+        Self {
+            scores_per_authority,
+            ..Default::default()
+        }
+    }
     /// Adds the provided `score` to the existing score for the provided `authority`
     pub fn add_score(&mut self, authority: PublicKey, score: u64) {
         self.scores_per_authority
@@ -88,6 +102,10 @@ impl ReputationScores {
 
     pub fn total_authorities(&self) -> u64 {
         self.scores_per_authority.len() as u64
+    }
+
+    pub fn all_zero(&self) -> bool {
+        !self.scores_per_authority.values().any(|e| *e > 0)
     }
 }
 

@@ -51,13 +51,13 @@ pub struct ConsensusState {
 }
 
 impl ConsensusState {
-    pub fn new(metrics: Arc<ConsensusMetrics>) -> Self {
+    pub fn new(metrics: Arc<ConsensusMetrics>, committee: &Committee) -> Self {
         Self {
             last_committed_round: 0,
             last_committed: Default::default(),
             latest_sub_dag_index: 0,
             dag: Default::default(),
-            last_consensus_reputation_score: ReputationScores::default(),
+            last_consensus_reputation_score: ReputationScores::new(committee),
             last_committed_leader: None,
             metrics,
         }
@@ -68,6 +68,7 @@ impl ConsensusState {
         recover_last_committed: HashMap<PublicKey, Round>,
         latest_sub_dag: Option<CommittedSubDagShell>,
         cert_store: CertificateStore,
+        committee: &Committee,
     ) -> Self {
         let last_committed_round = *recover_last_committed
             .iter()
@@ -81,7 +82,7 @@ impl ConsensusState {
         let (latest_sub_dag_index, last_consensus_reputation_score, last_committed_leader) =
             latest_sub_dag
                 .map(|s| (s.sub_dag_index, s.reputation_score, Some(s.leader)))
-                .unwrap_or_default();
+                .unwrap_or((0, ReputationScores::new(committee), None));
 
         Self {
             last_committed_round,
@@ -266,6 +267,7 @@ where
             recovered_last_committed,
             latest_sub_dag,
             cert_store,
+            &committee,
         );
         tx_consensus_round_updates
             .send(state.last_committed_round)

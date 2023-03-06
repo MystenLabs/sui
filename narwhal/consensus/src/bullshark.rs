@@ -342,7 +342,7 @@ impl Bullshark {
         // TODO: when schedule change is implemented we should probably change a little bit
         // this logic here.
         if sub_dag_index % self.num_sub_dags_per_schedule == 0 {
-            state.last_consensus_reputation_score = ReputationScores::default()
+            state.last_consensus_reputation_score = ReputationScores::new(&self.committee)
         }
 
         // update the score for the previous leader. If no previous leader exists,
@@ -368,6 +368,13 @@ impl Bullshark {
         // ones calculated for the current schedule.
         state.last_consensus_reputation_score.final_of_schedule =
             (sub_dag_index + 1) % self.num_sub_dags_per_schedule == 0;
+
+        // Always ensure that all the authorities are present in the reputation scores - even
+        // when score is zero.
+        assert_eq!(
+            state.last_consensus_reputation_score.total_authorities() as usize,
+            self.committee.authorities.len()
+        );
 
         state.last_consensus_reputation_score.clone()
     }
