@@ -1,15 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    hasPublicTransfer,
-    formatAddress,
-    getObjectOwner,
-    SuiObject,
-    is,
-} from '@mysten/sui.js';
+import { hasPublicTransfer, formatAddress } from '@mysten/sui.js';
 import cl from 'classnames';
-import { useMemo } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
@@ -20,7 +13,7 @@ import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { NFTDisplayCard } from '_components/nft-display';
-import { useNFTBasicData, useGetObject } from '_hooks';
+import { useNFTBasicData, useOwnedNFT } from '_hooks';
 import ExternalLink from '_src/ui/app/components/external-link';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
@@ -67,24 +60,12 @@ function NFTDetailsPage() {
     const nftId = searchParams.get('objectId');
     const accountAddress = useActiveAddress();
 
-    const { data: objectData, isLoading } = useGetObject(nftId || '');
+    const { data: objectData, isLoading } = useOwnedNFT(nftId!, accountAddress);
 
-    const selectedObject = useMemo(() => {
-        if (!is(objectData?.details, SuiObject) || !objectData) return null;
-        const objectOwner = getObjectOwner(objectData);
-        return objectOwner &&
-            objectOwner !== 'Immutable' &&
-            'AddressOwner' in objectOwner &&
-            objectOwner.AddressOwner === accountAddress
-            ? objectData.details
-            : null;
-    }, [accountAddress, objectData]);
-
-    const isTransferable =
-        !!selectedObject && hasPublicTransfer(selectedObject);
+    const isTransferable = !!objectData && hasPublicTransfer(objectData);
 
     const { nftFields, fileExtensionType, filePath } =
-        useNFTBasicData(selectedObject);
+        useNFTBasicData(objectData);
 
     // Extract either the attributes, or use the top-level NFT fields:
     const metaFields =
@@ -109,7 +90,7 @@ function NFTDetailsPage() {
             })}
         >
             <Loading loading={isLoading}>
-                {selectedObject ? (
+                {objectData ? (
                     <>
                         <PageTitle back="/nfts" />
                         <div className="flex flex-col flex-nowrap flex-1 items-stretch overflow-y-auto overflow-x-hidden gap-7">
