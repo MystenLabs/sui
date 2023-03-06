@@ -1,6 +1,6 @@
 # Sui Orchestrator
 
-The crate provides facilities to quickly deploy and benchmark the sui codebase in a geo-distributed environment. It is absolutely not meant to run Sui in production and is no indicator of proper production engineering best practices. Its purpose is to facilitate research projects wishing to benchmarks variants of Sui and comparison with related work.
+The crate provides facilities to quickly deploy and benchmark the Sui codebase in a geo-distributed environment. It is absolutely not meant to run Sui in production and is no indicator of proper production engineering best practices. Its purpose is to facilitate research projects wishing to benchmarks (variants of) Sui and analyze its performance.
 
 Below is a step-by-step guide to run geo-distributed benchmarks on either [Vultr](http://vultr.com) or [Amazon Web Services (AWS)](http://aws.amazon.com).
 
