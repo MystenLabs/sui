@@ -5,10 +5,9 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use std::collections::BTreeMap;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
-    GetRawObjectDataResponse, MoveFunctionArgType, SuiMoveNormalizedFunction,
-    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionResponse,
-    TransactionsPage,
+    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, SuiMoveNormalizedFunction,
+    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectDataOptions, SuiObjectInfo,
+    SuiObjectResponse, SuiPastObjectResponse, SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{
@@ -68,11 +67,13 @@ pub trait ReadApi {
 
     /// Return the object information for a specified object
     #[method(name = "getObject")]
-    async fn get_object(
+    async fn get_object_with_options(
         &self,
         /// the ID of the queried object
         object_id: ObjectID,
-    ) -> RpcResult<GetObjectDataResponse>;
+        /// options for specifying the content to be returned
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<SuiObjectResponse>;
 
     /// Return the dynamic field object information for a specified object
     #[method(name = "getDynamicFieldObject")]
@@ -82,7 +83,7 @@ pub trait ReadApi {
         parent_object_id: ObjectID,
         /// The Name of the dynamic field
         name: DynamicFieldName,
-    ) -> RpcResult<GetObjectDataResponse>;
+    ) -> RpcResult<SuiObjectResponse>;
 
     /// Return the argument types of a Move function,
     /// based on normalized Type.
@@ -141,6 +142,12 @@ pub trait ReadApi {
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage>;
 
+    #[method(name = "multiGetTransactions")]
+    async fn multi_get_transactions(
+        &self,
+        digests: Vec<TransactionDigest>,
+    ) -> RpcResult<Vec<SuiTransactionResponse>>;
+
     /// Note there is no software-level guarantee/SLA that objects with past versions
     /// can be retrieved by this API, even if the object and version exists/existed.
     /// The result may vary across nodes depending on their pruning policies.
@@ -152,7 +159,9 @@ pub trait ReadApi {
         object_id: ObjectID,
         /// the version of the queried object. If None, default to the latest known version
         version: SequenceNumber,
-    ) -> RpcResult<GetPastObjectDataResponse>;
+        /// options for specifying the content to be returned
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<SuiPastObjectResponse>;
 
     /// Return the sequence number of the latest checkpoint that has been executed
     #[method(name = "getLatestCheckpointSequenceNumber")]
@@ -193,21 +202,4 @@ pub trait ReadApi {
         &self,
         digest: CheckpointContentsDigest,
     ) -> RpcResult<CheckpointContents>;
-
-    /// Return the raw BCS serialized move object bytes for a specified object.
-    #[method(name = "getRawObject")]
-    async fn get_raw_object(
-        &self,
-        /// the id of the object
-        object_id: ObjectID,
-    ) -> RpcResult<GetRawObjectDataResponse>;
-
-    // TODO: this will be replaced by the new queryObjects API
-    /// Return the Display string of a object
-    #[method(name = "getDisplayDeprecated")]
-    async fn get_display_deprecated(
-        &self,
-        /// the id of the object
-        object_id: ObjectID,
-    ) -> RpcResult<BTreeMap<String, String>>;
 }

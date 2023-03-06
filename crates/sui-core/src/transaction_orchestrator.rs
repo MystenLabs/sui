@@ -30,8 +30,8 @@ use sui_types::committee::Committee;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    FinalizedEffects, QuorumDriverResponse, VerifiedCertifiedTransactionEffects,
-    VerifiedExecutableTransaction,
+    FinalizedEffects, QuorumDriverResponse, TransactionEffectsAPI,
+    VerifiedCertifiedTransactionEffects, VerifiedExecutableTransaction,
 };
 use sui_types::quorum_driver_types::{
     QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResult,
@@ -221,7 +221,7 @@ where
                 }
                 let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
                     transaction,
-                    effects_cert.executed_epoch,
+                    effects_cert.executed_epoch(),
                 );
 
                 match Self::execute_finalized_tx_locally_with_timeout(
@@ -347,7 +347,7 @@ where
                 Ok(Ok((transaction, QuorumDriverResponse { effects_cert, .. }))) => {
                     let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
                         transaction,
-                        effects_cert.executed_epoch,
+                        effects_cert.executed_epoch(),
                     );
                     let tx_digest = executable_tx.digest();
                     if let Err(err) = pending_transaction_log.finish_transaction(tx_digest) {

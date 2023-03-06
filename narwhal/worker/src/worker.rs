@@ -494,7 +494,7 @@ impl Worker {
             self.committee.clone(),
             self.worker_cache.clone(),
             shutdown_receivers.pop().unwrap(),
-            /* rx_message */ rx_quorum_waiter,
+            rx_quorum_waiter,
             network,
         );
 

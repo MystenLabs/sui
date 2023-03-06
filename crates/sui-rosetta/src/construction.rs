@@ -3,10 +3,14 @@
 
 use axum::{Extension, Json};
 use fastcrypto::encoding::{Encoding, Hex};
+use sui_json_rpc_types::SuiTransactionEffectsAPI;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{SignatureScheme, ToFromBytes};
-use sui_types::messages::{ExecuteTransactionRequestType, Transaction, TransactionData};
+use sui_types::messages::{
+    ExecuteTransactionRequestType, Transaction, TransactionData, TransactionDataAPI,
+};
 use sui_types::signature::GenericSignature;
+use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 
 use crate::errors::Error;
 use crate::types::{
@@ -129,13 +133,13 @@ pub async fn submit(
         )
         .await?;
 
-    if let SuiExecutionStatus::Failure { error } = response.effects.status {
-        return Err(Error::TransactionExecutionError(error));
+    if let SuiExecutionStatus::Failure { error } = response.effects.status() {
+        return Err(Error::TransactionExecutionError(error.to_string()));
     }
 
     Ok(TransactionIdentifierResponse {
         transaction_identifier: TransactionIdentifier {
-            hash: response.effects.transaction_digest,
+            hash: *response.effects.transaction_digest(),
         },
         metadata: None,
     })
@@ -190,12 +194,13 @@ pub async fn metadata(
     env.check_network_identifier(&request.network_identifier)?;
     let option = request.options.ok_or(Error::MissingMetadata)?;
     let sender = option.internal_operation.sender();
-    let gas_price = context
+    let system_state: SuiSystemState = context
         .client
         .governance_api()
         .get_sui_system_state()
         .await?
-        .reference_gas_price;
+        .into();
+    let gas_price = system_state.reference_gas_price();
 
     let (tx_metadata, gas, budget) = match &option.internal_operation {
         InternalOperation::PaySui {
@@ -253,7 +258,7 @@ pub async fn metadata(
                     coins,
                     locked_until_epoch: *locked_until_epoch,
                 },
-                data.gas(),
+                data.gas()[0],
                 13000,
             )
         }
@@ -271,7 +276,8 @@ pub async fn metadata(
         })?;
     let dry_run = context.client.read_api().dry_run_transaction(data).await?;
 
-    let budget = dry_run.effects.gas_used.computation_cost + dry_run.effects.gas_used.storage_cost;
+    let budget =
+        dry_run.effects.gas_used().computation_cost + dry_run.effects.gas_used().storage_cost;
 
     Ok(ConstructionMetadataResponse {
         metadata: ConstructionMetadata {

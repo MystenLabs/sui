@@ -39,7 +39,13 @@ export const navigateWithUnknown = async (
                     };
                 }),
             rpc(network)
-                .getObject(input)
+                .getObject(input, {
+                    showType: true,
+                    showContent: true,
+                    showOwner: true,
+                    showPreviousTransaction: true,
+                    showStorageRebate: true,
+                })
                 .then((data) => {
                     if (data.status !== 'Exists') {
                         throw new Error('no object found');

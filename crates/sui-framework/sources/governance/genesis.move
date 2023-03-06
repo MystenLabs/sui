@@ -31,6 +31,8 @@ module sui::genesis {
     /// all the information we need in the system.
     fun create(
         initial_sui_custody_account_address: address,
+        initial_validator_stake_mist: u64,
+        governance_start_epoch: u64,
         validator_pubkeys: vector<vector<u8>>,
         validator_network_pubkeys: vector<vector<u8>>,
         validator_worker_pubkeys: vector<vector<u8>>,
@@ -101,9 +103,8 @@ module sui::genesis {
                 p2p_address,
                 primary_address,
                 worker_address,
-                // TODO Figure out if we want to instead initialize validators with 0 stake.
-                // Initialize all validators with 1 Mist stake.
-                balance::split(&mut sui_supply, 1),
+                // Initialize all validators with uniform stake taken from the subsidy fund.
+                balance::split(&mut subsidy_fund, initial_validator_stake_mist),
                 option::none(),
                 gas_price,
                 commission_rate,
@@ -119,6 +120,7 @@ module sui::genesis {
             storage_fund,
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
+            governance_start_epoch,
             INIT_STAKE_SUBSIDY_AMOUNT,
             protocol_version,
             system_state_version,

@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFormatCoin } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 
-import { useFormatCoin } from '~/hooks/useFormatCoin';
 import { Heading } from '~/ui/Heading';
 import { Text } from '~/ui/Text';
 

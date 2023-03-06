@@ -3,17 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::{
-    make_authority_clients, make_network_authority_client_sets_from_committee,
-    make_network_authority_client_sets_from_system_state, AuthorityAPI, NetworkAuthorityClient,
+    make_authority_clients, make_network_authority_client_sets_from_committee, AuthorityAPI,
+    NetworkAuthorityClient,
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
-use crate::validator_info::make_committee;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use mysten_metrics::monitored_future;
 use mysten_network::config::Config;
 use std::convert::AsRef;
 use sui_config::genesis::Genesis;
-use sui_config::NetworkConfig;
+use sui_config::{NetworkConfig, ValidatorInfo};
 use sui_network::{
     default_mysten_network_config, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC,
 };
@@ -22,7 +21,7 @@ use sui_types::error::UserInputError;
 use sui_types::fp_ensure;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
-use sui_types::sui_system_state::SuiSystemState;
+use sui_types::sui_system_state::{SuiSystemStateInnerBenchmark, SuiSystemStateTrait};
 use sui_types::{
     base_types::*,
     committee::{Committee, ProtocolVersion},
@@ -45,6 +44,7 @@ use tokio::time::{sleep, timeout};
 
 use crate::authority::AuthorityStore;
 use crate::epoch::committee_store::CommitteeStore;
+use crate::signature_verifier::{DefaultSignatureVerifier, SignatureVerifier};
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregator};
 
 pub const DEFAULT_RETRIES: usize = 4;
@@ -236,11 +236,11 @@ impl ProcessTransactionResult {
 }
 
 #[derive(Clone)]
-pub struct AuthorityAggregator<A> {
+pub struct AuthorityAggregator<A, S = DefaultSignatureVerifier> {
     /// Our Sui committee.
     pub committee: Committee,
     /// How to talk to this committee.
-    pub authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
+    pub authority_clients: BTreeMap<AuthorityName, SafeClient<A, S>>,
     /// Metrics
     pub metrics: AuthAggMetrics,
     /// Metric base for the purpose of creating new safe clients during reconfiguration.
@@ -250,7 +250,7 @@ pub struct AuthorityAggregator<A> {
     pub committee_store: Arc<CommitteeStore>,
 }
 
-impl<A> AuthorityAggregator<A> {
+impl<A, S: SignatureVerifier + Default> AuthorityAggregator<A, S> {
     pub fn new(
         committee: Committee,
         committee_store: Arc<CommitteeStore>,
@@ -338,7 +338,7 @@ impl<A> AuthorityAggregator<A> {
         committee: CommitteeWithNetAddresses,
         network_config: &Config,
         disallow_missing_intermediate_committees: bool,
-    ) -> SuiResult<AuthorityAggregator<NetworkAuthorityClient>> {
+    ) -> SuiResult<AuthorityAggregator<NetworkAuthorityClient, S>> {
         let network_clients =
             make_network_authority_client_sets_from_committee(&committee, network_config).map_err(
                 |err| SuiError::GenericAuthorityError {
@@ -394,11 +394,11 @@ impl<A> AuthorityAggregator<A> {
         })
     }
 
-    pub fn get_client(&self, name: &AuthorityName) -> Option<&SafeClient<A>> {
+    pub fn get_client(&self, name: &AuthorityName) -> Option<&SafeClient<A, S>> {
         self.authority_clients.get(name)
     }
 
-    pub fn clone_client(&self, name: &AuthorityName) -> SafeClient<A>
+    pub fn clone_client(&self, name: &AuthorityName) -> SafeClient<A, S>
     where
         A: Clone,
     {
@@ -421,7 +421,7 @@ impl<A> AuthorityAggregator<A> {
     }
 }
 
-impl AuthorityAggregator<NetworkAuthorityClient> {
+impl<S: SignatureVerifier + Default> AuthorityAggregator<NetworkAuthorityClient, S> {
     /// Create a new network authority aggregator by reading the committee and
     /// network address information from the system state object on-chain.
     /// This function needs metrics parameters because registry will panic
@@ -433,16 +433,16 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
         auth_agg_metrics: AuthAggMetrics,
     ) -> anyhow::Result<Self> {
         let sui_system_state = store.get_sui_system_state_object()?;
-        Self::new_from_system_state(
-            &sui_system_state,
+        Self::new_from_committee(
+            sui_system_state.get_current_epoch_committee(),
             committee_store,
             safe_client_metrics_base,
             auth_agg_metrics,
         )
     }
 
-    pub fn new_from_system_state(
-        sui_system_state: &SuiSystemState,
+    pub fn new_from_committee(
+        committee: CommitteeWithNetAddresses,
         committee_store: &Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
         auth_agg_metrics: AuthAggMetrics,
@@ -452,9 +452,9 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
         // tolerate it as long as we have 2f+1 good validators.
         // GH issue: https://github.com/MystenLabs/sui/issues/7019
         let authority_clients =
-            make_network_authority_client_sets_from_system_state(sui_system_state, &net_config)?;
+            make_network_authority_client_sets_from_committee(&committee, &net_config)?;
         Ok(Self::new_with_metrics(
-            sui_system_state.get_current_epoch_committee().committee,
+            committee.committee,
             committee_store.clone(),
             authority_clients,
             safe_client_metrics_base,
@@ -470,7 +470,7 @@ pub enum ReduceOutput<R, S> {
     Success(R),
 }
 
-impl<A> AuthorityAggregator<A>
+impl<A, SV: SignatureVerifier + Default> AuthorityAggregator<A, SV>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
@@ -503,7 +503,7 @@ where
         initial_timeout: Duration,
     ) -> Result<R, S>
     where
-        FMap: FnOnce(AuthorityName, &'a SafeClient<A>) -> AsyncResult<'a, V, SuiError> + Clone,
+        FMap: FnOnce(AuthorityName, &'a SafeClient<A, SV>) -> AsyncResult<'a, V, SuiError> + Clone,
         FReduce: Fn(
             S,
             AuthorityName,
@@ -530,7 +530,7 @@ where
         initial_timeout: Duration,
     ) -> Result<R, S>
     where
-        FMap: FnOnce(AuthorityName, &'a SafeClient<A>) -> AsyncResult<'a, V, SuiError> + Clone,
+        FMap: FnOnce(AuthorityName, &'a SafeClient<A, SV>) -> AsyncResult<'a, V, SuiError> + Clone,
         FReduce: Fn(
             S,
             AuthorityName,
@@ -605,7 +605,10 @@ where
         authority_errors: &mut HashMap<AuthorityName, SuiError>,
     ) -> Result<S, SuiError>
     where
-        FMap: Fn(AuthorityName, SafeClient<A>) -> AsyncResult<'a, S, SuiError> + Send + Clone + 'a,
+        FMap: Fn(AuthorityName, SafeClient<A, SV>) -> AsyncResult<'a, S, SuiError>
+            + Send
+            + Clone
+            + 'a,
         S: Send,
     {
         let start = tokio::time::Instant::now();
@@ -623,7 +626,7 @@ where
 
             let mut futures = FuturesUnordered::<BoxFuture<'a, Event<S>>>::new();
 
-            let start_req = |name: AuthorityName, client: SafeClient<A>| {
+            let start_req = |name: AuthorityName, client: SafeClient<A, SV>| {
                 let map_each_authority = map_each_authority.clone();
                 Box::pin(monitored_future!(async move {
                     trace!(name=?name.concise(), now = ?tokio::time::Instant::now() - start, "new request");
@@ -738,7 +741,10 @@ where
         description: String,
     ) -> Result<S, SuiError>
     where
-        FMap: Fn(AuthorityName, SafeClient<A>) -> AsyncResult<'a, S, SuiError> + Send + Clone + 'a,
+        FMap: Fn(AuthorityName, SafeClient<A, SV>) -> AsyncResult<'a, S, SuiError>
+            + Send
+            + Clone
+            + 'a,
         S: Send,
     {
         let mut authority_errors = HashMap::new();
@@ -836,10 +842,10 @@ where
     /// It should only be used for testing or benchmarking.
     pub async fn get_latest_system_state_object_for_testing(
         &self,
-    ) -> anyhow::Result<SuiSystemState> {
+    ) -> anyhow::Result<SuiSystemStateInnerBenchmark> {
         #[derive(Debug, Default)]
         struct State {
-            latest_system_state: Option<SuiSystemState>,
+            latest_system_state: Option<SuiSystemStateInnerBenchmark>,
             total_weight: StakeUnit,
         }
         let initial_state = State::default();
@@ -854,12 +860,12 @@ where
                             debug!(
                                 "Received system state object from validator {:?} with epoch: {:?}",
                                 name.concise(),
-                                system_state.epoch
+                                system_state.epoch()
                             );
                             if state
                                 .latest_system_state
                                 .as_ref()
-                                .map_or(true, |latest| system_state.epoch > latest.epoch)
+                                .map_or(true, |latest| system_state.epoch() > latest.epoch())
                             {
                                 state.latest_system_state = Some(system_state);
                             }
@@ -1352,10 +1358,10 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         self
     }
 
-    pub fn build(
+    pub fn build<S: SignatureVerifier + Default>(
         self,
     ) -> anyhow::Result<(
-        AuthorityAggregator<NetworkAuthorityClient>,
+        AuthorityAggregator<NetworkAuthorityClient, S>,
         BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>,
     )> {
         let validator_info = if let Some(network_config) = self.network_config {
@@ -1365,7 +1371,7 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         } else {
             anyhow::bail!("need either NetworkConfig or Genesis.");
         };
-        let committee = make_committee(0, &validator_info)?;
+        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info))?;
         let mut registry = &prometheus::Registry::new();
         if self.registry.is_some() {
             registry = self.registry.unwrap();

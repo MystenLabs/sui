@@ -150,7 +150,7 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
         _epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         let serialized =
-            bincode::serialize(transaction).expect("Serializing consensus transaction cannot fail");
+            bcs::to_bytes(transaction).expect("Serializing consensus transaction cannot fail");
         let bytes = Bytes::from(serialized.clone());
 
         self.clone()

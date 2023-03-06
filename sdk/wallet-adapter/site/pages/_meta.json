@@ -1,0 +1,9 @@
+{
+  "index": "Introduction",
+  "another": "Another Page",
+  "advanced": "Advanced (A Folder)",
+  "demo": {
+    "title": "Demo",
+    "type": "page"
+  }
+}

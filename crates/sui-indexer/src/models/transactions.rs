@@ -8,7 +8,8 @@ use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use diesel::result::Error;
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiObjectRef, SuiTransaction, SuiTransactionEffects, SuiTransactionResponse,
+    OwnedObjectRef, SuiObjectRef, SuiTransaction, SuiTransactionDataAPI, SuiTransactionEffects,
+    SuiTransactionEffectsAPI, SuiTransactionResponse,
 };
 
 use crate::errors::IndexerError;
@@ -96,10 +97,10 @@ impl TryFrom<SuiTransactionResponse> for Transaction {
         })?;
 
         // canonical txn digest string is Base58 encoded
-        let tx_digest = tx_resp.effects.transaction_digest.base58_encode();
-        let gas_budget = tx_resp.transaction.data.gas_data.budget;
-        let gas_price = tx_resp.transaction.data.gas_data.price;
-        let sender = tx_resp.transaction.data.sender.to_string();
+        let tx_digest = tx_resp.effects.transaction_digest().base58_encode();
+        let gas_budget = tx_resp.transaction.data.gas_data().budget;
+        let gas_price = tx_resp.transaction.data.gas_data().price;
+        let sender = tx_resp.transaction.data.sender().to_string();
         // NOTE: unwrap is safe here because indexer fetches checkpoint first and then transactions
         // based on the transaction digests in the checkpoint, thus the checkpoint sequence number
         // is always Some. This is also confirmed by the sui-core team.
@@ -107,40 +108,39 @@ impl TryFrom<SuiTransactionResponse> for Transaction {
         let txn_kind_iter = tx_resp
             .transaction
             .data
-            .transactions
+            .transactions()
             .iter()
             .map(|k| k.to_string());
 
         let effects = tx_resp.effects.clone();
         let recipients: Vec<String> = effects
-            .mutated
-            .clone()
-            .into_iter()
+            .mutated()
+            .iter()
             .map(|owned_obj_ref| owned_obj_ref.owner.to_string())
             .collect();
         let created: Vec<String> = effects
-            .created
-            .into_iter()
+            .created()
+            .iter()
             .map(owned_obj_ref_to_obj_id_string)
             .collect();
         let mutated: Vec<String> = effects
-            .mutated
-            .into_iter()
+            .mutated()
+            .iter()
             .map(owned_obj_ref_to_obj_id_string)
             .collect();
         let unwrapped: Vec<String> = effects
-            .unwrapped
-            .into_iter()
+            .unwrapped()
+            .iter()
             .map(owned_obj_ref_to_obj_id_string)
             .collect();
         let deleted: Vec<String> = effects
-            .deleted
-            .into_iter()
+            .deleted()
+            .iter()
             .map(obj_ref_to_obj_id_string)
             .collect();
         let wrapped: Vec<String> = effects
-            .wrapped
-            .into_iter()
+            .wrapped()
+            .iter()
             .map(obj_ref_to_obj_id_string)
             .collect();
         let move_call_strs: Vec<String> = tx_resp
@@ -172,13 +172,13 @@ impl TryFrom<SuiTransactionResponse> for Transaction {
             None => None,
         };
 
-        let gas_object_ref = tx_resp.effects.gas_object.reference.clone();
+        let gas_object_ref = tx_resp.effects.gas_object().reference.clone();
         let gas_object_id = gas_object_ref.object_id.to_string();
         let gas_object_seq = gas_object_ref.version;
         // canonical object digest is Base58 encoded
         let gas_object_digest = gas_object_ref.digest.base58_encode();
 
-        let gas_summary = tx_resp.effects.gas_used;
+        let gas_summary = tx_resp.effects.gas_used();
         let computation_cost = gas_summary.computation_cost;
         let storage_cost = gas_summary.storage_cost;
         let storage_rebate = gas_summary.storage_rebate;
@@ -247,11 +247,11 @@ impl TryInto<SuiTransactionResponse> for Transaction {
     }
 }
 
-fn owned_obj_ref_to_obj_id_string(owned_obj_ref: OwnedObjectRef) -> String {
+fn owned_obj_ref_to_obj_id_string(owned_obj_ref: &OwnedObjectRef) -> String {
     owned_obj_ref.reference.object_id.to_string()
 }
 
-fn obj_ref_to_obj_id_string(obj_ref: SuiObjectRef) -> String {
+fn obj_ref_to_obj_id_string(obj_ref: &SuiObjectRef) -> String {
     obj_ref.object_id.to_string()
 }
 

@@ -215,10 +215,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
         .contains_key(&first_epoch)
         .unwrap());
 
-    let system_state = SuiSystemState {
-        epoch: 1,
-        ..Default::default()
-    };
+    let system_state = SuiSystemState::new_for_testing(1);
 
     let new_epoch_store = authority_state
         .reconfigure(

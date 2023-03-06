@@ -12,7 +12,7 @@ module sui::validator_set_tests {
     use sui::vec_map;
     use std::ascii;
     use std::option;
-    use sui::test_utils::assert_eq;
+    use sui::test_utils::{Self, assert_eq};
 
     #[test]
     fun test_validator_set_flow() {
@@ -83,7 +83,7 @@ module sui::validator_set_tests {
             assert!(validator_set::total_stake(&validator_set) == 900, 0);
         };
 
-        validator_set::destroy_for_testing(validator_set);
+        test_utils::destroy(validator_set);
         test_scenario::end(scenario);
     }
 
@@ -135,7 +135,7 @@ module sui::validator_set_tests {
 
         assert_eq(validator_set::derive_reference_gas_price(&validator_set), 43);
 
-        validator_set::destroy_for_testing(validator_set);
+        test_utils::destroy(validator_set);
         test_scenario::end(scenario);
     }
 

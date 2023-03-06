@@ -29,8 +29,12 @@ env:
 
 jobs:
   simtest:
-    timeout-minutes: 90
+    timeout-minutes: 120
     runs-on: [ubuntu-ghcloud]
+    env:
+      RUST_LOG: off
+      # Runs tests much faster - disables signing and verification
+      USE_MOCK_CRYPTO: 1
 
     steps:
     - name: Checkout sui repo main branch
@@ -44,12 +48,10 @@ jobs:
 
     - name: Build simtest
       run: |
-        export RUST_LOG=off
         ./scripts/simtest/cargo-simtest simtest build
 
     - name: Run simtest
       run: |
-        export RUST_LOG=off
         ./scripts/simtest/simtest-run.sh
 
   notify:
@@ -69,11 +71,17 @@ jobs:
         export sui_sha=$(git rev-parse HEAD)
         echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
 
+    - name: Get link to logs
+      run: |
+        gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ inputs.run_id }}/jobs' --jq '.jobs.[0].html_url')
+        echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV        
+
     - name: Post to slack
       uses: slackapi/slack-github-action@936158bbe252e9a6062e793ea4609642c966e302 # pin@v1.21.0
       env:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         SUI_SHA: ${{ env.sui_sha }}
+        GH_JOB_LINK: ${{ env.gh_job_link }}
       with:
         channel-id: 'simtest-nightly'
         payload: |
@@ -101,7 +109,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "Logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  "text": "<${{ env.GH_JOB_LINK }}|logs>"
                 }
               }
             ]

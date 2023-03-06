@@ -3,7 +3,7 @@
 
 import { useMemo } from 'react';
 
-import type { SuiData } from '@mysten/sui.js';
+import type { SuiParsedData } from '@mysten/sui.js';
 
 const fieldsOrder: Record<string, number> = {
     name: 0,
@@ -27,7 +27,7 @@ function sortKeys(a: string, b: string) {
     return a.localeCompare(b);
 }
 
-export default function useSuiObjectFields(data: SuiData) {
+export default function useSuiObjectFields(data: SuiParsedData) {
     const { fields = null } = data.dataType === 'moveObject' ? data : {};
     return useMemo(() => {
         const keys: string[] = [];

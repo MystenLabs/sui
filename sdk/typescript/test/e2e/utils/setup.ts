@@ -78,9 +78,15 @@ export async function publishPackage(
   packagePath: string,
 ): Promise<ObjectId> {
   const { execSync } = require('child_process');
+  const tmp = require('tmp');
+  // remove all controlled temporary objects on process exit
+  tmp.setGracefulCleanup();
+
+  const tmpobj = tmp.dirSync({ unsafeCleanup: true });
+
   const compiledModules = JSON.parse(
     execSync(
-      `${SUI_BIN} move build --dump-bytecode-as-base64 --path ${packagePath}`,
+      `${SUI_BIN} move build --dump-bytecode-as-base64 --path ${packagePath} --install-dir ${tmpobj.name}`,
       { encoding: 'utf-8' },
     ),
   );

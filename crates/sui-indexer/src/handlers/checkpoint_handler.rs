@@ -6,7 +6,10 @@ use futures::future::join_all;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use std::collections::BTreeMap;
-use sui_json_rpc_types::{SuiParsedData, SuiParsedObject, SuiTransactionResponse};
+use sui_json_rpc_types::{
+    SuiObjectData, SuiObjectDataOptions, SuiParsedData, SuiTransactionDataAPI,
+    SuiTransactionEffectsAPI, SuiTransactionKind, SuiTransactionResponse,
+};
 use sui_sdk::SuiClient;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
@@ -15,6 +18,7 @@ use crate::errors::IndexerError;
 use crate::metrics::IndexerCheckpointHandlerMetrics;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::events::Event;
+use crate::models::move_calls::MoveCall;
 use crate::models::packages::Package;
 use crate::models::transactions::Transaction;
 use crate::store::{CheckpointData, IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore};
@@ -122,34 +126,32 @@ where
             .get_checkpoint(seq.into())
             .await?;
 
-        let transactions = join_all(
-            checkpoint
-                .transactions
-                .iter()
-                .map(|tx_digest| self.rpc_client.read_api().get_transaction(*tx_digest)),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()?;
+        let transactions = self
+            .rpc_client
+            .read_api()
+            .multi_get_transactions(checkpoint.transactions.to_vec())
+            .await?;
 
         let all_mutated = transactions
             .iter()
             .flat_map(|tx| {
                 tx.effects
-                    .created
-                    .clone()
-                    .into_iter()
-                    .chain(tx.effects.mutated.clone().into_iter())
-                    .chain(tx.effects.unwrapped.clone().into_iter())
+                    .created()
+                    .iter()
+                    .cloned()
+                    .chain(tx.effects.mutated().iter().cloned())
+                    .chain(tx.effects.unwrapped().iter().cloned())
             })
             .map(|o| (o.reference.object_id, o.reference.version));
 
         // TODO: Use multi get objects
         // TODO: Error handling.
         let new_objects = join_all(all_mutated.map(|(id, version)| {
-            self.rpc_client
-                .read_api()
-                .try_get_parsed_past_object(id, version)
+            self.rpc_client.read_api().try_get_parsed_past_object(
+                id,
+                version,
+                SuiObjectDataOptions::full_content(),
+            )
         }))
         .await
         .into_iter()
@@ -202,7 +204,7 @@ where
                     })?;
                     let event = Event {
                         id: None,
-                        transaction_digest: tx.effects.transaction_digest.to_string(),
+                        transaction_digest: tx.effects.transaction_digest().to_string(),
                         event_sequence,
                         event_time: tx
                             .timestamp_ms
@@ -228,6 +230,36 @@ where
         // Index packages
         let packages = Self::index_packages(&transactions, &objects)?;
 
+        let move_calls: Vec<MoveCall> = transactions
+            .iter()
+            .flat_map(|t| {
+                t.transaction.data.transactions().iter().map(move |tx| {
+                    (
+                        tx.clone(),
+                        t.effects.transaction_digest(),
+                        checkpoint.sequence_number,
+                        checkpoint.epoch,
+                        t.transaction.data.sender(),
+                    )
+                })
+            })
+            .filter_map(
+                |(tx_kind, txn_digest, checkpoint_seq, epoch, sender)| match tx_kind {
+                    SuiTransactionKind::Call(sui_move_call) => Some(MoveCall {
+                        id: None,
+                        transaction_digest: txn_digest.to_string(),
+                        checkpoint_sequence_number: checkpoint_seq as i64,
+                        epoch: epoch as i64,
+                        sender: sender.to_string(),
+                        move_package: sui_move_call.package.to_string(),
+                        move_module: sui_move_call.module,
+                        move_function: sui_move_call.function,
+                    }),
+                    _ => None,
+                },
+            )
+            .collect();
+
         // Index epoch
         // TODO: Aggregate all object owner changes into owner index at epoch change.
         let epoch_index =
@@ -247,6 +279,7 @@ where
                 owner_changes: vec![],
                 addresses,
                 packages,
+                move_calls,
             },
             epoch_index,
         ))
@@ -254,13 +287,17 @@ where
 
     fn index_packages(
         transactions: &[SuiTransactionResponse],
-        objects: &[SuiParsedObject],
+        objects: &[SuiObjectData],
     ) -> Result<Vec<Package>, IndexerError> {
         let object_map = objects
             .iter()
             .filter_map(|o| {
-                if let SuiParsedData::Package(p) = &o.data {
-                    Some((o.reference.object_id, p))
+                if let SuiParsedData::Package(p) = &o
+                    .content
+                    .as_ref()
+                    .expect("Expect the content field to be non-empty from data fetching")
+                {
+                    Some((o.object_id, p))
                 } else {
                     None
                 }
@@ -270,9 +307,13 @@ where
         transactions
             .iter()
             .flat_map(|tx| {
-                tx.effects.created.iter().map(|oref| {
+                tx.effects.created().iter().map(|oref| {
                     object_map.get(&oref.reference.object_id).map(|o| {
-                        Package::try_from(oref.reference.object_id, tx.transaction.data.sender, o)
+                        Package::try_from(
+                            oref.reference.object_id,
+                            *tx.transaction.data.sender(),
+                            o,
+                        )
                     })
                 })
             })

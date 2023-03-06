@@ -175,6 +175,13 @@ impl AuthorityStore {
             })
     }
 
+    pub fn multi_get_events(
+        &self,
+        event_digests: &[TransactionEventsDigest],
+    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
+        Ok(self.perpetual_tables.events.multi_get(event_digests)?)
+    }
+
     pub fn multi_get_effects<'a>(
         &self,
         effects_digests: impl Iterator<Item = &'a TransactionEffectsDigest>,
@@ -204,7 +211,7 @@ impl AuthorityStore {
         let mut tx_to_effects_map = effects
             .into_iter()
             .flatten()
-            .map(|effects| (effects.transaction_digest, effects))
+            .map(|effects| (*effects.transaction_digest(), effects))
             .collect::<HashMap<_, _>>();
         Ok(digests
             .iter()
@@ -276,6 +283,18 @@ impl AuthorityStore {
             .perpetual_tables
             .executed_transactions_to_checkpoint
             .get(digest)?)
+    }
+
+    pub fn multi_get_transaction_checkpoint(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<(EpochId, CheckpointSequenceNumber)>>> {
+        Ok(self
+            .perpetual_tables
+            .executed_transactions_to_checkpoint
+            .multi_get(digests)?
+            .into_iter()
+            .collect())
     }
 
     /// Returns true if there are no objects in the database
@@ -1034,7 +1053,7 @@ impl AuthorityStore {
         };
 
         // We should never be reverting shared object transactions.
-        assert!(effects.shared_objects.is_empty());
+        assert!(effects.shared_objects().is_empty());
 
         let mut write_batch = self.perpetual_tables.transactions.batch();
         write_batch = write_batch
@@ -1046,27 +1065,27 @@ impl AuthorityStore {
             )?;
 
         let all_new_refs = effects
-            .mutated
+            .mutated()
             .iter()
-            .chain(effects.created.iter())
-            .chain(effects.unwrapped.iter())
+            .chain(effects.created().iter())
+            .chain(effects.unwrapped().iter())
             .map(|(r, _)| r)
-            .chain(effects.deleted.iter())
-            .chain(effects.unwrapped_then_deleted.iter())
-            .chain(effects.wrapped.iter());
+            .chain(effects.deleted().iter())
+            .chain(effects.unwrapped_then_deleted().iter())
+            .chain(effects.wrapped().iter());
         write_batch = write_batch.delete_batch(&self.perpetual_tables.parent_sync, all_new_refs)?;
 
         let all_new_object_keys = effects
-            .mutated
+            .mutated()
             .iter()
-            .chain(effects.created.iter())
-            .chain(effects.unwrapped.iter())
+            .chain(effects.created().iter())
+            .chain(effects.unwrapped().iter())
             .map(|((id, version, _), _)| ObjectKey(*id, *version));
         write_batch = write_batch
             .delete_batch(&self.perpetual_tables.objects, all_new_object_keys.clone())?;
 
         let modified_object_keys = effects
-            .modified_at_versions
+            .modified_at_versions()
             .iter()
             .map(|(id, version)| ObjectKey(*id, *version));
 

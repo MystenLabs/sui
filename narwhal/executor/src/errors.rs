@@ -57,6 +57,12 @@ pub enum SubscriberError {
     ClientExecutionError(String),
 }
 
+impl From<Box<bcs::Error>> for SubscriberError {
+    fn from(e: Box<bcs::Error>) -> Self {
+        Self::SerializationError(e.to_string())
+    }
+}
+
 impl From<Box<bincode::ErrorKind>> for SubscriberError {
     fn from(e: Box<bincode::ErrorKind>) -> Self {
         Self::SerializationError(e.to_string())

@@ -3,9 +3,6 @@
 
 import {
     fromB64,
-    getCertifiedTransaction,
-    getEvents,
-    getTransactionEffects,
     LocalTxnDataSerializer,
     type SignedTransaction,
     type SuiAddress,
@@ -20,7 +17,6 @@ import type {
     SuiMoveNormalizedFunction,
     SuiTransactionResponse,
     SignableTransaction,
-    SuiExecuteTransactionResponse,
     MoveCallTransaction,
     UnserializedSignableTransaction,
 } from '@mysten/sui.js';
@@ -158,7 +154,7 @@ export const respondToTransactionRequest = createAsyncThunk<
                     // Just a signing request, do not submit
                     txSigned = await signer.signTransaction(txRequest.tx.data);
                 } else {
-                    let response: SuiExecuteTransactionResponse;
+                    let response: SuiTransactionResponse;
                     if (
                         txRequest.tx.type === 'v2' ||
                         txRequest.tx.type === 'move-call'
@@ -188,13 +184,7 @@ export const respondToTransactionRequest = createAsyncThunk<
                         );
                     }
 
-                    txResult = {
-                        certificate: getCertifiedTransaction(response)!,
-                        effects: getTransactionEffects(response)!,
-                        events: getEvents(response)!,
-                        timestamp_ms: null,
-                        parsed_data: null,
-                    };
+                    txResult = response;
                 }
             } catch (e) {
                 tsResultError = (e as Error).message;

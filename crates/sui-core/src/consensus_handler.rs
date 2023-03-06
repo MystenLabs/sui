@@ -123,7 +123,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                 for serialized_transaction in batch.transactions {
                     bytes += serialized_transaction.len();
 
-                    let transaction = match bincode::deserialize::<ConsensusTransaction>(
+                    let transaction = match bcs::from_bytes::<ConsensusTransaction>(
                         &serialized_transaction,
                     ) {
                         Ok(transaction) => transaction,

@@ -44,6 +44,7 @@ pub struct DynamicFieldName {
     #[serde_as(as = "Readable<DisplayFromStr, _>")]
     pub type_: TypeTag,
     // Bincode does not like serde_json::Value, rocksdb will not insert the value without serializing value as string.
+    // TODO: investigate if this can be removed after switch to BCS.
     #[schemars(with = "Value")]
     #[serde_as(as = "Readable<_, DisplayFromStr>")]
     pub value: Value,

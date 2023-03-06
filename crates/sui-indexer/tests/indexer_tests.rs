@@ -81,6 +81,10 @@ impl IndexerStore for InMemoryIndexerStore {
         todo!()
     }
 
+    fn get_latest_move_call_sequence_number(&self) -> Result<i64, IndexerError> {
+        todo!()
+    }
+
     fn get_latest_transaction_sequence_number(&self) -> Result<i64, IndexerError> {
         todo!()
     }
@@ -92,7 +96,15 @@ impl IndexerStore for InMemoryIndexerStore {
     fn get_transaction_sequence_by_digest(
         &self,
         _txn_digest: Option<String>,
-        _reverse: bool,
+        _is_descending: bool,
+    ) -> Result<i64, IndexerError> {
+        todo!()
+    }
+
+    fn get_move_call_sequence_by_digest(
+        &self,
+        _txn_digest: Option<String>,
+        _is_descending: bool,
     ) -> Result<i64, IndexerError> {
         todo!()
     }
@@ -101,7 +113,7 @@ impl IndexerStore for InMemoryIndexerStore {
         &self,
         _start_sequence: i64,
         _limit: usize,
-        _reverse: bool,
+        _is_descending: bool,
     ) -> Result<Vec<String>, IndexerError> {
         todo!()
     }
@@ -111,7 +123,7 @@ impl IndexerStore for InMemoryIndexerStore {
         _object_id: String,
         _start_sequence: i64,
         _limit: usize,
-        _reverse: bool,
+        _is_descending: bool,
     ) -> Result<Vec<String>, IndexerError> {
         todo!()
     }
@@ -121,7 +133,19 @@ impl IndexerStore for InMemoryIndexerStore {
         _sender_address: String,
         _start_sequence: i64,
         _limit: usize,
-        _reverse: bool,
+        _is_descending: bool,
+    ) -> Result<Vec<String>, IndexerError> {
+        todo!()
+    }
+
+    fn get_transaction_digest_page_by_move_call(
+        &self,
+        _package: String,
+        _module: Option<String>,
+        _function: Option<String>,
+        _start_sequence: i64,
+        _limit: usize,
+        _is_descending: bool,
     ) -> Result<Vec<String>, IndexerError> {
         todo!()
     }
@@ -131,7 +155,7 @@ impl IndexerStore for InMemoryIndexerStore {
         _recipient_address: String,
         _start_sequence: i64,
         _limit: usize,
-        _reverse: bool,
+        _is_descending: bool,
     ) -> Result<Vec<String>, IndexerError> {
         todo!()
     }
