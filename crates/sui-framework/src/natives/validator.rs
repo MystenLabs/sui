@@ -10,7 +10,7 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use sui_types::sui_system_state::ValidatorMetadata;
+use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadata;
 
 pub fn validate_metadata_bcs(
     _context: &mut NativeContext,

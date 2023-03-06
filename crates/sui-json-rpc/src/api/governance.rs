@@ -11,7 +11,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::committee::EpochId;
 use sui_types::governance::DelegatedStake;
 
-use sui_types::sui_system_state::ValidatorMetadata;
+use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadata;
 
 #[open_rpc(namespace = "sui", tag = "Governance Read API")]
 #[rpc(server, client, namespace = "sui")]

@@ -11,7 +11,7 @@ use sui_json_rpc_types::{SuiCommittee, SuiSystemStateRpc};
 use sui_open_rpc::Module;
 use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::governance::DelegatedStake;
-use sui_types::sui_system_state::ValidatorMetadata;
+use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadata;
 
 pub(crate) struct GovernanceReadApi {
     fullnode: HttpClient,
