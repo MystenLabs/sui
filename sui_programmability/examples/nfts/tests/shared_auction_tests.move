@@ -31,7 +31,7 @@ module nfts::shared_auction_tests {
     // Initializes the "state of the world" that mimics what should
     // be available in Sui genesis state (e.g., mints and distributes
     // coins to users).
-    fun init(ctx: &mut TxContext, bidders: vector<address>) {
+    fun init_bidders(ctx: &mut TxContext, bidders: vector<address>) {
         while (!vector::is_empty(&bidders)) {
             let bidder = vector::pop_back(&mut bidders);
             let coin = coin::mint_for_testing<SUI>(COIN_VALUE, ctx);
@@ -52,7 +52,7 @@ module nfts::shared_auction_tests {
             let bidders = vector::empty();
             vector::push_back(&mut bidders, bidder1);
             vector::push_back(&mut bidders, bidder2);
-            init(test_scenario::ctx(scenario), bidders);
+            init_bidders(test_scenario::ctx(scenario), bidders);
         };
 
         // a transaction by the item owner to put it for auction
