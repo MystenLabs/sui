@@ -155,7 +155,7 @@ export class Coin {
     }
 
     let sum = BigInt(0);
-    let ret: ObjectDataFull[] = [];
+    let ret: CoinStruct[] = [];
     while (sum < total) {
       // prefer to add a coin with smallest sufficient balance
       const target = amount - sum;
