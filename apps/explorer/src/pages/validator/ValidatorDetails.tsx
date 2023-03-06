@@ -66,12 +66,19 @@ function ValidatorDetails() {
             <div className="flex flex-col flex-nowrap gap-5 md:flex-row md:gap-0">
                 <ValidatorMeta validatorData={validatorData} />
             </div>
-            <div className="mt-5 md:mt-8">
+            <div className="mt-5 flex flex-col gap-5 md:mt-8">
                 <ValidatorStats
                     validatorData={validatorData}
                     epoch={data.epoch}
                     epochRewards={validatorRewards}
                 />
+                {/* todo: include this banner for at-risk validators
+                <Banner variant="error" fullWidth>
+                    <Text variant="p2/semibold">At Risk</Text>
+                    This validator will be removed from the Sui network of
+                    validators if the SUI staked falls below 25 million for 7
+                    consecutive epochs.
+                </Banner> */}
             </div>
         </div>
     );
