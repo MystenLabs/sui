@@ -4678,7 +4678,7 @@
         ]
       },
       "MoveOption_for_uint64": {
-        "description": "Rust version of the Move std::option::Option type. Putting it in this file because it's only used here.",
+        "description": "Rust version of the Move std::option::Option type.",
         "type": "object",
         "required": [
           "vec"
@@ -6436,7 +6436,7 @@
         }
       },
       "Table": {
-        "description": "Rust version of the Move sui::table::Table type. Putting it here since we only use it in sui_system in the framework.",
+        "description": "Rust version of the Move sui::table::Table type.",
         "type": "object",
         "required": [
           "id",
@@ -6454,7 +6454,7 @@
         }
       },
       "TableVec": {
-        "description": "Rust version of the Move sui::table::Table type. Putting it here since we only use it in sui_system in the framework.",
+        "description": "Rust version of the Move sui::table::Table type.",
         "type": "object",
         "required": [
           "contents"

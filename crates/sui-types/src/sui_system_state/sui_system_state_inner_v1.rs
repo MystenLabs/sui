@@ -1,37 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::balance::Balance;
 use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
-use crate::collection_types::{VecMap, VecSet};
-use crate::committee::{Committee, CommitteeWithNetAddresses, EpochId, ProtocolVersion, StakeUnit};
+use crate::collection_types::{MoveOption, Table, TableVec, VecMap, VecSet};
+use crate::committee::{Committee, CommitteeWithNetAddresses, ProtocolVersion, StakeUnit};
 use crate::crypto::AuthorityPublicKeyBytes;
-use crate::dynamic_field::{derive_dynamic_field_id, Field};
-use crate::error::SuiError;
-use crate::storage::ObjectStore;
-use crate::{balance::Balance, id::UID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
 use anemo::PeerId;
 use anyhow::Result;
-use enum_dispatch::enum_dispatch;
 use fastcrypto::traits::ToFromBytes;
-use move_core_types::language_storage::TypeTag;
-use move_core_types::value::MoveTypeLayout;
-use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
-use move_vm_types::values::Value;
 use multiaddr::Multiaddr;
 use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
-use tracing::error;
 
-const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
-pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
-pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
-pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch_safe_mode");
-pub const CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME: &IdentStr =
-    ident_str!("consensus_commit_prologue");
-
-pub const INIT_SYSTEM_STATE_VERSION: u64 = 1;
+use super::SuiSystemStateTrait;
 
 const E_METADATA_INVALID_PUBKEY: u64 = 1;
 const E_METADATA_INVALID_NET_PUBKEY: u64 = 2;
@@ -47,19 +31,6 @@ pub struct SystemParameters {
     pub min_validator_stake: u64,
     pub max_validator_candidate_count: u64,
     pub governance_start_epoch: u64,
-}
-
-/// Rust version of the Move std::option::Option type.
-/// Putting it in this file because it's only used here.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
-pub struct MoveOption<T> {
-    pub vec: Vec<T>,
-}
-
-impl<T> MoveOption<T> {
-    pub fn empty() -> Self {
-        Self { vec: vec![] }
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
@@ -262,62 +233,6 @@ pub struct PendingWithdrawEntry {
     withdrawn_pool_tokens: Balance,
 }
 
-/// Rust version of the Move sui::table::Table type. Putting it here since
-/// we only use it in sui_system in the framework.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
-pub struct TableVec {
-    pub contents: Table,
-}
-
-impl Default for TableVec {
-    fn default() -> Self {
-        TableVec {
-            contents: Table {
-                id: ObjectID::from(SuiAddress::ZERO),
-                size: 0,
-            },
-        }
-    }
-}
-
-/// Rust version of the Move sui::table::Table type. Putting it here since
-/// we only use it in sui_system in the framework.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
-pub struct Table {
-    pub id: ObjectID,
-    pub size: u64,
-}
-
-impl Default for Table {
-    fn default() -> Self {
-        Table {
-            id: ObjectID::from(SuiAddress::ZERO),
-            size: 0,
-        }
-    }
-}
-
-/// Rust version of the Move sui::linked_table::LinkedTable type. Putting it here since
-/// we only use it in sui_system in the framework.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
-pub struct LinkedTable<K> {
-    pub id: ObjectID,
-    pub size: u64,
-    pub head: MoveOption<K>,
-    pub tail: MoveOption<K>,
-}
-
-impl<K> Default for LinkedTable<K> {
-    fn default() -> Self {
-        LinkedTable {
-            id: ObjectID::from(SuiAddress::ZERO),
-            size: 0,
-            head: MoveOption { vec: vec![] },
-            tail: MoveOption { vec: vec![] },
-        }
-    }
-}
-
 /// Rust version of the Move sui::staking_pool::StakingPool type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct StakingPool {
@@ -368,47 +283,11 @@ pub struct SuiSystemStateInnerV1 {
     // TODO: Use getters instead of all pub.
 }
 
-/// Rust version of the Move sui::sui_system::SuiSystemState type
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SuiSystemStateWrapper {
-    pub id: UID,
-    pub version: u64,
-}
-
-impl SuiSystemStateWrapper {
-    pub fn type_() -> StructTag {
-        StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
-            name: SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME.to_owned(),
-            module: SUI_SYSTEM_MODULE_NAME.to_owned(),
-            type_params: vec![],
-        }
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct StakeSubsidy {
     pub epoch_counter: u64,
     pub balance: Balance,
     pub current_epoch_amount: u64,
-}
-
-#[enum_dispatch]
-pub trait SuiSystemStateTrait {
-    fn epoch(&self) -> u64;
-    fn reference_gas_price(&self) -> u64;
-    fn protocol_version(&self) -> u64;
-    fn epoch_start_timestamp_ms(&self) -> u64;
-    fn safe_mode(&self) -> bool;
-    fn get_current_epoch_committee(&self) -> CommitteeWithNetAddresses;
-    fn get_current_epoch_narwhal_committee(&self) -> NarwhalCommittee;
-    fn get_current_epoch_narwhal_worker_cache(
-        &self,
-        transactions_address: &Multiaddr,
-    ) -> WorkerCache;
-    fn get_validator_metadata_vec(&self) -> Vec<ValidatorMetadata>;
-    fn get_current_epoch_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId>;
-    fn get_staking_pool_info(&self) -> BTreeMap<SuiAddress, (Vec<u8>, u64)>;
 }
 
 impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
@@ -593,117 +472,4 @@ impl Default for SuiSystemStateInnerV1 {
             epoch_start_timestamp_ms: 0,
         }
     }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-#[enum_dispatch(SuiSystemStateTrait)]
-pub enum SuiSystemState {
-    V1(SuiSystemStateInnerV1),
-}
-
-/// This is the fixed type used by genesis.
-pub type SuiSystemStateInnerGenesis = SuiSystemStateInnerV1;
-
-/// This is the fixed type used by benchmarking.
-pub type SuiSystemStateInnerBenchmark = SuiSystemStateInnerV1;
-
-impl SuiSystemState {
-    pub fn new_genesis(inner: SuiSystemStateInnerGenesis) -> Self {
-        Self::V1(inner)
-    }
-
-    /// Always return the version that we will be using for genesis.
-    /// Genesis always uses this version regardless of the current version.
-    pub fn into_genesis_version(self) -> SuiSystemStateInnerGenesis {
-        match self {
-            SuiSystemState::V1(inner) => inner,
-        }
-    }
-
-    pub fn into_benchmark_version(self) -> SuiSystemStateInnerBenchmark {
-        match self {
-            SuiSystemState::V1(inner) => inner,
-        }
-    }
-
-    pub fn new_for_benchmarking(inner: SuiSystemStateInnerBenchmark) -> Self {
-        Self::V1(inner)
-    }
-
-    pub fn new_for_testing(epoch: EpochId) -> Self {
-        SuiSystemState::V1(SuiSystemStateInnerV1 {
-            epoch,
-            ..Default::default()
-        })
-    }
-}
-
-impl Default for SuiSystemState {
-    fn default() -> Self {
-        SuiSystemState::V1(SuiSystemStateInnerV1::default())
-    }
-}
-
-pub fn get_sui_system_state_wrapper<S>(object_store: &S) -> Result<SuiSystemStateWrapper, SuiError>
-where
-    S: ObjectStore,
-{
-    let sui_system_object = object_store
-        .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)?
-        .ok_or(SuiError::SuiSystemStateNotFound)?;
-    let move_object = sui_system_object
-        .data
-        .try_as_move()
-        .ok_or(SuiError::SuiSystemStateNotFound)?;
-    let result = bcs::from_bytes::<SuiSystemStateWrapper>(move_object.contents())
-        .expect("Sui System State object deserialization cannot fail");
-    Ok(result)
-}
-
-// This version is used to support authority_tests::test_sui_system_state_nop_upgrade.
-pub const SUI_SYSTEM_STATE_TESTING_VERSION1: u64 = u64::MAX;
-
-pub fn get_sui_system_state<S>(object_store: &S) -> Result<SuiSystemState, SuiError>
-where
-    S: ObjectStore,
-{
-    let wrapper = get_sui_system_state_wrapper(object_store)?;
-    let inner_id = derive_dynamic_field_id(
-        wrapper.id.id.bytes,
-        &TypeTag::U64,
-        &MoveTypeLayout::U64,
-        &Value::u64(wrapper.version),
-    )
-    .expect("Sui System State object must exist");
-    let inner = object_store
-        .get_object(&inner_id)?
-        .ok_or(SuiError::SuiSystemStateNotFound)?;
-    let move_object = inner
-        .data
-        .try_as_move()
-        .ok_or(SuiError::SuiSystemStateNotFound)?;
-    match wrapper.version {
-        1 => {
-            let result =
-                bcs::from_bytes::<Field<u64, SuiSystemStateInnerV1>>(move_object.contents())
-                    .expect("Sui System State object deserialization cannot fail");
-            Ok(SuiSystemState::V1(result.value))
-        }
-        // The following case is for sim_test only to support authority_tests::test_sui_system_state_nop_upgrade.
-        #[cfg(msim)]
-        SUI_SYSTEM_STATE_TESTING_VERSION1 => {
-            let result =
-                bcs::from_bytes::<Field<u64, SuiSystemStateInnerV1>>(move_object.contents())
-                    .expect("Sui System State object deserialization cannot fail");
-            Ok(SuiSystemState::V1(result.value))
-        }
-        _ => {
-            error!("Unsupported Sui System State version: {}", wrapper.version);
-            Err(SuiError::SuiSystemStateUnexpectedVersion)
-        }
-    }
-}
-
-pub fn get_sui_system_state_version(_protocol_version: ProtocolVersion) -> u64 {
-    INIT_SYSTEM_STATE_VERSION
 }

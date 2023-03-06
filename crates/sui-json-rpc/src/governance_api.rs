@@ -5,6 +5,7 @@ use jsonrpsee::core::RpcResult;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_json_rpc_types::{SuiCommittee, SuiSystemStateRpc};
+use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadata;
 
 use crate::api::GovernanceReadApiServer;
 use crate::error::Error;
@@ -16,7 +17,7 @@ use sui_open_rpc::Module;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::EpochId;
 use sui_types::governance::{DelegatedStake, Delegation, DelegationStatus, StakedSui};
-use sui_types::sui_system_state::{SuiSystemStateTrait, ValidatorMetadata};
+use sui_types::sui_system_state::SuiSystemStateTrait;
 
 pub struct GovernanceReadApi {
     state: Arc<AuthorityState>,
