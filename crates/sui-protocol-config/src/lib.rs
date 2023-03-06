@@ -618,7 +618,7 @@ impl ProtocolConfig {
                 max_object_vec_argument_size: Some(128),
                 max_coins: Some(1024),
                 max_pay_recipients: Some(1024),
-                max_programmable_tx_commands: Some(128),
+                max_programmable_tx_commands: Some(1024),
                 move_binary_format_version: Some(6),
                 max_move_object_size: Some(250 * 1024),
                 max_move_package_size: Some(100 * 1024),
