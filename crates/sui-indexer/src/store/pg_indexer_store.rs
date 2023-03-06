@@ -11,9 +11,7 @@ use crate::schema::checkpoints::{checkpoint_digest, sequence_number};
 use crate::schema::move_calls::dsl as move_calls_dsl;
 use crate::schema::packages::{author, module_names, package_content, package_id};
 use crate::schema::transactions::{dsl, transaction_digest};
-use crate::schema::{
-    addresses, events, move_calls, objects, packages, transactions,
-};
+use crate::schema::{addresses, events, move_calls, objects, packages, transactions};
 use crate::store::indexer_store::TemporaryCheckpointStore;
 use crate::store::{IndexerStore, TemporaryEpochStore};
 use crate::{get_pg_pool_connection, PgConnectionPool};
