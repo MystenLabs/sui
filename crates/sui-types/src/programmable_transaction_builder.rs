@@ -16,6 +16,7 @@ use crate::{
         ProgrammableMoveCall, ProgrammableTransaction, SingleTransactionKind, TransactionData,
         TransactionKind, TransferObject, TransferSui,
     },
+    move_package::PACKAGE_MODULE_NAME,
     SUI_FRAMEWORK_OBJECT_ID,
 };
 
@@ -201,7 +202,7 @@ impl ProgrammableTransactionBuilder {
         self.commands
             .push(Command::MoveCall(Box::new(ProgrammableMoveCall {
                 package: SUI_FRAMEWORK_OBJECT_ID,
-                module: ident_str!("package").to_owned(),
+                module: PACKAGE_MODULE_NAME.to_owned(),
                 function: ident_str!("make_immutable").to_owned(),
                 type_arguments: vec![],
                 arguments: vec![cap],
