@@ -311,7 +311,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
         let data = |sender, gas| {
             let mut builder = ProgrammableTransactionBuilder::new();
-            builder.command(Command::Publish(vec![module_bytes]));
+            builder.publish(vec![module_bytes]);
             let pt = builder.finish();
             TransactionData::new_programmable_with_dummy_gas_price(
                 sender,
