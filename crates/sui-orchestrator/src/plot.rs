@@ -15,6 +15,8 @@ use plotters::{
 
 use crate::{measurement::MeasurementsCollection, settings::Settings};
 
+/// The set of parameters that uniquely identify a set of measurements. This id avoids
+/// plotting incomparable measurements on the same graph.
 #[derive(Hash, PartialEq, Eq)]
 pub struct MeasurementsCollectionId {
     shared_objects_ratio: u16,
@@ -61,9 +63,13 @@ impl From<MeasurementsCollection> for MeasurementsCollectionId {
     }
 }
 
+/// A data point of the plot.
 struct PlotDataPoint {
+    /// The x coordinate.
     x: f32,
+    /// The y coordinate.
     y: f32,
+    /// The y-stdev to plot as error bars.
     stdev: f32,
 }
 
@@ -77,14 +83,20 @@ impl From<&MeasurementsCollection> for PlotDataPoint {
     }
 }
 
+/// Plot latency-throughput graphs.
 pub struct Plotter {
+    /// The benchmarks settings.
     settings: Settings,
+    /// The collection of measurements to plot.
     measurements: HashMap<MeasurementsCollectionId, Vec<MeasurementsCollection>>,
+    /// The limit of the x-axis.
     x_lim: Option<f32>,
+    /// THe limit of the y-axis.
     y_lim: Option<f32>,
 }
 
 impl Plotter {
+    /// Make a new plotter from the benchmarks settings.
     pub fn new(settings: Settings) -> Self {
         Self {
             settings,
@@ -94,17 +106,20 @@ impl Plotter {
         }
     }
 
+    /// Set the limit of the x-axis.
     pub fn with_x_lim(mut self, x_lim: Option<f32>) -> Self {
         self.x_lim = x_lim;
         self
     }
 
+    /// Set the limit of the y-axis.
     pub fn with_y_lim(mut self, y_lim: Option<f32>) -> Self {
         self.y_lim = y_lim;
         self
     }
 
-    pub fn collect_measurements(mut self) -> Self {
+    /// Load all possible measurements from the results directory specified in the settings.
+    pub fn load_measurements(mut self) -> Self {
         let mut path = self.settings.results_directory.clone();
         path.push("*");
         path.set_extension("json");
@@ -128,6 +143,7 @@ impl Plotter {
         self
     }
 
+    /// Plot a latency-throughput graphs.
     pub fn plot_latency_throughput(&self) -> Result<()> {
         for (id, collections) in &self.measurements {
             let mut sorted = collections.clone();
@@ -145,6 +161,7 @@ impl Plotter {
         id: &MeasurementsCollectionId,
         data_points: Vec<PlotDataPoint>,
     ) -> Result<()> {
+        // Set the directory to save plots and compute the plot's filename.
         let mut filename = PathBuf::new();
         filename.push(&self.settings.results_directory);
         filename.push("plots");
@@ -152,6 +169,7 @@ impl Plotter {
         filename.push(format!("latency-{id:?}"));
         filename.set_extension("png");
 
+        // Prepare the plot frame.
         let root = BitMapBackend::new(&filename, (640, 320)).into_drawing_area();
         root.fill(&WHITE)?;
         let root = root.margin(10, 10, 10, 10);
@@ -178,6 +196,7 @@ impl Plotter {
             .y_label_area_size(30)
             .build_cartesian_2d(0.0..x_lim, 0.0..y_lim)?;
 
+        // Configure the axis.
         chart
             .configure_mesh()
             .x_desc("\nThroughput (tx/s)")
@@ -186,17 +205,20 @@ impl Plotter {
             .y_label_formatter(&|x| format!("{}", x))
             .draw()?;
 
+        // Draw lines and error bars between data points.
         chart.draw_series(data_points.iter().map(|data| {
             let yl = (data.y - data.stdev).max(0.0);
             let yh = data.y + data.stdev;
             ErrorBar::new_vertical(data.x, yl, data.y, yh, RED.filled(), 10)
         }))?;
 
+        // Plot the measurements points.
         chart.draw_series(LineSeries::new(
             data_points.iter().map(|data| (data.x, data.y)),
             &RED,
         ))?;
 
+        // Save the plot to file.
         root.present()?;
         Ok(())
     }

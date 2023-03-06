@@ -10,12 +10,12 @@ use prettytable::{format, row, Table};
 use prometheus_parse::Scrape;
 use serde::{Deserialize, Serialize};
 
-use crate::settings::Settings;
+use crate::{benchmark::BenchmarkParameters, settings::Settings};
 
-use super::benchmark::BenchmarkParameters;
-
+/// The identifier of prometheus latency buckets.
 type BucketId = String;
 
+/// A snapshot measurement at a given time.
 #[derive(Serialize, Deserialize, Default, Clone)]
 pub struct Measurement {
     /// Duration since the beginning of the benchmark.
@@ -31,6 +31,7 @@ pub struct Measurement {
 }
 
 impl Measurement {
+    /// Make a new measurement.
     pub fn new(
         benchmark_timestamp: Duration,
         buckets: HashMap<BucketId, usize>,
@@ -47,11 +48,13 @@ impl Measurement {
         }
     }
 
+    /// Compute the tps.
     pub fn tps(&self) -> u64 {
         let tps = self.count.checked_div(self.timestamp.as_secs() as usize);
         tps.unwrap_or_default() as u64
     }
 
+    /// Compute the average latency.
     pub fn average_latency(&self) -> Duration {
         self.sum.checked_div(self.count as u32).unwrap_or_default()
     }
@@ -82,17 +85,23 @@ impl Measurement {
     }
 }
 
+/// The identifier of the scrapers collecting the prometheus metrics.
 type ScraperId = usize;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct MeasurementsCollection {
+    /// The machine / instance type.
     pub machine_specs: String,
+    /// The commit of the codebase.
     pub commit: String,
+    /// The benchmark parameters of the current run.
     pub parameters: BenchmarkParameters,
+    /// The data collected by each scraper.
     scrapers: HashMap<ScraperId, Vec<Measurement>>,
 }
 
 impl MeasurementsCollection {
+    /// Create a new (empty) collection of measurements.
     pub fn new(settings: &Settings, parameters: BenchmarkParameters) -> Self {
         Self {
             machine_specs: settings.specs.clone(),
@@ -102,16 +111,20 @@ impl MeasurementsCollection {
         }
     }
 
+    /// Load a collection of measurement from a json file.
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, std::io::Error> {
         let data = fs::read(path)?;
         let measurements: Self = serde_json::from_slice(data.as_slice())?;
         Ok(measurements)
     }
 
+    /// Return the transaction (input) load of the benchmark.
     pub fn transaction_load(&self) -> usize {
         self.parameters.load
     }
 
+    /// Add a new measurement to the collection. The measurement is deduced from the text
+    /// exposed by prometheus.
     pub fn add(&mut self, scraper_id: ScraperId, text: &str) {
         let br = std::io::BufReader::new(text.as_bytes());
         let parsed = Scrape::parse(br.lines()).unwrap();
@@ -219,6 +232,7 @@ impl MeasurementsCollection {
             .unwrap_or_default()
     }
 
+    /// Save the collection of measurements as a json file.
     pub fn save<P: AsRef<Path>>(&self, path: P) {
         let json = serde_json::to_string_pretty(self).expect("Cannot serialize metrics");
         let mut file = PathBuf::from(path.as_ref());
@@ -226,7 +240,8 @@ impl MeasurementsCollection {
         fs::write(file, json).unwrap();
     }
 
-    pub fn dislay_summary(&self) {
+    /// Display a summary of the measurements.
+    pub fn display_summary(&self) {
         let duration = self.benchmark_duration();
         let total_tps = self.aggregate_tps();
         let average_latency = self.aggregate_average_latency();

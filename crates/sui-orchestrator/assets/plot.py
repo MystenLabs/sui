@@ -15,7 +15,7 @@ def aggregate_tps(measurement):
     for data in measurement['scrapers'].values():
         count = float(data[-1]['count'])
         duration = float(data[-1]['timestamp']['secs'])
-        tps += [count / duration] if duration != 0 else 0
+        tps += [(count / duration) if duration != 0 else 0]
     return sum(tps)
 
 
@@ -210,7 +210,7 @@ if __name__ == "__main__":
         help='The number of faults to plot on the same graph'
     )
     parser.add_argument(
-        '--y-max', type=int, default=None,
+        '--y-max', type=float, default=None,
         help='The maximum value of the y-axis'
     )
     parser.add_argument(

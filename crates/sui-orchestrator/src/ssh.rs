@@ -10,21 +10,27 @@ use ssh2::{Channel, Session};
 use tokio::net::TcpStream;
 
 use crate::{
+    client::Instance,
     ensure,
     error::{SshError, SshResult},
 };
 
-use super::client::Instance;
-
+/// The command to execute on all specified remote machines.
 #[derive(Clone)]
 pub struct SshCommand<C: Fn(usize) -> String> {
+    /// The shell command to execute, parametrized by instance index.
     pub command: C,
+    /// Whether to run the command in the background (and return immediately). Commands
+    /// running in the background are identified by a unique id.
     pub background: Option<String>,
+    /// The path from where to execute the command.
     pub path: Option<PathBuf>,
+    /// The log file to redirect all stdout and stderr.
     pub log_file: Option<PathBuf>,
 }
 
 impl<C: Fn(usize) -> String> SshCommand<C> {
+    /// Create a new ssh command.
     pub fn new(command: C) -> Self {
         Self {
             command,
@@ -34,21 +40,25 @@ impl<C: Fn(usize) -> String> SshCommand<C> {
         }
     }
 
+    /// Set id of the command and indicate that it should run in the background.
     pub fn run_background(mut self, id: String) -> Self {
         self.background = Some(id);
         self
     }
 
+    /// Set the path from where to execute the command.
     pub fn with_execute_from_path(mut self, path: PathBuf) -> Self {
         self.path = Some(path);
         self
     }
 
+    /// Set the log file where to redirect stdout and stderr.
     pub fn with_log_file(mut self, path: PathBuf) -> Self {
         self.log_file = Some(path);
         self
     }
 
+    /// Convert the command into a string.
     pub fn stringify(&self, index: usize) -> String {
         let mut str = (self.command)(index);
         if let Some(log_file) = &self.log_file {
@@ -69,13 +79,18 @@ impl<C: Fn(usize) -> String> SshCommand<C> {
 
 #[derive(Clone)]
 pub struct SshConnectionManager {
+    /// The ssh username.
     username: String,
+    /// The ssh primate key to connect to the instances.
     private_key_file: PathBuf,
+    /// The timeout value of the connection.
     timeout: Option<Duration>,
+    /// The number of retries before giving up to execute the command.
     retries: usize,
 }
 
 impl SshConnectionManager {
+    /// Create a new ssh manager from the instances username and private keys.
     pub fn new(username: String, private_key_file: PathBuf) -> Self {
         Self {
             username,
@@ -85,11 +100,13 @@ impl SshConnectionManager {
         }
     }
 
+    /// Set a timeout duration for the connections.
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
         self
     }
 
+    /// Set the maximum number of times to retries to establish a connection and execute commands.
     pub fn with_retries(mut self, retries: usize) -> Self {
         self.retries = retries;
         self
@@ -148,8 +165,11 @@ impl SshConnectionManager {
     }
 }
 
+/// Representation of an ssh connection.
 pub struct SshConnection {
+    /// The ssh session.
     session: Session,
+    /// The host address.
     address: SocketAddr,
 }
 
@@ -192,6 +212,7 @@ impl SshConnection {
         self
     }
 
+    /// Make a useful session error from the lower level error message.
     fn make_session_error(&self, error: ssh2::Error) -> SshError {
         SshError::SessionError {
             address: self.address.clone(),
@@ -199,6 +220,7 @@ impl SshConnection {
         }
     }
 
+    /// Make a useful connection error from the lower level error message.
     fn make_connection_error(&self, error: std::io::Error) -> SshError {
         SshError::ConnectionError {
             address: self.address.clone(),

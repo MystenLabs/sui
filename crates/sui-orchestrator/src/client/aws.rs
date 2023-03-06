@@ -205,11 +205,15 @@ impl ServerProviderClient for AwsClient {
         }
 
         for (region, client) in &self.clients {
-            client
-                .start_instances()
-                .set_instance_ids(instance_ids.remove(&region.to_string()))
-                .send()
-                .await?;
+            let ids = instance_ids.remove(&region.to_string());
+            println!("{region}: {ids:?}");
+            if ids.is_some() {
+                client
+                    .start_instances()
+                    .set_instance_ids(ids)
+                    .send()
+                    .await?;
+            }
         }
         Ok(())
     }

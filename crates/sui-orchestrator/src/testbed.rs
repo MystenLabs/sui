@@ -186,6 +186,7 @@ impl<C: ServerProviderClient> Testbed<C> {
         }
 
         // Start instances.
+        println!("availbe: {available:?}");
         self.client.start_instances(available.into_iter()).await?;
 
         // Wait until the instances are started.

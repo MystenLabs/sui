@@ -551,7 +551,7 @@ impl Orchestrator {
 
             // Wait for the benchmark to terminate. Then save the results and print a summary.
             let aggregator = self.collect_metrics(&parameters).await?;
-            aggregator.dislay_summary();
+            aggregator.display_summary();
             generator.register_result(aggregator);
 
             // Kill the nodes and clients (without deleting the log files).
