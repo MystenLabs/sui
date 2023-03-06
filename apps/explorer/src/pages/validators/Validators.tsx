@@ -27,10 +27,11 @@ const APY_DECIMALS = 3;
 
 const NodeMap = lazy(() => import('../../components/node-map'));
 
-function validatorsTableData(
+export function validatorsTableData(
     validators: Validator[],
     epoch: number,
-    validatorsEvents: SuiEventEnvelope[]
+    validatorsEvents: SuiEventEnvelope[],
+    minimumStake: number
 ) {
     return {
         data: validators.map((validator) => {
@@ -54,6 +55,7 @@ function validatorsTableData(
                 img: img,
                 address: validator.metadata.sui_address,
                 lastReward: event?.fields.stake_rewards || 0,
+                atRisk: totalStake < minimumStake,
             };
         }),
         columns: [
@@ -150,6 +152,22 @@ function validatorsTableData(
                     );
                 },
             },
+            {
+                header: 'Status',
+                accessorKey: 'atRisk',
+                cell: (props: any) => {
+                    const atRisk = props.getValue();
+                    return atRisk ? (
+                        <Text color="issue" variant="bodySmall/medium">
+                            At Risk
+                        </Text>
+                    ) : (
+                        <Text variant="bodySmall/medium" color="steel-darker">
+                            Active
+                        </Text>
+                    );
+                },
+            },
         ],
     };
 }
@@ -217,7 +235,8 @@ function ValidatorPageResult() {
         return validatorsTableData(
             validators,
             +data.epoch,
-            validatorEvents.data
+            validatorEvents.data,
+            data.parameters.min_validator_stake
         );
     }, [validatorEvents, data]);
 
