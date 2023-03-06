@@ -166,6 +166,11 @@ module fungible_tokens::treasury_lock {
     }
 }
 
+/*
+
+// TODO Re-enable when it's possible to test code using one-time
+// witnesses in `test_scenario`.
+
 #[test_only]
 module fungible_tokens::treasury_lock_tests {
     use std::option;
@@ -443,3 +448,4 @@ module fungible_tokens::treasury_lock_tests {
         test_scenario::end(scenario_);
     }
 }
+*/
