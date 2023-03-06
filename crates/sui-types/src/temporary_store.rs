@@ -11,7 +11,7 @@ use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use tracing::trace;
 
 use crate::coin::{check_coins, update_input_coins, Coin};
@@ -118,6 +118,7 @@ pub struct TemporaryStore<S> {
     events: Vec<Event>,
     gas_charged: Option<(SuiAddress, ObjectID, GasCostSummary)>,
     storage_rebate_rate: u64,
+    protocol_version: ProtocolVersion,
 }
 
 impl<S> TemporaryStore<S> {
@@ -143,6 +144,7 @@ impl<S> TemporaryStore<S> {
             events: Vec::new(),
             gas_charged: None,
             storage_rebate_rate: protocol_config.storage_rebate_rate(),
+            protocol_version: protocol_config.version,
         }
     }
 
@@ -584,6 +586,7 @@ impl<S> TemporaryStore<S> {
             modified_at_versions.push((*id, *version));
         });
 
+        let protocol_version = self.protocol_version;
         let inner = self.into_inner();
 
         // In the case of special transactions that don't require a gas object,
@@ -628,27 +631,28 @@ impl<S> TemporaryStore<S> {
             }
         }
 
-        let effects = TransactionEffects {
+        let effects = TransactionEffects::new_from_execution(
+            protocol_version,
             status,
-            executed_epoch: epoch,
-            gas_used: gas_cost_summary,
+            epoch,
+            gas_cost_summary,
             modified_at_versions,
-            shared_objects: shared_object_refs,
-            transaction_digest: *transaction_digest,
+            shared_object_refs,
+            *transaction_digest,
             created,
             mutated,
             unwrapped,
             deleted,
             unwrapped_then_deleted,
             wrapped,
-            gas_object: updated_gas_object_info,
-            events_digest: if inner.events.data.is_empty() {
+            updated_gas_object_info,
+            if inner.events.data.is_empty() {
                 None
             } else {
                 Some(inner.events.digest())
             },
-            dependencies: transaction_dependencies,
-        };
+            transaction_dependencies,
+        );
         (inner, effects)
     }
 

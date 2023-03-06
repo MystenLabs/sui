@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '@mysten/core';
-import {
-    type GetObjectDataResponse,
-    normalizeSuiAddress,
-} from '@mysten/sui.js';
+import { type SuiObjectResponse, normalizeSuiAddress } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 export function useGetValidators() {
@@ -20,12 +17,19 @@ export function useGetSystemObject() {
 
 export function useGetObject(
     objectId: string
-): UseQueryResult<GetObjectDataResponse, unknown> {
+): UseQueryResult<SuiObjectResponse, unknown> {
     const rpc = useRpcClient();
     const normalizedObjId = normalizeSuiAddress(objectId);
     const response = useQuery(
         ['object', normalizedObjId],
-        async () => rpc.getObject(normalizedObjId),
+        async () =>
+            rpc.getObject(normalizedObjId, {
+                showType: true,
+                showContent: true,
+                showOwner: true,
+                showPreviousTransaction: true,
+                showStorageRebate: true,
+            }),
         { enabled: !!objectId }
     );
 

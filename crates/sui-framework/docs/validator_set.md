@@ -1306,6 +1306,7 @@ is removed from <code>validators</code> and its staking pool is put into the <co
     self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
     ctx: &<b>mut</b> TxContext,
 ) {
+    <b>let</b> new_epoch = <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) + 1;
     <a href="validator_set.md#0x2_validator_set_sort_removal_list">sort_removal_list</a>(&<b>mut</b> self.pending_removals);
     <b>while</b> (!<a href="_is_empty">vector::is_empty</a>(&self.pending_removals)) {
         <b>let</b> index = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> self.pending_removals);
@@ -1314,7 +1315,7 @@ is removed from <code>validators</code> and its staking pool is put into the <co
         <a href="table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> self.staking_pool_mappings, validator_pool_id);
         self.total_stake = self.total_stake - <a href="validator.md#0x2_validator_total_stake_amount">validator::total_stake_amount</a>(&<a href="validator.md#0x2_validator">validator</a>);
         // Deactivate the <a href="validator.md#0x2_validator">validator</a> and its staking pool
-        <a href="validator.md#0x2_validator_deactivate">validator::deactivate</a>(&<b>mut</b> <a href="validator.md#0x2_validator">validator</a>, ctx);
+        <a href="validator.md#0x2_validator_deactivate">validator::deactivate</a>(&<b>mut</b> <a href="validator.md#0x2_validator">validator</a>, new_epoch);
         <a href="table.md#0x2_table_add">table::add</a>(&<b>mut</b> self.inactive_validators, validator_pool_id, <a href="validator.md#0x2_validator">validator</a>);
     }
 }

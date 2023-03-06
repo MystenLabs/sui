@@ -31,9 +31,9 @@ use sui_types::gas::SuiGasStatus;
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::intent::{Intent, IntentMessage, IntentScope};
 use sui_types::message_envelope::Message;
-use sui_types::messages::Transaction;
-use sui_types::messages::{CallArg, TransactionEffects};
-use sui_types::messages::{InputObjects, TransactionEvents};
+use sui_types::messages::{
+    CallArg, InputObjects, Transaction, TransactionEffects, TransactionEvents,
+};
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
 };
@@ -127,29 +127,33 @@ impl Genesis {
     }
 
     pub fn validator_set(&self) -> Vec<ValidatorInfo> {
-        let mut infos = Vec::new();
-        for validator in &self.sui_system_object().validators.active_validators {
-            let info = ValidatorInfo {
-                name: validator.metadata.name.clone(),
-                account_key: AccountsPublicKey::Ed25519(validator.metadata.network_key()), //TODO this is wrong and we shouldn't have this here
-                protocol_key: validator.metadata.protocol_key(),
-                worker_key: validator.metadata.worker_key(),
-                network_key: validator.metadata.network_key(),
-                gas_price: validator.gas_price,
-                commission_rate: validator.commission_rate,
-                network_address: validator.metadata.network_address().unwrap(),
-                p2p_address: validator.metadata.p2p_address().unwrap(),
-                narwhal_primary_address: validator.metadata.narwhal_primary_address().unwrap(),
-                narwhal_worker_address: validator.metadata.narwhal_worker_address().unwrap(),
-                description: validator.metadata.description.clone(),
-                image_url: validator.metadata.image_url.clone(),
-                project_url: validator.metadata.project_url.clone(),
-            };
-
-            infos.push(info);
-        }
-
-        infos
+        self.sui_system_object()
+            .validators
+            .active_validators
+            .iter()
+            .map(|validator| {
+                let metadata = validator
+                    .metadata
+                    .verify()
+                    .expect("Genesis validator metadata must be valid");
+                ValidatorInfo {
+                    name: metadata.name,
+                    account_key: AccountsPublicKey::Ed25519(metadata.network_pubkey.clone()), //TODO this is wrong and we shouldn't have this here
+                    protocol_key: (&metadata.protocol_pubkey).into(),
+                    worker_key: metadata.worker_pubkey,
+                    network_key: metadata.network_pubkey,
+                    gas_price: validator.gas_price,
+                    commission_rate: validator.commission_rate,
+                    network_address: metadata.net_address,
+                    p2p_address: metadata.p2p_address,
+                    narwhal_primary_address: metadata.primary_address,
+                    narwhal_worker_address: metadata.worker_address,
+                    description: metadata.description,
+                    image_url: metadata.image_url,
+                    project_url: metadata.project_url,
+                }
+            })
+            .collect()
     }
 
     pub fn committee(&self) -> SuiResult<Committee> {

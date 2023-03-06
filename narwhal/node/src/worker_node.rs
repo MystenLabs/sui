@@ -4,7 +4,7 @@
 use crate::metrics::new_registry;
 use crate::{try_join_all, FuturesUnordered, NodeError};
 use arc_swap::{ArcSwap, ArcSwapOption};
-use config::{Committee, Parameters, SharedWorkerCache, WorkerId};
+use config::{Committee, Parameters, WorkerCache, WorkerId};
 use crypto::{NetworkKeyPair, PublicKey};
 use mysten_metrics::{RegistryID, RegistryService};
 use prometheus::Registry;
@@ -47,7 +47,7 @@ impl WorkerNodeInner {
         // The committee information.
         committee: Committee,
         // The worker information cache.
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         // The node's store //TODO: replace this by a path so the method can open and independent storage
         store: &NodeStorage,
         // The transaction validator that should be used
@@ -188,7 +188,7 @@ impl WorkerNode {
         // The committee information.
         committee: Committee,
         // The worker information cache.
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         // The node's store //TODO: replace this by a path so the method can open and independent storage
         store: &NodeStorage,
         // The transaction validator defining Tx acceptance,
@@ -253,7 +253,7 @@ impl WorkerNodes {
         // The committee information.
         committee: Committee,
         // The worker information cache.
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         // The node's store //TODO: replace this by a path so the method can open and independent storage
         store: &NodeStorage,
         // The transaction validator defining Tx acceptance,

@@ -10,7 +10,7 @@ import {
   ObjectId,
   SuiAddress,
   SUI_TYPE_ARG,
-  Transaction,
+  SingleTransactionKind,
   TransactionData,
   TransactionKind,
   TypeTag,
@@ -19,6 +19,7 @@ import {
   bcsForVersion,
   GasData,
   RpcApiVersion,
+  prepareTxDataForBcs,
 } from '../../types';
 import {
   MoveCallTransaction,
@@ -101,7 +102,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     signerAddress: string,
     unserializedTxn: UnserializedSignableTransaction,
   ): Promise<[TransactionKind, ObjectId | undefined]> {
-    let tx: Transaction;
+    let tx: SingleTransactionKind;
     let gasPayment: ObjectId | undefined;
     switch (unserializedTxn.kind) {
       case 'transferObject':
@@ -321,7 +322,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   }
 
   private async getCoinStructTag(coinId: string): Promise<TypeTag> {
-    const coin = await this.provider.getObject(coinId);
+    const coin = await this.provider.getObject(coinId, { showType: true });
     const coinTypeArg = Coin.getCoinTypeArg(coin);
     if (coinTypeArg == null) {
       throw new Error(`Object ${coinId} is not a valid coin type`);
@@ -354,6 +355,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
       );
     }
     return {
+      messageVersion: 1,
       kind: tx,
       sender: signerAddress,
       gasData: {
@@ -375,7 +377,8 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     size: number = 8192,
   ): Promise<Uint8Array> {
     const bcs = bcsForVersion(await this.provider.getRpcApiVersion());
-    const dataBytes = bcs.ser('TransactionData', tx, size).toBytes();
+    let txBcs = prepareTxDataForBcs(tx);
+    const dataBytes = bcs.ser('TransactionData', txBcs, size).toBytes();
     return dataBytes;
   }
 
@@ -394,8 +397,10 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
 
   /**
    * Deserialize BCS encoded bytes into `SignableTransaction`
+   *
+   * @deprecated Use `Transaction.from()` instead.
    */
-  public async deserializeTransactionBytesToSignableTransaction(
+  async deserializeTransactionBytesToSignableTransaction(
     bytes: Uint8Array,
   ): Promise<
     UnserializedSignableTransaction | UnserializedSignableTransaction[]
@@ -412,7 +417,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   /**
    * Deserialize `TransactionData` to `SignableTransaction`
    */
-  public async transformTransactionDataToSignableTransaction(
+  private async transformTransactionDataToSignableTransaction(
     tx_data: TransactionData,
   ): Promise<
     UnserializedSignableTransaction | UnserializedSignableTransaction[]
@@ -430,8 +435,8 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     );
   }
 
-  public async transformTransactionToSignableTransaction(
-    tx: Transaction,
+  private async transformTransactionToSignableTransaction(
+    tx: SingleTransactionKind,
     gasData: GasData,
   ): Promise<UnserializedSignableTransaction> {
     if ('Pay' in tx) {

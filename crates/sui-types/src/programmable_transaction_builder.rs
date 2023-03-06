@@ -14,13 +14,13 @@ use crate::{
     messages::{
         Argument, CallArg, Command, MoveCall, MoveModulePublish, ObjectArg, Pay, PayAllSui, PaySui,
         ProgrammableMoveCall, ProgrammableTransaction, SingleTransactionKind, TransactionData,
-        TransactionKind, TransferObject, TransferSui,
+        TransactionDataAPI, TransactionKind, TransferObject, TransferSui,
     },
 };
 
 pub fn migrate_transaction_data(mut m: TransactionData) -> anyhow::Result<TransactionData> {
     let mut builder = ProgrammableTransactionBuilder::new();
-    match m.kind {
+    match m.kind().clone() {
         TransactionKind::Single(SingleTransactionKind::PaySui(PaySui {
             coins: _coins,
             recipients,
@@ -44,7 +44,7 @@ pub fn migrate_transaction_data(mut m: TransactionData) -> anyhow::Result<Transa
         }
     };
     let pt = builder.finish();
-    m.kind = TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt));
+    *m.kind_mut() = TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt));
     Ok(m)
 }
 

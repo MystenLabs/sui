@@ -23,7 +23,7 @@ async fn test_successfully_retrieve_block() {
     // GIVEN
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
@@ -103,7 +103,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
     // GIVEN
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
@@ -264,7 +264,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
 async fn test_return_error_when_certificate_is_missing() {
     // GIVEN
     let fixture = CommitteeFixture::builder().build();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
 
@@ -305,7 +305,7 @@ async fn test_return_error_when_certificate_is_missing() {
 async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
     // GIVEN
     let fixture = CommitteeFixture::builder().build();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
 

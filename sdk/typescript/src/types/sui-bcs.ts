@@ -209,7 +209,7 @@ export type MoveCallTx = {
 
 // ========== TransactionData ===========
 
-export type Transaction =
+export type SingleTransactionKind =
   | MoveCallTx
   | PayTx
   | PaySuiTx
@@ -225,8 +225,8 @@ export type Transaction =
  * the passed value (single Transaction or an array).
  */
 export type TransactionKind =
-  | { Single: Transaction }
-  | { Batch: Transaction[] };
+  | { Single: SingleTransactionKind }
+  | { Batch: SingleTransactionKind[] };
 
 /**
  * The GasData to be used in the transaction.
@@ -254,10 +254,15 @@ export type TransactionExpiration = { None: null } | { Epoch: number };
  * Field `expiration` is made optional as it is defaulted to `None`.
  */
 export type TransactionData = {
+  messageVersion: 1; // Eventually: 1 | 2 | ...
   sender?: string;
   kind: TransactionKind;
   gasData: GasData;
   expiration?: TransactionExpiration;
+};
+
+export type TransactionDataBCS = {
+  V1: Omit<TransactionData, 'messageVersion'>;
 };
 
 export const TRANSACTION_DATA_TYPE_TAG = Array.from('TransactionData::').map(
@@ -268,7 +273,20 @@ export function deserializeTransactionBytesToTransactionData(
   bcs: BCS,
   bytes: Uint8Array,
 ): TransactionData {
-  return bcs.de('TransactionData', bytes);
+  let deserialized = bcs.de('TransactionData', bytes);
+  let inner, messageVersion;
+
+  if (deserialized.V1 != null) {
+    inner = deserialized.V1;
+    messageVersion = 1;
+  } else {
+    throw new Error(`Unknown message: ${JSON.stringify(deserialized)}`);
+  }
+
+  return {
+    messageVersion,
+    ...inner,
+  };
 }
 
 // Move name of the Vector type.
@@ -279,6 +297,13 @@ type TypeSchema = {
   structs?: { [key: string]: StructTypeDefinition };
   enums?: { [key: string]: EnumTypeDefinition };
   aliases?: { [key: string]: string };
+};
+
+const TransactionDataV1 = {
+  kind: 'TransactionKind',
+  sender: BCS.ADDRESS,
+  gasData: 'GasData',
+  expiration: 'TransactionExpiration',
 };
 
 const BCS_SPEC: TypeSchema = {
@@ -317,6 +342,14 @@ const BCS_SPEC: TypeSchema = {
       Pay: 'PayTx',
       PaySui: 'PaySuiTx',
       PayAllSui: 'PayAllSuiTx',
+
+      // can not be called from sui.js; dummy placement
+      // to set the enum counter right for ProgrammableTransact
+      ChangeEpoch: null,
+      Genesis: null,
+      ConsensusCommitPrologue: null,
+
+      ProgrammableTransaction: 'ProgrammableTransaction',
     },
     TransactionKind: {
       Single: 'Transaction',
@@ -325,6 +358,9 @@ const BCS_SPEC: TypeSchema = {
     TransactionExpiration: {
       None: null,
       Epoch: BCS.U64,
+    },
+    TransactionData: {
+      V1: 'TransactionDataV1',
     },
   },
   structs: {
@@ -376,12 +412,6 @@ const BCS_SPEC: TypeSchema = {
       typeArguments: [VECTOR, 'TypeTag'],
       arguments: [VECTOR, 'CallArg'],
     },
-    TransactionData: {
-      kind: 'TransactionKind',
-      sender: BCS.ADDRESS,
-      gasData: 'GasData',
-      expiration: 'TransactionExpiration',
-    },
     GasData: {
       payment: [VECTOR, 'SuiObjectRef'],
       owner: BCS.ADDRESS,
@@ -393,6 +423,7 @@ const BCS_SPEC: TypeSchema = {
       data: 'TransactionData',
       txSignatures: [VECTOR, [VECTOR, BCS.U8]],
     },
+    TransactionDataV1,
   },
   aliases: {
     ObjectDigest: BCS.BASE58,

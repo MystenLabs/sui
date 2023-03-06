@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anemo::{Network, Request};
-use config::{Committee, Epoch, SharedWorkerCache, WorkerId};
+use config::{Committee, Epoch, WorkerCache, WorkerId};
 use consensus::dag::Dag;
 use crypto::{NetworkPublicKey, PublicKey};
 use fastcrypto::hash::Hash as _;
@@ -47,7 +47,7 @@ struct Inner {
     /// Committee of the current epoch.
     committee: Committee,
     /// The worker information cache.
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
     /// The depth of the garbage collector.
     gc_depth: Round,
     /// Highest round that has been GC'ed.
@@ -184,7 +184,7 @@ impl Synchronizer {
     pub fn new(
         name: PublicKey,
         committee: Committee,
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         gc_depth: Round,
         certificate_store: CertificateStore,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -746,7 +746,6 @@ impl Synchronizer {
             let inner = inner.clone();
             let worker_name = inner
                 .worker_cache
-                .load()
                 .worker(&inner.name, &worker_id)
                 .expect("Author of valid header is not in the worker cache")
                 .name;

@@ -16,9 +16,9 @@ use sui_types::{
     crypto::AuthorityKeyPair,
     error::SuiError,
     messages::{
-        CertifiedTransaction, CommitteeInfoRequest, CommitteeInfoResponse,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest,
-        Transaction, TransactionInfoRequest, TransactionInfoResponse,
+        CertifiedTransaction, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
+        SystemStateRequest, Transaction, TransactionEffectsAPI, TransactionInfoRequest,
+        TransactionInfoResponse,
     },
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
 };
@@ -103,15 +103,6 @@ impl AuthorityAPI for LocalAuthorityClient {
         state.handle_checkpoint_request(&request)
     }
 
-    async fn handle_committee_info_request(
-        &self,
-        request: CommitteeInfoRequest,
-    ) -> Result<CommitteeInfoResponse, SuiError> {
-        let state = self.state.clone();
-
-        state.handle_committee_info_request(&request)
-    }
-
     async fn handle_system_state_object(
         &self,
         _request: SystemStateRequest,
@@ -164,8 +155,8 @@ impl LocalAuthorityClient {
             }
             .into_inner();
 
-        let events = if let Some(digest) = signed_effects.events_digest {
-            state.get_transaction_events(digest).await?
+        let events = if let Some(digest) = signed_effects.events_digest() {
+            state.get_transaction_events(*digest).await?
         } else {
             TransactionEvents::default()
         };
@@ -186,7 +177,6 @@ impl LocalAuthorityClient {
 pub struct MockAuthorityApi {
     delay: Duration,
     count: Arc<Mutex<u32>>,
-    handle_committee_info_request_result: Option<SuiResult<CommitteeInfoResponse>>,
     handle_object_info_request_result: Option<SuiResult<ObjectInfoResponse>>,
 }
 
@@ -195,15 +185,8 @@ impl MockAuthorityApi {
         MockAuthorityApi {
             delay,
             count,
-            handle_committee_info_request_result: None,
             handle_object_info_request_result: None,
         }
-    }
-    pub fn set_handle_committee_info_request_result(
-        &mut self,
-        result: SuiResult<CommitteeInfoResponse>,
-    ) {
-        self.handle_committee_info_request_result = Some(result);
     }
 
     pub fn set_handle_object_info_request(&mut self, result: SuiResult<ObjectInfoResponse>) {
@@ -265,13 +248,6 @@ impl AuthorityAPI for MockAuthorityApi {
         unimplemented!();
     }
 
-    async fn handle_committee_info_request(
-        &self,
-        _request: CommitteeInfoRequest,
-    ) -> Result<CommitteeInfoResponse, SuiError> {
-        self.handle_committee_info_request_result.clone().unwrap()
-    }
-
     async fn handle_system_state_object(
         &self,
         _request: SystemStateRequest,
@@ -319,13 +295,6 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         &self,
         _request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        unimplemented!()
-    }
-
-    async fn handle_committee_info_request(
-        &self,
-        _request: CommitteeInfoRequest,
-    ) -> Result<CommitteeInfoResponse, SuiError> {
         unimplemented!()
     }
 

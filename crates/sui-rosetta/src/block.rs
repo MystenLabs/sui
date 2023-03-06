@@ -11,6 +11,7 @@ use crate::types::{
     TransactionIdentifier,
 };
 use crate::{Error, OnlineServerContext, SuiEnv};
+use sui_json_rpc_types::SuiTransactionEffectsAPI;
 
 /// This module implements the [Rosetta Block API](https://www.rosetta-api.org/docs/BlockApi.html)
 
@@ -43,7 +44,7 @@ pub async fn transaction(
     env.check_network_identifier(&request.network_identifier)?;
     let digest = request.transaction_identifier.hash;
     let response = context.client.read_api().get_transaction(digest).await?;
-    let hash = response.effects.transaction_digest;
+    let hash = *response.effects.transaction_digest();
 
     let operations = response.try_into()?;
 

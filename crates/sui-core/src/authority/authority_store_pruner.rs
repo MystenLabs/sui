@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::{sync::Arc, time::Duration};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_types::digests::CheckpointDigest;
-use sui_types::messages::TransactionEffects;
+use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::{
     base_types::{ObjectID, VersionNumber},
     storage::ObjectKey,
@@ -43,7 +43,7 @@ impl AuthorityStorePruner {
 
         let mut object_keys_to_prune = vec![];
         for effects in &transaction_effects {
-            for (object_id, seq_number) in &effects.modified_at_versions {
+            for (object_id, seq_number) in effects.modified_at_versions() {
                 object_keys_to_prune.push(ObjectKey(*object_id, *seq_number));
             }
         }
@@ -61,13 +61,13 @@ impl AuthorityStorePruner {
             DeletionMethod::RangeDelete => {
                 let mut updates: HashMap<ObjectID, (VersionNumber, VersionNumber)> = HashMap::new();
                 for effects in transaction_effects {
-                    for (object_id, seq_number) in effects.modified_at_versions {
+                    for (object_id, seq_number) in effects.modified_at_versions() {
                         updates
-                            .entry(object_id)
+                            .entry(*object_id)
                             .and_modify(|range| {
-                                *range = (min(range.0, seq_number), max(range.1, seq_number))
+                                *range = (min(range.0, *seq_number), max(range.1, *seq_number))
                             })
-                            .or_insert((seq_number, seq_number));
+                            .or_insert((*seq_number, *seq_number));
                     }
                 }
                 for (object_id, (min_version, max_version)) in updates {
@@ -237,7 +237,7 @@ mod tests {
     #[cfg(not(target_env = "msvc"))]
     use pprof::Symbol;
     use sui_types::base_types::{ObjectDigest, VersionNumber};
-    use sui_types::messages::TransactionEffects;
+    use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
     use sui_types::{
         base_types::{ObjectID, SequenceNumber},
         object::Object,
@@ -311,10 +311,10 @@ mod tests {
                 objects.insert(&ObjectKey(id, SequenceNumber::from(i)), &obj)?;
             }
         }
-        Ok(TransactionEffects {
-            modified_at_versions: to_delete,
-            ..Default::default()
-        })
+
+        let mut effects = TransactionEffects::default();
+        *effects.modified_at_versions_mut_for_testing() = to_delete;
+        Ok(effects)
     }
 
     fn read_keys(
@@ -387,10 +387,9 @@ mod tests {
                 total_unique_object_ids,
             )
             .unwrap();
-            let effects = TransactionEffects {
-                modified_at_versions: to_delete.into_iter().map(|o| (o.0, o.1)).collect(),
-                ..Default::default()
-            };
+            let mut effects = TransactionEffects::default();
+            *effects.modified_at_versions_mut_for_testing() =
+                to_delete.into_iter().map(|o| (o.0, o.1)).collect();
             AuthorityStorePruner::prune_effects(vec![effects], &db, deletion_method).unwrap();
             to_keep
         };
@@ -468,10 +467,8 @@ mod tests {
         perpetual_db.objects.rocksdb.flush()?;
         let before_compaction_size = get_size(primary_path.clone()).unwrap();
 
-        let effects = TransactionEffects {
-            modified_at_versions: to_delete,
-            ..Default::default()
-        };
+        let mut effects = TransactionEffects::default();
+        *effects.modified_at_versions_mut_for_testing() = to_delete;
         let total_pruned = AuthorityStorePruner::prune_effects(
             vec![effects],
             &perpetual_db,

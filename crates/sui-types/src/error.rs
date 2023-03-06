@@ -22,6 +22,7 @@ pub use move_vm_runtime::move_vm::MoveVM;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Debug};
 use strum_macros::{AsRefStr, IntoStaticStr};
+use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
 use thiserror::Error;
 use tonic::Status;
 use typed_store::rocks::TypedStoreError;
@@ -189,7 +190,7 @@ pub enum UserInputError {
 pub enum SuiError {
     #[error("Error checking transaction input objects: {:?}", error)]
     UserInputError { error: UserInputError },
-    #[error("Expecting a singler owner, shared ownership found")]
+    #[error("Expecting a single owner, shared ownership found")]
     UnexpectedOwnerType,
 
     #[error("Input {object_id} already has {queue_len} transactions pending, above threshold of {threshold}")]
@@ -425,6 +426,15 @@ pub enum SuiError {
 
     #[error("Found the sui system state object but it has an unexpected version")]
     SuiSystemStateUnexpectedVersion,
+
+    #[error("Message version is not supported at the current protocol version")]
+    WrongMessageVersion {
+        message_version: u64,
+        // the range in which the given message version is supported
+        supported: SupportedProtocolVersions,
+        // the current protocol version which is outside of that range
+        current_protocol_version: ProtocolVersion,
+    },
 
     #[error("unknown error: {0}")]
     Unknown(String),
@@ -702,7 +712,7 @@ pub fn convert_vm_error<
                         let offset = error.offsets().first().copied().map(|(f, i)| (f.0, i));
                         debug_assert!(
                             offset.is_some(),
-                            "Move should set the location on all execution errors"
+                            "Move should set the location on all execution errors. Error {error}"
                         );
                         let (function, instruction) = offset.unwrap_or((0, 0));
                         let function_name = vm.load_module(id, state_view).ok().map(|module| {

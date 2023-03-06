@@ -214,39 +214,6 @@ impl ValidatorMetadata {
     }
 }
 
-impl ValidatorMetadata {
-    pub fn network_address(&self) -> Result<Multiaddr> {
-        Multiaddr::try_from(self.net_address.clone()).map_err(Into::into)
-    }
-
-    pub fn p2p_address(&self) -> Result<Multiaddr> {
-        Multiaddr::try_from(self.p2p_address.clone()).map_err(Into::into)
-    }
-
-    pub fn narwhal_primary_address(&self) -> Result<Multiaddr> {
-        Multiaddr::try_from(self.primary_address.clone()).map_err(Into::into)
-    }
-
-    pub fn narwhal_worker_address(&self) -> Result<Multiaddr> {
-        Multiaddr::try_from(self.worker_address.clone()).map_err(Into::into)
-    }
-
-    pub fn protocol_key(&self) -> AuthorityPublicKeyBytes {
-        AuthorityPublicKeyBytes::from_bytes(self.protocol_pubkey_bytes.as_ref())
-            .expect("Validity of public key bytes should be verified on-chain")
-    }
-
-    pub fn worker_key(&self) -> crate::crypto::NetworkPublicKey {
-        crate::crypto::NetworkPublicKey::from_bytes(self.worker_pubkey_bytes.as_ref())
-            .expect("Validity of public key bytes should be verified on-chain")
-    }
-
-    pub fn network_key(&self) -> crate::crypto::NetworkPublicKey {
-        crate::crypto::NetworkPublicKey::from_bytes(self.network_pubkey_bytes.as_ref())
-            .expect("Validity of public key bytes should be verified on-chain")
-    }
-}
-
 /// Rust version of the Move sui::validator::Validator type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct Validator {

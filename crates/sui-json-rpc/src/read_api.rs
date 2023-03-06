@@ -7,7 +7,7 @@ use jsonrpsee::core::RpcResult;
 use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
-use move_core_types::value::{MoveStruct, MoveValue};
+use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_types::collection_types::VecMap;
@@ -21,22 +21,23 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::RpcModule;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
-    GetRawObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page, SuiEvent,
-    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct,
-    SuiMoveValue, SuiObjectInfo, SuiTransactionEvents, SuiTransactionResponse, TransactionsPage,
+    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, ObjectValueKind, Page,
+    SuiEvent, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
+    SuiMoveStruct, SuiMoveValue, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
+    SuiPastObjectResponse, SuiTransactionEvents, SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
-use sui_types::base_types::SequenceNumber;
-use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
+use sui_types::base_types::{
+    ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
+};
 use sui_types::crypto::sha3_hash;
-use sui_types::messages::TransactionData;
+use sui_types::messages::{TransactionData, TransactionEffectsAPI};
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
     CheckpointSummary,
 };
 use sui_types::move_package::normalize_modules;
-use sui_types::object::{Data, ObjectRead};
+use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
 
 use sui_types::dynamic_field::DynamicFieldName;
@@ -108,23 +109,80 @@ impl ReadApiServer for ReadApi {
         Ok(DynamicFieldPage { data, next_cursor })
     }
 
-    async fn get_object(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
-        Ok(self
+    async fn get_object_with_options(
+        &self,
+        object_id: ObjectID,
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<SuiObjectResponse> {
+        let object_read = self.state.get_object_read(&object_id).await.map_err(|e| {
+            debug!(?object_id, "Failed to get object: {:?}", e);
+            anyhow!("{e}")
+        })?;
+        let options = options.unwrap_or_default();
+
+        match object_read {
+            ObjectRead::NotExists(id) => Ok(SuiObjectResponse::NotExists(id)),
+            ObjectRead::Exists(object_ref, o, layout) => {
+                let display_fields = if options.show_display {
+                    get_display_fields(self, &o, &layout).await?
+                } else {
+                    None
+                };
+                Ok(SuiObjectResponse::Exists(
+                    (object_ref, o, layout, options, display_fields).try_into()?,
+                ))
+            }
+            ObjectRead::Deleted(oref) => Ok(SuiObjectResponse::Deleted(oref.into())),
+        }
+    }
+
+    async fn try_get_past_object(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<SuiPastObjectResponse> {
+        let past_read = self
             .state
-            .get_object_read(&object_id)
+            .get_past_object_read(&object_id, version)
             .await
-            .map_err(|e| {
-                debug!(?object_id, "Failed to get object: {:?}", e);
-                anyhow!("{e}")
-            })?
-            .try_into()?)
+            .map_err(|e| anyhow!("{e}"))?;
+        let options = options.unwrap_or_default();
+        match past_read {
+            PastObjectRead::ObjectNotExists(id) => Ok(SuiPastObjectResponse::ObjectNotExists(id)),
+            PastObjectRead::VersionFound(object_ref, o, layout) => {
+                let display_fields = if options.show_display {
+                    get_display_fields(self, &o, &layout).await?
+                } else {
+                    None
+                };
+                Ok(SuiPastObjectResponse::VersionFound(
+                    (object_ref, o, layout, options, display_fields).try_into()?,
+                ))
+            }
+            PastObjectRead::ObjectDeleted(oref) => {
+                Ok(SuiPastObjectResponse::ObjectDeleted(oref.into()))
+            }
+            PastObjectRead::VersionNotFound(id, seq_num) => {
+                Ok(SuiPastObjectResponse::VersionNotFound(id, seq_num))
+            }
+            PastObjectRead::VersionTooHigh {
+                object_id,
+                asked_version,
+                latest_version,
+            } => Ok(SuiPastObjectResponse::VersionTooHigh {
+                object_id,
+                asked_version,
+                latest_version,
+            }),
+        }
     }
 
     async fn get_dynamic_field_object(
         &self,
         parent_object_id: ObjectID,
         name: DynamicFieldName,
-    ) -> RpcResult<GetObjectDataResponse> {
+    ) -> RpcResult<SuiObjectResponse> {
         let id = self
             .state
             .get_dynamic_field_object_id(parent_object_id, &name)
@@ -132,7 +190,9 @@ impl ReadApiServer for ReadApi {
             .ok_or_else(|| {
                 anyhow!("Cannot find dynamic field [{name:?}] for object [{parent_object_id}].")
             })?;
-        self.get_object(id).await
+        // TODO(chris): add options to `get_dynamic_field_object` API as well
+        self.get_object_with_options(id, Some(SuiObjectDataOptions::full_content()))
+            .await
     }
 
     async fn get_total_transaction_number(&self) -> RpcResult<u64> {
@@ -167,10 +227,10 @@ impl ReadApiServer for ReadApi {
             .map_err(|e| anyhow!("{e}"))?;
         let checkpoint_timestamp = checkpoint.as_ref().map(|c| c.summary.timestamp_ms);
 
-        let events = if let Some(digest) = effects.events_digest {
+        let events = if let Some(digest) = effects.events_digest() {
             let events = self
                 .state
-                .get_transaction_events(digest)
+                .get_transaction_events(*digest)
                 .await
                 .map_err(Error::from)?;
             SuiTransactionEvents::try_from(
@@ -191,7 +251,7 @@ impl ReadApiServer for ReadApi {
 
         Ok(SuiTransactionResponse {
             transaction: transaction.into_message().try_into()?,
-            effects: effects.into(),
+            effects: effects.try_into()?,
             events,
             timestamp_ms: checkpoint_timestamp,
             confirmed_local_execution: None,
@@ -222,7 +282,7 @@ impl ReadApiServer for ReadApi {
                 let (transaction, effects, events, checkpoint) = txn;
                 responses.push(SuiTransactionResponse {
                     transaction: transaction.into_message().try_into()?,
-                    effects: effects.into(),
+                    effects: effects.try_into()?,
                     events: SuiTransactionEvents::try_from(
                         events,
                         // threading the epoch_store through this API does not
@@ -378,19 +438,6 @@ impl ReadApiServer for ReadApi {
         Ok(Page { data, next_cursor })
     }
 
-    async fn try_get_past_object(
-        &self,
-        object_id: ObjectID,
-        version: SequenceNumber,
-    ) -> RpcResult<GetPastObjectDataResponse> {
-        Ok(self
-            .state
-            .get_past_object_read(&object_id, version)
-            .await
-            .map_err(|e| anyhow!("{e}"))?
-            .try_into()?)
-    }
-
     async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber> {
         Ok(self
             .state
@@ -446,24 +493,6 @@ impl ReadApiServer for ReadApi {
             .get_checkpoint_contents_by_sequence_number(sequence_number)
             .map_err(|e| anyhow!("Checkpoint contents based on seq number: {sequence_number} were not found with error: {e}"))?)
     }
-
-    async fn get_raw_object(&self, object_id: ObjectID) -> RpcResult<GetRawObjectDataResponse> {
-        Ok(self
-            .state
-            .get_object_read(&object_id)
-            .await
-            .map_err(|e| anyhow!("{e}"))?
-            .try_into()?)
-    }
-
-    async fn get_display_deprecated(
-        &self,
-        object_id: ObjectID,
-    ) -> RpcResult<BTreeMap<String, String>> {
-        let (object_type, move_struct) = get_object_type_and_struct(self, object_id).await?;
-        let display_object = get_display_object(self, object_type).await?;
-        Ok(get_rendered_fields(display_object.fields, &move_struct).map_err(|e| anyhow!("{e}"))?)
-    }
 }
 
 impl SuiRpcModule for ReadApi {
@@ -476,11 +505,28 @@ impl SuiRpcModule for ReadApi {
     }
 }
 
-async fn get_display_object(
+async fn get_display_fields(
     fullnode_api: &ReadApi,
-    object_type: StructTag,
-) -> RpcResult<DisplayObject> {
+    original_object: &Object,
+    original_layout: &Option<MoveStructLayout>,
+) -> RpcResult<Option<BTreeMap<String, String>>> {
+    let (object_type, layout) = get_object_type_and_struct(original_object, original_layout)?;
+    if let Some(display_object) = get_display_object_by_type(fullnode_api, &object_type).await? {
+        return Ok(Some(get_rendered_fields(display_object.fields, &layout)?));
+    }
+    Ok(None)
+}
+
+async fn get_display_object_by_type(
+    fullnode_api: &ReadApi,
+    object_type: &StructTag,
+) -> RpcResult<Option<DisplayObject>> {
     let display_object_id = get_display_object_id(fullnode_api, object_type).await?;
+    if display_object_id.is_none() {
+        return Ok(None);
+    }
+    // safe to unwrap because `is_none` is checked above
+    let display_object_id = display_object_id.unwrap();
     if let ObjectRead::Exists(_, display_object, _) = fullnode_api
         .state
         .get_object_read(&display_object_id)
@@ -491,8 +537,11 @@ async fn get_display_object(
             .data
             .try_as_move()
             .ok_or_else(|| anyhow!("Failed to extract Move object from {display_object_id}"))?;
-        Ok(bcs::from_bytes::<DisplayObject>(move_object.contents())
-            .map_err(|e| anyhow!("Failed to deserialize DisplayObject {display_object_id}: {e}"))?)
+        Ok(Some(
+            bcs::from_bytes::<DisplayObject>(move_object.contents()).map_err(|e| {
+                anyhow!("Failed to deserialize DisplayObject {display_object_id}: {e}")
+            })?,
+        ))
     } else {
         Err(anyhow!("Display object {display_object_id} does not exist"))?
     }
@@ -500,58 +549,52 @@ async fn get_display_object(
 
 async fn get_display_object_id(
     fullnode_api: &ReadApi,
-    object_type: StructTag,
-) -> RpcResult<ObjectID> {
+    object_type: &StructTag,
+) -> RpcResult<Option<ObjectID>> {
     let display_created_event = fullnode_api
         .state
         .query_events(
-            EventQuery::MoveEvent(DisplayCreatedEvent::type_(&object_type).to_string()),
+            EventQuery::MoveEvent(DisplayCreatedEvent::type_(object_type).to_string()),
             /* cursor */ None,
             /* limit */ 1,
             /* descending */ false,
         )
         .await?;
     if display_created_event.is_empty() {
-        return Err(anyhow!(
-            "Failed to find DisplayCreated event for {object_type}"
-        ))?;
+        return Ok(None);
     }
     if let SuiEvent::MoveEvent { bcs, .. } = display_created_event[0].clone().1.event {
         let display_object_id = bcs::from_bytes::<DisplayCreatedEvent>(&bcs)
             .map_err(|e| anyhow!("Failed to deserialize DisplayCreatedEvent: {e}"))?
             .id
             .bytes;
-        Ok(display_object_id)
+        Ok(Some(display_object_id))
     } else {
         Err(anyhow!("Failed to extract display object id from event"))?
     }
 }
 
-async fn get_object_type_and_struct(
-    fullnode_api: &ReadApi,
-    object_id: ObjectID,
+fn get_object_type_and_struct(
+    o: &Object,
+    layout: &Option<MoveStructLayout>,
 ) -> RpcResult<(StructTag, MoveStruct)> {
-    let object_read = fullnode_api
-        .state
-        .get_object_read(&object_id)
-        .await
-        .map_err(|e| anyhow!("Failed to fetch {object_id}: {e}"))?;
-    if let ObjectRead::Exists(_, o, layout) = object_read {
-        let layout = layout.ok_or_else(|| anyhow!("Failed to extract layout"))?;
-        let object_type = o
-            .type_()
-            .ok_or_else(|| anyhow!("Failed to extract object type"))?
-            .clone();
-        let move_struct = o
-            .data
-            .try_as_move()
-            .ok_or_else(|| anyhow!("Failed to extract Move object from {object_id}"))?
-            .to_move_struct(&layout)
-            .map_err(|err| anyhow!("{err}"))?;
-        Ok((object_type, move_struct))
-    } else {
-        Err(anyhow!("Object {object_id} does not exist"))?
-    }
+    let object_type = o
+        .type_()
+        .ok_or_else(|| anyhow!("Failed to extract object type"))?
+        .clone();
+    let move_struct = get_move_struct(o, layout)?;
+    Ok((object_type, move_struct))
+}
+
+fn get_move_struct(o: &Object, layout: &Option<MoveStructLayout>) -> RpcResult<MoveStruct> {
+    let layout = layout
+        .as_ref()
+        .ok_or_else(|| anyhow!("Failed to extract layout"))?;
+    Ok(o.data
+        .try_as_move()
+        .ok_or_else(|| anyhow!("Failed to extract Move object"))?
+        .to_move_struct(layout)
+        .map_err(|err| anyhow!("{err}"))?)
 }
 
 pub async fn get_move_module(

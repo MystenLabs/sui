@@ -6,12 +6,13 @@ import {
     getEvents,
     getTransactionEffects,
     SUI_SYSTEM_STATE_OBJECT_ID,
+    getObjectType,
 } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
 
 import type {
     ObjectId,
-    SuiObject,
+    SuiObjectData,
     SuiAddress,
     SuiMoveObject,
     SuiTransactionResponse,
@@ -29,11 +30,8 @@ export const DEFAULT_NFT_TRANSFER_GAS_FEE = 450;
 
 // TODO use sdk
 export class Coin {
-    public static isCoin(obj: SuiObject) {
-        return (
-            obj.data.dataType === 'moveObject' &&
-            obj.data.type.startsWith(COIN_TYPE)
-        );
+    public static isCoin(obj: SuiObjectData) {
+        return getObjectType(obj)?.startsWith(COIN_TYPE) ?? false;
     }
 
     public static getCoinTypeArg(obj: SuiMoveObject) {

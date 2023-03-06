@@ -11,7 +11,7 @@ task 2 'view-object'. lines 13-13:
 106::m
 
 task 3 'transfer-object'. lines 15-15:
-Error: Attempt to transfer object 0x3d018ae3eb4670e1f112839d8343a6702525cbe9ea60ad59ff9f2f2743cccf6f that does not have public transfer. Object transfer must be done instead using a distinct Move function call.
+Error: A move object is expected, instead a move package is passed: 0x3d018ae3eb4670e1f112839d8343a6702525cbe9ea60ad59ff9f2f2743cccf6f
 
 task 4 'view-object'. lines 17-17:
 106::m

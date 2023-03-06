@@ -4,13 +4,12 @@
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
-use sui_json_rpc_types::SuiSystemStateRpc;
+use sui_json_rpc_types::{SuiCommittee, SuiSystemStateRpc};
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::SuiAddress;
 
 use sui_types::committee::EpochId;
 use sui_types::governance::DelegatedStake;
-use sui_types::messages::CommitteeInfoResponse;
 
 use sui_types::sui_system_state::ValidatorMetadata;
 
@@ -31,7 +30,7 @@ pub trait GovernanceReadApi {
         &self,
         /// The epoch of interest. If None, default to the latest epoch
         epoch: Option<EpochId>,
-    ) -> RpcResult<CommitteeInfoResponse>;
+    ) -> RpcResult<SuiCommittee>;
 
     /// Return latest SUI system state object on-chain.
     #[method(name = "getSuiSystemState")]

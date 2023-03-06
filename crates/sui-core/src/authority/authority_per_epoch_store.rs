@@ -4,7 +4,7 @@
 use futures::future::{join_all, select, Either};
 use futures::FutureExt;
 use narwhal_executor::ExecutionIndices;
-use narwhal_types::CommittedSubDag;
+use narwhal_types::Round;
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard};
 use rocksdb::Options;
@@ -25,8 +25,8 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     AuthorityCapabilities, CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey,
     ConsensusTransactionKind, SenderSignedData, SharedInputObject, TransactionData,
-    TransactionEffects, TrustedExecutableTransaction, VerifiedCertificate,
-    VerifiedExecutableTransaction, VerifiedSignedTransaction,
+    TransactionDataAPI, TransactionEffects, TransactionEffectsAPI, TrustedExecutableTransaction,
+    VerifiedCertificate, VerifiedExecutableTransaction, VerifiedSignedTransaction,
 };
 use sui_types::signature::GenericSignature;
 use tracing::{debug, info, trace, warn};
@@ -801,6 +801,7 @@ impl AuthorityPerEpochStore {
             // from the cert.
             let initial_versions: HashMap<_, _> = tx_data
                 .shared_input_objects()
+                .into_iter()
                 .map(SharedInputObject::into_id_and_version)
                 .collect();
 
@@ -900,7 +901,7 @@ impl AuthorityPerEpochStore {
         self.set_assigned_shared_object_versions(
             certificate,
             &effects
-                .shared_objects
+                .shared_objects()
                 .iter()
                 .map(|(id, version, _)| (*id, *version))
                 .collect(),
@@ -1740,10 +1741,10 @@ impl AuthorityPerEpochStore {
 
     pub fn handle_commit_boundary<C: CheckpointServiceNotify>(
         &self,
-        committed_dag: &Arc<CommittedSubDag>,
+        round: Round,
+        timestamp_ms: CheckpointTimestamp,
         checkpoint_service: &Arc<C>,
     ) -> SuiResult {
-        let round = committed_dag.round();
         debug!("Commit boundary at {}", round);
         // This exchange is restart safe because of following:
         //
@@ -1768,7 +1769,7 @@ impl AuthorityPerEpochStore {
             let checkpoint = PendingCheckpoint {
                 roots,
                 details: PendingCheckpointInfo {
-                    timestamp_ms: committed_dag.leader.metadata.created_at,
+                    timestamp_ms,
                     last_of_epoch: final_checkpoint,
                     commit_height: index,
                 },

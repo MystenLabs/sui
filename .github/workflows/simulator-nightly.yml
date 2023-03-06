@@ -67,13 +67,17 @@ jobs:
       uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
     
     - name: Get sui commit
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         export sui_sha=$(git rev-parse HEAD)
         echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
 
     - name: Get link to logs
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ inputs.run_id }}/jobs' --jq '.jobs.[0].html_url')
+        gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
         echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV        
 
     - name: Post to slack

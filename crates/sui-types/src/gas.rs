@@ -7,6 +7,7 @@ use crate::messages::TransactionEffects;
 use crate::{
     error::{ExecutionError, ExecutionErrorKind},
     gas_coin::GasCoin,
+    messages::TransactionEffectsAPI,
     object::{Object, Owner},
 };
 use itertools::MultiUnzip;
@@ -98,9 +99,9 @@ impl GasCostSummary {
             transactions
                 .map(|e| {
                     (
-                        e.gas_used.storage_cost,
-                        e.gas_used.computation_cost,
-                        e.gas_used.storage_rebate,
+                        e.gas_cost_summary().storage_cost,
+                        e.gas_cost_summary().computation_cost,
+                        e.gas_cost_summary().storage_rebate,
                     )
                 })
                 .multiunzip();

@@ -11,10 +11,10 @@ use std::collections::BTreeMap;
 use sui_json_rpc::api::{cap_page_limit, ReadApiClient, ReadApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
-    GetRawObjectDataResponse, MoveFunctionArgType, Page, SuiMoveNormalizedFunction,
-    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionResponse,
-    TransactionsPage,
+    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, Page,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
+    SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
+    SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TxSequenceNumber};
@@ -65,23 +65,32 @@ impl<S: IndexerStore> ReadApi<S> {
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage> {
         let limit = cap_page_limit(limit);
-        let indexer_seq_number = self.state.get_transaction_sequence_by_digest(
-            cursor.map(|digest| digest.to_string()),
-            descending_order.unwrap_or_default(),
-        )?;
+        let reverse = descending_order.unwrap_or_default();
+        let indexer_seq_number = self
+            .state
+            .get_transaction_sequence_by_digest(cursor.map(|digest| digest.to_string()), reverse)?;
+        let move_call_seq_number = self
+            .state
+            .get_move_call_sequence_by_digest(cursor.map(|digest| digest.to_string()), reverse)?;
 
         let digests_from_db = match query {
-            TransactionQuery::All => self.state.get_all_transaction_digest_page(
-                indexer_seq_number,
-                limit,
-                descending_order.unwrap_or_default(),
-            ),
+            TransactionQuery::All => {
+                self.state
+                    .get_all_transaction_digest_page(indexer_seq_number, limit, reverse)
+            }
             // TODO(gegaowp): implement Move call query handling.
             TransactionQuery::MoveFunction {
-                package: _,
-                module: _,
-                function: _,
-            } => Ok(vec![]),
+                package,
+                module,
+                function,
+            } => self.state.get_transaction_digest_page_by_move_call(
+                package.to_string(),
+                module,
+                function,
+                move_call_seq_number,
+                limit,
+                reverse,
+            ),
             // TODO(gegaowp): input objects are tricky to retrive from
             // SuiTransactionResponse, instead we should store the BCS
             // serialized transaction and retrive from there.
@@ -92,7 +101,7 @@ impl<S: IndexerStore> ReadApi<S> {
                     mutated_obj_id.to_string(),
                     indexer_seq_number,
                     limit + 1,
-                    descending_order.unwrap_or_default(),
+                    reverse,
                 )
             }
             TransactionQuery::FromAddress(sender_address) => {
@@ -100,7 +109,7 @@ impl<S: IndexerStore> ReadApi<S> {
                     sender_address.to_string(),
                     indexer_seq_number,
                     limit + 1,
-                    descending_order.unwrap_or_default(),
+                    reverse,
                 )
             }
             TransactionQuery::ToAddress(recipient_address) => {
@@ -108,7 +117,7 @@ impl<S: IndexerStore> ReadApi<S> {
                     recipient_address.to_string(),
                     indexer_seq_number,
                     limit + 1,
-                    descending_order.unwrap_or_default(),
+                    reverse,
                 )
             }
         }?;
@@ -169,15 +178,21 @@ where
             .await
     }
 
-    async fn get_object(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
-        self.fullnode.get_object(object_id).await
+    async fn get_object_with_options(
+        &self,
+        object_id: ObjectID,
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<SuiObjectResponse> {
+        self.fullnode
+            .get_object_with_options(object_id, options)
+            .await
     }
 
     async fn get_dynamic_field_object(
         &self,
         parent_object_id: ObjectID,
         name: DynamicFieldName,
-    ) -> RpcResult<GetObjectDataResponse> {
+    ) -> RpcResult<SuiObjectResponse> {
         self.fullnode
             .get_dynamic_field_object(parent_object_id, name)
             .await
@@ -303,8 +318,11 @@ where
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
-    ) -> RpcResult<GetPastObjectDataResponse> {
-        self.fullnode.try_get_past_object(object_id, version).await
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<SuiPastObjectResponse> {
+        self.fullnode
+            .try_get_past_object(object_id, version, options)
+            .await
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber> {
@@ -357,17 +375,6 @@ where
         sequence_number: CheckpointSequenceNumber,
     ) -> RpcResult<CheckpointContents> {
         self.fullnode.get_checkpoint_contents(sequence_number).await
-    }
-
-    async fn get_raw_object(&self, object_id: ObjectID) -> RpcResult<GetRawObjectDataResponse> {
-        self.fullnode.get_raw_object(object_id).await
-    }
-
-    async fn get_display_deprecated(
-        &self,
-        object_id: ObjectID,
-    ) -> RpcResult<BTreeMap<String, String>> {
-        self.fullnode.get_display_deprecated(object_id).await
     }
 }
 

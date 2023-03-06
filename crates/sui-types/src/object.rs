@@ -294,11 +294,11 @@ impl MoveObject {
     /// This should not be very expensive since the type tag is usually simple, and
     /// we only do this once per object being mutated.
     pub fn object_size_for_gas_metering(&self) -> usize {
-        let seriealized_type_tag =
-            bcs::to_bytes(&self.type_).expect("Serializing type tag should not fail");
+        let serialized_type_tag_size =
+            bcs::serialized_size(&self.type_).expect("Serializing type tag should not fail");
         // + 1 for 'has_public_transfer'
         // + 8 for `version`
-        self.contents.len() + seriealized_type_tag.len() + 1 + 8
+        self.contents.len() + serialized_type_tag_size + 1 + 8
     }
 
     /// Get the total amount of SUI embedded in `self`. Intended for testing purposes

@@ -11,6 +11,7 @@ use once_cell::sync::OnceCell;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
+use std::collections::BTreeSet;
 use std::iter;
 use std::path::Path;
 use std::sync::Arc;
@@ -211,7 +212,7 @@ impl AuthorityStore {
         let mut tx_to_effects_map = effects
             .into_iter()
             .flatten()
-            .map(|effects| (effects.transaction_digest, effects))
+            .map(|effects| (*effects.transaction_digest(), effects))
             .collect::<HashMap<_, _>>();
         Ok(digests
             .iter()
@@ -364,7 +365,7 @@ impl AuthorityStore {
         digest: &TransactionDigest,
         objects: &[InputObjectKind],
         epoch_store: &AuthorityPerEpochStore,
-    ) -> Vec<InputKey> {
+    ) -> BTreeSet<InputKey> {
         let mut shared_locks = HashMap::<ObjectID, SequenceNumber>::new();
         objects
             .iter()
@@ -1053,7 +1054,7 @@ impl AuthorityStore {
         };
 
         // We should never be reverting shared object transactions.
-        assert!(effects.shared_objects.is_empty());
+        assert!(effects.shared_objects().is_empty());
 
         let mut write_batch = self.perpetual_tables.transactions.batch();
         write_batch = write_batch
@@ -1065,27 +1066,27 @@ impl AuthorityStore {
             )?;
 
         let all_new_refs = effects
-            .mutated
+            .mutated()
             .iter()
-            .chain(effects.created.iter())
-            .chain(effects.unwrapped.iter())
+            .chain(effects.created().iter())
+            .chain(effects.unwrapped().iter())
             .map(|(r, _)| r)
-            .chain(effects.deleted.iter())
-            .chain(effects.unwrapped_then_deleted.iter())
-            .chain(effects.wrapped.iter());
+            .chain(effects.deleted().iter())
+            .chain(effects.unwrapped_then_deleted().iter())
+            .chain(effects.wrapped().iter());
         write_batch = write_batch.delete_batch(&self.perpetual_tables.parent_sync, all_new_refs)?;
 
         let all_new_object_keys = effects
-            .mutated
+            .mutated()
             .iter()
-            .chain(effects.created.iter())
-            .chain(effects.unwrapped.iter())
+            .chain(effects.created().iter())
+            .chain(effects.unwrapped().iter())
             .map(|((id, version, _), _)| ObjectKey(*id, *version));
         write_batch = write_batch
             .delete_batch(&self.perpetual_tables.objects, all_new_object_keys.clone())?;
 
         let modified_object_keys = effects
-            .modified_at_versions
+            .modified_at_versions()
             .iter()
             .map(|(id, version)| ObjectKey(*id, *version));
 

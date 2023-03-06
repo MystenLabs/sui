@@ -40,7 +40,7 @@ pub struct ExecutionResults {
     pub user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct InputObjectMetadata {
     pub id: ObjectID,
     pub is_mutable_input: bool,
@@ -48,14 +48,14 @@ pub struct InputObjectMetadata {
     pub version: SequenceNumber,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct InputValue {
     /// Used to remember the object ID and owner even if the value is taken
     pub object_metadata: Option<InputObjectMetadata>,
     pub inner: ResultValue,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ResultValue {
     /// This is used primarily for values that have `copy` but not `drop` as they must have been
     /// copied after the last borrow, otherwise we cannot consider the last "copy" to be instead
@@ -64,20 +64,20 @@ pub struct ResultValue {
     pub value: Option<Value>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum UsageKind {
     BorrowImm,
     BorrowMut,
     ByValue,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Value {
     Object(ObjectValue),
     Raw(RawValueType, Vec<u8>),
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ObjectValue {
     pub type_: StructTag,
     pub has_public_transfer: bool,
@@ -88,13 +88,13 @@ pub struct ObjectValue {
     pub contents: ObjectContents,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum ObjectContents {
     Coin(Coin),
     Raw(Vec<u8>),
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum RawValueType {
     Any,
     Loaded {

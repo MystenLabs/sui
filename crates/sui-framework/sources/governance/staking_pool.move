@@ -281,10 +281,10 @@ module sui::staking_pool {
     /// Deactivate a staking pool by setting the `deactivation_epoch`. After
     /// this pool deactivation, the pool stops earning rewards. Only delegation
     /// withdraws can be made to the pool.
-    public(friend) fun deactivate_staking_pool(pool: &mut StakingPool, ctx: &mut TxContext) {
+    public(friend) fun deactivate_staking_pool(pool: &mut StakingPool, deactivation_epoch: u64) {
         // We can't deactivate an already deactivated pool.
         assert!(pool_active(pool), EDeactivationOfInactivePool);
-        pool.deactivation_epoch = option::some(tx_context::epoch(ctx));
+        pool.deactivation_epoch = option::some(deactivation_epoch);
     }
 
     // ==== getters and misc utility functions ====

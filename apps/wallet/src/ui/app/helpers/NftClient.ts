@@ -1,9 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { SuiObject, is } from '@mysten/sui.js';
+import {
+    SuiObjectData,
+    is,
+    getObjectFields,
+    getObjectType,
+    getSuiObjectData,
+} from '@mysten/sui.js';
 
 import type {
-    GetObjectDataResponse,
+    SuiObjectResponse,
     JsonRpcProvider,
     SuiMoveObject,
 } from '@mysten/sui.js';
@@ -14,8 +20,8 @@ export interface WithIds {
 
 type FetchFnParser<RpcResponse, DataModel> = (
     typedData: RpcResponse,
-    suiObject: SuiObject,
-    rpcResponse: GetObjectDataResponse
+    suiObject: SuiObjectData,
+    rpcResponse: SuiObjectResponse
 ) => DataModel | undefined;
 
 type SuiObjectParser<RpcResponse, DataModel> = {
@@ -91,11 +97,11 @@ export const NftParser: SuiObjectParser<NftRpcResponse, NftRaw> = {
     parser: (data, suiData, rpcResponse) => {
         if (
             typeof rpcResponse.details === 'object' &&
-            'data' in rpcResponse.details
+            'owner' in rpcResponse.details
         ) {
             const { owner } = rpcResponse.details;
 
-            const matches = (suiData.data as SuiMoveObject).type.match(
+            const matches = (suiData.content as SuiMoveObject).type.match(
                 NftRegex
             );
             if (!matches) {
@@ -107,8 +113,8 @@ export const NftParser: SuiObjectParser<NftRpcResponse, NftRaw> = {
 
             return {
                 owner,
-                type: suiData.data.dataType,
-                id: rpcResponse.details.reference.objectId,
+                type: suiData.content?.dataType,
+                id: rpcResponse.details.objectId,
                 packageObjectId,
                 packageModule,
                 packageModuleClassName,
@@ -122,45 +128,37 @@ export const NftParser: SuiObjectParser<NftRpcResponse, NftRaw> = {
     regex: NftRegex,
 };
 
-const isObjectExists = (o: GetObjectDataResponse) => o.status === 'Exists';
+const isObjectExists = (o: SuiObjectResponse) => o.status === 'Exists';
 
-const isTypeMatchRegex = (d: GetObjectDataResponse, regex: RegExp) => {
+const isTypeMatchRegex = (d: SuiObjectResponse, regex: RegExp) => {
     const { details } = d;
-    if (is(details, SuiObject)) {
-        const { data } = details;
-        if ('type' in data) {
-            return data.type.match(regex);
+    if (is(details, SuiObjectData)) {
+        const { content } = details;
+        if (content && 'type' in content) {
+            return content.type.match(regex);
         }
     }
     return false;
 };
 
-export const parseDomains = (domains: GetObjectDataResponse[]) => {
+export const parseDomains = (domains: SuiObjectResponse[]) => {
     const response: Partial<NftDomains> = {};
     const urlDomain = domains.find((d) => isTypeMatchRegex(d, UrlDomainRegex));
     const displayDomain = domains.find((d) =>
         isTypeMatchRegex(d, DisplayDomainRegex)
     );
 
-    if (
-        urlDomain &&
-        is(urlDomain.details, SuiObject) &&
-        'fields' in urlDomain.details.data
-    ) {
-        const { data } = urlDomain.details;
-        response.url = (data.fields as UrlDomainRpcResponse).value.fields.url;
+    if (urlDomain && getObjectFields(urlDomain)) {
+        response.url = (
+            getObjectFields(urlDomain) as UrlDomainRpcResponse
+        ).value.fields.url;
     }
-    if (
-        displayDomain &&
-        is(displayDomain.details, SuiObject) &&
-        'fields' in displayDomain.details.data
-    ) {
-        const { data } = displayDomain.details;
+    if (displayDomain && getObjectFields(displayDomain)) {
         response.description = (
-            data.fields as DisplayDomainRpcResponse
+            getObjectFields(displayDomain) as DisplayDomainRpcResponse
         ).value.fields.description;
         response.name = (
-            data.fields as DisplayDomainRpcResponse
+            getObjectFields(displayDomain) as DisplayDomainRpcResponse
         ).value.fields.name;
     }
 
@@ -174,20 +172,14 @@ export class NftClient {
         this.provider = provider;
     }
 
-    parseObjects = async (
-        objects: GetObjectDataResponse[]
-    ): Promise<NftRaw[]> => {
+    parseObjects = async (objects: SuiObjectResponse[]): Promise<NftRaw[]> => {
         const parsedObjects = objects
             .filter(isObjectExists)
             .map((object) => {
-                if (
-                    is(object.details, SuiObject) &&
-                    'type' in object.details.data &&
-                    object.details.data.type.match(NftParser.regex)
-                ) {
+                if (getObjectType(object)?.match(NftParser.regex)) {
                     return NftParser.parser(
-                        object.details.data.fields as NftRpcResponse,
-                        object.details,
+                        getObjectFields(object) as NftRpcResponse,
+                        getSuiObjectData(object)!,
                         object
                     );
                 }
@@ -202,7 +194,11 @@ export class NftClient {
         if (ids.length === 0) {
             return new Array<NftRaw>();
         }
-        const objects = await this.provider.getObjectBatch(ids);
+        const objects = await this.provider.getObjectBatch(ids, {
+            showType: true,
+            showContent: true,
+            showOwner: true,
+        });
         return this.parseObjects(objects);
     };
 
@@ -211,7 +207,11 @@ export class NftClient {
         const objectIds = bagObjects.data.map(
             (bagObject) => bagObject.objectId
         );
-        return this.provider.getObjectBatch(objectIds);
+        return this.provider.getObjectBatch(objectIds, {
+            showType: true,
+            showContent: true,
+            showOwner: true,
+        });
     };
 
     getNftsById = async (params: WithIds): Promise<Nft[]> => {

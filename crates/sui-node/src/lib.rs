@@ -63,7 +63,6 @@ pub mod admin;
 mod handle;
 pub mod metrics;
 pub use handle::SuiNodeHandle;
-use narwhal_config::SharedWorkerCache;
 use narwhal_types::TransactionsClient;
 use sui_core::authority::authority_per_epoch_store::{
     AuthorityPerEpochStore, EpochStartConfiguration,
@@ -599,7 +598,7 @@ impl SuiNode {
         narwhal_manager
             .start(
                 committee.clone(),
-                SharedWorkerCache::from(worker_cache),
+                worker_cache,
                 consensus_handler,
                 SuiTxValidator::new(
                     epoch_store,

@@ -14,8 +14,12 @@ module sui::delegation_tests {
 
     use sui::governance_test_utils::{
         Self,
+        advance_epoch,
+        advance_epoch_with_reward_amounts,
         create_validator_for_testing,
         create_sui_system_state_for_testing,
+        delegate_to,
+        remove_validator,
         total_sui_balance,
         undelegate,
     };
@@ -47,10 +51,10 @@ module sui::delegation_tests {
         {
             let staked_sui_ids = test_scenario::ids_for_sender<StakedSui>(scenario);
             assert!(vector::length(&staked_sui_ids) == 2, 101); // staked sui split to 2 coins
-            
+
             let part1 = test_scenario::take_from_sender_by_id<StakedSui>(scenario, *vector::borrow(&staked_sui_ids, 0));
             let part2 = test_scenario::take_from_sender_by_id<StakedSui>(scenario, *vector::borrow(&staked_sui_ids, 1));
-                
+
             let amount1 = staking_pool::staked_sui_amount(&part1);
             let amount2 = staking_pool::staked_sui_amount(&part2);
             assert!(amount1 == 20 || amount1 == 40, 102);
@@ -241,6 +245,58 @@ module sui::delegation_tests {
         assert_eq(total_sui_balance(VALIDATOR_ADDR_1, scenario), 0);
         undelegate(VALIDATOR_ADDR_1, 0, scenario);
         if (should_distribute_rewards) undelegate(VALIDATOR_ADDR_1, 0, scenario);
+
+        // Make sure have all of their stake. NB there is no epoch change. This is immediate.
+        assert_eq(total_sui_balance(VALIDATOR_ADDR_1, scenario), 100 + reward_amt + validator_reward_amt);
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_earns_rewards_at_last_epoch() {
+        let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(scenario);
+
+        delegate_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_1, 100, scenario);
+
+        advance_epoch(scenario);
+
+        remove_validator(VALIDATOR_ADDR_1, scenario);
+
+        // Add some rewards after the validator requests to leave. Since the validator is still active
+        // this epoch, they should get the rewards from this epoch.
+        advance_epoch_with_reward_amounts(0, 40, scenario);
+
+        // Each 100 MIST of stake gets 10 MIST and validators shares the 10 MIST from the storage fund
+        // so validator gets another 5 MIST.
+        let reward_amt = 10;
+        let validator_reward_amt = 5;
+
+        // Make sure delegation withdrawal happens
+        test_scenario::next_tx(scenario, DELEGATOR_ADDR_1);
+        {
+            let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+            let system_state_mut_ref = &mut system_state;
+
+            let staked_sui = test_scenario::take_from_sender<StakedSui>(scenario);
+            assert_eq(staking_pool::staked_sui_amount(&staked_sui), 100);
+
+            // Undelegate from VALIDATOR_ADDR_1
+            assert_eq(total_sui_balance(DELEGATOR_ADDR_1, scenario), 0);
+            let ctx = test_scenario::ctx(scenario);
+            sui_system::request_withdraw_delegation(system_state_mut_ref, staked_sui, ctx);
+
+            // Make sure they have all of their stake.
+            assert_eq(total_sui_balance(DELEGATOR_ADDR_1, scenario), 100 + reward_amt);
+
+            test_scenario::return_shared(system_state);
+        };
+
+        // Validator undelegates now.
+        assert_eq(total_sui_balance(VALIDATOR_ADDR_1, scenario), 0);
+        undelegate(VALIDATOR_ADDR_1, 0, scenario);
+        undelegate(VALIDATOR_ADDR_1, 0, scenario);
 
         // Make sure have all of their stake. NB there is no epoch change. This is immediate.
         assert_eq(total_sui_balance(VALIDATOR_ADDR_1, scenario), 100 + reward_amt + validator_reward_amt);

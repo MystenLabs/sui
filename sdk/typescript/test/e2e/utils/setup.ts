@@ -83,7 +83,6 @@ export async function publishPackage(
   tmp.setGracefulCleanup();
 
   const tmpobj = tmp.dirSync({ unsafeCleanup: true });
-  console.log('Dir: ', tmpobj.name);
 
   const compiledModules = JSON.parse(
     execSync(
