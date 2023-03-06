@@ -9,10 +9,14 @@ use tap::tap::TapFallible;
 
 #[cfg(test)]
 use std::collections::HashSet;
+use std::default::Default;
 use std::path::Path;
 
 use sui::client_commands::WalletContext;
-use sui_json_rpc_types::{SuiObjectRead, SuiPaySui, SuiTransactionKind, SuiTransactionResponse};
+use sui_json_rpc_types::{
+    SuiObjectDataOptions, SuiObjectResponse, SuiPaySui, SuiTransactionDataAPI,
+    SuiTransactionEffectsAPI, SuiTransactionKind, SuiTransactionResponse,
+};
 use sui_keys::keystore::AccountKeystore;
 use sui_types::object::Owner;
 use sui_types::{
@@ -184,11 +188,20 @@ impl SimpleFaucet {
     /// If the fullnode returns an unexpected error, returns Err(e)
     async fn get_gas_coin(&self, coin_id: ObjectID) -> anyhow::Result<Option<GasCoin>> {
         let client = self.wallet.get_client().await?;
-        let gas_obj = client.read_api().get_parsed_object(coin_id).await?;
+        let gas_obj = client
+            .read_api()
+            .get_object_with_options(
+                coin_id,
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_content(),
+            )
+            .await?;
         Ok(match gas_obj {
-            SuiObjectRead::NotExists(_) | SuiObjectRead::Deleted(_) => None,
-            SuiObjectRead::Exists(obj) => match &obj.owner {
-                Owner::AddressOwner(owner_addr) if owner_addr == &self.active_address => {
+            SuiObjectResponse::NotExists(_) | SuiObjectResponse::Deleted(_) => None,
+            SuiObjectResponse::Exists(obj) => match &obj.owner {
+                Some(Owner::AddressOwner(owner_addr)) if owner_addr == &self.active_address => {
                     GasCoin::try_from(&obj).ok()
                 }
                 _ => None,
@@ -434,14 +447,14 @@ impl SimpleFaucet {
         number_of_coins: usize,
         recipient: &SuiAddress,
     ) -> Result<(TransactionDigest, Vec<ObjectID>, Vec<u64>), FaucetError> {
-        let txns = res.transaction.data.transactions;
+        let txns = res.transaction.data.transactions();
         if txns.len() != 1 {
             panic!(
                 "PaySui Transaction should create one and exactly one txn, but got {:?}",
                 txns
             );
         }
-        let created = res.effects.created;
+        let created = res.effects.created().to_vec();
         if created.len() != number_of_coins {
             panic!(
                 "PaySui Transaction should create exact {:?} new coins, but got {:?}",
@@ -463,7 +476,7 @@ impl SimpleFaucet {
                 .iter()
                 .map(|created_coin_owner_ref| created_coin_owner_ref.reference.object_id)
                 .collect();
-            Ok((res.effects.transaction_digest, coin_ids, amounts.clone()))
+            Ok((*res.effects.transaction_digest(), coin_ids, amounts.clone()))
         } else {
             panic!("Expect SuiTransactionKind::PaySui(SuiPaySui) to send coins to address {} but got txn {:?}", recipient, txn);
         }
@@ -655,7 +668,7 @@ mod tests {
 
         if let SuiClientCommandResult::PayAllSui(response) = res {
             assert!(matches!(
-                response.effects.status,
+                response.effects.status(),
                 SuiExecutionStatus::Success
             ));
         } else {
@@ -711,8 +724,8 @@ mod tests {
         .unwrap();
 
         let tiny_coin_id = if let SuiClientCommandResult::SplitCoin(resp) = res {
-            assert!(matches!(resp.effects.status, SuiExecutionStatus::Success));
-            resp.effects.created[0].reference.object_id
+            assert!(matches!(resp.effects.status(), SuiExecutionStatus::Success));
+            resp.effects.created()[0].reference.object_id
         } else {
             panic!("split command did not return SuiClientCommandResult::SplitCoin");
         };

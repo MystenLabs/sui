@@ -7,12 +7,12 @@ use crate::execution_mode::{self, ExecutionMode};
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_vm_runtime::move_vm::MoveVM;
-use sui_types::base_types::SequenceNumber;
+use sui_types::base_types::{ObjectID, SequenceNumber};
 use tracing::{debug, info, instrument};
 
 use crate::{adapter, programmable_transactions};
 use sui_protocol_config::ProtocolConfig;
-use sui_types::coin::{transfer_coin, update_input_coins, Coin};
+use sui_types::coin::{check_coins, transfer_coin, update_input_coins, Coin};
 use sui_types::epoch_data::EpochData;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
 use sui_types::gas::GasCostSummary;
@@ -25,17 +25,18 @@ use sui_types::messages::InputObjects;
 use sui_types::messages::{
     ConsensusCommitPrologue, GenesisTransaction, ObjectArg, Pay, PayAllSui, PaySui, TransactionKind,
 };
-use sui_types::object::{Data, MoveObject, Owner};
+use sui_types::object::{MoveObject, Owner};
 use sui_types::storage::SingleTxContext;
 use sui_types::storage::{ChildObjectResolver, DeleteKind, ParentSync, WriteKind};
 use sui_types::sui_system_state::{
-    ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME,
+    get_sui_system_state_version, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME,
+    CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME,
 };
 #[cfg(test)]
 use sui_types::temporary_store;
 use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
+    base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
     gas::SuiGasStatus,
     messages::{
         CallArg, ChangeEpoch, ExecutionStatus, MoveCall, MoveModulePublish, SingleTransactionKind,
@@ -62,7 +63,7 @@ pub fn execute_transaction_to_effects<
     mut temporary_store: TemporaryStore<S>,
     transaction_kind: TransactionKind,
     transaction_signer: SuiAddress,
-    gas_object_ref: ObjectRef,
+    gas: &[ObjectRef],
     transaction_digest: TransactionDigest,
     mut transaction_dependencies: BTreeSet<TransactionDigest>,
     move_vm: &Arc<MoveVM>,
@@ -79,7 +80,7 @@ pub fn execute_transaction_to_effects<
     let (gas_cost_summary, execution_result) = execute_transaction::<Mode, _>(
         &mut temporary_store,
         transaction_kind,
-        gas_object_ref.0,
+        gas,
         &mut tx_ctx,
         move_vm,
         gas_status,
@@ -110,7 +111,7 @@ pub fn execute_transaction_to_effects<
         transaction_dependencies.into_iter().collect(),
         gas_cost_summary,
         status,
-        gas_object_ref,
+        gas,
         epoch_data.epoch_id(),
     );
     (inner, effects, execution_result)
@@ -140,7 +141,7 @@ fn execute_transaction<
 >(
     temporary_store: &mut TemporaryStore<S>,
     transaction_kind: TransactionKind,
-    gas_object_id: ObjectID,
+    gas: &[ObjectRef],
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
     mut gas_status: SuiGasStatus,
@@ -149,6 +150,13 @@ fn execute_transaction<
     GasCostSummary,
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
+    // First smash gas into the first coin if more than 1 was provided
+    let sender = tx_ctx.sender();
+    let mut gas_object_ref = match temporary_store.smash_gas(sender, gas) {
+        Ok(obj_ref) => obj_ref,
+        Err(_) => gas[0], // this cannot fail, but we use gas[0] anyway
+    };
+
     // We must charge object read gas inside here during transaction execution, because if this fails
     // we must still ensure an effect is committed and all objects versions incremented.
     let result = charge_gas_for_object_read(temporary_store, &mut gas_status);
@@ -156,7 +164,7 @@ fn execute_transaction<
         let execution_result = execution_loop::<Mode, _>(
             temporary_store,
             transaction_kind,
-            gas_object_id,
+            gas_object_ref.0,
             tx_ctx,
             move_vm,
             &mut gas_status,
@@ -165,6 +173,11 @@ fn execute_transaction<
         if execution_result.is_err() {
             // Roll back the temporary store if execution failed.
             temporary_store.reset();
+            // re-smash so temporary store is again aware of smashing
+            gas_object_ref = match temporary_store.smash_gas(sender, gas) {
+                Ok(obj_ref) => obj_ref,
+                Err(_) => gas[0], // this cannot fail, but we use gas[0] anyway
+            };
         }
         execution_result
     });
@@ -172,10 +185,9 @@ fn execute_transaction<
     // Make sure every mutable object's version number is incremented.
     // This needs to happen before `charge_gas_for_storage_changes` so that it
     // can charge gas for all mutated objects properly.
-    let sender = tx_ctx.sender();
-    temporary_store.ensure_active_inputs_mutated(sender, &gas_object_id);
+    temporary_store.ensure_active_inputs_mutated(sender, &gas_object_ref.0);
     if !gas_status.is_unmetered() {
-        temporary_store.charge_gas(sender, gas_object_id, &mut gas_status, &mut result);
+        temporary_store.charge_gas(sender, gas_object_ref.0, &mut gas_status, &mut result, gas);
     }
 
     let cost_summary = gas_status.summary(result.is_ok());
@@ -394,6 +406,10 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             CallArg::Pure(bcs::to_bytes(&protocol_config.storage_fund_reinvest_rate()).unwrap()),
             CallArg::Pure(bcs::to_bytes(&protocol_config.reward_slashing_rate()).unwrap()),
             CallArg::Pure(bcs::to_bytes(&change_epoch.epoch_start_timestamp_ms).unwrap()),
+            CallArg::Pure(
+                bcs::to_bytes(&get_sui_system_state_version(change_epoch.protocol_version))
+                    .unwrap(),
+            ),
         ],
         gas_status.create_move_gas_status(),
         tx_ctx,
@@ -494,53 +510,6 @@ fn transfer_object<S>(
     let ctx = SingleTxContext::transfer_object(sender);
     temporary_store.write_object(&ctx, object, WriteKind::Mutate);
     Ok(())
-}
-
-fn check_coins(
-    coin_objects: &[Object],
-    mut coin_type: Option<StructTag>,
-) -> Result<(Vec<Coin>, StructTag), ExecutionError> {
-    if coin_objects.is_empty() {
-        return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::EmptyInputCoins,
-            "Pay transaction requires a non-empty list of input coins".to_string(),
-        ));
-    }
-    let mut coins = Vec::new();
-    for coin_obj in coin_objects {
-        match &coin_obj.data {
-            Data::Move(move_obj) => {
-                if !Coin::is_coin(&move_obj.type_) {
-                    return Err(ExecutionError::new_with_source(
-                        ExecutionErrorKind::InvalidCoinObject,
-                        "Provided non-Coin<T> object as input to pay/pay_sui/pay_all_sui transaction".to_string(),
-                    ));
-                }
-                if let Some(typ) = &coin_type {
-                    if typ != &move_obj.type_ {
-                        return Err(ExecutionError::new_with_source(
-                            ExecutionErrorKind::CoinTypeMismatch,
-                            format!("Coin type check failed in pay/pay_sui/pay_all_sui transaction, expected: {:?}, found: {:}", typ, move_obj.type_),
-                        ));
-                    }
-                } else {
-                    coin_type = Some(move_obj.type_.clone())
-                }
-
-                let coin = Coin::from_bcs_bytes(move_obj.contents())
-                    .expect("Deserializing coin object should not fail");
-                coins.push(coin)
-            }
-            _ => {
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::InvalidCoinObject,
-                    "Provided non-Coin<T> object as input to pay transaction".to_string(),
-                ))
-            }
-        }
-    }
-    // safe because coin_objects must be non-empty, and coin_type must be set in loop above.
-    Ok((coins, coin_type.unwrap()))
 }
 
 fn check_recipients(recipients: &[SuiAddress], amounts: &[u64]) -> Result<(), ExecutionError> {

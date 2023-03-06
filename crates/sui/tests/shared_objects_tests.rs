@@ -7,7 +7,7 @@ use sui_core::authority_client::AuthorityAPI;
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_types::messages::{
     CallArg, EntryArgumentError, EntryArgumentErrorKind, ExecutionFailureStatus, ExecutionStatus,
-    ObjectArg, ObjectInfoRequest,
+    ObjectArg, ObjectInfoRequest, TransactionEffectsAPI,
 };
 use test_utils::authority::get_client;
 use test_utils::transaction::{
@@ -90,9 +90,9 @@ async fn call_shared_object_contract() {
         /* arguments */ Vec::default(),
     );
     let (effects, _) = submit_single_owner_transaction(transaction, &configs.validator_set()).await;
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    let counter_creation_transaction = effects.transaction_digest;
-    let ((counter_id, counter_initial_shared_version, _), _) = effects.created[0];
+    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
+    let counter_creation_transaction = *effects.transaction_digest();
+    let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
     let counter_object_arg = ObjectArg::SharedObject {
         id: counter_id,
         initial_shared_version: counter_initial_shared_version,
@@ -120,12 +120,14 @@ async fn call_shared_object_contract() {
         let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
             .await
             .unwrap();
-        assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+        assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
         // Only gas object transaction and counter creation are dependencies
         // Note that this assert would fail for second transaction
         // if they send counter_object_arg instead of counter_object_arg_imm
-        assert_eq!(effects.dependencies.len(), 2);
-        assert!(effects.dependencies.contains(&counter_creation_transaction));
+        assert_eq!(effects.dependencies().len(), 2);
+        assert!(effects
+            .dependencies()
+            .contains(&counter_creation_transaction));
     }
 
     // Make a transaction to increment the counter.
@@ -139,12 +141,14 @@ async fn call_shared_object_contract() {
     let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
         .await
         .unwrap();
-    let increment_transaction = effects.transaction_digest;
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    let increment_transaction = *effects.transaction_digest();
+    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
     // Again - only gas object transaction and counter creation are dependencies
     // Previously executed assert_value transaction(s) are not a dependency because they took immutable reference to shared object
-    assert_eq!(effects.dependencies.len(), 2);
-    assert!(effects.dependencies.contains(&counter_creation_transaction));
+    assert_eq!(effects.dependencies().len(), 2);
+    assert!(effects
+        .dependencies()
+        .contains(&counter_creation_transaction));
 
     // assert_value can take both mutable and immutable references
     // it is allowed to pass mutable shared object arg to move call taking immutable reference
@@ -168,11 +172,11 @@ async fn call_shared_object_contract() {
         let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
             .await
             .unwrap();
-        assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+        assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
         // Gas object transaction and increment transaction are dependencies
-        assert_eq!(effects.dependencies.len(), 2);
-        assert!(effects.dependencies.contains(&increment_transaction));
-        assert_value_mut_transaction = Some(effects.transaction_digest);
+        assert_eq!(effects.dependencies().len(), 2);
+        assert!(effects.dependencies().contains(&increment_transaction));
+        assert_value_mut_transaction = Some(*effects.transaction_digest());
     }
 
     let assert_value_mut_transaction = assert_value_mut_transaction.unwrap();
@@ -190,7 +194,7 @@ async fn call_shared_object_contract() {
         .unwrap();
     // Transaction fails
     assert!(matches!(
-        effects.status,
+        effects.status(),
         ExecutionStatus::Failure {
             error: ExecutionFailureStatus::EntryArgumentError(EntryArgumentError {
                 kind: EntryArgumentErrorKind::ObjectMutabilityMismatch,
@@ -199,8 +203,10 @@ async fn call_shared_object_contract() {
             ..
         }
     ));
-    assert_eq!(effects.dependencies.len(), 2);
-    assert!(effects.dependencies.contains(&assert_value_mut_transaction));
+    assert_eq!(effects.dependencies().len(), 2);
+    assert!(effects
+        .dependencies()
+        .contains(&assert_value_mut_transaction));
 }
 
 #[sim_test]
@@ -240,7 +246,7 @@ async fn access_clock_object_test() {
     let finish = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
 
     assert_eq!(2, events.data.len());
     let event = events.data.get(1).unwrap();
@@ -307,8 +313,8 @@ async fn shared_object_flood() {
         /* arguments */ Vec::default(),
     );
     let (effects, _) = submit_single_owner_transaction(transaction, &configs.validator_set()).await;
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    let ((counter_id, counter_initial_shared_version, _), _) = effects.created[0];
+    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
+    let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
     let counter_object_arg = ObjectArg::SharedObject {
         id: counter_id,
         initial_shared_version: counter_initial_shared_version,
@@ -329,7 +335,7 @@ async fn shared_object_flood() {
     let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
         .await
         .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
 
     // Make a transaction to increment the counter.
     let transaction = move_transaction(
@@ -342,7 +348,7 @@ async fn shared_object_flood() {
     let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
         .await
         .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
 
     // Ensure the value of the counter is `1`.
     let transaction = move_transaction(
@@ -358,7 +364,7 @@ async fn shared_object_flood() {
     let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
         .await
         .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
 }
 
 #[sim_test]
@@ -400,8 +406,8 @@ async fn shared_object_sync() {
         &slow_validators,
     )
     .await;
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    let ((counter_id, counter_initial_shared_version, _), _) = effects.created[0];
+    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
+    let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
     let counter_object_arg = ObjectArg::SharedObject {
         id: counter_id,
         initial_shared_version: counter_initial_shared_version,
@@ -446,7 +452,7 @@ async fn shared_object_sync() {
     )
     .await
     .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
 
     // Submit transactions to the out-of-date authority.
     // It will succeed because we share owned object certificates through narwhal
@@ -456,7 +462,7 @@ async fn shared_object_sync() {
     )
     .await
     .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
 }
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
@@ -490,10 +496,10 @@ async fn replay_shared_object_transaction() {
             &configs.validator_set(),
         )
         .await;
-        assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+        assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
 
         // Ensure the sequence number of the shared object did not change.
-        let ((_, curr, _), _) = effects.created[0];
+        let ((_, curr, _), _) = effects.created()[0];
         if let Some(prev) = version {
             assert_eq!(
                 prev, curr,

@@ -40,7 +40,7 @@ async fn test_restore_from_disk() {
     ] {
         let mut c = client.clone();
         tokio::spawn(async move {
-            let tr = bincode::serialize(&tx).unwrap();
+            let tr = bcs::to_bytes(&tx).unwrap();
             let txn = TransactionProto {
                 transaction: Bytes::from(tr),
             };

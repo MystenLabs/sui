@@ -9,6 +9,7 @@ module sui::pay_tests {
     use sui::pay;
     use sui::balance;
     use sui::sui::SUI;
+    use sui::test_utils;
 
     const TEST_SENDER_ADDR: address = @0xA11CE;
 
@@ -37,9 +38,9 @@ module sui::pay_tests {
             1
         );
 
-        coin::destroy_for_testing(coin);
-        coin::destroy_for_testing(coin1);
-        coin::destroy_for_testing(coin2);
+        test_utils::destroy(coin);
+        test_utils::destroy(coin1);
+        test_utils::destroy(coin2);
         test_scenario::end(scenario_val);
     }
 
@@ -61,9 +62,9 @@ module sui::pay_tests {
         assert!(coin::value(&coin) == 4, 0);
 
         vector::destroy_empty(split_coins);
-        coin::destroy_for_testing(coin);
-        coin::destroy_for_testing(coin1);
-        coin::destroy_for_testing(coin2);
+        test_utils::destroy(coin);
+        test_utils::destroy(coin1);
+        test_utils::destroy(coin2);
         test_scenario::end(scenario_val);
     }
 
@@ -88,9 +89,9 @@ module sui::pay_tests {
         assert!(coin::value(&coin2) == 1, 0);
         assert!(coin::value(&coin) == 5, 0);
 
-        coin::destroy_for_testing(coin);
-        coin::destroy_for_testing(coin1);
-        coin::destroy_for_testing(coin2);
+        test_utils::destroy(coin);
+        test_utils::destroy(coin1);
+        test_utils::destroy(coin2);
         test_scenario::end(scenario_val);
     }
 
@@ -110,9 +111,9 @@ module sui::pay_tests {
         assert!(coin::value(&coin1) == 3, 0);
         assert!(coin::value(&coin) == 7, 0);
 
-        coin::destroy_for_testing(coin);
-        coin::destroy_for_testing(coin1);
-        test_scenario::end(scenario_val);        
+        test_utils::destroy(coin);
+        test_utils::destroy(coin1);
+        test_scenario::end(scenario_val);
     }
 
     #[test]
@@ -130,9 +131,9 @@ module sui::pay_tests {
         let coin_transfer_fail = test_scenario::take_from_sender<Coin<SUI>>(scenario);
         assert!(coin::value(&coin_transfer_fail) == 7, 0);
 
-        coin::destroy_for_testing(coin);
-        coin::destroy_for_testing(coin_transfer_fail);
-        test_scenario::end(scenario_val);   
+        test_utils::destroy(coin);
+        test_utils::destroy(coin_transfer_fail);
+        test_scenario::end(scenario_val);
     }
 
     #[test]
@@ -150,12 +151,12 @@ module sui::pay_tests {
         test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
         let coin1 = test_scenario::take_from_sender<Coin<SUI>>(scenario);
 
-        // result is `3` coins of balance `2`        
+        // result is `3` coins of balance `2`
         assert!(coin::value(&coin1) == 6, 0);
         assert!(coin::value(&coin) == 4, 0);
 
-        coin::destroy_for_testing(coin);
-        coin::destroy_for_testing(coin1);
-        test_scenario::end(scenario_val);   
+        test_utils::destroy(coin);
+        test_utils::destroy(coin1);
+        test_scenario::end(scenario_val);
     }
 }

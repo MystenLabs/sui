@@ -36,7 +36,8 @@ use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
 use sui_types::error::SuiResult;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::{
-    ConsensusTransactionKey, SingleTransactionKind, TransactionEffects, TransactionKind,
+    ConsensusTransactionKey, SingleTransactionKind, TransactionDataAPI, TransactionEffects,
+    TransactionEffectsAPI, TransactionKind,
 };
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
@@ -44,7 +45,7 @@ use sui_types::messages_checkpoint::{
     VerifiedCheckpoint,
 };
 use sui_types::signature::GenericSignature;
-use sui_types::sui_system_state::SuiSystemState;
+use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use tokio::{
     sync::{watch, Notify},
     time::timeout,
@@ -82,7 +83,7 @@ pub struct CheckpointStore {
     checkpoint_content: DBMap<CheckpointContentsDigest, CheckpointContents>,
 
     /// Stores certified checkpoints
-    certified_checkpoints: DBMap<CheckpointSequenceNumber, CertifiedCheckpointSummary>,
+    pub(crate) certified_checkpoints: DBMap<CheckpointSequenceNumber, CertifiedCheckpointSummary>,
     /// Map from checkpoint digest to certified checkpoint
     checkpoint_by_digest: DBMap<CheckpointDigest, CertifiedCheckpointSummary>,
 
@@ -335,11 +336,12 @@ impl CheckpointStore {
 
     pub fn update_highest_pruned_checkpoint(
         &self,
-        checkpoint: &VerifiedCheckpoint,
+        sequence_number: CheckpointSequenceNumber,
+        digest: CheckpointDigest,
     ) -> Result<(), TypedStoreError> {
         self.watermarks.insert(
             &CheckpointWatermark::HighestPruned,
-            &(checkpoint.sequence_number(), checkpoint.digest()),
+            &(sequence_number, digest),
         )
     }
 
@@ -611,7 +613,7 @@ impl CheckpointBuilder {
             let last_checkpoint_of_epoch = details.last_of_epoch && index == chunks_count - 1;
 
             let digests_without_epoch_augment: Vec<_> =
-                effects.iter().map(|e| e.transaction_digest).collect();
+                effects.iter().map(|e| *e.transaction_digest()).collect();
             debug!("Waiting for checkpoint user signatures for certificates {:?} to appear in consensus", digests_without_epoch_augment);
             for digest in digests_without_epoch_augment.iter() {
                 let transaction = self
@@ -621,7 +623,7 @@ impl CheckpointBuilder {
                     .expect("Could not find executed transaction");
                 // ConsensusCommitPrologue is guaranteed to be processed before we reach here
                 if !matches!(
-                    transaction.inner().transaction_data().kind,
+                    transaction.inner().transaction_data().kind(),
                     TransactionKind::Single(SingleTransactionKind::ConsensusCommitPrologue(..))
                 ) {
                     // todo - use NotifyRead::register_all might be faster
@@ -690,7 +692,7 @@ impl CheckpointBuilder {
                 Some(EndOfEpochData {
                     next_epoch_committee: committee.voting_rights,
                     next_epoch_protocol_version: ProtocolVersion::new(
-                        system_state_obj.protocol_version,
+                        system_state_obj.protocol_version(),
                     ),
                     root_state_digest: Accumulator::default().digest(),
                 })
@@ -795,14 +797,14 @@ impl CheckpointBuilder {
         loop {
             let mut pending = HashSet::new();
             for effect in roots {
-                let digest = effect.transaction_digest;
+                let digest = effect.transaction_digest();
                 if self
                     .epoch_store
-                    .builder_included_transaction_in_checkpoint(&digest)?
+                    .builder_included_transaction_in_checkpoint(digest)?
                 {
                     continue;
                 }
-                let executed_epoch = self.state.database.get_transaction_checkpoint(&digest)?;
+                let executed_epoch = self.state.database.get_transaction_checkpoint(digest)?;
                 if let Some((executed_epoch, _checkpoint)) = executed_epoch {
                     // Skip here if transaction was executed in previous epoch
                     //
@@ -813,7 +815,7 @@ impl CheckpointBuilder {
                         continue;
                     }
                 }
-                for dependency in effect.dependencies.iter() {
+                for dependency in effect.dependencies().iter() {
                     if seen.insert(*dependency) {
                         pending.insert(*dependency);
                     }
@@ -895,10 +897,19 @@ impl CheckpointAggregator {
     async fn run_inner(&mut self) -> SuiResult {
         let _scope = monitored_scope("CheckpointAggregator");
         'outer: loop {
+            let next_to_certify = self.next_checkpoint_to_certify();
             let current = if let Some(current) = &mut self.current {
+                // It's possible that the checkpoint was already certified by
+                // the rest of the network and we've already received the
+                // certified checkpoint via StateSync. In this case, we reset
+                // the current signature aggregator to the next checkpoint to
+                // be certified
+                if current.summary.sequence_number < next_to_certify {
+                    self.current = None;
+                    continue;
+                }
                 current
             } else {
-                let next_to_certify = self.next_checkpoint_to_certify();
                 let Some(summary) = self.epoch_store.get_built_checkpoint_summary(next_to_certify)? else { return Ok(()); };
                 self.current = Some(CheckpointSignatureAggregator {
                     next_index: 0,
@@ -1407,11 +1418,10 @@ mod tests {
         dependencies: Vec<TransactionDigest>,
         gas_used: GasCostSummary,
     ) -> TransactionEffects {
-        TransactionEffects {
-            transaction_digest,
-            dependencies,
-            gas_used,
-            ..Default::default()
-        }
+        let mut effects = TransactionEffects::default();
+        *effects.transaction_digest_mut_for_testing() = transaction_digest;
+        *effects.dependencies_mut_for_testing() = dependencies;
+        *effects.gas_cost_summary_mut_for_testing() = gas_used;
+        effects
     }
 }

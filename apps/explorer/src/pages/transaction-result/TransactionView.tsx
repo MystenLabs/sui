@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { CoinFormat, useFormatCoin } from '@mysten/core';
 import {
     getMoveCallTransaction,
     getPublishTransaction,
@@ -47,7 +48,6 @@ import type { ReactNode } from 'react';
 
 import styles from './TransactionResult.module.css';
 
-import { CoinFormat, useFormatCoin } from '~/hooks/useFormatCoin';
 import { Banner } from '~/ui/Banner';
 import { DateCard } from '~/ui/DateCard';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
@@ -441,7 +441,7 @@ function TransactionView({
         ? getSignatureFromAddress(deserializedTransactionSignatures, gasOwner)
         : null;
 
-    const timestamp = transaction.timestamp_ms || transaction.timestampMs;
+    const timestamp = transaction.timestampMs;
 
     return (
         <div className={clsx(styles.txdetailsbg)}>
@@ -584,7 +584,8 @@ function TransactionView({
                                 <DescriptionItem title="Gas Payment">
                                     <ObjectLink
                                         noTruncate
-                                        objectId={gasPayment.objectId}
+                                        // TODO: support multiple gas coins
+                                        objectId={gasPayment[0].objectId}
                                     />
                                 </DescriptionItem>
 

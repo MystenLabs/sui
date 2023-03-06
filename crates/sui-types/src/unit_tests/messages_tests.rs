@@ -471,7 +471,7 @@ fn test_digest_caching() {
 
     let mut signed_tx = SignedTransaction::new(
         committee.epoch(),
-        transaction.into_message(),
+        transaction.clone().into_message(),
         &sec1,
         AuthorityPublicKeyBytes::from(sec1.public()),
     );
@@ -483,24 +483,23 @@ fn test_digest_caching() {
         .data_mut_for_testing()
         .intent_message
         .value
-        .gas_data
+        .gas_data_mut()
         .budget += 1;
 
     // digest is cached
     assert_eq!(initial_digest, *signed_tx.digest());
 
-    let serialized_tx = bincode::serialize(&signed_tx).unwrap();
+    let serialized_tx = bcs::to_bytes(&signed_tx).unwrap();
 
-    let deserialized_tx: SignedTransaction = bincode::deserialize(&serialized_tx).unwrap();
+    let deserialized_tx: SignedTransaction = bcs::from_bytes(&serialized_tx).unwrap();
 
     // cached digest was not serialized/deserialized
     assert_ne!(initial_digest, *deserialized_tx.digest());
 
-    let effects = TransactionEffects {
-        transaction_digest: initial_digest,
-        gas_object: (random_object_ref(), Owner::AddressOwner(a1)),
-        ..Default::default()
-    };
+    let effects = TransactionEffects::new_with_tx_and_gas(
+        &transaction,
+        (random_object_ref(), Owner::AddressOwner(a1)),
+    );
 
     let mut signed_effects = SignedTransactionEffects::new(
         committee.epoch(),
@@ -512,16 +511,16 @@ fn test_digest_caching() {
     let initial_effects_digest = *signed_effects.digest();
     signed_effects
         .data_mut_for_testing()
-        .gas_used
+        .gas_cost_summary_mut_for_testing()
         .computation_cost += 1;
 
     // digest is cached
     assert_eq!(initial_effects_digest, *signed_effects.digest());
 
-    let serialized_effects = bincode::serialize(&signed_effects).unwrap();
+    let serialized_effects = bcs::to_bytes(&signed_effects).unwrap();
 
     let deserialized_effects: SignedTransactionEffects =
-        bincode::deserialize(&serialized_effects).unwrap();
+        bcs::from_bytes(&serialized_effects).unwrap();
 
     // cached digest was not serialized/deserialized
     assert_ne!(initial_effects_digest, *deserialized_effects.digest());
@@ -542,7 +541,7 @@ fn test_user_signature_committed_in_transactions() {
     );
 
     let mut tx_data_2 = tx_data.clone();
-    tx_data_2.gas_data.budget += 1;
+    tx_data_2.gas_data_mut().budget += 1;
 
     let transaction_a =
         Transaction::from_data_and_signer(tx_data.clone(), Intent::default(), vec![&sender_sec]);
@@ -673,7 +672,7 @@ fn test_sponsored_transaction_message() {
     }));
     let gas_obj_ref = random_object_ref();
     let gas_data = GasData {
-        payment: gas_obj_ref,
+        payment: vec![gas_obj_ref],
         owner: sponsor,
         price: DUMMY_GAS_PRICE,
         budget: 10000,
@@ -698,7 +697,7 @@ fn test_sponsored_transaction_message() {
     );
 
     assert_eq!(transaction.sender_address(), sender,);
-    assert_eq!(transaction.gas_payment_object_ref(), &gas_obj_ref);
+    assert_eq!(transaction.gas(), &[gas_obj_ref]);
 
     // Sig order does not matter
     let transaction = Transaction::from_generic_sig_data(
@@ -757,7 +756,7 @@ fn test_sponsored_transaction_message() {
     ));
 
     let tx = transaction.data().transaction_data();
-    assert_eq!(tx.gas(), gas_obj_ref,);
+    assert_eq!(tx.gas(), &[gas_obj_ref],);
     assert_eq!(tx.gas_data(), &gas_data,);
     assert_eq!(tx.sender(), sender,);
     assert_eq!(tx.gas_owner(), sponsor,);
@@ -773,7 +772,7 @@ fn test_sponsored_transaction_validity_check() {
     // This is a sponsored transaction
     assert_ne!(sender, sponsor);
     let gas_data = GasData {
-        payment: random_object_ref(),
+        payment: vec![random_object_ref()],
         owner: sponsor,
         price: DUMMY_GAS_PRICE,
         budget: 10000,
@@ -847,7 +846,7 @@ fn test_sponsored_transaction_validity_check() {
     assert_eq!(
         TransactionData::new_with_gas_data(
             TransactionKind::Single(SingleTransactionKind::PaySui(PaySui {
-                coins: vec![(gas_data.payment)],
+                coins: gas_data.payment.clone(),
                 recipients: vec![],
                 amounts: vec![],
             })),
@@ -863,7 +862,7 @@ fn test_sponsored_transaction_validity_check() {
     assert_eq!(
         TransactionData::new_with_gas_data(
             TransactionKind::Single(SingleTransactionKind::PayAllSui(PayAllSui {
-                coins: vec![(gas_data.payment)],
+                coins: gas_data.payment.clone(),
                 recipient: SuiAddress::random_for_testing_only(),
             })),
             sender,
@@ -919,14 +918,14 @@ fn verify_sender_signature_correctly_with_flag() {
     // create a sender keypair with Ed25519
     let sender_kp_2 = SuiKeyPair::Ed25519(get_key_pair().1);
     let mut tx_data_2 = tx_data.clone();
-    tx_data_2.sender = (&sender_kp_2.public()).into();
-    tx_data_2.gas_data.owner = tx_data_2.sender;
+    *tx_data_2.sender_mut() = (&sender_kp_2.public()).into();
+    tx_data_2.gas_data_mut().owner = tx_data_2.sender();
 
     // create a sender keypair with Secp256r1
     let sender_kp_3 = SuiKeyPair::Secp256r1(get_key_pair().1);
     let mut tx_data_3 = tx_data.clone();
-    tx_data_3.sender = (&sender_kp_3.public()).into();
-    tx_data_3.gas_data.owner = tx_data_3.sender;
+    *tx_data_3.sender_mut() = (&sender_kp_3.public()).into();
+    tx_data_3.gas_data_mut().owner = tx_data_3.sender();
 
     let transaction =
         Transaction::from_data_and_signer(tx_data, Intent::default(), vec![&sender_kp])

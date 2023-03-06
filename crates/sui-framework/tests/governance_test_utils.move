@@ -7,6 +7,7 @@ module sui::governance_test_utils {
     use sui::balance;
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
+    use sui::locked_coin::{Self, LockedCoin};
     use sui::staking_pool::{Self, StakedSui, StakingPool};
     use sui::test_utils::assert_eq;
     use sui::tx_context::{Self, TxContext};
@@ -65,8 +66,10 @@ module sui::governance_test_utils {
             balance::create_for_testing<SUI>(storage_fund_amount), // storage_fund
             1024, // max_validator_candidate_count
             0, // min_validator_stake
+            0, // governance_start_epoch
             0, // stake subsidy
             1, // protocol version
+            1, // system state version
             0, // epoch_start_timestamp_ms
             ctx,
         )
@@ -99,7 +102,7 @@ module sui::governance_test_utils {
 
         let ctx = test_scenario::ctx(scenario);
 
-        sui_system::advance_epoch(&mut system_state, new_epoch, 1, storage_charge, computation_charge, 0, 0, 0, 0,  ctx);
+        sui_system::advance_epoch(&mut system_state, new_epoch, 1, storage_charge, computation_charge, 0, 0, 0, 0, 1, ctx);
         test_scenario::return_shared(system_state);
         test_scenario::next_epoch(scenario, @0x0);
     }
@@ -117,7 +120,7 @@ module sui::governance_test_utils {
         let ctx = test_scenario::ctx(scenario);
 
         sui_system::advance_epoch(
-            &mut system_state, new_epoch, 1, storage_charge, computation_charge, 0, 0, reward_slashing_rate, 0, ctx
+            &mut system_state, new_epoch, 1, storage_charge, computation_charge, 0, 0, reward_slashing_rate, 0, 1, ctx
         );
         test_scenario::return_shared(system_state);
         test_scenario::next_epoch(scenario, @0x0);
@@ -133,6 +136,32 @@ module sui::governance_test_utils {
 
         sui_system::request_add_delegation(&mut system_state, coin::mint_for_testing(amount, ctx), validator, ctx);
         test_scenario::return_shared(system_state);
+    }
+
+    public fun delegate_locked_to(
+        delegator: address, validator: address, amount: u64, locked_until_epoch: u64, scenario: &mut Scenario
+    ) {        
+        // First lock the coin
+        test_scenario::next_tx(scenario, delegator);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            locked_coin::lock_coin<SUI>(coin::mint_for_testing(amount, ctx), delegator, locked_until_epoch, ctx);
+        };
+        
+        // Next delegate the locked coin
+        test_scenario::next_tx(scenario, delegator);
+        {
+            let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+            let locked_val = test_scenario::take_from_sender<LockedCoin<SUI>>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            sui_system::request_add_delegation_with_locked_coin(
+                &mut system_state,
+                locked_val,
+                validator,
+                ctx
+            );
+            test_scenario::return_shared(system_state);
+        };
     }
 
     public fun undelegate(

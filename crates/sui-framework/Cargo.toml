@@ -30,17 +30,12 @@ sui-types = { path = "../sui-types" }
 sui-cost-tables = {path = "../sui-cost-tables"}
 
 move-binary-format.workspace = true
-move-bytecode-verifier.workspace = true
-move-cli.workspace = true
 move-compiler.workspace = true
 move-core-types.workspace = true
 move-package.workspace = true
-move-stdlib.workspace = true
-move-unit-test.workspace = true
+move-stdlib = { workspace = true, default-features = false }
 move-vm-runtime.workspace = true
-move-vm-test-utils.workspace = true
 move-vm-types.workspace = true
-narwhal-crypto = { path = "../../narwhal/crypto" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
@@ -52,6 +47,3 @@ sui-framework-build = { path = "../sui-framework-build" }
 
 move-binary-format.workspace = true
 move-package.workspace = true
-
-[package.metadata.cargo-udeps.ignore]
-normal = ["move-cli", "move-unit-test"]

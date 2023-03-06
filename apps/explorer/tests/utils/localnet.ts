@@ -10,9 +10,9 @@ import {
     RawSigner,
     LocalTxnDataSerializer,
     type Keypair,
-    SuiExecuteTransactionResponse,
     assert,
     localnetConnection,
+    SuiTransactionResponse,
 } from '@mysten/sui.js';
 
 const addressToKeypair = new Map<string, Keypair>();
@@ -49,7 +49,7 @@ export async function mint(address: string) {
         gasBudget: 30000,
     });
 
-    assert(tx, SuiExecuteTransactionResponse);
+    assert(tx, SuiTransactionResponse);
     return tx;
 }
 

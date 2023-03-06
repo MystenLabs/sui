@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useCoinDecimals } from '@mysten/core';
 import {
     getTransactionDigest,
     SUI_TYPE_ARG,
@@ -32,12 +33,7 @@ import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { parseAmount } from '_helpers';
-import {
-    useSigner,
-    useAppSelector,
-    useCoinDecimals,
-    useGetCoinBalance,
-} from '_hooks';
+import { useSigner, useAppSelector, useGetCoinBalance } from '_hooks';
 import { createCoinsForTypeSelector } from '_redux/slices/account';
 import { Coin } from '_redux/slices/sui-objects/Coin';
 import { trackEvent } from '_src/shared/plausible';

@@ -150,7 +150,7 @@ export function TransactionCard({
             />
         );
 
-    const timestamp = txn.timestamp_ms || txn.timestampMs;
+    const timestamp = txn.timestampMs;
 
     return (
         <Link

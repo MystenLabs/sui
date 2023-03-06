@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFormatCoin } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
 import { getStakingRewards } from '../getStakingRewards';
 import { ValidatorLogo } from '../validators/ValidatorLogo';
-import { useFormatCoin } from '_app/hooks';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
 

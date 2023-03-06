@@ -8,6 +8,7 @@ use chrono::prelude::*;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::KeyPair;
+use itertools::izip;
 use itertools::Itertools;
 use move_binary_format::compatibility::Compatibility;
 use move_binary_format::CompiledModule;
@@ -35,6 +36,7 @@ use sui_types::intent::Intent;
 use sui_types::intent::IntentScope;
 use sui_types::message_envelope::Message;
 use sui_types::parse_sui_struct_tag;
+use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::MOVE_STDLIB_OBJECT_ID;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use tap::TapFallible;
@@ -155,6 +157,13 @@ pub type ReconfigConsensusMessage = (
     Vec<(ConsensusWorkerId, NetworkKeyPair)>,
     ConsensusWorkerCache,
 );
+
+pub type VerifiedTransactionBatch = Vec<(
+    VerifiedTransaction,
+    TransactionEffects,
+    TransactionEvents,
+    Option<(EpochId, CheckpointSequenceNumber)>,
+)>;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 pub struct AuthorityMetrics {
@@ -554,7 +563,7 @@ impl AuthorityState {
         }
 
         // Checks to see if the transaction has expired
-        if match &transaction.inner().data().transaction_data().expiration {
+        if match &transaction.inner().data().transaction_data().expiration() {
             TransactionExpiration::None => false,
             TransactionExpiration::Epoch(epoch) => *epoch < epoch_store.epoch(),
         } {
@@ -603,7 +612,7 @@ impl AuthorityState {
         let digest = *transaction.digest();
         debug!("execute_certificate_with_effects");
         fp_ensure!(
-            effects.data().transaction_digest == digest,
+            *effects.data().transaction_digest() == digest,
             SuiError::ErrorWhileProcessingCertificate {
                 err: "effects/tx digest mismatch".to_string()
             }
@@ -847,7 +856,7 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         let input_object_count = inner_temporary_store.objects.len();
-        let shared_object_count = effects.shared_objects.len();
+        let shared_object_count = effects.shared_objects().len();
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
@@ -899,7 +908,7 @@ impl AuthorityState {
             .observe(shared_object_count as f64);
         self.metrics
             .batch_size
-            .observe(certificate.data().intent_message.value.kind.batch_size() as f64);
+            .observe(certificate.data().intent_message.value.kind().batch_size() as f64);
 
         Ok(())
     }
@@ -941,16 +950,15 @@ impl AuthorityState {
             *certificate.digest(),
             epoch_store.protocol_config(),
         );
-        let transaction_data = certificate.data().intent_message.value.clone();
-        let signer = transaction_data.sender();
-        let gas = transaction_data.gas();
+        let transaction_data = &certificate.data().intent_message.value;
+        let (kind, signer, gas) = transaction_data.execution_parts();
         let (inner_temp_store, effects, _execution_error) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
                 shared_object_refs,
                 temporary_store,
-                transaction_data.kind,
+                kind,
                 signer,
-                gas,
+                &gas,
                 *certificate.digest(),
                 transaction_dependencies,
                 epoch_store.move_vm(),
@@ -997,8 +1005,7 @@ impl AuthorityState {
             transaction_digest,
             epoch_store.protocol_config(),
         );
-        let signer = transaction.sender();
-        let gas = transaction.gas();
+        let (kind, signer, gas) = transaction.execution_parts();
         let move_vm = Arc::new(
             adapter::new_move_vm(
                 epoch_store.native_functions().clone(),
@@ -1010,9 +1017,9 @@ impl AuthorityState {
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
                 shared_object_refs,
                 temporary_store,
-                transaction.kind,
+                kind,
                 signer,
-                gas,
+                &gas,
                 transaction_digest,
                 transaction_dependencies,
                 &move_vm,
@@ -1021,7 +1028,7 @@ impl AuthorityState {
                 epoch_store.protocol_config(),
             );
         Ok(DryRunTransactionResponse {
-            effects: effects.into(),
+            effects: effects.try_into()?,
             events: SuiTransactionEvents::try_from(
                 inner_temp_store.events,
                 epoch_store.module_cache().as_ref(),
@@ -1040,6 +1047,9 @@ impl AuthorityState {
         if !self.is_fullnode(&epoch_store) {
             return Err(anyhow!("dev-inspect is only supported on fullnodes"));
         }
+
+        transaction_kind.check_version_supported(epoch_store.protocol_version())?;
+
         let gas_price = gas_price.unwrap_or_else(|| epoch_store.reference_gas_price());
 
         let protocol_config = epoch_store.protocol_config();
@@ -1073,7 +1083,7 @@ impl AuthorityState {
             gas_budget,
         );
         let transaction_digest = TransactionDigest::new(sha3_hash(&data));
-        let transaction_kind = data.kind;
+        let transaction_kind = data.into_kind();
         let transaction_dependencies = input_objects.transaction_dependencies();
         let temporary_store = TemporaryStore::new(
             self.database.clone(),
@@ -1101,7 +1111,7 @@ impl AuthorityState {
                 temporary_store,
                 transaction_kind,
                 sender,
-                gas_object_ref,
+                &[gas_object_ref],
                 transaction_digest,
                 transaction_dependencies,
                 &move_vm,
@@ -1146,11 +1156,12 @@ impl AuthorityState {
                 .map(|o| o.object_id()),
             effects
                 .all_mutated()
+                .into_iter()
                 .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
             cert.data()
                 .intent_message
                 .value
-                .move_calls()
+                .legacy_move_calls()
                 .iter()
                 .map(|mc| (mc.package, mc.module.clone(), mc.function.clone())),
             changes,
@@ -1165,14 +1176,14 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Result<ObjectIndexChanges, SuiError> {
         let modified_at_version = effects
-            .modified_at_versions
+            .modified_at_versions()
             .iter()
             .cloned()
             .collect::<HashMap<_, _>>();
 
         let mut deleted_owners = vec![];
         let mut deleted_dynamic_fields = vec![];
-        for (id, _, _) in &effects.deleted {
+        for (id, _, _) in effects.deleted() {
             let old_version = modified_at_version.get(id).unwrap();
 
             match self.get_owner_at_version(id, *old_version)? {
@@ -1192,11 +1203,11 @@ impl AuthorityState {
             // For mutated objects, retrieve old owner and delete old index if there is a owner change.
             if let WriteKind::Mutate = kind {
                 let Some(old_version) = modified_at_version.get(id) else{
-                        error!("Error processing object owner index for tx [{:?}], cannot find modified at version for mutated object [{id}].", effects.transaction_digest);
+                        error!("Error processing object owner index for tx [{:?}], cannot find modified at version for mutated object [{id}].", effects.transaction_digest());
                         continue;
                     };
                 let Some(old_object) = self.database.get_object_by_key(id, *old_version)? else {
-                        error!("Error processing object owner index for tx [{:?}], cannot find object [{id}] at version [{old_version}].", effects.transaction_digest);
+                        error!("Error processing object owner index for tx [{:?}], cannot find object [{id}] at version [{old_version}].", effects.transaction_digest());
                         continue;
                     };
                 if &old_object.owner != owner {
@@ -1232,7 +1243,7 @@ impl AuthorityState {
                             digest: oref.2,
                             type_,
                             owner: *owner,
-                            previous_transaction: effects.transaction_digest,
+                            previous_transaction: *effects.transaction_digest(),
                         },
                     ));
                 }
@@ -1478,28 +1489,6 @@ impl AuthorityState {
         })
     }
 
-    pub fn handle_committee_info_request(
-        &self,
-        request: &CommitteeInfoRequest,
-    ) -> SuiResult<CommitteeInfoResponse> {
-        let (epoch, committee) = match request.epoch {
-            Some(epoch) => (
-                epoch,
-                self.committee_store
-                    .get_committee(&epoch)?
-                    .ok_or(SuiError::MissingCommitteeAtEpoch(epoch))?,
-            ),
-            None => {
-                let committee = self.committee_store.get_latest_committee();
-                (committee.epoch, committee)
-            }
-        };
-        Ok(CommitteeInfoResponse {
-            epoch,
-            committee_info: committee.voting_rights,
-        })
-    }
-
     fn check_protocol_version(
         supported_protocol_versions: SupportedProtocolVersions,
         current_version: ProtocolVersion,
@@ -1536,7 +1525,7 @@ impl AuthorityState {
         event_store: Option<Arc<EventStoreType>>,
         checkpoint_store: Arc<CheckpointStore>,
         prometheus_registry: &Registry,
-        pruning_config: &AuthorityStorePruningConfig,
+        pruning_config: AuthorityStorePruningConfig,
         genesis_objects: &[Object],
         epoch_duration_ms: u64,
         state_snapshot_config: &StateSnapshotConfig,
@@ -1558,14 +1547,14 @@ impl AuthorityState {
         ));
         let (tx_execution_shutdown, rx_execution_shutdown) = oneshot::channel();
 
+        let _authority_per_epoch_pruner =
+            AuthorityPerEpochStorePruner::new(epoch_store.get_parent_path(), &pruning_config);
         let _objects_pruner = AuthorityStorePruner::new(
             store.perpetual_tables.clone(),
             checkpoint_store.clone(),
             pruning_config,
             epoch_duration_ms,
         );
-        let _authority_per_epoch_pruner =
-            AuthorityPerEpochStorePruner::new(epoch_store.get_parent_path(), pruning_config);
 
         let state = Arc::new(AuthorityState {
             name,
@@ -1669,7 +1658,7 @@ impl AuthorityState {
             None,
             checkpoint_store,
             &registry,
-            &AuthorityStorePruningConfig::default(),
+            AuthorityStorePruningConfig::default(),
             genesis.objects(),
             10000,
             &StateSnapshotConfig::default(),
@@ -2137,6 +2126,46 @@ impl AuthorityState {
         }
     }
 
+    pub async fn multi_get_transactions(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Result<VerifiedTransactionBatch, anyhow::Error> {
+        let transactions = self.database.multi_get_transactions(digests)?;
+        let effects = self.database.multi_get_executed_effects(digests)?;
+        let checkpoints = self.database.multi_get_transaction_checkpoint(digests)?;
+
+        let mut events_digests: Vec<TransactionEventsDigest> = vec![];
+
+        for effect in effects.iter() {
+            match effect {
+                Some(eff) => events_digests.push(*eff.events_digest().unwrap()),
+                _ => continue,
+            }
+        }
+
+        let events = self.database.multi_get_events(events_digests.as_slice())?;
+
+        let mut missed_digests = vec![];
+        let mut response: VerifiedTransactionBatch = vec![];
+
+        for data in izip!(digests, transactions, effects, events, checkpoints) {
+            match data {
+                (_, Some(tx), Some(effect), Some(event), cp) => {
+                    response.push((tx, effect, event, cp))
+                }
+                (digest, _, _, _, _) => missed_digests.push(*digest),
+            }
+        }
+
+        if !missed_digests.is_empty() {
+            Err(anyhow!(SuiError::TransactionsNotFound {
+                digests: missed_digests
+            }))
+        } else {
+            Ok(response)
+        }
+    }
+
     pub async fn get_transaction_events(
         &self,
         digest: TransactionEventsDigest,
@@ -2385,8 +2414,8 @@ impl AuthorityState {
         {
             if let Some(transaction) = self.database.get_transaction(transaction_digest)? {
                 let cert_sig = epoch_store.get_transaction_cert_sig(transaction_digest)?;
-                let events = if let Some(digest) = effects.events_digest {
-                    self.database.get_events(&digest)?
+                let events = if let Some(digest) = effects.events_digest() {
+                    self.database.get_events(digest)?
                 } else {
                     TransactionEvents::default()
                 };
@@ -2430,7 +2459,7 @@ impl AuthorityState {
         effects: TransactionEffects,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Result<VerifiedSignedTransactionEffects, SuiError> {
-        let tx_digest = effects.transaction_digest;
+        let tx_digest = *effects.transaction_digest();
         let signed_effects = match epoch_store.get_effects_signature(&tx_digest)? {
             Some(sig) if sig.epoch == epoch_store.epoch() => {
                 SignedTransactionEffects::new_from_data_and_sig(effects, sig)
@@ -3003,9 +3032,9 @@ impl AuthorityState {
             "Effects summary of the change epoch transaction: {:?}",
             effects.summary_for_debug()
         );
-        epoch_store.record_is_safe_mode_metric(system_obj.safe_mode);
+        epoch_store.record_is_safe_mode_metric(system_obj.safe_mode());
         // The change epoch transaction cannot fail to execute.
-        assert!(effects.status.is_ok());
+        assert!(effects.status().is_ok());
         Ok((system_obj, effects))
     }
 
@@ -3057,7 +3086,7 @@ impl AuthorityState {
         let new_epoch = new_committee.epoch;
         info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
         assert_eq!(
-            epoch_start_configuration.system_state.epoch,
+            epoch_start_configuration.system_state.epoch(),
             new_committee.epoch
         );
         let new_epoch_store = cur_epoch_store.new_at_next_epoch(

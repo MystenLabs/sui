@@ -55,7 +55,7 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for Iter<'a, K, V> {
                 .value()
                 .expect("Valid iterator failed to get value");
             let key = config.deserialize(raw_key).ok();
-            let value = bincode::deserialize(raw_value).ok();
+            let value = bcs::from_bytes(raw_value).ok();
             if self.iter_bytes_sample_interval.sample() {
                 let total_bytes_read = (raw_key.len() + raw_value.len()) as f64;
                 self.db_metrics

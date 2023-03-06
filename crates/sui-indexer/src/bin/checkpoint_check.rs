@@ -12,8 +12,8 @@ use tracing::info;
 async fn main() -> Result<()> {
     info!("Running correctness check for indexer...");
     let test_config = TestConfig::parse();
-    let fn_rpc_client = new_rpc_client(test_config.fn_rpc_client_url.clone()).await?;
-    let indexer_rpc_client = new_rpc_client(test_config.indexer_rpc_client_url.clone()).await?;
+    let fn_rpc_client = new_rpc_client(&test_config.fn_rpc_client_url).await?;
+    let indexer_rpc_client = new_rpc_client(&test_config.indexer_rpc_client_url).await?;
 
     let latest_checkpoint = indexer_rpc_client
         .read_api()

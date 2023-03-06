@@ -6,8 +6,8 @@ written: object(103)
 
 task 2 'run'. lines 14-16:
 Error: Transaction Effects Status: Entry Argument Error. Error for argument at index 1: Mismatch between the number of actual versus expected arguments.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 1, kind: ArityMismatch }), source: Some("Expected 2 arguments calling function 'create', but found 1"), command: None } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 1, kind: ArityMismatch }), source: Some("Expected 2 arguments calling function 'create', but found 1"), command: Some(0) } }
 
 task 3 'run'. lines 17-17:
 Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: FAILED_TO_DESERIALIZE_ARGUMENT, sub_status: None, message: None, exec_state: None, location: Undefined, indices: [], offsets: [] }), command: None } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: FAILED_TO_DESERIALIZE_ARGUMENT, sub_status: None, message: None, exec_state: None, location: Undefined, indices: [], offsets: [] }), command: Some(0) } }

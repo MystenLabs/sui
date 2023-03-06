@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useRpcClient } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 
 import {
@@ -8,7 +9,6 @@ import {
     getDataOnTxDigests,
     type TxnData,
 } from '~/components/transaction-card/TxCardUtils';
-import { useRpc } from '~/hooks/useRpc';
 import { TableCard } from '~/ui/TableCard';
 
 export function CheckpointTransactions({
@@ -18,7 +18,7 @@ export function CheckpointTransactions({
     digest: string;
     transactions: string[];
 }) {
-    const rpc = useRpc();
+    const rpc = useRpcClient();
     const { data: txData, isLoading } = useQuery(
         ['checkpoint-transactions', digest],
         async () => {

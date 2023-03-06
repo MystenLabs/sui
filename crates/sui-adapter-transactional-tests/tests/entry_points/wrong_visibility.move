@@ -9,10 +9,6 @@
 module Test::M {
     use sui::tx_context::TxContext;
 
-    public fun t1(_: &mut TxContext) {
-        abort 0
-    }
-
     public(friend) fun t2(_: &mut TxContext) {
         abort 0
     }
@@ -21,10 +17,20 @@ module Test::M {
         abort 0
     }
 
-}
+    public fun t4(x: &u64, _: &mut TxContext): &u64 {
+        x
+    }
 
-//# run Test::M::t1
+    public fun t5(x: &mut u64, _: &mut TxContext): &mut u64 {
+        x
+    }
+
+}
 
 //# run Test::M::t2
 
 //# run Test::M::t3
+
+//# run Test::M::t4 --args 0
+
+//# run Test::M::t5 --args 0

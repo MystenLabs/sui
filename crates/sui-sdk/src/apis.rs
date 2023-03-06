@@ -14,9 +14,10 @@ use std::time::{Duration, Instant};
 use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DryRunTransactionResponse, DynamicFieldPage,
-    EventPage, GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
-    SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter, SuiMoveNormalizedModule, SuiObjectInfo,
-    SuiTransactionResponse, TransactionsPage,
+    EventPage, SuiCoinMetadata, SuiCommittee, SuiEventEnvelope, SuiEventFilter,
+    SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
+    SuiPastObjectResponse, SuiSystemStateRpc, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    TransactionsPage,
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{
@@ -25,12 +26,10 @@ use sui_types::base_types::{
 use sui_types::committee::EpochId;
 use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use sui_types::event::EventID;
-use sui_types::messages::{
-    CommitteeInfoResponse, ExecuteTransactionRequestType, TransactionData, VerifiedTransaction,
-};
+use sui_types::messages::{ExecuteTransactionRequestType, TransactionData, VerifiedTransaction};
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary};
 use sui_types::query::{EventQuery, TransactionQuery};
-use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
+use sui_types::sui_system_state::ValidatorMetadata;
 
 use futures::StreamExt;
 use sui_json_rpc::api::{CoinReadApiClient, EventReadApiClient, ReadApiClient, WriteApiClient};
@@ -66,27 +65,29 @@ impl ReadApi {
             .await?)
     }
 
-    pub async fn get_parsed_object(
-        &self,
-        object_id: ObjectID,
-    ) -> SuiRpcResult<GetObjectDataResponse> {
-        Ok(self.api.http.get_object(object_id).await?)
-    }
-
     pub async fn try_get_parsed_past_object(
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
-    ) -> SuiRpcResult<GetPastObjectDataResponse> {
+        options: SuiObjectDataOptions,
+    ) -> SuiRpcResult<SuiPastObjectResponse> {
         Ok(self
             .api
             .http
-            .try_get_past_object(object_id, version)
+            .try_get_past_object(object_id, version, Some(options))
             .await?)
     }
 
-    pub async fn get_object(&self, object_id: ObjectID) -> SuiRpcResult<GetRawObjectDataResponse> {
-        Ok(self.api.http.get_raw_object(object_id).await?)
+    pub async fn get_object_with_options(
+        &self,
+        object_id: ObjectID,
+        options: SuiObjectDataOptions,
+    ) -> SuiRpcResult<SuiObjectResponse> {
+        Ok(self
+            .api
+            .http
+            .get_object_with_options(object_id, Some(options))
+            .await?)
     }
 
     pub async fn get_total_transaction_number(&self) -> SuiRpcResult<u64> {
@@ -108,10 +109,14 @@ impl ReadApi {
         Ok(self.api.http.get_transaction(digest).await?)
     }
 
-    pub async fn get_committee_info(
+    pub async fn multi_get_transactions(
         &self,
-        epoch: Option<EpochId>,
-    ) -> SuiRpcResult<CommitteeInfoResponse> {
+        digests: Vec<TransactionDigest>,
+    ) -> SuiRpcResult<Vec<SuiTransactionResponse>> {
+        Ok(self.api.http.multi_get_transactions(digests).await?)
+    }
+
+    pub async fn get_committee_info(&self, epoch: Option<EpochId>) -> SuiRpcResult<SuiCommittee> {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }
 
@@ -191,7 +196,7 @@ impl ReadApi {
             .await?)
     }
 
-    pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemState> {
+    pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemStateRpc> {
         Ok(self.api.http.get_sui_system_state().await?)
     }
 
@@ -428,7 +433,7 @@ impl QuorumDriver {
                     if !confirmed_local_execution {
                         Self::wait_until_fullnode_sees_tx(
                             &self.api,
-                            response.effects.transaction_digest,
+                            *response.effects.transaction_digest(),
                         )
                         .await?;
                     }
@@ -491,15 +496,12 @@ impl GovernanceApi {
 
     /// Return the committee information for the asked `epoch`.
     /// `epoch`: The epoch of interest. If None, default to the latest epoch
-    pub async fn get_committee_info(
-        &self,
-        epoch: Option<EpochId>,
-    ) -> SuiRpcResult<CommitteeInfoResponse> {
+    pub async fn get_committee_info(&self, epoch: Option<EpochId>) -> SuiRpcResult<SuiCommittee> {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }
 
-    /// Return [SuiSystemState]
-    pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemState> {
+    /// Return [SuiSystemStateRpc]
+    pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemStateRpc> {
         Ok(self.api.http.get_sui_system_state().await?)
     }
 }

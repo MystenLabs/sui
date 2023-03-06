@@ -108,7 +108,7 @@ impl WriteApiServer for TransactionExecutionApi {
                     .clone();
                 Ok(SuiTransactionResponse {
                     transaction: tx,
-                    effects: effects.effects.into(),
+                    effects: effects.effects.try_into()?,
                     events: SuiTransactionEvents::try_from(events, module_cache.as_ref())?,
                     timestamp_ms: None,
                     confirmed_local_execution: Some(is_executed_locally),

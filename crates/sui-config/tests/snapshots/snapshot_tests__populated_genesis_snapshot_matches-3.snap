@@ -5,7 +5,7 @@ expression: genesis.sui_system_object()
 epoch: 0
 protocol_version: 1
 validators:
-  total_stake: 1
+  total_stake: 25000000000000000
   active_validators:
     - metadata:
         sui_address: "0x21b60aa9a8cb189ccbe20461dbfad2202fdef55b9418f30ac2c5fe632f6e1cb7"
@@ -242,10 +242,12 @@ validators:
       staking_pool:
         id: "0xd5d9aa879b78dc1f516d71ab979189086eff752f65e4b0dea15829e3157962e1"
         starting_epoch: 0
-        sui_balance: 1
+        deactivation_epoch:
+          vec: []
+        sui_balance: 25000000000000000
         rewards_pool:
           value: 0
-        pool_token_balance: 1
+        pool_token_balance: 25000000000000000
         exchange_rates:
           id: "0xe63945cec193ca7ac76960370028110a907ad1c22ff90b1fd57ea3c441c766b4"
           size: 1
@@ -253,7 +255,7 @@ validators:
         pending_total_sui_withdraw: 0
         pending_pool_token_withdraw: 0
       commission_rate: 0
-      next_epoch_stake: 1
+      next_epoch_stake: 25000000000000000
       next_epoch_gas_price: 1
       next_epoch_commission_rate: 0
   pending_validators:
@@ -264,18 +266,22 @@ validators:
   staking_pool_mappings:
     id: "0x18b8140c8a6ea340142f128061016fc4bd8220ec88875a8e573a5f72a85a15c1"
     size: 1
+  inactive_pools:
+    id: "0x1ace65f54d65a96251b3f46bfa720ab65a7ebe0174caa9fa1dc0d65a56ae7872"
+    size: 0
 storage_fund:
   value: 0
 parameters:
   min_validator_stake: 1
   max_validator_candidate_count: 100
+  governance_start_epoch: 0
 reference_gas_price: 1
 validator_report_records:
   contents: []
 stake_subsidy:
   epoch_counter: 0
   balance:
-    value: 1000000000000000000
+    value: 975000000000000000
   current_epoch_amount: 1000000
 safe_mode: false
 epoch_start_timestamp_ms: 10

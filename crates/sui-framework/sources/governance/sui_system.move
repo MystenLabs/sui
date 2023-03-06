@@ -45,6 +45,12 @@ module sui::sui_system {
         /// Maximum number of validator candidates at any moment.
         /// We do not allow the number of validators in any epoch to go above this.
         max_validator_candidate_count: u64,
+
+        /// The starting epoch in which various on-chain governance features take effect:
+        /// - stake subsidies are paid out
+        /// - TODO validators with stake less than a 'validator_stake_threshold' are
+        ///   kicked from the validator set
+        governance_start_epoch: u64,
     }
 
     /// The top-level object containing all information of the Sui system.
@@ -121,8 +127,10 @@ module sui::sui_system {
         storage_fund: Balance<SUI>,
         max_validator_candidate_count: u64,
         min_validator_stake: u64,
+        governance_start_epoch: u64,
         initial_stake_subsidy_amount: u64,
         protocol_version: u64,
+        system_state_version: u64,
         epoch_start_timestamp_ms: u64,
         ctx: &mut TxContext,
     ) {
@@ -136,6 +144,7 @@ module sui::sui_system {
             parameters: SystemParameters {
                 min_validator_stake,
                 max_validator_candidate_count,
+                governance_start_epoch,
             },
             reference_gas_price,
             validator_report_records: vec_map::empty(),
@@ -146,9 +155,9 @@ module sui::sui_system {
         let self = SuiSystemState {
             // Use a hardcoded ID.
             id: object::sui_system_state(),
-            version: protocol_version,
+            version: system_state_version,
         };
-        dynamic_field::add(&mut self.id, protocol_version, system_state);
+        dynamic_field::add(&mut self.id, system_state_version, system_state);
         transfer::share_object(self);
     }
 
@@ -209,9 +218,6 @@ module sui::sui_system {
             tx_context::epoch(ctx) + 1, // starting next epoch
             ctx
         );
-
-        // TODO: We need to verify the validator metadata.
-        // https://github.com/MystenLabs/sui/issues/7323
 
         validator_set::request_add_validator(&mut self.validators, validator);
     }
@@ -525,11 +531,13 @@ module sui::sui_system {
                                          // into storage fund, in basis point.
         reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
         epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
+        new_system_state_version: u64,
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, 0);
+        let old_protocol_version = self.protocol_version;
 
         self.epoch_start_timestamp_ms = epoch_start_timestamp_ms;
 
@@ -549,7 +557,13 @@ module sui::sui_system {
         let computation_reward = balance::create_staking_rewards(computation_charge);
 
         // Include stake subsidy in the rewards given out to validators and delegators.
-        let stake_subsidy = stake_subsidy::advance_epoch(&mut self.stake_subsidy);
+        // Delay distributing any stake subsidies until after `governance_start_epoch`.
+        let stake_subsidy = if (tx_context::epoch(ctx) >= self.parameters.governance_start_epoch) {
+            stake_subsidy::advance_epoch(&mut self.stake_subsidy)
+        } else {
+            balance::zero()
+        };
+
         let stake_subsidy_amount = balance::value(&stake_subsidy);
         balance::join(&mut computation_reward, stake_subsidy);
 
@@ -617,8 +631,17 @@ module sui::sui_system {
                 total_stake_rewards: total_rewards_amount,
             }
         );
-
         self.safe_mode = false;
+
+        if (new_system_state_version != wrapper.version) {
+            // If we are upgrading the system state, we need to make sure that the protocol version
+            // is also upgraded.
+            assert!(old_protocol_version != next_protocol_version, 0);
+            let cur_state: SuiSystemStateInner = dynamic_field::remove(&mut wrapper.id, wrapper.version);
+            let new_state = upgrade_system_state(cur_state);
+            wrapper.version = new_system_state_version;
+            dynamic_field::add(&mut wrapper.id, wrapper.version, new_state);
+        };
     }
 
     /// An extremely simple version of advance_epoch.
@@ -702,6 +725,13 @@ module sui::sui_system {
 
     fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInner {
         dynamic_field::borrow_mut(&mut self.id, self.version)
+    }
+
+    fun upgrade_system_state(cur_state: SuiSystemStateInner): SuiSystemStateInner {
+        // Whenever we upgrade the system state version, we will have to first
+        // ship a framework upgrade that introduces a new system state type, and make this
+        // function generate such type from the old state.
+        cur_state
     }
 
     /// Extract required Balance from vector of Coin<SUI>, transfer the remainder back to sender.

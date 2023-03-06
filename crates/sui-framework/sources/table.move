@@ -100,5 +100,4 @@ public fun drop<K: copy + drop + store, V: drop + store>(table: Table<K, V>) {
     let Table { id, size: _ } = table;
     object::delete(id)
 }
-
 }

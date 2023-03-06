@@ -4,6 +4,7 @@
 module sui::epoch_time_lock {
     use sui::tx_context::{Self, TxContext};
     friend sui::sui_system;
+    friend sui::staking_pool;
 
     /// The epoch passed into the creation of a lock has already passed.
     const EEpochAlreadyPassed: u64 = 0;

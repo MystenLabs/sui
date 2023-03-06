@@ -16,7 +16,7 @@ fn main() -> Result<()> {
         PathBuf::from(env::var("OUT_DIR")?)
     };
 
-    let codec_path = "mysten_network::codec::BincodeCodec";
+    let codec_path = "mysten_network::codec::BcsCodec";
 
     let validator_service = Service::builder()
         .name("Validator")
@@ -69,19 +69,10 @@ fn main() -> Result<()> {
         )
         .method(
             Method::builder()
-                .name("committee_info")
-                .route_name("CommitteeInfo")
-                .input_type("sui_types::messages::CommitteeInfoRequest")
-                .output_type("sui_types::messages::CommitteeInfoResponse")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            Method::builder()
                 .name("get_system_state_object")
                 .route_name("GetSystemStateObject")
                 .input_type("sui_types::messages::SystemStateRequest")
-                .output_type("sui_types::sui_system_state::SuiSystemState")
+                .output_type("sui_types::sui_system_state::SuiSystemStateInnerBenchmark")
                 .codec_path(codec_path)
                 .build(),
         )
@@ -100,6 +91,8 @@ fn main() -> Result<()> {
 }
 
 fn build_anemo_services(out_dir: &Path) {
+    let codec_path = "mysten_network::codec::anemo::BcsSnappyCodec";
+
     let discovery = anemo_build::manual::Service::builder()
         .name("Discovery")
         .package("sui")
@@ -109,7 +102,7 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("GetKnownPeers")
                 .request_type("()")
                 .response_type("crate::discovery::GetKnownPeersResponse")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .codec_path(codec_path)
                 .build(),
         )
         .build();
@@ -123,7 +116,7 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("PushCheckpointSummary")
                 .request_type("sui_types::messages_checkpoint::CertifiedCheckpointSummary")
                 .response_type("()")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .codec_path(codec_path)
                 .build(),
         )
         .method(
@@ -132,7 +125,7 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("GetCheckpointSummary")
                 .request_type("crate::state_sync::GetCheckpointSummaryRequest")
                 .response_type("Option<sui_types::messages_checkpoint::CertifiedCheckpointSummary>")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .codec_path(codec_path)
                 .build(),
         )
         .method(
@@ -141,7 +134,7 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("GetCheckpointContents")
                 .request_type("sui_types::messages_checkpoint::CheckpointContentsDigest")
                 .response_type("Option<sui_types::messages_checkpoint::CheckpointContents>")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .codec_path(codec_path)
                 .build(),
         )
         .method(
@@ -150,7 +143,7 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("GetTransactionAndEffects")
                 .request_type("sui_types::base_types::ExecutionDigests")
                 .response_type("Option<(sui_types::messages::Transaction, sui_types::messages::TransactionEffects)>")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .codec_path(codec_path)
                 .build(),
         )
         .build();

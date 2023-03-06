@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use sui_types::base_types::TransactionDigest;
-use sui_types::messages::TransactionEffects;
+use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::storage::ObjectKey;
 use tracing::trace;
 
@@ -76,10 +76,10 @@ struct TransactionDependencies {
 
 impl TransactionDependencies {
     fn from_effects(effects: TransactionEffects, rwlock_builder: &RWLockDependencyBuilder) -> Self {
-        let mut dependencies: BTreeSet<_> = effects.dependencies.iter().cloned().collect();
-        rwlock_builder.add_dependencies_for(effects.transaction_digest, &mut dependencies);
+        let mut dependencies: BTreeSet<_> = effects.dependencies().iter().cloned().collect();
+        rwlock_builder.add_dependencies_for(*effects.transaction_digest(), &mut dependencies);
         Self {
-            digest: effects.transaction_digest,
+            digest: *effects.transaction_digest(),
             dependencies,
             effects,
         }
@@ -120,12 +120,12 @@ impl RWLockDependencyBuilder {
         let mut overwrite_versions: HashMap<TransactionDigest, Vec<ObjectKey>> = Default::default();
         for effect in effects {
             let modified_at_versions: HashMap<_, _> =
-                effect.modified_at_versions.iter().cloned().collect();
-            for (obj, seq, _) in effect.shared_objects.iter() {
+                effect.modified_at_versions().iter().cloned().collect();
+            for (obj, seq, _) in effect.shared_objects().iter() {
                 if let Some(modified_seq) = modified_at_versions.get(obj) {
                     // write transaction
                     overwrite_versions
-                        .entry(effect.transaction_digest)
+                        .entry(*effect.transaction_digest())
                         .or_default()
                         .push(ObjectKey(*obj, *modified_seq));
                 } else {
@@ -133,7 +133,7 @@ impl RWLockDependencyBuilder {
                     read_version
                         .entry(ObjectKey(*obj, *seq))
                         .or_default()
-                        .push(effect.transaction_digest);
+                        .push(*effect.transaction_digest());
                 }
             }
         }
@@ -225,14 +225,14 @@ mod tests {
         let mut e2 = e(d(2), vec![]);
         let mut e3 = e(d(3), vec![]);
         let obj_digest = ObjectDigest::new(Default::default());
-        e5.shared_objects
+        e5.shared_objects_mut_for_testing()
             .push((o(1), SequenceNumber::from_u64(1), obj_digest));
-        e2.shared_objects
+        e2.shared_objects_mut_for_testing()
             .push((o(1), SequenceNumber::from_u64(1), obj_digest));
-        e3.shared_objects
+        e3.shared_objects_mut_for_testing()
             .push((o(1), SequenceNumber::from_u64(1), obj_digest));
 
-        e3.modified_at_versions
+        e3.modified_at_versions_mut_for_testing()
             .push((o(1), SequenceNumber::from_u64(1)));
         let r = extract(CasualOrder::casual_sort(vec![e5, e2, e3]));
         assert_eq!(r.len(), 3);
@@ -244,7 +244,7 @@ mod tests {
 
     fn extract(e: Vec<TransactionEffects>) -> Vec<u8> {
         e.into_iter()
-            .map(|e| e.transaction_digest.inner()[0])
+            .map(|e| e.transaction_digest().inner()[0])
             .collect()
     }
 
@@ -264,10 +264,9 @@ mod tests {
         transaction_digest: TransactionDigest,
         dependencies: Vec<TransactionDigest>,
     ) -> TransactionEffects {
-        TransactionEffects {
-            transaction_digest,
-            dependencies,
-            ..Default::default()
-        }
+        let mut effects = TransactionEffects::default();
+        *effects.transaction_digest_mut_for_testing() = transaction_digest;
+        *effects.dependencies_mut_for_testing() = dependencies;
+        effects
     }
 }

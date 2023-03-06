@@ -6,12 +6,12 @@ use crate::batch_maker::MAX_PARALLEL_BATCH;
 use config::{Committee, SharedWorkerCache, Stake, WorkerId};
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
-use futures::stream::{futures_unordered::FuturesUnordered, FuturesOrdered, StreamExt as _};
+use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use network::{CancelOnDropHandler, ReliableNetwork};
 use std::time::Duration;
 use tokio::{task::JoinHandle, time::timeout};
-use tracing::{error, trace};
+use tracing::{trace, warn};
 use types::{metered_channel::Receiver, Batch, ConditionalBroadcastReceiver, WorkerBatchMessage};
 
 #[cfg(test)]
@@ -31,7 +31,7 @@ pub struct QuorumWaiter {
     /// Receiver for shutdown.
     rx_shutdown: ConditionalBroadcastReceiver,
     /// Input Channel to receive commands.
-    rx_message: Receiver<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
+    rx_quorum_waiter: Receiver<(Batch, tokio::sync::oneshot::Sender<()>)>,
     /// A network sender to broadcast the batches to the other workers.
     network: anemo::Network,
 }
@@ -45,7 +45,7 @@ impl QuorumWaiter {
         committee: Committee,
         worker_cache: SharedWorkerCache,
         rx_shutdown: ConditionalBroadcastReceiver,
-        rx_message: Receiver<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
+        rx_quorum_waiter: Receiver<(Batch, tokio::sync::oneshot::Sender<()>)>,
         network: anemo::Network,
     ) -> JoinHandle<()> {
         spawn_logged_monitored_task!(
@@ -56,7 +56,7 @@ impl QuorumWaiter {
                     committee,
                     worker_cache,
                     rx_shutdown,
-                    rx_message,
+                    rx_quorum_waiter,
                     network,
                 }
                 .run()
@@ -77,8 +77,7 @@ impl QuorumWaiter {
 
     /// Main loop.
     async fn run(&mut self) {
-        //
-        let mut pipeline = FuturesOrdered::new();
+        let mut pipeline = FuturesUnordered::new();
         let mut best_effort_with_timeout = FuturesUnordered::new();
 
         loop {
@@ -88,7 +87,7 @@ impl QuorumWaiter {
                 // task to the pipeline to send this batch to workers.
                 //
                 // TODO: make the constant a config parameter.
-                Some((batch, opt_channel)) = self.rx_message.recv(), if pipeline.len() < MAX_PARALLEL_BATCH => {
+                Some((batch, channel)) = self.rx_quorum_waiter.recv(), if pipeline.len() < MAX_PARALLEL_BATCH => {
                     // Broadcast the batch to the other workers.
                     let workers: Vec<_> = self
                         .worker_cache
@@ -117,40 +116,41 @@ impl QuorumWaiter {
                     let threshold = self.committee.quorum_threshold();
                     let mut total_stake = self.committee.stake(&self.name);
 
-                    pipeline.push_back(async move {
-                        // A future that sends to 2/3 stake then returns. Also prints an error
+                    pipeline.push(async move {
+                        // A future that sends to 2/3 stake then returns. Also prints a warning
                         // if we terminate before we have managed to get to the full 2/3 stake.
-
+                        let mut opt_channel = Some(channel);
                         loop{
                             if let Some(stake) = wait_for_quorum.next().await {
                                 total_stake += stake;
                                 if total_stake >= threshold {
-
                                     // Notify anyone waiting for this.
-                                    if let Some(channel) = opt_channel {
-                                        if let Err(e) = channel.send(()) {
-                                            error!("Channel waiting for quorum response dropped: {:?}", e);
-                                        }
+                                    let channel = opt_channel.take().unwrap();
+                                    if let Err(e) = channel.send(()) {
+                                        warn!("Channel waiting for quorum response dropped: {:?}", e);
                                     }
                                     break
                                 }
                             } else {
-                                // TODO: maybe we should be stopping the system if that happens,
-                                //       since it seems serious. However, it may happen at the
-                                //       start of the epoch when not everyone is ready?
-                                tracing::error!("Batch dissemination ended without a quorum.");
+                                // This should not happen unless shutting down, because
+                                // `broadcast()` is supposed to keep retrying.
+                                warn!("Batch dissemination ended without a quorum. Shutting down.");
                                 break;
                             }
                         }
-                        (batch, wait_for_quorum)
+                        (batch, opt_channel, wait_for_quorum)
                     });
                 },
 
                 // Process futures in the pipeline. They complete when we have sent to >2/3
                 // of other worker by stake, but after that we still try to send to the remaining
                 // on a best effort basis.
-                Some((batch, mut remaining)) = pipeline.next() => {
-
+                Some((batch, opt_channel, mut remaining)) = pipeline.next() => {
+                    // opt_channel is not consumed only when the worker is shutting down and
+                    // broadcast fails. TODO: switch to returning a status from pipeline.
+                    if opt_channel.is_some() {
+                        return;
+                    }
                     // Attempt to send messages to the remaining workers
                     if !remaining.is_empty() {
                         trace!("Best effort dissemination for batch {} for remaining {}", batch.digest(), remaining.len());
@@ -164,7 +164,6 @@ impl QuorumWaiter {
                            }).await
                        });
                     }
-
                 },
 
                 // Drive the best effort send efforts which may update remaining workers
