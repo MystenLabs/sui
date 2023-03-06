@@ -20,8 +20,8 @@ adler = { version = "1", default-features = false }
 aead = { version = "0.5", default-features = false, features = ["alloc", "getrandom"] }
 aes = { version = "0.8", default-features = false }
 aes-gcm = { version = "0.10" }
-ahash-ca01ad9e24f5d932 = { package = "ahash", version = "0.7" }
 ahash-c38e5c1d305a1b54 = { package = "ahash", version = "0.8", default-features = false }
+ahash-ca01ad9e24f5d932 = { package = "ahash", version = "0.7" }
 aho-corasick = { version = "0.7" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
@@ -84,8 +84,7 @@ bitflags = { version = "1" }
 bitmaps = { version = "2" }
 bitvec-56bd22fc3884b12 = { package = "bitvec", version = "0.20", default-features = false, features = ["std"] }
 bitvec-cdcf2f9584511fe6 = { package = "bitvec", version = "0.19", default-features = false, features = ["std"] }
-blake2-274715c4dabd11b0 = { package = "blake2", version = "0.9", default-features = false }
-blake2-93f6ce9d446188ac = { package = "blake2", version = "0.10" }
+blake2 = { version = "0.10" }
 blake3 = { version = "1" }
 block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", default-features = false, features = ["block-padding"] }
 block-buffer-93f6ce9d446188ac = { package = "block-buffer", version = "0.10", default-features = false }
@@ -248,9 +247,8 @@ guppy-workspace-hack = { version = "0.1", default-features = false }
 h2 = { version = "0.3", default-features = false }
 hakari = { version = "0.13", default-features = false, features = ["cli-support"] }
 half = { version = "1", default-features = false }
-hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["raw"] }
-hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11" }
 hashbrown-594e8ee84c453af0 = { package = "hashbrown", version = "0.13" }
+hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["raw"] }
 hashlink = { version = "0.8", default-features = false }
 hdrhistogram = { version = "7" }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
@@ -646,8 +644,8 @@ adler = { version = "1", default-features = false }
 aead = { version = "0.5", default-features = false, features = ["alloc", "getrandom"] }
 aes = { version = "0.8", default-features = false }
 aes-gcm = { version = "0.10" }
-ahash-ca01ad9e24f5d932 = { package = "ahash", version = "0.7" }
 ahash-c38e5c1d305a1b54 = { package = "ahash", version = "0.8", default-features = false }
+ahash-ca01ad9e24f5d932 = { package = "ahash", version = "0.7" }
 aho-corasick = { version = "0.7" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
@@ -724,8 +722,7 @@ bitflags = { version = "1" }
 bitmaps = { version = "2" }
 bitvec-56bd22fc3884b12 = { package = "bitvec", version = "0.20", default-features = false, features = ["std"] }
 bitvec-cdcf2f9584511fe6 = { package = "bitvec", version = "0.19", default-features = false, features = ["std"] }
-blake2-274715c4dabd11b0 = { package = "blake2", version = "0.9", default-features = false }
-blake2-93f6ce9d446188ac = { package = "blake2", version = "0.10" }
+blake2 = { version = "0.10" }
 blake3 = { version = "1" }
 block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", default-features = false, features = ["block-padding"] }
 block-buffer-93f6ce9d446188ac = { package = "block-buffer", version = "0.10", default-features = false }
@@ -913,8 +910,8 @@ guppy-workspace-hack = { version = "0.1", default-features = false }
 h2 = { version = "0.3", default-features = false }
 hakari = { version = "0.13", default-features = false, features = ["cli-support"] }
 half = { version = "1", default-features = false }
-hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["raw"] }
 hashbrown-594e8ee84c453af0 = { package = "hashbrown", version = "0.13" }
+hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["raw"] }
 hashlink = { version = "0.8", default-features = false }
 hdrhistogram = { version = "7" }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }

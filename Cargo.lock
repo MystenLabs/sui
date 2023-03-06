@@ -266,7 +266,7 @@ dependencies = [
  "ark-serialize 0.4.1",
  "ark-snark",
  "ark-std 0.4.0",
- "blake2 0.10.6",
+ "blake2",
  "derivative",
  "digest 0.10.6",
  "rayon",
@@ -1001,17 +1001,6 @@ dependencies = [
  "radium 0.6.2",
  "tap",
  "wyz",
-]
-
-[[package]]
-name = "blake2"
-version = "0.9.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a4e37d16930f5459780f5621038b6382b9bb37c19016f39fb6b5808d831f174"
-dependencies = [
- "crypto-mac",
- "digest 0.9.0",
- "opaque-debug",
 ]
 
 [[package]]
@@ -1921,16 +1910,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crypto-mac"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b584a330336237c1eecd3e94266efb216c56ed91225d634cb2991c5f3fd1aeab"
-dependencies = [
- "generic-array",
- "subtle",
-]
-
-[[package]]
 name = "csv"
 version = "1.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2712,7 +2691,7 @@ dependencies = [
  "auto_ops",
  "base64ct",
  "bincode",
- "blake2 0.10.6",
+ "blake2",
  "blake3",
  "blst",
  "bs58",
@@ -3350,15 +3329,6 @@ name = "half"
 version = "1.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
-
-[[package]]
-name = "hashbrown"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
-dependencies = [
- "ahash 0.7.6",
-]
 
 [[package]]
 name = "hashbrown"
@@ -11166,8 +11136,7 @@ dependencies = [
  "bitmaps",
  "bitvec 0.19.6",
  "bitvec 0.20.4",
- "blake2 0.10.6",
- "blake2 0.9.2",
+ "blake2",
  "blake3",
  "block-buffer 0.10.3",
  "block-buffer 0.9.0",
@@ -11368,7 +11337,6 @@ dependencies = [
  "h2",
  "hakari",
  "half",
- "hashbrown 0.11.2",
  "hashbrown 0.12.3",
  "hashbrown 0.13.2",
  "hashlink",
