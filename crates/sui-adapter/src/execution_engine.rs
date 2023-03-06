@@ -142,7 +142,7 @@ fn execute_transaction<
 ) {
     // First smash gas into the first coin if more than 1 was provided
     let sender = tx_ctx.sender();
-    let mut gas_object_ref = match temporary_store.smash_gas(sender, gas) {
+    let gas_object_ref = match temporary_store.smash_gas(sender, gas) {
         Ok(obj_ref) => obj_ref,
         Err(_) => gas[0], // this cannot fail, but we use gas[0] anyway
     };
@@ -151,7 +151,7 @@ fn execute_transaction<
     // we must still ensure an effect is committed and all objects versions incremented.
     let result = charge_gas_for_object_read(temporary_store, &mut gas_status);
     let mut result = result.and_then(|()| {
-        let execution_result = execution_loop::<Mode, _>(
+        execution_loop::<Mode, _>(
             temporary_store,
             transaction_kind,
             gas_object_ref.0,
@@ -159,27 +159,11 @@ fn execute_transaction<
             move_vm,
             &mut gas_status,
             protocol_config,
-        );
-        if execution_result.is_err() {
-            // Roll back the temporary store if execution failed.
-            temporary_store.reset();
-            // re-smash so temporary store is again aware of smashing
-            gas_object_ref = match temporary_store.smash_gas(sender, gas) {
-                Ok(obj_ref) => obj_ref,
-                Err(_) => gas[0], // this cannot fail, but we use gas[0] anyway
-            };
-        }
-        execution_result
+        )
     });
-
-    // Make sure every mutable object's version number is incremented.
-    // This needs to happen before `charge_gas_for_storage_changes` so that it
-    // can charge gas for all mutated objects properly.
-    temporary_store.ensure_active_inputs_mutated(sender, &gas_object_ref.0);
     if !gas_status.is_unmetered() {
         temporary_store.charge_gas(sender, gas_object_ref.0, &mut gas_status, &mut result, gas);
     }
-
     if !is_system {
         #[cfg(debug_assertions)]
         {
@@ -187,7 +171,6 @@ fn execute_transaction<
             temporary_store.check_sui_conserved();
         }
     }
-
     let cost_summary = gas_status.summary();
     (cost_summary, result)
 }
@@ -325,7 +308,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             temporary_store.read_object(&SUI_SYSTEM_STATE_OBJECT_ID),
             change_epoch,
         );
-        temporary_store.reset();
+        temporary_store.drop_writes();
         let function = ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME.to_owned();
         let safe_mode_pt = {
             let mut builder = ProgrammableTransactionBuilder::new();

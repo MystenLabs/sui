@@ -120,8 +120,8 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
     let gas_size = gas_object.object_size_for_gas_metering();
 
     gas_status.charge_storage_read(obj_size + gas_size)?;
-    gas_status.charge_storage_mutation(obj_size, obj_size, 0.into())?;
-    gas_status.charge_storage_mutation(gas_size, gas_size, 0.into())?;
+    gas_status.charge_storage_mutation(obj_size, 0.into());
+    gas_status.charge_storage_mutation(gas_size, 0.into());
     assert_eq!(gas_cost, &gas_status.summary());
     Ok(())
 }
@@ -327,25 +327,23 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     )?;
     gas_status.charge_storage_read(gas_object.object_size_for_gas_metering())?;
     gas_status.charge_publish_package(publish_bytes.iter().map(|v| v.len()).sum())?;
-    gas_status.charge_storage_mutation(0, package.object_size_for_gas_metering(), 0.into())?;
+    gas_status.charge_storage_mutation(package.object_size_for_gas_metering(), 0.into());
     // Remember the gas used so far. We will use this to create another failure case latter.
     let gas_used_after_package_creation = gas_status.summary().gas_used();
-    gas_status.charge_storage_mutation(
-        gas_object.object_size_for_gas_metering(),
-        gas_object.object_size_for_gas_metering(),
-        0.into(),
-    )?;
+    gas_status.charge_storage_mutation(gas_object.object_size_for_gas_metering(), 0.into());
     // Actual gas cost will be greater than the expected summary because of the cost to discard the
     // `UpgradeCap`.
     let gas_summary = gas_status.summary();
     assert!(gas_cost.computation_cost >= gas_summary.computation_cost);
     assert_eq!(gas_cost.storage_cost, gas_summary.storage_cost);
+    println!("gas cost was {:?}", gas_cost);
 
     // Create a transaction with budget DELTA less than the gas cost required.
     let total_gas_used = gas_cost.gas_used();
     let computation_cost = gas_cost.computation_cost;
     const DELTA: u64 = 1;
     let budget = total_gas_used - DELTA;
+    println!("budget is {:?}", budget);
     // Run the transaction again with 1 less than the required budget.
     let response = build_and_try_publish_test_package(
         &authority_state,
@@ -359,12 +357,14 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     .await;
     let effects = response.1.into_data();
     let gas_cost = effects.gas_cost_summary().clone();
+    println!("effects are {:?}", effects);
     let err = effects.into_status().unwrap_err().0;
 
     assert_eq!(err, ExecutionFailureStatus::InsufficientGas);
 
     // Make sure that we are not charging storage cost at failure.
     assert_eq!(gas_cost.storage_cost, 0);
+    assert_eq!(gas_cost.storage_rebate, 0);
     // Upon failure, we should only be charging the expected computation cost.
     assert_eq!(gas_cost.gas_used(), computation_cost);
 
@@ -439,6 +439,8 @@ async fn test_move_call_gas() -> SuiResult {
         expected_gas_balance,
     );
 
+    println!("create is done");
+
     // Mimic the gas charge behavior and cross check the result with above. Do not include
     // computation cost calculation as it would require hard-coding a constant representing VM
     // execution cost which is quite fragile.
@@ -461,17 +463,8 @@ async fn test_move_call_gas() -> SuiResult {
         .get_object(&effects.created()[0].0 .0)
         .await?
         .unwrap();
-    gas_status.charge_storage_mutation(
-        0,
-        created_object.object_size_for_gas_metering(),
-        0.into(),
-    )?;
-    gas_status.charge_storage_mutation(
-        gas_object.object_size_for_gas_metering(),
-        gas_object.object_size_for_gas_metering(),
-        0.into(),
-    )?;
-
+    gas_status.charge_storage_mutation(created_object.object_size_for_gas_metering(), 0.into());
+    gas_status.charge_storage_mutation(gas_object.object_size_for_gas_metering(), 0.into());
     let new_cost = gas_status.summary();
     assert_eq!(gas_cost.storage_cost, new_cost.storage_cost);
     // This is the total amount of storage cost paid. We will use this
@@ -544,7 +537,7 @@ async fn test_storage_gas_unit_price() -> SuiResult {
         1.into(),
         SuiCostTable::new_for_testing(),
     );
-    gas_status1.charge_storage_mutation(100, 200, 5.into())?;
+    gas_status1.charge_storage_mutation(200, 5.into());
     let gas_cost1 = gas_status1.summary();
     let mut gas_status2 = SuiGasStatus::new_with_budget(
         *MAX_GAS_BUDGET,
@@ -552,7 +545,7 @@ async fn test_storage_gas_unit_price() -> SuiResult {
         3.into(),
         SuiCostTable::new_for_testing(),
     );
-    gas_status2.charge_storage_mutation(100, 200, 5.into())?;
+    gas_status2.charge_storage_mutation(200, 5.into());
     let gas_cost2 = gas_status2.summary();
     // Computation unit price is the same, hence computation cost should be the same.
     assert_eq!(gas_cost1.computation_cost, gas_cost2.computation_cost);

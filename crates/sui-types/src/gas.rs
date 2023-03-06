@@ -246,10 +246,6 @@ fn to_external(internal_units: InternalGas) -> GasUnits {
     InternalGas::to_unit_round_down(internal_units)
 }
 
-fn to_internal(external_units: GasUnits) -> InternalGas {
-    GasUnits::to_unit(external_units)
-}
-
 #[derive(Debug)]
 pub struct SuiGasStatus<'a> {
     gas_status: GasStatus<'a>,
@@ -303,6 +299,18 @@ impl<'a> SuiGasStatus<'a> {
         !self.charge
     }
 
+    pub fn computation_gas_remaining(&self) -> u64 {
+        self.gas_status.remaining_gas().into()
+    }
+
+    pub fn storage_rebate(&self) -> u64 {
+        self.storage_rebate.into()
+    }
+
+    pub fn storage_gas_units(&self) -> u64 {
+        self.storage_gas_units.into()
+    }
+
     pub fn max_gax_budget_in_balance(&self) -> u64 {
         let max_gas_unit_price =
             std::cmp::max(self.computation_gas_unit_price, self.storage_gas_unit_price);
@@ -317,6 +325,11 @@ impl<'a> SuiGasStatus<'a> {
         // Disable flat fee for now
         // self.deduct_computation_cost(&VM_FLAT_FEE.to_unit())
         Ok(())
+    }
+
+    pub fn reset_storage_cost_and_rebate(&mut self) {
+        self.storage_gas_units = GasQuantity::zero();
+        self.storage_rebate = GasQuantity::zero();
     }
 
     /// Try to charge the minimal amount of gas from the gas object.
@@ -340,29 +353,26 @@ impl<'a> SuiGasStatus<'a> {
         self.deduct_computation_cost(&cost)
     }
 
-    pub fn charge_storage_mutation(
+    pub fn charge_computation_gas_for_storage_mutation(
         &mut self,
-        old_size: usize,
-        new_size: usize,
-        storage_rebate: SuiGas,
-    ) -> Result<u64, ExecutionError> {
-        if self.is_unmetered() {
-            return Ok(0);
-        }
-
+        size: u64,
+    ) -> Result<(), ExecutionError> {
         // Computation cost of a mutation is charged based on the sum of the old and new size.
         // This is because to update an object in the store, we have to erase the old one and
         // write a new one.
-        let cost = NumBytes::new((old_size + new_size) as u64)
-            .mul(*self.cost_table.object_mutation_per_byte_cost);
-        self.deduct_computation_cost(&cost)?;
+        let cost = NumBytes::new(size).mul(*self.cost_table.object_mutation_per_byte_cost);
+        self.deduct_computation_cost(&cost)
+    }
+
+    pub fn charge_storage_mutation(&mut self, new_size: usize, storage_rebate: SuiGas) -> u64 {
+        if self.is_unmetered() {
+            return 0;
+        }
 
         self.storage_rebate += storage_rebate;
-
         let storage_cost =
             NumBytes::new(new_size as u64).mul(*self.cost_table.storage_per_byte_cost);
-
-        self.deduct_storage_cost(&storage_cost).map(|q| q.into())
+        self.deduct_storage_cost(&storage_cost).into()
     }
 
     /// This function is only called during testing, where we need to mock
@@ -386,9 +396,8 @@ impl<'a> SuiGasStatus<'a> {
         let computation_cost = self
             .init_budget
             .checked_sub(remaining_gas)
-            .expect("Subtraction overflowed")
-            .checked_sub(storage_cost)
             .expect("Subtraction overflowed");
+        assert!(self.init_budget >= computation_cost + storage_cost);
         let computation_cost_in_sui = computation_cost.mul(self.computation_gas_unit_price).into();
         GasCostSummary {
             computation_cost: computation_cost_in_sui,
@@ -426,24 +435,13 @@ impl<'a> SuiGasStatus<'a> {
         })
     }
 
-    fn deduct_storage_cost(&mut self, cost: &InternalGas) -> Result<GasUnits, ExecutionError> {
+    fn deduct_storage_cost(&mut self, cost: &InternalGas) -> GasUnits {
         if self.is_unmetered() {
-            return Ok(0.into());
+            return 0.into();
         }
         let ext_cost = to_external(NumBytes::new(1).mul(InternalGasPerByte::new(u64::from(*cost))));
-        let charge_amount = to_internal(ext_cost);
-        let remaining_gas = self.gas_status.remaining_gas();
-        if self.gas_status.deduct_gas(charge_amount).is_err() {
-            debug_assert_eq!(u64::from(self.gas_status.remaining_gas()), 0);
-            // Even when we run out of gas, we still keep track of the storage_cost change,
-            // so that at the end, we could still use it to accurately derive the
-            // computation cost.
-            self.storage_gas_units = self.storage_gas_units.add(remaining_gas);
-            Err(ExecutionErrorKind::InsufficientGas.into())
-        } else {
-            self.storage_gas_units = self.storage_gas_units.add(ext_cost);
-            Ok(ext_cost.mul(self.storage_gas_unit_price))
-        }
+        self.storage_gas_units = self.storage_gas_units.add(ext_cost);
+        ext_cost.mul(self.storage_gas_unit_price)
     }
 }
 
