@@ -122,7 +122,7 @@ impl WriteStore for RocksDbStore {
         if let Some(EndOfEpochData {
             next_epoch_committee,
             ..
-        }) = checkpoint.summary.end_of_epoch_data.as_ref()
+        }) = checkpoint.end_of_epoch_data.as_ref()
         {
             let next_committee = next_epoch_committee.iter().cloned().collect();
             let committee = Committee::new(checkpoint.epoch().saturating_add(1), next_committee)

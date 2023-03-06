@@ -128,16 +128,16 @@ impl AuthorityStorePruner {
             if current_epoch < checkpoint.epoch() + config.num_epochs_to_retain {
                 break;
             }
-            checkpoint_number = checkpoint.sequence_number();
-            checkpoint_digest = checkpoint.digest();
+            checkpoint_number = *checkpoint.sequence_number();
+            checkpoint_digest = *checkpoint.digest();
             checkpoints_in_batch += 1;
-            if network_total_transactions == checkpoint.summary.network_total_transactions {
+            if network_total_transactions == checkpoint.network_total_transactions {
                 continue;
             }
-            network_total_transactions = checkpoint.summary.network_total_transactions;
+            network_total_transactions = checkpoint.network_total_transactions;
 
             let content = checkpoint_store
-                .get_checkpoint_contents(&checkpoint.content_digest())?
+                .get_checkpoint_contents(&checkpoint.content_digest)?
                 .ok_or_else(|| anyhow::anyhow!("checkpoint content data is missing"))?;
             let effects = perpetual_db
                 .effects

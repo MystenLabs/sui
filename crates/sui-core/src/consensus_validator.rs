@@ -91,20 +91,17 @@ impl TransactionValidator for SuiTxValidator {
                 }
                 ConsensusTransactionKind::CheckpointSignature(signature) => {
                     self.metrics.checkpoint_signatures_verified.inc();
-                    let summary = signature.summary.summary;
+                    let summary = signature.summary;
                     let idx = obligation.add_message(
-                        &summary,
+                        summary.data(),
                         summary.epoch,
                         Intent::default().with_scope(IntentScope::CheckpointSummary),
                     );
-                    signature
-                        .summary
-                        .auth_signature
-                        .add_to_verification_obligation(
-                            self.epoch_store.committee(),
-                            &mut obligation,
-                            idx,
-                        )?;
+                    summary.auth_sig().add_to_verification_obligation(
+                        self.epoch_store.committee(),
+                        &mut obligation,
+                        idx,
+                    )?;
                 }
                 ConsensusTransactionKind::EndOfPublish(_)
                 | ConsensusTransactionKind::CapabilityNotification(_) => {}

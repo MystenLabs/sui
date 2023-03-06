@@ -973,7 +973,7 @@ impl SuiNode {
             .expect("Error loading last checkpoint for current epoch")
             .expect("Could not load last checkpoint for current epoch");
         let epoch_start_configuration =
-            EpochStartConfiguration::new(next_epoch_start_system_state, last_checkpoint.digest());
+            EpochStartConfiguration::new(next_epoch_start_system_state, *last_checkpoint.digest());
 
         let new_epoch_store = self
             .state

@@ -130,18 +130,27 @@ where
         secret: &dyn Signer<AuthoritySignature>,
         authority: AuthorityName,
     ) -> Self {
-        let auth_signature = AuthoritySignInfo::new(
-            epoch,
-            &data,
-            Intent::default().with_scope(T::SCOPE),
-            authority,
-            secret,
-        );
+        let auth_signature = Self::sign(epoch, &data, secret, authority);
         Self {
             digest: OnceCell::new(),
             data,
             auth_signature,
         }
+    }
+
+    pub fn sign(
+        epoch: EpochId,
+        data: &T,
+        secret: &dyn Signer<AuthoritySignature>,
+        authority: AuthorityName,
+    ) -> AuthoritySignInfo {
+        AuthoritySignInfo::new(
+            epoch,
+            &data,
+            Intent::default().with_scope(T::SCOPE),
+            authority,
+            secret,
+        )
     }
 
     pub fn epoch(&self) -> EpochId {

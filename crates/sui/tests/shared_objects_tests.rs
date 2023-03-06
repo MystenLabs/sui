@@ -282,7 +282,7 @@ async fn access_clock_object_test() {
 
         // Timestamp that we have read in a smart contract
         // should match timestamp of the checkpoint where transaction is included
-        assert_eq!(checkpoint.summary.timestamp_ms, event.timestamp_ms);
+        assert_eq!(checkpoint.timestamp_ms, event.timestamp_ms);
         break;
     }
 }

@@ -3908,7 +3908,7 @@ impl ConsensusTransaction {
 
     pub fn new_checkpoint_signature_message(data: CheckpointSignatureMessage) -> Self {
         let mut hasher = DefaultHasher::new();
-        data.summary.auth_signature.signature.hash(&mut hasher);
+        data.summary.auth_sig().signature.hash(&mut hasher);
         let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
@@ -3962,8 +3962,8 @@ impl ConsensusTransaction {
             }
             ConsensusTransactionKind::CheckpointSignature(data) => {
                 ConsensusTransactionKey::CheckpointSignature(
-                    data.summary.auth_signature.authority,
-                    data.summary.summary.sequence_number,
+                    data.summary.auth_sig().authority,
+                    data.summary.sequence_number,
                 )
             }
             ConsensusTransactionKind::EndOfPublish(authority) => {

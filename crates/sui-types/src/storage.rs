@@ -402,10 +402,10 @@ impl InMemoryStore {
     }
 
     pub fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
-        let digest = checkpoint.digest();
-        let sequence_number = checkpoint.sequence_number();
+        let digest = *checkpoint.digest();
+        let sequence_number = *checkpoint.sequence_number();
 
-        if let Some(end_of_epoch_data) = &checkpoint.summary.end_of_epoch_data {
+        if let Some(end_of_epoch_data) = &checkpoint.data().end_of_epoch_data {
             let next_committee = end_of_epoch_data
                 .next_epoch_committee
                 .iter()
@@ -427,11 +427,12 @@ impl InMemoryStore {
     }
 
     pub fn update_highest_synced_checkpoint(&mut self, checkpoint: &VerifiedCheckpoint) {
-        if !self.checkpoints.contains_key(&checkpoint.digest()) {
+        if !self.checkpoints.contains_key(checkpoint.digest()) {
             panic!("store should already contain checkpoint");
         }
 
-        self.highest_synced_checkpoint = Some((checkpoint.sequence_number(), checkpoint.digest()));
+        self.highest_synced_checkpoint =
+            Some((*checkpoint.sequence_number(), *checkpoint.digest()));
     }
 
     pub fn checkpoints(&self) -> &HashMap<CheckpointDigest, VerifiedCheckpoint> {

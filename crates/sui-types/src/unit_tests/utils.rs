@@ -16,7 +16,7 @@ use crate::{
     intent::Intent,
     messages::{Transaction, TransactionData, VerifiedTransaction},
     messages_checkpoint::{
-        CertifiedCheckpointSummary, CheckpointContents, SignedCheckpointSummary,
+        CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, SignedCheckpointSummary,
     },
     object::Object,
 };
@@ -98,24 +98,24 @@ pub fn mock_certified_checkpoint<'a>(
         [ExecutionDigests::random()].into_iter(),
     );
 
-    let signed_checkpoints: Vec<_> = keys
+    let summary = CheckpointSummary::new(
+        committee.epoch,
+        seq_num,
+        0,
+        &contents,
+        None,
+        GasCostSummary::default(),
+        None,
+        0,
+    );
+
+    let sign_infos: Vec<_> = keys
         .map(|k| {
             let name = k.public().into();
 
-            SignedCheckpointSummary::new(
-                committee.epoch,
-                seq_num,
-                0,
-                name,
-                k,
-                &contents,
-                None,
-                GasCostSummary::default(),
-                None,
-                0,
-            )
+            SignedCheckpointSummary::sign(committee.epoch, &summary, k, name)
         })
         .collect();
 
-    CertifiedCheckpointSummary::aggregate(signed_checkpoints, &committee).expect("Cert is OK")
+    CertifiedCheckpointSummary::new(summary, sign_infos, &committee).expect("Cert is OK")
 }
