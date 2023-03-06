@@ -11,6 +11,7 @@ import IconLink from './icon-link';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
+import Loading from '_components/loading';
 import { SuiIcons } from '_font-icons/output/sui-icons';
 import { useAppSelector, useGetAllBalances, useGetCoinBalance } from '_hooks';
 import { AccountSelector } from '_src/ui/app/components/AccountSelector';
@@ -23,14 +24,21 @@ type TokenDetailsProps = {
 
 function MyTokens() {
     const accountAddress = useActiveAddress();
-    const { data: balance } = useGetAllBalances(accountAddress);
+    const {
+        data: balance,
+        isLoading,
+        isFetched,
+    } = useGetAllBalances(accountAddress);
 
     const noSuiToken = !balance?.find(
         ({ coinType }) => coinType === SUI_TYPE_ARG
     );
 
+    // Avoid perpetual loading state when fetching and retry keeps failing; add isFetched check.
+    const isFirstTimeLoading = isLoading && !isFetched;
+
     return (
-        <>
+        <Loading loading={isFirstTimeLoading}>
             {balance?.length ? (
                 <div className="flex flex-1 justify-start flex-col w-full mt-6">
                     <Text variant="caption" color="steel" weight="semibold">
@@ -56,17 +64,19 @@ function MyTokens() {
                     </Text>
                 </div>
             ) : null}
-        </>
+        </Loading>
     );
 }
 
 function TokenDetails({ coinType }: TokenDetailsProps) {
     const activeCoinType = coinType || SUI_TYPE_ARG;
     const accountAddress = useAppSelector(({ account }) => account.address);
-    const { data: coinBalance, isError } = useGetCoinBalance(
-        activeCoinType,
-        accountAddress
-    );
+    const {
+        data: coinBalance,
+        isError,
+        isLoading,
+        isFetched,
+    } = useGetCoinBalance(activeCoinType, accountAddress);
 
     const tokenBalance = coinBalance?.totalBalance || BigInt(0);
 
@@ -74,9 +84,11 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
         () => Coin.getCoinSymbol(activeCoinType),
         [activeCoinType]
     );
+    // Avoid perpetual loading state when fetching and retry keeps failing add isFetched check
+    const isFirstTimeLoading = isLoading && !isFetched;
 
     return (
-        <>
+        <Loading loading={isFirstTimeLoading}>
             {coinType && <PageTitle title={coinSymbol} back="/tokens" />}
 
             <div
@@ -151,7 +163,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                     </div>
                 )}
             </div>
-        </>
+        </Loading>
     );
 }
 
