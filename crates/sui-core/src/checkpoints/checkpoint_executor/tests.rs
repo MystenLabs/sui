@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use fastcrypto::hash::MultisetHash;
 use fastcrypto::traits::KeyPair;
 use tempfile::tempdir;
 
@@ -10,8 +9,8 @@ use std::{sync::Arc, time::Duration};
 
 use broadcast::{Receiver, Sender};
 use sui_protocol_config::SupportedProtocolVersions;
-use sui_types::messages_checkpoint::VerifiedCheckpoint;
-use sui_types::{accumulator::Accumulator, committee::ProtocolVersion};
+use sui_types::committee::ProtocolVersion;
+use sui_types::messages_checkpoint::{ECMHLiveObjectSetDigest, VerifiedCheckpoint};
 use tokio::{sync::broadcast, time::timeout};
 
 use crate::authority::authority_per_epoch_store::EpochStartConfiguration;
@@ -426,7 +425,7 @@ fn sync_end_of_epoch_checkpoint(
         Some(EndOfEpochData {
             next_epoch_committee: new_committee.committee().voting_rights.clone(),
             next_epoch_protocol_version: ProtocolVersion::MIN,
-            root_state_digest: Accumulator::default().digest(),
+            epoch_commitments: vec![ECMHLiveObjectSetDigest::default().into()],
         }),
     );
     sync_checkpoint(&checkpoint, checkpoint_store, sender);

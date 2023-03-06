@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::hash::Digest;
+use fastcrypto::hash::{Digest, MultisetHash};
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use crate::accumulator::Accumulator;
 use crate::base_types::{ExecutionData, ExecutionDigests, VerifiedExecutionData};
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo};
@@ -52,6 +53,39 @@ pub struct CheckpointResponse {
 
 // The constituent parts of checkpoints, signed and certified
 
+/// The Sha256 digest of an EllipticCurveMultisetHash committing to the live object set.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+pub struct ECMHLiveObjectSetDigest {
+    #[schemars(with = "[u8; 32]")]
+    pub digest: Digest<32>,
+}
+
+impl From<Digest<32>> for ECMHLiveObjectSetDigest {
+    fn from(digest: Digest<32>) -> Self {
+        Self { digest }
+    }
+}
+
+impl Default for ECMHLiveObjectSetDigest {
+    fn default() -> Self {
+        Self {
+            digest: Accumulator::default().digest(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+pub enum CheckpointCommitment {
+    ECMHLiveObjectSetDigest(ECMHLiveObjectSetDigest),
+    // Other commitment types (e.g. merkle roots) go here.
+}
+
+impl From<ECMHLiveObjectSetDigest> for CheckpointCommitment {
+    fn from(d: ECMHLiveObjectSetDigest) -> Self {
+        Self::ECMHLiveObjectSetDigest(d)
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 pub struct EndOfEpochData {
     /// next_epoch_committee is `Some` if and only if the current checkpoint is
@@ -67,10 +101,8 @@ pub struct EndOfEpochData {
     /// checkpoint.
     pub next_epoch_protocol_version: ProtocolVersion,
 
-    /// The digest of the union of all checkpoint accumulators,
-    /// representing the state of the system at the end of the epoch.
-    #[schemars(with = "[u8; 32]")]
-    pub root_state_digest: Digest<32>,
+    /// Commitments to epoch specific state (e.g. live object set)
+    pub epoch_commitments: Vec<CheckpointCommitment>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
@@ -90,6 +122,10 @@ pub struct CheckpointSummary {
     /// Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent
     /// checkpoints can have same timestamp if they originate from the same underlining consensus commit
     pub timestamp_ms: CheckpointTimestamp,
+
+    /// Commitments to checkpoint-specific state (e.g. txns in checkpoint, objects read/written in
+    /// checkpoint).
+    pub checkpoint_commitments: Vec<CheckpointCommitment>,
 
     /// Present only on the final checkpoint of the epoch.
     pub end_of_epoch_data: Option<EndOfEpochData>,
@@ -124,6 +160,7 @@ impl CheckpointSummary {
             end_of_epoch_data,
             timestamp_ms,
             version_specific_data: Vec::new(),
+            checkpoint_commitments: Default::default(),
         }
     }
 

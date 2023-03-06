@@ -70,6 +70,7 @@ impl CommitteeFixture {
             end_of_epoch_data: None,
             timestamp_ms: 0,
             version_specific_data: Vec::new(),
+            checkpoint_commitments: Default::default(),
         };
 
         self.create_certified_checkpoint(checkpoint)
@@ -134,6 +135,7 @@ impl CommitteeFixture {
                 end_of_epoch_data: None,
                 timestamp_ms: 0,
                 version_specific_data: Vec::new(),
+                checkpoint_commitments: Default::default(),
             };
 
             let checkpoint = self.create_certified_checkpoint(summary);
@@ -181,6 +183,7 @@ impl CommitteeFixture {
             end_of_epoch_data,
             timestamp_ms: 0,
             version_specific_data: Vec::new(),
+            checkpoint_commitments: Default::default(),
         };
 
         let checkpoint = self.create_certified_checkpoint(summary);
