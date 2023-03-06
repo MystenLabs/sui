@@ -68,9 +68,9 @@ pub struct SuiValidatorSummary {
     pub next_epoch_commission_rate: u64,
 
     // Staking pool information
-    pub starting_epoch: u64,
-    pub deactivation_epoch: Option<u64>,
-    pub sui_balance: u64,
+    pub staking_pool_starting_epoch: u64,
+    pub staking_pool_deactivation_epoch: Option<u64>,
+    pub staking_pool_sui_balance: u64,
     pub rewards_pool: u64,
     pub pool_token_balance: u64,
     pub pending_delegation: u64,

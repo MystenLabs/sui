@@ -46,6 +46,7 @@ import {
   DryRunTransactionResponse,
   SuiTransactionResponse,
   SuiObjectDataOptions,
+  SuiSystemStateSummary,
 } from '../types';
 import { Provider } from './provider';
 
@@ -66,6 +67,10 @@ export class VoidProvider extends Provider {
 
   async getSuiSystemState(): Promise<SuiSystemState> {
     throw this.newError('getSuiSystemState');
+  }
+
+  async getLatestSuiSystemState(): Promise<SuiSystemStateSummary> {
+    throw this.newError('getLatestSuiSystemState');
   }
 
   async getDelegatedStakes(_address: SuiAddress): Promise<DelegatedStake[]> {

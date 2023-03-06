@@ -51,6 +51,10 @@ describe('Governance API', () => {
   it('test getSuiSystemState', async () => {
     await toolbox.provider.getSuiSystemState();
   });
+
+  it('test getLatestSuiSystemState', async () => {
+    await toolbox.provider.getLatestSuiSystemState();
+  });
 });
 
 async function addDelegation(signer: RawSigner) {
