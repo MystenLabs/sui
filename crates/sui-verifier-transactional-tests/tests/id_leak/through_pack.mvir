@@ -46,8 +46,8 @@ module 0x0.m {
     }
 
     struct Bar {
-        v: u64,
         id: object.UID,
+        v: u64,
     }
 
     foo(f: Self.Foo) {
@@ -55,7 +55,7 @@ module 0x0.m {
         let b: Self.Bar;
         label l0:
         Foo { id } = move(f);
-        b = Bar { v: 0, id: move(id) };
+        b = Bar { id: move(id), v: 0 };
         abort 0;
     }
 

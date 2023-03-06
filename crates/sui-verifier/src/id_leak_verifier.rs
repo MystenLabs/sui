@@ -26,8 +26,9 @@ use move_bytecode_verifier::absint::{
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
 use std::collections::BTreeMap;
 use sui_types::{
-    error::ExecutionError, id::OBJECT_MODULE_NAME, messages::ExecutionFailureStatus,
-    sui_system_state::SUI_SYSTEM_MODULE_NAME, SUI_FRAMEWORK_ADDRESS,
+    clock::CLOCK_MODULE_NAME, error::ExecutionError, id::OBJECT_MODULE_NAME,
+    messages::ExecutionFailureStatus, sui_system_state::SUI_SYSTEM_MODULE_NAME,
+    SUI_FRAMEWORK_ADDRESS,
 };
 
 use crate::{verification_failure, TEST_SCENARIO_MODULE_NAME};
@@ -59,8 +60,13 @@ const SUI_SYSTEM_CREATE: FunctionIdent = (
     SUI_SYSTEM_MODULE_NAME,
     ident_str!("create"),
 );
+const SUI_CLOCK_CREATE: FunctionIdent = (
+    &SUI_FRAMEWORK_ADDRESS,
+    CLOCK_MODULE_NAME,
+    ident_str!("create"),
+);
 const FRESH_ID_FUNCTIONS: &[FunctionIdent] = &[OBJECT_NEW, OBJECT_NEW_UID_FROM_HASH, TS_NEW_OBJECT];
-const FUNCTIONS_TO_SKIP: &[FunctionIdent] = &[SUI_SYSTEM_CREATE];
+const FUNCTIONS_TO_SKIP: &[FunctionIdent] = &[SUI_SYSTEM_CREATE, SUI_CLOCK_CREATE];
 
 impl AbstractValue {
     pub fn join(&self, value: &AbstractValue) -> AbstractValue {
@@ -174,6 +180,11 @@ impl<'a> IDLeakAnalysis<'a> {
         self.stack.drain(new_len..);
     }
 
+    fn stack_pushn(&mut self, n: usize, val: AbstractValue) {
+        let new_len = self.stack.len() + n;
+        self.stack.resize(new_len, val);
+    }
+
     fn resolve_function(&self, function_handle: &FunctionHandle) -> FunctionIdent<'a> {
         let m = self.binary_view.module_handle_at(function_handle.module);
         let address = self.binary_view.address_identifier_at(m.address);
@@ -245,9 +256,7 @@ fn call(
         }
         verifier.stack.push(AbstractValue::Fresh);
     } else {
-        verifier
-            .stack
-            .extend(vec![AbstractValue::Other; return_.0.len()]);
+        verifier.stack_pushn(return_.0.len(), AbstractValue::Other);
     }
     Ok(())
 }
@@ -263,7 +272,7 @@ fn pack(
     verifier: &mut IDLeakAnalysis,
     struct_def: &StructDefinition,
 ) -> Result<(), ExecutionError> {
-    // When unpacking, an object whose struct type has key ability must have the first field as
+    // When packing, an object whose struct type has key ability must have the first field as
     // "id". That fields must come from one of the functions that creates a new UID.
     let handle = verifier
         .binary_view
@@ -277,8 +286,9 @@ fn pack(
             let msg = format!(
                 "Invalid object creation in {cur_package}::{cur_module}::{cur_function}. \
                 Object created without a newly created UID. \
-                The UID must come directly from sui::{}::{}.",
-                OBJECT_NEW.1, OBJECT_NEW.2,
+                The UID must come directly from sui::{}::{}. \
+                Or for tests, it can come from sui::{}::{}",
+                OBJECT_NEW.1, OBJECT_NEW.2, TS_NEW_OBJECT.1, TS_NEW_OBJECT.2,
             );
             return Err(verification_failure(msg));
         }
@@ -289,9 +299,7 @@ fn pack(
 
 fn unpack(verifier: &mut IDLeakAnalysis, struct_def: &StructDefinition) {
     verifier.stack.pop().unwrap();
-    verifier
-        .stack
-        .extend(vec![AbstractValue::Other; num_fields(struct_def)]);
+    verifier.stack_pushn(num_fields(struct_def), AbstractValue::Other);
 }
 
 fn execute_inner(
@@ -451,7 +459,7 @@ fn execute_inner(
 
         Bytecode::VecUnpack(_, num) => {
             verifier.stack.pop().unwrap();
-            verifier.stack.extend(vec![AbstractValue::Other; *num as usize])
+            verifier.stack_pushn(*num as usize, AbstractValue::Other);
         }
 
         Bytecode::VecSwap(_) => {

@@ -61,7 +61,7 @@ mod test {
 
         // build tests first to enable Sui-specific test code verification
         build_move_package(path, config)
-            .unwrap_or_else(|_| panic!("Building tests at {}", path.display()));
+            .unwrap_or_else(|e| panic!("Building tests at {}.\nWith error {e}", path.display()));
 
         assert_eq!(
             run_move_unit_tests(path, move_config, None, false).unwrap(),

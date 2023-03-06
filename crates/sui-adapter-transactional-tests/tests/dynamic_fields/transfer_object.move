@@ -23,8 +23,8 @@ struct Counter has key, store {
     count: u64,
 }
 
-fun new(id: UID): Counter {
-    Counter { id, count: 0 }
+fun new(ctx: &mut TxContext): Counter {
+    Counter { id: object::new(ctx), count: 0 }
 }
 
 fun count(counter: &Counter): u64 {
@@ -48,7 +48,7 @@ entry fun create(ctx: &mut TxContext) {
 }
 
 entry fun add_counter(obj: &mut Obj, ctx: &mut TxContext) {
-    add(&mut obj.id, 0, new(object::new(ctx)))
+    add(&mut obj.id, 0, new(ctx))
 }
 
 entry fun obj_bump(obj: &mut Obj) {
