@@ -94,4 +94,4 @@ Benchmarks results are automatically saved into the folder specified by the sett
 cargo run --bin orchestrator -- plot
 ```
 
-More elaborated (and nicer) plots can be generated with the python located in `./assets/plots.rs`.
+More elaborated (and nicer) plots can be generated with the python script located in `./assets/plots.rs`.
