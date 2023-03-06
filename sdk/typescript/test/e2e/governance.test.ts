@@ -72,12 +72,14 @@ async function addDelegation(signer: RawSigner) {
 
   const validators = await signer.provider.getValidators();
 
-  return await signer.signAndExecuteTransaction(
-    await SuiSystemStateUtil.newRequestAddDelegationTxn(
-      [coins[0].objectId],
-      BigInt(DEFAULT_STAKED_AMOUNT),
-      validators[0].sui_address,
-      DEFAULT_GAS_BUDGET,
-    ),
+  const tx = await SuiSystemStateUtil.newRequestAddDelegationTxn(
+    [coins[0].objectId],
+    BigInt(DEFAULT_STAKED_AMOUNT),
+    validators[0].sui_address,
+    DEFAULT_GAS_BUDGET,
   );
+
+  // tx.setGasBudget(DEFAULT_GAS_BUDGET);
+
+  return await signer.signAndExecuteTransaction(tx);
 }

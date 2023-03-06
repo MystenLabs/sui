@@ -60,6 +60,24 @@ export class SuiSystemStateUtil {
         gasPrice,
       },
     };
+    // // TODO: validate coin types and handle locked coins
+    // // TODO: Use split from gas to construct staking coin.
+    // const tx = new Transaction();
+    // tx.add(
+    //   Commands.MoveCall({
+    //     package: SUI_FRAMEWORK_ADDRESS,
+    //     module: SUI_SYSTEM_MODULE_NAME,
+    //     function: ADD_DELEGATION_MUL_COIN_FUN_NAME,
+    //     typeArguments: [],
+    //     arguments: [
+    //       tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
+    //       tx.input(coins),
+    //       tx.input([String(amount)]),
+    //       tx.input(validatorAddress),
+    //     ],
+    //   }),
+    // );
+    // return tx;
   }
 
   /**
@@ -90,5 +108,20 @@ export class SuiSystemStateUtil {
         gasPrice,
       },
     };
+    // const tx = new Transaction();
+    // tx.add(
+    //   Commands.MoveCall({
+    //     package: SUI_FRAMEWORK_ADDRESS,
+    //     module: SUI_SYSTEM_MODULE_NAME,
+    //     function: WITHDRAW_DELEGATION_FUN_NAME,
+    //     typeArguments: [],
+    //     arguments: [
+    //       tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
+    //       tx.input(delegation),
+    //       tx.input(stakedCoinId),
+    //     ],
+    //   }),
+    // );
+    // return tx;
   }
 }
