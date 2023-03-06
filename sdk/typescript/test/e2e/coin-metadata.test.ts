@@ -18,7 +18,7 @@ describe('Test Coin Metadata', () => {
       new LocalTxnDataSerializer(toolbox.provider),
     );
     const packagePath = __dirname + '/./data/coin_metadata';
-    packageId = await publishPackage(signer, true, packagePath);
+    packageId = await publishPackage(signer, packagePath);
   });
 
   it('Test accessing coin metadata', async () => {

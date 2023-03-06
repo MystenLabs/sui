@@ -74,7 +74,6 @@ export async function setup() {
 
 export async function publishPackage(
   signer: RawSigner,
-  useLocalTxnBuilder: boolean,
   packagePath: string,
 ): Promise<ObjectId> {
   const { execSync } = require('child_process');
@@ -91,9 +90,7 @@ export async function publishPackage(
     ),
   );
   const publishTxn = await signer.publish({
-    compiledModules: useLocalTxnBuilder
-      ? compiledModules.map((m: any) => Array.from(fromB64(m)))
-      : compiledModules,
+    compiledModules: compiledModules.map((m: any) => Array.from(fromB64(m))),
     gasBudget: DEFAULT_GAS_BUDGET,
   });
   expect(getExecutionStatusType(publishTxn)).toEqual('success');

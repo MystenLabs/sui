@@ -23,7 +23,7 @@ describe('Test Object Display Standard', () => {
       new LocalTxnDataSerializer(toolbox.provider),
     );
     const packagePath = __dirname + '/./data/display_test';
-    packageId = await publishPackage(signer, true, packagePath);
+    packageId = await publishPackage(signer, packagePath);
   });
 
   it('Test getting Display fields', async () => {
