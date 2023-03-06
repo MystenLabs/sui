@@ -6,7 +6,7 @@ The next release of Sui, release 0.28, includes the breaking changes described i
 
 **[Major breaking change]** - The new Programmable Transactions feature introduces a new type of transaction that replaces both batch transactions and normal transactions (with the exception of special system transactions). These transactions allow for a series of Commands (mini transactions of sorts) to be executed, where the results of commands can be used in following commands. For more information, see the [Programmable Transactions RFC](https://forums.sui.io/t/rfc-planned-feature-programmable-transactions/3823).
 
-**[Major breaking change]** - `SuiAddress` and `ObjectID` are now 32 bytes long instead of 20 bytes (in hex, the `len` increases from 40 to 64). If your software interacts with any `ObjectID` and `SuiAddress`, you must update it to use updated addresses and redeploy it. [PR 8542](https://github.com/MystenLabs/sui/pull/8542)
+**[Major breaking change]** - `SuiAddress` and `ObjectID` are now 32 bytes long instead of 20 bytes (in hex, the `len` increases from 40 to 64). If your software interacts with any `ObjectID` and `SuiAddress`, you must update it to use updated addresses and redeploy it. [PR 8542](https://github.com/MystenLabs/sui/pull/8542).
 
 **[Breaking change]** - Changes to Gas Budget to use SUI rather than gas units. This removes the concept of gas units from any user-related API operations. This does not change the format of `TransactionData` (u64). This is not a breaking change in the sense that the current format no longer works, but rather requires you to reconsider how you use gas budgets.
 
@@ -22,7 +22,7 @@ This release changes the field value type in `TransactionData` from `gas_payment
 
 **[Minor breaking change]** - This release modifies the format for `ConsensusCommitPrologue` transactions. This is a system-generated transaction that updates timestamp on the `Clock` object, allowing Sui Move smart contracts to read up-to-date timestamps from the blockchain.
 
-**[Minor breaking change]** - Removes `bulletproofs` and `elliptic_curve` modules from the Sui Framework. For more information, see [PR 8660](https://github.com/MystenLabs/sui/pull/8660)
+**[Minor breaking change]** - Removes `bulletproofs` and `elliptic_curve` modules from the Sui Framework. For more information, see [PR 8660](https://github.com/MystenLabs/sui/pull/8660).
 
 **[API breaking change]** - This release replaces `SuiCertifiedTransaction` with `SuiTransaction` in `SuiTransactionResponse`. This is because validators can no longer guarantee to return a transaction certificate. This release also unifies `SuiTransactionResponse` and `SuiExecuteTransactionResponse` to simplify the API. See [PR 8369](https://github.com/MystenLabs/sui/pull/8369) for more information.
 
@@ -31,3 +31,5 @@ This release changes the field value type in `TransactionData` from `gas_payment
 **[API breaking change]** - This release removes the request_switch_delegation function from the Transaction Builder API. It also removes the pending_delegation_switches field from the validator set type in the Sui SDK. See [PR 8435](https://github.com/MystenLabs/sui/pull/8435) for more information.
 
 **[API breaking change]** - To reduce the size of Sui Full node synchronization payloads, this release removes events from `TransactionEffect`. The events are still included in the `SuiTransactionResponse` returned by `sui_getTransaction` and `sui_submitTransaction` endpoints. For more information, see [PR 7822](https://github.com/MystenLabs/sui/pull/7822).
+
+**[API breaking change]** - The `StakedSui` object now includes the ID of the staking pool, `pool_id`. For more information, see [PR 8371](https://github.com/MystenLabs/sui/pull/8371).
