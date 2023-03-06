@@ -5,6 +5,7 @@ use crate::errors::IndexerError;
 use crate::models::addresses::Address;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::events::Event;
+use crate::models::move_calls::MoveCall;
 use crate::models::objects::Object;
 use crate::models::owners::OwnerChange;
 use crate::models::packages::Package;
@@ -25,20 +26,21 @@ pub trait IndexerStore {
     // based on observations, thus `get_total_transaction_number` and
     // `get_latest_transaction_sequence_number` are not always equal.
     fn get_latest_transaction_sequence_number(&self) -> Result<i64, IndexerError>;
+    fn get_latest_move_call_sequence_number(&self) -> Result<i64, IndexerError>;
 
     // TODO: combine all get_transaction* methods
     fn get_transaction_by_digest(&self, txn_digest: String) -> Result<Transaction, IndexerError>;
     fn get_transaction_sequence_by_digest(
         &self,
         txn_digest: Option<String>,
-        reverse: bool,
+        is_descending: bool,
     ) -> Result<i64, IndexerError>;
 
     fn get_all_transaction_digest_page(
         &self,
         start_sequence: i64,
         limit: usize,
-        reverse: bool,
+        is_descending: bool,
     ) -> Result<Vec<String>, IndexerError>;
 
     fn get_transaction_digest_page_by_mutated_object(
@@ -46,7 +48,7 @@ pub trait IndexerStore {
         object_id: String,
         start_sequence: i64,
         limit: usize,
-        reverse: bool,
+        is_descending: bool,
     ) -> Result<Vec<String>, IndexerError>;
 
     fn get_transaction_digest_page_by_sender_address(
@@ -54,7 +56,7 @@ pub trait IndexerStore {
         sender_address: String,
         start_sequence: i64,
         limit: usize,
-        reverse: bool,
+        is_descending: bool,
     ) -> Result<Vec<String>, IndexerError>;
 
     fn get_transaction_digest_page_by_recipient_address(
@@ -62,8 +64,24 @@ pub trait IndexerStore {
         recipient_address: String,
         start_sequence: i64,
         limit: usize,
-        reverse: bool,
+        is_descending: bool,
     ) -> Result<Vec<String>, IndexerError>;
+
+    fn get_transaction_digest_page_by_move_call(
+        &self,
+        package: String,
+        module: Option<String>,
+        function: Option<String>,
+        start_sequence: i64,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<String>, IndexerError>;
+
+    fn get_move_call_sequence_by_digest(
+        &self,
+        txn_digest: Option<String>,
+        is_descending: bool,
+    ) -> Result<i64, IndexerError>;
 
     fn read_transactions(
         &self,
@@ -92,6 +110,7 @@ pub struct TemporaryCheckpointStore {
     pub owner_changes: Vec<OwnerChange>,
     pub addresses: Vec<Address>,
     pub packages: Vec<Package>,
+    pub move_calls: Vec<MoveCall>,
 }
 
 // Per epoch indexing

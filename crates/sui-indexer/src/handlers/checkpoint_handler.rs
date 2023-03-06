@@ -8,7 +8,7 @@ use prometheus::Registry;
 use std::collections::BTreeMap;
 use sui_json_rpc_types::{
     SuiObjectData, SuiObjectDataOptions, SuiParsedData, SuiTransactionDataAPI,
-    SuiTransactionEffectsAPI, SuiTransactionResponse,
+    SuiTransactionEffectsAPI, SuiTransactionKind, SuiTransactionResponse,
 };
 use sui_sdk::SuiClient;
 use tokio::task::JoinHandle;
@@ -18,6 +18,7 @@ use crate::errors::IndexerError;
 use crate::metrics::IndexerCheckpointHandlerMetrics;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::events::Event;
+use crate::models::move_calls::MoveCall;
 use crate::models::packages::Package;
 use crate::models::transactions::Transaction;
 use crate::store::{CheckpointData, IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore};
@@ -229,6 +230,36 @@ where
         // Index packages
         let packages = Self::index_packages(&transactions, &objects)?;
 
+        let move_calls: Vec<MoveCall> = transactions
+            .iter()
+            .flat_map(|t| {
+                t.transaction.data.transactions().iter().map(move |tx| {
+                    (
+                        tx.clone(),
+                        t.effects.transaction_digest(),
+                        checkpoint.sequence_number,
+                        checkpoint.epoch,
+                        t.transaction.data.sender(),
+                    )
+                })
+            })
+            .filter_map(
+                |(tx_kind, txn_digest, checkpoint_seq, epoch, sender)| match tx_kind {
+                    SuiTransactionKind::Call(sui_move_call) => Some(MoveCall {
+                        id: None,
+                        transaction_digest: txn_digest.to_string(),
+                        checkpoint_sequence_number: checkpoint_seq as i64,
+                        epoch: epoch as i64,
+                        sender: sender.to_string(),
+                        move_package: sui_move_call.package.to_string(),
+                        move_module: sui_move_call.module,
+                        move_function: sui_move_call.function,
+                    }),
+                    _ => None,
+                },
+            )
+            .collect();
+
         // Index epoch
         // TODO: Aggregate all object owner changes into owner index at epoch change.
         let epoch_index =
@@ -248,6 +279,7 @@ where
                 owner_changes: vec![],
                 addresses,
                 packages,
+                move_calls,
             },
             epoch_index,
         ))

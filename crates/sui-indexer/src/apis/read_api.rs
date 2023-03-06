@@ -65,23 +65,32 @@ impl<S: IndexerStore> ReadApi<S> {
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage> {
         let limit = cap_page_limit(limit);
-        let indexer_seq_number = self.state.get_transaction_sequence_by_digest(
-            cursor.map(|digest| digest.to_string()),
-            descending_order.unwrap_or_default(),
-        )?;
+        let reverse = descending_order.unwrap_or_default();
+        let indexer_seq_number = self
+            .state
+            .get_transaction_sequence_by_digest(cursor.map(|digest| digest.to_string()), reverse)?;
+        let move_call_seq_number = self
+            .state
+            .get_move_call_sequence_by_digest(cursor.map(|digest| digest.to_string()), reverse)?;
 
         let digests_from_db = match query {
-            TransactionQuery::All => self.state.get_all_transaction_digest_page(
-                indexer_seq_number,
-                limit,
-                descending_order.unwrap_or_default(),
-            ),
+            TransactionQuery::All => {
+                self.state
+                    .get_all_transaction_digest_page(indexer_seq_number, limit, reverse)
+            }
             // TODO(gegaowp): implement Move call query handling.
             TransactionQuery::MoveFunction {
-                package: _,
-                module: _,
-                function: _,
-            } => Ok(vec![]),
+                package,
+                module,
+                function,
+            } => self.state.get_transaction_digest_page_by_move_call(
+                package.to_string(),
+                module,
+                function,
+                move_call_seq_number,
+                limit,
+                reverse,
+            ),
             // TODO(gegaowp): input objects are tricky to retrive from
             // SuiTransactionResponse, instead we should store the BCS
             // serialized transaction and retrive from there.
@@ -92,7 +101,7 @@ impl<S: IndexerStore> ReadApi<S> {
                     mutated_obj_id.to_string(),
                     indexer_seq_number,
                     limit + 1,
-                    descending_order.unwrap_or_default(),
+                    reverse,
                 )
             }
             TransactionQuery::FromAddress(sender_address) => {
@@ -100,7 +109,7 @@ impl<S: IndexerStore> ReadApi<S> {
                     sender_address.to_string(),
                     indexer_seq_number,
                     limit + 1,
-                    descending_order.unwrap_or_default(),
+                    reverse,
                 )
             }
             TransactionQuery::ToAddress(recipient_address) => {
@@ -108,7 +117,7 @@ impl<S: IndexerStore> ReadApi<S> {
                     recipient_address.to_string(),
                     indexer_seq_number,
                     limit + 1,
-                    descending_order.unwrap_or_default(),
+                    reverse,
                 )
             }
         }?;
