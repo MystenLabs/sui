@@ -1,19 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-  is,
-  assert,
-  literal,
-  object,
-  Infer,
-  array,
-  optional,
-  define,
-  string,
-  nullable,
-  integer,
-} from 'superstruct';
+import { is } from 'superstruct';
 import { Provider } from '../providers/provider';
 import {
   extractStructTag,
@@ -22,7 +10,6 @@ import {
   normalizeSuiObjectId,
   SuiObjectRef,
 } from '../types';
-import { builder } from './bcs';
 import {
   Commands,
   CommandArgument,
@@ -33,6 +20,10 @@ import {
 } from './Commands';
 import { BuilderCallArg, Inputs } from './Inputs';
 import { getPureSerializationType, isTxContext } from './serializer';
+import {
+  TransactionDataBuilder,
+  TransactionExpiration,
+} from './TransactionData';
 import { COMMAND_TYPE, create, WellKnownEncoding } from './utils';
 
 type TransactionResult = CommandArgument & CommandArgument[];
@@ -83,50 +74,10 @@ function createTransactionResult(index: number): TransactionResult {
   }) as TransactionResult;
 }
 
-const StringEncodedBigint = define<string>('StringEncodedBigint', (val) => {
-  if (typeof val !== 'string') return false;
-
-  try {
-    BigInt(val);
-    return true;
-  } catch {
-    return false;
-  }
-});
-
-const SuiAddress = string();
-type SuiAddress = Infer<typeof SuiAddress>;
-
-const GasConfig = object({
-  budget: optional(StringEncodedBigint),
-  price: optional(StringEncodedBigint),
-  payment: optional(array(SuiObjectRef)),
-  owner: optional(SuiAddress),
-});
-type GasConfig = Infer<typeof GasConfig>;
-
-const TransactionExpiration = optional(nullable(object({ Epoch: integer() })));
-type TransactionExpiration = Infer<typeof TransactionExpiration>;
-
-/**
- * The serialized representation of a transaction builder, which is used to pass
- * payloads across
- */
-const SerializedTransactionBuilder = object({
-  version: literal(1),
-  sender: optional(SuiAddress),
-  expiration: TransactionExpiration,
-  inputs: array(TransactionInput),
-  commands: array(TransactionCommand),
-  gasConfig: GasConfig,
-});
-type SerializedTransactionBuilder = Infer<typeof SerializedTransactionBuilder>;
-
-// TODO: Improve error messaging so that folks know exactly what is missing
-function expectProvider(provider?: Provider): Provider {
+function expectProvider(provider: Provider | undefined): Provider {
   if (!provider) {
     throw new Error(
-      'No provider passed to Transaction#build, but transaction data was not sufficient to build offline.',
+      `No provider passed to Transaction#build, but transaction data was not sufficient to build offline.`,
     );
   }
 
@@ -157,13 +108,8 @@ export class Transaction {
     }
 
     const parsed = JSON.parse(serialized);
-    assert(parsed, SerializedTransactionBuilder);
     const tx = new Transaction();
-    tx.#sender = parsed.sender;
-    tx.#expiration = parsed.expiration;
-    tx.#gasConfig = parsed.gasConfig;
-    tx.#inputs = parsed.inputs;
-    tx.#commands = parsed.commands;
+    tx.#transactionData = TransactionDataBuilder.restore(parsed);
     return tx;
   }
 
@@ -177,62 +123,32 @@ export class Transaction {
     return Inputs;
   }
 
-  #sender?: string;
-  get sender() {
-    return this.#sender;
-  }
   setSender(sender: string) {
-    this.#sender = sender;
-  }
-
-  #expiration?: TransactionExpiration;
-  get expiration() {
-    return this.#expiration;
+    this.#transactionData.sender = sender;
   }
   setExpiration(expiration?: TransactionExpiration) {
-    this.#expiration = expiration;
-  }
-
-  /** The gas configuration for the transaction. */
-  #gasConfig: GasConfig;
-  /** Returns a copy of the gas config. */
-  get gasConfig(): GasConfig {
-    return { ...this.#gasConfig };
+    this.#transactionData.expiration = expiration;
   }
   setGasPrice(price: number | bigint) {
-    this.#gasConfig.price = String(price);
+    this.#transactionData.gasConfig.price = String(price);
   }
   setGasBudget(budget: number | bigint) {
-    this.#gasConfig.budget = String(budget);
+    this.#transactionData.gasConfig.budget = String(budget);
   }
   setGasPayment(payment: SuiObjectRef[]) {
-    this.#gasConfig.payment = payment;
+    this.#transactionData.gasConfig.payment = payment;
   }
 
-  /**
-   * The list of inputs currently assigned to this transaction.
-   * This list should be append-only, so that indexes for arguments never change.
-   */
-  #inputs: TransactionInput[];
-  /** Returns a copy of the inputs. */
-  get inputs(): TransactionInput[] {
-    return [...this.#inputs];
-  }
-
-  /**
-   * The list of comamnds in the transaction.
-   * This list should be append-only, so that indexes for arguments never change.
-   */
-  #commands: TransactionCommand[];
-  /** Returns a copy of the commands. */
-  get commands(): TransactionCommand[] {
-    return [...this.#commands];
+  #transactionData: TransactionDataBuilder;
+  /** Get a snapshot of the transaction data, in JSON form: */
+  get transactionData() {
+    return this.#transactionData.snapshot();
   }
 
   constructor(transaction?: Transaction) {
-    this.#inputs = transaction?.inputs ?? [];
-    this.#commands = transaction?.commands ?? [];
-    this.#gasConfig = transaction?.gasConfig ?? {};
+    this.#transactionData = new TransactionDataBuilder(
+      transaction ? transaction.#transactionData : undefined,
+    );
   }
 
   /** Returns an argument for the gas coin, to be used in a transaction. */
@@ -256,9 +172,9 @@ export class Transaction {
     //   value = { Pure: value };
     // }
 
-    const index = this.#inputs.length;
+    const index = this.#transactionData.inputs.length;
     const input = create({ kind: 'Input', value, index }, TransactionInput);
-    this.#inputs.push(input);
+    this.#transactionData.inputs.push(input);
     return input;
   }
 
@@ -276,30 +192,20 @@ export class Transaction {
   /** Add a command to the transaction. */
   add(command: TransactionCommand) {
     // TODO: This should also look at the command arguments and add any referenced commands that are not present in this transaction.
-    const index = this.#commands.push(command);
+    const index = this.#transactionData.commands.push(command);
     return createTransactionResult(index - 1);
   }
 
   /** Build the transaction to BCS bytes. */
   async build({ provider }: { provider?: Provider } = {}): Promise<Uint8Array> {
-    if (!this.#gasConfig.budget) {
-      throw new Error('Missing gas budget');
-    }
-
     // TODO: Automatic gas object selection.
-    if (!this.#gasConfig.payment) {
-      throw new Error('Missing gas payment');
-    }
-
-    if (!this.#sender) {
-      throw new Error('Missing transaction sender');
-    }
-
-    if (!this.#gasConfig.price) {
-      this.#gasConfig.price = String(
+    if (!this.#transactionData.gasConfig.price) {
+      this.#transactionData.gasConfig.price = String(
         await expectProvider(provider).getReferenceGasPrice(),
       );
     }
+
+    const { inputs, commands } = this.#transactionData;
 
     const moveModulesToResolve: MoveCallCommand[] = [];
 
@@ -307,7 +213,7 @@ export class Transaction {
     // We keep the input by-reference to avoid needing to re-resolve it:
     const objectsToResolve: { id: string; input: TransactionInput }[] = [];
 
-    this.#commands.forEach((command) => {
+    commands.forEach((command) => {
       // Special case move call:
       if (command.kind === 'MoveCall') {
         // Determine if any of the arguments require encoding.
@@ -316,7 +222,7 @@ export class Transaction {
         const needsResolution = command.arguments.some(
           (arg) =>
             arg.kind === 'Input' &&
-            !is(this.#inputs[arg.index].value, BuilderCallArg),
+            !is(inputs[arg.index].value, BuilderCallArg),
         );
 
         if (needsResolution) {
@@ -343,7 +249,7 @@ export class Transaction {
         if (!wellKnownEncoding) return;
 
         const encodeInput = (index: number) => {
-          const input = this.#inputs[index];
+          const input = inputs[index];
           if (!input) {
             throw new Error(`Missing input ${value.index}`);
           }
@@ -408,8 +314,8 @@ export class Transaction {
           params.forEach((param, i) => {
             const arg = moveCall.arguments[i];
             if (arg.kind !== 'Input') return;
-            if (is(this.#inputs[arg.index], BuilderCallArg)) return;
-            const input = this.#inputs[arg.index];
+            if (is(inputs[arg.index], BuilderCallArg)) return;
+            const input = inputs[arg.index];
             const inputValue = input.value;
 
             const serType = getPureSerializationType(param, inputValue);
@@ -473,32 +379,7 @@ export class Transaction {
       });
     }
 
-    // Resolve inputs down to values:
-    const inputs = this.#inputs.map((input) => {
-      assert(input.value, BuilderCallArg);
-      return input.value;
-    });
-
-    const transactionData = {
-      sender: this.#sender,
-      expiration: this.#expiration ? this.#expiration : { None: true },
-      gasData: {
-        payment: this.#gasConfig.payment,
-        owner: this.#gasConfig.owner ?? this.#sender,
-        price: this.#gasConfig.price,
-        budget: this.#gasConfig.budget,
-      },
-      kind: {
-        Single: {
-          ProgrammableTransaction: {
-            inputs,
-            commands: this.#commands,
-          },
-        },
-      },
-    };
-
-    return builder.ser('TransactionData', { V1: transactionData }).toBytes();
+    return this.#transactionData.build();
   }
 
   /**
@@ -514,19 +395,6 @@ export class Transaction {
    * and performing a dry run).
    */
   serialize() {
-    const allInputsProvided = this.#inputs.every((input) => !!input.value);
-
-    if (!allInputsProvided) {
-      throw new Error('All input values must be provided before serializing.');
-    }
-
-    const data: SerializedTransactionBuilder = {
-      version: 1,
-      inputs: this.#inputs,
-      commands: this.#commands,
-      gasConfig: this.#gasConfig,
-    };
-
-    return JSON.stringify(create(data, SerializedTransactionBuilder));
+    return JSON.stringify(this.#transactionData.snapshot());
   }
 }
