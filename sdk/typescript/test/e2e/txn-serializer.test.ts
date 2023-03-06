@@ -16,7 +16,6 @@ import {
   TransactionData,
   TransactionKind,
   PaySuiTransaction,
-  getObjectId,
   PayAllSuiTx,
   PayAllSuiTransaction,
 } from '../../src';

@@ -215,7 +215,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         coinObjectId: coins[0].coinObjectId,
         splitAmounts: [2000, 2000, 2000],
         gasBudget: gasBudget,
-        gasPayment: coins[0].coinObjectId,
+        gasPayment: coins[1].coinObjectId,
       });
       const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
         getObjectId(c),
