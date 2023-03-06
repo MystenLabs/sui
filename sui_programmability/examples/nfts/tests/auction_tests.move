@@ -58,16 +58,8 @@ module nfts::auction_tests {
             id: object::new(ctx),
             value: 42,
         };
-        // generate unique auction ID (it would be more natural to
-        // generate one in crate_auction and return it, but we cannot
-        // do this at the moment)
-        let id = object::new(ctx);
-        // we need to dereference (copy) right here rather wherever
-        // auction_id is used - otherwise id would still be considered
-        // borrowed and could not be passed argument to a function
-        // consuming it
-        let auction_id = object::uid_to_inner(&id);
-        auction::create_auction(to_sell, id, auctioneer, ctx);
+        // create the auction
+        let auction_id = auction::create_auction(to_sell, auctioneer, ctx);
 
         // a transaction by the first bidder to create and put a bid
         test_scenario::next_tx(scenario, bidder1);
