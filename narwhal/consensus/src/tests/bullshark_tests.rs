@@ -710,9 +710,9 @@ async fn reset_consensus_scores_on_every_schedule_change() {
     // ensure the leaders of rounds 2 and 4 have been committed
     let mut current_score = 0;
     for sub_dag in all_subdags {
-        // The first commit has no scores
+        // The first commit has all zero scores
         if sub_dag.sub_dag_index == 1 {
-            assert_eq!(sub_dag.reputation_score.total_authorities(), 0);
+            assert!(sub_dag.reputation_score.all_zero());
         } else if sub_dag.sub_dag_index % NUM_SUB_DAGS_PER_SCHEDULE == 0 {
             // On every 5th commit we reset the scores and count from the beginning with
             // scores updated to 1, as we expect now every node to have voted for the previous leader.
