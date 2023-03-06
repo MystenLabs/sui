@@ -21,6 +21,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::hash::{Hash, Hasher};
+use sui_protocol_config::ProtocolConfig;
 
 use crate::{
     base_types::SuiAddress,
@@ -35,7 +36,6 @@ mod multisig_tests;
 
 pub type WeightUnit = u8;
 pub type ThresholdUnit = u16;
-pub const MAX_SIGNER_IN_MULTISIG: usize = 10;
 
 /// This initialize the underlying bytes representation of MultiSig. It encodes
 /// [struct MultiSig] as the MultiSig flag (0x03) concat with the bcs bytes
@@ -102,7 +102,9 @@ impl AuthenticatorTrait for MultiSig {
     where
         T: Serialize,
     {
-        if self.multisig_pk.pk_map.len() > MAX_SIGNER_IN_MULTISIG {
+        let max_signer_in_multisig =
+            ProtocolConfig::get_for_min_version().max_num_multisig_signers();
+        if self.multisig_pk.pk_map.len() > max_signer_in_multisig {
             return Err(SuiError::InvalidSignature {
                 error: "Invalid number of public keys".to_string(),
             });
@@ -177,8 +179,10 @@ impl MultiSig {
         full_sigs: Vec<Signature>,
         multisig_pk: MultiSigPublicKey,
     ) -> Result<Self, SuiError> {
+        let max_signer_in_multisig =
+            ProtocolConfig::get_for_min_version().max_num_multisig_signers();
         if full_sigs.len() > multisig_pk.pk_map.len()
-            || multisig_pk.pk_map.len() > MAX_SIGNER_IN_MULTISIG
+            || multisig_pk.pk_map.len() > max_signer_in_multisig
             || full_sigs.is_empty()
             || multisig_pk.pk_map.is_empty()
         {
@@ -228,11 +232,13 @@ impl MultiSigPublicKey {
         weights: Vec<WeightUnit>,
         threshold: ThresholdUnit,
     ) -> Result<Self, SuiError> {
+        let max_signer_in_multisig =
+            ProtocolConfig::get_for_min_version().max_num_multisig_signers();
         if pks.is_empty()
             || weights.is_empty()
             || threshold == 0
             || pks.len() != weights.len()
-            || pks.len() > MAX_SIGNER_IN_MULTISIG
+            || pks.len() > max_signer_in_multisig
             || weights.iter().any(|w| w == &0)
         {
             return Err(SuiError::InvalidSignature {
@@ -260,7 +266,8 @@ impl MultiSigPublicKey {
     pub fn validate(&self) -> Result<(), FastCryptoError> {
         if self.threshold == 0
             || self.pubkeys().is_empty()
-            || self.pubkeys().len() > MAX_SIGNER_IN_MULTISIG
+            || self.pubkeys().len()
+                > ProtocolConfig::get_for_min_version().max_num_multisig_signers()
             || self.pubkeys().iter().any(|pk_weight| pk_weight.1 == 0)
         {
             return Err(FastCryptoError::InvalidInput);

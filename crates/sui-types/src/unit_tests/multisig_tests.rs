@@ -7,6 +7,7 @@ use fastcrypto::traits::ToFromBytes;
 use once_cell::sync::OnceCell;
 use rand::{rngs::StdRng, SeedableRng};
 use roaring::RoaringBitmap;
+use sui_protocol_config::ProtocolConfig;
 
 use crate::{
     base_types::SuiAddress,
@@ -15,7 +16,7 @@ use crate::{
         SuiSignatureInner,
     },
     intent::{Intent, IntentMessage, PersonalMessage},
-    multisig::{MultiSig, MAX_SIGNER_IN_MULTISIG},
+    multisig::MultiSig,
     signature::{AuthenticatorTrait, GenericSignature},
 };
 
@@ -311,6 +312,7 @@ fn test_multisig_address() {
 
 #[test]
 fn test_max_sig() {
+    let max_signer_in_multisig = ProtocolConfig::get_for_min_version().max_num_multisig_signers();
     let msg = IntentMessage::new(
         Intent::default(),
         PersonalMessage {
@@ -325,15 +327,15 @@ fn test_max_sig() {
 
     // multisig_pk with larger that max number of pks fails.
     assert!(MultiSigPublicKey::new(
-        vec![keys[0].public(); MAX_SIGNER_IN_MULTISIG + 1],
-        vec![WeightUnit::MAX; MAX_SIGNER_IN_MULTISIG + 1],
+        vec![keys[0].public(); max_signer_in_multisig + 1],
+        vec![WeightUnit::MAX; max_signer_in_multisig + 1],
         ThresholdUnit::MAX
     )
     .is_err());
 
     // multisig_pk with max weights for each pk and max threshold is ok.
     let high_threshold_pk = MultiSigPublicKey::new(
-        vec![keys[0].public(); MAX_SIGNER_IN_MULTISIG],
+        vec![keys[0].public(); max_signer_in_multisig],
         vec![WeightUnit::MAX; 10],
         ThresholdUnit::MAX,
     )
@@ -342,12 +344,12 @@ fn test_max_sig() {
     let sig = Signature::new_secure(&msg, &keys[0]);
 
     // But max threshold cannot be met, fails to verify.
-    let multisig = MultiSig::combine(vec![sig; MAX_SIGNER_IN_MULTISIG], high_threshold_pk).unwrap();
+    let multisig = MultiSig::combine(vec![sig; max_signer_in_multisig], high_threshold_pk).unwrap();
     assert!(multisig.verify_secure_generic(&msg, address).is_err());
 
     // multisig_pk with max weights for each pk with threshold is 1x max weight verifies ok.
     let low_threshold_pk = MultiSigPublicKey::new(
-        vec![keys[0].public(); MAX_SIGNER_IN_MULTISIG],
+        vec![keys[0].public(); max_signer_in_multisig],
         vec![WeightUnit::MAX; 10],
         WeightUnit::MAX.into(),
     )

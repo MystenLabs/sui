@@ -292,6 +292,11 @@ pub struct ProtocolConfig {
     /// 3f+1 must vote), while 0bps would indicate that 2f+1 is sufficient.
     buffer_stake_for_protocol_upgrade_bps: Option<u64>,
 
+    /// === Crypto ===
+
+    /// Maximum number of signers which can be in a multisig
+    max_num_multisig_signers: Option<usize>,
+
     /// === Native Function Costs ===
 
     /// Cost params for the Move native function `address::from_bytes(bytes: vector<u8>)`
@@ -467,7 +472,9 @@ impl ProtocolConfig {
         self.buffer_stake_for_protocol_upgrade_bps
             .expect(CONSTANT_ERR_MSG)
     }
-
+    pub fn max_num_multisig_signers(&self) -> usize {
+        self.max_num_multisig_signers.expect(CONSTANT_ERR_MSG)
+    }
     pub fn copy_bytes_to_address_cost_per_byte(&self) -> u64 {
         self.copy_bytes_to_address_cost_per_byte
             .expect(CONSTANT_ERR_MSG)
@@ -651,6 +658,9 @@ impl ProtocolConfig {
                 // require 2f+1 + 0.75 * f stake for automatic protocol upgrades.
                 // TODO: tune based on experience in testnet
                 buffer_stake_for_protocol_upgrade_bps: Some(7500),
+
+
+                max_num_multisig_signers: Some(10),
 
                 /// === Native Function Costs ===
                 // Copying bytes is a simple low-cost operation
