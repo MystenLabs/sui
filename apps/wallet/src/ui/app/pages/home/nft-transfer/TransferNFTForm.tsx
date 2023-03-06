@@ -47,11 +47,9 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
                 gasBudget: DEFAULT_NFT_TRANSFER_GAS_FEE,
             });
         },
-        onSuccess: async (response) => {
-            Promise.all([
-                queryClient.invalidateQueries(['object', objectId]),
-                queryClient.invalidateQueries(['objects-owned']),
-            ]);
+        onSuccess: (response) => {
+            queryClient.invalidateQueries(['object', objectId]);
+            queryClient.invalidateQueries(['objects-owned']);
             return navigate(
                 `/receipt?${new URLSearchParams({
                     txdigest: getTransactionDigest(response),
