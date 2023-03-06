@@ -3349,7 +3349,6 @@ dependencies = [
  "narwhal-test-utils",
  "narwhal-types",
  "pprof",
- "prometheus",
  "rand",
  "serde",
  "telemetry-subscribers",

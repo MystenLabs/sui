@@ -6,7 +6,6 @@ use config::{AuthorityIdentifier, Committee, Parameters, WorkerCache};
 use consensus::bullshark::Bullshark;
 use consensus::consensus::ConsensusRound;
 use consensus::dag::Dag;
-use consensus::metrics::ConsensusMetrics;
 use consensus::Consensus;
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{get_restored_consensus_output, ExecutionState, Executor, SubscriberResult};
@@ -192,11 +191,9 @@ impl PrimaryNodeInner {
             watch::channel(ConsensusRound::new(0, 0));
         let (dag, network_model) = if !internal_consensus {
             debug!("Consensus is disabled: the primary will run w/o Bullshark");
-            let consensus_metrics = Arc::new(ConsensusMetrics::new());
             let (handle, dag) = Dag::new(
                 &committee,
                 rx_new_certificates,
-                consensus_metrics,
                 tx_shutdown.subscribe(),
             );
 
