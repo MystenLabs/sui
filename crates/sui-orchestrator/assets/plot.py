@@ -91,7 +91,6 @@ class MeasurementId:
 
 
 class Plotter:
-
     def __init__(self, data_directory, parameters, y_max=None, legend_columns=2):
         self.data_directory = data_directory
         self.parameters = parameters
