@@ -24,7 +24,6 @@ mod utils;
 #[cfg(test)]
 #[path = "tests/common.rs"]
 mod common;
-mod metrics;
 
 #[cfg(test)]
 #[path = "tests/certificate_tests.rs"]
@@ -34,7 +33,5 @@ pub use crate::{
     block_remover::BlockRemover,
     block_synchronizer::{mock::MockBlockSynchronizer, BlockHeader},
     block_waiter::{BlockWaiter, GetBlockResponse},
-    grpc_server::metrics::EndpointMetrics,
-    metrics::PrimaryChannelMetrics,
     primary::{NetworkModel, Primary, CHANNEL_CAPACITY, NUM_SHUTDOWN_RECEIVERS},
 };

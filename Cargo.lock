@@ -3569,8 +3569,6 @@ dependencies = [
  "narwhal-types",
  "narwhal-worker",
  "once_cell",
- "parking_lot 0.12.1",
- "prometheus",
  "proptest",
  "prost",
  "rand",

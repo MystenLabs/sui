@@ -18,7 +18,6 @@ use tracing::{error, info, warn};
 use types::{ConditionalBroadcastReceiver, ConfigurationServer, ProposerServer, ValidatorServer};
 
 mod configuration;
-pub mod metrics;
 mod proposer;
 mod validator;
 
