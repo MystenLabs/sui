@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    getObjectExistsResponse,
     getObjectId,
     getObjectVersion,
+    getSuiObjectData,
     SUI_SYSTEM_STATE_OBJECT_ID,
 } from '@mysten/sui.js';
 import {
@@ -16,7 +16,7 @@ import {
 import { activeAccountSelector } from '../account';
 import { ExampleNFT } from './NFT';
 
-import type { SuiObject, ObjectId } from '@mysten/sui.js';
+import type { SuiObjectData, ObjectId } from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
