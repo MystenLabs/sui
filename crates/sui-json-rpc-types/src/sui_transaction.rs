@@ -35,12 +35,77 @@ use crate::{Page, SuiEvent, SuiMovePackage, SuiObjectRef};
 
 pub type TransactionsPage = Page<TransactionDigest, TransactionDigest>;
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq, Default)]
+#[serde(
+    rename_all = "camelCase",
+    rename = "TransactionResponseOptions",
+    default
+)]
+pub struct SuiTransactionResponseOptions {
+    /// Whether to show transaction input data. Default to be False
+    pub show_input: bool,
+    /// Whether to show transaction effects. Default to be False
+    pub show_effects: bool,
+    /// Whether to show transaction events. Default to be False
+    pub show_events: bool,
+    /// Whether to show checkpoint sequence number. Default to be False
+    pub show_checkpoint: bool,
+    /// Whether to show timestamp. Default to be False
+    pub show_timestamp: bool,
+}
+
+impl SuiTransactionResponseOptions {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn full_content() -> Self {
+        Self {
+            show_checkpoint: true,
+            show_effects: true,
+            show_timestamp: true,
+            show_input: true,
+            show_events: true,
+        }
+    }
+
+    pub fn with_input(mut self) -> Self {
+        self.show_input = true;
+        self
+    }
+
+    pub fn with_effects(mut self) -> Self {
+        self.show_effects = true;
+        self
+    }
+
+    pub fn with_events(mut self) -> Self {
+        self.show_events = true;
+        self
+    }
+
+    pub fn with_checkpoint(mut self) -> Self {
+        self.show_checkpoint = true;
+        self
+    }
+
+    pub fn with_timestamp(mut self) -> Self {
+        self.show_timestamp = true;
+        self
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, Default)]
+#[serde(rename_all = "camelCase", rename = "TransactionResponse")]
 pub struct SuiTransactionResponse {
-    pub transaction: SuiTransaction,
-    pub effects: SuiTransactionEffects,
-    pub events: SuiTransactionEvents,
+    pub digest: TransactionDigest,
+    /// Transaction input data
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction: Option<SuiTransaction>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effects: Option<SuiTransactionEffects>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub events: Option<SuiTransactionEvents>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timestamp_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -49,6 +114,17 @@ pub struct SuiTransactionResponse {
     /// This is only returned in the read api, not in the transaction execution api.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<CheckpointSequenceNumber>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub errors: Vec<String>,
+}
+
+impl SuiTransactionResponse {
+    pub fn new(digest: TransactionDigest) -> Self {
+        Self {
+            digest,
+            ..Default::default()
+        }
+    }
 }
 
 /// We are specifically ignoring events for now until events become more stable.
@@ -518,7 +594,7 @@ pub struct DryRunTransactionResponse {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "TransactionEffects", transparent)]
+#[serde(rename = "TransactionEvents", transparent)]
 pub struct SuiTransactionEvents {
     pub data: Vec<SuiEvent>,
 }

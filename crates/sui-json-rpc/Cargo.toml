@@ -12,6 +12,8 @@ fastcrypto-tbls.workspace = true
 jsonrpsee = { version = "0.16.2", features = ["full"] }
 jsonrpsee-proc-macros = "0.16.2"
 hyper = "0.14"
+itertools = "0.10.4"
+linked-hash-map = "0.5.6"
 tower = "0.4.12"
 tower-http = { version = "0.3.4", features = ["full"] }
 move-binary-format.workspace = true

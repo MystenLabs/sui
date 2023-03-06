@@ -183,7 +183,7 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq, Default)]
-#[serde(rename_all = "camelCase", rename = "ObjectContentOptions", default)]
+#[serde(rename_all = "camelCase", rename = "ObjectDataOptions", default)]
 pub struct SuiObjectDataOptions {
     /// Whether to show the type of the object. Default to be False
     pub show_type: bool,

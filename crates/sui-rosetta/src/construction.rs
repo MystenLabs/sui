@@ -132,13 +132,17 @@ pub async fn submit(
         )
         .await?;
 
-    if let SuiExecutionStatus::Failure { error } = response.effects.status() {
+    if let SuiExecutionStatus::Failure { error } = response
+        .effects
+        .expect("Execute transaction should return effects")
+        .status()
+    {
         return Err(Error::TransactionExecutionError(error.to_string()));
     }
 
     Ok(TransactionIdentifierResponse {
         transaction_identifier: TransactionIdentifier {
-            hash: *response.effects.transaction_digest(),
+            hash: response.digest,
         },
         metadata: None,
     })

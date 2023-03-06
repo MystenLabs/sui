@@ -120,6 +120,7 @@ pub async fn publish_package_with_wallet(
 
     assert!(resp.confirmed_local_execution.unwrap());
     resp.effects
+        .unwrap()
         .created()
         .iter()
         .find(|obj_ref| obj_ref.owner == Owner::Immutable)
@@ -201,6 +202,7 @@ pub async fn publish_basics_package_and_make_counter(
 
     let counter_ref = response
         .effects
+        .unwrap()
         .created()
         .iter()
         .find(|obj_ref| matches!(obj_ref.owner, Owner::Shared { .. }))
@@ -289,7 +291,7 @@ pub async fn transfer_sui(
     .await?;
 
     let digest = if let SuiClientCommandResult::TransferSui(response) = res {
-        *response.effects.transaction_digest()
+        response.digest
     } else {
         panic!("transfer command did not return WalletCommandResult::TransferSui");
     };
@@ -334,11 +336,17 @@ pub async fn transfer_coin(
     .await?;
 
     let (digest, gas, gas_used) = if let SuiClientCommandResult::Transfer(_, response) = res {
+        let gas_used = response.effects.as_ref().unwrap().gas_used();
         (
-            *response.effects.transaction_digest(),
-            response.transaction.data.gas_data().payment.clone(),
-            response.effects.gas_used().computation_cost + response.effects.gas_used().storage_cost
-                - response.effects.gas_used().storage_rebate,
+            response.digest,
+            response
+                .transaction
+                .unwrap()
+                .data
+                .gas_data()
+                .payment
+                .clone(),
+            gas_used.computation_cost + gas_used.storage_cost - gas_used.storage_rebate,
         )
     } else {
         panic!("transfer command did not return WalletCommandResult::Transfer");

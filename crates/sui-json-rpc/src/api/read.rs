@@ -7,7 +7,8 @@ use std::collections::BTreeMap;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, SuiMoveNormalizedFunction,
     SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectDataOptions, SuiObjectInfo,
-    SuiObjectResponse, SuiPastObjectResponse, SuiTransactionResponse, TransactionsPage,
+    SuiObjectResponse, SuiPastObjectResponse, SuiTransactionResponse,
+    SuiTransactionResponseOptions, TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{
@@ -56,10 +57,12 @@ pub trait ReadApi {
 
     /// Return the transaction response object.
     #[method(name = "getTransaction")]
-    async fn get_transaction(
+    async fn get_transaction_with_options(
         &self,
         /// the digest of the queried transaction
         digest: TransactionDigest,
+        /// options for specifying the content to be returned
+        options: Option<SuiTransactionResponseOptions>,
     ) -> RpcResult<SuiTransactionResponse>;
 
     /// Return the object information for a specified object
@@ -139,10 +142,16 @@ pub trait ReadApi {
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage>;
 
+    /// Returns an ordered list of transaction responses
+    /// The method will throw an error if the input contains any duplicate or
+    /// the input size exceeds [QUERY_MAX_RESULT_LIMIT]
     #[method(name = "multiGetTransactions")]
-    async fn multi_get_transactions(
+    async fn multi_get_transactions_with_options(
         &self,
+        /// A list of transaction digests.
         digests: Vec<TransactionDigest>,
+        /// config options to control which fields to fetch
+        options: Option<SuiTransactionResponseOptions>,
     ) -> RpcResult<Vec<SuiTransactionResponse>>;
 
     /// Note there is no software-level guarantee/SLA that objects with past versions

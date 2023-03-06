@@ -86,6 +86,7 @@ impl WriteApiServer for TransactionExecutionApi {
 
         let txn = Transaction::from_generic_sig_data(tx_data, Intent::default(), sigs);
         let tx = txn.data().clone().try_into()?;
+        let digest = *txn.digest();
 
         let transaction_orchestrator = self.transaction_orchestrator.clone();
         let response = spawn_monitored_task!(transaction_orchestrator.execute_transaction(
@@ -107,12 +108,17 @@ impl WriteApiServer for TransactionExecutionApi {
                     .module_cache()
                     .clone();
                 Ok(SuiTransactionResponse {
-                    transaction: tx,
-                    effects: effects.effects.try_into()?,
-                    events: SuiTransactionEvents::try_from(events, module_cache.as_ref())?,
+                    digest,
+                    transaction: Some(tx),
+                    effects: Some(effects.effects.try_into()?),
+                    events: Some(SuiTransactionEvents::try_from(
+                        events,
+                        module_cache.as_ref(),
+                    )?),
                     timestamp_ms: None,
                     confirmed_local_execution: Some(is_executed_locally),
                     checkpoint: None,
+                    errors: vec![],
                 })
             }
         }

@@ -142,10 +142,10 @@ async fn test_publish_and_move_call() {
     };
     let response =
         test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
-    let events = response.events;
+    let events = response.events.unwrap();
 
     // Test move call (reuse published module from above test)
-    let effect = response.effects;
+    let effect = response.effects.unwrap();
     let package = events
         .data
         .iter()
@@ -630,7 +630,7 @@ async fn test_transaction(
         .map_err(|e| anyhow!("TX execution failed for {data:#?}, error : {e}"))
         .unwrap();
 
-    let effects = &response.effects;
+    let effects = response.effects.as_ref().unwrap();
 
     if !expect_fail {
         assert_eq!(
