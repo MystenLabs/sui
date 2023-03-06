@@ -152,10 +152,10 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
 
       // get some new coins with small amount
       const splitTxn = await signer.splitCoin({
-        coinObjectId: getObjectId(coins[0]),
+        coinObjectId: coins[0].coinObjectId,
         splitAmounts: [1, 2, 3],
         gasBudget: DEFAULT_GAS_BUDGET,
-        gasPayment: getObjectId(coins[1]),
+        gasPayment: coins[1].coinObjectId,
       });
       const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
         getObjectId(c),
@@ -169,7 +169,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
           gasBudget: DEFAULT_GAS_BUDGET,
           recipients: [DEFAULT_RECIPIENT, DEFAULT_RECIPIENT_2],
           amounts: [4, 2],
-          gasPayment: getObjectId(coins[2]),
+          gasPayment: coins[2].coinObjectId,
         },
       });
     });
@@ -183,10 +183,10 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         );
 
       const splitTxn = await signer.splitCoin({
-        coinObjectId: getObjectId(coins[0]),
+        coinObjectId: coins[0].coinObjectId,
         splitAmounts: [2000, 2000, 2000],
         gasBudget: gasBudget,
-        gasPayment: getObjectId(coins[1]),
+        gasPayment: coins[1].coinObjectId,
       });
       const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
         getObjectId(c),
@@ -212,10 +212,10 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         );
 
       const splitTxn = await signer.splitCoin({
-        coinObjectId: getObjectId(coins[0]),
+        coinObjectId: coins[0].coinObjectId,
         splitAmounts: [2000, 2000, 2000],
         gasBudget: gasBudget,
-        gasPayment: getObjectId(coins[1]),
+        gasPayment: coins[0].coinObjectId,
       });
       const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
         getObjectId(c),

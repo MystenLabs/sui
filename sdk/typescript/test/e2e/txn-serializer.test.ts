@@ -13,7 +13,6 @@ import {
   RpcTxnDataSerializer,
   SUI_SYSTEM_STATE_OBJECT_ID,
   UnserializedSignableTransaction,
-  getObjectReference,
   TransactionData,
   TransactionKind,
   PaySuiTransaction,
@@ -214,7 +213,13 @@ describe('Transaction Serialization and deserialization', () => {
 
     const paySuiTx = {
       PaySui: {
-        coins: [getObjectReference(coins[0])],
+        coins: [
+          {
+            objectId: coins[0].coinObjectId,
+            version: coins[0].version,
+            digest: coins[0].digest,
+          },
+        ],
         recipients: [DEFAULT_RECIPIENT],
         amounts: [100],
       },
@@ -228,7 +233,13 @@ describe('Transaction Serialization and deserialization', () => {
         owner: DEFAULT_RECIPIENT_2,
         budget: gasBudget,
         price: 100,
-        payment: [getObjectReference(coins[1])],
+        payment: [
+          {
+            objectId: coins[1].coinObjectId,
+            version: coins[1].version,
+            digest: coins[1].digest,
+          },
+        ],
       },
       expiration: { None: null },
     } as TransactionData;
@@ -245,7 +256,7 @@ describe('Transaction Serialization and deserialization', () => {
     const expectedTx = {
       kind: 'paySui',
       data: {
-        inputCoins: [getObjectId(coins[0]).substring(2)],
+        inputCoins: [coins[0].coinObjectId.substring(2)],
         recipients: [DEFAULT_RECIPIENT.substring(2)],
         amounts: [BigInt(100)] as unknown as number[],
       } as PaySuiTransaction,
@@ -263,7 +274,13 @@ describe('Transaction Serialization and deserialization', () => {
 
     const payAllSui = {
       PayAllSui: {
-        coins: [getObjectReference(coins[0])],
+        coins: [
+          {
+            objectId: coins[0].coinObjectId,
+            version: coins[0].version,
+            digest: coins[0].digest,
+          },
+        ],
         recipient: DEFAULT_RECIPIENT,
       },
     } as PayAllSuiTx;
@@ -275,7 +292,13 @@ describe('Transaction Serialization and deserialization', () => {
         owner: DEFAULT_RECIPIENT_2,
         budget: gasBudget,
         price: 100,
-        payment: [getObjectReference(coins[1])],
+        payment: [
+          {
+            objectId: coins[1].coinObjectId,
+            version: coins[1].version,
+            digest: coins[1].digest,
+          },
+        ],
       },
       expiration: { None: null },
     } as TransactionData;
@@ -292,7 +315,7 @@ describe('Transaction Serialization and deserialization', () => {
     const expectedTx = {
       kind: 'payAllSui',
       data: {
-        inputCoins: [getObjectId(coins[0]).substring(2)],
+        inputCoins: [coins[0].coinObjectId.substring(2)],
         recipient: DEFAULT_RECIPIENT.substring(2),
       } as PayAllSuiTransaction,
     } as UnserializedSignableTransaction;

@@ -45,6 +45,7 @@ import {
   Checkpoint,
   DryRunTransactionResponse,
   SuiTransactionResponse,
+  CoinStruct,
 } from '../types';
 import { Provider } from './provider';
 
@@ -143,7 +144,7 @@ export class VoidProvider extends Provider {
     _amount: bigint,
     _typeArg: string,
     _exclude: ObjectId[] = [],
-  ): Promise<SuiObjectResponse[]> {
+  ): Promise<CoinStruct[]> {
     throw this.newError('selectCoinsWithBalanceGreaterThanOrEqual');
   }
 
@@ -152,7 +153,7 @@ export class VoidProvider extends Provider {
     _amount: bigint,
     _typeArg: string,
     _exclude: ObjectId[],
-  ): Promise<SuiObjectResponse[]> {
+  ): Promise<CoinStruct[]> {
     throw this.newError('selectCoinSetWithCombinedBalanceGreaterThanOrEqual');
   }
 
