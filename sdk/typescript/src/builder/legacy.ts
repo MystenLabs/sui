@@ -16,10 +16,12 @@ import { Transaction, Commands } from './';
  * @deprecated Use native `Transaction` instead, do not continue use of legacy transaction APIs.
  */
 export async function convertToTransactionBuilder(
+  sender: string,
   { kind, data }: UnserializedSignableTransaction,
   provider: Provider,
-): Promise<Transaction> {
+) {
   const tx = new Transaction();
+  tx.setSender(sender);
   switch (kind) {
     case 'mergeCoin':
       tx.add(
@@ -55,13 +57,16 @@ export async function convertToTransactionBuilder(
       });
       tx.setGasPayment(objects.map((obj) => getObjectReference(obj)!));
       break;
-    case 'splitCoin':
+    case 'splitCoin': {
+      const splitCoinInput = tx.input(data.coinObjectId);
       data.splitAmounts.forEach((amount) => {
-        tx.add(
-          Commands.SplitCoin(tx.input(data.coinObjectId), tx.input(amount)),
+        const coin = tx.add(
+          Commands.SplitCoin(splitCoinInput, tx.input(amount)),
         );
+        tx.add(Commands.TransferObjects([coin], tx.input(sender)));
       });
       break;
+    }
     case 'moveCall':
       tx.add(
         Commands.MoveCall({
@@ -97,13 +102,13 @@ export async function convertToTransactionBuilder(
       data.recipients.forEach((recipient, index) => {
         const amount = data.amounts[index];
         const coin = tx.add(Commands.SplitCoin(coinInput, tx.input(amount)));
-        tx.add(Commands.TransferObjects(coin, tx.input(recipient)));
+        tx.add(Commands.TransferObjects([coin], tx.input(recipient)));
       });
       break;
     }
     case 'transferSui': {
       const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(data.amount)));
-      tx.add(Commands.TransferObjects(coin, tx.input(data.recipient)));
+      tx.add(Commands.TransferObjects([coin], tx.input(data.recipient)));
       const object = await provider.getObject(data.suiObjectId);
       tx.setGasPayment([getObjectReference(object)!]);
       break;
@@ -123,5 +128,5 @@ export async function convertToTransactionBuilder(
     tx.setGasPrice(data.gasPrice);
   }
 
-  return tx;
+  return tx.build({ provider });
 }
