@@ -52,10 +52,13 @@ function TransferCoinPage() {
 
                 // Use payAllSui if sendMax is true and the token type is SUI
                 if (formData.isPayAllSui && coinType === SUI_TYPE_ARG) {
-                    return signer.payAllSui({
-                        recipient: formData.to,
-                        gasBudget: formData.gasBudget,
-                        inputCoins: formData.coinIds,
+                    return signer.signAndExecuteTransaction({
+                        kind: 'payAllSui',
+                        data: {
+                            recipient: formData.to,
+                            gasBudget: formData.gasBudget,
+                            inputCoins: formData.coinIds,
+                        },
                     });
                 }
 

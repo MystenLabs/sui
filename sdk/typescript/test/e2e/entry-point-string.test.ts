@@ -16,13 +16,16 @@ describe('Test Move call with strings', () => {
   let packageId: ObjectId;
 
   async function callWithString(str: string | string[], funcName: string) {
-    const txn = await signer.executeMoveCall({
-      packageObjectId: packageId,
-      module: 'entry_point_string',
-      function: funcName,
-      typeArguments: [],
-      arguments: [str],
-      gasBudget: DEFAULT_GAS_BUDGET,
+    const txn = await signer.signAndExecuteTransaction({
+      kind: 'moveCall',
+      data: {
+        packageObjectId: packageId,
+        module: 'entry_point_string',
+        function: funcName,
+        typeArguments: [],
+        arguments: [str],
+        gasBudget: DEFAULT_GAS_BUDGET,
+      },
     });
     expect(getExecutionStatusType(txn)).toEqual('success');
   }

@@ -89,9 +89,12 @@ export async function publishPackage(
       { encoding: 'utf-8' },
     ),
   );
-  const publishTxn = await signer.publish({
-    compiledModules: compiledModules.map((m: any) => Array.from(fromB64(m))),
-    gasBudget: DEFAULT_GAS_BUDGET,
+  const publishTxn = await signer.signAndExecuteTransaction({
+    kind: 'publish',
+    data: {
+      compiledModules: compiledModules.map((m: any) => Array.from(fromB64(m))),
+      gasBudget: DEFAULT_GAS_BUDGET,
+    },
   });
   expect(getExecutionStatusType(publishTxn)).toEqual('success');
 

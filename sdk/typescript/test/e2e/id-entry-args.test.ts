@@ -18,15 +18,18 @@ describe('Test ID as args to entry functions', () => {
   });
 
   it('Test ID as arg to entry functions', async () => {
-    const txn = await signer.executeMoveCall({
-      packageObjectId: packageId,
-      module: 'test',
-      function: 'test_id',
-      typeArguments: [],
-      arguments: [
-        '0x000000000000000000000000c2b5625c221264078310a084df0a3137956d20ee',
-      ],
-      gasBudget: 2000,
+    const txn = await signer.signAndExecuteTransaction({
+      kind: 'moveCall',
+      data: {
+        packageObjectId: packageId,
+        module: 'test',
+        function: 'test_id',
+        typeArguments: [],
+        arguments: [
+          '0x000000000000000000000000c2b5625c221264078310a084df0a3137956d20ee',
+        ],
+        gasBudget: 2000,
+      },
     });
     expect(getExecutionStatusType(txn)).toEqual('success');
   });

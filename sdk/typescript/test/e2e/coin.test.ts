@@ -30,11 +30,14 @@ describe('Coin related API', () => {
     );
     coinToSplit = coins[0].objectId;
     // split coins into desired amount
-    await signer.splitCoin({
-      coinObjectId: coinToSplit,
-      splitAmounts: SPLIT_AMOUNTS.map((s) => Number(s)),
-      gasBudget: DEFAULT_GAS_BUDGET,
-      gasPayment: coins[1].objectId,
+    await signer.signAndExecuteTransaction({
+      kind: 'splitCoin',
+      data: {
+        coinObjectId: coinToSplit,
+        splitAmounts: SPLIT_AMOUNTS.map((s) => Number(s)),
+        gasBudget: DEFAULT_GAS_BUDGET,
+        gasPayment: coins[1].objectId,
+      },
     });
     coinsAfterSplit = await toolbox.provider.getGasObjectsOwnedByAddress(
       toolbox.address(),

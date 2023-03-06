@@ -35,18 +35,21 @@ export async function mint(address: string) {
         keypair.getPublicKey().toSuiAddress()
     );
 
-    const tx = await signer.executeMoveCall({
-        packageObjectId: '0x2',
-        module: 'devnet_nft',
-        function: 'mint',
-        typeArguments: [],
-        arguments: [
-            'Example NFT',
-            'An example NFT.',
-            'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
-        ],
-        gasPayment: gasPayment.objectId,
-        gasBudget: 30000,
+    const tx = await signer.signAndExecuteTransaction({
+        kind: 'moveCall',
+        data: {
+            packageObjectId: '0x2',
+            module: 'devnet_nft',
+            function: 'mint',
+            typeArguments: [],
+            arguments: [
+                'Example NFT',
+                'An example NFT.',
+                'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
+            ],
+            gasPayment: gasPayment.objectId,
+            gasBudget: 30000,
+        },
     });
 
     assert(tx, SuiTransactionResponse);
