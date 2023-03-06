@@ -65,7 +65,8 @@ module sui::clock {
     }
 
     #[test_only]
-    public fun share_for_testing(clock: Clock) {
-        transfer::share_object(clock)
+    public fun delete_for_testing(clock: Clock) {
+        let Clock { id, timestamp_ms: _ } = clock;
+        object::delete(id)
     }
 }
