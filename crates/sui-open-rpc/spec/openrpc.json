@@ -297,7 +297,8 @@
                   "messageVersion": "v1",
                   "transactions": [
                     {
-                      "TransferObject": {
+                      "type": "TransferObject",
+                      "content": {
                         "recipient": "0xe1fc17c8147089dc4318fdd400db67364ef350c952676d857dc37fae7d93298a",
                         "objectRef": {
                           "objectId": "0x1245c31b420688c1686cb4d1356d17180dd82e93a483c5ab5f01a29887a1d95e",
@@ -373,7 +374,8 @@
               },
               "events": [
                 {
-                  "transferObject": {
+                  "type": "transferObject",
+                  "content": {
                     "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
                     "transactionModule": "native",
                     "sender": "0xb6c42fbe81eec16036a11e212407a8db52c3de78585b0016bbb3640575dea3be",
@@ -991,7 +993,8 @@
                     "eventSeq": 0
                   },
                   "event": {
-                    "transferObject": {
+                    "type": "transferObject",
+                    "content": {
                       "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
                       "transactionModule": "native",
                       "sender": "0x9100ecbc36623d5703ab2951bbc49fb2f6d742b1f4dc4bc4d349c7217f4c90a0",
@@ -1515,7 +1518,8 @@
                   "messageVersion": "v1",
                   "transactions": [
                     {
-                      "TransferObject": {
+                      "type": "TransferObject",
+                      "content": {
                         "recipient": "0xd77e89e7bfefd4f73ada3d19ac87d45351f0196a880b95c3ea244dd060d2b653",
                         "objectRef": {
                           "objectId": "0x8196d048b7a6d04c8edc89579d86fd3fc90c52f9a14c6b812b94fe613c5bcebb",
@@ -1591,7 +1595,8 @@
               },
               "events": [
                 {
-                  "transferObject": {
+                  "type": "transferObject",
+                  "content": {
                     "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
                     "transactionModule": "native",
                     "sender": "0xbdda5e66040ca41c0b935b7d5083add6ab4e34a41e5c0d6d87ad3df5cc0fa664",
@@ -2523,7 +2528,8 @@
                   "messageVersion": "v1",
                   "transactions": [
                     {
-                      "TransferObject": {
+                      "type": "TransferObject",
+                      "content": {
                         "recipient": "0xa3dbd92a83ef26d128b88fe66bf26e0e0d09cdaf727d1d84cccaa97a02cc3a98",
                         "objectRef": {
                           "objectId": "0x041670e1609db714e9858c96e9e469855f1cf3bfdf97e865b10c0046e293c08c",
@@ -2599,7 +2605,8 @@
               },
               "events": [
                 {
-                  "transferObject": {
+                  "type": "transferObject",
+                  "content": {
                     "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
                     "transactionModule": "native",
                     "sender": "0x8f2eabf281fb7f7144905e80d9a1412a2b137ba0e2932911846ca5144cbb7bc3",
@@ -3591,10 +3598,11 @@
             "description": "Move-specific event",
             "type": "object",
             "required": [
-              "moveEvent"
+              "content",
+              "type"
             ],
             "properties": {
-              "moveEvent": {
+              "content": {
                 "type": "object",
                 "required": [
                   "bcs",
@@ -3630,18 +3638,24 @@
                     "type": "string"
                   }
                 }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "moveEvent"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Module published",
             "type": "object",
             "required": [
-              "publish"
+              "content",
+              "type"
             ],
             "properties": {
-              "publish": {
+              "content": {
                 "type": "object",
                 "required": [
                   "digest",
@@ -3663,18 +3677,24 @@
                     "$ref": "#/components/schemas/SequenceNumber"
                   }
                 }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "publish"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Coin balance changing event",
             "type": "object",
             "required": [
-              "coinBalanceChange"
+              "content",
+              "type"
             ],
             "properties": {
-              "coinBalanceChange": {
+              "content": {
                 "type": "object",
                 "required": [
                   "amount",
@@ -3717,48 +3737,66 @@
                     "$ref": "#/components/schemas/SequenceNumber"
                   }
                 }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "coinBalanceChange"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Epoch change",
             "type": "object",
             "required": [
-              "epochChange"
+              "content",
+              "type"
             ],
             "properties": {
-              "epochChange": {
+              "content": {
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0.0
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "epochChange"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "New checkpoint",
             "type": "object",
             "required": [
-              "checkpoint"
+              "content",
+              "type"
             ],
             "properties": {
-              "checkpoint": {
+              "content": {
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0.0
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "checkpoint"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Transfer objects to new address / wrap in another object / coin",
             "type": "object",
             "required": [
-              "transferObject"
+              "content",
+              "type"
             ],
             "properties": {
-              "transferObject": {
+              "content": {
                 "type": "object",
                 "required": [
                   "objectId",
@@ -3792,18 +3830,24 @@
                     "$ref": "#/components/schemas/SequenceNumber"
                   }
                 }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "transferObject"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Object mutated.",
             "type": "object",
             "required": [
-              "mutateObject"
+              "content",
+              "type"
             ],
             "properties": {
-              "mutateObject": {
+              "content": {
                 "type": "object",
                 "required": [
                   "objectId",
@@ -3833,18 +3877,24 @@
                     "$ref": "#/components/schemas/SequenceNumber"
                   }
                 }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "mutateObject"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Delete object",
             "type": "object",
             "required": [
-              "deleteObject"
+              "content",
+              "type"
             ],
             "properties": {
-              "deleteObject": {
+              "content": {
                 "type": "object",
                 "required": [
                   "objectId",
@@ -3870,18 +3920,24 @@
                     "$ref": "#/components/schemas/SequenceNumber"
                   }
                 }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "deleteObject"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "New object creation",
             "type": "object",
             "required": [
-              "newObject"
+              "content",
+              "type"
             ],
             "properties": {
-              "newObject": {
+              "content": {
                 "type": "object",
                 "required": [
                   "objectId",
@@ -3915,9 +3971,14 @@
                     "$ref": "#/components/schemas/SequenceNumber"
                   }
                 }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "newObject"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           }
         ]
       },

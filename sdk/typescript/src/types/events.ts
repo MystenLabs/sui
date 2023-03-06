@@ -119,15 +119,15 @@ export const CheckpointEvent = union([bigint(), number()]);
 export type CheckpointEvent = Infer<typeof EpochChangeEvent>;
 
 export const SuiEvent = union([
-  object({ moveEvent: MoveEvent }),
-  object({ publish: PublishEvent }),
-  object({ coinBalanceChange: CoinBalanceChangeEvent }),
-  object({ transferObject: TransferObjectEvent }),
-  object({ mutateObject: MutateObjectEvent }),
-  object({ deleteObject: DeleteObjectEvent }),
-  object({ newObject: NewObjectEvent }),
-  object({ epochChange: EpochChangeEvent }),
-  object({ checkpoint: CheckpointEvent }),
+  object({ type: literal("moveEvent"), content: MoveEvent }),
+  object({ type: literal("publish"), content: PublishEvent }),
+  object({ type: literal("coinBalanceChange"), content: CoinBalanceChangeEvent }),
+  object({ type: literal("transferObject"), content: TransferObjectEvent }),
+  object({ type: literal("mutateObject"), content: MutateObjectEvent }),
+  object({ type: literal("deleteObject"), content: DeleteObjectEvent }),
+  object({ type: literal("newObject"), content: NewObjectEvent }),
+  object({ type: literal("epochChange"), content: EpochChangeEvent }),
+  object({ type: literal("checkpoint"), content: CheckpointEvent }),
 ]);
 export type SuiEvent = Infer<typeof SuiEvent>;
 

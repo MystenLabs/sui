@@ -98,10 +98,10 @@ export async function publishPackage(
   });
   expect(getExecutionStatusType(publishTxn)).toEqual('success');
 
-  const publishEvent = getEvents(publishTxn)?.find((e) => 'publish' in e);
+  const publishEvent = getEvents(publishTxn)?.find((e) => e.type === 'publish');
 
   // @ts-ignore: Publish not narrowed:
-  const packageId = publishEvent?.publish.packageId.replace(/^(0x)(0+)/, '0x');
+  const packageId = publishEvent?.content.packageId.replace(/^(0x)(0+)/, '0x');
   console.info(
     `Published package ${packageId} from address ${await signer.getAddress()}}`,
   );
