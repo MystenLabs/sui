@@ -273,7 +273,7 @@ impl Bullshark {
             if #[cfg(test)] {
                 // We apply round robin in leader election. Since we expect round to be an even number,
                 // 2, 4, 6, 8... it can't work well for leader election as we'll omit leaders. Thus
-                // we can always dive by 2 to get a monotonically incremented sequence,
+                // we can always divide by 2 to get a monotonically incremented sequence,
                 // 2/2 = 1, 4/2 = 2, 6/2 = 3, 8/2 = 4  etc, and then do minus 1 so we can always
                 // start with base zero 0.
                 let next_leader = (round/2 - 1) as usize % committee.authorities.len();

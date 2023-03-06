@@ -460,7 +460,7 @@ pub fn make_certificates(
 // `keys`: the authorities for which it will create certificates for
 // `slow_nodes`: the authorities which are considered slow. Being a slow authority means that we will
 //  still create certificates for them on each round, but no other authority from higher round will refer
-// to those certificates. The number (by stake) o slow_nodes can not be > f , as otherwise no valid graph will be
+// to those certificates. The number (by stake) of slow_nodes can not be > f , as otherwise no valid graph will be
 // produced.
 pub fn make_certificates_with_slow_nodes(
     committee: &Committee,

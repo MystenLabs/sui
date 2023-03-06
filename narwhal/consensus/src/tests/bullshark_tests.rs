@@ -923,7 +923,7 @@ async fn garbage_collection_basic() {
                         .filter(|(round, _)| **round <= 1_u64)
                         .count(),
                     0,
-                    "Didn't expect to still have certificates from round 1 and 2"
+                    "Didn't expect to still have certificates from round 1"
                 );
             }
 
@@ -1055,6 +1055,8 @@ async fn slow_node() {
     // leader of round 8 (the slow node - 4) so we can trigger a commit. Also since slow node
     // refers to always all the parents of previous rounds, there will be a link to the previous
     // leader, so commit should be triggered immediately.
+    // It is reminded that the leader election for testing is round robin, thus we can deterministically
+    // know the leader of each round.
     let (certificates, _) = test_utils::make_certificates_with_slow_nodes(
         &committee,
         9..=9,
