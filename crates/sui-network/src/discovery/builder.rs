@@ -9,18 +9,28 @@ use std::{
     sync::{Arc, RwLock},
 };
 use sui_config::p2p::P2pConfig;
+use sui_types::committee::{CommitteeWithNetworkMetadata, ProtocolVersion};
 use tap::Pipe;
-use tokio::{sync::oneshot, task::JoinSet};
+use tokio::{
+    sync::{broadcast::Receiver, oneshot},
+    task::JoinSet,
+};
 
 /// Discovery Service Builder.
 pub struct Builder {
     config: Option<P2pConfig>,
+    reconfig_receiver: Receiver<(CommitteeWithNetworkMetadata, ProtocolVersion)>,
 }
 
 impl Builder {
     #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
-        Self { config: None }
+    pub fn new(
+        reconfig_receiver: Receiver<(CommitteeWithNetworkMetadata, ProtocolVersion)>,
+    ) -> Self {
+        Self {
+            config: None,
+            reconfig_receiver,
+        }
     }
 
     pub fn config(mut self, config: P2pConfig) -> Self {
@@ -50,7 +60,10 @@ impl Builder {
     }
 
     pub(super) fn build_internal(self) -> (UnstartedDiscovery, Server) {
-        let Builder { config } = self;
+        let Builder {
+            config,
+            reconfig_receiver,
+        } = self;
         let config = config.unwrap();
         let (sender, receiver) = oneshot::channel();
 
@@ -76,6 +89,7 @@ impl Builder {
                 config,
                 shutdown_handle: receiver,
                 state,
+                reconfig_receiver,
             },
             server,
         )
@@ -88,6 +102,7 @@ pub struct UnstartedDiscovery {
     pub(super) config: P2pConfig,
     pub(super) shutdown_handle: oneshot::Receiver<()>,
     pub(super) state: Arc<RwLock<State>>,
+    pub(super) reconfig_receiver: Receiver<(CommitteeWithNetworkMetadata, ProtocolVersion)>,
 }
 
 impl UnstartedDiscovery {
@@ -97,6 +112,7 @@ impl UnstartedDiscovery {
             config,
             shutdown_handle,
             state,
+            reconfig_receiver,
         } = self;
 
         let discovery_config = config.discovery.clone().unwrap_or_default();
@@ -111,6 +127,7 @@ impl UnstartedDiscovery {
                 dial_seed_peers_task: None,
                 shutdown_handle,
                 state,
+                reconfig_receiver,
             },
             handle,
         )

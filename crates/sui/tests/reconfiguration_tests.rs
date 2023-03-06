@@ -259,8 +259,8 @@ async fn test_passive_reconfig() {
 
     timeout(Duration::from_secs(60), async move {
         while let Ok((committee, _)) = epoch_rx.recv().await {
-            info!("received epoch {}", committee.epoch);
-            if committee.epoch >= target_epoch {
+            info!("received epoch {}", committee.epoch());
+            if committee.epoch() >= target_epoch {
                 break;
             }
         }

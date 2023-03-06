@@ -37,3 +37,5 @@ tonic-build = { version = "0.8.2", features = [ "transport" ] }
 [dev-dependencies]
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
+ed25519-consensus = { version = "2.0.1" }
+fastcrypto = { workspace = true }

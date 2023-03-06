@@ -41,7 +41,9 @@ use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
+use sui_types::committee::CommitteeWithNetworkMetadata;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use tokio::sync::broadcast::Receiver;
 use tracing::debug;
 
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
@@ -117,7 +119,7 @@ pub struct SuiNode {
     connection_monitor_status: Arc<ConnectionMonitorStatus>,
 
     /// Broadcast channel to send the committee and protocol version for the next epoch.
-    end_of_epoch_channel: broadcast::Sender<(Committee, ProtocolVersion)>,
+    end_of_epoch_channel: broadcast::Sender<(CommitteeWithNetworkMetadata, ProtocolVersion)>,
 
     #[cfg(msim)]
     sim_node: sui_simulator::runtime::NodeHandle,
@@ -234,9 +236,18 @@ impl SuiNode {
             None
         };
 
+        let (end_of_epoch_channel, end_of_epoch_receiver) =
+            broadcast::channel::<(CommitteeWithNetworkMetadata, ProtocolVersion)>(
+                config.end_of_epoch_broadcast_channel_capacity,
+            );
+
         // Create network
-        let (p2p_network, discovery_handle, state_sync_handle) =
-            Self::create_p2p_network(&config, state_sync_store, &prometheus_registry)?;
+        let (p2p_network, discovery_handle, state_sync_handle) = Self::create_p2p_network(
+            &config,
+            state_sync_store,
+            end_of_epoch_channel.subscribe(),
+            &prometheus_registry,
+        )?;
 
         // Create Authority State
         let state = AuthorityState::new(
@@ -274,15 +285,11 @@ impl SuiNode {
                 .unwrap();
         }
 
-        let (end_of_epoch_channel, receiver) = broadcast::channel::<(Committee, ProtocolVersion)>(
-            config.end_of_epoch_broadcast_channel_capacity,
-        );
-
         let transaction_orchestrator = if is_full_node {
             Some(Arc::new(
                 TransactiondOrchestrator::new_with_network_clients(
                     state.clone(),
-                    receiver,
+                    end_of_epoch_receiver,
                     config.db_path(),
                     &prometheus_registry,
                 )
@@ -373,7 +380,9 @@ impl SuiNode {
         Ok(node)
     }
 
-    pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<(Committee, ProtocolVersion)> {
+    pub fn subscribe_to_epoch_change(
+        &self,
+    ) -> broadcast::Receiver<(CommitteeWithNetworkMetadata, ProtocolVersion)> {
         self.end_of_epoch_channel.subscribe()
     }
 
@@ -413,6 +422,7 @@ impl SuiNode {
     fn create_p2p_network(
         config: &NodeConfig,
         state_sync_store: RocksDbStore,
+        reconfig_channel: Receiver<(CommitteeWithNetworkMetadata, ProtocolVersion)>,
         prometheus_registry: &Registry,
     ) -> Result<(Network, discovery::Handle, state_sync::Handle)> {
         let (state_sync, state_sync_server) = state_sync::Builder::new()
@@ -437,7 +447,9 @@ impl SuiNode {
             });
         p2p_config.seed_peers.extend(other_validators);
 
-        let (discovery, discovery_server) = discovery::Builder::new().config(p2p_config).build();
+        let (discovery, discovery_server) = discovery::Builder::new(reconfig_channel)
+            .config(p2p_config)
+            .build();
 
         let p2p_network = {
             let routes = anemo::Router::new()
@@ -826,7 +838,7 @@ impl SuiNode {
                 .state
                 .get_sui_system_state_object_during_reconfig()
                 .expect("Read Sui System State object cannot fail");
-            let next_epoch_committee = system_state.get_current_epoch_committee().committee;
+            let next_epoch_committee = system_state.get_current_epoch_committee();
             let next_epoch = next_epoch_committee.epoch();
             assert_eq!(cur_epoch_store.epoch() + 1, next_epoch);
 
@@ -874,7 +886,11 @@ impl SuiNode {
                 narwhal_manager.shutdown().await;
 
                 let new_epoch_store = self
-                    .reconfigure_state(&cur_epoch_store, next_epoch_committee, system_state)
+                    .reconfigure_state(
+                        &cur_epoch_store,
+                        next_epoch_committee.committee,
+                        system_state,
+                    )
                     .await;
 
                 narwhal_epoch_data_remover
@@ -906,7 +922,11 @@ impl SuiNode {
                 }
             } else {
                 let new_epoch_store = self
-                    .reconfigure_state(&cur_epoch_store, next_epoch_committee, system_state)
+                    .reconfigure_state(
+                        &cur_epoch_store,
+                        next_epoch_committee.committee,
+                        system_state,
+                    )
                     .await;
 
                 if self.state.is_validator(&new_epoch_store) {

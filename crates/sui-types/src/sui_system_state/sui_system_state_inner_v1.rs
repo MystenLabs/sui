@@ -4,7 +4,9 @@
 use crate::balance::Balance;
 use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::collection_types::{MoveOption, Table, TableVec, VecMap, VecSet};
-use crate::committee::{Committee, CommitteeWithNetAddresses, ProtocolVersion, StakeUnit};
+use crate::committee::{
+    Committee, CommitteeWithNetworkMetadata, NetworkMetadata, ProtocolVersion, StakeUnit,
+};
 use crate::crypto::AuthorityPublicKeyBytes;
 use anemo::PeerId;
 use anyhow::Result;
@@ -186,6 +188,16 @@ impl ValidatorMetadata {
     }
 }
 
+impl ValidatorMetadata {
+    pub fn network_address(&self) -> Result<Multiaddr> {
+        Multiaddr::try_from(self.net_address.clone()).map_err(Into::into)
+    }
+
+    pub fn p2p_address(&self) -> Result<Multiaddr> {
+        Multiaddr::try_from(self.p2p_address.clone()).map_err(Into::into)
+    }
+}
+
 /// Rust version of the Move sui::validator::Validator type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct Validator {
@@ -200,15 +212,26 @@ pub struct Validator {
 }
 
 impl Validator {
-    pub fn to_current_epoch_committee_with_net_addresses(
-        &self,
-    ) -> (AuthorityName, StakeUnit, Vec<u8>) {
+    pub fn to_stake_and_network_metadata(&self) -> (AuthorityName, StakeUnit, NetworkMetadata) {
         (
             // TODO: Make sure we are actually verifying this on-chain.
             AuthorityPublicKeyBytes::from_bytes(self.metadata.protocol_pubkey_bytes.as_ref())
                 .expect("Validity of public key bytes should be verified on-chain"),
             self.voting_power,
-            self.metadata.net_address.clone(),
+            NetworkMetadata {
+                network_pubkey: narwhal_crypto::NetworkPublicKey::from_bytes(
+                    &self.metadata.network_pubkey_bytes,
+                )
+                .expect("Validity of network public key should be verified on-chain"),
+                network_address: self
+                    .metadata
+                    .network_address()
+                    .expect("Validity of network address hould be verified on-chain"),
+                p2p_address: self
+                    .metadata
+                    .p2p_address()
+                    .expect("Validity of p2p address hould be verified on-chain"),
+            },
         )
     }
 
@@ -292,21 +315,20 @@ pub struct StakeSubsidy {
 }
 
 impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
-    fn get_current_epoch_committee(&self) -> CommitteeWithNetAddresses {
+    fn get_current_epoch_committee(&self) -> CommitteeWithNetworkMetadata {
         let mut voting_rights = BTreeMap::new();
-        let mut net_addresses = BTreeMap::new();
+        let mut network_metadata = BTreeMap::new();
         for validator in &self.validators.active_validators {
-            let (name, voting_stake, net_address) =
-                validator.to_current_epoch_committee_with_net_addresses();
+            let (name, voting_stake, metadata) = validator.to_stake_and_network_metadata();
             voting_rights.insert(name, voting_stake);
-            net_addresses.insert(name, net_address);
+            network_metadata.insert(name, metadata);
         }
-        CommitteeWithNetAddresses {
+        CommitteeWithNetworkMetadata {
             committee: Committee::new(self.epoch, voting_rights)
                 // unwrap is safe because we should have verified the committee on-chain.
                 // TODO: Make sure we actually verify it.
                 .unwrap(),
-            net_addresses,
+            network_metadata,
         }
     }
 
