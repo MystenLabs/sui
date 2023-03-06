@@ -43,7 +43,6 @@ use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiCostTable;
 use sui_types::id::UID;
 use sui_types::in_memory_storage::InMemoryStorage;
-use sui_types::messages::Command;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
