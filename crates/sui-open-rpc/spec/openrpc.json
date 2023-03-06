@@ -6798,9 +6798,9 @@
           "proof_of_possession_bytes",
           "protocol_pubkey_bytes",
           "rewards_pool",
-          "starting_epoch",
+          "staking_pool_starting_epoch",
+          "staking_pool_sui_balance",
           "sui_address",
-          "sui_balance",
           "voting_power",
           "worker_address",
           "worker_pubkey_bytes"
@@ -6808,14 +6808,6 @@
         "properties": {
           "commission_rate": {
             "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "deactivation_epoch": {
-            "type": [
-              "integer",
-              "null"
-            ],
             "format": "uint64",
             "minimum": 0.0
           },
@@ -7012,18 +7004,26 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "starting_epoch": {
+          "staking_pool_deactivation_epoch": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "staking_pool_starting_epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "staking_pool_sui_balance": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
           "sui_address": {
             "$ref": "#/components/schemas/SuiAddress"
-          },
-          "sui_balance": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
           },
           "voting_power": {
             "type": "integer",

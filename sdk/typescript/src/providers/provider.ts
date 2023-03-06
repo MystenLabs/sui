@@ -48,6 +48,7 @@ import {
   DryRunTransactionResponse,
   SuiTransactionResponse,
   SuiObjectDataOptions,
+  SuiSystemStateSummary,
 } from '../types';
 
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
@@ -321,7 +322,7 @@ export abstract class Provider {
   abstract unsubscribeEvent(id: SubscriptionId): Promise<boolean>;
 
   /**
-   * Runs the transaction in dev-inpsect mode. Which allows for nearly any
+   * Runs the transaction in dev-inspect mode. Which allows for nearly any
    * transaction (or Move call) with any arguments. Detailed results are
    * provided, including both the transaction effects and any return values.
    *
@@ -389,6 +390,11 @@ export abstract class Provider {
    * Return the content of `0x5` object
    */
   abstract getSuiSystemState(): Promise<SuiSystemState>;
+
+  /**
+   * Return the latest system state content.
+   */
+  abstract getLatestSuiSystemState(): Promise<SuiSystemStateSummary>;
 
   /**
    * Get the sequence number of the latest checkpoint that has been executed

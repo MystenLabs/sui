@@ -57,6 +57,7 @@ import {
   CommitteeInfo,
   DryRunTransactionResponse,
   SuiObjectDataOptions,
+  SuiSystemStateSummary,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -757,6 +758,20 @@ export class JsonRpcProvider extends Provider {
       return resp;
     } catch (err) {
       throw new Error(`Error in getSuiSystemState: ${err}`);
+    }
+  }
+
+  async getLatestSuiSystemState(): Promise<SuiSystemStateSummary> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getLatestSuiSystemState',
+        [],
+        SuiSystemStateSummary,
+        this.options.skipDataValidation,
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error in getLatestSuiSystemState: ${err}`);
     }
   }
 

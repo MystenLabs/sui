@@ -226,11 +226,11 @@ impl Validator {
                 network_address: self
                     .metadata
                     .network_address()
-                    .expect("Validity of network address hould be verified on-chain"),
+                    .expect("Validity of network address should be verified on-chain"),
                 p2p_address: self
                     .metadata
                     .p2p_address()
-                    .expect("Validity of p2p address hould be verified on-chain"),
+                    .expect("Validity of p2p address should be verified on-chain"),
             },
         )
     }
@@ -509,9 +509,12 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                     next_epoch_stake: v.next_epoch_stake,
                     next_epoch_gas_price: v.next_epoch_gas_price,
                     next_epoch_commission_rate: v.next_epoch_commission_rate,
-                    starting_epoch: v.staking_pool.starting_epoch,
-                    deactivation_epoch: v.staking_pool.deactivation_epoch.into_option(),
-                    sui_balance: v.staking_pool.sui_balance,
+                    staking_pool_starting_epoch: v.staking_pool.starting_epoch,
+                    staking_pool_deactivation_epoch: v
+                        .staking_pool
+                        .deactivation_epoch
+                        .into_option(),
+                    staking_pool_sui_balance: v.staking_pool.sui_balance,
                     rewards_pool: v.staking_pool.rewards_pool.value(),
                     pool_token_balance: v.staking_pool.pool_token_balance,
                     pending_delegation: v.staking_pool.pending_delegation,
