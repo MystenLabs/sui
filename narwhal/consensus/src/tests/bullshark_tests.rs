@@ -1083,3 +1083,171 @@ async fn slow_node() {
 
     assert!(committed, "We expect to have commit for round 8");
 }
+
+/// This test creates a DAG that:
+/// * contains a leader has not enough support at round 2
+/// * a leader is missing at round 4
+/// * gc happens on commit of leader round 6
+/// * a dead node (node 4) for the first 3 rounds
+/// * a dead node (node 1) for the last 3 rounds
+#[tokio::test]
+async fn not_enough_support_and_missing_leaders_and_gc() {
+    const GC_DEPTH: Round = 4;
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
+
+    let fixture = CommitteeFixture::builder().build();
+    let committee: Committee = fixture.committee();
+
+    let keys: Vec<PublicKey> = committee
+        .authorities()
+        .map(|(key, _)| key.clone())
+        .collect();
+
+    // take the first 3 nodes only - 4th one won't propose anything
+    let keys_with_dead_node = keys[0..=2].to_vec();
+    let slow_node = keys[3].clone();
+    let slow_nodes = vec![(slow_node, 0.0_f64)];
+    let genesis = Certificate::genesis(&committee);
+
+    let (mut certificates, round_2_certificates) = test_utils::make_certificates_with_slow_nodes(
+        &committee,
+        1..=2,
+        genesis,
+        &keys_with_dead_node,
+        &slow_nodes,
+    );
+
+    // on round 3 we'll create certificates that don't provide f+1 support to round 2.
+    let mut round_3_certificates: Vec<Certificate> = Vec::new();
+    let first_node = keys_with_dead_node.get(0).unwrap();
+    for key in &keys_with_dead_node {
+        // Only the first one will provide support to it's own certificate apart from the others
+        if key == first_node {
+            let parents = round_2_certificates
+                .iter()
+                .map(|cert| cert.digest())
+                .collect::<BTreeSet<_>>();
+            let (_, certificate) =
+                test_utils::mock_certificate(&committee, key.clone(), 3, parents);
+            round_3_certificates.push(certificate);
+        } else {
+            // we filter out the round 2 leader
+            let parents = round_2_certificates
+                .iter()
+                .filter(|cert| cert.origin() != *first_node)
+                .map(|cert| cert.digest())
+                .collect::<BTreeSet<_>>();
+            let (_, certificate) =
+                test_utils::mock_certificate(&committee, key.clone(), 3, parents);
+            round_3_certificates.push(certificate);
+        }
+    }
+
+    // on round 4 we create a missing leader (node 2)
+    let mut round_4_certificates = Vec::new();
+    let missing_leader = &keys[1];
+    for key in keys.iter().filter(|a| *a != missing_leader) {
+        let parents = round_3_certificates
+            .iter()
+            .map(|cert| cert.digest())
+            .collect::<BTreeSet<_>>();
+        let (_, certificate) = test_utils::mock_certificate(&committee, key.clone(), 4, parents);
+        round_4_certificates.push(certificate);
+    }
+
+    // now from round 5 to 7 create all certificates, except for node 1 which is now a slow node
+    let slow_node = keys[0].clone();
+    let slow_nodes = vec![(slow_node, 0.0_f64)];
+
+    let (certificates_5_to_7, _round_7_certificates) =
+        test_utils::make_certificates_with_slow_nodes(
+            &committee,
+            5..=7,
+            round_4_certificates.clone(),
+            &keys,
+            &slow_nodes,
+        );
+
+    // now send all certificates to Bullshark
+    certificates.extend(round_3_certificates);
+    certificates.extend(round_4_certificates);
+    certificates.extend(certificates_5_to_7);
+
+    // Create Bullshark consensus engine
+    let store = make_consensus_store(&test_utils::temp_dir());
+    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let mut state = ConsensusState::new(metrics.clone());
+    let mut bullshark = Bullshark::new(
+        committee,
+        store,
+        GC_DEPTH,
+        metrics,
+        NUM_SUB_DAGS_PER_SCHEDULE,
+    );
+
+    let mut committed = false;
+    for c in &certificates {
+        let (outcome, sub_dags) = bullshark
+            .process_certificate(&mut state, c.clone())
+            .unwrap();
+
+        // We expect leader of round 2 to not have enough support from certificates of round 3,
+        // thus no commit should happen and every attempt should return a not enough support outcome
+        if c.round() == 3 {
+            assert_eq!(outcome, Outcome::NotEnoughSupportForLeader);
+        }
+
+        // We don't expect to have a leader at round 4, thus any addition of certificate on round 5
+        // should not find a leader.
+        if c.round() == 5 {
+            assert_eq!(outcome, Outcome::LeaderNotFound);
+        }
+
+        // Leader election is triggered when populating certificates of odd rounds.
+        if c.round() == 1 || c.round() == 2 || c.round() == 4 {
+            assert_eq!(outcome, Outcome::NoLeaderElectedForOddRound);
+        }
+
+        // We do not expect any commit when inserting certificates below or equal round 6
+        if c.round() <= 6 {
+            assert_eq!(sub_dags.len(), 0);
+        }
+
+        // At round 7 we expect to trigger a commit
+        if c.round() == 7 {
+            match outcome {
+                Outcome::NotEnoughSupportForLeader => {}
+                Outcome::LeaderBelowCommitRound => {}
+                Outcome::Commit => {
+                    // we expect now to commit two sub dags, those with leader 6 and 2.
+                    assert_eq!(sub_dags.len(), 2);
+
+                    assert_eq!(sub_dags[0].leader.round(), 2);
+                    assert_eq!(sub_dags[1].leader.round(), 6);
+
+                    assert_eq!(sub_dags[0].certificates.len(), 4);
+                    assert_eq!(sub_dags[1].certificates.len(), 11);
+
+                    // And GC has collected everything up to round 5.
+                    assert_eq!(state.dag.len(), 4);
+                    for (round, entries) in state.dag.iter() {
+                        assert!(*round >= 4, "{}", format!("Round detected: {}", round));
+
+                        if *round == 4 || *round == 5 {
+                            assert_eq!(entries.len(), 1);
+                        } else if *round == 6 {
+                            assert_eq!(entries.len(), 3);
+                        } else {
+                            assert_eq!(entries.len(), 2);
+                        }
+                    }
+
+                    committed = true;
+                }
+                _ => panic!("Unexpected outcome: {:?}", outcome),
+            }
+        }
+    }
+
+    assert!(committed);
+}
