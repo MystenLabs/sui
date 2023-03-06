@@ -192,6 +192,9 @@ impl Orchestrator {
             "rustup default stable",
             // Disable UFW.
             "sudo ufw disable",
+            // Install prometheus.
+            "sudo apt-get -y install prometheus",
+            "sudo chmod 777 -R /var/lib/prometheus/",
             // Clone the repo.
             &format!("(git clone {url} || true)"),
         ]
@@ -332,6 +335,7 @@ impl Orchestrator {
             );
             ["source $HOME/.cargo/env", &run].join(" && ")
         };
+        println!("{}", command(0));
 
         let repo = self.settings.repository_name();
         let ssh_command = SshCommand::new(command)

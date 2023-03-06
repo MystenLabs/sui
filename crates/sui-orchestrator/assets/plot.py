@@ -48,7 +48,8 @@ def aggregate_stdev_latency(measurement):
 
 class PlotType(Enum):
     L_GRAPH = 1
-    SLA = 2
+    HEALTH = 2
+    SLA = 3  # TODO
 
 
 class PlotError(Exception):
@@ -90,9 +91,11 @@ class MeasurementId:
 
 class Plotter:
 
-    def __init__(self, data_directory, parameters):
+    def __init__(self, data_directory, parameters, y_max=None, legend_columns=2):
         self.data_directory = data_directory
         self.parameters = parameters
+        self.y_max = y_max
+        self.legend_columns = legend_columns
 
     def _make_plot_directory(self):
         plot_directory = os.path.join(self.data_directory, 'plots')
@@ -102,7 +105,7 @@ class Plotter:
         return plot_directory
 
     def _legend_entry(self, plot_type, id):
-        if plot_type == PlotType.L_GRAPH:
+        if plot_type == PlotType.L_GRAPH or plot_type == PlotType.HEALTH:
             f = id.faults
             l = f'{id.nodes} nodes' if f == 0 else f'{id.nodes} ({f} faulty)'
             return f'{l} - {id.shared_objects_ratio}% shared objects'
@@ -110,9 +113,14 @@ class Plotter:
             assert False
 
     def _axes_labels(self, plot_type):
-        return ('Throughput (tx/s)', 'Latency (s)')
+        if plot_type == PlotType.L_GRAPH:
+            return ('Throughput (tx/s)', 'Latency (s)')
+        elif plot_type == PlotType.HEALTH:
+            return ('Input Load (tx/s)', 'Throughput (tx/s)')
+        else:
+            assert False
 
-    def _plot(self, data, plot_type, y_max=None, legend_columns=2):
+    def _plot(self, data, plot_type):
         plt.figure(figsize=(6.4, 2.4))
         markers = cycle(['o', 'v', 's', 'p', 'D', 'P'])
 
@@ -128,14 +136,21 @@ class Plotter:
             legend_location = 'upper left'
             x_label, y_label = self._axes_labels(plot_type)
             plot_name = f'latency-{self.parameters.shared_objects_ratio}'
+        elif plot_type == PlotType.HEALTH:
+            legend_anchor = (0, 1)
+            legend_location = 'upper left'
+            x_label, y_label = self._axes_labels(plot_type)
+            plot_name = f'health-{self.parameters.shared_objects_ratio}'
         else:
             assert False
 
         plt.legend(
-            loc=legend_location, bbox_to_anchor=legend_anchor, ncol=legend_columns
+            loc=legend_location,
+            bbox_to_anchor=legend_anchor,
+            ncol=self.legend_columns
         )
         plt.xlim(xmin=0)
-        plt.ylim(bottom=0, top=y_max)
+        plt.ylim(bottom=0, top=self.y_max)
         plt.xlabel(x_label, fontweight='bold')
         plt.ylabel(y_label, fontweight='bold')
         plt.xticks(weight='bold')
@@ -168,7 +183,7 @@ class Plotter:
     def _file_format(self, shared_objects_ratio, faults, nodes, load):
         return f'measurements-{shared_objects_ratio}-{faults}-{nodes}-{load}.json'
 
-    def plot_latency_throughput(self, y_max=None, legend_columns=2):
+    def plot_latency_throughput(self):
         plot_lines_data = []
         shared_objects_ratio = self.parameters.shared_objects_ratio
         for n in self.parameters.nodes:
@@ -189,7 +204,30 @@ class Plotter:
                 id = MeasurementId(measurement)
                 plot_data += [(id, x_values, y_values, e_values)]
 
-        self._plot(plot_data, PlotType.L_GRAPH, y_max, legend_columns)
+        self._plot(plot_data, PlotType.L_GRAPH)
+
+    def plot_health(self):
+        plot_lines_data = []
+        shared_objects_ratio = self.parameters.shared_objects_ratio
+        for n in self.parameters.nodes:
+            for f in self.parameters.faults:
+                filename = self._file_format(shared_objects_ratio, f, n, '*')
+                plot_lines_data += [self._load_measurement_data(filename)]
+
+        plot_data = []
+        for measurements in plot_lines_data:
+            x_values, y_values, e_values = [], [], []
+            measurements.sort(key=lambda x: x['parameters']['load'])
+            for measurement in measurements:
+                x_values += [measurement['parameters']['load']]
+                y_values += [aggregate_tps(measurement)]
+                e_values += [0]
+
+            if x_values:
+                id = MeasurementId(measurements[0])
+                plot_data += [(id, x_values, y_values, e_values)]
+
+        self._plot(plot_data, PlotType.HEALTH)
 
 
 if __name__ == "__main__":
@@ -224,6 +262,8 @@ if __name__ == "__main__":
 
     for r in args.shared_objects_ratio:
         parameters = PlotParameters(r, args.nodes, args.faults)
-        Plotter(args.dir, parameters).plot_latency_throughput(
-            args.y_max, args.legend_columns
+        plotter = Plotter(
+            args.dir, parameters, args.y_max, args.legend_columns
         )
+        plotter.plot_latency_throughput()
+        plotter.plot_health()
