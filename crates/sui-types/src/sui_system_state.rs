@@ -8,8 +8,8 @@ use crate::crypto::AuthorityPublicKeyBytes;
 use crate::dynamic_field::{derive_dynamic_field_id, Field};
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
+use crate::sui_system_state_summary::SuiValidatorSummary;
 use crate::{balance::Balance, id::UID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
-use anemo::PeerId;
 use anyhow::Result;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::traits::ToFromBytes;
@@ -18,10 +18,9 @@ use move_core_types::value::MoveTypeLayout;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use move_vm_types::values::Value;
 use multiaddr::Multiaddr;
-use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use tracing::error;
 
 const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
@@ -279,6 +278,31 @@ impl Validator {
     }
 }
 
+impl From<&Validator> for SuiValidatorSummary {
+    fn from(validator: &Validator) -> Self {
+        let metadata = validator
+            .metadata
+            .verify()
+            .expect("Validator metadata must have been verified on-chain");
+        Self {
+            sui_address: metadata.sui_address,
+            protocol_pubkey: metadata.protocol_pubkey,
+            network_pubkey: metadata.network_pubkey,
+            worker_pubkey: metadata.worker_pubkey,
+            proof_of_possession_bytes: metadata.proof_of_possession_bytes,
+            name: metadata.name,
+            description: metadata.description,
+            image_url: metadata.image_url,
+            project_url: metadata.project_url,
+            net_address: metadata.net_address,
+            p2p_address: metadata.p2p_address,
+            primary_address: metadata.primary_address,
+            worker_address: metadata.worker_address,
+            voting_power: validator.voting_power,
+        }
+    }
+}
+
 /// Rust version of the Move sui::staking_pool::PendingDelegationEntry type.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct PendingDelegationEntry {
@@ -434,13 +458,8 @@ pub trait SuiSystemStateTrait {
     fn epoch_start_timestamp_ms(&self) -> u64;
     fn safe_mode(&self) -> bool;
     fn get_current_epoch_committee(&self) -> CommitteeWithNetAddresses;
-    fn get_current_epoch_narwhal_committee(&self) -> NarwhalCommittee;
-    fn get_current_epoch_narwhal_worker_cache(
-        &self,
-        transactions_address: &Multiaddr,
-    ) -> WorkerCache;
     fn get_validator_metadata_vec(&self) -> Vec<ValidatorMetadata>;
-    fn get_current_epoch_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId>;
+    fn get_validator_summary_vec(&self) -> Vec<SuiValidatorSummary>;
     fn get_staking_pool_info(&self) -> BTreeMap<SuiAddress, (Vec<u8>, u64)>;
 }
 
@@ -463,95 +482,19 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
         }
     }
 
-    #[allow(clippy::mutable_key_type)]
-    fn get_current_epoch_narwhal_committee(&self) -> NarwhalCommittee {
-        let narwhal_committee = self
-            .validators
-            .active_validators
-            .iter()
-            .map(|validator| {
-                let verified_metadata = validator
-                    .metadata
-                    .verify()
-                    .expect("Metadata should have been verified upon request");
-                let authority = narwhal_config::Authority {
-                    stake: validator.voting_power as narwhal_config::Stake,
-                    primary_address: verified_metadata.primary_address,
-                    network_key: verified_metadata.network_pubkey,
-                };
-                (verified_metadata.protocol_pubkey, authority)
-            })
-            .collect();
-
-        narwhal_config::Committee {
-            authorities: narwhal_committee,
-            epoch: self.epoch as narwhal_config::Epoch,
-        }
-    }
-
-    fn get_current_epoch_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId> {
-        let mut result = HashMap::new();
-        let _: () = self
-            .validators
-            .active_validators
-            .iter()
-            .map(|validator| {
-                let name = validator.authority_name();
-
-                let network_key = narwhal_crypto::NetworkPublicKey::from_bytes(
-                    &validator.metadata.network_pubkey_bytes,
-                )
-                .expect("Can't get narwhal network key");
-
-                let peer_id = PeerId(network_key.0.to_bytes());
-
-                result.insert(name, peer_id);
-            })
-            .collect();
-
-        result
-    }
-
-    #[allow(clippy::mutable_key_type)]
-    fn get_current_epoch_narwhal_worker_cache(
-        &self,
-        transactions_address: &Multiaddr,
-    ) -> WorkerCache {
-        let workers: BTreeMap<narwhal_crypto::PublicKey, WorkerIndex> = self
-            .validators
-            .active_validators
-            .iter()
-            .map(|validator| {
-                let verified_metadata = validator
-                    .metadata
-                    .verify()
-                    .expect("Metadata should have been verified upon request");
-                let workers = [(
-                    0,
-                    narwhal_config::WorkerInfo {
-                        name: verified_metadata.worker_pubkey,
-                        transactions: transactions_address.clone(),
-                        worker_address: verified_metadata.worker_address,
-                    },
-                )]
-                .into_iter()
-                .collect();
-                let worker_index = WorkerIndex(workers);
-
-                (verified_metadata.protocol_pubkey, worker_index)
-            })
-            .collect();
-        WorkerCache {
-            workers,
-            epoch: self.epoch,
-        }
-    }
-
     fn get_validator_metadata_vec(&self) -> Vec<ValidatorMetadata> {
         self.validators
             .active_validators
             .iter()
             .map(|v| v.metadata.clone())
+            .collect()
+    }
+
+    fn get_validator_summary_vec(&self) -> Vec<SuiValidatorSummary> {
+        self.validators
+            .active_validators
+            .iter()
+            .map(|v| v.into())
             .collect()
     }
 

@@ -223,8 +223,8 @@ pub async fn test_checkpoint_executor_cross_epoch() {
             SupportedProtocolVersions::SYSTEM_DEFAULT,
             second_committee.committee().clone(),
             EpochStartConfiguration {
-                system_state,
-                ..Default::default()
+                system_state: system_state.into(),
+                epoch_digest: Default::default(),
             },
         )
         .await

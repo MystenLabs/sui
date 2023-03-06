@@ -14,7 +14,7 @@ use narwhal_worker::TrivialTransactionValidator;
 use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::sui_system_state_summary::SuiSystemStateSummary;
 use test_utils::authority::test_and_configure_authority_configs;
 use tokio::sync::broadcast;
 use tokio::time::{interval, sleep};
@@ -98,13 +98,14 @@ async fn test_narwhal_manager() {
         let state =
             AuthorityState::new_for_testing(genesis_committee, &secret, None, genesis).await;
 
-        let system_state = state
+        let system_state: SuiSystemStateSummary = state
             .get_sui_system_state_object_for_testing()
-            .expect("Reading Sui system state object cannot fail");
+            .expect("Reading Sui system state object cannot fail")
+            .into();
 
         let transactions_addr = &config.consensus_config.as_ref().unwrap().address;
-        let narwhal_committee = system_state.get_current_epoch_narwhal_committee();
-        let worker_cache = system_state.get_current_epoch_narwhal_worker_cache(transactions_addr);
+        let narwhal_committee = system_state.narwhal_committee();
+        let worker_cache = system_state.narwhal_worker_cache(transactions_addr);
 
         let execution_state = Arc::new(NoOpExecutionState {
             epoch: narwhal_committee.epoch,
@@ -174,13 +175,13 @@ async fn test_narwhal_manager() {
             .await
             .is_empty());
 
-        let system_state = state
+        let system_state: SuiSystemStateSummary = state
             .get_sui_system_state_object_for_testing()
-            .expect("Reading Sui system state object cannot fail");
+            .expect("Reading Sui system state object cannot fail")
+            .into();
 
-        let mut narwhal_committee = system_state.get_current_epoch_narwhal_committee();
-        let mut worker_cache =
-            system_state.get_current_epoch_narwhal_worker_cache(&transactions_addr);
+        let mut narwhal_committee = system_state.narwhal_committee();
+        let mut worker_cache = system_state.narwhal_worker_cache(&transactions_addr);
 
         // advance epoch
         narwhal_committee.epoch = 1;

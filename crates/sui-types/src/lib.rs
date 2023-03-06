@@ -52,6 +52,7 @@ pub mod signature;
 pub mod storage;
 pub mod sui_serde;
 pub mod sui_system_state;
+pub mod sui_system_state_summary;
 pub mod temporary_store;
 
 pub mod epoch_data;

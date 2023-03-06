@@ -29,6 +29,7 @@ use sui_types::messages::{
     VerifiedCertificate, VerifiedExecutableTransaction, VerifiedSignedTransaction,
 };
 use sui_types::signature::GenericSignature;
+use sui_types::sui_system_state_summary::SuiSystemStateSummary;
 use tracing::{debug, info, trace, warn};
 use typed_store::rocks::{DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
@@ -64,7 +65,6 @@ use sui_types::messages_checkpoint::{
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp,
 };
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
-use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 use tokio::time::Instant;
@@ -278,9 +278,9 @@ pub struct AuthorityEpochTables {
 }
 
 /// Parameters of the epoch fixed at epoch start.
-#[derive(Default, Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct EpochStartConfiguration {
-    pub system_state: SuiSystemState,
+    pub system_state: SuiSystemStateSummary,
     /// epoch_digest is defined as following
     /// (1) For the genesis epoch it is set to 0
     /// (2) For all other epochs it is a digest of the last checkpoint of a previous epoch
@@ -500,12 +500,12 @@ impl AuthorityPerEpochStore {
             .insert(checkpoint, accumulator)?)
     }
 
-    pub fn system_state_object(&self) -> &SuiSystemState {
+    pub fn system_state_summary(&self) -> &SuiSystemStateSummary {
         &self.epoch_start_configuration.system_state
     }
 
     pub fn reference_gas_price(&self) -> u64 {
-        self.system_state_object().reference_gas_price()
+        self.system_state_summary().reference_gas_price()
     }
 
     pub fn protocol_version(&self) -> ProtocolVersion {

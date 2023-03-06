@@ -1794,8 +1794,8 @@ async fn test_transaction_expiration() {
             SupportedProtocolVersions::SYSTEM_DEFAULT,
             committee,
             EpochStartConfiguration {
-                system_state,
-                ..Default::default()
+                system_state: system_state.into(),
+                epoch_digest: Default::default(),
             },
         )
         .await
@@ -2716,7 +2716,10 @@ async fn test_authority_persist() {
             &epoch_store_path,
             None,
             EpochMetrics::new(&registry),
-            Some(Default::default()),
+            Some(EpochStartConfiguration {
+                system_state: SuiSystemStateSummary::new_for_testing(),
+                epoch_digest: Default::default(),
+            }),
             store.clone(),
             cache_metrics,
         );
@@ -4716,7 +4719,10 @@ async fn test_tallying_rule_score_updates() {
         &path,
         None,
         metrics.clone(),
-        Some(Default::default()),
+        Some(EpochStartConfiguration {
+            system_state: SuiSystemStateSummary::new_for_testing(),
+            epoch_digest: Default::default(),
+        }),
         store,
         cache_metrics,
     );

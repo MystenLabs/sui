@@ -41,7 +41,7 @@ use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
-use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::sui_system_state_summary::SuiSystemStateSummary;
 use tracing::debug;
 
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
@@ -182,8 +182,9 @@ impl SuiNode {
             .get_committee(&cur_epoch)?
             .expect("Committee of the current epoch must exist");
         let epoch_start_configuration = if cur_epoch == genesis.epoch() {
+            let system_state = SuiSystemState::new_genesis(genesis.sui_system_object());
             Some(EpochStartConfiguration {
-                system_state: SuiSystemState::new_genesis(genesis.sui_system_object()),
+                system_state: system_state.into(),
                 epoch_digest: genesis.checkpoint().digest(),
             })
         } else {
@@ -306,7 +307,7 @@ impl SuiNode {
         let authority_names_to_peer_ids = epoch_store
             .epoch_start_configuration()
             .system_state
-            .get_current_epoch_authority_names_to_peer_ids();
+            .authority_names_to_peer_ids();
 
         let network_connection_metrics =
             NetworkConnectionMetrics::new("sui", &registry_service.default_registry());
@@ -586,15 +587,15 @@ impl SuiNode {
             state.metrics.clone(),
         ));
 
-        let system_state = epoch_store.system_state_object();
-        let committee = system_state.get_current_epoch_narwhal_committee();
+        let system_state = epoch_store.system_state_summary();
+        let committee = system_state.narwhal_committee();
 
         let transactions_addr = &config
             .consensus_config
             .as_ref()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?
             .address;
-        let worker_cache = system_state.get_current_epoch_narwhal_worker_cache(transactions_addr);
+        let worker_cache = system_state.narwhal_worker_cache(transactions_addr);
 
         narwhal_manager
             .start(
@@ -823,9 +824,9 @@ impl SuiNode {
             checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
             let system_state = self
                 .state
-                .get_sui_system_state_object_during_reconfig()
+                .get_sui_system_state_summary_during_reconfig()
                 .expect("Read Sui System State object cannot fail");
-            let next_epoch_committee = system_state.get_current_epoch_committee().committee;
+            let next_epoch_committee = system_state.sui_committee();
             let next_epoch = next_epoch_committee.epoch();
             assert_eq!(cur_epoch_store.epoch() + 1, next_epoch);
 
@@ -842,8 +843,7 @@ impl SuiNode {
             // so that we don't need to restart the connection monitor every epoch.
             //  Update the mappings that will be used by the consensus adapter if it exists or is
             // about to be created.
-            let authority_names_to_peer_ids =
-                system_state.get_current_epoch_authority_names_to_peer_ids();
+            let authority_names_to_peer_ids = system_state.authority_names_to_peer_ids();
             self.connection_monitor_status
                 .update_mapping_for_epoch(authority_names_to_peer_ids);
 
@@ -937,7 +937,7 @@ impl SuiNode {
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
         next_epoch_committee: Committee,
-        system_state: SuiSystemState,
+        system_state: SuiSystemStateSummary,
     ) -> Arc<AuthorityPerEpochStore> {
         let next_epoch = next_epoch_committee.epoch();
 

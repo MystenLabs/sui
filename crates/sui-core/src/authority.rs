@@ -37,6 +37,7 @@ use sui_types::intent::IntentScope;
 use sui_types::message_envelope::Message;
 use sui_types::parse_sui_struct_tag;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::MOVE_STDLIB_OBJECT_ID;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use tap::TapFallible;
@@ -1655,7 +1656,10 @@ impl AuthorityState {
             &path.join("store"),
             None,
             EpochMetrics::new(&registry),
-            Some(Default::default()),
+            Some(EpochStartConfiguration {
+                system_state: SuiSystemStateSummary::new_for_testing(),
+                epoch_digest: Default::default(),
+            }),
             store.clone(),
             cache_metrics,
         );
@@ -1878,8 +1882,10 @@ impl AuthorityState {
     /// This function should be called once and exactly once during reconfiguration.
     /// Instead of this function use AuthorityEpochStore::epoch_start_configuration() to access this object everywhere
     /// besides when we are reading fields for the current epoch
-    pub fn get_sui_system_state_object_during_reconfig(&self) -> SuiResult<SuiSystemState> {
-        self.database.get_sui_system_state_object()
+    pub fn get_sui_system_state_summary_during_reconfig(&self) -> SuiResult<SuiSystemStateSummary> {
+        self.database
+            .get_sui_system_state_object()
+            .map(|s| s.into())
     }
 
     // This function is only used for testing.
