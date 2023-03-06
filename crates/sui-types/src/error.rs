@@ -712,7 +712,7 @@ pub fn convert_vm_error<
                         let offset = error.offsets().first().copied().map(|(f, i)| (f.0, i));
                         debug_assert!(
                             offset.is_some(),
-                            "Move should set the location on all execution errors"
+                            "Move should set the location on all execution errors. Error {error}"
                         );
                         let (function, instruction) = offset.unwrap_or((0, 0));
                         let function_name = vm.load_module(id, state_view).ok().map(|module| {

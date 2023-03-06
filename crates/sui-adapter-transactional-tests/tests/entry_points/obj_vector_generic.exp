@@ -31,8 +31,8 @@ created: object(116)
 written: object(115)
 
 task 8 'run'. lines 137-140:
-Error: Transaction Effects Status: Entry Argument Error. Error for argument at index 0: Type mismatch.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: TypeMismatch }), source: Some("Expected argument of type Test::M::ObjAny<T0>, but found type Test::M::AnotherObjAny<Test::M::Any>"), command: None } }
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
 
 task 9 'run'. lines 142-142:
 created: object(119)
@@ -43,27 +43,29 @@ created: object(121)
 written: object(120)
 
 task 11 'run'. lines 146-149:
-Error: Transaction Effects Status: Entry Argument Error. Error for argument at index 0: Type mismatch.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: TypeMismatch }), source: Some("Expected argument of type Test::M::ObjAny<T0>, but found type Test::M::AnotherObjAny<Test::M::Any>"), command: None } }
+Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(0) } }
 
 task 12 'run'. lines 151-151:
 created: object(124)
 written: object(123)
 
 task 13 'run'. lines 153-156:
-Error: Transaction Effects Status: Entry Argument Error. Error for argument at index 0: Immutable and shared objects cannot be passed by-value.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: InvalidObjectByValue }), source: Some("Immutable and shared objects cannot be passed by-value, violation found in argument 0"), command: None } }
+Error: Transaction Effects Status: Invalid command argument at 0. Immutable and shared objects cannot be passed by-value.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByValue }, source: None, command: Some(0) } }
 
 task 14 'run'. lines 158-158:
 created: object(127)
 written: object(126)
 
 task 15 'run'. lines 160-163:
-Error: The transaction inputs contain duplicated ObjectRef's
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of already taken value. There is now no value available at this location
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidUsageOfTakenValue }, source: None, command: Some(1) } }
 
 task 16 'run'. lines 165-165:
 created: object(130)
 written: object(129)
 
 task 17 'run'. lines 167-167:
-Error: The transaction inputs contain duplicated ObjectRef's
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of already taken value. There is now no value available at this location
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidUsageOfTakenValue }, source: None, command: Some(1) } }
