@@ -6,7 +6,7 @@ import cl from 'classnames';
 import { useCallback, useMemo, useState } from 'react';
 
 import { Button } from '../../shared/ButtonUI';
-import AccountAddress from '_components/account-address';
+import { AccountAddress } from '_components/AccountAddress';
 import ExternalLink from '_components/external-link';
 
 import type { ReactNode } from 'react';
@@ -78,13 +78,7 @@ export function UserApproveContainer({
                     {!addressHidden ? (
                         <div className={st.cardFooter}>
                             <div className={st.label}>Your address</div>
-                            <AccountAddress
-                                showLink={false}
-                                mode="normal"
-                                copyable
-                                className={st.address}
-                                address={address}
-                            />
+                            <AccountAddress address={address} copyable />
                         </div>
                     ) : null}
                 </div>
