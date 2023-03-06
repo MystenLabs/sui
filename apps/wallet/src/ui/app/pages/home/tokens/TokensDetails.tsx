@@ -13,7 +13,7 @@ import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { SuiIcons } from '_font-icons/output/sui-icons';
-import { useAppSelector, useGetAllBalances, useGetCoinBalance } from '_hooks';
+import { useGetAllBalances, useGetCoinBalance } from '_hooks';
 import { AccountSelector } from '_src/ui/app/components/AccountSelector';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
@@ -70,7 +70,7 @@ function MyTokens() {
 
 function TokenDetails({ coinType }: TokenDetailsProps) {
     const activeCoinType = coinType || SUI_TYPE_ARG;
-    const accountAddress = useAppSelector(({ account }) => account.address);
+    const accountAddress = useActiveAddress();
     const {
         data: coinBalance,
         isError,
