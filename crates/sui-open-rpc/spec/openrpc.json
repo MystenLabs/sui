@@ -1034,6 +1034,23 @@
       }
     },
     {
+      "name": "sui_getLatestSuiSystemState",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return the latest SUI system state object on-chain.",
+      "params": [],
+      "result": {
+        "name": "SuiSystemStateSummary",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/SuiSystemStateSummary"
+        }
+      }
+    },
+    {
       "name": "sui_getMoveFunctionArgTypes",
       "tags": [
         {
@@ -1408,7 +1425,7 @@
           "name": "Governance Read API"
         }
       ],
-      "description": "Return latest SUI system state object on-chain.",
+      "description": "(Deprecated) Return latest SUI system state object on-chain. This is now deprecated in favor of get_latest_sui_system_state.",
       "params": [],
       "result": {
         "name": "SuiSystemStateRpc",
@@ -1416,7 +1433,8 @@
         "schema": {
           "$ref": "#/components/schemas/SuiSystemState"
         }
-      }
+      },
+      "deprecated": true
     },
     {
       "name": "sui_getTotalSupply",
@@ -6298,6 +6316,97 @@
           }
         }
       },
+      "SuiSystemStateSummary": {
+        "description": "This is the JSON-RPC type for the SUI system state object. It flatterns all fields to make them top-level fields such that it as minimum dependencies to the internal data structures of the SUI system state type.",
+        "type": "object",
+        "required": [
+          "active_validators",
+          "epoch",
+          "epoch_start_timestamp_ms",
+          "governance_start_epoch",
+          "max_validator_candidate_count",
+          "min_validator_stake",
+          "protocol_version",
+          "reference_gas_price",
+          "safe_mode",
+          "stake_subsidy_balance",
+          "stake_subsidy_current_epoch_amount",
+          "stake_subsidy_epoch_counter",
+          "storage_fund",
+          "total_stake"
+        ],
+        "properties": {
+          "active_validators": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiValidatorSummary"
+            }
+          },
+          "epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "epoch_start_timestamp_ms": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "governance_start_epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "max_validator_candidate_count": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "min_validator_stake": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "protocol_version": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "reference_gas_price": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "safe_mode": {
+            "type": "boolean"
+          },
+          "stake_subsidy_balance": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "stake_subsidy_current_epoch_amount": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "stake_subsidy_epoch_counter": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "storage_fund": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "total_stake": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
       "SuiTBlsSignObjectCommitmentType": {
         "oneOf": [
           {
@@ -6393,6 +6502,280 @@
           },
           "transaction": {
             "$ref": "#/components/schemas/Transaction"
+          }
+        }
+      },
+      "SuiValidatorSummary": {
+        "description": "This is the JSON-RPC type for the SUI validator. It flattens all inner strucutures to top-level fields so that they are decoupled from the internal definitions.",
+        "type": "object",
+        "required": [
+          "commission_rate",
+          "description",
+          "gas_price",
+          "image_url",
+          "name",
+          "net_address",
+          "network_pubkey_bytes",
+          "next_epoch_commission_rate",
+          "next_epoch_gas_price",
+          "next_epoch_stake",
+          "p2p_address",
+          "pending_delegation",
+          "pending_pool_token_withdraw",
+          "pending_total_sui_withdraw",
+          "pool_token_balance",
+          "primary_address",
+          "project_url",
+          "proof_of_possession_bytes",
+          "protocol_pubkey_bytes",
+          "rewards_pool",
+          "starting_epoch",
+          "sui_address",
+          "sui_balance",
+          "voting_power",
+          "worker_address",
+          "worker_pubkey_bytes"
+        ],
+        "properties": {
+          "commission_rate": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "deactivation_epoch": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "description": {
+            "type": "string"
+          },
+          "gas_price": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "image_url": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "net_address": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "network_pubkey_bytes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_commission_rate": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "next_epoch_gas_price": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "next_epoch_net_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_network_pubkey_bytes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_p2p_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_primary_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_proof_of_possession": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_protocol_pubkey_bytes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_stake": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "next_epoch_worker_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_worker_pubkey_bytes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "p2p_address": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "pending_delegation": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "pending_pool_token_withdraw": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "pending_total_sui_withdraw": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "pool_token_balance": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "primary_address": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "project_url": {
+            "type": "string"
+          },
+          "proof_of_possession_bytes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "protocol_pubkey_bytes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "rewards_pool": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "starting_epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "sui_address": {
+            "$ref": "#/components/schemas/SuiAddress"
+          },
+          "sui_balance": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "voting_power": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "worker_address": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "worker_pubkey_bytes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
           }
         }
       },
