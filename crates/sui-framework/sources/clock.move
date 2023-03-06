@@ -55,4 +55,12 @@ module sui::clock {
     public fun increment_for_testing(clock: &mut Clock, tick: u64) {
         clock.timestamp_ms = clock.timestamp_ms + tick;
     }
+
+    #[test_only]
+    public fun create_for_testing(timestamp_ms: u64): Clock {
+        Clock {
+            id: object::clock(),
+            timestamp_ms,
+        }
+    }
 }
