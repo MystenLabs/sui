@@ -28,7 +28,6 @@ fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 network = { path = "../network", package = "narwhal-network" }
 types = { path = "../types", package = "narwhal-types" }
-prometheus = "0.13.3"
 store = { path = "../../crates/typed-store", package = "typed-store" }
 mysten-network = { path = "../../crates/mysten-network"}
 

@@ -3716,7 +3716,6 @@ dependencies = [
  "narwhal-storage",
  "narwhal-test-utils",
  "narwhal-types",
- "prometheus",
  "rand",
  "reqwest",
  "serde",
