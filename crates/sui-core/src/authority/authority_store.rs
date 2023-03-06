@@ -71,7 +71,13 @@ impl AuthorityStore {
     ) -> SuiResult<Self> {
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
         if perpetual_tables.database_is_empty()? {
-            perpetual_tables.set_recovery_epoch(0)?;
+            let epoch_start_configuration = EpochStartConfiguration {
+                system_state: SuiSystemState::new_genesis(genesis.sui_system_object()),
+                epoch_digest: genesis.checkpoint().digest(),
+            };
+            perpetual_tables
+                .set_epoch_start_configuration(&epoch_start_configuration)
+                .await?;
         }
         let cur_epoch = perpetual_tables.get_recovery_epoch_at_restart()?;
         let committee = committee_store
@@ -623,6 +629,20 @@ impl AuthorityStore {
         batch.write()?;
 
         Ok(())
+    }
+
+    pub async fn set_epoch_start_configuration(
+        &self,
+        epoch_start_configuration: &EpochStartConfiguration,
+    ) -> SuiResult {
+        self.perpetual_tables
+            .set_epoch_start_configuration(epoch_start_configuration)
+            .await?;
+        Ok(())
+    }
+
+    pub fn get_epoch_start_configuration(&self) -> SuiResult<Option<EpochStartConfiguration>> {
+        Ok(self.perpetual_tables.epoch_start_configuration.get(&())?)
     }
 
     /// Updates the state resulting from the execution of a certificate.

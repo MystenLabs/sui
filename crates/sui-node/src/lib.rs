@@ -180,14 +180,9 @@ impl SuiNode {
         let committee = committee_store
             .get_committee(&cur_epoch)?
             .expect("Committee of the current epoch must exist");
-        let epoch_start_configuration = if cur_epoch == genesis.epoch() {
-            Some(EpochStartConfiguration {
-                system_state: SuiSystemState::new_genesis(genesis.sui_system_object()),
-                epoch_digest: genesis.checkpoint().digest(),
-            })
-        } else {
-            None
-        };
+        let epoch_start_configuration = store
+            .get_epoch_start_configuration()?
+            .expect("EpochStartConfiguration of the current epoch must exist");
         let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
