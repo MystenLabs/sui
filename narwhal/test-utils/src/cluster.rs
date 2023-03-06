@@ -9,7 +9,7 @@ use itertools::Itertools;
 use multiaddr::Multiaddr;
 use node::primary_node::PrimaryNode;
 use node::worker_node::WorkerNode;
-use node::{execution_state::SimpleExecutionState, metrics::worker_metrics_registry};
+use node::execution_state::SimpleExecutionState;
 use prometheus::{proto::Metric, Registry};
 use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc, sync::Arc, time::Duration};
 use storage::NodeStorage;
@@ -447,8 +447,6 @@ impl WorkerNodeDetails {
             );
         }
 
-        let registry = worker_metrics_registry(self.id, self.name);
-
         // Make the data store.
         let store_path = if preserve_store {
             self.store_path.clone()
@@ -472,7 +470,6 @@ impl WorkerNodeDetails {
             .unwrap();
 
         self.store_path = store_path;
-        self.registry = registry;
     }
 
     async fn stop(&self) {

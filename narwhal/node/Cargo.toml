@@ -30,7 +30,6 @@ crypto = { path = "../crypto", package = "narwhal-crypto" }
 executor = { path = "../executor", package = "narwhal-executor" }
 network = { path = "../network", package = "narwhal-network" }
 primary = { path = "../primary", package = "narwhal-primary" }
-prometheus = "0.13.3"
 storage = { path = "../storage", package = "narwhal-storage" }
 types = { path = "../types", package = "narwhal-types" }
 worker = { path = "../worker", package = "narwhal-worker" }
@@ -42,7 +41,6 @@ derive_more = "0.99.17"
 serde_with = "2.1.0"
 signature = "1.6.0"
 
-mysten-metrics = { path = "../../crates/mysten-metrics" }
 store = { path = "../../crates/typed-store", package = "typed-store" }
 mysten-network = { path = "../../crates/mysten-network" }
 telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
