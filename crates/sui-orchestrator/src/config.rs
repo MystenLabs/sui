@@ -15,8 +15,10 @@ use sui_types::{
     crypto::{AuthorityKeyPair, KeypairTraits, NetworkKeyPair, SuiKeyPair},
 };
 
-use super::client::Instance;
+use crate::client::Instance;
 
+/// All configurations information to run a sui client or validator.
+// TODO: This module is very ad-hoc and hard to read, needs refactoring.
 pub struct Config {
     genesis_config: GenesisConfig,
     keystore: FileBasedKeystore,

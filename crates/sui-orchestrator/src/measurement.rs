@@ -31,16 +31,70 @@ pub struct Measurement {
 }
 
 impl Measurement {
-    /// Make a new measurement.
-    pub fn new(
-        benchmark_timestamp: Duration,
-        buckets: HashMap<BucketId, usize>,
-        sum: Duration,
-        count: usize,
-        squared_sum: Duration,
-    ) -> Self {
+    // Make a new measurement from the text exposed by prometheus.
+    pub fn from_prometheus(text: &str) -> Self {
+        let br = std::io::BufReader::new(text.as_bytes());
+        let parsed = Scrape::parse(br.lines()).unwrap();
+
+        let buckets: HashMap<_, _> = parsed
+            .samples
+            .iter()
+            .find(|x| x.metric == "latency_s")
+            .map(|x| match &x.value {
+                prometheus_parse::Value::Histogram(values) => values
+                    .iter()
+                    .map(|x| {
+                        let bucket_id = x.less_than.to_string();
+                        let count = x.count as usize;
+                        (bucket_id, count)
+                    })
+                    .collect(),
+                _ => panic!("Unexpected scraped value"),
+            })
+            .unwrap_or_default();
+
+        let sum = parsed
+            .samples
+            .iter()
+            .find(|x| x.metric == "latency_s_sum")
+            .map(|x| match x.value {
+                prometheus_parse::Value::Untyped(value) => Duration::from_secs_f64(value),
+                _ => panic!("Unexpected scraped value"),
+            })
+            .unwrap_or_default();
+
+        let count = parsed
+            .samples
+            .iter()
+            .find(|x| x.metric == "latency_s_count")
+            .map(|x| match x.value {
+                prometheus_parse::Value::Untyped(value) => value as usize,
+                _ => panic!("Unexpected scraped value"),
+            })
+            .unwrap_or_default();
+
+        let squared_sum = parsed
+            .samples
+            .iter()
+            .find(|x| x.metric == "latency_squared_s")
+            .map(|x| match x.value {
+                prometheus_parse::Value::Counter(value) => Duration::from_secs_f64(value),
+                _ => panic!("Unexpected scraped value"),
+            })
+            .unwrap_or_default();
+
+        let timestamp = parsed
+            .samples
+            .iter()
+            .find(|x| x.metric == "benchmark_duration")
+            .map(|x| match x.value {
+                prometheus_parse::Value::Counter(value) => Duration::from_secs(value as u64),
+                _ => panic!("Unexpected scraped value"),
+            })
+            .unwrap_or_default();
+
         Self {
-            timestamp: benchmark_timestamp,
+            timestamp,
             buckets,
             sum,
             count,
@@ -118,78 +172,17 @@ impl MeasurementsCollection {
         Ok(measurements)
     }
 
-    /// Return the transaction (input) load of the benchmark.
-    pub fn transaction_load(&self) -> usize {
-        self.parameters.load
-    }
-
-    /// Add a new measurement to the collection. The measurement is deduced from the text
-    /// exposed by prometheus.
-    pub fn add(&mut self, scraper_id: ScraperId, text: &str) {
-        let br = std::io::BufReader::new(text.as_bytes());
-        let parsed = Scrape::parse(br.lines()).unwrap();
-
-        let buckets: HashMap<_, _> = parsed
-            .samples
-            .iter()
-            .find(|x| x.metric == "latency_s")
-            .map(|x| match &x.value {
-                prometheus_parse::Value::Histogram(values) => values
-                    .iter()
-                    .map(|x| {
-                        let bucket_id = x.less_than.to_string();
-                        let count = x.count as usize;
-                        (bucket_id, count)
-                    })
-                    .collect(),
-                _ => panic!("Unexpected scraped value"),
-            })
-            .unwrap_or_default();
-
-        let sum = parsed
-            .samples
-            .iter()
-            .find(|x| x.metric == "latency_s_sum")
-            .map(|x| match x.value {
-                prometheus_parse::Value::Untyped(value) => Duration::from_secs_f64(value),
-                _ => panic!("Unexpected scraped value"),
-            })
-            .unwrap_or_default();
-
-        let count = parsed
-            .samples
-            .iter()
-            .find(|x| x.metric == "latency_s_count")
-            .map(|x| match x.value {
-                prometheus_parse::Value::Untyped(value) => value as usize,
-                _ => panic!("Unexpected scraped value"),
-            })
-            .unwrap_or_default();
-
-        let squared_sum = parsed
-            .samples
-            .iter()
-            .find(|x| x.metric == "latency_squared_s")
-            .map(|x| match x.value {
-                prometheus_parse::Value::Counter(value) => Duration::from_secs_f64(value),
-                _ => panic!("Unexpected scraped value"),
-            })
-            .unwrap_or_default();
-
-        let duration = parsed
-            .samples
-            .iter()
-            .find(|x| x.metric == "benchmark_duration")
-            .map(|x| match x.value {
-                prometheus_parse::Value::Counter(value) => Duration::from_secs(value as u64),
-                _ => panic!("Unexpected scraped value"),
-            })
-            .unwrap_or_default();
-
+    /// Add a new measurement to the collection.
+    pub fn add(&mut self, scraper_id: ScraperId, measurement: Measurement) {
         self.scrapers
             .entry(scraper_id)
             .or_insert_with(Vec::new)
-            .push(Measurement::new(duration, buckets, sum, count, squared_sum));
+            .push(measurement);
+    }
+
+    /// Return the transaction (input) load of the benchmark.
+    pub fn transaction_load(&self) -> usize {
+        self.parameters.load
     }
 
     /// Aggregate the benchmark duration of multiple data points by taking the max.
@@ -291,26 +284,26 @@ mod test {
 
     #[test]
     fn average_latency() {
-        let data = Measurement::new(
-            Duration::from_secs(10), // benchmark_timestamp
-            HashMap::new(),          // buckets
-            Duration::from_secs(2),  // sum
-            100,                     // count
-            Duration::from_secs(0),  // squared_sum
-        );
+        let data = Measurement {
+            timestamp: Duration::from_secs(10),
+            buckets: HashMap::new(),
+            sum: Duration::from_secs(2),
+            count: 100,
+            squared_sum: Duration::from_secs(0),
+        };
 
         assert_eq!(data.average_latency(), Duration::from_millis(20));
     }
 
     #[test]
     fn stdev_latency() {
-        let data = Measurement::new(
-            Duration::from_secs(10), // benchmark_timestamp
-            HashMap::new(),          // buckets
-            Duration::from_secs(50), // sum
-            100,                     // count
-            Duration::from_secs(75), // squared_sum
-        );
+        let data = Measurement {
+            timestamp: Duration::from_secs(10),
+            buckets: HashMap::new(),
+            sum: Duration::from_secs(50),
+            count: 100,
+            squared_sum: Duration::from_secs(75),
+        };
 
         // squared_sum / count
         assert_eq!(
@@ -356,10 +349,11 @@ mod test {
             latency_squared_s{workload="transfer_object"} 952.8160642745289
         "#;
 
+        let measurement = Measurement::from_prometheus(report);
         let settings = Settings::new_for_test();
         let mut aggregator = MeasurementsCollection::new(&settings, BenchmarkParameters::default());
         let scraper_id = 1;
-        aggregator.add(scraper_id, report);
+        aggregator.add(scraper_id, measurement);
 
         assert_eq!(aggregator.scrapers.len(), 1);
         let data_points = aggregator.scrapers.get(&scraper_id).unwrap();

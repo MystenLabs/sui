@@ -18,12 +18,13 @@ use crate::{
     config::Config,
     ensure,
     error::{TestbedError, TestbedResult},
-    logs::LogsParser,
-    measurement::MeasurementsCollection,
+    logs::LogsAnalyzer,
+    measurement::{Measurement, MeasurementsCollection},
     settings::Settings,
     ssh::{SshCommand, SshConnectionManager},
 };
 
+/// An orchestrator to run benchmarks on a testbed.
 pub struct Orchestrator {
     /// The testbed's settings.
     settings: Settings,
@@ -31,15 +32,21 @@ pub struct Orchestrator {
     instances: Vec<Instance>,
     /// Handle ssh connections to instances.
     ssh_manager: SshConnectionManager,
+    /// Whether to skip testbed updates before running benchmarks.
     skip_testbed_update: bool,
+    /// Whether to skip testbed configuration before running benchmarks.
     skip_testbed_configuration: bool,
+    /// Whether to skip downloading and analyzing log files.
     skip_logs_processing: bool,
 }
 
 impl Orchestrator {
+    /// The port where the client exposes prometheus metrics.
     const CLIENT_METRIC_PORT: u16 = 8081;
+    /// The default interval between measurements collection.
     const SCRAPE_INTERVAL: Duration = Duration::from_secs(30);
 
+    /// Make a new orchestrator.
     pub fn new(
         settings: Settings,
         instances: Vec<Instance>,
@@ -55,21 +62,25 @@ impl Orchestrator {
         }
     }
 
+    /// Whether to skip testbed updates before running benchmarks.
     pub fn skip_testbed_updates(mut self, skip_testbed_update: bool) -> Self {
         self.skip_testbed_update = skip_testbed_update;
         self
     }
 
+    /// Whether to skip testbed configuration before running benchmarks.
     pub fn skip_testbed_configuration(mut self, skip_testbed_configuration: bool) -> Self {
         self.skip_testbed_configuration = skip_testbed_configuration;
         self
     }
 
+    /// Whether to skip downloading and analyzing log files.
     pub fn skip_logs_processing(mut self, skip_logs_analysis: bool) -> Self {
         self.skip_logs_processing = skip_logs_analysis;
         self
     }
 
+    /// Select on which instances of the testbed to run the benchmarks.
     pub fn select_instances(
         &self,
         parameters: &BenchmarkParameters,
@@ -103,6 +114,7 @@ impl Orchestrator {
         Ok(instances)
     }
 
+    /// Wait until a command running in the background terminated.
     pub async fn wait_for_command<'a, I>(&self, instances: I, command_id: &str) -> TestbedResult<()>
     where
         I: Iterator<Item = &'a Instance> + Clone,
@@ -126,6 +138,7 @@ impl Orchestrator {
         Ok(())
     }
 
+    /// Wait until a command started to run in the background.
     pub async fn wait_until_command<'a, I>(
         &self,
         instances: I,
@@ -150,6 +163,7 @@ impl Orchestrator {
         Ok(())
     }
 
+    /// Install the codebase and its dependencies on the testbed.
     pub async fn install(&self) -> TestbedResult<()> {
         crossterm::execute!(
             stdout(),
@@ -191,6 +205,7 @@ impl Orchestrator {
         Ok(())
     }
 
+    /// Update all instances to use the version of the codebase specified in the setting file.
     pub async fn update(&self) -> TestbedResult<()> {
         let commit = self.settings.repository.commit.clone();
         crossterm::execute!(
@@ -227,6 +242,7 @@ impl Orchestrator {
         Ok(())
     }
 
+    /// Configure the instances with the appropriate configuration files.
     pub async fn configure(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
         // Select instances to configure.
         let instances = self.select_instances(parameters)?;
@@ -276,6 +292,7 @@ impl Orchestrator {
         Ok(())
     }
 
+    /// Cleanup all instances and optionally delete their log files.
     pub async fn cleanup(&self, cleanup: bool) -> TestbedResult<()> {
         crossterm::execute!(stdout(), Print("Cleaning up testbed...")).unwrap();
 
@@ -298,6 +315,7 @@ impl Orchestrator {
         Ok(())
     }
 
+    /// Deploy the nodes.
     pub async fn run_nodes(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
         crossterm::execute!(stdout(), Print("Deploying validators...")).unwrap();
 
@@ -328,6 +346,7 @@ impl Orchestrator {
         Ok(())
     }
 
+    /// Deploy the load generators.
     pub async fn run_clients(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
         crossterm::execute!(stdout(), Print("Setting up load generators...")).unwrap();
 
@@ -374,6 +393,7 @@ impl Orchestrator {
         Ok(())
     }
 
+    /// Collect metrics from the load generators.
     pub async fn collect_metrics(
         &self,
         parameters: &BenchmarkParameters,
@@ -417,7 +437,8 @@ impl Orchestrator {
                     )
                     .unwrap();
                     for (i, (stdout, _stderr)) in stdio.iter().enumerate() {
-                        aggregator.add(i, stdout);
+                        let measurement = Measurement::from_prometheus(stdout);
+                        aggregator.add(i, measurement);
                     }
                 }
                 Err(e) => crossterm::execute!(
@@ -439,10 +460,11 @@ impl Orchestrator {
         Ok(aggregator)
     }
 
+    /// Download the log files from the nodes and clients.
     pub async fn download_logs(
         &self,
         parameters: &BenchmarkParameters,
-    ) -> TestbedResult<LogsParser> {
+    ) -> TestbedResult<LogsAnalyzer> {
         // Select the instances to run.
         let instances = self.select_instances(parameters)?;
 
@@ -460,7 +482,7 @@ impl Orchestrator {
             )
             .unwrap();
 
-            let mut log_parser = LogsParser::default();
+            let mut log_parser = LogsAnalyzer::default();
 
             // Connect to the instance.
             let connection = self.ssh_manager.connect(instance.ssh_address()).await?;
@@ -495,9 +517,10 @@ impl Orchestrator {
         }
 
         println!(" [{}]", "Ok".green());
-        Ok(LogsParser::aggregate(log_parsers))
+        Ok(LogsAnalyzer::aggregate(log_parsers))
     }
 
+    /// Run all the benchmarks specified by the benchmark generator.
     pub async fn run_benchmarks(
         &mut self,
         mut generator: BenchmarkParametersGenerator,

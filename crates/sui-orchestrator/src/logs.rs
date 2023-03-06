@@ -2,25 +2,34 @@ use std::{cmp::max, io::stdout};
 
 use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
 
+/// A simple log analyzer counting the number of errors and panics.
 #[derive(Default)]
-pub struct LogsParser {
+pub struct LogsAnalyzer {
+    /// The number of errors in the nodes' log files.
     pub node_errors: usize,
+    /// Whether a node panicked.
     pub node_panic: bool,
+    /// The number of errors int he clients' log files.
     pub client_errors: usize,
+    /// Whether a client panicked.
     pub client_panic: bool,
 }
 
-impl LogsParser {
+impl LogsAnalyzer {
+    /// Deduce the number of nodes errors from the logs.
     pub fn set_node_errors(&mut self, log: &str) {
         self.node_errors = log.matches(" ERROR").count();
         self.node_panic = log.contains("panic");
     }
 
+    /// Deduce the number of clients errors from the logs.
     pub fn set_client_errors(&mut self, log: &str) {
         self.client_errors = max(self.client_errors, log.matches(" ERROR").count());
         self.client_panic = log.contains("panic");
     }
 
+    /// Aggregate multiple log analyzers into one, based on the analyzer that found the
+    /// most serious errors.
     pub fn aggregate(counters: Vec<Self>) -> Self {
         let mut highest = Self::default();
         for counter in counters {
@@ -37,6 +46,7 @@ impl LogsParser {
         highest
     }
 
+    /// Print a summary of the errors.
     pub fn print_summary(&self) {
         if self.node_panic {
             crossterm::execute!(

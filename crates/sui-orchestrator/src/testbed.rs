@@ -17,6 +17,7 @@ use crate::{
 
 use super::client::Instance;
 
+/// Represents a testbed running on a cloud provider.
 pub struct Testbed<C> {
     /// The testbed's settings.
     settings: Settings,
@@ -40,10 +41,12 @@ impl<C: ServerProviderClient> Testbed<C> {
         })
     }
 
+    /// Return the list of instances of the testbed.
     pub fn instances(&self) -> Vec<Instance> {
         self.instances.clone()
     }
 
+    /// Return the username to connect to the instances through ssh.
     pub fn username(&self) -> &'static str {
         C::USERNAME
     }
@@ -177,7 +180,7 @@ impl<C: ServerProviderClient> Testbed<C> {
                     .filter(|x| {
                         x.is_inactive()
                             && &x.region == region
-                            && x.plan.to_lowercase().replace(".", "")
+                            && x.specs.to_lowercase().replace(".", "")
                                 == self.settings.specs.to_lowercase().replace(".", "")
                     })
                     .take(quantity)
@@ -211,6 +214,7 @@ impl<C: ServerProviderClient> Testbed<C> {
         Ok(())
     }
 
+    /// Signal when all instances are ready to accept ssh connections.
     async fn ready(&self) -> TestbedResult<()> {
         let mut waiting = 0;
         loop {
@@ -322,9 +326,6 @@ mod test {
 
         testbed.stop().await.unwrap();
 
-        assert!(testbed
-            .instances
-            .iter()
-            .all(|x| x.power_status == "inactive"))
+        assert!(testbed.instances.iter().all(|x| x.status == "inactive"))
     }
 }

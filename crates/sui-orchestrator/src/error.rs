@@ -1,10 +1,3 @@
-// #[macro_export]
-// macro_rules! bail {
-//     ($e:expr) => {
-//         return Err($e)
-//     };
-// }
-
 use std::net::SocketAddr;
 
 use reqwest::Url;

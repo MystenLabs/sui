@@ -20,6 +20,7 @@ use crate::{
 
 use super::{Instance, ServerProviderClient};
 
+// Make a request error from an AWS error message.
 impl<T> From<SdkError<T>> for CloudProviderError
 where
     T: Debug + std::error::Error + Send + Sync + 'static,
@@ -29,8 +30,11 @@ where
     }
 }
 
+/// A AWS client.
 pub struct AwsClient {
+    /// The settings of the testbed.
     settings: Settings,
+    /// A list of clients, one per AWS region.
     clients: HashMap<String, aws_sdk_ec2::Client>,
 }
 
@@ -44,6 +48,7 @@ impl AwsClient {
     const OS_IMAGE: &'static str =
         "Canonical, Ubuntu, 22.04 LTS, amd64 jammy image build on 2023-02-16";
 
+    /// Make a new AWS client.
     pub async fn new(settings: Settings) -> Self {
         let profile_files = ProfileFiles::builder()
             .with_file(ProfileFileKind::Credentials, &settings.token_file)
@@ -64,6 +69,7 @@ impl AwsClient {
         Self { settings, clients }
     }
 
+    /// Parse an AWS response and ignore errors if they mean a request is a duplicate.
     fn ignore_duplicates<T, E>(response: Result<T, SdkError<E>>) -> CloudProviderResult<()>
     where
         E: Debug + std::error::Error + Send + Sync + 'static,
@@ -77,6 +83,7 @@ impl AwsClient {
         Ok(())
     }
 
+    /// Convert an AWS instance into an orchestrator instance (used in the rest of the codebase).
     fn into_instance(
         &self,
         region: String,
@@ -94,13 +101,13 @@ impl AwsClient {
                 .parse()
                 .expect("AWS instance should have a valid ip"),
             tags: vec![self.settings.testbed_id.clone()],
-            plan: format!(
+            specs: format!(
                 "{:?}",
                 aws_instance
                     .instance_type()
                     .expect("AWS instance should have a type")
             ),
-            power_status: format!(
+            status: format!(
                 "{:?}",
                 aws_instance
                     .state()
@@ -138,6 +145,7 @@ impl AwsClient {
             })
     }
 
+    /// Create a new security group for the instance (if it doesn't already exist).
     async fn create_security_group(&self, client: &aws_sdk_ec2::Client) -> CloudProviderResult<()> {
         // Create a security group (if it doesn't already exist).
         let request = client

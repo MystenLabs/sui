@@ -10,29 +10,40 @@ use super::error::CloudProviderResult;
 pub mod aws;
 pub mod vultr;
 
+/// Represents a cloud provider instance.
 #[derive(Debug, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Instance {
+    /// The unique identifier of the instance.
     pub id: String,
+    /// The region where the instance runs.
     pub region: String,
+    /// The public ip address of the instance (accessible from anywhere).
     pub main_ip: Ipv4Addr,
+    /// The list of tags associated with the instance.
     pub tags: Vec<String>,
-    pub plan: String,
-    pub power_status: String,
+    /// The specs of the instance.
+    pub specs: String,
+    /// The current status of the instance.
+    pub status: String,
 }
 
 impl Instance {
+    /// Return whether the instance is active and running.
     pub fn is_active(&self) -> bool {
-        self.power_status.to_lowercase() == "running"
+        self.status.to_lowercase() == "running"
     }
 
+    /// Return whether the instance is inactive and not ready for use.
     pub fn is_inactive(&self) -> bool {
         !self.is_active()
     }
 
+    /// Return whether the instance is terminated and in the process of being deleted.
     pub fn is_terminated(&self) -> bool {
-        self.power_status.to_lowercase() == "terminated"
+        self.status.to_lowercase() == "terminated"
     }
 
+    /// Return the ssh address to connect to the instance.
     pub fn ssh_address(&self) -> SocketAddr {
         format!("{}:22", self.main_ip).parse().unwrap()
     }
@@ -106,7 +117,7 @@ pub mod test_client {
             let instance_ids: Vec<_> = instances.map(|x| x.id.clone()).collect();
             let mut guard = self.instances.lock().unwrap();
             for instance in guard.iter_mut().filter(|x| instance_ids.contains(&x.id)) {
-                instance.power_status = "running".into();
+                instance.status = "running".into();
             }
             Ok(())
         }
@@ -118,7 +129,7 @@ pub mod test_client {
             let instance_ids: Vec<_> = instances.map(|x| x.id.clone()).collect();
             let mut guard = self.instances.lock().unwrap();
             for instance in guard.iter_mut().filter(|x| instance_ids.contains(&x.id)) {
-                instance.power_status = "stopped".into();
+                instance.status = "stopped".into();
             }
             Ok(())
         }
@@ -134,8 +145,8 @@ pub mod test_client {
                 region: region.into(),
                 main_ip: format!("0.0.0.{id}").parse().unwrap(),
                 tags: Vec::new(),
-                plan: "".into(),
-                power_status: "running".into(),
+                specs: "".into(),
+                status: "running".into(),
             };
             guard.push(instance.clone());
             Ok(instance)

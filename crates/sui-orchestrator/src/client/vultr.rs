@@ -11,24 +11,28 @@ use crate::{
 
 use super::{Instance, ServerProviderClient};
 
+/// Make a network error.
 impl From<reqwest::Error> for CloudProviderError {
     fn from(e: reqwest::Error) -> Self {
         Self::RequestError(e.to_string())
     }
 }
 
+/// Make an error signaling the client provider returned an unexpected response.
 impl From<serde_json::Error> for CloudProviderError {
     fn from(e: serde_json::Error) -> Self {
         Self::UnexpectedResponse(e.to_string())
     }
 }
 
+/// Represents the ssh key information as defined by Vultr.
 #[derive(Debug, Deserialize)]
 pub struct SshKey {
     pub id: String,
     pub name: String,
 }
 
+/// Represents an instance as defined by Vultr.
 #[derive(Debug, Deserialize)]
 pub struct VultrInstance {
     pub id: String,
@@ -46,13 +50,14 @@ impl From<VultrInstance> for Instance {
             region: instance.region,
             main_ip: instance.main_ip,
             tags: instance.tags,
-            plan: instance.plan,
-            power_status: instance.power_status,
+            specs: instance.plan,
+            status: instance.power_status,
         }
     }
 }
 
 impl VultrInstance {
+    /// Return whether the instance matches the parameters specified in the setting file.
     pub fn filter(&self, settings: &Settings) -> bool {
         settings.regions.contains(&self.region)
             && self.tags.contains(&settings.testbed_id)
@@ -60,6 +65,7 @@ impl VultrInstance {
     }
 }
 
+/// A Vultr client.
 pub struct VultrClient {
     token: String,
     settings: Settings,
@@ -77,6 +83,7 @@ impl VultrClient {
     const BASE_URL: &str = "https://api.vultr.com/v2/";
     const DEFAULT_OS: u16 = 1743; // Ubuntu 22.04 x64
 
+    /// Make a new Vultr client.
     pub fn new<T: Into<String>>(token: T, settings: Settings) -> Self {
         Self {
             token: token.into(),
@@ -86,6 +93,7 @@ impl VultrClient {
         }
     }
 
+    /// Check an http response code.
     fn check_status_code(response: &Response) -> CloudProviderResult<()> {
         if !response.status().is_success() {
             return Err(CloudProviderError::FailureResponseCode(
@@ -96,6 +104,7 @@ impl VultrClient {
         Ok(())
     }
 
+    /// Check an http response and deduced whether it contains an error.
     fn check_response(response: &Value) -> CloudProviderResult<()> {
         response.get("error").map_or_else(
             || Ok(()),
