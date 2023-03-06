@@ -24,20 +24,18 @@ export function App() {
 
 > The `WalletKitProvider` also supports an `adapters` prop, which lets you override the default Sui Wallet Adapters.
 
-You can then add a **Connect Wallet** button to your page and use the **callback function** to make the  wallet status change to perform the desired operation (such as a toast):
+You can then add a **Connect Wallet** button to your page:
 
 ```tsx
 import { ConnectButton, useWalletKit } from "@mysten/wallet-kit";
+import { formatAddress } from "@mysten/sui.js";
 
 function ConnectToWallet() {
   const { currentAccount } = useWalletKit();
   return (
     <ConnectButton
       connectText={"Connect Wallet"}
-      connectedCallback={(wallet, select) => {
-        alert(`${select}: ${currentAccount?.address} ${wallet?.connected}`);
-      }}
-      disconnectCallback={() => alert("disconnected")}
+      connectedText={`Connected: ${formatAddress(currentAccount.address)}`}
     />
   );
 }
