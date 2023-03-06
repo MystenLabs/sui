@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiEventEnvelope, type MoveEvent } from '@mysten/sui.js';
+import { type SuiEventEnvelope } from '@mysten/sui.js';
 
 export function getValidatorMoveEvent(
     validatorsEvent: SuiEventEnvelope[],
