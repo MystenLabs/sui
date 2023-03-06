@@ -16,9 +16,7 @@ New entries added 03/06.
 
 **[Breaking change]** - Changes to Gas Budget to use SUI rather than gas units. This removes the concept of gas units from any user-related API operations. This does not change the format of `TransactionData` (u64). This is not a breaking change in the sense that the current format no longer works, but rather requires you to reconsider how you use gas budgets.
 
-**[Breaking change]** - Currently, transactions require a single coin to pay for gas. This sometimes results in users needing to make separate transactions (such as `PaySui`) to merge coins before completing a transaction, which can also increase the cost of the transaction.
-
-This release changes the field value type in `TransactionData` from `gas_payment: ObjectRef` to `gas_payment: Vec<ObjectRef>`, where `Vec<ObjectRef>` is a non-empty vector of owned SUI objects. This combines all of the coins into a single coin, using the `ObjectID` of the first coin in the vector as the coin containing the merge.
+**[Breaking change]** - Currently, transactions require a single coin to pay for gas. This sometimes results in users needing to make separate transactions (such as `PaySui`) to merge coins before completing a transaction, which can also increase the cost of the transaction. This release changes the field value type in `TransactionData` from `gas_payment: ObjectRef` to `gas_payment: Vec<ObjectRef>`, where `Vec<ObjectRef>` is a non-empty vector of owned SUI objects. This combines all of the coins into a single coin, using the `ObjectID` of the first coin in the vector as the coin containing the merge.
 
 **[Breaking change]** - `ecdsa_k1::ecrecover` and `ecdsa_k1::secp256k1_verify` now require you to input the raw message instead of a hashed message. You must also include the u8 that represents  the hash function. See [PR 7773](https://github.com/MystenLabs/sui/pull/7773) for more details.
 
