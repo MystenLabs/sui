@@ -2716,7 +2716,7 @@ async fn test_authority_persist() {
             &epoch_store_path,
             None,
             EpochMetrics::new(&registry),
-            Some(Default::default()),
+            Default::default(),
             store.clone(),
             cache_metrics,
         );
@@ -4716,7 +4716,7 @@ async fn test_tallying_rule_score_updates() {
         &path,
         None,
         metrics.clone(),
-        Some(Default::default()),
+        Default::default(),
         store,
         cache_metrics,
     );
