@@ -3669,7 +3669,6 @@ dependencies = [
  "narwhal-dag",
  "narwhal-test-utils",
  "once_cell",
- "prometheus",
  "proptest",
  "proptest-derive",
  "prost",

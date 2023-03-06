@@ -16,7 +16,6 @@ enum_dispatch = "^0.3"
 futures = "0.3.24"
 indexmap = { version = "1.9.2", features = ["serde"] }
 mockall = "0.11.2"
-prometheus = "0.13.3"
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
 prost = "0.11.3"
