@@ -1,7 +1,6 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/mysten-metrics",
     "crates/mysten-network",
     "crates/mysten-util-mem",
     "crates/mysten-util-mem-derive",

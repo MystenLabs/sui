@@ -321,7 +321,7 @@ impl PrimaryNodeDetails {
     /// If metric has not been found then None is returned instead.
     pub async fn metric(&self, _name: &str) -> Option<Metric> {
         // TODO(metrics): Somehow add this back?
-        // Stub due to removal mysten-metrics
+        // Stub due to removal of mysten-metrics
         None
     }
 
