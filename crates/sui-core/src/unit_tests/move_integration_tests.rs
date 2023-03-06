@@ -12,7 +12,8 @@ use move_core_types::{
     language_storage::TypeTag,
     value::{MoveStruct, MoveValue},
 };
-use sui_framework_build::compiled_package::BuildConfig;
+use move_package::source_package::manifest_parser;
+use sui_framework_build::compiled_package::{BuildConfig, SuiPackageHooks};
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
     error::SuiError,
@@ -2012,6 +2013,36 @@ async fn test_generate_lock_file() {
         ]
     "##]];
     expected.assert_eq(lock_file_contents.as_str());
+}
+
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
+async fn test_custom_property_published_at() {
+    let build_config = BuildConfig::new_for_testing();
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["src", "unit_tests", "data", "custom_properties_in_manifest"]);
+
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
+    sui_framework::build_move_package(&path, build_config).expect("Move package did not build");
+    let manifest =
+        manifest_parser::parse_move_manifest_from_file(&path.as_path().join("Move.toml"))
+            .expect("Could not parse Move.toml");
+    let properties = manifest
+        .package
+        .custom_properties
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect::<Vec<_>>();
+
+    let expected = expect![[r#"
+        [
+            (
+                "published-at",
+                "0x777",
+            ),
+        ]
+    "#]];
+    expected.assert_debug_eq(&properties)
 }
 
 pub async fn build_and_try_publish_test_package(
