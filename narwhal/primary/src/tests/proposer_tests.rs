@@ -13,7 +13,7 @@ use types::PreSubscribedBroadcastSender;
 async fn propose_empty() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let shared_worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
@@ -52,14 +52,14 @@ async fn propose_empty() {
     let header = rx_headers.recv().await.unwrap();
     assert_eq!(header.round, 1);
     assert!(header.payload.is_empty());
-    assert!(header.verify(&committee, shared_worker_cache).is_ok());
+    assert!(header.verify(&committee, worker_cache).is_ok());
 }
 
 #[tokio::test]
 async fn propose_payload_and_repropose_after_n_seconds() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let shared_worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
     let header_resend_delay = Duration::from_secs(3);
@@ -124,7 +124,7 @@ async fn propose_payload_and_repropose_after_n_seconds() {
         header.payload.get(&digest),
         Some(&(worker_id, created_at_ts))
     );
-    assert!(header.verify(&committee, shared_worker_cache).is_ok());
+    assert!(header.verify(&committee, worker_cache).is_ok());
 
     // WHEN available batches are more than the maximum ones
     let batches: IndexMap<BatchDigest, (WorkerId, TimestampMs)> =
@@ -185,7 +185,7 @@ async fn propose_payload_and_repropose_after_n_seconds() {
 async fn equivocation_protection() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let shared_worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
@@ -258,7 +258,7 @@ async fn equivocation_protection() {
         header.payload.get(&digest),
         Some(&(worker_id, created_at_ts))
     );
-    assert!(header.verify(&committee, shared_worker_cache).is_ok());
+    assert!(header.verify(&committee, worker_cache).is_ok());
 
     // restart the proposer.
     tx_shutdown.send().unwrap();

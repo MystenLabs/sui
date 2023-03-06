@@ -122,11 +122,10 @@ async fn test_narwhal_manager() {
         let narwhal_manager = NarwhalManager::new(narwhal_config, metrics);
 
         // start narwhal
-        let shared_worker_cache = worker_cache.clone();
         narwhal_manager
             .start(
                 narwhal_committee.clone(),
-                shared_worker_cache.clone(),
+                worker_cache.clone(),
                 Arc::new(execution_state.clone()),
                 TrivialTransactionValidator::default(),
             )
@@ -145,7 +144,7 @@ async fn test_narwhal_manager() {
         tokio::spawn(async move {
             send_transactions(
                 &name,
-                shared_worker_cache,
+                worker_cache.clone(),
                 narwhal_committee.epoch,
                 rx_shutdown,
             )
@@ -189,11 +188,10 @@ async fn test_narwhal_manager() {
         });
 
         // start narwhal with advanced epoch
-        let shared_worker_cache = worker_cache.clone();
         narwhal_manager
             .start(
                 narwhal_committee.clone(),
-                shared_worker_cache.clone(),
+                worker_cache.clone(),
                 Arc::new(execution_state.clone()),
                 TrivialTransactionValidator::default(),
             )
@@ -204,7 +202,7 @@ async fn test_narwhal_manager() {
         tokio::spawn(async move {
             send_transactions(
                 &name,
-                shared_worker_cache,
+                worker_cache.clone(),
                 narwhal_committee.epoch,
                 rx_shutdown,
             )

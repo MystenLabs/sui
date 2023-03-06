@@ -19,7 +19,7 @@ async fn propose_header() {
     telemetry_subscribers::init_for_testing();
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().last().unwrap();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();
@@ -130,7 +130,7 @@ async fn propose_header_failure() {
     telemetry_subscribers::init_for_testing();
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().last().unwrap();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();
@@ -224,7 +224,7 @@ async fn propose_header_failure() {
 async fn shutdown_core() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();

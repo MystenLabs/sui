@@ -32,8 +32,8 @@ pub struct Cluster {
     #[allow(unused)]
     fixture: CommitteeFixture,
     authorities: HashMap<usize, AuthorityDetails>,
-    pub committee_shared: Committee,
-    pub worker_cache_shared: WorkerCache,
+    pub committee: Committee,
+    pub worker_cache: WorkerCache,
     #[allow(dead_code)]
     parameters: Parameters,
 }
@@ -52,9 +52,8 @@ impl Cluster {
     /// DAG externally.
     pub fn new(parameters: Option<Parameters>, internal_consensus_enabled: bool) -> Self {
         let fixture = CommitteeFixture::builder().randomize_ports(true).build();
-        let c = fixture.committee();
-        let shared_worker_cache = fixture.shared_worker_cache();
-        let shared_committee = c;
+        let committee = fixture.committee();
+        let worker_cache = fixture.worker_cache();
         let params = parameters.unwrap_or_else(Self::parameters);
 
         info!("###### Creating new cluster ######");
@@ -70,8 +69,8 @@ impl Cluster {
                 authority_fixture.network_keypair().copy(),
                 authority_fixture.worker_keypairs(),
                 params.with_available_ports(),
-                shared_committee.clone(),
-                shared_worker_cache.clone(),
+                committee.clone(),
+                worker_cache.clone(),
                 internal_consensus_enabled,
             );
             nodes.insert(id, authority);
@@ -80,8 +79,8 @@ impl Cluster {
         Self {
             fixture,
             authorities: nodes,
-            committee_shared: shared_committee,
-            worker_cache_shared: shared_worker_cache,
+            committee,
+            worker_cache,
             parameters: params,
         }
     }
@@ -105,7 +104,7 @@ impl Cluster {
         workers_per_authority: Option<usize>,
         boot_wait_time: Option<Duration>,
     ) {
-        let max_authorities = self.committee_shared.authorities.len();
+        let max_authorities = self.committee.authorities.len();
         let authorities = authorities_number.unwrap_or(max_authorities);
 
         if authorities > max_authorities {

@@ -695,10 +695,6 @@ impl CommitteeFixture {
         }
     }
 
-    pub fn shared_worker_cache(&self) -> WorkerCache {
-        self.worker_cache()
-    }
-
     // pub fn header(&self, author: PublicKey) -> Header {
     // Currently sign with the last authority
     pub fn header(&self) -> Header {

@@ -14,7 +14,7 @@ async fn synchronize() {
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let name = fixture.authorities().next().unwrap().public_key();
     let id = 0;
 
@@ -84,7 +84,7 @@ async fn synchronize_when_batch_exists() {
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let name = fixture.authorities().next().unwrap().public_key();
     let id = 0;
 
@@ -129,7 +129,7 @@ async fn delete_batches() {
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let name = fixture.authorities().next().unwrap().public_key();
     let id = 0;
 
