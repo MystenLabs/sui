@@ -333,6 +333,7 @@ impl PrimaryNodeInner {
         );
         let consensus_handles = Consensus::spawn(
             committee.clone(),
+            parameters.gc_depth,
             store.consensus_store.clone(),
             store.certificate_store.clone(),
             shutdown_receivers.pop().unwrap(),
