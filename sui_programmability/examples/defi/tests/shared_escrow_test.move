@@ -30,10 +30,10 @@ module defi::shared_escrow_tests {
     #[test]
     fun test_escrow_flow() {
         // Alice creates the escrow
-        let (scenario_val, item_b_versioned_id) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
+        let (scenario_val, item_b) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
 
         // Bob exchanges item B for the escrowed item A
-        exchange(&mut scenario_val, BOB_ADDRESS, item_b_versioned_id);
+        exchange(&mut scenario_val, BOB_ADDRESS, item_b);
 
         // Alice now owns item B, and Bob now owns item A
         assert!(owns_object<ItemB>(ALICE_ADDRESS), ESwapTransferFailed);
@@ -45,7 +45,7 @@ module defi::shared_escrow_tests {
     #[test]
     fun test_cancel() {
         // Alice creates the escrow
-        let (scenario_val, id) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
+        let (scenario_val, ItemB { id }) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
         object::delete(id);
         let scenario = &mut scenario_val;
         // Alice does not own item A
@@ -64,7 +64,7 @@ module defi::shared_escrow_tests {
     #[expected_failure(abort_code = shared_escrow::EWrongOwner)]
     fun test_cancel_with_wrong_owner() {
         // Alice creates the escrow
-        let (scenario_val, id) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
+        let (scenario_val, ItemB { id }) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
         object::delete(id);
         let scenario = &mut scenario_val;
 
@@ -78,15 +78,15 @@ module defi::shared_escrow_tests {
     #[expected_failure(abort_code = shared_escrow::EWrongExchangeObject)]
     fun test_swap_wrong_objects() {
         // Alice creates the escrow in exchange for item b
-        let (scenario_val, item_b_versioned_id) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
-        object::delete(item_b_versioned_id);
+        let (scenario_val, ItemB { id }) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
+        object::delete(id);
         let scenario = &mut scenario_val;
 
         // Bob tries to exchange item C for the escrowed item A and expects failure
         test_scenario::next_tx(scenario, BOB_ADDRESS);
         let ctx = test_scenario::ctx(scenario);
-        let item_c_versioned_id = object::new(ctx);
-        exchange(scenario, BOB_ADDRESS, item_c_versioned_id);
+        let item_c = ItemB { id: object::new(ctx) };
+        exchange(scenario, BOB_ADDRESS, item_c);
 
         test_scenario::end(scenario_val);
     }
@@ -95,11 +95,11 @@ module defi::shared_escrow_tests {
     #[expected_failure(abort_code = shared_escrow::EWrongRecipient)]
     fun test_swap_wrong_recipient() {
          // Alice creates the escrow in exchange for item b
-        let (scenario_val, item_b_versioned_id) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
+        let (scenario_val, item_b) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
         let scenario = &mut scenario_val;
 
         // Random address tries to exchange item B for the escrowed item A and expects failure
-        exchange(scenario, RANDOM_ADDRESS, item_b_versioned_id);
+        exchange(scenario, RANDOM_ADDRESS, item_b);
 
         test_scenario::end(scenario_val);
     }
@@ -108,7 +108,7 @@ module defi::shared_escrow_tests {
     #[expected_failure(abort_code = shared_escrow::EAlreadyExchangedOrCancelled)]
     fun test_cancel_twice() {
         // Alice creates the escrow
-        let (scenario_val, id) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
+        let (scenario_val, ItemB { id }) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
         object::delete(id);
         let scenario = &mut scenario_val;
         // Alice does not own item A
@@ -138,14 +138,11 @@ module defi::shared_escrow_tests {
         test_scenario::next_tx(scenario, initiator);
     }
 
-    fun exchange(scenario: &mut Scenario, bob: address, item_b_verioned_id: UID) {
+    fun exchange(scenario: &mut Scenario, bob: address, item_b: ItemB) {
         test_scenario::next_tx(scenario, bob);
         {
             let escrow_val = test_scenario::take_shared<EscrowedObj<ItemA, ItemB>>(scenario);
             let escrow = &mut escrow_val;
-            let item_b = ItemB {
-                id: item_b_verioned_id
-            };
             let ctx = test_scenario::ctx(scenario);
             shared_escrow::exchange(item_b, escrow, ctx);
             test_scenario::return_shared(escrow_val);
@@ -156,7 +153,7 @@ module defi::shared_escrow_tests {
     fun create_escrow(
         alice: address,
         bob: address,
-    ): (Scenario, UID) {
+    ): (Scenario, ItemB) {
         let new_scenario = test_scenario::begin(alice);
         let scenario = &mut new_scenario;
         let ctx = test_scenario::ctx(scenario);
@@ -164,8 +161,8 @@ module defi::shared_escrow_tests {
 
         test_scenario::next_tx(scenario, bob);
         let ctx = test_scenario::ctx(scenario);
-        let item_b_versioned_id = object::new(ctx);
-        let item_b_id = object::uid_to_inner(&item_b_versioned_id);
+        let item_b = ItemB { id: object::new(ctx) };
+        let item_b_id = object::id(&item_b);
 
         // Alice creates the escrow
         test_scenario::next_tx(scenario, alice);
@@ -182,7 +179,7 @@ module defi::shared_escrow_tests {
             );
         };
         test_scenario::next_tx(scenario, alice);
-        (new_scenario, item_b_versioned_id)
+        (new_scenario, item_b)
     }
 
     fun owns_object<T: key + store>(owner: address): bool {

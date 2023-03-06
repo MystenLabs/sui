@@ -84,9 +84,3 @@ Wallet Kit comes pre-configured with every supported wallet. You can also instal
 ### Wallet Standard
 
 The `WalletStandardAdapterProvider` adapter (published under `@mysten/wallet-adapter-wallet-standard`) automatically supports wallets that adhere to the cross-chain [Wallet Standard](https://github.com/wallet-standard/wallet-standard/). This adapter detects the available wallets in users' browsers. You do not need to configure additional adapters.
-
-The following wallets are known to work with the Wallet Standard:
-
-- **[Sui Wallet](https://docs.sui.io/devnet/explore/wallet-browser)**
-- **[Ethos Wallet](https://chrome.google.com/webstore/detail/ethos-wallet/mcbigmjiafegjnnogedioegffbooigli)**
-- **[Suiet Wallet](https://suiet.app/)**

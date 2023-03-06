@@ -4,8 +4,8 @@
 
 use anemo::async_trait;
 use config::{
-    utils::get_available_port, Authority, Committee, Epoch, SharedWorkerCache, Stake, WorkerCache,
-    WorkerId, WorkerIndex, WorkerInfo,
+    utils::get_available_port, Authority, Committee, Epoch, Stake, WorkerCache, WorkerId,
+    WorkerIndex, WorkerInfo,
 };
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey};
 use fastcrypto::{
@@ -676,10 +676,6 @@ impl CommitteeFixture {
                 .map(|a| (a.public_key(), a.worker_index()))
                 .collect(),
         }
-    }
-
-    pub fn shared_worker_cache(&self) -> SharedWorkerCache {
-        self.worker_cache().into()
     }
 
     // pub fn header(&self, author: PublicKey) -> Header {

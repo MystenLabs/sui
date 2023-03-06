@@ -15,7 +15,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
-use sui_types::messages::VerifiedTransaction;
+use sui_types::messages::{TransactionEffectsAPI, VerifiedTransaction};
 use sui_types::object::{generate_test_gas_objects, Object};
 use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResult};
 use sui_types::{base_types::TransactionDigest, messages::QuorumDriverResponse};
@@ -72,7 +72,7 @@ async fn test_quorum_driver_submit_transaction() {
             .unwrap()
             .unwrap();
         assert_eq!(tx.digest(), &digest);
-        assert_eq!(effects_cert.data().transaction_digest, digest);
+        assert_eq!(*effects_cert.data().transaction_digest(), digest);
     });
     let ticket = quorum_driver_handler.submit_transaction(tx).await.unwrap();
     verify_ticket_response(ticket, &digest).await;
@@ -102,7 +102,7 @@ async fn test_quorum_driver_submit_transaction_no_ticket() {
             .unwrap()
             .unwrap();
         assert_eq!(tx.digest(), &digest);
-        assert_eq!(effects_cert.data().transaction_digest, digest);
+        assert_eq!(*effects_cert.data().transaction_digest(), digest);
     });
     quorum_driver_handler
         .submit_transaction_no_ticket(tx)
@@ -116,7 +116,7 @@ async fn verify_ticket_response<'a>(
     tx_digest: &TransactionDigest,
 ) {
     let QuorumDriverResponse { effects_cert, .. } = ticket.await.unwrap();
-    assert_eq!(&effects_cert.data().transaction_digest, tx_digest);
+    assert_eq!(effects_cert.data().transaction_digest(), tx_digest);
 }
 
 #[tokio::test]
@@ -144,7 +144,7 @@ async fn test_quorum_driver_with_given_notify_read() {
             .unwrap()
             .unwrap();
         assert_eq!(tx.digest(), &digest);
-        assert_eq!(effects_cert.data().transaction_digest, digest);
+        assert_eq!(*effects_cert.data().transaction_digest(), digest);
     });
     let ticket1 = notifier.register_one(&digest);
     let ticket2 = quorum_driver_handler.submit_transaction(tx).await.unwrap();
@@ -310,7 +310,7 @@ async fn test_quorum_driver_retry_on_object_locked() -> Result<(), anyhow::Error
 
     // Aggregator gets three good responses and execution succeeds.
     let QuorumDriverResponse { effects_cert, .. } = res;
-    assert_eq!(effects_cert.transaction_digest, tx2_digest);
+    assert_eq!(*effects_cert.transaction_digest(), tx2_digest);
 
     // Case 4 - object is locked by 2 txes with weight 2 and 1 respectivefully. Then try to execute the third txn
     let gas = gas_objects.pop().unwrap();
@@ -371,7 +371,7 @@ async fn test_quorum_driver_retry_on_object_locked() -> Result<(), anyhow::Error
         .unwrap();
 
     let QuorumDriverResponse { effects_cert, .. } = res;
-    assert_eq!(effects_cert.transaction_digest, tx_digest);
+    assert_eq!(*effects_cert.transaction_digest(), tx_digest);
 
     // Case 7 - three validators lock the object, by different txes
     let gas = gas_objects.pop().unwrap();

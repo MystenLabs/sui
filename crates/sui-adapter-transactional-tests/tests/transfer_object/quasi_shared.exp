@@ -21,7 +21,7 @@ Version: 3
 Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(110)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(111)}}
 
 task 5 'transfer-object'. lines 35-35:
-Error: Attempt to transfer object 0x6275cf6234e8410dffa1af64cf108d68e1912de97438e7a3c75d73e8ff5ca38f that does not have public transfer. Object transfer must be done instead using a distinct Move function call.
+Error: Object 0x6275cf6234e8410dffa1af64cf108d68e1912de97438e7a3c75d73e8ff5ca38f is owned by object 0x745ea5d547883aa753c1f9ad61290dafd7a462cc162ae5ddf2ede94917e3bf49. Objects owned by other objects cannot be used as input arguments.
 
 task 6 'view-object'. lines 37-37:
 Owner: Object ID: ( fake(108) )

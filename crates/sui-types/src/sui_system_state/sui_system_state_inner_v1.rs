@@ -1,35 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::balance::Balance;
 use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
-use crate::collection_types::{VecMap, VecSet};
+use crate::collection_types::{MoveOption, Table, TableVec, VecMap, VecSet};
 use crate::committee::{Committee, CommitteeWithNetAddresses, ProtocolVersion, StakeUnit};
 use crate::crypto::AuthorityPublicKeyBytes;
-use crate::dynamic_field::{derive_dynamic_field_id, Field};
-use crate::error::SuiError;
-use crate::storage::ObjectStore;
-use crate::{balance::Balance, id::UID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
 use anemo::PeerId;
 use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;
-use move_core_types::language_storage::TypeTag;
-use move_core_types::value::MoveTypeLayout;
-use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
-use move_vm_types::values::Value;
 use multiaddr::Multiaddr;
 use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
-const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
-pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
-pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
-pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch_safe_mode");
-pub const CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME: &IdentStr =
-    ident_str!("consensus_commit_prologue");
-
-pub const INIT_SYSTEM_STATE_VERSION: u64 = 1;
+use super::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary};
+use super::SuiSystemStateTrait;
 
 const E_METADATA_INVALID_PUBKEY: u64 = 1;
 const E_METADATA_INVALID_NET_PUBKEY: u64 = 2;
@@ -44,13 +31,7 @@ const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 pub struct SystemParameters {
     pub min_validator_stake: u64,
     pub max_validator_candidate_count: u64,
-}
-
-/// Rust version of the Move std::option::Option type.
-/// Putting it in this file because it's only used here.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
-pub struct MoveOption<T> {
-    pub vec: Vec<T>,
+    pub governance_start_epoch: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
@@ -205,39 +186,6 @@ impl ValidatorMetadata {
     }
 }
 
-impl ValidatorMetadata {
-    pub fn network_address(&self) -> Result<Multiaddr> {
-        Multiaddr::try_from(self.net_address.clone()).map_err(Into::into)
-    }
-
-    pub fn p2p_address(&self) -> Result<Multiaddr> {
-        Multiaddr::try_from(self.p2p_address.clone()).map_err(Into::into)
-    }
-
-    pub fn narwhal_primary_address(&self) -> Result<Multiaddr> {
-        Multiaddr::try_from(self.primary_address.clone()).map_err(Into::into)
-    }
-
-    pub fn narwhal_worker_address(&self) -> Result<Multiaddr> {
-        Multiaddr::try_from(self.worker_address.clone()).map_err(Into::into)
-    }
-
-    pub fn protocol_key(&self) -> AuthorityPublicKeyBytes {
-        AuthorityPublicKeyBytes::from_bytes(self.protocol_pubkey_bytes.as_ref())
-            .expect("Validity of public key bytes should be verified on-chain")
-    }
-
-    pub fn worker_key(&self) -> crate::crypto::NetworkPublicKey {
-        crate::crypto::NetworkPublicKey::from_bytes(self.worker_pubkey_bytes.as_ref())
-            .expect("Validity of public key bytes should be verified on-chain")
-    }
-
-    pub fn network_key(&self) -> crate::crypto::NetworkPublicKey {
-        crate::crypto::NetworkPublicKey::from_bytes(self.network_pubkey_bytes.as_ref())
-            .expect("Validity of public key bytes should be verified on-chain")
-    }
-}
-
 /// Rust version of the Move sui::validator::Validator type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct Validator {
@@ -286,67 +234,12 @@ pub struct PendingWithdrawEntry {
     withdrawn_pool_tokens: Balance,
 }
 
-/// Rust version of the Move sui::table::Table type. Putting it here since
-/// we only use it in sui_system in the framework.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
-pub struct TableVec {
-    pub contents: Table,
-}
-
-impl Default for TableVec {
-    fn default() -> Self {
-        TableVec {
-            contents: Table {
-                id: ObjectID::from(SuiAddress::ZERO),
-                size: 0,
-            },
-        }
-    }
-}
-
-/// Rust version of the Move sui::table::Table type. Putting it here since
-/// we only use it in sui_system in the framework.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
-pub struct Table {
-    pub id: ObjectID,
-    pub size: u64,
-}
-
-impl Default for Table {
-    fn default() -> Self {
-        Table {
-            id: ObjectID::from(SuiAddress::ZERO),
-            size: 0,
-        }
-    }
-}
-
-/// Rust version of the Move sui::linked_table::LinkedTable type. Putting it here since
-/// we only use it in sui_system in the framework.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
-pub struct LinkedTable<K> {
-    pub id: ObjectID,
-    pub size: u64,
-    pub head: MoveOption<K>,
-    pub tail: MoveOption<K>,
-}
-
-impl<K> Default for LinkedTable<K> {
-    fn default() -> Self {
-        LinkedTable {
-            id: ObjectID::from(SuiAddress::ZERO),
-            size: 0,
-            head: MoveOption { vec: vec![] },
-            tail: MoveOption { vec: vec![] },
-        }
-    }
-}
-
 /// Rust version of the Move sui::staking_pool::StakingPool type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct StakingPool {
     pub id: ObjectID,
     pub starting_epoch: u64,
+    pub deactivation_epoch: MoveOption<u64>,
     pub sui_balance: u64,
     pub rewards_pool: Balance,
     pub pool_token_balance: u64,
@@ -371,12 +264,13 @@ pub struct ValidatorSet {
     pub pending_validators: TableVec,
     pub pending_removals: Vec<u64>,
     pub staking_pool_mappings: Table,
+    pub inactive_pools: Table,
 }
 
 /// Rust version of the Move sui::sui_system::SuiSystemStateInner type
 /// We want to keep it named as SuiSystemState in Rust since this is the primary interface type.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
-pub struct SuiSystemState {
+pub struct SuiSystemStateInnerV1 {
     pub epoch: u64,
     pub protocol_version: u64,
     pub validators: ValidatorSet,
@@ -390,24 +284,6 @@ pub struct SuiSystemState {
     // TODO: Use getters instead of all pub.
 }
 
-/// Rust version of the Move sui::sui_system::SuiSystemState type
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SuiSystemStateWrapper {
-    pub id: UID,
-    pub version: u64,
-}
-
-impl SuiSystemStateWrapper {
-    pub fn type_() -> StructTag {
-        StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
-            name: SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME.to_owned(),
-            module: SUI_SYSTEM_MODULE_NAME.to_owned(),
-            type_params: vec![],
-        }
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct StakeSubsidy {
     pub epoch_counter: u64,
@@ -415,8 +291,8 @@ pub struct StakeSubsidy {
     pub current_epoch_amount: u64,
 }
 
-impl SuiSystemState {
-    pub fn get_current_epoch_committee(&self) -> CommitteeWithNetAddresses {
+impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
+    fn get_current_epoch_committee(&self) -> CommitteeWithNetAddresses {
         let mut voting_rights = BTreeMap::new();
         let mut net_addresses = BTreeMap::new();
         for validator in &self.validators.active_validators {
@@ -435,7 +311,7 @@ impl SuiSystemState {
     }
 
     #[allow(clippy::mutable_key_type)]
-    pub fn get_current_epoch_narwhal_committee(&self) -> NarwhalCommittee {
+    fn get_current_epoch_narwhal_committee(&self) -> NarwhalCommittee {
         let narwhal_committee = self
             .validators
             .active_validators
@@ -460,7 +336,7 @@ impl SuiSystemState {
         }
     }
 
-    pub fn get_current_epoch_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId> {
+    fn get_current_epoch_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId> {
         let mut result = HashMap::new();
         let _: () = self
             .validators
@@ -484,7 +360,7 @@ impl SuiSystemState {
     }
 
     #[allow(clippy::mutable_key_type)]
-    pub fn get_current_epoch_narwhal_worker_cache(
+    fn get_current_epoch_narwhal_worker_cache(
         &self,
         transactions_address: &Multiaddr,
     ) -> WorkerCache {
@@ -517,10 +393,116 @@ impl SuiSystemState {
             epoch: self.epoch,
         }
     }
+
+    fn get_validator_metadata_vec(&self) -> Vec<ValidatorMetadata> {
+        self.validators
+            .active_validators
+            .iter()
+            .map(|v| v.metadata.clone())
+            .collect()
+    }
+
+    /// Maps from validator Sui address to (public key bytes, staking pool sui balance).
+    /// TODO: Might be useful to return a more organized data structure.
+    fn get_staking_pool_info(&self) -> BTreeMap<SuiAddress, (Vec<u8>, u64)> {
+        self.validators
+            .active_validators
+            .iter()
+            .map(|validator| {
+                (
+                    validator.metadata.sui_address,
+                    (
+                        validator.metadata.protocol_pubkey_bytes.clone(),
+                        validator.staking_pool.sui_balance,
+                    ),
+                )
+            })
+            .collect()
+    }
+
+    fn epoch(&self) -> u64 {
+        self.epoch
+    }
+
+    fn reference_gas_price(&self) -> u64 {
+        self.reference_gas_price
+    }
+
+    fn protocol_version(&self) -> u64 {
+        self.protocol_version
+    }
+
+    fn epoch_start_timestamp_ms(&self) -> u64 {
+        self.epoch_start_timestamp_ms
+    }
+
+    fn safe_mode(&self) -> bool {
+        self.safe_mode
+    }
+
+    fn into_sui_system_state_summary(self) -> SuiSystemStateSummary {
+        SuiSystemStateSummary {
+            epoch: self.epoch,
+            protocol_version: self.protocol_version,
+            storage_fund: self.storage_fund.value(),
+            reference_gas_price: self.reference_gas_price,
+            safe_mode: self.safe_mode,
+            epoch_start_timestamp_ms: self.epoch_start_timestamp_ms,
+            min_validator_stake: self.parameters.min_validator_stake,
+            max_validator_candidate_count: self.parameters.max_validator_candidate_count,
+            governance_start_epoch: self.parameters.governance_start_epoch,
+            stake_subsidy_epoch_counter: self.stake_subsidy.epoch_counter,
+            stake_subsidy_balance: self.stake_subsidy.balance.value(),
+            stake_subsidy_current_epoch_amount: self.stake_subsidy.current_epoch_amount,
+            total_stake: self.validators.total_stake,
+            active_validators: self
+                .validators
+                .active_validators
+                .into_iter()
+                .map(|v| SuiValidatorSummary {
+                    sui_address: v.metadata.sui_address,
+                    protocol_pubkey_bytes: v.metadata.protocol_pubkey_bytes,
+                    network_pubkey_bytes: v.metadata.network_pubkey_bytes,
+                    worker_pubkey_bytes: v.metadata.worker_pubkey_bytes,
+                    proof_of_possession_bytes: v.metadata.proof_of_possession_bytes,
+                    name: v.metadata.name,
+                    description: v.metadata.description,
+                    image_url: v.metadata.image_url,
+                    project_url: v.metadata.project_url,
+                    net_address: v.metadata.net_address,
+                    p2p_address: v.metadata.p2p_address,
+                    primary_address: v.metadata.primary_address,
+                    worker_address: v.metadata.worker_address,
+                    next_epoch_protocol_pubkey_bytes: v.metadata.next_epoch_protocol_pubkey_bytes,
+                    next_epoch_proof_of_possession: v.metadata.next_epoch_proof_of_possession,
+                    next_epoch_network_pubkey_bytes: v.metadata.next_epoch_network_pubkey_bytes,
+                    next_epoch_worker_pubkey_bytes: v.metadata.next_epoch_worker_pubkey_bytes,
+                    next_epoch_net_address: v.metadata.next_epoch_net_address,
+                    next_epoch_p2p_address: v.metadata.next_epoch_p2p_address,
+                    next_epoch_primary_address: v.metadata.next_epoch_primary_address,
+                    next_epoch_worker_address: v.metadata.next_epoch_worker_address,
+                    voting_power: v.voting_power,
+                    gas_price: v.gas_price,
+                    commission_rate: v.commission_rate,
+                    next_epoch_stake: v.next_epoch_stake,
+                    next_epoch_gas_price: v.next_epoch_gas_price,
+                    next_epoch_commission_rate: v.next_epoch_commission_rate,
+                    starting_epoch: v.staking_pool.starting_epoch,
+                    deactivation_epoch: v.staking_pool.deactivation_epoch.into_option(),
+                    sui_balance: v.staking_pool.sui_balance,
+                    rewards_pool: v.staking_pool.rewards_pool.value(),
+                    pool_token_balance: v.staking_pool.pool_token_balance,
+                    pending_delegation: v.staking_pool.pending_delegation,
+                    pending_total_sui_withdraw: v.staking_pool.pending_total_sui_withdraw,
+                    pending_pool_token_withdraw: v.staking_pool.pending_pool_token_withdraw,
+                })
+                .collect(),
+        }
+    }
 }
 
 // The default implementation for tests
-impl Default for SuiSystemState {
+impl Default for SuiSystemStateInnerV1 {
     fn default() -> Self {
         let validator_set = ValidatorSet {
             total_stake: 2,
@@ -528,8 +510,9 @@ impl Default for SuiSystemState {
             pending_validators: TableVec::default(),
             pending_removals: vec![],
             staking_pool_mappings: Table::default(),
+            inactive_pools: Table::default(),
         };
-        SuiSystemState {
+        Self {
             epoch: 0,
             protocol_version: ProtocolVersion::MIN.as_u64(),
             validators: validator_set,
@@ -537,6 +520,7 @@ impl Default for SuiSystemState {
             parameters: SystemParameters {
                 min_validator_stake: 1,
                 max_validator_candidate_count: 100,
+                governance_start_epoch: 0,
             },
             reference_gas_price: 1,
             validator_report_records: VecMap { contents: vec![] },
@@ -549,48 +533,4 @@ impl Default for SuiSystemState {
             epoch_start_timestamp_ms: 0,
         }
     }
-}
-
-pub fn get_sui_system_state_wrapper<S>(object_store: &S) -> Result<SuiSystemStateWrapper, SuiError>
-where
-    S: ObjectStore,
-{
-    let sui_system_object = object_store
-        .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)?
-        .ok_or(SuiError::SuiSystemStateNotFound)?;
-    let move_object = sui_system_object
-        .data
-        .try_as_move()
-        .ok_or(SuiError::SuiSystemStateNotFound)?;
-    let result = bcs::from_bytes::<SuiSystemStateWrapper>(move_object.contents())
-        .expect("Sui System State object deserialization cannot fail");
-    Ok(result)
-}
-
-pub fn get_sui_system_state<S>(object_store: &S) -> Result<SuiSystemState, SuiError>
-where
-    S: ObjectStore,
-{
-    let wrapper = get_sui_system_state_wrapper(object_store)?;
-    let inner_id = derive_dynamic_field_id(
-        wrapper.id.id.bytes,
-        &TypeTag::U64,
-        &MoveTypeLayout::U64,
-        &Value::u64(wrapper.version),
-    )
-    .expect("Sui System State object must exist");
-    let inner = object_store
-        .get_object(&inner_id)?
-        .ok_or(SuiError::SuiSystemStateNotFound)?;
-    let move_object = inner
-        .data
-        .try_as_move()
-        .ok_or(SuiError::SuiSystemStateNotFound)?;
-    let result = bcs::from_bytes::<Field<u64, SuiSystemState>>(move_object.contents())
-        .expect("Sui System State object deserialization cannot fail");
-    Ok(result.value)
-}
-
-pub fn get_sui_system_state_version(_protocol_version: ProtocolVersion) -> u64 {
-    INIT_SYSTEM_STATE_VERSION
 }

@@ -6,7 +6,7 @@ import { formatAddress, type SuiAddress } from '@mysten/sui.js';
 
 import { MiniNFT } from './MiniNFT';
 import { SummaryCard } from './SummaryCard';
-import AccountAddress from '_components/account-address';
+import { AccountAddress } from '_components/AccountAddress';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { useGetNFTMeta, useTransactionSummary } from '_hooks';
@@ -133,13 +133,7 @@ function TransactionSummary({
                     <div className={st.row}>
                         <div className={st.label}>To</div>
                         <div className={st.value}>
-                            <AccountAddress
-                                showLink={false}
-                                copyable={false}
-                                className={st.ownerAddress}
-                                mode="normal"
-                                address={addressForTransaction}
-                            />
+                            <AccountAddress address={addressForTransaction} />
                         </div>
                     </div>
                 </div>

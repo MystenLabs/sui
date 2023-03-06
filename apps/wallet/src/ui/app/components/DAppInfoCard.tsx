@@ -2,19 +2,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowUpRight12 } from '@mysten/icons';
+import { type SuiAddress } from '@mysten/sui.js/src';
+import { cx } from 'class-variance-authority';
 import { useMemo } from 'react';
 
 import { Link } from '../shared/Link';
 import { Heading } from '../shared/heading';
 import { Text } from '../shared/text';
+import { AccountAddress } from './AccountAddress';
 import { SummaryCard } from './SummaryCard';
 
 export type DAppInfoCardProps = {
     name: string;
     url: string;
     iconUrl?: string;
+    connectedAddress?: SuiAddress;
 };
-export function DAppInfoCard({ name, url, iconUrl }: DAppInfoCardProps) {
+export function DAppInfoCard({
+    name,
+    url,
+    iconUrl,
+    connectedAddress,
+}: DAppInfoCardProps) {
     const hostname = useMemo(() => {
         try {
             return new URL(url).hostname;
@@ -55,7 +64,12 @@ export function DAppInfoCard({ name, url, iconUrl }: DAppInfoCardProps) {
                             </Text>
                         </div>
                     </div>
-                    <div className="flex justify-start pt-3">
+                    <div
+                        className={cx(
+                            'flex justify-start pt-3',
+                            connectedAddress ? 'pb-3' : ''
+                        )}
+                    >
                         <div>
                             <Link
                                 href={url}
@@ -67,6 +81,23 @@ export function DAppInfoCard({ name, url, iconUrl }: DAppInfoCardProps) {
                             />
                         </div>
                     </div>
+                    {connectedAddress ? (
+                        <div className="flex flex-nowrap flex-row items-center pt-3 gap-3">
+                            <Text
+                                variant="bodySmall"
+                                weight="medium"
+                                color="steel-darker"
+                                truncate
+                            >
+                                Connected account
+                            </Text>
+                            <div className="flex-1" />
+                            <AccountAddress
+                                copyable
+                                address={connectedAddress}
+                            />
+                        </div>
+                    ) : null}
                 </>
             }
         />

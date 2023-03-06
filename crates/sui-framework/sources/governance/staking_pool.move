@@ -7,7 +7,7 @@ module sui::staking_pool {
     use std::option::{Self, Option};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
-    use sui::epoch_time_lock::{EpochTimeLock};
+    use sui::epoch_time_lock::{Self, EpochTimeLock};
     use sui::object::{Self, ID, UID};
     use sui::locked_coin;
     use sui::coin;
@@ -27,13 +27,18 @@ module sui::staking_pool {
     const EWrongDelegation: u64 = 7;
     const EPendingDelegationDoesNotExist: u64 = 8;
     const ETokenBalancesDoNotMatchExchangeRate: u64 = 9;
-    const EWithdrawalInSameEpoch: u64 = 10;
+    const EDelegationToInactivePool: u64 = 10;
+    const EDeactivationOfInactivePool: u64 = 11;
+    const EIncompatibleStakedSui: u64 = 12;
 
     /// A staking pool embedded in each validator struct in the system state object.
     struct StakingPool has key, store {
         id: UID,
         /// The epoch at which this pool started operating. Should be the epoch at which the validator became active.
         starting_epoch: u64,
+        /// The epoch at which this staking pool ceased to be active. `None` = {pre-active, active},
+        /// `Some(<epoch_number>)` if in-active, and it was de-activated at epoch `<epoch_number>`.
+        deactivation_epoch: Option<u64>,
         /// The total number of SUI tokens in this pool, including the SUI in the rewards_pool, as well as in all the principal
         /// in the `StakedSui` object, updated at epoch boundaries.
         sui_balance: u64,
@@ -58,13 +63,6 @@ module sui::staking_pool {
     struct PoolTokenExchangeRate has store, copy, drop {
         sui_amount: u64,
         pool_token_amount: u64,
-    }
-
-    /// An inactive staking pool associated with an inactive validator.
-    /// Only withdraws can be made from this pool.
-    struct InactiveStakingPool has key {
-        id: UID, // TODO: inherit an ID from active staking pool?
-        pool: StakingPool,
     }
 
     /// A self-custodial object holding the staked SUI tokens.
@@ -96,6 +94,7 @@ module sui::staking_pool {
         StakingPool {
             id: object::new(ctx),
             starting_epoch,
+            deactivation_epoch: option::none(),
             sui_balance: 0,
             rewards_pool: balance::zero(),
             pool_token_balance: 0,
@@ -119,6 +118,7 @@ module sui::staking_pool {
         ctx: &mut TxContext
     ) {
         let sui_amount = balance::value(&stake);
+        assert!(pool_active(pool), EDelegationToInactivePool);
         assert!(sui_amount > 0, 0);
         let staked_sui = StakedSui {
             id: object::new(ctx),
@@ -149,8 +149,12 @@ module sui::staking_pool {
             pool, principal_withdraw_amount, pool_token_withdraw_amount, tx_context::epoch(ctx)
         );
         let total_sui_withdraw_amount = principal_withdraw_amount + balance::value(&rewards_withdraw);
+
         pool.pending_total_sui_withdraw = pool.pending_total_sui_withdraw + total_sui_withdraw_amount;
         pool.pending_pool_token_withdraw = pool.pending_pool_token_withdraw + pool_token_withdraw_amount;
+
+        // If the pool is inactive, we immediately process the withdrawal.
+        if (!pool_active(pool)) process_pending_delegation_withdraw(pool);
 
         // TODO: implement withdraw bonding period here.
         if (option::is_some(&time_lock)) {
@@ -166,6 +170,8 @@ module sui::staking_pool {
             option::destroy_none(time_lock);
         };
         total_sui_withdraw_amount
+
+        // payment_amount
     }
 
     /// Withdraw the principal SUI stored in the StakedSui object, and calculate the corresponding amount of pool
@@ -225,6 +231,7 @@ module sui::staking_pool {
     }
 
     /// Called at epoch boundaries to process pending delegation withdraws requested during the epoch.
+    /// Also called immediately upon withdrawal if the pool is inactive.
     fun process_pending_delegation_withdraw(pool: &mut StakingPool) {
         pool.sui_balance = pool.sui_balance - pool.pending_total_sui_withdraw;
         pool.pool_token_balance = pool.pool_token_balance - pool.pending_pool_token_withdraw;
@@ -271,18 +278,20 @@ module sui::staking_pool {
 
     // ==== inactive pool related ====
 
-    /// Deactivate a staking pool by wrapping it in an `InactiveStakingPool` and sharing this newly created object.
-    /// After this pool deactivation, the pool stops earning rewards. Only delegation withdraws can be made to the pool.
-    public(friend) fun deactivate_staking_pool(pool: StakingPool, ctx: &mut TxContext) {
-        let inactive_pool = InactiveStakingPool { id: object::new(ctx), pool};
-        transfer::share_object(inactive_pool);
+    /// Deactivate a staking pool by setting the `deactivation_epoch`. After
+    /// this pool deactivation, the pool stops earning rewards. Only delegation
+    /// withdraws can be made to the pool.
+    public(friend) fun deactivate_staking_pool(pool: &mut StakingPool, deactivation_epoch: u64) {
+        // We can't deactivate an already deactivated pool.
+        assert!(pool_active(pool), EDeactivationOfInactivePool);
+        pool.deactivation_epoch = option::some(deactivation_epoch);
     }
 
     // ==== getters and misc utility functions ====
 
-    public fun sui_balance(pool: &StakingPool) : u64 { pool.sui_balance }
+    public fun sui_balance(pool: &StakingPool): u64 { pool.sui_balance }
 
-    public fun pool_id(staked_sui: &StakedSui) : ID { staked_sui.pool_id }
+    public fun pool_id(staked_sui: &StakedSui): ID { staked_sui.pool_id }
 
     public fun staked_sui_amount(staked_sui: &StakedSui): u64 { balance::value(&staked_sui.principal) }
 
@@ -290,7 +299,73 @@ module sui::staking_pool {
         staked_sui.delegation_activation_epoch
     }
 
+    public fun pool_active(pool: &StakingPool): bool {
+        option::is_none(&pool.deactivation_epoch)
+    }
+
+    /// Split StakedSui `self` to two parts, one with principal `split_amount`,
+    /// and the remaining principal is left in `self`.
+    /// All the other parameters of the StakedSui like `delegation_activation_epoch` or `pool_id` remain the same.
+    public fun split(self: &mut StakedSui, split_amount: u64, ctx: &mut TxContext): StakedSui {
+        StakedSui {
+            id: object::new(ctx),
+            pool_id: self.pool_id,
+            validator_address: self.validator_address,
+            delegation_activation_epoch: self.delegation_activation_epoch,
+            principal: balance::split(&mut self.principal, split_amount),
+            sui_token_lock: self.sui_token_lock,
+        }
+    }
+
+    /// Split the given StakedSui to the two parts, one with principal `split_amount`,
+    /// transfer the newly split part to the sender address.
+    public entry fun split_staked_sui(c: &mut StakedSui, split_amount: u64, ctx: &mut TxContext) {
+        transfer::transfer(split(c, split_amount, ctx), tx_context::sender(ctx));
+    }
+
+    /// Consume the staked sui `other` and add its value to `self`.
+    /// Aborts if some of the staking parameters are incompatible (pool id, delegation activation epoch, etc.)
+    public entry fun join_staked_sui(self: &mut StakedSui, other: StakedSui) {
+        assert!(is_equal_staking_metadata(self, &other), EIncompatibleStakedSui);        
+        let StakedSui {
+            id,
+            pool_id: _,
+            validator_address: _,
+            delegation_activation_epoch: _,
+            principal,
+            sui_token_lock
+        } = other;
+        
+        object::delete(id);
+        if (option::is_some(&sui_token_lock)) {
+            epoch_time_lock::destroy_unchecked(option::destroy_some(sui_token_lock));
+        } else {
+            option::destroy_none(sui_token_lock);
+        };
+        balance::join(&mut self.principal, principal);
+    }
+
+    /// Returns true if all the staking parameters of the staked sui except the principal are identical
+    public fun is_equal_staking_metadata(self: &StakedSui, other: &StakedSui): bool {
+        if ((self.pool_id != other.pool_id) ||
+            (self.validator_address != other.validator_address) ||
+            (self.delegation_activation_epoch != other.delegation_activation_epoch)) {
+            return false
+        };
+        if (option::is_none(&self.sui_token_lock) && option::is_none(&other.sui_token_lock)) {
+            return true
+        };
+        if (option::is_some(&self.sui_token_lock) && option::is_some(&other.sui_token_lock)) {
+            epoch_time_lock::epoch(option::borrow(&self.sui_token_lock)) ==
+                epoch_time_lock::epoch(option::borrow(&other.sui_token_lock))
+        } else
+            false // locked coin in one and unlocked in another
+    }
+
+
     public fun pool_token_exchange_rate_at_epoch(pool: &StakingPool, epoch: u64): PoolTokenExchangeRate {
+        let clamped_epoch = option::get_with_default(&pool.deactivation_epoch, epoch);
+        let epoch = math::min(clamped_epoch, epoch);
         *table::borrow(&pool.exchange_rates, epoch)
     }
 
@@ -335,6 +410,7 @@ module sui::staking_pool {
         let actual = pool.pool_token_balance;
         assert!(expected == actual, ETokenBalancesDoNotMatchExchangeRate)
     }
+
     // ==== test-related functions ====
 
     // Given the `staked_sui` receipt calculate the current rewards (in terms of SUI) for it.

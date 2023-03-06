@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use sui_types::base_types::TransactionDigest;
 use sui_types::error::SuiResult;
-use sui_types::messages::TransactionEffects;
+use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
 use tokio::sync::oneshot;
 use tokio::time::Instant;
 use tracing::debug;
@@ -206,8 +206,8 @@ impl EffectsNotifyRead for Arc<AuthorityStore> {
         let mut effects_map = HashMap::new();
         let mut last_finished = None;
         while let Some(finished) = results.next().await {
-            last_finished = Some(finished.transaction_digest);
-            effects_map.insert(finished.transaction_digest, finished);
+            last_finished = Some(*finished.transaction_digest());
+            effects_map.insert(*finished.transaction_digest(), finished);
         }
         if needs_wait {
             // Only log the duration if we ended up waiting.

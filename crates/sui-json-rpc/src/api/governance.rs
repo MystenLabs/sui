@@ -4,14 +4,15 @@
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
+use sui_json_rpc_types::{SuiCommittee, SuiSystemStateRpc};
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::SuiAddress;
 
 use sui_types::committee::EpochId;
 use sui_types::governance::DelegatedStake;
-use sui_types::messages::CommitteeInfoResponse;
 
-use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
+use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadata;
+use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
 #[open_rpc(namespace = "sui", tag = "Governance Read API")]
 #[rpc(server, client, namespace = "sui")]
@@ -30,11 +31,16 @@ pub trait GovernanceReadApi {
         &self,
         /// The epoch of interest. If None, default to the latest epoch
         epoch: Option<EpochId>,
-    ) -> RpcResult<CommitteeInfoResponse>;
+    ) -> RpcResult<SuiCommittee>;
 
-    /// Return [SuiSystemState]
-    #[method(name = "getSuiSystemState")]
-    async fn get_sui_system_state(&self) -> RpcResult<SuiSystemState>;
+    /// (Deprecated) Return latest SUI system state object on-chain.
+    /// This is now deprecated in favor of get_latest_sui_system_state.
+    #[method(name = "getSuiSystemState", deprecated)]
+    async fn get_sui_system_state(&self) -> RpcResult<SuiSystemStateRpc>;
+
+    /// Return the latest SUI system state object on-chain.
+    #[method(name = "getLatestSuiSystemState")]
+    async fn get_latest_sui_system_state(&self) -> RpcResult<SuiSystemStateSummary>;
 
     /// Return the reference gas price for the network
     #[method(name = "getReferenceGasPrice")]

@@ -3,7 +3,7 @@
 
 use move_binary_format::access::ModuleAccess;
 use sui_json_rpc::api::ReadApiClient;
-use sui_json_rpc_types::SuiObjectRead;
+use sui_json_rpc_types::SuiObjectResponse;
 use sui_types::{
     base_types::ObjectID, digests::TransactionDigest, object::Object, SUI_FRAMEWORK_OBJECT_ID,
 };
@@ -22,8 +22,8 @@ async fn test_additional_objects() {
         .unwrap();
 
     let client = cluster.rpc_client();
-    let resp = client.get_object(id).await.unwrap();
-    assert!(matches!(resp, SuiObjectRead::Exists(_)));
+    let resp = client.get_object_with_options(id, None).await.unwrap();
+    assert!(matches!(resp, SuiObjectResponse::Exists(_)));
 }
 
 #[sim_test]
@@ -34,11 +34,11 @@ async fn test_package_override() {
     let framework_ref = {
         let default_cluster = TestClusterBuilder::new().build().await.unwrap();
         let client = default_cluster.rpc_client();
-        let SuiObjectRead::Exists(obj) = client.get_object(id).await.unwrap() else {
+        let SuiObjectResponse::Exists(obj) = client.get_object_with_options(id, None).await.unwrap() else {
             panic!("Original framework package should exist");
         };
 
-        obj.reference
+        obj.object_ref()
     };
 
     let modified_ref = {
@@ -64,11 +64,11 @@ async fn test_package_override() {
             .unwrap();
 
         let client = modified_cluster.rpc_client();
-        let SuiObjectRead::Exists(obj) = client.get_object(id).await.unwrap() else {
+        let SuiObjectResponse::Exists(obj) = client.get_object_with_options(id, None).await.unwrap() else {
             panic!("Modified framework package should exist");
         };
 
-        obj.reference
+        obj.object_ref()
     };
 
     assert_ne!(framework_ref, modified_ref);

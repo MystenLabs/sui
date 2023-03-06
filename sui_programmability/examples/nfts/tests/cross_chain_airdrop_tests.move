@@ -26,7 +26,7 @@ module nfts::cross_chain_airdrop_tests {
 
     #[test]
     fun test_claim_airdrop() {
-        let (scenario, oracle_address) = init();
+        let (scenario, oracle_address) = init_scenario();
 
         // claim a token
         claim_token(&mut scenario, oracle_address, SOURCE_TOKEN_ID);
@@ -39,7 +39,7 @@ module nfts::cross_chain_airdrop_tests {
     #[test]
     #[expected_failure(abort_code = cross_chain_airdrop::ETokenIDClaimed)]
     fun test_double_claim() {
-        let (scenario, oracle_address) = init();
+        let (scenario, oracle_address) = init_scenario();
 
         // claim a token
         claim_token(&mut scenario, oracle_address, SOURCE_TOKEN_ID);
@@ -49,7 +49,7 @@ module nfts::cross_chain_airdrop_tests {
         test_scenario::end(scenario);
     }
 
-    fun init(): (Scenario, address) {
+    fun init_scenario(): (Scenario, address) {
         let scenario = test_scenario::begin(ORACLE_ADDRESS);
         {
             let ctx = test_scenario::ctx(&mut scenario);

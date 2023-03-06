@@ -31,16 +31,16 @@ use sui_types::gas::SuiGasStatus;
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::intent::{Intent, IntentMessage, IntentScope};
 use sui_types::message_envelope::Message;
-use sui_types::messages::Transaction;
-use sui_types::messages::{CallArg, TransactionEffects};
-use sui_types::messages::{InputObjects, TransactionEvents};
+use sui_types::messages::{
+    CallArg, InputObjects, Transaction, TransactionEffects, TransactionEvents,
+};
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
 };
 use sui_types::object::Owner;
 use sui_types::sui_system_state::{
     get_sui_system_state, get_sui_system_state_version, get_sui_system_state_wrapper,
-    SuiSystemState, SuiSystemStateWrapper,
+    SuiSystemStateInnerGenesis, SuiSystemStateTrait, SuiSystemStateWrapper,
 };
 use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::MOVE_STDLIB_ADDRESS;
@@ -127,29 +127,33 @@ impl Genesis {
     }
 
     pub fn validator_set(&self) -> Vec<ValidatorInfo> {
-        let mut infos = Vec::new();
-        for validator in &self.sui_system_object().validators.active_validators {
-            let info = ValidatorInfo {
-                name: validator.metadata.name.clone(),
-                account_key: AccountsPublicKey::Ed25519(validator.metadata.network_key()), //TODO this is wrong and we shouldn't have this here
-                protocol_key: validator.metadata.protocol_key(),
-                worker_key: validator.metadata.worker_key(),
-                network_key: validator.metadata.network_key(),
-                gas_price: validator.gas_price,
-                commission_rate: validator.commission_rate,
-                network_address: validator.metadata.network_address().unwrap(),
-                p2p_address: validator.metadata.p2p_address().unwrap(),
-                narwhal_primary_address: validator.metadata.narwhal_primary_address().unwrap(),
-                narwhal_worker_address: validator.metadata.narwhal_worker_address().unwrap(),
-                description: validator.metadata.description.clone(),
-                image_url: validator.metadata.image_url.clone(),
-                project_url: validator.metadata.project_url.clone(),
-            };
-
-            infos.push(info);
-        }
-
-        infos
+        self.sui_system_object()
+            .validators
+            .active_validators
+            .iter()
+            .map(|validator| {
+                let metadata = validator
+                    .metadata
+                    .verify()
+                    .expect("Genesis validator metadata must be valid");
+                ValidatorInfo {
+                    name: metadata.name,
+                    account_key: AccountsPublicKey::Ed25519(metadata.network_pubkey.clone()), //TODO this is wrong and we shouldn't have this here
+                    protocol_key: (&metadata.protocol_pubkey).into(),
+                    worker_key: metadata.worker_pubkey,
+                    network_key: metadata.network_pubkey,
+                    gas_price: validator.gas_price,
+                    commission_rate: validator.commission_rate,
+                    network_address: metadata.net_address,
+                    p2p_address: metadata.p2p_address,
+                    narwhal_primary_address: metadata.primary_address,
+                    narwhal_worker_address: metadata.worker_address,
+                    description: metadata.description,
+                    image_url: metadata.image_url,
+                    project_url: metadata.project_url,
+                }
+            })
+            .collect()
     }
 
     pub fn committee(&self) -> SuiResult<Committee> {
@@ -164,8 +168,10 @@ impl Genesis {
             .expect("Sui System State Wrapper object must always exist")
     }
 
-    pub fn sui_system_object(&self) -> SuiSystemState {
-        get_sui_system_state(&self.objects()).expect("Sui System State object must always exist")
+    pub fn sui_system_object(&self) -> SuiSystemStateInnerGenesis {
+        get_sui_system_state(&self.objects())
+            .expect("Sui System State object must always exist")
+            .into_genesis_version()
     }
 
     pub fn clock(&self) -> Clock {
@@ -319,6 +325,18 @@ pub struct GenesisChainParameters {
     /// genesis.
     #[serde(default)]
     pub initial_sui_custody_account_address: SuiAddress,
+
+    /// The initial amount of Sui (denominated in Mist) given to genesis validators for their
+    /// initial stake.
+    #[serde(default = "GenesisChainParameters::test_initial_validator_stake_mist")]
+    pub initial_validator_stake_mist: u64,
+
+    /// The starting epoch in which various on-chain governance features take effect. E.g.
+    /// - stake subsidies are paid out
+    /// - validators with stake less than a 'validator_stake_threshold' are
+    ///   kicked from the validator set
+    #[serde(default)]
+    pub governance_start_epoch: u64,
     // Most other parameters (e.g. initial gas schedule) should be derived from protocol_version.
 }
 
@@ -329,6 +347,8 @@ impl GenesisChainParameters {
             protocol_version: ProtocolVersion::MAX,
             allow_insertion_of_extra_objects: true,
             initial_sui_custody_account_address: SuiAddress::default(),
+            initial_validator_stake_mist: Self::test_initial_validator_stake_mist(),
+            governance_start_epoch: 0,
         }
     }
 
@@ -342,6 +362,10 @@ impl GenesisChainParameters {
     fn default_allow_insertion_of_extra_objects() -> bool {
         true
     }
+
+    fn test_initial_validator_stake_mist() -> u64 {
+        sui_types::governance::MINIMUM_VALIDATOR_STAKE_SUI * sui_types::gas_coin::MIST_PER_SUI
+    }
 }
 
 impl Default for GenesisChainParameters {
@@ -354,8 +378,7 @@ pub struct Builder {
     parameters: GenesisChainParameters,
     objects: BTreeMap<ObjectID, Object>,
     validators: BTreeMap<AuthorityPublicKeyBytes, GenesisValidatorInfo>,
-    // Validator signatures over 0: checkpoint 1: genesis transaction
-    // TODO remove the need to have a sig on the transaction
+    // Validator signatures over checkpoint
     signatures: BTreeMap<AuthorityPublicKeyBytes, AuthoritySignInfo>,
     built_genesis: Option<GenesisTuple>,
 }
@@ -712,15 +735,8 @@ fn build_unsigned_genesis_data(
         sui_framework::get_sui_framework(),
     ];
 
-    let objects = create_genesis_objects(
-        &mut genesis_ctx,
-        &modules,
-        objects,
-        validators,
-        parameters.timestamp_ms,
-        parameters.protocol_version,
-        parameters.initial_sui_custody_account_address,
-    );
+    let objects =
+        create_genesis_objects(&mut genesis_ctx, &modules, objects, validators, parameters);
 
     let (genesis_transaction, genesis_effects, genesis_events, objects) =
         create_genesis_transaction(objects, &protocol_config, &epoch_data);
@@ -817,9 +833,8 @@ fn create_genesis_transaction(
                 .expect("We defined natives to not fail here"),
         );
 
-        let transaction_data = genesis_transaction.data().intent_message.value.clone();
-        let signer = transaction_data.sender();
-        let gas = transaction_data.gas();
+        let transaction_data = &genesis_transaction.data().intent_message.value;
+        let (kind, signer, gas) = transaction_data.execution_parts();
         let (inner_temp_store, effects, _execution_error) =
             sui_adapter::execution_engine::execute_transaction_to_effects::<
                 execution_mode::Normal,
@@ -827,9 +842,9 @@ fn create_genesis_transaction(
             >(
                 vec![],
                 temporary_store,
-                transaction_data.kind,
+                kind,
                 signer,
-                gas,
+                &gas,
                 *genesis_transaction.digest(),
                 Default::default(),
                 &move_vm,
@@ -860,12 +875,10 @@ fn create_genesis_objects(
     modules: &[Vec<CompiledModule>],
     input_objects: &[Object],
     validators: &[GenesisValidatorInfo],
-    epoch_start_timestamp_ms: u64,
-    protocol_version: ProtocolVersion,
-    initial_sui_custody_account_address: SuiAddress,
+    parameters: &GenesisChainParameters,
 ) -> Vec<Object> {
     let mut store = InMemoryStorage::new(Vec::new());
-    let protocol_config = ProtocolConfig::get_for_version(protocol_version);
+    let protocol_config = ProtocolConfig::get_for_version(parameters.protocol_version);
 
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
@@ -887,16 +900,8 @@ fn create_genesis_objects(
         store.insert_object(object.to_owned());
     }
 
-    generate_genesis_system_object(
-        &mut store,
-        &move_vm,
-        validators,
-        genesis_ctx,
-        epoch_start_timestamp_ms,
-        protocol_version,
-        initial_sui_custody_account_address,
-    )
-    .unwrap();
+    generate_genesis_system_object(&mut store, &move_vm, validators, genesis_ctx, parameters)
+        .unwrap();
 
     store.into_inner().into_values().collect()
 }
@@ -977,13 +982,11 @@ pub fn generate_genesis_system_object(
     move_vm: &MoveVM,
     committee: &[GenesisValidatorInfo],
     genesis_ctx: &mut TxContext,
-    epoch_start_timestamp_ms: u64,
-    protocol_version: ProtocolVersion,
-    initial_sui_custody_account_address: SuiAddress,
+    parameters: &GenesisChainParameters,
 ) -> Result<()> {
     let genesis_digest = genesis_ctx.digest();
-    let protocol_config = ProtocolConfig::get_for_version(protocol_version);
-    let system_state_version = get_sui_system_state_version(protocol_version);
+    let protocol_config = ProtocolConfig::get_for_version(parameters.protocol_version);
+    let system_state_version = get_sui_system_state_version(parameters.protocol_version);
     let mut temporary_store = TemporaryStore::new(
         &*store,
         InputObjects::new(vec![]),
@@ -1036,7 +1039,9 @@ pub fn generate_genesis_system_object(
         &ident_str!("create").to_owned(),
         vec![],
         vec![
-            CallArg::Pure(bcs::to_bytes(&initial_sui_custody_account_address).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&parameters.initial_sui_custody_account_address).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&parameters.initial_validator_stake_mist).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&parameters.governance_start_epoch).unwrap()),
             CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
             CallArg::Pure(bcs::to_bytes(&network_pubkeys).unwrap()),
             CallArg::Pure(bcs::to_bytes(&worker_pubkeys).unwrap()),
@@ -1052,9 +1057,9 @@ pub fn generate_genesis_system_object(
             CallArg::Pure(bcs::to_bytes(&worker_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&gas_prices).unwrap()),
             CallArg::Pure(bcs::to_bytes(&commission_rates).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&protocol_version.as_u64()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&parameters.protocol_version.as_u64()).unwrap()),
             CallArg::Pure(bcs::to_bytes(&system_state_version).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&epoch_start_timestamp_ms).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&parameters.timestamp_ms).unwrap()),
         ],
         SuiGasStatus::new_unmetered().create_move_gas_status(),
         genesis_ctx,
@@ -1161,9 +1166,8 @@ mod test {
                 .expect("We defined natives to not fail here"),
         );
 
-        let transaction_data = genesis_transaction.data().intent_message.value.clone();
-        let signer = transaction_data.sender();
-        let gas = transaction_data.gas();
+        let transaction_data = &genesis_transaction.data().intent_message.value;
+        let (kind, signer, gas) = transaction_data.execution_parts();
         let (_inner_temp_store, effects, _execution_error) =
             sui_adapter::execution_engine::execute_transaction_to_effects::<
                 execution_mode::Normal,
@@ -1171,9 +1175,9 @@ mod test {
             >(
                 vec![],
                 temporary_store,
-                transaction_data.kind,
+                kind,
                 signer,
-                gas,
+                &gas,
                 *genesis_transaction.digest(),
                 Default::default(),
                 &move_vm,

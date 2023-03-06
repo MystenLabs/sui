@@ -12,8 +12,8 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
-use sui_config::genesis::Genesis;
 use sui_config::NetworkConfig;
+use sui_config::{genesis::Genesis, ValidatorInfo};
 use sui_core::signature_verifier::IgnoreSignatureVerifier;
 use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
@@ -21,12 +21,12 @@ use sui_core::{
     quorum_driver::{
         QuorumDriver, QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics,
     },
-    validator_info::make_committee,
 };
-use sui_json_rpc_types::{SuiObjectRead, SuiTransactionEffects};
+use sui_json_rpc_types::{
+    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffects, SuiTransactionEffectsAPI,
+};
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::messages::TransactionEvents;
 use sui_types::{
     base_types::ObjectID,
@@ -38,13 +38,17 @@ use sui_types::{
     message_envelope::Envelope,
     messages::{
         CertifiedTransaction, CertifiedTransactionEffects, HandleCertificateResponse,
-        QuorumDriverResponse, Transaction, TransactionStatus,
+        QuorumDriverResponse, Transaction, TransactionEffectsAPI, TransactionStatus,
     },
     object::Object,
 };
 use sui_types::{
     base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo,
     messages::ExecuteTransactionRequestType, object::Owner,
+};
+use sui_types::{
+    base_types::{AuthorityName, SuiAddress},
+    sui_system_state::SuiSystemStateTrait,
 };
 use sui_types::{error::SuiError, sui_system_state::SuiSystemState};
 use tokio::{task::JoinSet, time::timeout};
@@ -71,12 +75,11 @@ impl ExecutionEffects {
     pub fn mutated(&self) -> Vec<(ObjectRef, Owner)> {
         match self {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
-                certified_effects.data().mutated.clone()
+                certified_effects.data().mutated().to_vec()
             }
             ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
-                .mutated
-                .clone()
-                .into_iter()
+                .mutated()
+                .iter()
                 .map(|refe| (refe.reference.to_object_ref(), refe.owner))
                 .collect(),
         }
@@ -85,12 +88,11 @@ impl ExecutionEffects {
     pub fn created(&self) -> Vec<(ObjectRef, Owner)> {
         match self {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
-                certified_effects.data().created.clone()
+                certified_effects.data().created().to_vec()
             }
             ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
-                .created
-                .clone()
-                .into_iter()
+                .created()
+                .iter()
                 .map(|refe| (refe.reference.to_object_ref(), refe.owner))
                 .collect(),
         }
@@ -108,10 +110,10 @@ impl ExecutionEffects {
     pub fn gas_object(&self) -> (ObjectRef, Owner) {
         match self {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
-                certified_effects.data().gas_object
+                *certified_effects.data().gas_object()
             }
             ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => {
-                let refe = &sui_tx_effects.gas_object;
+                let refe = &sui_tx_effects.gas_object();
                 (refe.reference.to_object_ref(), refe.owner)
             }
         }
@@ -161,7 +163,7 @@ impl LocalValidatorAggregatorProxy {
             .unwrap();
 
         let validator_info = genesis.validator_set();
-        let committee = make_committee(0, &validator_info).unwrap();
+        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info)).unwrap();
         let clients = make_authority_clients(
             &validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
@@ -189,7 +191,7 @@ impl LocalValidatorAggregatorProxy {
             .unwrap();
 
         let validator_info = configs.validator_set();
-        let committee = make_committee(0, &validator_info).unwrap();
+        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info)).unwrap();
         let clients = make_authority_clients(
             &validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
@@ -270,7 +272,10 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
     async fn get_latest_system_state_object(&self) -> Result<SuiSystemState, anyhow::Error> {
         let auth_agg = self.qd.authority_aggregator().load();
-        auth_agg.get_latest_system_state_object_for_testing().await
+        auth_agg
+            .get_latest_system_state_object_for_testing()
+            .await
+            .map(SuiSystemState::new_for_benchmarking)
     }
 
     async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
@@ -477,10 +482,9 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     async fn get_validators(&self) -> Result<Vec<SuiAddress>, anyhow::Error> {
         let system_state = self.get_latest_system_state_object().await?;
         Ok(system_state
-            .validators
-            .active_validators
+            .get_validator_metadata_vec()
             .into_iter()
-            .map(|v| v.metadata.sui_address)
+            .map(|metadata| metadata.sui_address)
             .collect())
     }
 }
@@ -500,7 +504,7 @@ impl FullNodeProxy {
 
         let resp = sui_client.read_api().get_committee_info(None).await?;
         let epoch = resp.epoch;
-        let committee_vec = resp.committee_info;
+        let committee_vec = resp.validators;
         let committee_map =
             BTreeMap::from_iter(committee_vec.into_iter().map(|(name, stake)| (name, stake)));
         let committee = Committee::new(epoch, committee_map)?;
@@ -515,14 +519,24 @@ impl FullNodeProxy {
 #[async_trait]
 impl ValidatorProxy for FullNodeProxy {
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
-        match self.sui_client.read_api().get_object(object_id).await? {
-            SuiObjectRead::Exists(sui_object) => sui_object.try_into(),
+        match self
+            .sui_client
+            .read_api()
+            .get_object_with_options(object_id, SuiObjectDataOptions::bcs_lossless())
+            .await?
+        {
+            SuiObjectResponse::Exists(sui_object) => sui_object.try_into(),
             _ => bail!("Object {:?} not found", object_id),
         }
     }
 
     async fn get_latest_system_state_object(&self) -> Result<SuiSystemState, anyhow::Error> {
-        Ok(self.sui_client.read_api().get_sui_system_state().await?)
+        Ok(self
+            .sui_client
+            .read_api()
+            .get_sui_system_state()
+            .await?
+            .into())
     }
 
     async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {

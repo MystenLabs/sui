@@ -35,7 +35,7 @@ function NftTransferPage() {
         [nftId]
     );
     const selectedNft = useAppSelector(nftSelector);
-    const objectId = selectedNft ? getObjectId(selectedNft.reference) : null;
+    const objectId = selectedNft ? getObjectId(selectedNft) : null;
     const address = useAppSelector(({ account: { address } }) => address);
     const dispatch = useAppDispatch();
     const [sendError, setSendError] = useState<string | null>(null);

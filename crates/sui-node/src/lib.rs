@@ -41,6 +41,7 @@ use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
+use sui_types::sui_system_state::SuiSystemStateTrait;
 use tracing::debug;
 
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
@@ -62,7 +63,6 @@ pub mod admin;
 mod handle;
 pub mod metrics;
 pub use handle::SuiNodeHandle;
-use narwhal_config::SharedWorkerCache;
 use narwhal_types::TransactionsClient;
 use sui_core::authority::authority_per_epoch_store::{
     AuthorityPerEpochStore, EpochStartConfiguration,
@@ -182,7 +182,7 @@ impl SuiNode {
             .expect("Committee of the current epoch must exist");
         let epoch_start_configuration = if cur_epoch == genesis.epoch() {
             Some(EpochStartConfiguration {
-                system_state: genesis.sui_system_object(),
+                system_state: SuiSystemState::new_genesis(genesis.sui_system_object()),
                 epoch_digest: genesis.checkpoint().digest(),
             })
         } else {
@@ -598,7 +598,7 @@ impl SuiNode {
         narwhal_manager
             .start(
                 committee.clone(),
-                SharedWorkerCache::from(worker_cache),
+                worker_cache,
                 consensus_handler,
                 SuiTxValidator::new(
                     epoch_store,
@@ -652,6 +652,7 @@ impl SuiNode {
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
         let max_tx_per_checkpoint = max_tx_per_checkpoint(epoch_store.protocol_config());
+        let max_checkpoint_size = epoch_store.protocol_config().max_checkpoint_size();
 
         CheckpointService::spawn(
             state.clone(),
@@ -663,6 +664,7 @@ impl SuiNode {
             Box::new(certified_checkpoint_output),
             checkpoint_metrics,
             max_tx_per_checkpoint,
+            max_checkpoint_size,
         )
     }
 
@@ -830,7 +832,7 @@ impl SuiNode {
 
             // If we eventually add tests that exercise safe mode, we will need a configurable way of
             // guarding against unexpected safe_mode.
-            debug_assert!(!system_state.safe_mode);
+            debug_assert!(!system_state.safe_mode());
 
             info!(
                 next_epoch,
@@ -849,7 +851,7 @@ impl SuiNode {
             cur_epoch_store.record_epoch_reconfig_start_time_metric();
             let _ = self.end_of_epoch_channel.send((
                 next_epoch_committee.clone(),
-                ProtocolVersion::new(system_state.protocol_version),
+                ProtocolVersion::new(system_state.protocol_version()),
             ));
 
             // The following code handles 4 different cases, depending on whether the node

@@ -109,6 +109,15 @@ A list of system config parameters.
  Maximum number of validator candidates at any moment.
  We do not allow the number of validators in any epoch to go above this.
 </dd>
+<dt>
+<code>governance_start_epoch: u64</code>
+</dt>
+<dd>
+ The starting epoch in which various on-chain governance features take effect:
+ - stake subsidies are paid out
+ - TODO validators with stake less than a 'validator_stake_threshold' are
+   kicked from the validator set
+</dd>
 </dl>
 
 
@@ -405,7 +414,7 @@ Create a new SuiSystemState object and make it shared.
 This function will be called only once in genesis.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, stake_subsidy_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_candidate_count: u64, min_validator_stake: u64, initial_stake_subsidy_amount: u64, protocol_version: u64, system_state_version: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, stake_subsidy_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_candidate_count: u64, min_validator_stake: u64, governance_start_epoch: u64, initial_stake_subsidy_amount: u64, protocol_version: u64, system_state_version: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -420,6 +429,7 @@ This function will be called only once in genesis.
     storage_fund: Balance&lt;SUI&gt;,
     max_validator_candidate_count: u64,
     min_validator_stake: u64,
+    governance_start_epoch: u64,
     initial_stake_subsidy_amount: u64,
     protocol_version: u64,
     system_state_version: u64,
@@ -436,6 +446,7 @@ This function will be called only once in genesis.
         parameters: <a href="sui_system.md#0x2_sui_system_SystemParameters">SystemParameters</a> {
             min_validator_stake,
             max_validator_candidate_count,
+            governance_start_epoch,
         },
         reference_gas_price,
         validator_report_records: <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
@@ -525,9 +536,6 @@ The amount of stake in the <code><a href="validator.md#0x2_validator">validator<
         <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) + 1, // starting next epoch
         ctx
     );
-
-    // TODO: We need <b>to</b> verify the <a href="validator.md#0x2_validator">validator</a> metadata.
-    // https://github.com/MystenLabs/<a href="sui.md#0x2_sui">sui</a>/issues/7323
 
     <a href="validator_set.md#0x2_validator_set_request_add_validator">validator_set::request_add_validator</a>(&<b>mut</b> self.validators, <a href="validator.md#0x2_validator">validator</a>);
 }
@@ -1305,7 +1313,13 @@ gas coins.
     <b>let</b> computation_reward = <a href="balance.md#0x2_balance_create_staking_rewards">balance::create_staking_rewards</a>(computation_charge);
 
     // Include stake subsidy in the rewards given out <b>to</b> validators and delegators.
-    <b>let</b> <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a> = <a href="stake_subsidy.md#0x2_stake_subsidy_advance_epoch">stake_subsidy::advance_epoch</a>(&<b>mut</b> self.<a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>);
+    // Delay distributing any stake subsidies until after `governance_start_epoch`.
+    <b>let</b> <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a> = <b>if</b> (<a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) &gt;= self.parameters.governance_start_epoch) {
+        <a href="stake_subsidy.md#0x2_stake_subsidy_advance_epoch">stake_subsidy::advance_epoch</a>(&<b>mut</b> self.<a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>)
+    } <b>else</b> {
+        <a href="balance.md#0x2_balance_zero">balance::zero</a>()
+    };
+
     <b>let</b> stake_subsidy_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&<a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>);
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> computation_reward, <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>);
 

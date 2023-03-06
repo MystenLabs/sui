@@ -60,7 +60,7 @@ impl CommittedSubDag {
             .map_or_else(|| false, |x| x == output)
     }
 
-    pub fn round(&self) -> Round {
+    pub fn leader_round(&self) -> Round {
         self.leader.round()
     }
 }

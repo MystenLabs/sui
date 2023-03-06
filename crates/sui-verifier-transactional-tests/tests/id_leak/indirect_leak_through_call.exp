@@ -1,9 +1,9 @@
 processed 2 tasks
 
-task 0 'publish'. lines 4-25:
+task 0 'publish'. lines 4-26:
 Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("ID is leaked into a struct. Found in _::m::foo"), command: None } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("Invalid object creation in _::m::foo. Object created without a newly created UID. The UID must come directly from sui::object::new. Or for tests, it can come from sui::test_scenario::new_object Found in _::m::foo"), command: Some(0) } }
 
-task 1 'publish'. lines 27-48:
-Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("ID leaked through function call. Found in _::m::foo"), command: None } }
+task 1 'publish'. lines 28-50:
+created: object(105)
+written: object(104)

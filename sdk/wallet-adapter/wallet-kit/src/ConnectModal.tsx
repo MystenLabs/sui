@@ -65,7 +65,7 @@ const LeftPanel = styled("div", {
   flex: 1,
   "@md": {
     flex: 0,
-    width: 240,
+    minWidth: 240,
   },
 
   variants: {

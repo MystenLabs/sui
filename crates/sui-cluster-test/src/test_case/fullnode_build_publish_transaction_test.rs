@@ -5,6 +5,7 @@ use crate::{TestCaseImpl, TestContext};
 use async_trait::async_trait;
 use jsonrpsee::rpc_params;
 use sui_core::test_utils::compile_basics_package;
+use sui_json_rpc_types::SuiTransactionEffectsAPI;
 use sui_types::{base_types::ObjectID, object::Owner};
 
 pub struct FullNodeBuildPublishTransactionTest;
@@ -36,7 +37,7 @@ impl TestCaseImpl for FullNodeBuildPublishTransactionTest {
         let response = ctx.sign_and_execute(data, "publish basics package").await;
         response
             .effects
-            .created
+            .created()
             .iter()
             .find(|obj_ref| obj_ref.owner == Owner::Immutable)
             .unwrap();

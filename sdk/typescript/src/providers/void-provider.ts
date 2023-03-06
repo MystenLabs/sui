@@ -4,12 +4,11 @@
 import { HttpHeaders } from '../rpc/client';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
-  CertifiedTransaction,
   TransactionDigest,
   GetTxnDigestsResponse,
   GatewayTxSeqNumber,
   SuiObjectInfo,
-  GetObjectDataResponse,
+  SuiObjectResponse,
   SuiObjectRef,
   SuiMoveFunctionArgTypes,
   SuiMoveNormalizedFunction,
@@ -20,7 +19,6 @@ import {
   SuiEventEnvelope,
   SubscriptionId,
   ExecuteTransactionRequestType,
-  SuiExecuteTransactionResponse,
   SuiAddress,
   ObjectId,
   TransactionQuery,
@@ -46,11 +44,14 @@ import {
   CommitteeInfo,
   Checkpoint,
   DryRunTransactionResponse,
+  SuiTransactionResponse,
+  SuiObjectDataOptions,
 } from '../types';
 import { Provider } from './provider';
 
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import { SerializedSignature } from '../cryptography/signature';
+import { Transaction } from '../builder';
 
 export class VoidProvider extends Provider {
   // API Version
@@ -139,22 +140,12 @@ export class VoidProvider extends Provider {
     throw this.newError('getGasObjectsOwnedByAddress');
   }
 
-  /**
-   * @deprecated The method should not be used
-   */
-  async getCoinBalancesOwnedByAddress(
-    _address: string,
-    _typeArg?: string,
-  ): Promise<GetObjectDataResponse[]> {
-    throw this.newError('getCoinBalancesOwnedByAddress');
-  }
-
   async selectCoinsWithBalanceGreaterThanOrEqual(
     _address: string,
     _amount: bigint,
     _typeArg: string,
     _exclude: ObjectId[] = [],
-  ): Promise<GetObjectDataResponse[]> {
+  ): Promise<SuiObjectResponse[]> {
     throw this.newError('selectCoinsWithBalanceGreaterThanOrEqual');
   }
 
@@ -163,11 +154,11 @@ export class VoidProvider extends Provider {
     _amount: bigint,
     _typeArg: string,
     _exclude: ObjectId[],
-  ): Promise<GetObjectDataResponse[]> {
+  ): Promise<SuiObjectResponse[]> {
     throw this.newError('selectCoinSetWithCombinedBalanceGreaterThanOrEqual');
   }
 
-  async getObject(_objectId: string): Promise<GetObjectDataResponse> {
+  async getObject(_objectId: string): Promise<SuiObjectResponse> {
     throw this.newError('getObject');
   }
 
@@ -175,10 +166,17 @@ export class VoidProvider extends Provider {
     throw this.newError('getObjectRef');
   }
 
+  async getObjectBatch(
+    _objectIds: ObjectId[],
+    _options?: SuiObjectDataOptions,
+  ): Promise<SuiObjectResponse[]> {
+    throw this.newError('getObjectBatch');
+  }
+
   // Transactions
   async getTransaction(
     _digest: TransactionDigest,
-  ): Promise<CertifiedTransaction> {
+  ): Promise<SuiTransactionResponse> {
     throw this.newError('getTransaction');
   }
 
@@ -186,13 +184,13 @@ export class VoidProvider extends Provider {
     _txnBytes: Uint8Array,
     _signature: SerializedSignature,
     _requestType: ExecuteTransactionRequestType,
-  ): Promise<SuiExecuteTransactionResponse> {
+  ): Promise<SuiTransactionResponse> {
     throw this.newError('executeTransaction with request Type');
   }
 
   devInspectTransaction(
     _sender: SuiAddress,
-    _txn: UnserializedSignableTransaction | string | Uint8Array,
+    _txn: Transaction | UnserializedSignableTransaction | string | Uint8Array,
     _gasPrice: number | null = null,
     _epoch: number | null = null,
   ): Promise<DevInspectResults> {
@@ -214,7 +212,7 @@ export class VoidProvider extends Provider {
   getDynamicFieldObject(
     _parent_object_id: ObjectId,
     _name: string | DynamicFieldName,
-  ): Promise<GetObjectDataResponse> {
+  ): Promise<SuiObjectResponse> {
     throw this.newError('getDynamicFieldObject');
   }
 

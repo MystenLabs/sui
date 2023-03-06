@@ -8,9 +8,12 @@ use crate::models::transactions::Transaction;
 use crate::schema::addresses::account_address;
 use crate::schema::checkpoints::dsl::checkpoints as checkpoints_table;
 use crate::schema::checkpoints::{checkpoint_digest, sequence_number};
+use crate::schema::move_calls::dsl as move_calls_dsl;
 use crate::schema::packages::{author, module_names, package_content, package_id};
 use crate::schema::transactions::{dsl, transaction_digest};
-use crate::schema::{addresses, events, objects, owner_changes, packages, transactions};
+use crate::schema::{
+    addresses, events, move_calls, objects, owner_changes, packages, transactions,
+};
 use crate::store::indexer_store::TemporaryCheckpointStore;
 use crate::store::{IndexerStore, TemporaryEpochStore};
 use crate::{get_pg_pool_connection, PgConnectionPool};
@@ -135,6 +138,26 @@ impl IndexerStore for PgIndexerStore {
             })
     }
 
+    fn get_latest_move_call_sequence_number(&self) -> Result<i64, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                move_calls::table
+                    .select(max(move_calls::id))
+                    .first::<Option<i64>>(conn)
+                    // postgres serial starts from 1
+                    .map(|seq_num_opt| seq_num_opt.unwrap_or(0))
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading latest move call sequence number with err: {:?}",
+                    e
+                ))
+            })
+    }
+
     fn get_transaction_by_digest(&self, txn_digest: String) -> Result<Transaction, IndexerError> {
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
         pg_pool_conn
@@ -156,11 +179,11 @@ impl IndexerStore for PgIndexerStore {
     fn get_transaction_sequence_by_digest(
         &self,
         txn_digest: Option<String>,
-        reverse: bool,
+        is_descending: bool,
     ) -> Result<i64, IndexerError> {
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
         let Some(txn_digest) = txn_digest else {
-            if reverse {
+            if is_descending {
                 return self.get_latest_transaction_sequence_number();
             } else {
                 // NOTE: Postgres serial starts from 1
@@ -184,18 +207,55 @@ impl IndexerStore for PgIndexerStore {
             })
     }
 
+    fn get_move_call_sequence_by_digest(
+        &self,
+        txn_digest: Option<String>,
+        reverse: bool,
+    ) -> Result<i64, IndexerError> {
+        let Some(txn_digest) = txn_digest else {
+            if reverse {
+                return self.get_latest_move_call_sequence_number();
+            } else {
+                // NOTE: Postgres serial starts from 1
+                return Ok(1);
+            }
+        };
+
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                let mut boxed_query = move_calls_dsl::move_calls
+                    .filter(move_calls_dsl::transaction_digest.eq(txn_digest.clone()))
+                    .into_boxed();
+                if reverse {
+                    boxed_query = boxed_query.order(move_calls_dsl::id.desc());
+                } else {
+                    boxed_query = boxed_query.order(move_calls_dsl::id.asc());
+                }
+                boxed_query.select(move_calls_dsl::id).first::<i64>(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading move call sequence with digest {} and err: {:?}",
+                    txn_digest, e
+                ))
+            })
+    }
+
     fn get_all_transaction_digest_page(
         &self,
         start_sequence: i64,
         limit: usize,
-        reverse: bool,
+        is_descending: bool,
     ) -> Result<Vec<String>, IndexerError> {
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
         pg_pool_conn
             .build_transaction()
             .read_only()
             .run(|conn| {
-                if reverse {
+                if is_descending {
                     dsl::transactions
                         .filter(dsl::id.le(start_sequence))
                         .order(dsl::id.desc())
@@ -218,9 +278,11 @@ impl IndexerStore for PgIndexerStore {
         })
     }
 
-    fn get_transaction_digest_page_by_mutated_object(
+    fn get_transaction_digest_page_by_move_call(
         &self,
-        object_id: String,
+        package_name: String,
+        module_name: Option<String>,
+        function_name: Option<String>,
         start_sequence: i64,
         limit: usize,
         reverse: bool,
@@ -230,7 +292,52 @@ impl IndexerStore for PgIndexerStore {
             .build_transaction()
             .read_only()
             .run(|conn| {
+                let mut builder = move_calls_dsl::move_calls.filter(move_calls_dsl::move_package.eq(package_name.clone())).into_boxed();
+                if let Some(module_name) = module_name.clone() {
+                    builder = builder.filter(move_calls_dsl::move_module.eq(module_name));
+                }
+                if let Some(function_name) = function_name.clone() {
+                    builder = builder.filter(move_calls_dsl::move_function.eq(function_name));
+                }
                 if reverse {
+                    builder.filter(move_calls_dsl::id.le(start_sequence))
+                        .order(move_calls_dsl::id.desc())
+                        // id is needed in the select clause to make distinct work
+                        .select((move_calls_dsl::transaction_digest, move_calls_dsl::id))
+                        .distinct()
+                        .limit(limit as i64)
+                        .load::<(String, i64)>(conn)
+                        .map(|v| v.into_iter().map(|(digest, _)| digest).collect())
+                } else {
+                    builder.filter(move_calls_dsl::id.ge(start_sequence))
+                        .order(move_calls_dsl::id.asc())
+                        .select((move_calls_dsl::transaction_digest, move_calls_dsl::id))
+                        .distinct()
+                        .limit(limit as i64)
+                        .load::<(String, i64)>(conn)
+                        .map(|v| v.into_iter().map(|(digest, _)| digest).collect())
+                }
+            }).map_err(|e| {
+            IndexerError::PostgresReadError(format!(
+                "Failed reading transaction digests with package_name {} module_name {:?} and function_name {:?} and start_sequence {} and limit {} and err: {:?}",
+                package_name, module_name, function_name, start_sequence, limit, e
+            ))
+        })
+    }
+
+    fn get_transaction_digest_page_by_mutated_object(
+        &self,
+        object_id: String,
+        start_sequence: i64,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<String>, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                if is_descending {
                     dsl::transactions
                         .filter(dsl::id.le(start_sequence))
                         .filter(dsl::mutated.contains(vec![Some(object_id.clone())]))
@@ -260,14 +367,14 @@ impl IndexerStore for PgIndexerStore {
         sender_address: String,
         start_sequence: i64,
         limit: usize,
-        reverse: bool,
+        is_descending: bool,
     ) -> Result<Vec<String>, IndexerError> {
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
         pg_pool_conn
             .build_transaction()
             .read_only()
             .run(|conn| {
-                if reverse {
+                if is_descending {
                     dsl::transactions
                         .filter(dsl::id.le(start_sequence))
                         .filter(dsl::sender.eq(sender_address.clone()))
@@ -297,14 +404,14 @@ impl IndexerStore for PgIndexerStore {
         recipient_address: String,
         start_sequence: i64,
         limit: usize,
-        reverse: bool,
+        is_descending: bool,
     ) -> Result<Vec<String>, IndexerError> {
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
         pg_pool_conn
             .build_transaction()
             .read_only()
             .run(|conn| {
-                if reverse {
+                if is_descending {
                     dsl::transactions
                         .filter(dsl::id.le(start_sequence))
                         .filter(dsl::recipients.contains(vec![Some(recipient_address.clone())]))
@@ -361,6 +468,7 @@ impl IndexerStore for PgIndexerStore {
             owner_changes,
             addresses,
             packages,
+            move_calls,
             // TODO: store raw object
         } = data;
 
@@ -408,6 +516,10 @@ impl IndexerStore for PgIndexerStore {
                         module_names.eq(excluded(module_names)),
                         package_content.eq(excluded(package_content)),
                     ))
+                    .execute(conn)?;
+
+                diesel::insert_into(move_calls::table)
+                    .values(move_calls)
                     .execute(conn)
 
             })

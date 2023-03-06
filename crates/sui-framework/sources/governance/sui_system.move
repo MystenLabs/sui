@@ -45,6 +45,12 @@ module sui::sui_system {
         /// Maximum number of validator candidates at any moment.
         /// We do not allow the number of validators in any epoch to go above this.
         max_validator_candidate_count: u64,
+
+        /// The starting epoch in which various on-chain governance features take effect:
+        /// - stake subsidies are paid out
+        /// - TODO validators with stake less than a 'validator_stake_threshold' are
+        ///   kicked from the validator set
+        governance_start_epoch: u64,
     }
 
     /// The top-level object containing all information of the Sui system.
@@ -121,6 +127,7 @@ module sui::sui_system {
         storage_fund: Balance<SUI>,
         max_validator_candidate_count: u64,
         min_validator_stake: u64,
+        governance_start_epoch: u64,
         initial_stake_subsidy_amount: u64,
         protocol_version: u64,
         system_state_version: u64,
@@ -137,6 +144,7 @@ module sui::sui_system {
             parameters: SystemParameters {
                 min_validator_stake,
                 max_validator_candidate_count,
+                governance_start_epoch,
             },
             reference_gas_price,
             validator_report_records: vec_map::empty(),
@@ -210,9 +218,6 @@ module sui::sui_system {
             tx_context::epoch(ctx) + 1, // starting next epoch
             ctx
         );
-
-        // TODO: We need to verify the validator metadata.
-        // https://github.com/MystenLabs/sui/issues/7323
 
         validator_set::request_add_validator(&mut self.validators, validator);
     }
@@ -552,7 +557,13 @@ module sui::sui_system {
         let computation_reward = balance::create_staking_rewards(computation_charge);
 
         // Include stake subsidy in the rewards given out to validators and delegators.
-        let stake_subsidy = stake_subsidy::advance_epoch(&mut self.stake_subsidy);
+        // Delay distributing any stake subsidies until after `governance_start_epoch`.
+        let stake_subsidy = if (tx_context::epoch(ctx) >= self.parameters.governance_start_epoch) {
+            stake_subsidy::advance_epoch(&mut self.stake_subsidy)
+        } else {
+            balance::zero()
+        };
+
         let stake_subsidy_amount = balance::value(&stake_subsidy);
         balance::join(&mut computation_reward, stake_subsidy);
 

@@ -29,14 +29,17 @@ use move_core_types::{
 };
 pub use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::{
-    config::VMConfig,
+    config::{VMConfig, VMRuntimeLimitsConfig},
     native_extensions::NativeContextExtensions,
     native_functions::NativeFunctionTable,
     session::{SerializedReturnValues, Session},
 };
 
 use sui_cost_tables::bytecode_tables::GasStatus;
-use sui_framework::natives::object_runtime::{self, ObjectRuntime};
+use sui_framework::natives::{
+    object_runtime::{self, ObjectRuntime},
+    NativesCostTable,
+};
 use sui_json::primitive_type;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
@@ -78,9 +81,13 @@ pub fn new_move_vm(
                 max_fields_in_struct: Some(protocol_config.max_fields_in_struct()),
                 max_function_definitions: Some(protocol_config.max_function_definitions()),
                 max_struct_definitions: Some(protocol_config.max_struct_definitions()),
+                max_constant_vector_len: protocol_config.max_move_vector_len(),
             },
             max_binary_format_version: protocol_config.move_binary_format_version(),
             paranoid_type_checks: false,
+            runtime_limits_config: VMRuntimeLimitsConfig {
+                vector_len_max: protocol_config.max_move_vector_len(),
+            },
         },
     )
     .map_err(|_| SuiError::ExecutionInvariantViolation)
@@ -105,6 +112,7 @@ pub fn new_session<
         is_metered,
         protocol_config,
     ));
+    extensions.add(NativesCostTable::from_protocol_config(protocol_config));
     vm.new_session_with_extensions(state_view, extensions)
 }
 

@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Transaction } from '../builder';
 import { SerializedSignature } from '../cryptography/signature';
 import { HttpHeaders } from '../rpc/client';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
-  GetObjectDataResponse,
+  SuiObjectResponse,
   SuiObjectInfo,
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
@@ -19,7 +20,6 @@ import {
   SuiEventEnvelope,
   SubscriptionId,
   ExecuteTransactionRequestType,
-  SuiExecuteTransactionResponse,
   TransactionDigest,
   ObjectId,
   SuiAddress,
@@ -46,6 +46,8 @@ import {
   Checkpoint,
   CommitteeInfo,
   DryRunTransactionResponse,
+  SuiTransactionResponse,
+  SuiObjectDataOptions,
 } from '../types';
 
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
@@ -156,14 +158,6 @@ export abstract class Provider {
   ): Promise<SuiObjectInfo[]>;
 
   /**
-   * @deprecated The method should not be used
-   */
-  abstract getCoinBalancesOwnedByAddress(
-    address: string,
-    typeArg?: string,
-  ): Promise<GetObjectDataResponse[]>;
-
-  /**
    * Convenience method for select coin objects that has a balance greater than or equal to `amount`
    *
    * @param amount coin balance
@@ -176,7 +170,7 @@ export abstract class Provider {
     amount: bigint,
     typeArg: string,
     exclude: ObjectId[],
-  ): Promise<GetObjectDataResponse[]>;
+  ): Promise<SuiObjectResponse[]>;
 
   /**
    * Convenience method for select a minimal set of coin objects that has a balance greater than
@@ -193,18 +187,26 @@ export abstract class Provider {
     amount: bigint,
     typeArg: string,
     exclude: ObjectId[],
-  ): Promise<GetObjectDataResponse[]>;
+  ): Promise<SuiObjectResponse[]>;
 
   /**
    * Get details about an object
    */
-  abstract getObject(objectId: string): Promise<GetObjectDataResponse>;
+  abstract getObject(
+    objectId: string,
+    options?: SuiObjectDataOptions,
+  ): Promise<SuiObjectResponse>;
 
   /**
    * Get object reference(id, tx digest, version id)
    * @param objectId
    */
   abstract getObjectRef(objectId: string): Promise<SuiObjectRef | undefined>;
+
+  abstract getObjectBatch(
+    objectIds: ObjectId[],
+    options?: SuiObjectDataOptions,
+  ): Promise<SuiObjectResponse[]>;
 
   // Transactions
   /**
@@ -242,7 +244,7 @@ export abstract class Provider {
     txnBytes: Uint8Array | string,
     signature: SerializedSignature,
     requestType: ExecuteTransactionRequestType,
-  ): Promise<SuiExecuteTransactionResponse>;
+  ): Promise<SuiTransactionResponse>;
 
   // Move info
   /**
@@ -332,7 +334,7 @@ export abstract class Provider {
    */
   abstract devInspectTransaction(
     sender: SuiAddress,
-    txn: UnserializedSignableTransaction | string | Uint8Array,
+    txn: Transaction | UnserializedSignableTransaction | string | Uint8Array,
     gasPrice: number | null,
     epoch: number | null,
   ): Promise<DevInspectResults>;
@@ -366,7 +368,7 @@ export abstract class Provider {
   abstract getDynamicFieldObject(
     parent_object_id: ObjectId,
     name: string | DynamicFieldName,
-  ): Promise<GetObjectDataResponse>;
+  ): Promise<SuiObjectResponse>;
 
   /**
    * Getting the reference gas price for the network
@@ -440,6 +442,4 @@ export abstract class Provider {
    * @return {CommitteeInfo} the committee information
    */
   abstract getCommitteeInfo(epoch?: number): Promise<CommitteeInfo>;
-
-  // TODO: add more interface methods
 }

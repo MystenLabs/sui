@@ -45,7 +45,13 @@ function ObjectResultAPI({ objID }: { objID: string }) {
     const rpc = useRpcClient();
 
     useEffect(() => {
-        rpc.getObject(objID)
+        rpc.getObject(objID, {
+            showType: true,
+            showContent: true,
+            showOwner: true,
+            showPreviousTransaction: true,
+            showStorageRebate: true,
+        })
             .then((objState) => {
                 const resp: DataType = translate(objState) as DataType;
 
