@@ -166,8 +166,7 @@ impl BatchMaker {
         &self,
         timeout: bool,
         mut batch: Batch,
-        #[allow(unused_variables)]
-        size: usize,
+        #[allow(unused_variables)] size: usize,
         responses: Vec<TxResponse>,
     ) -> Option<impl Future<Output = ()>> {
         let reason = if timeout { "timeout" } else { "size_reached" };

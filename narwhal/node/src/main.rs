@@ -136,15 +136,8 @@ async fn main() -> Result<(), eyre::Report> {
             let worker_keypair = read_network_keypair_from_file(worker_key_file)
                 .expect("Failed to load the node's worker keypair");
 
-            // In benchmarks, transactions are not deserializable => many errors at the debug level
-            // Moreover, we need RFC 3339 timestamps to parse properly => we use a custom subscriber.
-            cfg_if::cfg_if! {
-                if #[cfg(feature = "benchmark")] {
-                    setup_benchmark_telemetry(tracing_level, network_tracing_level)?;
-                } else {
-                    let _guard = setup_telemetry(tracing_level, network_tracing_level);
-                }
-            }
+            let _guard = setup_telemetry(tracing_level, network_tracing_level);
+
             run(
                 sub_matches,
                 committee,
@@ -159,10 +152,7 @@ async fn main() -> Result<(), eyre::Report> {
     Ok(())
 }
 
-fn setup_telemetry(
-    tracing_level: &str,
-    network_tracing_level: &str,
-) -> TelemetryGuards {
+fn setup_telemetry(tracing_level: &str, network_tracing_level: &str) -> TelemetryGuards {
     let log_filter = format!("{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level},quinn={network_tracing_level}");
 
     let config = telemetry_subscribers::TelemetryConfig::new()

@@ -257,21 +257,6 @@ impl Proposer {
                 Duration::from_millis(*header.created_at() - digest.timestamp).as_secs_f64();
             total_inclusion_secs += batch_inclusion_secs;
 
-            self.metrics
-                .proposer_batch_latency
-                .observe(batch_inclusion_secs);
-            
-            #[cfg(feature = "benchmark")]
-            {
-                // NOTE: This log entry is used to compute performance.
-                tracing::info!(
-                    "Batch {:?} from worker {} took {} seconds from creation to be included in a proposed header",
-                    _digest,
-                    _worker_id,
-                    batch_inclusion_secs
-                );
-            }
-
             // TODO(metrics): Observe `batch_inclusion_secs` as `proposer_batch_latency`
         }
 
