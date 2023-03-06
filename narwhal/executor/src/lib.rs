@@ -4,8 +4,6 @@ mod errors;
 mod state;
 mod subscriber;
 
-mod metrics;
-
 pub use errors::{SubscriberError, SubscriberResult};
 pub use state::ExecutionIndices;
 
