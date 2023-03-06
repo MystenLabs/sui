@@ -28,11 +28,17 @@ export function EpochProgress({
             <div className="flex flex-col space-y-16">
                 <div className="space-y-4">
                     <Heading color="steel-darker" variant="heading3/semibold">
-                        Epoch {epoch} {inProgress ? 'in progress' : ''}
+                        {inProgress
+                            ? `Epoch ${epoch} in progress`
+                            : `Epoch ${epoch}`}
                     </Heading>
                     <div>
-                        <Text variant="p4/normal" color="steel-darker">
-                            START
+                        <Text
+                            variant="p4/normal"
+                            uppercase
+                            color="steel-darker"
+                        >
+                            Start
                         </Text>
                         <Text variant="p3/semibold" color="steel-darker">
                             {formatDate(start)}

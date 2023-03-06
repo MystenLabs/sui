@@ -23,63 +23,50 @@ import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
 
 function EpochDetail() {
-    const enabled = useFeature(GROWTHBOOK_FEATURES.EPOCHS_CHECKPOINTS).on;
-    const {
-        startTimestamp,
-        endTimestamp,
-        storageSize,
-        gasCostSummary,
-        totalRewards,
-        storageFundEarnings,
-        stakeSubsidies,
-    } = getMockEpochData();
+    const { endTimestamp, gasCostSummary, totalRewards, storageFundEarnings } =
+        getMockEpochData();
 
-    const epochQuery = useGetSystemObject();
+    const { data, isError, isLoading } = useGetSystemObject();
 
     const { active, pending, atRisk } = {
-        active: epochQuery.data?.validators.active_validators.length,
-        pending: epochQuery.data?.validators.pending_validators.contents.size,
-        atRisk: epochQuery.data?.validators.pending_removals.length,
+        active: data?.validators.active_validators.length,
+        pending: data?.validators.pending_active_validators.contents.size,
+        atRisk: data?.validators.pending_removals.length,
     };
 
     const { data: validatorEvents, isLoading: validatorsEventsLoading } =
         useGetValidatorsEvents({
-            limit: epochQuery.data?.validators.active_validators.length || 0,
+            limit: data?.validators.active_validators.length || 0,
             order: 'descending',
         });
 
-    if (!enabled) return <Navigate to="/" />;
-    if (epochQuery.isError)
+    if (isError)
         return (
             <Banner variant="error" fullWidth>
                 There was an issue retrieving data for the current epoch
             </Banner>
         );
 
-    if (epochQuery.isLoading || validatorsEventsLoading)
-        return <LoadingSpinner />;
-    if (!epochQuery.data || !validatorEvents) return null;
+    if (isLoading || validatorsEventsLoading) return <LoadingSpinner />;
+    if (!data || !validatorEvents) return null;
 
     const validatorsTable = validatorsTableData(
-        epochQuery?.data.validators.active_validators,
-        epochQuery?.data.epoch,
+        data.validators.active_validators,
+        data.epoch,
         validatorEvents?.data,
-        epochQuery?.data.parameters.min_validator_stake
+        data.parameters.min_validator_stake
     );
 
     return (
         <div className="flex flex-col space-y-16">
-            <div className="grid grid-cols-1 gap-4 sm:gap-2 md:flex md:gap-6">
+            <div className="grid grid-flow-row gap-4 sm:gap-2 md:flex md:gap-6">
                 <EpochProgress
-                    epoch={epochQuery.data.epoch}
+                    epoch={data.epoch}
                     inProgress
-                    start={startTimestamp!}
+                    start={data.epoch_start_timestamp_ms ?? 0}
                     end={endTimestamp}
                 />
                 <EpochStats label="Activity">
-                    <Stats label="Storage Size" tooltip="Storage Size">
-                        {`${storageSize.toFixed(2)} GB`}
-                    </Stats>
                     <Stats label="Gas Revenue" tooltip="Gas Revenue">
                         <SuiAmount amount={gasCostSummary?.gasRevenue} />
                     </Stats>
@@ -92,7 +79,9 @@ function EpochDetail() {
                 </EpochStats>
                 <EpochStats label="Rewards">
                     <Stats label="Stake Subsidies" tooltip="Stake Subsidies">
-                        <SuiAmount amount={stakeSubsidies} />
+                        <SuiAmount
+                            amount={data.stake_subsidy.current_epoch_amount}
+                        />
                     </Stats>
                     <Stats label="Total Rewards" tooltip="Total Rewards">
                         <SuiAmount amount={totalRewards} />
@@ -137,7 +126,7 @@ function EpochDetail() {
                 </TabList>
                 <TabPanels className="mt-4">
                     <TabPanel>
-                        <CheckpointsTable epoch={epochQuery.data.epoch} />
+                        <CheckpointsTable epoch={data.epoch} />
                     </TabPanel>
                     <TabPanel>
                         {validatorsTable ? (
@@ -157,8 +146,10 @@ function EpochDetail() {
 
 export default function EpochDetailFeatureFlagged() {
     const gb = useGrowthBook();
-    if (gb?.ready) {
-        return <EpochDetail />;
-    }
-    return <LoadingSpinner />;
+    const { on: epochsEnabled } = useFeature(
+        GROWTHBOOK_FEATURES.EPOCHS_CHECKPOINTS
+    );
+    if (!gb?.ready) return <LoadingSpinner />;
+    if (epochsEnabled) return <EpochDetail />;
+    return <Navigate to="/" />;
 }

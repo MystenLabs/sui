@@ -62,8 +62,8 @@ importers:
       '@floating-ui/react': ^0.18.0
       '@fontsource/inter': ^4.5.14
       '@fontsource/red-hat-mono': ^4.5.11
-      '@growthbook/growthbook': ^0.21.2
-      '@growthbook/growthbook-react': ^0.11.2
+      '@growthbook/growthbook': ^0.23.0
+      '@growthbook/growthbook-react': ^0.12.0
       '@headlessui/react': ^1.7.7
       '@hookform/resolvers': ^2.9.10
       '@mysten/core': workspace:*
@@ -134,8 +134,8 @@ importers:
       '@floating-ui/react': 0.18.0_ib3m5ricvtkl2cll7qpr2f6lvq
       '@fontsource/inter': 4.5.14
       '@fontsource/red-hat-mono': 4.5.11
-      '@growthbook/growthbook': 0.21.2
-      '@growthbook/growthbook-react': 0.11.2_react@18.2.0
+      '@growthbook/growthbook': 0.23.0
+      '@growthbook/growthbook-react': 0.12.0_react@18.2.0
       '@headlessui/react': 1.7.7_biqbaboplfbrettd7655fr4n2y
       '@hookform/resolvers': 2.9.10_react-hook-form@7.42.1
       '@mysten/core': link:../core
@@ -4329,13 +4329,13 @@ packages:
       react: 18.2.0
     dev: false
 
-  /@growthbook/growthbook-react/0.11.2_react@18.2.0:
-    resolution: {integrity: sha512-C2O4F3Sf28vFDM8Bv3xj9wYAeCVm5r2ykGzWjtezrhd2MVc38gFVOz3tIMg79xJiffM50NF7G+qIm4Y664rV8Q==}
+  /@growthbook/growthbook-react/0.12.0_react@18.2.0:
+    resolution: {integrity: sha512-Oo2cbGpM8thaAmwEccKFy/uRU3bqU4r4xcpKaLEHPeGARCkccFi1tdq2GPYEoO6cyeo7/Wc9eHqhtazg340orA==}
     engines: {node: '>=10'}
     peerDependencies:
       react: ^16.8.0-0 || ^17.0.0-0 || ^18.0.0-0
     dependencies:
-      '@growthbook/growthbook': 0.21.2
+      '@growthbook/growthbook': 0.23.0
       react: 18.2.0
     dev: false
 
@@ -4344,8 +4344,8 @@ packages:
     engines: {node: '>=10'}
     dev: false
 
-  /@growthbook/growthbook/0.21.2:
-    resolution: {integrity: sha512-kAu6LH02krkS+IxfQbe5mGYfPCGrmw+Cm9N3BChc151anhhVvMd8KS1m+vev6yEPnY606BouxE6a3SuDmmCF4g==}
+  /@growthbook/growthbook/0.23.0:
+    resolution: {integrity: sha512-sEVJGazy40N2iGUZQN0qzO6qSFJEbKVVfA4dLo5znP0YCr1xWbGlrmmXshQDMEznj2fZiiFL5/UCnghktwB35g==}
     engines: {node: '>=10'}
     dev: false
 
@@ -8686,7 +8686,7 @@ packages:
   /axios/0.25.0_debug@4.3.4:
     resolution: {integrity: sha512-cD8FOb0tRH3uuEe6+evtAbgJtfxr7ly3fQjYcMcuPlgkwVS9xboaVIpcDV+cYQe+yGykgwZCs1pzjntcGa6l5g==}
     dependencies:
-      follow-redirects: 1.15.1
+      follow-redirects: 1.15.1_debug@4.3.4
     transitivePeerDependencies:
       - debug
     dev: true
@@ -12615,6 +12615,18 @@ packages:
     peerDependenciesMeta:
       debug:
         optional: true
+    dev: true
+
+  /follow-redirects/1.15.1_debug@4.3.4:
+    resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
+    engines: {node: '>=4.0'}
+    peerDependencies:
+      debug: '*'
+    peerDependenciesMeta:
+      debug:
+        optional: true
+    dependencies:
+      debug: 4.3.4
     dev: true
 
   /for-each/0.3.3:

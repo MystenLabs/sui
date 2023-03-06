@@ -21,9 +21,7 @@ export function EpochStats({ label, children }: EpochStatsProps) {
                     </Heading>
                 )}
                 {/* todo: get tooltip content, can we re-use metrics components from home */}
-                <div className="grid grid-cols-2 gap-6 overflow-y-hidden">
-                    {children}
-                </div>
+                <div className="flex flex-wrap gap-6">{children}</div>
             </div>
         </Card>
     );

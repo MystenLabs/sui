@@ -72,7 +72,7 @@ export function RingChart({
     });
 
     return (
-        <div className="grid grid-cols-1 items-center justify-center xl:grid-cols-2">
+        <div className="grid grid-flow-row items-center justify-start xl:grid-cols-2 xl:justify-center">
             <div className="self-start">
                 <Legend data={data} title={title} />
             </div>

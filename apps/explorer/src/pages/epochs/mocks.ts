@@ -3,8 +3,6 @@
 
 export type Epoch = {
     epoch: number;
-    // validators: any;
-    // transactionCount: number;
     checkpointSet: [number, number];
     startTimestamp: number;
     endTimestamp: number;
@@ -45,15 +43,11 @@ export const getMockEpochData = (): Epoch => ({
     totalRewards: 1000000,
 });
 
-export const getEpochs = async () =>
-    Promise.all(Array.from({ length: 20 }).map(getMockEpochData));
+export const getEpochs = () => Array.from({ length: 20 }).map(getMockEpochData);
+export const getCheckpoints = () =>
+    Array.from({ length: 20 }).map(getCheckpoint);
 
-// getCheckpoints()
-export const getCheckpoints = async () =>
-    Promise.all(Array.from({ length: 20 }).map(getCheckpoint));
-
-// getCheckpoint()
-export const getCheckpoint = async () => ({
+export const getCheckpoint = () => ({
     epoch: 0,
     timestampMs: recentTime(),
     sequence_number: 50000,
