@@ -20,12 +20,13 @@ use sui_types::digests::TransactionEventsDigest;
 use sui_types::error::ExecutionError;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::{
-    CallArg, ExecutionStatus, GenesisObject, InputObjectKind, ObjectArg, Pay, PayAllSui, PaySui,
-    SenderSignedData, SingleTransactionKind, TransactionData, TransactionDataAPI,
-    TransactionEffects, TransactionEffectsAPI, TransactionEvents, TransactionKind,
-    VersionedProtocolMessage,
+    Argument, CallArg, Command, ExecutionStatus, GenesisObject, InputObjectKind, ObjectArg, Pay,
+    PayAllSui, PaySui, ProgrammableMoveCall, ProgrammableTransaction, SenderSignedData,
+    SingleTransactionKind, TransactionData, TransactionDataAPI, TransactionEffects,
+    TransactionEffectsAPI, TransactionEvents, TransactionKind, VersionedProtocolMessage,
 };
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::move_package::disassemble_modules;
 use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
 use sui_types::signature::GenericSignature;
@@ -87,6 +88,9 @@ pub enum SuiTransactionKind {
     /// A system transaction marking the start of a series of transactions scheduled as part of a
     /// checkpoint
     ConsensusCommitPrologue(SuiConsensusCommitPrologue),
+    /// A series of commands where the results of one command can be used in future
+    /// commands
+    ProgrammableTransaction(SuiProgrammableTransaction),
     // .. more transaction types go here
 }
 
@@ -183,6 +187,10 @@ impl Display for SuiTransactionKind {
                     p.epoch, p.round, p.commit_timestamp_ms
                 )?;
             }
+            Self::ProgrammableTransaction(p) => {
+                writeln!(writer, "Transaction Kind : Programmable")?;
+                write!(writer, "{p}")?;
+            }
         }
         write!(f, "{}", writer)
     }
@@ -249,8 +257,8 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
                     commit_timestamp_ms: p.commit_timestamp_ms,
                 })
             }
-            SingleTransactionKind::ProgrammableTransaction(_) => {
-                anyhow::bail!("programmable transactions are not yet supported")
+            SingleTransactionKind::ProgrammableTransaction(p) => {
+                Self::ProgrammableTransaction(p.try_into()?)
             }
         })
     }
@@ -958,6 +966,236 @@ pub enum SuiInputObjectKind {
         #[serde(default = "default_shared_object_mutability")]
         mutable: bool,
     },
+}
+
+/// A series of commands where the results of one command can be used in future
+/// commands
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SuiProgrammableTransaction {
+    /// Input objects or primitive values
+    pub inputs: Vec<SuiJsonValue>,
+    /// The commands to be executed sequentially. A failure in any command will
+    /// result in the failure of the entire transaction.
+    pub commands: Vec<SuiCommand>,
+}
+
+impl Display for SuiProgrammableTransaction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let Self { inputs, commands } = self;
+        writeln!(f, "Inputs: {inputs:?}")?;
+        writeln!(f, "Commands: [")?;
+        for c in commands {
+            writeln!(f, "  {c},")?;
+        }
+        writeln!(f, "]")
+    }
+}
+
+impl TryFrom<ProgrammableTransaction> for SuiProgrammableTransaction {
+    type Error = anyhow::Error;
+
+    fn try_from(value: ProgrammableTransaction) -> Result<Self, Self::Error> {
+        let ProgrammableTransaction { inputs, commands } = value;
+        Ok(SuiProgrammableTransaction {
+            inputs: inputs
+                .into_iter()
+                .map(|arg| arg.try_into())
+                .collect::<Result<_, _>>()?,
+            commands: commands.into_iter().map(SuiCommand::from).collect(),
+        })
+    }
+}
+
+/// A single command in a programmable transaction.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub enum SuiCommand {
+    /// A call to either an entry or a public Move function
+    MoveCall(Box<SuiProgrammableMoveCall>),
+    /// `(Vec<forall T:key+store. T>, address)`
+    /// It sends n-objects to the specified address. These objects must have store
+    /// (public transfer) and either the previous owner must be an address or the object must
+    /// be newly created.
+    TransferObjects(Vec<SuiArgument>, SuiArgument),
+    /// `(&mut Coin<T>, u64)` -> `Coin<T>`
+    /// It splits off some amount into a new coin
+    SplitCoin(SuiArgument, SuiArgument),
+    /// `(&mut Coin<T>, Vec<Coin<T>>)`
+    /// It merges n-coins into the first coin
+    MergeCoins(SuiArgument, Vec<SuiArgument>),
+    /// Publishes a Move package
+    Publish(SuiMovePackage),
+    /// `forall T: Vec<T> -> vector<T>`
+    /// Given n-values of the same type, it constructs a vector. For non objects or an empty vector,
+    /// the type tag must be specified.
+    MakeMoveVec(Option<String>, Vec<SuiArgument>),
+}
+
+impl Display for SuiCommand {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MoveCall(p) => {
+                write!(f, "MoveCall({p})")
+            }
+            Self::MakeMoveVec(ty_opt, elems) => {
+                write!(f, "MakeMoveVec(")?;
+                if let Some(ty) = ty_opt {
+                    write!(f, "Some{ty}")?;
+                } else {
+                    write!(f, "None")?;
+                }
+                write!(f, ",[")?;
+                write_sep(f, elems, ",")?;
+                write!(f, "])")
+            }
+            Self::TransferObjects(objs, addr) => {
+                write!(f, "TransferObjects([")?;
+                write_sep(f, objs, ",")?;
+                write!(f, "],{addr})")
+            }
+            Self::SplitCoin(coin, amount) => write!(f, "SplitCoin({coin},{amount})"),
+            Self::MergeCoins(target, coins) => {
+                write!(f, "MergeCoins({target},")?;
+                write_sep(f, coins, ",")?;
+                write!(f, ")")
+            }
+            Self::Publish(_bytes) => write!(f, "Publish(_)"),
+        }
+    }
+}
+
+impl From<Command> for SuiCommand {
+    fn from(value: Command) -> Self {
+        match value {
+            Command::MoveCall(m) => SuiCommand::MoveCall(Box::new((*m).into())),
+            Command::TransferObjects(args, arg) => SuiCommand::TransferObjects(
+                args.into_iter().map(SuiArgument::from).collect(),
+                arg.into(),
+            ),
+            Command::SplitCoin(a1, a2) => SuiCommand::SplitCoin(a1.into(), a2.into()),
+            Command::MergeCoins(arg, args) => SuiCommand::MergeCoins(
+                arg.into(),
+                args.into_iter().map(SuiArgument::from).collect(),
+            ),
+            Command::Publish(modules) => SuiCommand::Publish(SuiMovePackage {
+                disassembled: disassemble_modules(modules.iter()).unwrap_or_default(),
+            }),
+            Command::MakeMoveVec(tag_opt, args) => SuiCommand::MakeMoveVec(
+                tag_opt.map(|tag| tag.to_string()),
+                args.into_iter().map(SuiArgument::from).collect(),
+            ),
+        }
+    }
+}
+
+/// An argument to a programmable transaction command
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub enum SuiArgument {
+    /// The gas coin. The gas coin can only be used by-ref, except for with
+    /// `TransferObjects`, which can use it by-value.
+    GasCoin,
+    /// One of the input objects or primitive values (from
+    /// `ProgrammableTransaction` inputs)
+    Input(u16),
+    /// The result of another command (from `ProgrammableTransaction` commands)
+    Result(u16),
+    /// Like a `Result` but it accesses a nested result. Currently, the only usage
+    /// of this is to access a value from a Move call with multiple return values.
+    NestedResult(u16, u16),
+}
+
+impl Display for SuiArgument {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::GasCoin => write!(f, "GasCoin"),
+            Self::Input(i) => write!(f, "Input({i})"),
+            Self::Result(i) => write!(f, "Result({i})"),
+            Self::NestedResult(i, j) => write!(f, "NestedResult({i},{j})"),
+        }
+    }
+}
+
+impl From<Argument> for SuiArgument {
+    fn from(value: Argument) -> Self {
+        match value {
+            Argument::GasCoin => Self::GasCoin,
+            Argument::Input(i) => Self::Input(i),
+            Argument::Result(i) => Self::Result(i),
+            Argument::NestedResult(i, j) => Self::NestedResult(i, j),
+        }
+    }
+}
+
+/// The command for calling a Move function, either an entry function or a public
+/// function (which cannot return references).
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SuiProgrammableMoveCall {
+    /// The package containing the module and function.
+    pub package: ObjectID,
+    /// The specific module in the package containing the function.
+    pub module: String,
+    /// The function to be called.
+    pub function: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    /// The type arguments to the function.
+    pub type_arguments: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    /// The arguments to the function.
+    pub arguments: Vec<SuiArgument>,
+}
+
+fn write_sep<T: Display>(
+    f: &mut Formatter<'_>,
+    items: impl IntoIterator<Item = T>,
+    sep: &str,
+) -> std::fmt::Result {
+    let mut xs = items.into_iter().peekable();
+    while let Some(x) = xs.next() {
+        if xs.peek().is_some() {
+            write!(f, "{sep}")?;
+        }
+        write!(f, "{x}")?;
+    }
+    Ok(())
+}
+
+impl Display for SuiProgrammableMoveCall {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let Self {
+            package,
+            module,
+            function,
+            type_arguments,
+            arguments,
+        } = self;
+        write!(f, "{package}::{module}::{function}")?;
+        if !type_arguments.is_empty() {
+            write!(f, "<")?;
+            write_sep(f, type_arguments, ",")?;
+            write!(f, ">")?;
+        }
+        write!(f, "(")?;
+        write_sep(f, arguments, ",")?;
+        write!(f, ")")
+    }
+}
+
+impl From<ProgrammableMoveCall> for SuiProgrammableMoveCall {
+    fn from(value: ProgrammableMoveCall) -> Self {
+        let ProgrammableMoveCall {
+            package,
+            module,
+            function,
+            type_arguments,
+            arguments,
+        } = value;
+        Self {
+            package,
+            module: module.to_string(),
+            function: function.to_string(),
+            type_arguments: type_arguments.into_iter().map(|t| t.to_string()).collect(),
+            arguments: arguments.into_iter().map(SuiArgument::from).collect(),
+        }
+    }
 }
 
 const fn default_shared_object_mutability() -> bool {
