@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 
 import PageMainLayout from '_app/shared/page-main-layout';
@@ -20,18 +19,6 @@ const HomePage = ({ disableNavigation, limitToPopUpSize = true }: Props) => {
     const initChecking = useInitializedGuard(true);
     const lockedChecking = useLockedGuard(false);
     const guardChecking = initChecking || lockedChecking;
-    const [, setVisibility] = useState(document?.visibilityState || null);
-
-    useEffect(() => {
-        const callback = () => {
-            setVisibility(document.visibilityState);
-        };
-        callback();
-        document.addEventListener('visibilitychange', callback);
-        return () => {
-            document.removeEventListener('visibilitychange', callback);
-        };
-    }, []);
 
     usePageView();
     return (
