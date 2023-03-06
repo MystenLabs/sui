@@ -8,12 +8,12 @@ export function getValidatorMoveEvent(
     validatorAddress: string
 ) {
     const event = validatorsEvent.find(({ event }) => {
-        if ('moveEvent' in event) {
-            const { moveEvent } = event as { moveEvent: MoveEvent };
-            return moveEvent.fields.validator_address === validatorAddress;
+        if (event.type === 'moveEvent') {
+            const { content } = event;
+            return content.fields.validator_address === validatorAddress;
         }
         return false;
     });
 
-    return event && 'moveEvent' in event.event ? event.event.moveEvent : null;
+    return event && event.event.type === 'moveEvent' ? event.event.content : null;
 }

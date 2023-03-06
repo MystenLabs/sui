@@ -113,13 +113,13 @@ function getTxnAmountFromCoinBalanceEvent(
 
     events.forEach((event) => {
         if (
-            'coinBalanceChange' in event &&
-            event?.coinBalanceChange?.changeType &&
-            ['Receive', 'Pay'].includes(event?.coinBalanceChange?.changeType) &&
-            event?.coinBalanceChange?.transactionModule !== 'gas'
+            event.type === 'coinBalanceChange' &&
+            event?.content?.changeType &&
+            ['Receive', 'Pay'].includes(event?.content?.changeType) &&
+            event?.content?.transactionModule !== 'gas'
         ) {
-            const { coinBalanceChange } = event;
-            const { coinType, amount, owner, sender } = coinBalanceChange;
+            const { content } = event;
+            const { coinType, amount, owner, sender } = content;
             const { AddressOwner } = owner as { AddressOwner: string };
             if (AddressOwner === address || address === sender) {
                 coinsMeta[`${AddressOwner}${coinType}`] = {

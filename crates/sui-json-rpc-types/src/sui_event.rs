@@ -43,7 +43,12 @@ pub struct SuiEventEnvelope {
 
 #[serde_as]
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "Event", rename_all = "camelCase", tag = "type", content = "content")]
+#[serde(
+    rename = "Event",
+    rename_all = "camelCase",
+    tag = "type",
+    content = "content"
+)]
 pub enum SuiEvent {
     /// Move-specific event
     #[serde(rename_all = "camelCase")]

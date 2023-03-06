@@ -200,9 +200,9 @@ function ValidatorPageResult() {
         let totalRewards = 0;
 
         validatorEvents.data.forEach(({ event }) => {
-            if ('moveEvent' in event) {
-                const { moveEvent } = event;
-                totalRewards += +moveEvent.fields.stake_rewards;
+            if (event.type === 'moveEvent') {
+                const { content } = event;
+                totalRewards += +content.fields.stake_rewards;
             }
         });
 

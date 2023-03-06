@@ -52,11 +52,11 @@ const transformTable = (events: SuiEvents) => ({
             timestamp,
             txDigest,
         }: SuiEventEnvelope): PackageTableData => {
-            if (!('publish' in event)) return {};
+            if (!(event.type === 'publish')) return {};
             return {
                 time: <TxTimeType timestamp={timestamp} />,
-                sender: <AddressLink address={event.publish.sender} />,
-                packageId: <ObjectLink objectId={event.publish.packageId} />,
+                sender: <AddressLink address={event.content.sender} />,
+                packageId: <ObjectLink objectId={event.content.packageId} />,
                 txnDigest: <TransactionLink digest={txDigest} />,
             };
         }
