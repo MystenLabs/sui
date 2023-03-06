@@ -111,7 +111,7 @@ class Plotter:
             l = f'{id.nodes} nodes{f}'
             return f'{l} - {id.shared_objects_ratio}% shared objects'
         elif plot_type == PlotType.SCALABILITY:
-            l = f'{id.max_latency}s max latency{f}'
+            l = f'{id.max_latency}s latency cap{f}'
             return f'{l} - {id.shared_objects_ratio}% shared objects'
         else:
             assert False
