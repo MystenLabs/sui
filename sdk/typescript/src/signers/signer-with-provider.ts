@@ -24,16 +24,7 @@ import { IntentScope, messageWithIntent } from '../utils/intent';
 import { Signer } from './signer';
 import { RpcTxnDataSerializer } from './txn-data-serializers/rpc-txn-data-serializer';
 import {
-  MoveCallTransaction,
-  MergeCoinTransaction,
-  PayTransaction,
-  PaySuiTransaction,
-  PayAllSuiTransaction,
-  SplitCoinTransaction,
-  TransferObjectTransaction,
-  TransferSuiTransaction,
   TxnDataSerializer,
-  PublishTransaction,
   SignableTransaction,
   UnserializedSignableTransaction,
   SignedTransaction,
@@ -104,6 +95,13 @@ export abstract class SignerWithProvider implements Signer {
     };
   }
 
+  /** @deprecated Instead of using `SignableTransaction`, pass a `Transaction` instance instead. */
+  async signTransaction(
+    transaction: SignableTransaction,
+  ): Promise<SignedTransaction>;
+  async signTransaction(
+    transaction: Uint8Array | Transaction,
+  ): Promise<SignedTransaction>;
   /**
    * Sign a transaction.
    */
@@ -146,6 +144,15 @@ export abstract class SignerWithProvider implements Signer {
     };
   }
 
+  /** @deprecated Instead of using `SignableTransaction`, pass a `Transaction` instance instead. */
+  async signAndExecuteTransaction(
+    transaction: SignableTransaction,
+    requestType?: ExecuteTransactionRequestType,
+  ): Promise<SuiTransactionResponse>;
+  async signAndExecuteTransaction(
+    transaction: Uint8Array | Transaction,
+    requestType?: ExecuteTransactionRequestType,
+  ): Promise<SuiTransactionResponse>;
   /**
    * Sign a transaction and submit to the Fullnode for execution.
    */
@@ -154,7 +161,8 @@ export abstract class SignerWithProvider implements Signer {
     requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
   ): Promise<SuiTransactionResponse> {
     const { transactionBytes, signature } = await this.signTransaction(
-      transaction,
+      // TODO: Remove this refinement when the deprecated overload goes away
+      transaction as Uint8Array | Transaction,
     );
 
     return await this.provider.executeTransaction(
@@ -246,153 +254,6 @@ export abstract class SignerWithProvider implements Signer {
       }
     }
     return this.provider.dryRunTransaction(dryRunTxBytes);
-  }
-
-  /**
-   *
-   * Serialize and sign a `TransferObject` transaction and submit to the Fullnode
-   * for execution
-   *
-   * @deprecated Use `Transaction` builder API instead.
-   */
-  async transferObject(
-    transaction: TransferObjectTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
-  ): Promise<SuiTransactionResponse> {
-    return this.signAndExecuteTransaction(
-      { kind: 'transferObject', data: transaction },
-      requestType,
-    );
-  }
-
-  /**
-   *
-   * Serialize and sign a `TransferSui` transaction and submit to the Fullnode
-   * for execution
-   *
-   * @deprecated Use `Transaction` builder API instead.
-   */
-  async transferSui(
-    transaction: TransferSuiTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
-  ): Promise<SuiTransactionResponse> {
-    return this.signAndExecuteTransaction(
-      { kind: 'transferSui', data: transaction },
-      requestType,
-    );
-  }
-
-  /**
-   *
-   * Serialize and Sign a `Pay` transaction and submit to the fullnode for execution
-   *
-   * @deprecated Use `Transaction` builder API instead.
-   */
-  async pay(
-    transaction: PayTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
-  ): Promise<SuiTransactionResponse> {
-    return this.signAndExecuteTransaction(
-      { kind: 'pay', data: transaction },
-      requestType,
-    );
-  }
-
-  /**
-   * Serialize and Sign a `PaySui` transaction and submit to the fullnode for execution
-   *
-   * @deprecated Use `Transaction` builder API instead.
-   */
-  async paySui(
-    transaction: PaySuiTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
-  ): Promise<SuiTransactionResponse> {
-    return this.signAndExecuteTransaction(
-      { kind: 'paySui', data: transaction },
-      requestType,
-    );
-  }
-
-  /**
-   * Serialize and Sign a `PayAllSui` transaction and submit to the fullnode for execution
-   *
-   * @deprecated Use `Transaction` builder API instead.
-   */
-  async payAllSui(
-    transaction: PayAllSuiTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
-  ): Promise<SuiTransactionResponse> {
-    return this.signAndExecuteTransaction(
-      { kind: 'payAllSui', data: transaction },
-      requestType,
-    );
-  }
-
-  /**
-   *
-   * Serialize and sign a `MergeCoin` transaction and submit to the Fullnode
-   * for execution
-   *
-   * @deprecated Use `Transaction` builder API instead.
-   */
-  async mergeCoin(
-    transaction: MergeCoinTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
-  ): Promise<SuiTransactionResponse> {
-    return this.signAndExecuteTransaction(
-      { kind: 'mergeCoin', data: transaction },
-      requestType,
-    );
-  }
-
-  /**
-   *
-   * Serialize and sign a `SplitCoin` transaction and submit to the Fullnode
-   * for execution
-   *
-   * @deprecated Use `Transaction` builder API instead.
-   */
-  async splitCoin(
-    transaction: SplitCoinTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
-  ): Promise<SuiTransactionResponse> {
-    return this.signAndExecuteTransaction(
-      { kind: 'splitCoin', data: transaction },
-      requestType,
-    );
-  }
-
-  /**
-   * Serialize and sign a `MoveCall` transaction and submit to the Fullnode
-   * for execution
-   *
-   * @deprecated Use `Transaction` builder API instead.
-   */
-  async executeMoveCall(
-    transaction: MoveCallTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
-  ): Promise<SuiTransactionResponse> {
-    return this.signAndExecuteTransaction(
-      { kind: 'moveCall', data: transaction },
-      requestType,
-    );
-  }
-
-  /**
-   *
-   * Serialize and sign a `Publish` transaction and submit to the Fullnode
-   * for execution
-   *
-   * @deprecated Use `Transaction` builder API instead.
-   */
-  async publish(
-    transaction: PublishTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
-  ): Promise<SuiTransactionResponse> {
-    return this.signAndExecuteTransaction(
-      { kind: 'publish', data: transaction },
-      requestType,
-    );
   }
 
   /**

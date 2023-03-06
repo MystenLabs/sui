@@ -23,26 +23,32 @@ describe.skip('Test Move call with a vector of objects as input (skipped due to 
   let packageId: ObjectId;
 
   async function mintObject(val: number) {
-    const txn = await signer.executeMoveCall({
-      packageObjectId: packageId,
-      module: 'entry_point_vector',
-      function: 'mint',
-      typeArguments: [],
-      arguments: [val.toString()],
-      gasBudget: DEFAULT_GAS_BUDGET,
+    const txn = await signer.signAndExecuteTransaction({
+      kind: 'moveCall',
+      data: {
+        packageObjectId: packageId,
+        module: 'entry_point_vector',
+        function: 'mint',
+        typeArguments: [],
+        arguments: [val.toString()],
+        gasBudget: DEFAULT_GAS_BUDGET,
+      },
     });
     expect(getExecutionStatusType(txn)).toEqual('success');
     return getCreatedObjects(txn)![0].reference.objectId;
   }
 
   async function destroyObjects(objects: ObjectId[]) {
-    const txn = await signer.executeMoveCall({
-      packageObjectId: packageId,
-      module: 'entry_point_vector',
-      function: 'two_obj_vec_destroy',
-      typeArguments: [],
-      arguments: [objects],
-      gasBudget: DEFAULT_GAS_BUDGET,
+    const txn = await signer.signAndExecuteTransaction({
+      kind: 'moveCall',
+      data: {
+        packageObjectId: packageId,
+        module: 'entry_point_vector',
+        function: 'two_obj_vec_destroy',
+        typeArguments: [],
+        arguments: [objects],
+        gasBudget: DEFAULT_GAS_BUDGET,
+      },
     });
     expect(getExecutionStatusType(txn)).toEqual('success');
   }
@@ -65,13 +71,16 @@ describe.skip('Test Move call with a vector of objects as input (skipped due to 
       toolbox.address(),
     );
     const coinIDs = coins.map((coin) => Coin.getID(coin));
-    const txn = await signer.executeMoveCall({
-      packageObjectId: SUI_FRAMEWORK_ADDRESS,
-      module: 'pay',
-      function: 'join_vec',
-      typeArguments: ['0x2::sui::SUI'],
-      arguments: [coinIDs[0], [coinIDs[1], coinIDs[2]]],
-      gasBudget: DEFAULT_GAS_BUDGET,
+    const txn = await signer.signAndExecuteTransaction({
+      kind: 'moveCall',
+      data: {
+        packageObjectId: SUI_FRAMEWORK_ADDRESS,
+        module: 'pay',
+        function: 'join_vec',
+        typeArguments: ['0x2::sui::SUI'],
+        arguments: [coinIDs[0], [coinIDs[1], coinIDs[2]]],
+        gasBudget: DEFAULT_GAS_BUDGET,
+      },
     });
     expect(getExecutionStatusType(txn)).toEqual('success');
   });
