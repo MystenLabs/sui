@@ -4,7 +4,7 @@
 use futures::future::{join_all, select, Either};
 use futures::FutureExt;
 use narwhal_executor::ExecutionIndices;
-use narwhal_types::CommittedSubDag;
+use narwhal_types::Round;
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard};
 use rocksdb::Options;
@@ -1741,10 +1741,10 @@ impl AuthorityPerEpochStore {
 
     pub fn handle_commit_boundary<C: CheckpointServiceNotify>(
         &self,
-        committed_dag: &Arc<CommittedSubDag>,
+        round: Round,
+        timestamp_ms: CheckpointTimestamp,
         checkpoint_service: &Arc<C>,
     ) -> SuiResult {
-        let round = committed_dag.round();
         debug!("Commit boundary at {}", round);
         // This exchange is restart safe because of following:
         //
@@ -1769,7 +1769,7 @@ impl AuthorityPerEpochStore {
             let checkpoint = PendingCheckpoint {
                 roots,
                 details: PendingCheckpointInfo {
-                    timestamp_ms: committed_dag.leader.metadata.created_at,
+                    timestamp_ms,
                     last_of_epoch: final_checkpoint,
                     commit_height: index,
                 },
