@@ -1521,6 +1521,8 @@ pub trait TransactionDataAPI {
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult;
 
+    fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult;
+
     /// Check if the transaction is compliant with sponsorship.
     fn check_sponsorship(&self) -> UserInputResult;
 
@@ -1615,14 +1617,20 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
-        let gas = self.gas();
+        fp_ensure!(!self.gas().is_empty(), UserInputError::MissingGasPayment);
         fp_ensure!(
-            gas.len() < config.max_gas_payment_objects() as usize,
+            self.gas().len() < config.max_gas_payment_objects() as usize,
             UserInputError::SizeLimitExceeded {
                 limit: "maximum number of gas payment objects".to_string(),
                 value: config.max_gas_payment_objects().to_string()
             }
         );
+        self.validity_check_no_gas_check(config)
+    }
+
+    // Keep all the logic for validity here, we need this for dry run where the gas
+    // may not be provided and created "on the fly"
+    fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult {
         self.kind().validity_check(config)?;
         self.check_sponsorship()
     }
