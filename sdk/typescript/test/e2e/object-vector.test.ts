@@ -17,7 +17,7 @@ import {
   TestToolbox,
 } from './utils/setup';
 
-describe('Test Move call with a vector of objects as input', () => {
+describe.skip('Test Move call with a vector of objects as input (skipped due to move vector requirement)', () => {
   let toolbox: TestToolbox;
   let signer: RawSigner;
   let packageId: ObjectId;

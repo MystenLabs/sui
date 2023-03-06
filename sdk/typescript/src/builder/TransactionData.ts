@@ -80,7 +80,7 @@ export class TransactionDataBuilder {
     this.commands = clone?.commands ?? [];
   }
 
-  build() {
+  build({ size }: { size?: number } = {}) {
     if (!this.gasConfig.budget) {
       throw new Error('Missing gas budget');
     }
@@ -122,7 +122,9 @@ export class TransactionDataBuilder {
       },
     };
 
-    return builder.ser('TransactionData', { V1: transactionData }).toBytes();
+    return builder
+      .ser('TransactionData', { V1: transactionData }, size)
+      .toBytes();
   }
 
   snapshot(): SerializedTransactionDataBuilder {

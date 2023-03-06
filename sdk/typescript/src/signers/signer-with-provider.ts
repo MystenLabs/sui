@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64, toB64 } from '@mysten/bcs';
-import { Transaction } from '../builder';
+import { builder, Transaction } from '../builder';
+import { convertToTransactionBuilder } from '../builder/legacy';
 import { SerializedSignature } from '../cryptography/signature';
 import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import { Provider } from '../providers/provider';
@@ -16,7 +17,6 @@ import {
   getTotalGasUsedUpperBound,
   SuiAddress,
   DevInspectResults,
-  bcsForVersion,
   DryRunTransactionResponse,
   SuiTransactionResponse,
 } from '../types';
@@ -122,16 +122,16 @@ export abstract class SignerWithProvider implements Signer {
       transactionBytes =
         transaction instanceof Uint8Array ? transaction : transaction.data;
     } else {
-      transactionBytes = await this.serializer.serializeToBytes(
-        await this.getAddress(),
-        transaction,
-        'Commit',
-      );
-      // transactionBytes = await convertToTransactionBuilder(
+      // transactionBytes = await this.serializer.serializeToBytes(
       //   await this.getAddress(),
       //   transaction,
-      //   this.provider,
+      //   'Commit',
       // );
+      transactionBytes = await convertToTransactionBuilder(
+        await this.getAddress(),
+        transaction,
+        this.provider,
+      );
     }
 
     const intentMessage = messageWithIntent(
@@ -174,22 +174,22 @@ export abstract class SignerWithProvider implements Signer {
     } else if (tx instanceof Uint8Array || tx.kind === 'bytes') {
       txBytes = tx instanceof Uint8Array ? tx : tx.data;
     } else {
-      // txBytes = await convertToTransactionBuilder(tx).build({
-      //   provider: this.provider,
-      // });
-      txBytes = await this.serializer.serializeToBytes(
+      txBytes = await convertToTransactionBuilder(
         await this.getAddress(),
         tx,
-        'DevInspect',
+        this.provider,
       );
+      // txBytes = await this.serializer.serializeToBytes(
+      //   await this.getAddress(),
+      //   tx,
+      //   'DevInspect',
+      // );
     }
-    const version = await this.provider.getRpcApiVersion();
-    const bcs = bcsForVersion(version);
 
     // TODO: Why do we deserialize, then immedietly re-serialize the transaction data here?
     // Probably can improve this with some `Transaction` helpers to build just transaction data.
-    const data = deserializeTransactionBytesToTransactionData(bcs, txBytes);
-    return generateTransactionDigest(data, bcs);
+    const data = deserializeTransactionBytesToTransactionData(builder, txBytes);
+    return generateTransactionDigest(data, builder);
   }
 
   /**
@@ -382,6 +382,8 @@ export abstract class SignerWithProvider implements Signer {
    *
    * Serialize and sign a `Publish` transaction and submit to the Fullnode
    * for execution
+   *
+   * @deprecated Use `Transaction` builder API instead.
    */
   async publish(
     transaction: PublishTransaction,

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   getExecutionStatusType,
   getNewlyCreatedCoinRefsAfterSplit,
@@ -23,7 +23,7 @@ describe('Transaction Builders', () => {
   let toolbox: TestToolbox;
   let signer: RawSigner;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     toolbox = await setup();
     signer = new RawSigner(toolbox.keypair, toolbox.provider);
   });

@@ -5,7 +5,6 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import {
   Coin,
   getObjectId,
-  LocalTxnDataSerializer,
   normalizeSuiObjectId,
   ObjectId,
   RawSigner,
@@ -25,11 +24,7 @@ describe('Coin related API', () => {
 
   beforeAll(async () => {
     toolbox = await setup();
-    signer = new RawSigner(
-      toolbox.keypair,
-      toolbox.provider,
-      new LocalTxnDataSerializer(toolbox.provider),
-    );
+    signer = new RawSigner(toolbox.keypair, toolbox.provider);
     const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
       toolbox.address(),
     );
