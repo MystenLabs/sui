@@ -15,5 +15,7 @@ export function getValidatorMoveEvent(
         return false;
     });
 
-    return event && event.event.type === 'moveEvent' ? event.event.content : null;
+    return event && event.event.type === 'moveEvent'
+        ? event.event.content
+        : null;
 }
