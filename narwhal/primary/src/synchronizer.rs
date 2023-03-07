@@ -452,7 +452,7 @@ impl Synchronizer {
         );
         // Verify the certificate (and the embedded header).
         certificate
-            .verify(&self.inner.committee, self.inner.worker_cache.clone())
+            .verify(&self.inner.committee, &self.inner.worker_cache)
             .map_err(DagError::from)
     }
 

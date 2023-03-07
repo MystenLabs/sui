@@ -779,7 +779,7 @@ async fn sync_batches_drops_old() {
         let header = author
             .header_builder(&fixture.committee())
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build(author.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -796,7 +796,7 @@ async fn sync_batches_drops_old() {
         .round(2)
         .parents(certificates.keys().cloned().collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
-        .build(author.keypair())
+        .build()
         .unwrap();
 
     tokio::task::spawn(async move {

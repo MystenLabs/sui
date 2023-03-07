@@ -7,7 +7,7 @@ use crate::{
 use anemo::async_trait;
 use anyhow::Result;
 use config::{Epoch, WorkerId};
-use crypto::{PublicKey, Signature};
+use crypto::PublicKey;
 use fastcrypto::{hash::Hash, traits::KeyPair};
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -133,7 +133,6 @@ struct BadHeader {
     pub payload: IndexMap<BatchDigest, WorkerId>,
     pub parents: BTreeSet<CertificateDigest>,
     pub id: OnceCell<HeaderDigest>,
-    pub signature: Signature,
     pub metadata: Metadata,
 }
 

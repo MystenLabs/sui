@@ -65,7 +65,7 @@ async fn test_get_collections() {
         let header = author
             .header_builder(&committee)
             .with_payload_batch(batch.clone(), worker_id, 0)
-            .build(author.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -283,7 +283,7 @@ async fn test_remove_collections() {
         let header = author
             .header_builder(&committee)
             .with_payload_batch(batch.clone(), worker_id, 0)
-            .build(author.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -1192,7 +1192,7 @@ async fn fixture_certificate(
     let header = authority
         .header_builder(committee)
         .payload(payload)
-        .build(authority.keypair())
+        .build()
         .unwrap();
 
     let certificate = fixture.certificate(&header);
