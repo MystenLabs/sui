@@ -3,7 +3,6 @@
 
 import {
     fromB64,
-    LocalTxnDataSerializer,
     type SignedMessage,
     type SignedTransaction,
     type SuiAddress,
@@ -18,7 +17,6 @@ import type {
     SuiMoveNormalizedFunction,
     SuiTransactionResponse,
     SignableTransaction,
-    MoveCallTransaction,
     UnserializedSignableTransaction,
 } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
@@ -78,42 +76,43 @@ export const deserializeTxn = createAsyncThunk<
         { id, serializedTxn, addressForTransaction },
         { dispatch, extra: { api, background } }
     ) => {
-        const signer = api.getSignerInstance(addressForTransaction, background);
-        const localSerializer = new LocalTxnDataSerializer(signer.provider);
-        const txnBytes = fromB64(serializedTxn);
+        // TODO: Deserialize transaction:
+        // const signer = api.getSignerInstance(addressForTransaction, background);
+        // const txnBytes = fromB64(serializedTxn);
 
-        //TODO: Error handling - either show the error or use the serialized txn
-        const deserializeTx =
-            (await localSerializer.deserializeTransactionBytesToSignableTransaction(
-                txnBytes
-            )) as UnserializedSignableTransaction;
+        // //TODO: Error handling - either show the error or use the serialized txn
+        // const deserializeTx =
+        //     (await localSerializer.deserializeTransactionBytesToSignableTransaction(
+        //         txnBytes
+        //     )) as UnserializedSignableTransaction;
 
-        const deserializeData = deserializeTx?.data as MoveCallTransaction;
+        // const deserializeData = deserializeTx?.data as MoveCallTransaction;
 
-        const normalized = {
-            ...deserializeData,
-            gasPayment: '0x' + deserializeData.gasPayment,
-            arguments: deserializeData.arguments.map((d) => '0x' + d),
-        };
+        // const normalized = {
+        //     ...deserializeData,
+        //     gasPayment: '0x' + deserializeData.gasPayment,
+        //     arguments: deserializeData.arguments.map((d) => '0x' + d),
+        // };
 
-        if (deserializeTx && normalized) {
-            dispatch(
-                loadTransactionResponseMetadata({
-                    txRequestID: id,
-                    objectId: normalized.packageObjectId,
-                    moduleName: normalized.module,
-                    functionName: normalized.function,
-                })
-            );
-        }
+        // if (deserializeTx && normalized) {
+        //     dispatch(
+        //         loadTransactionResponseMetadata({
+        //             txRequestID: id,
+        //             objectId: normalized.packageObjectId,
+        //             moduleName: normalized.module,
+        //             functionName: normalized.function,
+        //         })
+        //     );
+        // }
 
         return {
             txRequestID: id,
-            unSerializedTxn:
-                ({
-                    ...deserializeTx,
-                    data: normalized,
-                } as UnserializedSignableTransaction) || null,
+            unSerializedTxn: null,
+            // unSerializedTxn:
+            //     ({
+            //         ...deserializeTx,
+            //         data: normalized,
+            //     } as UnserializedSignableTransaction) || null,
         };
     }
 );

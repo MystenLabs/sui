@@ -8,7 +8,6 @@ import {
     Ed25519Keypair,
     JsonRpcProvider,
     RawSigner,
-    LocalTxnDataSerializer,
     type Keypair,
     localnetConnection,
     Transaction,
@@ -24,11 +23,7 @@ export async function mint(address: string) {
     const provider = new JsonRpcProvider(localnetConnection, {
         skipDataValidation: false,
     });
-    const signer = new RawSigner(
-        keypair,
-        provider,
-        new LocalTxnDataSerializer(provider)
-    );
+    const signer = new RawSigner(keypair, provider);
 
     const tx = new Transaction();
     tx.add(
