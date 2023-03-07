@@ -35,6 +35,8 @@ max_num_deleted_move_object_ids: 2048
 max_num_transfered_move_object_ids: 2048
 max_event_emit_size: 256000
 max_move_vector_len: 262144
+object_runtime_max_num_cached_objects: 1000
+object_runtime_max_num_store_entries: 1000
 base_tx_cost_fixed: 110000
 package_publish_cost_fixed: 1000
 base_tx_cost_per_byte: 0
