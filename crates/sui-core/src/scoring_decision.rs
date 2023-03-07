@@ -193,7 +193,7 @@ pub fn test_update_low_scoring_authorities() {
     update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores);
     assert_eq!(low_scoring.load().len(), 0);
 
-    // the computation can handle score values at any scale
+    // the computation can handle score values at larger scale
     let mut scores = HashMap::new();
     scores.insert(sec1.public().clone(), 2300_u64);
     scores.insert(sec2.public().clone(), 3000_u64);
@@ -207,8 +207,7 @@ pub fn test_update_low_scoring_authorities() {
     update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores);
     assert_eq!(low_scoring.load().len(), 0);
 
-    // the computation can handle score values scaled up or down
-    // (note as we scale up sensitivity to outliers goes slightly down)
+    // the computation can handle score values scaled up
     let mut scores = HashMap::new();
     scores.insert(sec1.public().clone(), 2300_u64);
     scores.insert(sec2.public().clone(), 3000_u64);
@@ -221,5 +220,45 @@ pub fn test_update_low_scoring_authorities() {
 
     update_low_scoring_authorities(&low_scoring, committee, reputation_scores);
     assert_eq!(*low_scoring.load().get(&a3).unwrap(), 210_u64);
+    assert_eq!(low_scoring.load().len(), 1);
+
+    // test with large cluster
+    let mut secs = Vec::new();
+    let mut authority_names = Vec::new();
+    let mut authorities = BTreeMap::new();
+    let num_nodes = 50;
+
+    for _i in 0..num_nodes {
+        let (_, sec1): (_, AuthorityKeyPair) = get_key_pair();
+        let a: AuthorityName = sec1.public().into();
+        secs.push(sec1);
+        authority_names.push(a);
+        authorities.insert(a, 1);
+    }
+
+    let committee = Committee::new(0, authorities).unwrap();
+    let low_scoring = ArcSwap::new(Arc::new(HashMap::new()));
+    let mut scores = HashMap::new();
+    // scores clustered between 100 - 110
+    for i in 0..num_nodes - 1 {
+        let score_add = i / 5_u64;
+        scores.insert(secs[i as usize].public().clone(), 100_u64 + score_add);
+    }
+    // the outlier
+    scores.insert(secs[num_nodes as usize].public().clone(), 70_u64);
+
+    let reputation_scores = ReputationScores {
+        scores_per_authority: scores,
+        final_of_schedule: true,
+    };
+
+    update_low_scoring_authorities(&low_scoring, committee, reputation_scores);
+    assert_eq!(
+        *low_scoring
+            .load()
+            .get(&authority_names[num_nodes as usize])
+            .unwrap(),
+        70_u64
+    );
     assert_eq!(low_scoring.load().len(), 1);
 }

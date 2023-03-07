@@ -46,3 +46,15 @@ pub fn quicksort(v: &mut [f64]) {
     quicksort(&mut v[..pivot]);
     quicksort(&mut v[(pivot + 1)..]);
 }
+
+#[test]
+fn test_median() {
+    let a1 = vec![2.5, 1.0, 3.0];
+    assert_eq!(median(&a1), 2.5);
+
+    let a2 = vec![100.0, 25.0, 75.0, 50.0];
+    assert_eq!(median(&a2), 62.5);
+
+    let a3 = vec![1.0, 1.0, 1.0, 0.02, 0.03, 1.0];
+    assert_eq!(median(&a3), 1.0);
+}
