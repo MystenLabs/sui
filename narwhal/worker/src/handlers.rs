@@ -217,12 +217,15 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
                 match result {
                     Ok(response) => {
                         if let Some(batch) = response.into_body().batch {
-                            if let Err(err) = self.validator.validate_batch(&batch) {
-                                // The batch is invalid, we don't want to process it.
-                                return Err(anemo::rpc::Status::new_with_message(
-                                    StatusCode::BadRequest,
-                                    format!("Invalid batch: {err}"),
-                                ));
+                            if !message.is_certified {
+                                // This batch is not part of a certificate, so we need to validate it.
+                                if let Err(err) = self.validator.validate_batch(&batch) {
+                                    // The batch is invalid, we don't want to process it.
+                                    return Err(anemo::rpc::Status::new_with_message(
+                                        StatusCode::BadRequest,
+                                        format!("Invalid batch: {err}"),
+                                    ));
+                                }
                             }
                             let digest = batch.digest();
                             if missing.remove(&digest) {

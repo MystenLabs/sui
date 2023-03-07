@@ -553,7 +553,7 @@ impl Synchronizer {
         let sync_network = network.clone();
         let max_age = self.inner.gc_depth.saturating_sub(1);
         self.inner.batch_tasks.lock().spawn(async move {
-            Synchronizer::sync_batches_internal(inner, &header, sync_network, max_age).await
+            Synchronizer::sync_batches_internal(inner, &header, sync_network, max_age, true).await
         });
 
         // The state lock must be held for the rest of the function, to ensure updating state,
@@ -704,20 +704,33 @@ impl Synchronizer {
     /// Blocks until either synchronization is complete, or the current consensus rounds advances
     /// past the max allowed age. (`max_age == 0` means the header's round must match current
     /// round.)
-    pub async fn sync_batches(
+    pub async fn sync_header_batches(
         &self,
         header: &Header,
         network: anemo::Network,
         max_age: Round,
     ) -> DagResult<()> {
-        Synchronizer::sync_batches_internal(self.inner.clone(), header, network, max_age).await
+        Synchronizer::sync_batches_internal(self.inner.clone(), header, network, max_age, false)
+            .await
     }
+
+    // TODO: Add batching support to synchronizer and use this call from executor.
+    // pub async fn sync_certificate_batches(
+    //     &self,
+    //     header: &Header,
+    //     network: anemo::Network,
+    //     max_age: Round,
+    // ) -> DagResult<()> {
+    //     Synchronizer::sync_batches_internal(self.inner.clone(), header, network, max_age, true)
+    //         .await
+    // }
 
     async fn sync_batches_internal(
         inner: Arc<Inner>,
         header: &Header,
         network: anemo::Network,
         max_age: Round,
+        is_certified: bool,
     ) -> DagResult<()> {
         if header.author == inner.name {
             debug!("skipping sync_batches for header {header}: no need to sync payload from own workers");
@@ -783,6 +796,7 @@ impl Synchronizer {
                 let message = WorkerSynchronizeMessage {
                     digests: digests.clone(),
                     target: header.author.clone(),
+                    is_certified,
                 };
                 let peer = network.waiting_peer(anemo::PeerId(worker_name.0.to_bytes()));
                 let mut client = PrimaryToWorkerClient::new(peer);
