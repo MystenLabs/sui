@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::AuthorityMetrics;
 use crate::math::median;
 use arc_swap::ArcSwap;
 use narwhal_types::ReputationScores;
@@ -8,7 +9,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::Committee;
-use tracing::warn;
+use tracing::{debug, warn};
 
 /// Updates list of authorities that are deemed to have low reputation scores by consensus
 /// these may be lagging behind the network, byzantine, or not reliably participating for any reason.
@@ -40,6 +41,7 @@ pub fn update_low_scoring_authorities(
     low_scoring_authorities: &ArcSwap<HashMap<AuthorityName, u64>>,
     committee: Committee,
     reputation_scores: ReputationScores,
+    metrics: Option<&AuthorityMetrics>,
 ) {
     if !reputation_scores.final_of_schedule {
         return;
@@ -94,6 +96,26 @@ pub fn update_low_scoring_authorities(
     }
 
     low_scoring_authorities.swap(Arc::new(new_inner));
+
+    if let Some(m) = metrics {
+        m.consensus_handler_num_low_scoring_authorities
+            .set(low_scoring_authorities.load().len() as i64);
+
+        low_scoring_authorities
+            .load()
+            .iter()
+            .for_each(|(key, val)| debug!("low scoring authority {} has score {}", key, val));
+
+        reputation_scores
+            .scores_per_authority
+            .iter()
+            .for_each(|(a, s)| {
+                let name = AuthorityName::from(a);
+                if !low_scoring_authorities.load().contains_key(&name) {
+                    debug!("authority {} has score {}", name, s);
+                }
+            });
+    }
 }
 
 #[test]
@@ -132,7 +154,7 @@ pub fn test_update_low_scoring_authorities() {
 
     // when final of schedule is false, calling update_low_scoring_authorities will not change the
     // low_scoring_authorities map
-    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores_1);
+    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores_1, None);
     assert_eq!(*low_scoring.load().get(&a1).unwrap(), 50_u64);
     assert_eq!(low_scoring.load().len(), 1);
 
@@ -147,7 +169,7 @@ pub fn test_update_low_scoring_authorities() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores);
+    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores, None);
     assert_eq!(*low_scoring.load().get(&a4).unwrap(), 25_u64);
     assert_eq!(low_scoring.load().len(), 1);
 
@@ -162,7 +184,7 @@ pub fn test_update_low_scoring_authorities() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores);
+    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores, None);
     assert_eq!(low_scoring.load().len(), 0);
 
     // this set of scores has a high performing outlier, we don't exclude it
@@ -176,7 +198,7 @@ pub fn test_update_low_scoring_authorities() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores);
+    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores, None);
     assert_eq!(low_scoring.load().len(), 0);
 
     // if more than the quorum is a low outlier, we don't exclude any authority
@@ -190,7 +212,7 @@ pub fn test_update_low_scoring_authorities() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores);
+    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores, None);
     assert_eq!(low_scoring.load().len(), 0);
 
     // the computation can handle score values at larger scale
@@ -204,7 +226,7 @@ pub fn test_update_low_scoring_authorities() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores);
+    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores, None);
     assert_eq!(low_scoring.load().len(), 0);
 
     // the computation can handle score values scaled up
@@ -218,7 +240,7 @@ pub fn test_update_low_scoring_authorities() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(&low_scoring, committee, reputation_scores);
+    update_low_scoring_authorities(&low_scoring, committee, reputation_scores, None);
     assert_eq!(*low_scoring.load().get(&a3).unwrap(), 210_u64);
     assert_eq!(low_scoring.load().len(), 1);
 
@@ -252,7 +274,7 @@ pub fn test_update_low_scoring_authorities() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(&low_scoring, committee, reputation_scores);
+    update_low_scoring_authorities(&low_scoring, committee, reputation_scores, None);
     assert_eq!(
         *low_scoring
             .load()
