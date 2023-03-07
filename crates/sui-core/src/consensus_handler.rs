@@ -7,15 +7,21 @@ use crate::authority::authority_per_epoch_store::{
 use crate::authority::AuthorityMetrics;
 use crate::checkpoints::CheckpointService;
 use crate::transaction_manager::TransactionManager;
+use arc_swap::ArcSwap;
 use async_trait::async_trait;
+<<<<<<< HEAD
 use dashmap::DashMap;
 use lru::LruCache;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
+=======
+use mysten_metrics::monitored_scope;
+>>>>>>> 919a4d2ff7 (update type of shared map)
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::{ConsensusOutput, ReputationScores};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
@@ -38,7 +44,7 @@ pub struct ConsensusHandler<T> {
     /// parent_sync_store is needed when determining the next version to assign for shared objects.
     parent_sync_store: T,
     /// Reputation scores used by consensus adapter that we update, forwarded from consensus
-    low_scoring_authorities: Arc<DashMap<AuthorityName, u64>>,
+    low_scoring_authorities: ArcSwap<HashMap<AuthorityName, u64>>,
     /// The committee used to do stake computations for deciding set of low scoring authorities
     committee: Committee,
     // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
@@ -57,7 +63,7 @@ impl<T> ConsensusHandler<T> {
         checkpoint_service: Arc<CheckpointService>,
         transaction_manager: Arc<TransactionManager>,
         parent_sync_store: T,
-        scores_per_authority: Arc<DashMap<AuthorityName, u64>>,
+        low_scoring_authorities: ArcSwap<HashMap<AuthorityName, u64>>,
         committee: Committee,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
@@ -69,7 +75,7 @@ impl<T> ConsensusHandler<T> {
             last_seen,
             checkpoint_service,
             parent_sync_store,
-            low_scoring_authorities: scores_per_authority,
+            low_scoring_authorities,
             committee,
             metrics,
             processed_cache: Mutex::new(LruCache::new(
@@ -86,7 +92,7 @@ impl<T> ConsensusHandler<T> {
 /// is including enough stake for a quorum, at the very least. It is also possible that no authorities
 /// are particularly low scoring, in which case this will result in storing an empty list.
 fn update_low_scoring_authorities(
-    low_scoring_authorities: Arc<DashMap<AuthorityName, u64>>,
+    low_scoring_authorities: &ArcSwap<HashMap<AuthorityName, u64>>,
     committee: Committee,
     reputation_scores: ReputationScores,
 ) {
@@ -119,8 +125,6 @@ fn update_low_scoring_authorities(
         }
     }
 
-    low_scoring_authorities.clear();
-
     // make sure the rest have at least quorum
     let remaining_stake = rest.iter().map(|a| committee.weight(a)).sum::<u64>();
     let quorum_threshold = committee.threshold::<true>();
@@ -128,11 +132,14 @@ fn update_low_scoring_authorities(
         warn!(
             "Too many low reputation-scoring authorities, temporarily disabling scoring mechanism"
         );
+
+        low_scoring_authorities.swap(Arc::new(HashMap::new()));
         return;
     }
 
+    let mut new_inner = HashMap::new();
     for authority in low_scoring {
-        low_scoring_authorities.insert(
+        new_inner.insert(
             AuthorityName::from(authority),
             *reputation_scores
                 .scores_per_authority
@@ -140,6 +147,8 @@ fn update_low_scoring_authorities(
                 .unwrap_or(&0),
         );
     }
+
+    low_scoring_authorities.swap(Arc::new(new_inner));
 }
 
 fn update_hash(
@@ -196,7 +205,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
         // TODO: spawn a separate task for this as an optimization
         update_low_scoring_authorities(
-            self.low_scoring_authorities.clone(),
+            &self.low_scoring_authorities,
             self.committee.clone(),
             consensus_output.sub_dag.reputation_score.clone(),
         );
@@ -204,12 +213,13 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         if consensus_output.sub_dag.reputation_score.final_of_schedule {
             self.metrics
                 .consensus_handler_num_low_scoring_authorities
-                .set(self.low_scoring_authorities.len() as i64);
+                .set(self.low_scoring_authorities.load().len() as i64);
 
             let _ = self
                 .low_scoring_authorities
+                .load()
                 .iter()
-                .map(|s| debug!("low scoring authority {} with score {}", s.key(), s.value()));
+                .map(|(key, val)| debug!("low scoring authority {} with score {}", key, val));
         };
 
         for (cert, batches) in consensus_output.batches {
@@ -522,22 +532,21 @@ pub fn test_update_low_scoring_authorities() {
     authorities.insert(a4, 1);
     let committee = Committee::new(0, ProtocolVersion::MIN, authorities).unwrap();
 
-    let low_scoring = Arc::new(DashMap::new());
-    low_scoring.insert(a1, 50);
+    let low_scoring = ArcSwap::new(Arc::new(HashMap::new()));
+
+    let mut inner = HashMap::new();
+    inner.insert(a1, 50);
     let reputation_scores_1 = ReputationScores {
         scores_per_authority: Default::default(),
         final_of_schedule: false,
     };
+    low_scoring.swap(Arc::new(inner));
 
     // when final of schedule is false, calling update_low_scoring_authorities will not change the
     // low_scoring_authorities map
-    update_low_scoring_authorities(
-        low_scoring.clone(),
-        committee.clone(),
-        reputation_scores_1.clone(),
-    );
-    assert_eq!(*low_scoring.get(&a1).unwrap().value(), 50_u64);
-    assert_eq!(low_scoring.len(), 1);
+    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores_1.clone());
+    assert_eq!(*low_scoring.load().get(&a1).unwrap(), 50_u64);
+    assert_eq!(low_scoring.load().len(), 1);
 
     // there is a clear low outlier in the scores, exclude it
     let mut scores = HashMap::new();
@@ -550,9 +559,9 @@ pub fn test_update_low_scoring_authorities() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(low_scoring.clone(), committee.clone(), reputation_scores);
-    assert_eq!(*low_scoring.get(&a4).unwrap().value(), 25_u64);
-    assert_eq!(low_scoring.len(), 1);
+    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores);
+    assert_eq!(*low_scoring.load().get(&a4).unwrap(), 25_u64);
+    assert_eq!(low_scoring.load().len(), 1);
 
     // a4 has score of 30 which is a bit lower, but not an outlier, so it should not be excluded
     let mut scores = HashMap::new();
@@ -565,8 +574,8 @@ pub fn test_update_low_scoring_authorities() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(low_scoring.clone(), committee.clone(), reputation_scores);
-    assert_eq!(low_scoring.len(), 0);
+    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores);
+    assert_eq!(low_scoring.load().len(), 0);
 
     // this set of scores has a high performing outlier, we don't exclude it
     let mut scores = HashMap::new();
@@ -579,8 +588,8 @@ pub fn test_update_low_scoring_authorities() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(low_scoring.clone(), committee.clone(), reputation_scores);
-    assert_eq!(low_scoring.len(), 0);
+    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores);
+    assert_eq!(low_scoring.load().len(), 0);
 
     // if more than the quorum is a low outlier, we don't exclude any authority
     let mut scores = HashMap::new();
@@ -593,8 +602,8 @@ pub fn test_update_low_scoring_authorities() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(low_scoring.clone(), committee.clone(), reputation_scores);
-    assert_eq!(low_scoring.len(), 0);
+    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores);
+    assert_eq!(low_scoring.load().len(), 0);
 
     // the computation can handle score values at any scale
     let mut scores = HashMap::new();
@@ -607,8 +616,8 @@ pub fn test_update_low_scoring_authorities() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(low_scoring.clone(), committee.clone(), reputation_scores);
-    assert_eq!(low_scoring.len(), 0);
+    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores);
+    assert_eq!(low_scoring.load().len(), 0);
 
     // the computation can handle score values scaled up or down
     // (note as we scale up sensitivity to outliers goes slightly down)
@@ -622,7 +631,7 @@ pub fn test_update_low_scoring_authorities() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(low_scoring.clone(), committee.clone(), reputation_scores);
-    assert_eq!(*low_scoring.get(&a3).unwrap().value(), 210_u64);
-    assert_eq!(low_scoring.len(), 1);
+    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores);
+    assert_eq!(*low_scoring.load().get(&a3).unwrap(), 210_u64);
+    assert_eq!(low_scoring.load().len(), 1);
 }
