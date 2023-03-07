@@ -102,7 +102,7 @@ impl ConsensusState {
     ) -> Result<Dag, ConsensusError> {
         let mut dag: Dag = BTreeMap::new();
 
-        info!("Recreating dag from last GC round: {}", gc_round,);
+        info!("Recreating dag from last GC round: {}", gc_round);
 
         // get all certificates at rounds > gc_round
         let certificates = cert_store.after_round(gc_round + 1).unwrap();
@@ -188,7 +188,7 @@ impl ConsensusState {
 
         // Purge all certificates past the gc depth.
         self.dag
-            .retain(|r, _| r + gc_depth >= self.last_committed_round);
+            .retain(|r, _| r + gc_depth > self.last_committed_round);
         // Also purge this certificate, and other certificates at the same origin below its round.
         self.dag.retain(|r, authorities| {
             if r <= &certificate.round() {
