@@ -7,16 +7,13 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use fastcrypto::encoding::Encoding;
 use futures::future::join_all;
 
 use anyhow::{anyhow, ensure};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 
-use fastcrypto::encoding::Base64;
 use jsonrpsee::core::__reexports::serde_json;
-use std::collections::HashMap;
 use sui_adapter::adapter::resolve_and_type_check;
 use sui_adapter::execution_mode::ExecutionMode;
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
@@ -33,8 +30,8 @@ use sui_types::coin::{Coin, LockedCoin};
 use sui_types::error::SuiError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
-    CallArg, GaslessTransactionData, InputObjectKind, MoveCall, ObjectArg, SingleTransactionKind,
-    TransactionData, TransactionKind, TransferObject,
+    CallArg, InputObjectKind, MoveCall, ObjectArg, SingleTransactionKind, TransactionData,
+    TransactionKind, TransferObject,
 };
 use tracing::{debug, info};
 
@@ -88,44 +85,12 @@ impl GasStationClient for RemoteGasStationClient {
         gas_budget: u64,
     ) -> SponsoredTransactionResponse {
         let url = format!("{}", self.gas_station_endpoint);
+
         debug!("Sending gasless tx bytes to {}", url);
 
-        // let params = HashMap::from([
-        //     ("gaslessTxBytes", gasless_tx_bytes.encoded()),
-        //     ("gasBudget", gas_budget.to_string()),
-        // ]);
-
-        // #[derive(Serialize)]
-        // enum Thing {
-        //     Number(u64),
-        //     String(String),
-        // }
-
-        // let text_params: Vec<Thing> = Vec::new();
-        // text_params.push(Thing::Number(gas_budget));
-        // text_params.push(Thing::String(gasless_tx_bytes.encoded()));
-
-        // let data = serde_json::json!({
-        //     "jsonrpc": "2.0",
-        //     "id": "1",
-        //     "method": "sponsorTransaction",
-        //     "params": &text_str,
-        // }
-        // );
         let gasless_bytes = gasless_txn_bytes.tx_bytes.encoded();
         let text_params = vec![gasless_bytes, gas_budget.to_string()];
         let text_str = serde_json::to_value(text_params).unwrap();
-
-        // let data = HashMap::from([
-        //     ("jsonrpc", "2.0"),
-        //     ("id", "1"),
-        //     ("method", "sponsorTransaction"),
-        //     ("params", &text_str),
-        // ]);
-
-        // println!("data: {:?}", data);
-
-        // TODO: grab headers
 
         let response = reqwest::Client::new()
             .post(&url)
@@ -139,18 +104,13 @@ impl GasStationClient for RemoteGasStationClient {
             .await
             .unwrap_or_else(|e| panic!("Failed to talk to remote gas station {:?}: {:?}", url, e));
 
+        // With the above unwrap or else we should have some bytes.
         let full_bytes = response.bytes().await.unwrap();
-        println!("{:?}", full_bytes);
         let gas_station_response: SponsoredTransactionResponse =
             serde_json::from_slice(&full_bytes)
                 .map_err(|e| anyhow::anyhow!("json deser failed with bytes {:?}: {e}", full_bytes))
                 .unwrap();
-        // if let Some(error) = gas_station_response.error {
-        //     panic!("Failed to sponsor transaction with error: {}", error)
-        // };
-        // let gas_station_response: SponsoredTransactionResponse = { res };
 
-        // gas_station_response
         gas_station_response
     }
 
@@ -158,23 +118,26 @@ impl GasStationClient for RemoteGasStationClient {
         &self,
         tx_digest: String,
     ) -> GetSponsoredTransactionStatusResponse {
-        let url = format!(
-            "{}/getSponsoredTransactionStatus",
-            self.gas_station_endpoint
-        );
+        let url = format!("{}", self.gas_station_endpoint);
 
-        let data = HashMap::from([("txDigest", tx_digest)]);
+        let text_params = vec![tx_digest];
+        let text_str = serde_json::to_value(text_params).unwrap();
 
         // TODO: grab headers
         let response = reqwest::Client::new()
             .post(&url)
-            .json(&data)
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "1",
+                "method": "getSponsoredTransactionStatus",
+                "params": &text_str,
+            }))
             .send()
             .await
             .unwrap_or_else(|e| panic!("Failed to talk to remote gas station {:?}: {:?}", url, e));
 
+        // With the above unwrap or else we should have some bytes.
         let full_bytes = response.bytes().await.unwrap();
-
         let gas_station_response: GetSponsoredTransactionStatusResponse =
             serde_json::from_slice(&full_bytes)
                 .map_err(|e| anyhow::anyhow!("json deser failed with bytes {:?}: {e}", full_bytes))

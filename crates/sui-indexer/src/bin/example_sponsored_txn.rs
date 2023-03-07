@@ -4,6 +4,7 @@
 use anyhow::Result;
 use clap::Parser;
 use move_core_types::account_address::AccountAddress;
+use std::str::FromStr;
 use sui_indexer::new_rpc_client;
 use sui_json_rpc_types::GaslessTransactionBytes;
 use sui_types::{
@@ -18,7 +19,7 @@ async fn main() -> Result<()> {
     let addy = AccountAddress::from_str("0x9131a6b39e93d5bc9379594068bf1dc62eefd4b9")?;
     let signer = SuiAddress::from(addy);
 
-    let object_id = ObjectID::from_str("0xa08bd090b20a05a8c5f07265e817602a9adc8f18")?;
+    let object_id = ObjectID::from_str("0xf7be95a22a85abc6e83df8b447aab4cef10cf805")?;
 
     let recipient_account = AccountAddress::from_str("0xd4caf026aa45790b4f7abe81ba181eb18c2c4c09")?;
     let recipient = SuiAddress::from(recipient_account);
@@ -35,7 +36,6 @@ async fn main() -> Result<()> {
     println!("converting data to bytes");
     let gasless_data = GaslessTransactionData::from_transaction_data(transaction);
     let gasless_txn_bytes = GaslessTransactionBytes::from_data(gasless_data)?;
-    println!("got txn bytes: {:?}", gasless_txn_bytes);
 
     let sponsored_bytes = fn_rpc_client
         .transaction_builder()

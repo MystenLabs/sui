@@ -1613,9 +1613,8 @@ pub struct SuiGenesisTransaction {
     pub objects: Vec<ObjectID>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Eq, PartialEq)]
-#[serde(rename = "SponsoredTransactionResponse", rename_all = "camelCase")]
-pub struct SponsoredTransactionResponse {
+#[derive(Clone, Serialize, Deserialize, JsonSchema, Debug)]
+pub struct SponsoredTransactionResponseData {
     /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
     pub tx_bytes: Base64,
     /// Base58 encoded transaction digest
@@ -1624,9 +1623,27 @@ pub struct SponsoredTransactionResponse {
     pub signature: GenericSignature,
     /// Expiration time of the assigned gas object
     pub expire_at: u64,
-    pub error: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ErrorData {
+    pub details: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SponsoredTransactionResponseError {
+    pub code: i32,
+    pub message: String,
+    pub data: ErrorData,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "SponsoredTransactionResponse", rename_all = "camelCase")]
+pub struct SponsoredTransactionResponse {
+    pub data: Option<SponsoredTransactionResponseData>,
+    pub error: Option<SponsoredTransactionResponseError>,
+}
+
+// TODO: change this structure too
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(
     rename = "GetSponsoredTransactionStatusResponse",
