@@ -1,8 +1,8 @@
 name: Simtest
 
 on:
-  schedule:
-    - cron: '0 3 * * *'  # every day at 2am
+  # schedule:
+  #   - cron: '0 3 * * *'  # every day at 2am
   workflow_dispatch:
 
 jobs:
