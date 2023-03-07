@@ -34,14 +34,14 @@ export function ValidatorLogo({
     const validatorMeta = useMemo(() => {
         if (!data) return null;
 
-        const validator = data.validators.active_validators.find(
-            ({ metadata }) => metadata.sui_address === validatorAddress
+        const validator = data.active_validators.find(
+            (validator) => validator.sui_address === validatorAddress
         );
         if (!validator) return null;
 
         return {
-            name: validator.metadata.name,
-            logo: validator.metadata.image_url,
+            name: validator.name,
+            logo: validator.image_url,
         };
     }, [validatorAddress, data]);
 

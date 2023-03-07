@@ -28,15 +28,13 @@ function EpochDetail() {
 
     const { data, isError, isLoading } = useGetSystemObject();
 
-    const { active, pending, atRisk } = {
-        active: data?.validators.active_validators.length,
-        pending: data?.validators.pending_active_validators.contents.size,
-        atRisk: data?.validators.pending_removals.length,
-    };
+    const active = data?.active_validators.length;
+    const pending = 0; // data?.pending_active_validators.contents.size;
+    const atRisk = 0; // data?.pending_removals.length;
 
     const { data: validatorEvents, isLoading: validatorsEventsLoading } =
         useGetValidatorsEvents({
-            limit: data?.validators.active_validators.length || 0,
+            limit: data?.active_validators.length || 0,
             order: 'descending',
         });
 
@@ -51,10 +49,10 @@ function EpochDetail() {
     if (!data || !validatorEvents) return null;
 
     const validatorsTable = validatorsTableData(
-        data.validators.active_validators,
+        data.active_validators,
         data.epoch,
         validatorEvents?.data,
-        data.parameters.min_validator_stake
+        data.min_validator_stake
     );
 
     return (
@@ -80,7 +78,7 @@ function EpochDetail() {
                 <EpochStats label="Rewards">
                     <Stats label="Stake Subsidies" tooltip="Stake Subsidies">
                         <SuiAmount
-                            amount={data.stake_subsidy.current_epoch_amount}
+                            amount={data.stake_subsidy_current_epoch_amount}
                         />
                     </Stats>
                     <Stats label="Total Rewards" tooltip="Total Rewards">

@@ -33,7 +33,6 @@ import {
   Order,
   CoinMetadata,
   DevInspectResults,
-  SuiSystemState,
   DelegatedStake,
   PaginatedCoins,
   CoinBalance,
@@ -370,11 +369,6 @@ export abstract class Provider {
    * Return the delegated stakes for an address
    */
   abstract getDelegatedStakes(address: SuiAddress): Promise<DelegatedStake[]>;
-
-  /**
-   * Return the content of `0x5` object
-   */
-  abstract getSuiSystemState(): Promise<SuiSystemState>;
 
   /**
    * Return the latest system state content.

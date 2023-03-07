@@ -125,11 +125,8 @@ describe('Transaction Serialization and deserialization', () => {
   it('Move Shared Object Call', async () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
 
-    const [
-      {
-        metadata: { sui_address: validator_address },
-      },
-    ] = await toolbox.getActiveValidators();
+    const [{ sui_address: validator_address }] =
+      await toolbox.getActiveValidators();
 
     const moveCall = {
       packageObjectId:

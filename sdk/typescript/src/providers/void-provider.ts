@@ -31,7 +31,6 @@ import {
   Order,
   CoinMetadata,
   DevInspectResults,
-  SuiSystemState,
   DelegatedStake,
   PaginatedCoins,
   CoinBalance,
@@ -60,10 +59,6 @@ export class VoidProvider extends Provider {
   // Governance
   async getReferenceGasPrice(): Promise<number> {
     throw this.newError('getReferenceGasPrice');
-  }
-
-  async getSuiSystemState(): Promise<SuiSystemState> {
-    throw this.newError('getSuiSystemState');
   }
 
   async getLatestSuiSystemState(): Promise<SuiSystemStateSummary> {

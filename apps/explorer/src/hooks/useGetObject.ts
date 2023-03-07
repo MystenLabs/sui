@@ -7,7 +7,7 @@ import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 export function useGetSystemObject() {
     const rpc = useRpcClient();
-    return useQuery(['system', 'state'], () => rpc.getSuiSystemState());
+    return useQuery(['system', 'state'], () => rpc.getLatestSuiSystemState());
 }
 
 export function useGetObject(

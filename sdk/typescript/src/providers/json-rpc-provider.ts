@@ -45,7 +45,6 @@ import {
   SuiObjectResponse,
   GetOwnedObjectsResponse,
   DelegatedStake,
-  SuiSystemState,
   CoinBalance,
   CoinSupply,
   CheckpointDigest,
@@ -718,20 +717,6 @@ export class JsonRpcProvider extends Provider {
       return resp;
     } catch (err) {
       throw new Error(`Error in getDelegatedStake: ${err}`);
-    }
-  }
-
-  async getSuiSystemState(): Promise<SuiSystemState> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getSuiSystemState',
-        [],
-        SuiSystemState,
-        this.options.skipDataValidation,
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(`Error in getSuiSystemState: ${err}`);
     }
   }
 
