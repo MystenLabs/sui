@@ -435,42 +435,51 @@ pub trait SubscriberNetwork: Send + Sync {
     ) -> HashMap<BatchDigest, Batch> {
         let mut fetched_batches = HashMap::new();
 
-        for (worker_name, (digests, known_workers)) in batch_digests_and_workers {
-            debug!(
-                "Attempting to fetch {} digests from {} known workers, {worker_name}'s",
-                digests.len(),
-                known_workers.len()
-            );
-            // TODO: Can further parallelize this by worker if necessary. Maybe move the logic
-            // to NetworkClient.
-            // Only have one worker for now so will leave this for a future
-            // optimization.
-            let request = FetchBatchesRequest {
-                digests,
-                known_workers,
-            };
-            let batches = loop {
-                match inner
-                    .client
-                    .fetch_batches(worker_name.clone(), request.clone())
-                    .await
-                {
-                    Ok(resp) => break resp.batches,
-                    Err(e) => {
-                        error!("Failed to fetch batches from worker {worker_name}: {e:?}");
-                        // Loop forever on failure. During shutdown, this should get cancelled.
-                        tokio::time::sleep(Duration::from_secs(1)).await;
-                        continue;
-                    }
-                }
-            };
-            for (digest, batch) in batches {
-                let batch_fetch_duration = batch.metadata().created_at.elapsed().as_secs_f64();
-                inner
-                    .metrics
-                    .batch_execution_latency
-                    .observe(batch_fetch_duration);
-                fetched_batches.insert(digest, batch);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crypto::NetworkKeyPair;
+    use fastcrypto::hash::Hash;
+    use fastcrypto::traits::KeyPair;
+    use rand::rngs::StdRng;
+    use std::collections::HashMap;
+
+    #[tokio::test]
+    pub async fn test_fetcher() {
+        let mut network = TestSubscriberNetwork::new();
+        let batch1 = Batch::new(vec![vec![1]]);
+        let batch2 = Batch::new(vec![vec![2]]);
+        network.put(&[1, 2], batch1.clone());
+        network.put(&[2, 3], batch2.clone());
+        let fetcher = Fetcher { network };
+        let batch = fetcher
+            .fetch_payload(batch1.digest(), 0, test_pks(&[1, 2]))
+            .await;
+        assert_eq!(batch, batch1);
+        let batch = fetcher
+            .fetch_payload(batch2.digest(), 0, test_pks(&[2, 3]))
+            .await;
+        assert_eq!(batch, batch2);
+    }
+
+    struct TestSubscriberNetwork {
+        data: HashMap<BatchDigest, HashMap<NetworkPublicKey, Batch>>,
+        my: NetworkPublicKey,
+    }
+
+    impl TestSubscriberNetwork {
+        pub fn new() -> Self {
+            let my = test_pk(0);
+            let data = Default::default();
+            Self { data, my }
+        }
+
+        pub fn put(&mut self, keys: &[u8], batch: Batch) {
+            let digest = batch.digest();
+            let entry = self.data.entry(digest).or_default();
+            for key in keys {
+                let key = test_pk(*key);
+                entry.insert(key, batch.clone());
             }
         }
 

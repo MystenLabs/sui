@@ -2,12 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{Dag, ValidatorDagError};
-use crate::metrics::ConsensusMetrics;
 use crate::NUM_SHUTDOWN_RECEIVERS;
 use dag::node_dag::NodeDagError;
 use fastcrypto::hash::Hash;
 use indexmap::IndexMap;
-use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc};
 use test_utils::{make_optimal_certificates, CommitteeFixture};
 use types::{Certificate, CertificateAPI, HeaderAPI, PreSubscribedBroadcastSender};
@@ -29,8 +27,7 @@ async fn inner_dag_insert_one() {
 
     // set up a Dag
     let (tx_cert, rx_cert) = test_utils::test_channel!(1);
-    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    Dag::new(&committee, rx_cert, metrics, tx_shutdown.subscribe());
+    Dag::new(&committee, rx_cert, tx_shutdown.subscribe());
 
     // Feed the certificates to the Dag
     while let Some(certificate) = certificates.pop_front() {
@@ -54,13 +51,7 @@ async fn test_dag_read_notify() {
     // set up a Dag
     let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
-    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let arc = Arc::new(Dag::new(
-        &committee,
-        rx_cert,
-        metrics,
-        tx_shutdown.subscribe(),
-    ));
+    let arc = Arc::new(Dag::new(&committee, rx_cert, tx_shutdown.subscribe()));
     let cloned = arc.clone();
     let handle = tokio::spawn(async move {
         let _ = &arc;
@@ -92,10 +83,9 @@ async fn test_dag_new_has_genesis_and_its_not_live() {
 
     // set up a Dag
     let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
-    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
-    let (_, dag) = Dag::new(&committee, rx_cert, metrics, tx_shutdown.subscribe());
+    let (_, dag) = Dag::new(&committee, rx_cert, tx_shutdown.subscribe());
 
     for certificate in genesis.clone() {
         assert!(dag.contains(certificate).await);
@@ -144,10 +134,9 @@ async fn test_dag_compresses_empty_blocks() {
 
     // set up a Dag
     let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
-    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
-    let (_, dag) = Dag::new(&committee, rx_cert, metrics, tx_shutdown.subscribe());
+    let (_, dag) = Dag::new(&committee, rx_cert, tx_shutdown.subscribe());
 
     // insert one round of empty certificates
     let (mut certificates, next_parents) =
@@ -212,10 +201,9 @@ async fn test_dag_rounds_after_compression() {
 
     // set up a Dag
     let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
-    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
-    let (_, dag) = Dag::new(&committee, rx_cert, metrics, tx_shutdown.subscribe());
+    let (_, dag) = Dag::new(&committee, rx_cert, tx_shutdown.subscribe());
 
     // insert one round of empty certificates
     let (mut certificates, next_parents) =
@@ -263,10 +251,9 @@ async fn dag_mutation_failures() {
 
     // set up a Dag
     let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
-    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
-    let (_handle, dag) = Dag::new(&committee, rx_cert, metrics, tx_shutdown.subscribe());
+    let (_handle, dag) = Dag::new(&committee, rx_cert, tx_shutdown.subscribe());
     let mut certs_to_insert = certificates.clone();
     let mut certs_to_insert_in_reverse = certs_to_insert.clone();
     let mut certs_to_remove_before_insert = certs_to_insert.clone();
@@ -334,8 +321,7 @@ async fn dag_insert_one_and_rounds_node_read() {
 
     // set up a Dag
     let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
-    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let (_handle, dag) = Dag::new(&committee, rx_cert, metrics, tx_shutdown.subscribe());
+    let (_handle, dag) = Dag::new(&committee, rx_cert, tx_shutdown.subscribe());
     let mut certs_to_insert = certificates.clone();
 
     // Feed the certificates to the Dag
@@ -382,8 +368,7 @@ async fn dag_insert_and_remove_reads() {
 
     // set up a Dag
     let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
-    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let (_handle, dag) = Dag::new(&committee, rx_cert, metrics, tx_shutdown.subscribe());
+    let (_handle, dag) = Dag::new(&committee, rx_cert, tx_shutdown.subscribe());
 
     // Feed the certificates to the Dag
     while let Some(certificate) = certificates.pop_front() {

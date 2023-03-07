@@ -1,18 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    common::create_db_stores, metrics::PrimaryMetrics, synchronizer::Synchronizer,
-    NUM_SHUTDOWN_RECEIVERS,
-};
-use config::Committee;
-use consensus::consensus::ConsensusRound;
-use consensus::utils::gc_round;
-use consensus::{dag::Dag, metrics::ConsensusMetrics};
+use crate::{common::create_db_stores, synchronizer::Synchronizer, NUM_SHUTDOWN_RECEIVERS};
+use consensus::dag::Dag;
 use fastcrypto::{hash::Hash, traits::KeyPair};
-use futures::{stream::FuturesUnordered, StreamExt};
-use itertools::Itertools;
-use network::client::NetworkClient;
-use prometheus::Registry;
 use std::{
     collections::{BTreeSet, HashMap},
     num::NonZeroUsize,
@@ -593,16 +583,7 @@ async fn deliver_certificate_using_dag() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
-    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let dag = Arc::new(
-        Dag::new(
-            &committee,
-            rx_consensus,
-            consensus_metrics,
-            tx_shutdown.subscribe(),
-        )
-        .1,
-    );
+    let dag = Arc::new(Dag::new(&committee, rx_consensus, tx_shutdown.subscribe()).1);
 
     let synchronizer = Synchronizer::new(
         name,

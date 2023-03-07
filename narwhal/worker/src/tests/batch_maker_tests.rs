@@ -4,9 +4,10 @@
 use super::*;
 
 use crate::NUM_SHUTDOWN_RECEIVERS;
-use prometheus::Registry;
-use test_utils::{create_batch_store, transaction};
-use types::MockWorkerToPrimary;
+use store::rocks;
+use store::rocks::MetricConf;
+use store::rocks::ReadWriteOptions;
+use test_utils::{temp_dir, transaction};
 use types::PreSubscribedBroadcastSender;
 
 fn create_network_client() -> NetworkClient {
@@ -19,8 +20,8 @@ async fn make_batch() {
     let store = create_batch_store();
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_batch_maker, rx_batch_maker) = test_utils::test_channel!(1);
-    let (tx_quorum_waiter, mut rx_quorum_waiter) = test_utils::test_channel!(1);
-    let node_metrics = WorkerMetrics::new(&Registry::new());
+    let (tx_message, mut rx_message) = test_utils::test_channel!(1);
+    let (tx_digest, mut rx_digest) = test_utils::test_channel!(1);
 
     // Mock the primary client to always succeed.
     let mut mock_server = MockWorkerToPrimary::new();
@@ -38,9 +39,7 @@ async fn make_batch() {
         Duration::from_millis(1_000_000), // Ensure the timer is not triggered.
         tx_shutdown.subscribe(),
         rx_batch_maker,
-        tx_quorum_waiter,
-        Arc::new(node_metrics),
-        client,
+        tx_message,
         store.clone(),
     );
 
@@ -74,15 +73,8 @@ async fn batch_timeout() {
     let store = create_batch_store();
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_batch_maker, rx_batch_maker) = test_utils::test_channel!(1);
-    let (tx_quorum_waiter, mut rx_quorum_waiter) = test_utils::test_channel!(1);
-    let node_metrics = WorkerMetrics::new(&Registry::new());
-
-    // Mock the primary client to always succeed.
-    let mut mock_server = MockWorkerToPrimary::new();
-    mock_server
-        .expect_report_our_batch()
-        .returning(|_| Ok(anemo::Response::new(())));
-    client.set_worker_to_primary_local_handler(Arc::new(mock_server));
+    let (tx_message, mut rx_message) = test_utils::test_channel!(1);
+    let (tx_digest, mut rx_digest) = test_utils::test_channel!(1);
 
     // Spawn a `BatchMaker` instance.
     let id = 0;
@@ -93,9 +85,7 @@ async fn batch_timeout() {
         Duration::from_millis(50), // Ensure the timer is triggered.
         tx_shutdown.subscribe(),
         rx_batch_maker,
-        tx_quorum_waiter,
-        Arc::new(node_metrics),
-        client,
+        tx_message,
         store.clone(),
     );
 

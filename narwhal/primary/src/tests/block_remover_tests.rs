@@ -3,11 +3,10 @@
 use crate::{block_remover::BlockRemover, common::create_db_stores, NUM_SHUTDOWN_RECEIVERS};
 use anemo::PeerId;
 use config::{Committee, WorkerId};
-use consensus::{dag::Dag, metrics::ConsensusMetrics};
+use consensus::dag::Dag;
 use crypto::traits::KeyPair;
 use fastcrypto::hash::Hash;
 use futures::future::join_all;
-use prometheus::Registry;
 use std::{borrow::Borrow, collections::HashMap, sync::Arc, time::Duration};
 use test_utils::CommitteeFixture;
 use tokio::time::timeout;
@@ -33,16 +32,7 @@ async fn test_successful_blocks_delete() {
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // AND a Dag with genesis populated
-    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let dag = Arc::new(
-        Dag::new(
-            &committee,
-            rx_consensus,
-            consensus_metrics,
-            tx_shutdown.subscribe(),
-        )
-        .1,
-    );
+    let dag = Arc::new(Dag::new(&committee, rx_consensus, tx_shutdown.subscribe()).1);
     populate_genesis(&dag, &committee).await;
 
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
@@ -202,16 +192,7 @@ async fn test_failed_blocks_delete() {
     let primary = fixture.authorities().nth(1).unwrap();
     let id = primary.id();
     // AND a Dag with genesis populated
-    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let dag = Arc::new(
-        Dag::new(
-            &committee,
-            rx_consensus,
-            consensus_metrics,
-            tx_shutdown.subscribe(),
-        )
-        .1,
-    );
+    let dag = Arc::new(Dag::new(&committee, rx_consensus, tx_shutdown.subscribe()).1);
     populate_genesis(&dag, &committee).await;
 
     let network = test_utils::test_network(primary.network_keypair(), primary.address());

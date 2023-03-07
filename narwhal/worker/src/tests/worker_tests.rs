@@ -2,12 +2,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::LocalNarwhalClient;
-use crate::{metrics::initialise_metrics, TrivialTransactionValidator};
-use async_trait::async_trait;
+use crate::TrivialTransactionValidator;
+use arc_swap::ArcSwap;
 use bytes::Bytes;
-use consensus::consensus::ConsensusRound;
-use consensus::{dag::Dag, metrics::ConsensusMetrics};
+use consensus::dag::Dag;
 use fastcrypto::{
     encoding::{Encoding, Hex},
     hash::Hash,
@@ -15,8 +13,7 @@ use fastcrypto::{
 use futures::stream::FuturesOrdered;
 use futures::StreamExt;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY, NUM_SHUTDOWN_RECEIVERS};
-use prometheus::Registry;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use storage::NodeStorage;
 use store::rocks;
 use store::rocks::MetricConf;
@@ -70,9 +67,6 @@ async fn reject_invalid_clients_transactions() {
     )
     .unwrap();
 
-    let registry = Registry::new();
-    let metrics = initialise_metrics(&registry);
-
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // Spawn a `Worker` instance with a reject-all validator.
@@ -84,9 +78,7 @@ async fn reject_invalid_clients_transactions() {
         worker_cache.clone(),
         parameters,
         NilTxValidator,
-        client,
-        batch_store,
-        metrics,
+        store,
         &mut tx_shutdown,
     );
 
@@ -165,9 +157,6 @@ async fn handle_remote_clients_transactions() {
     )
     .unwrap();
 
-    let registry = Registry::new();
-    let metrics = initialise_metrics(&registry);
-
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // Spawn a `Worker` instance.
@@ -179,9 +168,7 @@ async fn handle_remote_clients_transactions() {
         worker_cache.clone(),
         parameters,
         TrivialTransactionValidator::default(),
-        client.clone(),
-        batch_store,
-        metrics,
+        store,
         &mut tx_shutdown,
     );
 
@@ -392,7 +379,6 @@ async fn get_network_peers_from_admin_server() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::default());
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
-    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 1
     Primary::spawn(
@@ -413,25 +399,17 @@ async fn get_network_peers_from_admin_server() {
         rx_consensus_round_updates,
         /* dag */
         Some(Arc::new(
-            Dag::new(
-                &committee,
-                rx_new_certificates,
-                consensus_metrics,
-                tx_shutdown.subscribe(),
-            )
-            .1,
+            Dag::new(&committee, rx_new_certificates, tx_shutdown.subscribe()).1,
         )),
         NetworkModel::Asynchronous,
         &mut tx_shutdown,
         tx_feedback,
-        &Registry::new(),
+        None,
     );
 
     // Wait for tasks to start
     tokio::time::sleep(Duration::from_secs(1)).await;
 
-    let registry_1 = Registry::new();
-    let metrics_1 = initialise_metrics(&registry_1);
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     let worker_1_parameters = Parameters {
@@ -450,7 +428,6 @@ async fn get_network_peers_from_admin_server() {
         TrivialTransactionValidator::default(),
         client_1.clone(),
         store.batch_store.clone(),
-        metrics_1.clone(),
         &mut tx_shutdown,
     );
 
@@ -516,7 +493,6 @@ async fn get_network_peers_from_admin_server() {
         watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
-    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
     Primary::spawn(
@@ -537,25 +513,16 @@ async fn get_network_peers_from_admin_server() {
         rx_consensus_round_updates,
         /* dag */
         Some(Arc::new(
-            Dag::new(
-                &committee,
-                rx_new_certificates_2,
-                consensus_metrics,
-                tx_shutdown.subscribe(),
-            )
-            .1,
+            Dag::new(&committee, rx_new_certificates_2, tx_shutdown.subscribe()).1,
         )),
         NetworkModel::Asynchronous,
         &mut tx_shutdown_2,
         tx_feedback_2,
-        &Registry::new(),
+        None,
     );
 
     // Wait for tasks to start
     tokio::time::sleep(Duration::from_secs(1)).await;
-
-    let registry_2 = Registry::new();
-    let metrics_2 = initialise_metrics(&registry_2);
 
     let worker_2_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -575,7 +542,6 @@ async fn get_network_peers_from_admin_server() {
         TrivialTransactionValidator::default(),
         client_2,
         store.batch_store,
-        metrics_2.clone(),
         &mut tx_shutdown_worker,
     );
 
@@ -657,16 +623,6 @@ async fn get_network_peers_from_admin_server() {
         m.insert("peer_id", f.0);
         m.insert("type", f.1);
 
-        assert_eq!(
-            1,
-            metrics_2
-                .clone()
-                .network_connection_metrics
-                .unwrap()
-                .network_peer_connected
-                .get_metric_with(&m)
-                .unwrap()
-                .get()
-        );
+        // TODO(metrics): Assert that network_peer_connected metric is 1
     }
 }

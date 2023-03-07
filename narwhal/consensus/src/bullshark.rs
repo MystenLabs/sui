@@ -71,15 +71,15 @@ impl ConsensusProtocol for Bullshark {
         }
 
         // Report last leader election if was unsuccessful
-        if round > self.max_inserted_certificate_round && round % 2 == 0 {
-            let last_election_round = &self.last_leader_election;
+        // if round > self.max_inserted_certificate_round && round % 2 == 0 {
+        //     let _last_election_round = &self.last_leader_election;
 
-            if !last_election_round.leader_found {
-                // TODO(metrics): Increment leader_election_not_found
-            } else if !last_election_round.leader_has_support {
-                // TODO(metrics): Increment leader_election_not_enough_support
-            }
-        }
+        //     // if !last_election_round.leader_found {
+        //     //     // TODO(metrics): Increment leader_election_not_found
+        //     // } else if !last_election_round.leader_has_support {
+        //     //     // TODO(metrics): Increment leader_election_not_enough_support
+        //     // }
+        // }
 
         self.max_inserted_certificate_round = self.max_inserted_certificate_round.max(round);
 

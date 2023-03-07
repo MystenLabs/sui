@@ -1,12 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::{stream::FuturesUnordered, StreamExt};
-use prometheus::IntGauge;
+use anemo::async_trait;
+use futures::{stream::FuturesUnordered, Future, StreamExt};
 
 use super::DagError;
 use std::{future, time::Duration};
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::mpsc::{channel, Permit, Receiver, Sender};
+
+#[async_trait]
+pub trait WithPermit<T> {
+    async fn with_permit<F: Future + Send>(&self, f: F) -> Option<(Permit<T>, F::Output)>;
+}
+
+#[async_trait]
+impl<T: Send> WithPermit<T> for Sender<T> {
+    async fn with_permit<F: Future + Send>(&self, f: F) -> Option<(Permit<T>, F::Output)> {
+        let permit = self.reserve().await.ok()?;
+        Some((permit, f.await))
+    }
+}
 
 pub struct Processor {
     input: Receiver<usize>,
@@ -37,7 +50,6 @@ impl Processor {
                     waiting.push(deliver)
                 }
 
-
                 Some((permit, Some(res_value))) = self.output.with_permit(waiting.next())  => {
                     permit.send(res_value.unwrap());
                 }
@@ -48,8 +60,6 @@ impl Processor {
 
 #[tokio::test]
 async fn with_permit_unhappy_case() {
-    let counter = IntGauge::new("TEST_COUNTER", "test").unwrap();
-
     let (tx_inbound, rx_inbound) = channel(100); // we'll make sure we always have stuff inbound
     let (tx_outbound, mut rx_outbound) = channel(1); // we'll constrain the output
 

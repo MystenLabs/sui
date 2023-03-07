@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::primary::NUM_SHUTDOWN_RECEIVERS;
-use crate::{
-    certificate_fetcher::CertificateFetcher, metrics::PrimaryMetrics, synchronizer::Synchronizer,
-};
+use crate::{certificate_fetcher::CertificateFetcher, core::Core, synchronizer::Synchronizer};
 use anemo::async_trait;
 use anyhow::Result;
 use config::{AuthorityIdentifier, Epoch, WorkerId};
@@ -12,7 +10,6 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use network::client::NetworkClient;
 use once_cell::sync::OnceCell;
-use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use storage::CertificateStore;
 use storage::NodeStorage;
@@ -204,6 +201,8 @@ async fn fetch_certificates_basic() {
         .await
         .unwrap();
 
+    let gc_depth: Round = 50;
+
     // Make a certificate fetcher
     let _certificate_fetcher_handle = CertificateFetcher::spawn(
         id,
@@ -213,8 +212,27 @@ async fn fetch_certificates_basic() {
         rx_consensus_round_updates.clone(),
         tx_shutdown.subscribe(),
         rx_certificate_fetcher,
+        tx_certificates_loopback,
+    );
+
+    // Spawn the core.
+    let _core_handle = Core::spawn(
+        name.clone(),
+        fixture.committee(),
+        store.header_store.clone(),
+        certificate_store.clone(),
         synchronizer.clone(),
-        metrics.clone(),
+        signature_service,
+        rx_consensus_round_updates,
+        rx_narwhal_round_updates,
+        gc_depth,
+        tx_shutdown.subscribe(),
+        rx_certificates,
+        rx_certificates_loopback,
+        rx_headers,
+        tx_consensus,
+        tx_parents,
+        client_network,
     );
 
     // Generate headers and certificates in successive rounds

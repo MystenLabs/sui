@@ -51,11 +51,13 @@ impl ConnectionMonitor {
             }
         };
 
+        /* TODO(metrics)
         // we report first all the known peers as disconnected - so we can see
         // their labels in the metrics reporting tool
         for (_peer_id, _ty) in &self.peer_id_types {
             // TODO(metrics): Set `network_peer_connected` to 0
         }
+        */
 
         // TODO(metrics): Set `network_peers` to `connected_peers.len() as i64`
 
