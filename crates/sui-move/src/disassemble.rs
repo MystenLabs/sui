@@ -51,7 +51,7 @@ impl Disassemble {
         // disassembling a bytecode file with no source info
         assert!(
             Path::new(&self.module_path).exists(),
-            "Bath path to .mv file"
+            "Bad path to .mv file"
         );
 
         let mut bytes = Vec::new();
