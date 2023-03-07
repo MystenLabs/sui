@@ -30,6 +30,8 @@ use std::{
 };
 use tracing::warn;
 
+use mysten_metrics::monitored_scope;
+
 #[cfg(test)]
 #[path = "./tests/primary_type_tests.rs"]
 mod primary_type_tests;
@@ -240,6 +242,7 @@ impl Header {
     }
 
     pub fn verify(&self, committee: &Committee, worker_cache: SharedWorkerCache) -> DagResult<()> {
+        let _scope = monitored_scope("AK-Header::verify");
         // Ensure the header is from the correct epoch.
         ensure!(
             self.epoch == committee.epoch(),
@@ -272,9 +275,13 @@ impl Header {
 
         // Check the signature.
         let digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.digest());
-        self.author
+        let author_verification_scope = monitored_scope("AK-Header::author.verify");
+        let result = self
+            .author
             .verify(digest.as_ref(), &self.signature)
-            .map_err(|_| DagError::InvalidSignature)
+            .map_err(|_| DagError::InvalidSignature);
+        drop(author_verification_scope);
+        result
     }
 }
 
@@ -661,6 +668,7 @@ impl Certificate {
     /// Verifies the validaity of the certificate.
     /// TODO: Output a different type, similar to Sui VerifiedCertificate.
     pub fn verify(&self, committee: &Committee, worker_cache: SharedWorkerCache) -> DagResult<()> {
+        let _scope = monitored_scope("AK-Certificate::verify");
         // Ensure the header is from the correct epoch.
         ensure!(
             self.epoch() == committee.epoch(),
@@ -685,11 +693,14 @@ impl Certificate {
             DagError::CertificateRequiresQuorum
         );
 
+        let aggregated_signature_verification_scope =
+            monitored_scope("AK-Certificate::aggregated_signature.verify");
         // Verify the signatures
         let certificate_digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.digest());
         self.aggregated_signature
             .verify(&pks[..], certificate_digest.as_ref())
             .map_err(|_| DagError::InvalidSignature)?;
+        drop(aggregated_signature_verification_scope);
 
         Ok(())
     }

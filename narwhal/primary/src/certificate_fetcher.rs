@@ -424,6 +424,7 @@ async fn process_certificates_helper(
             let sync = synchronizer.clone();
             // Use threads dedicated to computation heavy work.
             spawn_blocking(move || {
+                let _verify_scope = monitored_scope("AK-sanitize-fetched-certificate");
                 for c in &certs {
                     sync.sanitize_certificate(c)?;
                 }
