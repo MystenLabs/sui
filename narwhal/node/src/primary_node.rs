@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::metrics::new_registry;
 use crate::{try_join_all, FuturesUnordered, NodeError};
-use config::{Committee, Parameters, SharedWorkerCache};
+use config::{Committee, Parameters, WorkerCache};
 use consensus::bullshark::Bullshark;
 use consensus::dag::Dag;
 use consensus::metrics::{ChannelMetrics, ConsensusMetrics};
@@ -61,7 +61,7 @@ impl PrimaryNodeInner {
         // The committee information.
         committee: Committee,
         // The worker information cache.
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         // The node's store //TODO: replace this by a path so the method can open and independent storage
         store: &NodeStorage,
         // The state used by the client to execute transactions.
@@ -173,7 +173,7 @@ impl PrimaryNodeInner {
         // The committee information.
         committee: Committee,
         // The worker information cache.
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         // The node's storage.
         store: &NodeStorage,
         // The configuration parameters.
@@ -284,7 +284,7 @@ impl PrimaryNodeInner {
     async fn spawn_consensus<State>(
         name: PublicKey,
         rx_executor_network: oneshot::Receiver<anemo::Network>,
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         committee: Committee,
         store: &NodeStorage,
         parameters: Parameters,
@@ -333,6 +333,7 @@ impl PrimaryNodeInner {
         );
         let consensus_handles = Consensus::spawn(
             committee.clone(),
+            parameters.gc_depth,
             store.consensus_store.clone(),
             store.certificate_store.clone(),
             shutdown_receivers.pop().unwrap(),
@@ -398,7 +399,7 @@ impl PrimaryNode {
         // The committee information.
         committee: Committee,
         // The worker information cache.
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         // The node's store //TODO: replace this by a path so the method can open and independent storage
         store: &NodeStorage,
         // The state used by the client to execute transactions.

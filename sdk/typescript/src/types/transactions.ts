@@ -14,6 +14,7 @@ import {
   unknown,
   boolean,
   tuple,
+  any,
 } from 'superstruct';
 import { SuiEvent } from './events';
 import { SuiGasData, SuiMovePackage, SuiObjectRef } from './objects';
@@ -120,6 +121,8 @@ export const SuiTransactionKind = union([
   object({ PaySui: PaySui }),
   object({ PayAllSui: PayAllSui }),
   object({ Genesis: Genesis }),
+  // TODO: Refine object type
+  object({ ProgrammableTransaction: any() }),
 ]);
 export type SuiTransactionKind = Infer<typeof SuiTransactionKind>;
 

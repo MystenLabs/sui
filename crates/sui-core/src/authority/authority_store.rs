@@ -11,6 +11,7 @@ use once_cell::sync::OnceCell;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
+use std::collections::BTreeSet;
 use std::iter;
 use std::path::Path;
 use std::sync::Arc;
@@ -70,7 +71,13 @@ impl AuthorityStore {
     ) -> SuiResult<Self> {
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
         if perpetual_tables.database_is_empty()? {
-            perpetual_tables.set_recovery_epoch(0)?;
+            let epoch_start_configuration = EpochStartConfiguration {
+                system_state: SuiSystemState::new_genesis(genesis.sui_system_object()),
+                epoch_digest: genesis.checkpoint().digest(),
+            };
+            perpetual_tables
+                .set_epoch_start_configuration(&epoch_start_configuration)
+                .await?;
         }
         let cur_epoch = perpetual_tables.get_recovery_epoch_at_restart()?;
         let committee = committee_store
@@ -364,7 +371,7 @@ impl AuthorityStore {
         digest: &TransactionDigest,
         objects: &[InputObjectKind],
         epoch_store: &AuthorityPerEpochStore,
-    ) -> Vec<InputKey> {
+    ) -> BTreeSet<InputKey> {
         let mut shared_locks = HashMap::<ObjectID, SequenceNumber>::new();
         objects
             .iter()
@@ -622,6 +629,20 @@ impl AuthorityStore {
         batch.write()?;
 
         Ok(())
+    }
+
+    pub async fn set_epoch_start_configuration(
+        &self,
+        epoch_start_configuration: &EpochStartConfiguration,
+    ) -> SuiResult {
+        self.perpetual_tables
+            .set_epoch_start_configuration(epoch_start_configuration)
+            .await?;
+        Ok(())
+    }
+
+    pub fn get_epoch_start_configuration(&self) -> SuiResult<Option<EpochStartConfiguration>> {
+        Ok(self.perpetual_tables.epoch_start_configuration.get(&())?)
     }
 
     /// Updates the state resulting from the execution of a certificate.
@@ -1204,6 +1225,23 @@ impl AuthorityStore {
             .transactions
             .get(tx_digest)
             .map(|v| v.map(|v| v.into()))
+    }
+
+    pub fn get_transaction_and_serialized_size(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Result<Option<(VerifiedTransaction, usize)>, TypedStoreError> {
+        self.perpetual_tables
+            .transactions
+            .get_raw_bytes(tx_digest)
+            .and_then(|v| match v {
+                Some(tx_bytes) => {
+                    let tx: VerifiedTransaction =
+                        bcs::from_bytes::<TrustedTransaction>(&tx_bytes)?.into();
+                    Ok(Some((tx, tx_bytes.len())))
+                }
+                None => Ok(None),
+            })
     }
 
     // TODO: Transaction Orchestrator also calls this, which is not ideal.

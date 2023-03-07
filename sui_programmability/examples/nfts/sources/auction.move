@@ -17,13 +17,13 @@
 ///  - The auction starts with the owner sending an item to be sold along with
 ///    its own address to the auctioneer who creates and initializes an
 ///    auction.
-///  - Bidders send their bid to the auctioneer. 
+///  - Bidders send their bid to the auctioneer.
 ///    A bid consists of the funds offered for the item and the bidder's address.
 ///  - The auctioneer periodically inspects the bids:
-///    - (inspected bid > current best bid (initially there is no bid)): 
+///    - (inspected bid > current best bid (initially there is no bid)):
 ///      The auctioneer updates the auction with the current bid
 ///      and the funds of the previous highest bid are sent back to their owner.
-///    - (inspected bid <= current best bid): 
+///    - (inspected bid <= current best bid):
 ///      The auctioneer sents the inspected bid's funds back to the new bidder,
 ///      and the auction remains unchanged.
 ///  - The auctioneer eventually ends the auction:
@@ -65,10 +65,12 @@ module nfts::auction {
     /// moment. This is executed by the owner of the asset to be
     /// auctioned.
     public fun create_auction<T: key + store>(
-        to_sell: T, id: UID, auctioneer: address, ctx: &mut TxContext
-    ) {
-        let auction = auction_lib::create_auction(id, to_sell, ctx);
+        to_sell: T, auctioneer: address, ctx: &mut TxContext
+    ): ID {
+        let auction = auction_lib::create_auction(to_sell, ctx);
+        let id = object::id(&auction);
         auction_lib::transfer(auction, auctioneer);
+        id
     }
 
     /// Creates a bid a and send it to the auctioneer along with the

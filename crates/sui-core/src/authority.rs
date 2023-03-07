@@ -1633,7 +1633,7 @@ impl AuthorityState {
             &path.join("store"),
             None,
             EpochMetrics::new(&registry),
-            Some(Default::default()),
+            Default::default(),
             store.clone(),
             cache_metrics,
         );
@@ -3084,18 +3084,20 @@ impl AuthorityState {
         epoch_start_configuration: EpochStartConfiguration,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         let new_epoch = new_committee.epoch;
-        info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
+        info!(new_epoch = ?new_epoch, "re-opening AuthorityEpochTables for new epoch");
         assert_eq!(
             epoch_start_configuration.system_state.epoch(),
             new_committee.epoch
         );
+        self.db()
+            .set_epoch_start_configuration(&epoch_start_configuration)
+            .await?;
         let new_epoch_store = cur_epoch_store.new_at_next_epoch(
             self.name,
             new_committee,
             epoch_start_configuration,
             self.db(),
         );
-        self.db().perpetual_tables.set_recovery_epoch(new_epoch)?;
         self.epoch_store.store(new_epoch_store.clone());
         cur_epoch_store.epoch_terminated().await;
         Ok(new_epoch_store)

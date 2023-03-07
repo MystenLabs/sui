@@ -210,3 +210,62 @@ export const SuiSystemState = object({
 });
 
 export type SuiSystemState = Infer<typeof SuiSystemState>;
+
+export const SuiValidatorSummary = object({
+  sui_address: SuiAddress,
+  protocol_pubkey_bytes: array(number()),
+  network_pubkey_bytes: array(number()),
+  worker_pubkey_bytes: array(number()),
+  proof_of_possession_bytes: array(number()),
+  name: string(),
+  description: string(),
+  image_url: string(),
+  project_url: string(),
+  p2p_address: array(number()),
+  net_address: array(number()),
+  primary_address: array(number()),
+  worker_address: array(number()),
+  next_epoch_protocol_pubkey_bytes: nullable(array(number())),
+  next_epoch_proof_of_possession: nullable(array(number())),
+  next_epoch_network_pubkey_bytes: nullable(array(number())),
+  next_epoch_worker_pubkey_bytes: nullable(array(number())),
+  next_epoch_net_address: nullable(array(number())),
+  next_epoch_p2p_address: nullable(array(number())),
+  next_epoch_primary_address: nullable(array(number())),
+  next_epoch_worker_address: nullable(array(number())),
+  voting_power: number(),
+  gas_price: number(),
+  commission_rate: number(),
+  next_epoch_stake: number(),
+  next_epoch_gas_price: number(),
+  next_epoch_commission_rate: number(),
+  staking_pool_starting_epoch: number(),
+  staking_pool_deactivation_epoch: nullable(number()),
+  staking_pool_sui_balance: number(),
+  rewards_pool: number(),
+  pool_token_balance: number(),
+  pending_delegation: number(),
+  pending_pool_token_withdraw: number(),
+  pending_total_sui_withdraw: number(),
+});
+
+export type SuiValidatorSummary = Infer<typeof SuiValidatorSummary>;
+
+export const SuiSystemStateSummary = object({
+  epoch: number(),
+  protocol_version: number(),
+  storage_fund: number(),
+  reference_gas_price: number(),
+  safe_mode: boolean(),
+  epoch_start_timestamp_ms: number(),
+  min_validator_stake: number(),
+  max_validator_candidate_count: number(),
+  governance_start_epoch: number(),
+  stake_subsidy_epoch_counter: number(),
+  stake_subsidy_balance: number(),
+  stake_subsidy_current_epoch_amount: number(),
+  total_stake: number(),
+  active_validators: array(SuiValidatorSummary),
+});
+
+export type SuiSystemStateSummary = Infer<typeof SuiSystemStateSummary>;

@@ -42,6 +42,7 @@ dist/
 storybook-static/
 web-ext-artifacts/
 .next/
+next-env.d.ts
 
 # App test artifacts
 coverage/

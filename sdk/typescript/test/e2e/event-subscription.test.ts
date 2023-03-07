@@ -33,10 +33,13 @@ describe('Event Subscription API', () => {
       toolbox.address(),
     );
 
-    await signer.payAllSui({
-      inputCoins: inputCoins.map((o) => o.objectId),
-      recipient: DEFAULT_RECIPIENT,
-      gasBudget: DEFAULT_GAS_BUDGET,
+    await signer.signAndExecuteTransaction({
+      kind: 'payAllSui',
+      data: {
+        inputCoins: inputCoins.map((o) => o.objectId),
+        recipient: DEFAULT_RECIPIENT,
+        gasBudget: DEFAULT_GAS_BUDGET,
+      },
     });
 
     const subFoundAndRemoved = await toolbox.provider.unsubscribeEvent(

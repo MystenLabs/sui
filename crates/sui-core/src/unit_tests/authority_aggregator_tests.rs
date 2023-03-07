@@ -3,15 +3,12 @@
 
 use crate::test_utils::make_transfer_sui_transaction;
 use move_core_types::{account_address::AccountAddress, ident_str};
-use multiaddr::Multiaddr;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use sui_framework_build::compiled_package::BuildConfig;
-use sui_types::crypto::{
-    get_authority_key_pair, get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
-};
+use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
 use sui_types::crypto::{AuthoritySignature, Signer};
 use sui_types::crypto::{KeypairTraits, Signature};
 
@@ -930,12 +927,4 @@ fn set_tx_info_response_with_signed_tx(
         };
         clients.get_mut(name).unwrap().set_tx_info_response(resp);
     }
-}
-
-pub fn get_authority_pub_key_bytes_and_address() -> (AuthorityPublicKeyBytes, Vec<u8>) {
-    let (_val0_addr, val0_kp) = get_authority_key_pair();
-    (
-        AuthorityPublicKeyBytes::from(val0_kp.public()),
-        Multiaddr::empty().to_vec(),
-    )
 }

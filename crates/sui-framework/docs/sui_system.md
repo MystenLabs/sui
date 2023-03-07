@@ -180,11 +180,14 @@ The top-level object containing all information of the Sui system.
 <code>validator_report_records: <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;</code>
 </dt>
 <dd>
- A map storing the records of validator reporting each other during the current epoch.
+ A map storing the records of validator reporting each other.
  There is an entry in the map for each validator that has been reported
  at least once. The entry VecSet contains all the validators that reported
  them. If a validator has never been reported they don't have an entry in this map.
- This map resets every epoch.
+ This map persists across epoch: a peer continues being in a reported state until the
+ reporter doesn't explicitly remove their report.
+ Note that in case we want to support validator address change in future,
+ the reports should be based on validator ids
 </dd>
 <dt>
 <code><a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>: <a href="stake_subsidy.md#0x2_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a></code>
@@ -830,7 +833,7 @@ Withdraw some portion of a delegation from a validator's staking pool.
 
 Report a validator as a bad or non-performant actor in the system.
 Succeeds iff both the sender and the input <code>validator_addr</code> are active validators
-and they are not the same address. This function is idempotent within an epoch.
+and they are not the same address. This function is idempotent.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_report_validator">report_validator</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, validator_addr: <b>address</b>, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -873,8 +876,8 @@ and they are not the same address. This function is idempotent within an epoch.
 
 ## Function `undo_report_validator`
 
-Undo a <code>report_validator</code> action. Aborts if the sender has not reported the
-<code>validator_addr</code> within this epoch.
+Undo a <code>report_validator</code> action. Aborts if the sender has not previously reported the
+<code>validator_addr</code>.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_undo_report_validator">undo_report_validator</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, validator_addr: <b>address</b>, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -898,6 +901,9 @@ Undo a <code>report_validator</code> action. Aborts if the sender has not report
     <b>let</b> reporters = <a href="vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.validator_report_records, &validator_addr);
     <b>assert</b>!(<a href="vec_set.md#0x2_vec_set_contains">vec_set::contains</a>(reporters, &sender), <a href="sui_system.md#0x2_sui_system_EReportRecordNotFound">EReportRecordNotFound</a>);
     <a href="vec_set.md#0x2_vec_set_remove">vec_set::remove</a>(reporters, &sender);
+    <b>if</b> (<a href="vec_set.md#0x2_vec_set_is_empty">vec_set::is_empty</a>(reporters)) {
+        <a href="vec_map.md#0x2_vec_map_remove">vec_map::remove</a>(&<b>mut</b> self.validator_report_records, &validator_addr);
+    }
 }
 </code></pre>
 
@@ -1348,7 +1354,7 @@ gas coins.
         &<b>mut</b> self.validators,
         &<b>mut</b> computation_reward,
         &<b>mut</b> storage_fund_reward,
-        self.validator_report_records,
+        &<b>mut</b> self.validator_report_records,
         reward_slashing_rate,
         ctx,
     );
@@ -1366,10 +1372,6 @@ gas coins.
     // Destroy the storage rebate.
     <b>assert</b>!(<a href="balance.md#0x2_balance_value">balance::value</a>(&self.storage_fund) &gt;= storage_rebate, 0);
     <a href="balance.md#0x2_balance_destroy_storage_rebates">balance::destroy_storage_rebates</a>(<a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> self.storage_fund, storage_rebate));
-
-    // Validator reports are only valid for the epoch.
-    // TODO: or do we want <b>to</b> make it persistent and validators have <b>to</b> explicitly change their scores?
-    self.validator_report_records = <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
 
     <b>let</b> new_total_stake = <a href="validator_set.md#0x2_validator_set_total_stake">validator_set::total_stake</a>(&self.validators);
 
@@ -1614,7 +1616,7 @@ Returns reference to the staking pool mappings that map pool ids to active valid
 
 ## Function `get_reporters_of`
 
-Returns all the validators who have reported <code>addr</code> this epoch.
+Returns all the validators who are currently reporting <code>addr</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_get_reporters_of">get_reporters_of</a>(wrapper: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, addr: <b>address</b>): <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;

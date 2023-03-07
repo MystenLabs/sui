@@ -65,17 +65,16 @@ impl ConsensusState {
 
     pub fn new_from_store(
         metrics: Arc<ConsensusMetrics>,
-        recover_last_committed: HashMap<PublicKey, Round>,
+        last_committed_round: Round,
+        gc_depth: Round,
+        recovered_last_committed: HashMap<PublicKey, Round>,
         latest_sub_dag: Option<CommittedSubDagShell>,
         cert_store: CertificateStore,
     ) -> Self {
-        let last_committed_round = *recover_last_committed
-            .iter()
-            .max_by(|a, b| a.1.cmp(b.1))
-            .map(|(_k, v)| v)
-            .unwrap_or_else(|| &0);
-        let dag = Self::construct_dag_from_cert_store(cert_store, &recover_last_committed)
-            .expect("error when recovering DAG from store");
+        let gc_round = last_committed_round.saturating_sub(gc_depth);
+        let dag =
+            Self::construct_dag_from_cert_store(cert_store, gc_round, &recovered_last_committed)
+                .expect("error when recovering DAG from store");
         metrics.recovered_consensus_state.inc();
 
         let (latest_sub_dag_index, last_consensus_reputation_score, last_committed_leader) =
@@ -85,7 +84,7 @@ impl ConsensusState {
 
         Self {
             last_committed_round,
-            last_committed: recover_last_committed,
+            last_committed: recovered_last_committed,
             last_consensus_reputation_score,
             latest_sub_dag_index,
             last_committed_leader,
@@ -97,18 +96,15 @@ impl ConsensusState {
     #[instrument(level = "info", skip_all)]
     pub fn construct_dag_from_cert_store(
         cert_store: CertificateStore,
+        gc_round: Round,
         last_committed: &HashMap<PublicKey, Round>,
     ) -> Result<Dag, ConsensusError> {
         let mut dag: Dag = BTreeMap::new();
-        let min_committed_round = last_committed.values().min().cloned().unwrap_or(0);
 
-        info!(
-            "Recreating dag from min committed round: {}",
-            min_committed_round,
-        );
+        info!("Recreating dag from last GC round: {}", gc_round,);
 
-        // get all certificates at a round > min_round
-        let certificates = cert_store.after_round(min_committed_round + 1).unwrap();
+        // get all certificates at rounds > gc_round
+        let certificates = cert_store.after_round(gc_round + 1).unwrap();
 
         let mut num_certs = 0;
         for cert in &certificates {
@@ -248,6 +244,7 @@ where
     #[must_use]
     pub fn spawn(
         committee: Committee,
+        gc_depth: Round,
         store: Arc<ConsensusStore>,
         cert_store: CertificateStore,
         rx_shutdown: ConditionalBroadcastReceiver,
@@ -260,13 +257,29 @@ where
     ) -> JoinHandle<()> {
         // The consensus state (everything else is immutable).
         let recovered_last_committed = store.read_last_committed();
+        let last_committed_round = recovered_last_committed
+            .iter()
+            .max_by(|a, b| a.1.cmp(b.1))
+            .map(|(_k, v)| *v)
+            .unwrap_or_else(|| 0);
         let latest_sub_dag = store.get_latest_sub_dag();
+        if let Some(sub_dag) = &latest_sub_dag {
+            assert_eq!(
+                sub_dag.leader_round, last_committed_round,
+                "Last subdag leader round {} is not equal to the last committed round {}!",
+                sub_dag.leader_round, last_committed_round,
+            );
+        }
+
         let state = ConsensusState::new_from_store(
             metrics.clone(),
+            last_committed_round,
+            gc_depth,
             recovered_last_committed,
             latest_sub_dag,
             cert_store,
         );
+
         tx_consensus_round_updates
             .send(state.last_committed_round)
             .expect("Failed to send last_committed_round on initialization!");

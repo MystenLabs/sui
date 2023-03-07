@@ -12,7 +12,7 @@ use tracing::info;
 
 use crate::metrics::ExecutorMetrics;
 use async_trait::async_trait;
-use config::{Committee, SharedWorkerCache};
+use config::{Committee, WorkerCache};
 use crypto::PublicKey;
 
 use prometheus::Registry;
@@ -54,7 +54,7 @@ impl Executor {
     pub fn spawn<State>(
         name: PublicKey,
         network: oneshot::Receiver<anemo::Network>,
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         committee: Committee,
         execution_state: State,
         shutdown_receivers: Vec<ConditionalBroadcastReceiver>,

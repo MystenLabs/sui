@@ -45,7 +45,7 @@ describe('Transaction Serialization and deserialization', () => {
     );
     const signer = new RawSigner(toolbox.keypair, toolbox.provider);
     const packagePath = __dirname + '/./data/serializer';
-    packageId = await publishPackage(signer, false, packagePath);
+    packageId = await publishPackage(signer, packagePath);
   });
 
   async function serializeAndDeserialize(

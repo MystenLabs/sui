@@ -1234,12 +1234,14 @@ impl TransactionKind {
     }
 
     pub fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>> {
+        let mut seen = BTreeSet::new();
         let inputs: Vec<_> = self
             .single_transactions()
             .map(|s| s.input_objects())
             .collect::<UserInputResult<Vec<_>>>()?
             .into_iter()
             .flatten()
+            .filter(|kind| seen.insert(*kind))
             .collect();
         Ok(inputs)
     }

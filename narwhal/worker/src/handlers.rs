@@ -4,7 +4,7 @@
 use anemo::types::response::StatusCode;
 use anyhow::Result;
 use async_trait::async_trait;
-use config::{Committee, SharedWorkerCache, WorkerId};
+use config::{Committee, WorkerCache, WorkerId};
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -88,7 +88,7 @@ pub struct PrimaryReceiverHandler<V> {
     // The committee information.
     pub committee: Committee,
     // The worker information cache.
-    pub worker_cache: SharedWorkerCache,
+    pub worker_cache: WorkerCache,
     // The batch store
     pub store: Store<BatchDigest, Batch>,
     // Timeout on RequestBatch RPC.
@@ -158,7 +158,7 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
                 };
             if first_attempt {
                 // Send first sync request to a single node.
-                let worker_name = match self.worker_cache.load().worker(&message.target, &self.id) {
+                let worker_name = match self.worker_cache.worker(&message.target, &self.id) {
                     Ok(worker_info) => worker_info.name,
                     Err(e) => {
                         return Err(anemo::rpc::Status::internal(format!(
@@ -186,7 +186,6 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
                 // If first request timed out or was missing batches, try broadcasting to some others.
                 let names: Vec<_> = self
                     .worker_cache
-                    .load()
                     .others_workers_by_id(&self.name, &self.id)
                     .into_iter()
                     .map(|(_, info)| info.name)

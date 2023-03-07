@@ -212,6 +212,7 @@ export class Coin {
     return data.type;
   }
 
+  // TODO: Do we want to keep this method?
   /**
    * Create a new transaction for sending coins ready to be signed and executed.
    * @param allCoins All the coins that are owned by the sender. Can be only the relevant type of coins for the transfer, Sui for gas and the coins with the same type as the type to send.

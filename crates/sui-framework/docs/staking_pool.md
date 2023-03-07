@@ -752,7 +752,7 @@ this pool deactivation, the pool stops earning rewards. Only delegation
 withdraws can be made to the pool.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">deactivate_staking_pool</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">deactivate_staking_pool</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, deactivation_epoch: u64)
 </code></pre>
 
 
@@ -761,10 +761,10 @@ withdraws can be made to the pool.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">deactivate_staking_pool</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, ctx: &<b>mut</b> TxContext) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">deactivate_staking_pool</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, deactivation_epoch: u64) {
     // We can't deactivate an already deactivated pool.
     <b>assert</b>!(<a href="staking_pool.md#0x2_staking_pool_pool_active">pool_active</a>(pool), <a href="staking_pool.md#0x2_staking_pool_EDeactivationOfInactivePool">EDeactivationOfInactivePool</a>);
-    pool.deactivation_epoch = <a href="_some">option::some</a>(<a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx));
+    pool.deactivation_epoch = <a href="_some">option::some</a>(deactivation_epoch);
 }
 </code></pre>
 

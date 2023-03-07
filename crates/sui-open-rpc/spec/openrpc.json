@@ -1034,6 +1034,23 @@
       }
     },
     {
+      "name": "sui_getLatestSuiSystemState",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return the latest SUI system state object on-chain.",
+      "params": [],
+      "result": {
+        "name": "SuiSystemStateSummary",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/SuiSystemStateSummary"
+        }
+      }
+    },
+    {
       "name": "sui_getMoveFunctionArgTypes",
       "tags": [
         {
@@ -1408,7 +1425,7 @@
           "name": "Governance Read API"
         }
       ],
-      "description": "Return latest SUI system state object on-chain.",
+      "description": "(Deprecated) Return latest SUI system state object on-chain. This is now deprecated in favor of get_latest_sui_system_state.",
       "params": [],
       "result": {
         "name": "SuiSystemStateRpc",
@@ -1416,7 +1433,8 @@
         "schema": {
           "$ref": "#/components/schemas/SuiSystemState"
         }
-      }
+      },
+      "deprecated": true
     },
     {
       "name": "sui_getTotalSupply",
@@ -4678,7 +4696,7 @@
         ]
       },
       "MoveOption_for_uint64": {
-        "description": "Rust version of the Move std::option::Option type. Putting it in this file because it's only used here.",
+        "description": "Rust version of the Move std::option::Option type.",
         "type": "object",
         "required": [
           "vec"
@@ -5750,6 +5768,75 @@
       "SuiAddress": {
         "$ref": "#/components/schemas/Hex"
       },
+      "SuiArgument": {
+        "description": "An argument to a programmable transaction command",
+        "oneOf": [
+          {
+            "description": "The gas coin. The gas coin can only be used by-ref, except for with `TransferObjects`, which can use it by-value.",
+            "type": "string",
+            "enum": [
+              "GasCoin"
+            ]
+          },
+          {
+            "description": "One of the input objects or primitive values (from `ProgrammableTransaction` inputs)",
+            "type": "object",
+            "required": [
+              "Input"
+            ],
+            "properties": {
+              "Input": {
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0.0
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "The result of another command (from `ProgrammableTransaction` commands)",
+            "type": "object",
+            "required": [
+              "Result"
+            ],
+            "properties": {
+              "Result": {
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0.0
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Like a `Result` but it accesses a nested result. Currently, the only usage of this is to access a value from a Move call with multiple return values.",
+            "type": "object",
+            "required": [
+              "NestedResult"
+            ],
+            "properties": {
+              "NestedResult": {
+                "type": "array",
+                "items": [
+                  {
+                    "type": "integer",
+                    "format": "uint16",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "integer",
+                    "format": "uint16",
+                    "minimum": 0.0
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "SuiAuthorityStrongQuorumSignInfo": {
         "type": "object",
         "required": [
@@ -5854,6 +5941,141 @@
             "type": "string"
           }
         }
+      },
+      "SuiCommand": {
+        "description": "A single command in a programmable transaction.",
+        "oneOf": [
+          {
+            "description": "A call to either an entry or a public Move function",
+            "type": "object",
+            "required": [
+              "MoveCall"
+            ],
+            "properties": {
+              "MoveCall": {
+                "$ref": "#/components/schemas/SuiProgrammableMoveCall"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "`(Vec<forall T:key+store. T>, address)` It sends n-objects to the specified address. These objects must have store (public transfer) and either the previous owner must be an address or the object must be newly created.",
+            "type": "object",
+            "required": [
+              "TransferObjects"
+            ],
+            "properties": {
+              "TransferObjects": {
+                "type": "array",
+                "items": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SuiArgument"
+                    }
+                  },
+                  {
+                    "$ref": "#/components/schemas/SuiArgument"
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "`(&mut Coin<T>, u64)` -> `Coin<T>` It splits off some amount into a new coin",
+            "type": "object",
+            "required": [
+              "SplitCoin"
+            ],
+            "properties": {
+              "SplitCoin": {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/SuiArgument"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SuiArgument"
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "`(&mut Coin<T>, Vec<Coin<T>>)` It merges n-coins into the first coin",
+            "type": "object",
+            "required": [
+              "MergeCoins"
+            ],
+            "properties": {
+              "MergeCoins": {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/SuiArgument"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SuiArgument"
+                    }
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Publishes a Move package",
+            "type": "object",
+            "required": [
+              "Publish"
+            ],
+            "properties": {
+              "Publish": {
+                "$ref": "#/components/schemas/MovePackage"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "`forall T: Vec<T> -> vector<T>` Given n-values of the same type, it constructs a vector. For non objects or an empty vector, the type tag must be specified.",
+            "type": "object",
+            "required": [
+              "MakeMoveVec"
+            ],
+            "properties": {
+              "MakeMoveVec": {
+                "type": "array",
+                "items": [
+                  {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SuiArgument"
+                    }
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
       },
       "SuiConsensusCommitPrologue": {
         "type": "object",
@@ -6231,6 +6453,71 @@
           "Friend"
         ]
       },
+      "SuiProgrammableMoveCall": {
+        "description": "The command for calling a Move function, either an entry function or a public function (which cannot return references).",
+        "type": "object",
+        "required": [
+          "function",
+          "module",
+          "package"
+        ],
+        "properties": {
+          "arguments": {
+            "description": "The arguments to the function.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiArgument"
+            }
+          },
+          "function": {
+            "description": "The function to be called.",
+            "type": "string"
+          },
+          "module": {
+            "description": "The specific module in the package containing the function.",
+            "type": "string"
+          },
+          "package": {
+            "description": "The package containing the module and function.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            ]
+          },
+          "type_arguments": {
+            "description": "The type arguments to the function.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "SuiProgrammableTransaction": {
+        "description": "A series of commands where the results of one command can be used in future commands",
+        "type": "object",
+        "required": [
+          "commands",
+          "inputs"
+        ],
+        "properties": {
+          "commands": {
+            "description": "The commands to be executed sequentially. A failure in any command will result in the failure of the entire transaction.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiCommand"
+            }
+          },
+          "inputs": {
+            "description": "Input objects or primitive values",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiJsonValue"
+            }
+          }
+        }
+      },
       "SuiSystemState": {
         "anyOf": [
           {
@@ -6291,6 +6578,97 @@
           },
           "validators": {
             "$ref": "#/components/schemas/ValidatorSet"
+          }
+        }
+      },
+      "SuiSystemStateSummary": {
+        "description": "This is the JSON-RPC type for the SUI system state object. It flatterns all fields to make them top-level fields such that it as minimum dependencies to the internal data structures of the SUI system state type.",
+        "type": "object",
+        "required": [
+          "active_validators",
+          "epoch",
+          "epoch_start_timestamp_ms",
+          "governance_start_epoch",
+          "max_validator_candidate_count",
+          "min_validator_stake",
+          "protocol_version",
+          "reference_gas_price",
+          "safe_mode",
+          "stake_subsidy_balance",
+          "stake_subsidy_current_epoch_amount",
+          "stake_subsidy_epoch_counter",
+          "storage_fund",
+          "total_stake"
+        ],
+        "properties": {
+          "active_validators": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiValidatorSummary"
+            }
+          },
+          "epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "epoch_start_timestamp_ms": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "governance_start_epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "max_validator_candidate_count": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "min_validator_stake": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "protocol_version": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "reference_gas_price": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "safe_mode": {
+            "type": "boolean"
+          },
+          "stake_subsidy_balance": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "stake_subsidy_current_epoch_amount": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "stake_subsidy_epoch_counter": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "storage_fund": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "total_stake": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       },
@@ -6392,6 +6770,280 @@
           }
         }
       },
+      "SuiValidatorSummary": {
+        "description": "This is the JSON-RPC type for the SUI validator. It flattens all inner strucutures to top-level fields so that they are decoupled from the internal definitions.",
+        "type": "object",
+        "required": [
+          "commission_rate",
+          "description",
+          "gas_price",
+          "image_url",
+          "name",
+          "net_address",
+          "network_pubkey_bytes",
+          "next_epoch_commission_rate",
+          "next_epoch_gas_price",
+          "next_epoch_stake",
+          "p2p_address",
+          "pending_delegation",
+          "pending_pool_token_withdraw",
+          "pending_total_sui_withdraw",
+          "pool_token_balance",
+          "primary_address",
+          "project_url",
+          "proof_of_possession_bytes",
+          "protocol_pubkey_bytes",
+          "rewards_pool",
+          "staking_pool_starting_epoch",
+          "staking_pool_sui_balance",
+          "sui_address",
+          "voting_power",
+          "worker_address",
+          "worker_pubkey_bytes"
+        ],
+        "properties": {
+          "commission_rate": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "description": {
+            "type": "string"
+          },
+          "gas_price": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "image_url": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "net_address": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "network_pubkey_bytes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_commission_rate": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "next_epoch_gas_price": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "next_epoch_net_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_network_pubkey_bytes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_p2p_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_primary_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_proof_of_possession": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_protocol_pubkey_bytes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_stake": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "next_epoch_worker_address": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_worker_pubkey_bytes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "p2p_address": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "pending_delegation": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "pending_pool_token_withdraw": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "pending_total_sui_withdraw": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "pool_token_balance": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "primary_address": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "project_url": {
+            "type": "string"
+          },
+          "proof_of_possession_bytes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "protocol_pubkey_bytes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "rewards_pool": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "staking_pool_deactivation_epoch": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "staking_pool_starting_epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "staking_pool_sui_balance": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "sui_address": {
+            "$ref": "#/components/schemas/SuiAddress"
+          },
+          "voting_power": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "worker_address": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "worker_pubkey_bytes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          }
+        }
+      },
       "Supply": {
         "type": "object",
         "required": [
@@ -6432,7 +7084,7 @@
         }
       },
       "Table": {
-        "description": "Rust version of the Move sui::table::Table type. Putting it here since we only use it in sui_system in the framework.",
+        "description": "Rust version of the Move sui::table::Table type.",
         "type": "object",
         "required": [
           "id",
@@ -6450,7 +7102,7 @@
         }
       },
       "TableVec": {
-        "description": "Rust version of the Move sui::table::Table type. Putting it here since we only use it in sui_system in the framework.",
+        "description": "Rust version of the Move sui::table::Table type.",
         "type": "object",
         "required": [
           "contents"
@@ -6810,6 +7462,19 @@
             "properties": {
               "ConsensusCommitPrologue": {
                 "$ref": "#/components/schemas/SuiConsensusCommitPrologue"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "A series of commands where the results of one command can be used in future commands",
+            "type": "object",
+            "required": [
+              "ProgrammableTransaction"
+            ],
+            "properties": {
+              "ProgrammableTransaction": {
+                "$ref": "#/components/schemas/SuiProgrammableTransaction"
               }
             },
             "additionalProperties": false

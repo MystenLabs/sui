@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::utils;
 use anyhow::Result;
-use config::{SharedWorkerCache, WorkerId};
+use config::{WorkerCache, WorkerId};
 use consensus::dag::{Dag, ValidatorDagError};
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
@@ -33,7 +33,7 @@ pub struct BlockRemover {
     name: PublicKey,
 
     /// The worker information cache.
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
 
     /// Storage that keeps the Certificates by their digest id.
     certificate_store: CertificateStore,
@@ -58,7 +58,7 @@ impl BlockRemover {
     #[must_use]
     pub fn new(
         name: PublicKey,
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         certificate_store: CertificateStore,
         header_store: Store<HeaderDigest, Header>,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -101,7 +101,6 @@ impl BlockRemover {
         for (worker_id, batch_digests) in batches_by_worker.iter() {
             let worker_name = self
                 .worker_cache
-                .load()
                 .worker(&self.name, worker_id)
                 .expect("Worker id not found")
                 .name;

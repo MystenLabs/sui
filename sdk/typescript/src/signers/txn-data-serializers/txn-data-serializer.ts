@@ -113,6 +113,7 @@ export interface RawMoveCall {
   arguments: SuiJsonValue[];
 }
 
+/** @deprecated Use `Transaction` class. */
 export type UnserializedSignableTransaction =
   | {
       kind: 'moveCall';
@@ -161,7 +162,10 @@ export type SignedMessage = {
   signature: SerializedSignature;
 };
 
-/** A type that represents the possible transactions that can be signed: */
+/**
+ * A type that represents the possible transactions that can be signed:
+ * @deprecated Use `Transaction` instead.
+ */
 export type SignableTransaction =
   | UnserializedSignableTransaction
   | {
