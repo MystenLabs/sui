@@ -15,7 +15,6 @@ import { normalizeSuiObjectId, ObjectId, SuiAddress } from '../types/common';
 import { getOption, Option } from '../types/option';
 import { CoinStruct } from '../types/coin';
 import { StructTag } from '../types/sui-bcs';
-import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import { Infer, literal, number, object, string, union } from 'superstruct';
 
 export const SUI_FRAMEWORK_ADDRESS = '0x2';
@@ -216,81 +215,6 @@ export class Coin {
       return getObjectType(data);
     }
     return data.type;
-  }
-
-  // TODO: Do we want to keep this method?
-  /**
-   * Create a new transaction for sending coins ready to be signed and executed.
-   * @param allCoins All the coins that are owned by the sender. Can be only the relevant type of coins for the transfer, Sui for gas and the coins with the same type as the type to send.
-   * @param coinTypeArg The coin type argument (Coin<T> the T) of the coin to send
-   * @param amountToSend Total amount to send to recipient
-   * @param recipient Recipient's address
-   * @param gasBudget Gas budget for the tx
-   * @throws in case of insufficient funds
-   */
-  public static async newPayTransaction(
-    allCoins: CoinStruct[],
-    coinTypeArg: string,
-    amountToSend: bigint,
-    recipient: SuiAddress,
-    gasBudget: number,
-  ): Promise<UnserializedSignableTransaction> {
-    const isSuiTransfer = coinTypeArg === SUI_TYPE_ARG;
-    const coinsOfTransferType = allCoins.filter(
-      ({ coinType }) => coinType === coinTypeArg,
-    );
-    const coinsOfGas = isSuiTransfer
-      ? coinsOfTransferType
-      : allCoins.filter(({ coinType }) => coinType === SUI_TYPE_ARG);
-    const gasCoin = Coin.selectCoinWithBalanceGreaterThanOrEqual(
-      coinsOfGas,
-      BigInt(gasBudget),
-    );
-    if (!gasCoin) {
-      // TODO: denomination for gasBudget?
-      throw new Error(
-        `Unable to find a coin to cover the gas budget ${gasBudget}`,
-      );
-    }
-    const totalAmountIncludingGas =
-      amountToSend +
-      BigInt(
-        isSuiTransfer
-          ? // subtract from the total the balance of the gasCoin as it's going be the first element of the inputCoins
-            BigInt(gasBudget) - BigInt(gasCoin.balance || 0)
-          : 0,
-      );
-    const inputCoinObjs =
-      totalAmountIncludingGas > 0
-        ? await Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
-            coinsOfTransferType,
-            totalAmountIncludingGas,
-            isSuiTransfer ? [gasCoin.coinObjectId] : [],
-          )
-        : [];
-    if (totalAmountIncludingGas > 0 && !inputCoinObjs.length) {
-      const totalBalanceOfTransferType = Coin.totalBalance(coinsOfTransferType);
-      const suggestedAmountToSend =
-        totalBalanceOfTransferType - BigInt(isSuiTransfer ? gasBudget : 0);
-      // TODO: denomination for values?
-      throw new Error(
-        `Coin balance ${totalBalanceOfTransferType} is not sufficient to cover the transfer amount ` +
-          `${amountToSend}. Try reducing the transfer amount to ${suggestedAmountToSend}.`,
-      );
-    }
-    if (isSuiTransfer) {
-      inputCoinObjs.unshift(gasCoin);
-    }
-    return {
-      kind: isSuiTransfer ? 'paySui' : 'pay',
-      data: {
-        inputCoins: inputCoinObjs.map(({ coinObjectId }) => coinObjectId),
-        recipients: [recipient],
-        // TODO: change this to string to avoid losing precision
-        amounts: [Number(amountToSend)],
-        gasBudget: Number(gasBudget),
-      },
-    };
   }
 }
 
