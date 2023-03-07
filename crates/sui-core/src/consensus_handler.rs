@@ -141,18 +141,8 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             &self.low_scoring_authorities,
             self.committee.clone(),
             consensus_output.sub_dag.reputation_score.clone(),
+            Some(&self.metrics),
         );
-
-        if consensus_output.sub_dag.reputation_score.final_of_schedule {
-            self.metrics
-                .consensus_handler_num_low_scoring_authorities
-                .set(self.low_scoring_authorities.load().len() as i64);
-
-            self.low_scoring_authorities
-                .load()
-                .iter()
-                .for_each(|(key, val)| debug!("low scoring authority {} with score {}", key, val));
-        };
 
         for (cert, batches) in consensus_output.batches {
             let author = cert.header.author.clone();
