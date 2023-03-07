@@ -96,7 +96,8 @@ async fn commit_one() {
     assert_eq!(output.round(), 2);
 
     // AND the reputation scores have not been updated
-    assert_eq!(committed_sub_dag.reputation_score.total_authorities(), 0);
+    assert_eq!(committed_sub_dag.reputation_score.total_authorities(), 4);
+    assert!(committed_sub_dag.reputation_score.all_zero());
 }
 
 // Run for 8 dag rounds with one dead node node (that is not a leader). We should commit the leaders of
@@ -110,7 +111,7 @@ async fn dead_node() {
     let committee = fixture.committee();
     let mut keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
     keys.sort(); // Ensure we don't remove one of the leaders.
-    let _ = keys.pop().unwrap();
+    let dead_node = keys.pop().unwrap();
 
     let genesis = Certificate::genesis(&committee)
         .iter()
@@ -182,14 +183,26 @@ async fn dead_node() {
 
     // AND check that the consensus scores are the expected ones
     for (index, sub_dag) in committed_sub_dags.iter().enumerate() {
-        // For the first commit we don't expect to have any score updates
+        assert_eq!(sub_dag.reputation_score.total_authorities(), 4);
+
+        // For the first commit we expect to have any only zero scores
         if index == 0 {
-            assert_eq!(sub_dag.reputation_score.total_authorities(), 0);
+            sub_dag
+                .reputation_score
+                .scores_per_authority
+                .iter()
+                .for_each(|(_key, score)| {
+                    assert_eq!(*score, 0_u64);
+                });
         } else {
             // For any other commit we expect to always have a +1 score for each authority, as everyone
             // always votes for the leader
-            for score in sub_dag.reputation_score.scores_per_authority.values() {
-                assert_eq!(*score as usize, index);
+            for (key, score) in &sub_dag.reputation_score.scores_per_authority {
+                if *key == dead_node {
+                    assert_eq!(*score as usize, 0);
+                } else {
+                    assert_eq!(*score as usize, index);
+                }
             }
         }
     }
@@ -315,8 +328,9 @@ async fn not_enough_support() {
     let output = sequence.next().unwrap();
     assert_eq!(output.round(), 2);
 
-    // AND no scores exist for leader 2 , as this is the first commit
-    assert_eq!(committed_sub_dag.reputation_score.total_authorities(), 0);
+    // AND all scores are zero for leader 2 , as this is the first commit
+    assert_eq!(committed_sub_dag.reputation_score.total_authorities(), 4);
+    assert!(committed_sub_dag.reputation_score.all_zero());
 
     let committed_sub_dag: CommittedSubDag = rx_output.recv().await.unwrap();
     let mut sequence = committed_sub_dag.certificates.into_iter();
@@ -332,17 +346,22 @@ async fn not_enough_support() {
     assert_eq!(output.round(), 4);
 
     // AND scores should be updated with everyone that has voted for leader of round 2.
-    // Only node 0 has voted for the leader of this round, so only 1 score should exist
-    // with value 1
-    assert_eq!(committed_sub_dag.reputation_score.total_authorities(), 1);
+    // Only node 0 has voted for the leader of this round, so only their score should exist
+    // with value 1, and everything else should be zero.
+    assert_eq!(committed_sub_dag.reputation_score.total_authorities(), 4);
 
-    let node_0_name = &keys[0];
-    let score = committed_sub_dag
+    let node_0_name: PublicKey = keys[0].clone();
+    committed_sub_dag
         .reputation_score
         .scores_per_authority
-        .get(node_0_name)
-        .unwrap();
-    assert_eq!(*score, 1);
+        .iter()
+        .for_each(|(key, score)| {
+            if *key == node_0_name {
+                assert_eq!(*score, 1_u64);
+            } else {
+                assert_eq!(*score, 0_u64);
+            }
+        });
 }
 
 // Run for 7 dag rounds. Node 0 (the leader of round 2) is missing for rounds 1 and 2,
@@ -437,8 +456,8 @@ async fn missing_leader() {
     let output = sequence.next().unwrap();
     assert_eq!(output.round(), 4);
 
-    // AND no scores exist since this is the first commit that has happened
-    assert_eq!(committed_sub_dag.reputation_score.total_authorities(), 0);
+    // AND all scores are zero since this is the first commit that has happened
+    assert!(committed_sub_dag.reputation_score.all_zero());
 }
 
 // Run for 11 dag rounds in ideal conditions (all nodes reference all other nodes).
@@ -560,7 +579,7 @@ async fn delayed_certificates_are_rejected() {
         test_utils::make_certificates_with_epoch(&committee, 1..=5, epoch, &genesis, &keys);
 
     let store = make_consensus_store(&test_utils::temp_dir());
-    let mut state = ConsensusState::new(metrics.clone());
+    let mut state = ConsensusState::new(metrics.clone(), &committee);
     let mut bullshark = Bullshark::new(
         committee,
         store,
@@ -612,7 +631,7 @@ async fn submitting_equivocating_certificate_should_error() {
         test_utils::make_certificates_with_epoch(&committee, 1..=1, epoch, &genesis, &keys);
 
     let store = make_consensus_store(&test_utils::temp_dir());
-    let mut state = ConsensusState::new(metrics.clone());
+    let mut state = ConsensusState::new(metrics.clone(), &committee);
     let mut bullshark = Bullshark::new(
         committee.clone(),
         store,
@@ -675,7 +694,7 @@ async fn reset_consensus_scores_on_every_schedule_change() {
         test_utils::make_certificates_with_epoch(&committee, 1..=50, epoch, &genesis, &keys);
 
     let store = make_consensus_store(&test_utils::temp_dir());
-    let mut state = ConsensusState::new(metrics.clone());
+    let mut state = ConsensusState::new(metrics.clone(), &committee);
     let mut bullshark = Bullshark::new(
         committee,
         store,
@@ -696,9 +715,9 @@ async fn reset_consensus_scores_on_every_schedule_change() {
     // ensure the leaders of rounds 2 and 4 have been committed
     let mut current_score = 0;
     for sub_dag in all_subdags {
-        // The first commit has no scores
+        // The first commit has all zero scores
         if sub_dag.sub_dag_index == 1 {
-            assert_eq!(sub_dag.reputation_score.total_authorities(), 0);
+            assert!(sub_dag.reputation_score.all_zero());
         } else if sub_dag.sub_dag_index % NUM_SUB_DAGS_PER_SCHEDULE == 0 {
             // On every 5th commit we reset the scores and count from the beginning with
             // scores updated to 1, as we expect now every node to have voted for the previous leader.
