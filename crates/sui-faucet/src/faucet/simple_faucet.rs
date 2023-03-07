@@ -14,8 +14,8 @@ use std::path::Path;
 
 use sui::client_commands::WalletContext;
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectResponse, SuiPaySui, SuiTransactionDataAPI,
-    SuiTransactionEffectsAPI, SuiTransactionKind, SuiTransactionResponse,
+    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionDataAPI, SuiTransactionEffectsAPI,
+    SuiTransactionResponse,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_types::object::Owner;
@@ -281,12 +281,11 @@ impl SimpleFaucet {
         amounts: &[u64],
         recipient: SuiAddress,
         uuid: Uuid,
-    ) -> Result<(TransactionDigest, Vec<ObjectID>, Vec<u64>), FaucetError> {
+    ) -> Result<(TransactionDigest, Vec<ObjectID>), FaucetError> {
         let number_of_coins = amounts.len();
         let total_amount: u64 = amounts.iter().sum();
 
         let gas_coin_response = self.prepare_gas_coin(total_amount, uuid).await;
-
         match gas_coin_response {
             GasCoinResponse::ValidGasCoin(coin_id) => {
                 let tx_data = self
@@ -308,12 +307,11 @@ impl SimpleFaucet {
                     wal.reserve(uuid, coin_id, recipient, tx_data.clone())
                         .map_err(FaucetError::internal)?;
                 }
-
                 let response = self
                     .sign_and_execute_txn(uuid, recipient, coin_id, tx_data)
                     .await?;
 
-                self.check_and_map_transfer_gas_result(response, number_of_coins, &recipient)
+                self.check_and_map_transfer_gas_result(response, number_of_coins, recipient)
                     .await
             }
 
@@ -430,13 +428,7 @@ impl SimpleFaucet {
         let client = self.wallet.get_client().await?;
         client
             .transaction_builder()
-            .pay_sui_legacy_for_faucet_do_not_use_will_be_removed(
-                signer,
-                vec![coin_id],
-                recipients,
-                amounts.to_vec(),
-                budget,
-            )
+            .pay_sui(signer, vec![coin_id], recipients, amounts.to_vec(), budget)
             .await
             .map_err(|e| {
                 anyhow::anyhow!(
@@ -451,8 +443,8 @@ impl SimpleFaucet {
         &self,
         res: SuiTransactionResponse,
         number_of_coins: usize,
-        recipient: &SuiAddress,
-    ) -> Result<(TransactionDigest, Vec<ObjectID>, Vec<u64>), FaucetError> {
+        recipient: SuiAddress,
+    ) -> Result<(TransactionDigest, Vec<ObjectID>), FaucetError> {
         let txns = res.transaction.data.transactions();
         if txns.len() != 1 {
             panic!(
@@ -467,25 +459,14 @@ impl SimpleFaucet {
                 number_of_coins, created
             );
         }
-        let txn = &txns[0];
-        if let SuiTransactionKind::PaySui(SuiPaySui {
-            // coins here are input coins, rather than the created coins under recipients.
-            coins: _,
-            recipients,
-            amounts,
-        }) = txn
-        {
-            assert!(recipients
-                .iter()
-                .all(|sent_recipient| sent_recipient == recipient));
-            let coin_ids: Vec<ObjectID> = created
-                .iter()
-                .map(|created_coin_owner_ref| created_coin_owner_ref.reference.object_id)
-                .collect();
-            Ok((*res.effects.transaction_digest(), coin_ids, amounts.clone()))
-        } else {
-            panic!("Expect SuiTransactionKind::PaySui(SuiPaySui) to send coins to address {} but got txn {:?}", recipient, txn);
-        }
+        assert!(created
+            .iter()
+            .all(|created_coin_owner_ref| created_coin_owner_ref.owner == recipient));
+        let coin_ids: Vec<ObjectID> = created
+            .iter()
+            .map(|created_coin_owner_ref| created_coin_owner_ref.reference.object_id)
+            .collect();
+        Ok((*res.effects.transaction_digest(), coin_ids))
     }
 
     #[cfg(test)]
@@ -524,28 +505,36 @@ impl Faucet for SimpleFaucet {
     ) -> Result<FaucetReceipt, FaucetError> {
         info!(?recipient, uuid = ?id, "Getting faucet requests");
 
-        let (digest, coin_ids, sent_amounts) = self.transfer_gases(amounts, recipient, id).await?;
-        if coin_ids.len() != amounts.len() {
-            error!(
-                uuid = ?id, ?recipient,
-                "Requested {} coins but got {}",
-                amounts.len(),
-                coin_ids.len()
-            );
-        }
+        let (digest, coin_ids) = self.transfer_gases(amounts, recipient, id).await?;
 
         info!(uuid = ?id, ?recipient, ?digest, "PaySui txn succeeded");
-        Ok(FaucetReceipt {
-            sent: coin_ids
-                .iter()
-                .zip(sent_amounts)
-                .map(|(coin_id, sent_amount)| CoinInfo {
-                    transfer_tx_digest: digest,
-                    amount: sent_amount,
-                    id: *coin_id,
-                })
-                .collect(),
-        })
+        let mut sent = Vec::with_capacity(coin_ids.len());
+        for coin_id in coin_ids {
+            let mut retry_delay = Duration::from_millis(500);
+            let amount = loop {
+                let res = self.get_gas_coin(coin_id).await;
+                if let Ok(Some(coin)) = res {
+                    break coin.value();
+                }
+                info!(
+                    ?recipient,
+                    ?coin_id,
+                    uuid = ?id,
+                    ?retry_delay,
+                    "Could not find coint after successful transaction, error: {:?}",
+                    &res,
+                );
+
+                tokio::time::sleep(retry_delay).await;
+                retry_delay *= 2;
+            };
+            sent.push(CoinInfo {
+                transfer_tx_digest: digest,
+                amount,
+                id: coin_id,
+            });
+        }
+        Ok(FaucetReceipt { sent })
     }
 }
 
@@ -634,7 +623,6 @@ mod tests {
         .into_iter()
         .map(|res| res.unwrap())
         .collect::<Vec<_>>();
-
         // After all transfer requests settle, we still have the original candidates gas in queue.
         let available = faucet.metrics.total_available_coins.get();
         let candidates = faucet.drain_gas_queue(gases.len()).await;

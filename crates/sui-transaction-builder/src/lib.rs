@@ -227,44 +227,6 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         )
     }
 
-    pub async fn pay_sui_legacy_for_faucet_do_not_use_will_be_removed(
-        &self,
-        signer: SuiAddress,
-        input_coins: Vec<ObjectID>,
-        recipients: Vec<SuiAddress>,
-        amounts: Vec<u64>,
-        gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
-        fp_ensure!(
-            !input_coins.is_empty(),
-            UserInputError::EmptyInputCoins.into()
-        );
-
-        let handles: Vec<_> = input_coins
-            .into_iter()
-            .map(|id| self.get_object_ref(id))
-            .collect();
-        let coins = join_all(handles)
-            .await
-            .into_iter()
-            .collect::<anyhow::Result<Vec<ObjectRef>>>()?;
-        // [0] is safe because input_coins is non-empty and coins are of same length as input_coins.
-        let gas_object_ref = coins[0];
-        let gas_price = self.0.get_reference_gas_price().await?;
-        let kind = TransactionKind::Single(SingleTransactionKind::PaySui(PaySui {
-            coins,
-            recipients,
-            amounts,
-        }));
-        Ok(TransactionData::new(
-            kind,
-            signer,
-            gas_object_ref,
-            gas_budget,
-            gas_price,
-        ))
-    }
-
     pub async fn pay_all_sui(
         &self,
         signer: SuiAddress,
