@@ -12,7 +12,7 @@ use fastcrypto::hash::Hash;
 use fastcrypto::traits::EncodeDecodeBase64;
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::time::Instant;
-use tracing::{debug, trace};
+use tracing::{debug, error_span, trace};
 use types::{
     Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, ReputationScores, Round,
 };
@@ -150,13 +150,19 @@ impl ConsensusProtocol for Bullshark {
         // Get an ordered list of past leaders that are linked to the current leader.
         debug!("Leader {:?} has enough support", leader);
         let mut committed_sub_dags = Vec::new();
+        let mut total_committed_certificates = 0;
 
         // TODO: duplicated in tusk.rs
         for leader in utils::order_leaders(&self.committee, leader, state, Self::leader)
             .iter()
             .rev()
         {
-            debug!("Previous Leader {:?} has enough support", leader);
+            let sub_dag_index = state.latest_sub_dag_index + 1;
+            let _span = error_span!("bullshark_process_sub_dag", sub_dag_index);
+
+            debug!("Leader {:?} has enough support", leader);
+
+            let mut min_round = leader.round();
             let mut sequence = Vec::new();
 
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
@@ -164,30 +170,32 @@ impl ConsensusProtocol for Bullshark {
                 // Update and clean up internal state.
                 state.update(&x, self.gc_depth);
 
+                // For logging.
+                min_round = min_round.min(x.round());
+
                 // Add the certificate to the sequence.
                 sequence.push(x);
             }
+            debug!(min_round, "Subdag has {} certificates", sequence.len());
 
-            let next_sub_dag_index = state.latest_sub_dag_index + 1;
+            total_committed_certificates += sequence.len();
 
             // We update the reputation score stored in state
-            let reputation_score =
-                self.update_reputation_score(state, &sequence, next_sub_dag_index);
+            let reputation_score = self.update_reputation_score(state, &sequence, sub_dag_index);
 
             let sub_dag = CommittedSubDag {
                 certificates: sequence,
                 leader: leader.clone(),
-                sub_dag_index: next_sub_dag_index,
+                sub_dag_index,
                 reputation_score,
             };
 
             // Persist the update.
             self.store
                 .write_consensus_state(&state.last_committed, &sub_dag)?;
-            debug!("Store commit index:{},", &next_sub_dag_index,);
 
             // Increase the global consensus index.
-            state.latest_sub_dag_index = next_sub_dag_index;
+            state.latest_sub_dag_index = sub_dag_index;
             state.last_committed_leader = Some(sub_dag.leader.digest());
 
             committed_sub_dags.push(sub_dag);
@@ -224,15 +232,6 @@ impl ConsensusProtocol for Bullshark {
         for (name, round) in &state.last_committed {
             debug!("Latest commit of {}: Round {}", name.encode_base64(), round);
         }
-
-        let total_committed_certificates: usize = committed_sub_dags
-            .iter()
-            .map(|x| x.certificates.len())
-            .sum();
-        debug!(
-            "Total committed certificates: {}",
-            total_committed_certificates
-        );
 
         self.metrics
             .committed_certificates

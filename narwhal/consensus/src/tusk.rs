@@ -8,7 +8,7 @@ use crate::{
 use config::{Committee, Stake};
 use fastcrypto::{hash::Hash, traits::EncodeDecodeBase64};
 use std::{collections::HashMap, sync::Arc};
-use tracing::debug;
+use tracing::{debug, error_span};
 use types::{
     Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, ReputationScores, Round,
 };
@@ -89,6 +89,9 @@ impl ConsensusProtocol for Tusk {
             .iter()
             .rev()
         {
+            let sub_dag_index = state.latest_sub_dag_index + 1;
+            let _span = error_span!("tusk_process_sub_dag", sub_dag_index);
+
             let mut sequence = Vec::new();
 
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
@@ -99,12 +102,12 @@ impl ConsensusProtocol for Tusk {
                 // Add the certificate to the sequence.
                 sequence.push(x);
             }
+            debug!("Subdag has {} certificates", sequence.len());
 
-            let next_sub_dag_index = state.latest_sub_dag_index + 1;
             let sub_dag = CommittedSubDag {
                 certificates: sequence,
                 leader: leader.clone(),
-                sub_dag_index: next_sub_dag_index,
+                sub_dag_index,
                 reputation_score: ReputationScores::default(), // TODO compute the scores for Tusk as well
             };
 
@@ -113,7 +116,7 @@ impl ConsensusProtocol for Tusk {
                 .write_consensus_state(&state.last_committed, &sub_dag)?;
 
             // Increase the global consensus index.
-            state.latest_sub_dag_index = next_sub_dag_index;
+            state.latest_sub_dag_index = sub_dag_index;
 
             committed_sub_dags.push(sub_dag);
         }
