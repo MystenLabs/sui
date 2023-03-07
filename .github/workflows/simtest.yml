@@ -30,4 +30,4 @@ jobs:
           # valid for. This is optional and defaults to "1h"
           certificate-ttl: 2h
       - name: Run simtest
-        run: tsh -i ${{ steps.auth.outputs.identity-file }} ls # running a test command
+        run: tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest ls -al # running a test command
