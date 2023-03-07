@@ -8,7 +8,7 @@ use jsonrpsee::core::RpcResult;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    GetRawObjectDataResponse, SponsoredTransactionResponse, SuiObjectInfo,
+    GaslessTransactionBytes, GetRawObjectDataResponse, SponsoredTransactionResponse, SuiObjectInfo,
     SuiTransactionBuilderMode, SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc::Module;
@@ -343,12 +343,12 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
     async fn send_bytes_to_sponsor(
         &self,
         gas_station_url: String,
-        transaction_bytes: TransactionBytes,
+        gasless_txn_bytes: GaslessTransactionBytes,
         gas_budget: u64,
     ) -> RpcResult<SponsoredTransactionResponse> {
         Ok(self
             .builder
-            .send_bytes_to_sponsor(gas_station_url, transaction_bytes, gas_budget)
+            .send_bytes_to_sponsor(gas_station_url, gasless_txn_bytes, gas_budget)
             .await?)
     }
 }

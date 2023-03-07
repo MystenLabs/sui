@@ -990,6 +990,25 @@ pub struct GasData {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct GaslessTransactionData {
+    pub kind: TransactionKind,
+    pub sender: SuiAddress,
+}
+
+impl GaslessTransactionData {
+    pub fn new(kind: TransactionKind, sender: SuiAddress) -> Self {
+        GaslessTransactionData { kind, sender }
+    }
+
+    pub fn from_transaction_data(transaction_data: TransactionData) -> Self {
+        GaslessTransactionData {
+            kind: transaction_data.kind,
+            sender: transaction_data.sender,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct TransactionData {
     pub kind: TransactionKind,
     pub sender: SuiAddress,

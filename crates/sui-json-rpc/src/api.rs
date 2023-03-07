@@ -9,14 +9,14 @@ use jsonrpsee_proc_macros::rpc;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    Balance, CoinPage, DevInspectResults, DynamicFieldPage, EventPage, GetObjectDataResponse,
-    GetPastObjectDataResponse, GetRawObjectDataResponse, MoveFunctionArgType,
-    RPCTransactionRequestParams, SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter,
-    SuiExecuteTransactionResponse, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
-    SuiMoveNormalizedStruct, SuiObjectInfo, SuiTBlsSignObjectCommitmentType,
-    SuiTBlsSignRandomnessObjectResponse, SuiTransactionAuthSignersResponse,
-    SuiTransactionBuilderMode, SuiTransactionEffects, SuiTransactionResponse, SuiTypeTag,
-    TransactionBytes, TransactionsPage,
+    Balance, CoinPage, DevInspectResults, DynamicFieldPage, EventPage, GaslessTransactionBytes,
+    GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
+    MoveFunctionArgType, RPCTransactionRequestParams, SponsoredTransactionResponse,
+    SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
+    SuiTBlsSignObjectCommitmentType, SuiTBlsSignRandomnessObjectResponse,
+    SuiTransactionAuthSignersResponse, SuiTransactionBuilderMode, SuiTransactionEffects,
+    SuiTransactionResponse, SuiTypeTag, TransactionBytes, TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::balance::Supply;
@@ -334,6 +334,15 @@ pub trait GovernanceReadApi {
 #[open_rpc(namespace = "sui", tag = "Transaction Builder API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcTransactionBuilder {
+    // TODO: migrate above two rpc calls to this one eventually.
+    #[method(name = "sendBytesToSponsor")]
+    async fn send_bytes_to_sponsor(
+        &self,
+        gas_station_url: String,
+        gasless_txn: GaslessTransactionBytes,
+        gas_budget: u64,
+    ) -> RpcResult<SponsoredTransactionResponse>;
+
     /// Create an unsigned transaction to transfer an object from one address to another. The object's type
     /// must allow public transfers
     #[method(name = "transferObject")]

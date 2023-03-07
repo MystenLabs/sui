@@ -47,9 +47,9 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
     CallArg, CertifiedTransaction, EffectsFinalityInfo, ExecuteTransactionResponse,
-    ExecutionStatus, FinalizedEffects, GenesisObject, InputObjectKind, MoveModulePublish,
-    ObjectArg, Pay, PayAllSui, PaySui, SingleTransactionKind, TransactionData, TransactionEffects,
-    TransactionKind, VerifiedCertificate,
+    ExecutionStatus, FinalizedEffects, GaslessTransactionData, GenesisObject, InputObjectKind,
+    MoveModulePublish, ObjectArg, Pay, PayAllSui, PaySui, SingleTransactionKind, TransactionData,
+    TransactionEffects, TransactionKind, VerifiedCertificate,
 };
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::{disassemble_modules, MovePackage};
@@ -1613,10 +1613,7 @@ pub struct SuiGenesisTransaction {
     pub objects: Vec<ObjectID>,
 }
 
-<<<<<<< HEAD
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-=======
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Eq, PartialEq)]
 #[serde(rename = "SponsoredTransactionResponse", rename_all = "camelCase")]
 pub struct SponsoredTransactionResponse {
     /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
@@ -1641,7 +1638,6 @@ pub struct GetSponsoredTransactionStatusResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
->>>>>>> 9b95f4135 (creating gas station client and adding to txn builder sdk)
 pub struct SuiConsensusCommitPrologue {
     pub checkpoint_start_timestamp_ms: u64,
 }
@@ -3028,7 +3024,7 @@ impl TryInto<EventFilter> for SuiEventFilter {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionBytes {
     /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
@@ -3055,6 +3051,29 @@ impl TransactionBytes {
     pub fn to_data(self) -> Result<TransactionData, anyhow::Error> {
         bcs::from_bytes::<TransactionData>(&self.tx_bytes.to_vec().map_err(|e| anyhow::anyhow!(e))?)
             .map_err(|e| anyhow::anyhow!(e))
+    }
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, JsonSchema, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GaslessTransactionBytes {
+    /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
+    pub tx_bytes: Base64,
+}
+
+impl GaslessTransactionBytes {
+    pub fn from_data(data: GaslessTransactionData) -> Result<Self, anyhow::Error> {
+        Ok(Self {
+            tx_bytes: Base64::from_bytes(bcs::to_bytes(&data)?.as_slice()),
+        })
+    }
+
+    pub fn to_data(self) -> Result<GaslessTransactionData, anyhow::Error> {
+        bcs::from_bytes::<GaslessTransactionData>(
+            &self.tx_bytes.to_vec().map_err(|e| anyhow::anyhow!(e))?,
+        )
+        .map_err(|e| anyhow::anyhow!(e))
     }
 }
 
