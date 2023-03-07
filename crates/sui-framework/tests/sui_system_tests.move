@@ -46,9 +46,26 @@ module sui::sui_system_tests {
 
         advance_epoch(scenario);
 
-        // After an epoch ends, report records are reset.
-        assert!(get_reporters_of(@0x2, scenario) == vector[], 0);
+        // After an epoch ends, report records are still present.
+        assert!(get_reporters_of(@0x2, scenario) == vector[@0x1], 0);
 
+        report_helper(@0x2, @0x1, false, scenario);
+        assert!(get_reporters_of(@0x1, scenario) == vector[@0x2], 0);
+
+
+        report_helper(@0x3, @0x2, false, scenario);
+        assert!(get_reporters_of(@0x2, scenario) == vector[@0x1, @0x3], 0);
+        
+        // After 0x3 leaves, its reports are gone
+        remove_validator(@0x3, scenario);
+        advance_epoch(scenario);
+        assert!(get_reporters_of(@0x2, scenario) == vector[@0x1], 0);
+
+        // After 0x1 leaves, both its reports and the reports on its name are gone
+        remove_validator(@0x1, scenario);
+        advance_epoch(scenario);
+        assert!(vector::is_empty(&get_reporters_of(@0x1, scenario)), 0);
+        assert!(vector::is_empty(&get_reporters_of(@0x2, scenario)), 0);
         test_scenario::end(scenario_val);
     }
 

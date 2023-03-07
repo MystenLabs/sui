@@ -212,7 +212,7 @@ module sui::validator_set_tests {
             validator_set,
             &mut dummy_computation_reward,
             &mut dummy_storage_fund_reward,
-            vec_map::empty(),
+            &mut vec_map::empty(),
             0,
             ctx
         );

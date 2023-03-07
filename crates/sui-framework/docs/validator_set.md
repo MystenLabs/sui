@@ -37,6 +37,7 @@
 -  [Function `get_active_validator_ref`](#0x2_validator_set_get_active_validator_ref)
 -  [Function `get_pending_validator_ref`](#0x2_validator_set_get_pending_validator_ref)
 -  [Function `process_pending_removals`](#0x2_validator_set_process_pending_removals)
+-  [Function `clean_report_records_leaving_validator`](#0x2_validator_set_clean_report_records_leaving_validator)
 -  [Function `process_pending_validators`](#0x2_validator_set_process_pending_validators)
 -  [Function `sort_removal_list`](#0x2_validator_set_sort_removal_list)
 -  [Function `process_pending_delegations_and_withdraws`](#0x2_validator_set_process_pending_delegations_and_withdraws)
@@ -591,7 +592,7 @@ It does the following things:
 5. At the end, we calculate the total stake for the new epoch.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, computation_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_report_records: <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, reward_slashing_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, computation_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_report_records: &<b>mut</b> <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, reward_slashing_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -604,7 +605,7 @@ It does the following things:
     self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
     computation_reward: &<b>mut</b> Balance&lt;SUI&gt;,
     storage_fund_reward: &<b>mut</b> Balance&lt;SUI&gt;,
-    validator_report_records: VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
+    validator_report_records: &<b>mut</b> VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
     reward_slashing_rate: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
@@ -624,7 +625,7 @@ It does the following things:
     <b>let</b> (slashed_validators, total_slashed_validator_stake) =
         <a href="validator_set.md#0x2_validator_set_compute_slashed_validators_and_total_stake">compute_slashed_validators_and_total_stake</a>(
             self,
-            <b>copy</b> validator_report_records,
+            *validator_report_records,
         );
 
     // Compute the reward adjustments of slashed validators, <b>to</b> be taken into
@@ -672,11 +673,11 @@ It does the following things:
 
     // Emit events after we have processed all the rewards distribution and pending delegations.
     <a href="validator_set.md#0x2_validator_set_emit_validator_epoch_events">emit_validator_epoch_events</a>(new_epoch, &self.active_validators, &adjusted_staking_reward_amounts,
-        &validator_report_records, &slashed_validators);
+        validator_report_records, &slashed_validators);
 
     <a href="validator_set.md#0x2_validator_set_process_pending_validators">process_pending_validators</a>(self);
 
-    <a href="validator_set.md#0x2_validator_set_process_pending_removals">process_pending_removals</a>(self, ctx);
+    <a href="validator_set.md#0x2_validator_set_process_pending_removals">process_pending_removals</a>(self, validator_report_records, ctx);
 
     self.total_stake = <a href="validator_set.md#0x2_validator_set_calculate_total_stakes">calculate_total_stakes</a>(&self.active_validators);
 
@@ -1293,7 +1294,7 @@ Process the pending withdraw requests. For each pending request, the validator
 is removed from <code>validators</code> and its staking pool is put into the <code>inactive_validators</code> table.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_pending_removals">process_pending_removals</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_pending_removals">process_pending_removals</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_report_records: &<b>mut</b> <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1304,6 +1305,7 @@ is removed from <code>validators</code> and its staking pool is put into the <co
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_pending_removals">process_pending_removals</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
+    validator_report_records: &<b>mut</b> VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> new_epoch = <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) + 1;
@@ -1314,9 +1316,59 @@ is removed from <code>validators</code> and its staking pool is put into the <co
         <b>let</b> validator_pool_id = staking_pool_id(&<a href="validator.md#0x2_validator">validator</a>);
         <a href="table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> self.staking_pool_mappings, validator_pool_id);
         self.total_stake = self.total_stake - <a href="validator.md#0x2_validator_total_stake_amount">validator::total_stake_amount</a>(&<a href="validator.md#0x2_validator">validator</a>);
+
+        <a href="validator_set.md#0x2_validator_set_clean_report_records_leaving_validator">clean_report_records_leaving_validator</a>(
+            validator_report_records, <a href="validator.md#0x2_validator_sui_address">validator::sui_address</a>(&<a href="validator.md#0x2_validator">validator</a>));
+
         // Deactivate the <a href="validator.md#0x2_validator">validator</a> and its staking pool
         <a href="validator.md#0x2_validator_deactivate">validator::deactivate</a>(&<b>mut</b> <a href="validator.md#0x2_validator">validator</a>, new_epoch);
         <a href="table.md#0x2_table_add">table::add</a>(&<b>mut</b> self.inactive_validators, validator_pool_id, <a href="validator.md#0x2_validator">validator</a>);
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_clean_report_records_leaving_validator"></a>
+
+## Function `clean_report_records_leaving_validator`
+
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_clean_report_records_leaving_validator">clean_report_records_leaving_validator</a>(validator_report_records: &<b>mut</b> <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, leaving_validator_addr: <b>address</b>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_clean_report_records_leaving_validator">clean_report_records_leaving_validator</a>(
+    validator_report_records: &<b>mut</b> VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
+    leaving_validator_addr: <b>address</b>
+) {
+    // Remove the records about this <a href="validator.md#0x2_validator">validator</a>
+    <b>if</b> (<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(validator_report_records, &leaving_validator_addr)) {
+        <a href="vec_map.md#0x2_vec_map_remove">vec_map::remove</a>(validator_report_records, &leaving_validator_addr);
+    };
+
+    // Remove the reports submitted by this <a href="validator.md#0x2_validator">validator</a>
+    <b>let</b> reported_validators = <a href="vec_map.md#0x2_vec_map_keys">vec_map::keys</a>(validator_report_records);
+    <b>let</b> length = <a href="_length">vector::length</a>(&reported_validators);
+    <b>let</b> i = 0;
+    <b>while</b> (i &lt; length) {
+        <b>let</b> reported_validator_addr = <a href="_borrow">vector::borrow</a>(&reported_validators, i);
+        <b>let</b> reporters = <a href="vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(validator_report_records, reported_validator_addr);
+        <b>if</b> (<a href="vec_set.md#0x2_vec_set_contains">vec_set::contains</a>(reporters, &leaving_validator_addr)) {
+            <a href="vec_set.md#0x2_vec_set_remove">vec_set::remove</a>(reporters, &leaving_validator_addr);
+            <b>if</b> (<a href="vec_set.md#0x2_vec_set_is_empty">vec_set::is_empty</a>(reporters)) {
+                <a href="vec_map.md#0x2_vec_map_remove">vec_map::remove</a>(validator_report_records, reported_validator_addr);
+            };
+        };
+        i = i + 1;
     }
 }
 </code></pre>
