@@ -229,6 +229,8 @@ module sui::test_scenario {
     /// Returns all ids of type `T` transferred to address `account`.
     public native fun ids_for_address<T: key>(account: address): vector<ID>;
 
+    public native fun is_owned_by_address_of_type<T>(account: address, id: ID): bool;
+
     /// helper that returns true iff `most_recent_id_for_address` returns some
     public fun has_most_recent_for_address<T: key>(account: address): bool {
         option::is_some(&most_recent_id_for_address<T>(account))

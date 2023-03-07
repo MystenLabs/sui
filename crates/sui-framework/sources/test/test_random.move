@@ -141,4 +141,8 @@ module sui::test_random {
     public fun next_bool(random: &mut Random): bool {
         next_u8(random) % 2 == 1
     }
+
+   public fun next_address(random: &mut Random): address {
+        sui::address::from_u256(next_u256_in_range(random, 1461501637330902918203684832716283019655932542975))
+    }
 }

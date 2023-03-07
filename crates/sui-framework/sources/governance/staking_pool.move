@@ -488,6 +488,10 @@ module sui::staking_pool {
 
     // ==== test-related functions ====
 
+    public fun validator_address(staked_sui: &StakedSui): address {
+        staked_sui.validator_address
+    }
+
     // Given the `staked_sui` receipt calculate the current rewards (in terms of SUI) for it.
     #[test_only]
     public fun calculate_rewards(

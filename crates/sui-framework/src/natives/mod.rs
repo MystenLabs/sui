@@ -257,6 +257,11 @@ pub fn all_natives(
             make_native!(test_scenario::ids_for_address),
         ),
         (
+            "test_scenario",
+            "is_owned_by_address_of_type",
+            make_native!(test_scenario::is_owned_by_address_of_type),
+        ),
+        (
             "transfer",
             "transfer_internal",
             make_native!(transfer::transfer_internal),

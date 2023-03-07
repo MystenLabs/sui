@@ -824,6 +824,12 @@ module sui::sui_system {
         validator_set::get_pending_validator_ref(validators(self), validator_address)
     }
 
+    /// Return the balance of the storage fund.
+    public fun storage_fund_balance(wrapper: &SuiSystemState): u64 {
+        let self = load_system_state(wrapper);
+        balance::value(&self.storage_fund)
+    }
+
     #[test_only]
     public fun set_epoch_for_testing(wrapper: &mut SuiSystemState, epoch_num: u64) {
         let self = load_system_state_mut(wrapper);

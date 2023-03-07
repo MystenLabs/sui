@@ -52,6 +52,7 @@
 -  [Function `validators`](#0x2_sui_system_validators)
 -  [Function `active_validator_by_address`](#0x2_sui_system_active_validator_by_address)
 -  [Function `pending_validator_by_address`](#0x2_sui_system_pending_validator_by_address)
+-  [Function `storage_fund_balance`](#0x2_sui_system_storage_fund_balance)
 
 
 <pre><code><b>use</b> <a href="">0x1::ascii</a>;
@@ -1941,6 +1942,32 @@ Return the currently pending validator by address
 
 <pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_pending_validator_by_address">pending_validator_by_address</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>, validator_address: <b>address</b>): &Validator {
     <a href="validator_set.md#0x2_validator_set_get_pending_validator_ref">validator_set::get_pending_validator_ref</a>(<a href="sui_system.md#0x2_sui_system_validators">validators</a>(self), validator_address)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_storage_fund_balance"></a>
+
+## Function `storage_fund_balance`
+
+Return the balance of the storage fund.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_storage_fund_balance">storage_fund_balance</a>(wrapper: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_storage_fund_balance">storage_fund_balance</a>(wrapper: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): u64 {
+    <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state">load_system_state</a>(wrapper);
+    <a href="balance.md#0x2_balance_value">balance::value</a>(&self.storage_fund)
 }
 </code></pre>
 

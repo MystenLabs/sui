@@ -509,6 +509,29 @@ pub fn was_taken_shared(
     ))
 }
 
+pub fn is_owned_by_address_of_type(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    let specified_ty = get_specified_ty(ty_args);
+    let id = pop_id(&mut args)?;
+    let account: SuiAddress = pop_arg!(args, AccountAddress).into();
+    assert!(args.is_empty());
+    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let inventories = &mut object_runtime.test_inventories;
+    let is_owned_by_address = inventories
+        .address_inventories
+        .get(&account)
+        .and_then(|inv| inv.get(&specified_ty))
+        .map(|s| s.contains_key(&id))
+        .unwrap_or(false);
+    Ok(NativeResult::ok(
+        legacy_test_cost(),
+        smallvec![Value::bool(is_owned_by_address)],
+    ))
+}
+
 // impls
 
 fn take_from_inventory(

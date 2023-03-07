@@ -40,6 +40,7 @@
 -  [Function `get_token_amount`](#0x2_staking_pool_get_token_amount)
 -  [Function `initial_exchange_rate`](#0x2_staking_pool_initial_exchange_rate)
 -  [Function `check_balance_invariants`](#0x2_staking_pool_check_balance_invariants)
+-  [Function `validator_address`](#0x2_staking_pool_validator_address)
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
@@ -1403,6 +1404,30 @@ Returns true if the provided staking pool is preactive at the provided epoch.
     <b>let</b> expected = <a href="staking_pool.md#0x2_staking_pool_get_token_amount">get_token_amount</a>(&exchange_rate, pool.sui_balance);
     <b>let</b> actual = pool.pool_token_balance;
     <b>assert</b>!(expected == actual, <a href="staking_pool.md#0x2_staking_pool_ETokenBalancesDoNotMatchExchangeRate">ETokenBalancesDoNotMatchExchangeRate</a>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_validator_address"></a>
+
+## Function `validator_address`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_validator_address">validator_address</a>(staked_sui: &<a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>): <b>address</b>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_validator_address">validator_address</a>(staked_sui: &<a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>): <b>address</b> {
+    staked_sui.validator_address
 }
 </code></pre>
 
