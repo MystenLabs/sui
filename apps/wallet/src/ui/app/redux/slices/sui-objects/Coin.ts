@@ -107,18 +107,21 @@ export class Coin {
         });
 
         try {
-            return await signer.executeMoveCall({
-                packageObjectId: '0x2',
-                module: 'sui_system',
-                function: 'request_add_delegation_mul_coin',
-                typeArguments: [],
-                arguments: [
-                    SUI_SYSTEM_STATE_OBJECT_ID,
-                    [stakeCoin],
-                    [String(amount)],
-                    validator,
-                ],
-                gasBudget: DEFAULT_GAS_BUDGET_FOR_STAKE,
+            return await signer.signAndExecuteTransaction({
+                kind: 'moveCall',
+                data: {
+                    packageObjectId: '0x2',
+                    module: 'sui_system',
+                    function: 'request_add_delegation_mul_coin',
+                    typeArguments: [],
+                    arguments: [
+                        SUI_SYSTEM_STATE_OBJECT_ID,
+                        [stakeCoin],
+                        [String(amount)],
+                        validator,
+                    ],
+                    gasBudget: DEFAULT_GAS_BUDGET_FOR_STAKE,
+                },
             });
         } finally {
             span.finish();
@@ -133,17 +136,20 @@ export class Coin {
     ): Promise<SuiTransactionResponse> {
         const transaction = Sentry.startTransaction({ name: 'unstake' });
         try {
-            return await signer.executeMoveCall({
-                packageObjectId: '0x2',
-                module: 'sui_system',
-                function: 'request_withdraw_delegation',
-                typeArguments: [],
-                arguments: [
-                    SUI_SYSTEM_STATE_OBJECT_ID,
-                    delegation,
-                    stakedSuiId,
-                ],
-                gasBudget: DEFAULT_GAS_BUDGET_FOR_STAKE,
+            return await signer.signAndExecuteTransaction({
+                kind: 'moveCall',
+                data: {
+                    packageObjectId: '0x2',
+                    module: 'sui_system',
+                    function: 'request_withdraw_delegation',
+                    typeArguments: [],
+                    arguments: [
+                        SUI_SYSTEM_STATE_OBJECT_ID,
+                        delegation,
+                        stakedSuiId,
+                    ],
+                    gasBudget: DEFAULT_GAS_BUDGET_FOR_STAKE,
+                },
             });
         } finally {
             transaction.finish();
@@ -173,16 +179,19 @@ export class Coin {
 
             const address = await signer.getAddress();
 
-            const result = await signer.paySui({
-                // NOTE: We reverse the order here so that the highest coin is in the front
-                // so that it is used as the gas coin.
-                inputCoins: [...inputCoins]
-                    .reverse()
-                    .map((coin) => Coin.getID(coin as SuiMoveObject)),
-                recipients: [address, address],
-                // TODO: Update SDK to accept bigint
-                amounts: [Number(amount), Number(gasFee)],
-                gasBudget,
+            const result = await signer.signAndExecuteTransaction({
+                kind: 'paySui',
+                data: {
+                    // NOTE: We reverse the order here so that the highest coin is in the front
+                    // so that it is used as the gas coin.
+                    inputCoins: [...inputCoins]
+                        .reverse()
+                        .map((coin) => Coin.getID(coin as SuiMoveObject)),
+                    recipients: [address, address],
+                    // TODO: Update SDK to accept bigint
+                    amounts: [Number(amount), Number(gasFee)],
+                    gasBudget,
+                },
             });
 
             const effects = getTransactionEffects(result);

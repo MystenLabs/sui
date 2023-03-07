@@ -5,7 +5,6 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import {
   getObjectId,
   getNewlyCreatedCoinRefsAfterSplit,
-  LocalTxnDataSerializer,
   RawSigner,
   UnserializedSignableTransaction,
 } from '../../src';
@@ -17,104 +16,98 @@ import {
   TestToolbox,
 } from './utils/setup';
 
-describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
-  'Test dev inspect',
-  ({ useLocalTxnBuilder }) => {
-    let toolbox: TestToolbox;
-    let signer: RawSigner;
-    let packageId: string;
+describe('Test dev inspect', () => {
+  let toolbox: TestToolbox;
+  let signer: RawSigner;
+  let packageId: string;
 
-    beforeAll(async () => {
-      toolbox = await setup();
-      //const version = await toolbox.provider.getRpcApiVersion();
-      signer = new RawSigner(
-        toolbox.keypair,
-        toolbox.provider,
-        useLocalTxnBuilder
-          ? new LocalTxnDataSerializer(toolbox.provider)
-          : undefined,
+  beforeAll(async () => {
+    toolbox = await setup();
+    //const version = await toolbox.provider.getRpcApiVersion();
+    signer = new RawSigner(toolbox.keypair, toolbox.provider);
+    const packagePath = __dirname + '/./data/serializer';
+    packageId = await publishPackage(signer, packagePath);
+  });
+
+  it('Dev inspect transaction with Pay', async () => {
+    const gasBudget = 1000;
+    const coins =
+      await toolbox.provider.selectCoinsWithBalanceGreaterThanOrEqual(
+        toolbox.address(),
+        BigInt(DEFAULT_GAS_BUDGET),
       );
-      const packagePath = __dirname + '/./data/serializer';
-      packageId = await publishPackage(signer, useLocalTxnBuilder, packagePath);
-    });
 
-    it('Dev inspect transaction with Pay', async () => {
-      const gasBudget = 1000;
-      const coins =
-        await toolbox.provider.selectCoinsWithBalanceGreaterThanOrEqual(
-          toolbox.address(),
-          BigInt(DEFAULT_GAS_BUDGET),
-        );
-
-      const splitTxn = await signer.splitCoin({
+    const splitTxn = await signer.signAndExecuteTransaction({
+      kind: 'splitCoin',
+      data: {
         coinObjectId: getObjectId(coins[0]),
         splitAmounts: [2000, 2000, 2000],
         gasBudget: gasBudget,
         gasPayment: getObjectId(coins[1]),
-      });
-      const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
-        getObjectId(c),
-      );
-
-      await validateDevInspectTransaction(
-        signer,
-        {
-          kind: 'pay',
-          data: {
-            inputCoins: splitCoins,
-            recipients: [DEFAULT_RECIPIENT],
-            amounts: [4000],
-            gasBudget: gasBudget,
-          },
-        },
-        'success',
-      );
+      },
     });
+    const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
+      getObjectId(c),
+    );
 
-    it('Move Call that returns struct', async () => {
-      const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-        toolbox.address(),
-      );
-      const moveCall = {
-        packageObjectId: packageId,
-        module: 'serializer_tests',
-        function: 'return_struct',
-        typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>'],
-        arguments: [coins[0].objectId],
-        gasBudget: DEFAULT_GAS_BUDGET,
-      };
-
-      await validateDevInspectTransaction(
-        signer,
-        {
-          kind: 'moveCall',
-          data: moveCall,
+    await validateDevInspectTransaction(
+      signer,
+      {
+        kind: 'pay',
+        data: {
+          inputCoins: splitCoins,
+          recipients: [DEFAULT_RECIPIENT],
+          amounts: [4000],
+          gasBudget: gasBudget,
         },
-        'success',
-      );
-    });
+      },
+      'success',
+    );
+  });
 
-    it('Move Call that aborts', async () => {
-      const moveCall = {
-        packageObjectId: packageId,
-        module: 'serializer_tests',
-        function: 'test_abort',
-        typeArguments: [],
-        arguments: [],
-        gasBudget: DEFAULT_GAS_BUDGET,
-      };
+  it('Move Call that returns struct', async () => {
+    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
+      toolbox.address(),
+    );
+    const moveCall = {
+      packageObjectId: packageId,
+      module: 'serializer_tests',
+      function: 'return_struct',
+      typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>'],
+      arguments: [coins[0].objectId],
+      gasBudget: DEFAULT_GAS_BUDGET,
+    };
 
-      await validateDevInspectTransaction(
-        signer,
-        {
-          kind: 'moveCall',
-          data: moveCall,
-        },
-        'failure',
-      );
-    });
-  },
-);
+    await validateDevInspectTransaction(
+      signer,
+      {
+        kind: 'moveCall',
+        data: moveCall,
+      },
+      'success',
+    );
+  });
+
+  it('Move Call that aborts', async () => {
+    const moveCall = {
+      packageObjectId: packageId,
+      module: 'serializer_tests',
+      function: 'test_abort',
+      typeArguments: [],
+      arguments: [],
+      gasBudget: DEFAULT_GAS_BUDGET,
+    };
+
+    await validateDevInspectTransaction(
+      signer,
+      {
+        kind: 'moveCall',
+        data: moveCall,
+      },
+      'failure',
+    );
+  });
+});
 
 async function validateDevInspectTransaction(
   signer: RawSigner,

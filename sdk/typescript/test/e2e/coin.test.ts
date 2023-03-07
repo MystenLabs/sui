@@ -5,7 +5,6 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import {
   Coin,
   getObjectId,
-  LocalTxnDataSerializer,
   normalizeSuiObjectId,
   ObjectId,
   RawSigner,
@@ -25,21 +24,20 @@ describe('Coin related API', () => {
 
   beforeAll(async () => {
     toolbox = await setup();
-    signer = new RawSigner(
-      toolbox.keypair,
-      toolbox.provider,
-      new LocalTxnDataSerializer(toolbox.provider),
-    );
+    signer = new RawSigner(toolbox.keypair, toolbox.provider);
     const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
       toolbox.address(),
     );
     coinToSplit = coins[0].objectId;
     // split coins into desired amount
-    await signer.splitCoin({
-      coinObjectId: coinToSplit,
-      splitAmounts: SPLIT_AMOUNTS.map((s) => Number(s)),
-      gasBudget: DEFAULT_GAS_BUDGET,
-      gasPayment: coins[1].objectId,
+    await signer.signAndExecuteTransaction({
+      kind: 'splitCoin',
+      data: {
+        coinObjectId: coinToSplit,
+        splitAmounts: SPLIT_AMOUNTS.map((s) => Number(s)),
+        gasBudget: DEFAULT_GAS_BUDGET,
+        gasPayment: coins[1].objectId,
+      },
     });
     coinsAfterSplit = await toolbox.provider.getGasObjectsOwnedByAddress(
       toolbox.address(),
