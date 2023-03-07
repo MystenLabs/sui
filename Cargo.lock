@@ -9039,7 +9039,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "ed25519-consensus",
- "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=f589a2fdb634e8d905adf7d0ce9ec433e51e5bcf)",
+ "fastcrypto",
  "futures",
  "governor",
  "multiaddr",
