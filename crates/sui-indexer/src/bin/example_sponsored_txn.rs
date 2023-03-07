@@ -39,10 +39,18 @@ async fn main() -> Result<()> {
 
     let sponsored_bytes = fn_rpc_client
         .transaction_builder()
-        .send_bytes_to_sponsor(gas_station_url, gasless_txn_bytes, 5000)
+        .send_bytes_to_sponsor(gas_station_url.clone(), gasless_txn_bytes, 5000)
         .await?;
 
     println!("bytes_response {:?}", sponsored_bytes);
+
+    let txn_digest = sponsored_bytes.result.unwrap().tx_digest;
+    let status = fn_rpc_client
+        .transaction_builder()
+        .get_sponsored_transaction_status(gas_station_url.clone(), txn_digest.base58_encode())
+        .await?;
+
+    println!("status {:?}", status);
 
     Ok(())
 }

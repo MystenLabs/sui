@@ -11,12 +11,13 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     Balance, CoinPage, DevInspectResults, DynamicFieldPage, EventPage, GaslessTransactionBytes,
     GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
-    MoveFunctionArgType, RPCTransactionRequestParams, SponsoredTransactionResponse,
-    SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse,
-    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
-    SuiTBlsSignObjectCommitmentType, SuiTBlsSignRandomnessObjectResponse,
-    SuiTransactionAuthSignersResponse, SuiTransactionBuilderMode, SuiTransactionEffects,
-    SuiTransactionResponse, SuiTypeTag, TransactionBytes, TransactionsPage,
+    GetSponsoredTransactionStatusResponse, MoveFunctionArgType, RPCTransactionRequestParams,
+    SponsoredTransactionResponse, SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter,
+    SuiExecuteTransactionResponse, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
+    SuiMoveNormalizedStruct, SuiObjectInfo, SuiTBlsSignObjectCommitmentType,
+    SuiTBlsSignRandomnessObjectResponse, SuiTransactionAuthSignersResponse,
+    SuiTransactionBuilderMode, SuiTransactionEffects, SuiTransactionResponse, SuiTypeTag,
+    TransactionBytes, TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::balance::Supply;
@@ -342,6 +343,15 @@ pub trait RpcTransactionBuilder {
         gasless_txn: GaslessTransactionBytes,
         gas_budget: u64,
     ) -> RpcResult<SponsoredTransactionResponse>;
+
+    #[method(name = "getSponsoredTransactionStatus")]
+    async fn get_sponsored_transaction_status(
+        &self,
+        /// endpoint for a gas station
+        gas_station_url: String,
+        /// The transaction digest we would like to check
+        digest: String,
+    ) -> RpcResult<GetSponsoredTransactionStatusResponse>;
 
     /// Create an unsigned transaction to transfer an object from one address to another. The object's type
     /// must allow public transfers

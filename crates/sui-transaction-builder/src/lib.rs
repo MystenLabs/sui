@@ -143,10 +143,6 @@ impl GasStationClient for RemoteGasStationClient {
                 .map_err(|e| anyhow::anyhow!("json deser failed with bytes {:?}: {e}", full_bytes))
                 .unwrap();
 
-        if let Some(error) = gas_station_response.error {
-            panic!("Failed to sponsor transaction with error: {}", error)
-        };
-
         gas_station_response
     }
 }
@@ -851,6 +847,18 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
 
         Ok(gas_station_client
             .sponsor_transaction(gasless_txn_bytes, gas_budget)
+            .await)
+    }
+
+    pub async fn get_sponsored_transaction_status(
+        &self,
+        gas_station_url: String,
+        digest: String,
+    ) -> anyhow::Result<GetSponsoredTransactionStatusResponse> {
+        let gas_station_client = RemoteGasStationClient::new(gas_station_url);
+
+        Ok(gas_station_client
+            .get_sponsored_transaction_status(digest)
             .await)
     }
 

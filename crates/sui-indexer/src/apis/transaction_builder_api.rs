@@ -10,8 +10,8 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc::api::{TransactionBuilderClient, TransactionBuilderServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    RPCTransactionRequestParams, SponsoredTransactionResponse, SuiTransactionBuilderMode,
-    SuiTypeTag, TransactionBytes,
+    GetSponsoredTransactionStatusResponse, RPCTransactionRequestParams,
+    SponsoredTransactionResponse, SuiTransactionBuilderMode, SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -221,6 +221,16 @@ impl TransactionBuilderServer for TransactionBuilderApi {
     ) -> RpcResult<SponsoredTransactionResponse> {
         self.fullnode
             .send_bytes_to_sponsor(gas_station_url, transaction_bytes, gas_budget)
+            .await
+    }
+
+    async fn get_sponsored_transaction_status(
+        &self,
+        gas_station_url: String,
+        digest: String,
+    ) -> RpcResult<GetSponsoredTransactionStatusResponse> {
+        self.fullnode
+            .get_sponsored_transaction_status(gas_station_url, digest)
             .await
     }
 }

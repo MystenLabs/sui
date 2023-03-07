@@ -1616,13 +1616,16 @@ pub struct SuiGenesisTransaction {
 #[derive(Clone, Serialize, Deserialize, JsonSchema, Debug)]
 pub struct SponsoredTransactionResponseData {
     /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
+    #[serde(rename = "txBytes")]
     pub tx_bytes: Base64,
     /// Base58 encoded transaction digest
+    #[serde(rename = "txDigest")]
     pub tx_digest: TransactionDigest,
     /// Base64 encoded transaction signature, signed by the gas owner
     pub signature: GenericSignature,
     /// Expiration time of the assigned gas object
-    pub expire_at: u64,
+    #[serde(rename = "expireAt")]
+    pub expire_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -1639,19 +1642,18 @@ pub struct SponsoredTransactionResponseError {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "SponsoredTransactionResponse", rename_all = "camelCase")]
 pub struct SponsoredTransactionResponse {
-    pub data: Option<SponsoredTransactionResponseData>,
+    pub result: Option<SponsoredTransactionResponseData>,
     pub error: Option<SponsoredTransactionResponseError>,
 }
 
-// TODO: change this structure too
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(
     rename = "GetSponsoredTransactionStatusResponse",
     rename_all = "camelCase"
 )]
 pub struct GetSponsoredTransactionStatusResponse {
-    pub status: String,
-    pub error: Option<String>,
+    pub result: Option<String>,
+    pub error: Option<SponsoredTransactionResponseError>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
