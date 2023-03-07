@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use anyhow::anyhow;
@@ -25,7 +26,7 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{ObjectType, SuiAddress};
 use sui_types::crypto::{
     Ed25519SuiSignature, Secp256k1SuiSignature, SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
@@ -204,7 +205,10 @@ async fn test_create_example_nft_command() {
             assert_eq!(obj.owner.unwrap().get_owner_address().unwrap(), address);
             assert_eq!(
                 obj.type_.clone().unwrap(),
-                sui_framework_address_concat_string("::devnet_nft::DevNetNFT")
+                ObjectType::from_str(&sui_framework_address_concat_string(
+                    "::devnet_nft::DevNetNFT"
+                ))
+                .unwrap()
             );
             Ok(obj)
         }

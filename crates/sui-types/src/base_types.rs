@@ -112,7 +112,7 @@ impl FromStr for ObjectType {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "Package" {
+        if s.to_lowercase() == PACKAGE {
             Ok(ObjectType::Package)
         } else {
             let tag = parse_sui_struct_tag(s)?;
@@ -144,7 +144,7 @@ impl ObjectInfo {
         }
     }
 }
-
+const PACKAGE: &str = "package";
 impl ObjectType {
     pub fn is_gas_coin(&self) -> bool {
         match self {
@@ -785,7 +785,7 @@ impl fmt::Display for ObjectID {
 impl fmt::Display for ObjectType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ObjectType::Package => write!(f, "package"),
+            ObjectType::Package => write!(f, "{}", PACKAGE),
             ObjectType::Struct(t) => write!(f, "{}", t),
         }
     }

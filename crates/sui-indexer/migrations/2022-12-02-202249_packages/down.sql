@@ -1,2 +1,2 @@
-DROP TABLE packages;
-DROP TABLE package_logs;
+DROP TABLE IF EXISTS packages;
+DROP TABLE IF EXISTS package_logs;
