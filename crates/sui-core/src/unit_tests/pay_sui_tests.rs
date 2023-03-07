@@ -81,14 +81,12 @@ async fn test_pay_sui_failure_insufficient_total_balance_one_input_coin() {
     )
     .await;
 
-    let ExecutionStatus::Failure { error, command } = res.txn_result.as_ref().unwrap().status()
-    else {
-        panic!("expected failure but got success")
-    };
-    assert_eq!(command, &Some(2));
     assert_eq!(
-        error,
-        &ExecutionFailureStatus::InvalidTransferSuiInsufficientBalance,
+        res.txn_result.as_ref().unwrap().status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::InvalidTransferSuiInsufficientBalance,
+            command: Some(2)
+        },
     );
 }
 
@@ -136,14 +134,12 @@ async fn test_pay_sui_failure_insufficient_total_balance_multiple_input_coins() 
         201,
     )
     .await;
-    let ExecutionStatus::Failure { error, command } = res.txn_result.as_ref().unwrap().status()
-    else {
-        panic!("expected failure but got success")
-    };
-    assert_eq!(command, &Some(2));
     assert_eq!(
-        error,
-        &ExecutionFailureStatus::InvalidTransferSuiInsufficientBalance,
+        res.txn_result.as_ref().unwrap().status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::InvalidTransferSuiInsufficientBalance,
+            command: Some(2)
+        },
     );
 }
 
