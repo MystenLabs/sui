@@ -10,7 +10,7 @@ publish = false
 fdlimit = "0.2"
 indexmap = { version = "1.9.2", features = ["serde"] }
 itertools = "0.10.5"
-prometheus = "0.13.3"
+multiaddr = "0.17.0"
 rand = "0.8.5"
 tempfile = "3.3.0"
 thiserror = "1.0.35"
