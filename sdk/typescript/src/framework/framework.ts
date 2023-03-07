@@ -13,6 +13,7 @@ import {
 import { normalizeSuiObjectId, ObjectId, SuiAddress } from '../types/common';
 
 import { getOption, Option } from '../types/option';
+import { CoinStruct } from '../types/coin';
 import { StructTag } from '../types/sui-bcs';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import { Infer, literal, number, object, string, union } from 'superstruct';
@@ -96,14 +97,14 @@ export class Coin {
    * @return a list of coin objects that has balance greater than `amount` in an ascending order
    */
   static selectCoinsWithBalanceGreaterThanOrEqual(
-    coins: ObjectDataFull[],
+    coins: CoinStruct[],
     amount: bigint,
     exclude: ObjectId[] = [],
-  ): ObjectDataFull[] {
+  ): CoinStruct[] {
     return Coin.sortByBalance(
       coins.filter(
-        (c) =>
-          !exclude.includes(Coin.getID(c)) && Coin.getBalance(c)! >= amount,
+        ({ coinObjectId, balance }) =>
+          !exclude.includes(coinObjectId) && BigInt(balance) >= amount,
       ),
     );
   }
@@ -117,12 +118,13 @@ export class Coin {
    * @return an arbitrary coin with balance greater than or equal to `amount
    */
   static selectCoinWithBalanceGreaterThanOrEqual(
-    coins: ObjectDataFull[],
+    coins: CoinStruct[],
     amount: bigint,
     exclude: ObjectId[] = [],
-  ): ObjectDataFull | undefined {
+  ): CoinStruct | undefined {
     return coins.find(
-      (c) => !exclude.includes(Coin.getID(c)) && Coin.getBalance(c)! >= amount,
+      ({ coinObjectId, balance }) =>
+        !exclude.includes(coinObjectId) && BigInt(balance) >= amount,
     );
   }
 
@@ -136,12 +138,12 @@ export class Coin {
    * to`amount` in an ascending order. If no such set exists, an empty list is returned
    */
   static selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
-    coins: ObjectDataFull[],
+    coins: CoinStruct[],
     amount: bigint,
     exclude: ObjectId[] = [],
-  ): ObjectDataFull[] {
+  ): CoinStruct[] {
     const sortedCoins = Coin.sortByBalance(
-      coins.filter((c) => !exclude.includes(Coin.getID(c))),
+      coins.filter(({ coinObjectId }) => !exclude.includes(coinObjectId)),
     );
 
     const total = Coin.totalBalance(sortedCoins);
@@ -153,12 +155,12 @@ export class Coin {
     }
 
     let sum = BigInt(0);
-    let ret: ObjectDataFull[] = [];
+    let ret: CoinStruct[] = [];
     while (sum < total) {
       // prefer to add a coin with smallest sufficient balance
       const target = amount - sum;
       const coinWithSmallestSufficientBalance = sortedCoins.find(
-        (c) => Coin.getBalance(c)! >= target,
+        (coin) => Coin.getBalanceFromCoinStruct(coin) >= target,
       );
       if (coinWithSmallestSufficientBalance) {
         ret.push(coinWithSmallestSufficientBalance);
@@ -167,15 +169,15 @@ export class Coin {
 
       const coinWithLargestBalance = sortedCoins.pop()!;
       ret.push(coinWithLargestBalance);
-      sum += Coin.getBalance(coinWithLargestBalance)!;
+      sum += BigInt(coinWithLargestBalance.balance);
     }
 
     return Coin.sortByBalance(ret);
   }
 
-  static totalBalance(coins: ObjectDataFull[]): bigint {
+  static totalBalance(coins: CoinStruct[]): bigint {
     return coins.reduce(
-      (partialSum, c) => partialSum + Coin.getBalance(c)!,
+      (partialSum, c) => partialSum + Coin.getBalanceFromCoinStruct(c),
       BigInt(0),
     );
   }
@@ -183,14 +185,18 @@ export class Coin {
   /**
    * Sort coin by balance in an ascending order
    */
-  static sortByBalance(coins: ObjectDataFull[]): ObjectDataFull[] {
+  static sortByBalance(coins: CoinStruct[]): CoinStruct[] {
     return [...coins].sort((a, b) =>
-      Coin.getBalance(a)! < Coin.getBalance(b)!
+      Coin.getBalanceFromCoinStruct(a) < Coin.getBalanceFromCoinStruct(b)
         ? -1
-        : Coin.getBalance(a)! > Coin.getBalance(b)!
+        : Coin.getBalanceFromCoinStruct(a) > Coin.getBalanceFromCoinStruct(b)
         ? 1
         : 0,
     );
+  }
+
+  static getBalanceFromCoinStruct(coin: CoinStruct): bigint {
+    return BigInt(coin.balance);
   }
 
   static getBalance(data: ObjectDataFull): bigint | undefined {
@@ -223,7 +229,7 @@ export class Coin {
    * @throws in case of insufficient funds
    */
   public static async newPayTransaction(
-    allCoins: SuiMoveObject[],
+    allCoins: CoinStruct[],
     coinTypeArg: string,
     amountToSend: bigint,
     recipient: SuiAddress,
@@ -231,11 +237,11 @@ export class Coin {
   ): Promise<UnserializedSignableTransaction> {
     const isSuiTransfer = coinTypeArg === SUI_TYPE_ARG;
     const coinsOfTransferType = allCoins.filter(
-      (aCoin) => Coin.getCoinTypeArg(aCoin) === coinTypeArg,
+      ({ coinType }) => coinType === coinTypeArg,
     );
     const coinsOfGas = isSuiTransfer
       ? coinsOfTransferType
-      : allCoins.filter((aCoin) => Coin.isSUI(aCoin));
+      : allCoins.filter(({ coinType }) => coinType === SUI_TYPE_ARG);
     const gasCoin = Coin.selectCoinWithBalanceGreaterThanOrEqual(
       coinsOfGas,
       BigInt(gasBudget),
@@ -251,7 +257,7 @@ export class Coin {
       BigInt(
         isSuiTransfer
           ? // subtract from the total the balance of the gasCoin as it's going be the first element of the inputCoins
-            BigInt(gasBudget) - BigInt(Coin.getBalance(gasCoin) || 0)
+            BigInt(gasBudget) - BigInt(gasCoin.balance || 0)
           : 0,
       );
     const inputCoinObjs =
@@ -259,7 +265,7 @@ export class Coin {
         ? await Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
             coinsOfTransferType,
             totalAmountIncludingGas,
-            isSuiTransfer ? [Coin.getID(gasCoin)] : [],
+            isSuiTransfer ? [gasCoin.coinObjectId] : [],
           )
         : [];
     if (totalAmountIncludingGas > 0 && !inputCoinObjs.length) {
@@ -278,7 +284,7 @@ export class Coin {
     return {
       kind: isSuiTransfer ? 'paySui' : 'pay',
       data: {
-        inputCoins: inputCoinObjs.map(Coin.getID),
+        inputCoins: inputCoinObjs.map(({ coinObjectId }) => coinObjectId),
         recipients: [recipient],
         // TODO: change this to string to avoid losing precision
         amounts: [Number(amountToSend)],

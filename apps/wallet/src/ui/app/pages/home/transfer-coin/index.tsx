@@ -5,7 +5,7 @@ import { useCoinDecimals } from '@mysten/core';
 import { ArrowRight16, ArrowLeft16 } from '@mysten/icons';
 import { getTransactionDigest, SUI_TYPE_ARG, Coin } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
@@ -36,6 +36,7 @@ function TransferCoinPage() {
     const [coinDecimals] = useCoinDecimals(coinType);
 
     const signer = useSigner();
+    const queryClient = useQueryClient();
     const executeTransfer = useMutation({
         mutationFn: async () => {
             if (coinType === null || !signer || !formData) {
@@ -81,9 +82,10 @@ function TransferCoinPage() {
             }
         },
         onSuccess: (response) => {
-            const txDigest = getTransactionDigest(response);
+            queryClient.invalidateQueries(['get-coins']);
+            queryClient.invalidateQueries(['coin-balance']);
             const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
-                txDigest
+                getTransactionDigest(response)
             )}&from=transactions`;
             return navigate(receiptUrl);
         },

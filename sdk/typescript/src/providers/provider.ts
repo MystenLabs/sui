@@ -49,6 +49,7 @@ import {
   SuiTransactionResponse,
   SuiObjectDataOptions,
   SuiSystemStateSummary,
+  CoinStruct,
 } from '../types';
 
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
@@ -171,7 +172,7 @@ export abstract class Provider {
     amount: bigint,
     typeArg: string,
     exclude: ObjectId[],
-  ): Promise<SuiObjectResponse[]>;
+  ): Promise<CoinStruct[]>;
 
   /**
    * Convenience method for select a minimal set of coin objects that has a balance greater than
@@ -188,7 +189,7 @@ export abstract class Provider {
     amount: bigint,
     typeArg: string,
     exclude: ObjectId[],
-  ): Promise<SuiObjectResponse[]>;
+  ): Promise<CoinStruct[]>;
 
   /**
    * Get details about an object
