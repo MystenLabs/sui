@@ -72,6 +72,7 @@ async fn test_consensus_recovery_with_bullshark() {
 
     let consensus_handle = Consensus::spawn(
         committee.clone(),
+        gc_depth,
         consensus_store.clone(),
         certificate_store.clone(),
         tx_shutdown.subscribe(),
@@ -166,6 +167,7 @@ async fn test_consensus_recovery_with_bullshark() {
 
     let consensus_handle = Consensus::spawn(
         committee.clone(),
+        gc_depth,
         consensus_store.clone(),
         certificate_store.clone(),
         tx_shutdown.subscribe(),
@@ -234,6 +236,7 @@ async fn test_consensus_recovery_with_bullshark() {
 
     let _consensus_handle = Consensus::spawn(
         committee.clone(),
+        gc_depth,
         consensus_store.clone(),
         certificate_store.clone(),
         tx_shutdown.subscribe(),
