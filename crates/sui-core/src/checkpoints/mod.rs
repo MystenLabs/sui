@@ -573,6 +573,9 @@ impl CheckpointBuilder {
             .zip(signatures.into_iter())
         {
             // Roll over to a new chunk after either max count or max size is reached.
+            // The size calculation here is intended to estimate the size of the
+            // FullCheckpointContents struct. If this code is modified, that struct
+            // should also be updated accordingly.
             let size = transaction_size
                 + bcs::serialized_size(&effects)?
                 + bcs::serialized_size(&signatures)?;

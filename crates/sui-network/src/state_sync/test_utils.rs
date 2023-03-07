@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::intent::{Intent, IntentMessage, IntentScope};
+use sui_types::messages_checkpoint::{FullCheckpointContents, VerifiedCheckpointContents};
 use sui_types::{
     base_types::AuthorityName,
     committee::{Committee, EpochId, StakeUnit},
@@ -12,8 +13,8 @@ use sui_types::{
         SuiAuthoritySignature,
     },
     messages_checkpoint::{
-        CertifiedCheckpointSummary, CheckpointContents, CheckpointDigest, CheckpointSequenceNumber,
-        CheckpointSummary, EndOfEpochData, VerifiedCheckpoint,
+        CertifiedCheckpointSummary, CheckpointDigest, CheckpointSequenceNumber, CheckpointSummary,
+        EndOfEpochData, VerifiedCheckpoint,
     },
 };
 
@@ -60,7 +61,10 @@ impl CommitteeFixture {
             epoch: 0,
             sequence_number: 0,
             network_total_transactions: 0,
-            content_digest: empty_contents().digest(),
+            content_digest: empty_contents()
+                .into_inner()
+                .into_checkpoint_contents()
+                .digest(),
             previous_digest: None,
             epoch_rolling_gas_cost_summary: Default::default(),
             end_of_epoch_data: None,
@@ -121,7 +125,10 @@ impl CommitteeFixture {
                 epoch: self.epoch,
                 sequence_number: prev.summary.sequence_number + 1,
                 network_total_transactions: 0,
-                content_digest: empty_contents().digest(),
+                content_digest: empty_contents()
+                    .into_inner()
+                    .into_checkpoint_contents()
+                    .digest(),
                 previous_digest: Some(prev.summary.digest()),
                 epoch_rolling_gas_cost_summary: Default::default(),
                 end_of_epoch_data: None,
@@ -165,7 +172,10 @@ impl CommitteeFixture {
             epoch: self.epoch,
             sequence_number: previous_checkpoint.summary.sequence_number + 1,
             network_total_transactions: 0,
-            content_digest: empty_contents().digest(),
+            content_digest: empty_contents()
+                .into_inner()
+                .into_checkpoint_contents()
+                .digest(),
             previous_digest: Some(previous_checkpoint.summary.digest()),
             epoch_rolling_gas_cost_summary: Default::default(),
             end_of_epoch_data,
@@ -183,6 +193,8 @@ impl CommitteeFixture {
     }
 }
 
-pub fn empty_contents() -> CheckpointContents {
-    CheckpointContents::new_with_causally_ordered_transactions(std::iter::empty())
+pub fn empty_contents() -> VerifiedCheckpointContents {
+    VerifiedCheckpointContents::new_unchecked(
+        FullCheckpointContents::new_with_causally_ordered_transactions(std::iter::empty()),
+    )
 }

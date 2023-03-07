@@ -14,7 +14,8 @@ use crate::messages::{
     VerifiedTransaction,
 };
 use crate::messages_checkpoint::{
-    CheckpointContents, CheckpointSequenceNumber, VerifiedCheckpoint,
+    CheckpointContents, CheckpointSequenceNumber, FullCheckpointContents, VerifiedCheckpoint,
+    VerifiedCheckpointContents,
 };
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
@@ -208,10 +209,10 @@ pub trait ReadStore {
 
     fn get_highest_synced_checkpoint(&self) -> Result<VerifiedCheckpoint, Self::Error>;
 
-    fn get_checkpoint_contents(
+    fn get_full_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> Result<Option<CheckpointContents>, Self::Error>;
+    ) -> Result<Option<FullCheckpointContents>, Self::Error>;
 
     fn get_committee(&self, epoch: EpochId) -> Result<Option<Committee>, Self::Error>;
 
@@ -256,11 +257,11 @@ impl<T: ReadStore> ReadStore for &T {
         ReadStore::get_highest_synced_checkpoint(*self)
     }
 
-    fn get_checkpoint_contents(
+    fn get_full_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> Result<Option<CheckpointContents>, Self::Error> {
-        ReadStore::get_checkpoint_contents(*self, digest)
+    ) -> Result<Option<FullCheckpointContents>, Self::Error> {
+        ReadStore::get_full_checkpoint_contents(*self, digest)
     }
 
     fn get_committee(&self, epoch: EpochId) -> Result<Option<Committee>, Self::Error> {
@@ -295,15 +296,12 @@ pub trait WriteStore: ReadStore {
         &self,
         checkpoint: &VerifiedCheckpoint,
     ) -> Result<(), Self::Error>;
-    fn insert_checkpoint_contents(&self, contents: CheckpointContents) -> Result<(), Self::Error>;
+    fn insert_checkpoint_contents(
+        &self,
+        contents: VerifiedCheckpointContents,
+    ) -> Result<(), Self::Error>;
 
     fn insert_committee(&self, new_committee: Committee) -> Result<(), Self::Error>;
-
-    fn insert_transaction_and_effects(
-        &self,
-        transaction: VerifiedTransaction,
-        transaction_effects: TransactionEffects,
-    ) -> Result<(), Self::Error>;
 }
 
 impl<T: WriteStore> WriteStore for &T {
@@ -318,20 +316,15 @@ impl<T: WriteStore> WriteStore for &T {
         WriteStore::update_highest_synced_checkpoint(*self, checkpoint)
     }
 
-    fn insert_checkpoint_contents(&self, contents: CheckpointContents) -> Result<(), Self::Error> {
+    fn insert_checkpoint_contents(
+        &self,
+        contents: VerifiedCheckpointContents,
+    ) -> Result<(), Self::Error> {
         WriteStore::insert_checkpoint_contents(*self, contents)
     }
 
     fn insert_committee(&self, new_committee: Committee) -> Result<(), Self::Error> {
         WriteStore::insert_committee(*self, new_committee)
-    }
-
-    fn insert_transaction_and_effects(
-        &self,
-        transaction: VerifiedTransaction,
-        transaction_effects: TransactionEffects,
-    ) -> Result<(), Self::Error> {
-        WriteStore::insert_transaction_and_effects(*self, transaction, transaction_effects)
     }
 }
 
@@ -353,19 +346,13 @@ impl InMemoryStore {
     pub fn insert_genesis_state(
         &mut self,
         checkpoint: VerifiedCheckpoint,
-        contents: CheckpointContents,
-        transactions: Vec<VerifiedTransaction>,
-        effects: Vec<TransactionEffects>,
+        contents: VerifiedCheckpointContents,
         committee: Committee,
     ) {
         self.insert_committee(committee);
         self.insert_checkpoint(checkpoint.clone());
         self.insert_checkpoint_contents(contents);
         self.update_highest_synced_checkpoint(&checkpoint);
-
-        for (transaction, effect) in transactions.into_iter().zip(effects) {
-            self.insert_transaction_and_effects(transaction, effect);
-        }
     }
 
     pub fn get_checkpoint_by_digest(
@@ -403,7 +390,14 @@ impl InMemoryStore {
         self.checkpoint_contents.get(digest)
     }
 
-    pub fn insert_checkpoint_contents(&mut self, contents: CheckpointContents) {
+    pub fn insert_checkpoint_contents(&mut self, contents: VerifiedCheckpointContents) {
+        for tx in contents.iter() {
+            self.transactions
+                .insert(*tx.transaction.digest(), tx.transaction.to_owned());
+            self.effects
+                .insert(tx.effects.digest(), tx.effects.to_owned());
+        }
+        let contents = contents.into_inner().into_checkpoint_contents();
         self.checkpoint_contents.insert(contents.digest(), contents);
     }
 
@@ -485,16 +479,6 @@ impl InMemoryStore {
     ) -> Option<&TransactionEvents> {
         self.events.get(digest)
     }
-
-    pub fn insert_transaction_and_effects(
-        &mut self,
-        transaction: VerifiedTransaction,
-        transaction_effects: TransactionEffects,
-    ) {
-        self.transactions.insert(*transaction.digest(), transaction);
-        self.effects
-            .insert(transaction_effects.digest(), transaction_effects);
-    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -549,14 +533,16 @@ impl ReadStore for SharedInMemoryStore {
             .pipe(Ok)
     }
 
-    fn get_checkpoint_contents(
+    fn get_full_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> Result<Option<CheckpointContents>, Self::Error> {
+    ) -> Result<Option<FullCheckpointContents>, Self::Error> {
         self.inner()
             .get_checkpoint_contents(digest)
-            .cloned()
-            .pipe(Ok)
+            .map(|contents| {
+                FullCheckpointContents::from_checkpoint_contents(&self, contents.to_owned())
+            })
+            .transpose()
     }
 
     fn get_committee(&self, epoch: EpochId) -> Result<Option<Committee>, Self::Error> {
@@ -606,23 +592,16 @@ impl WriteStore for SharedInMemoryStore {
         Ok(())
     }
 
-    fn insert_checkpoint_contents(&self, contents: CheckpointContents) -> Result<(), Self::Error> {
+    fn insert_checkpoint_contents(
+        &self,
+        contents: VerifiedCheckpointContents,
+    ) -> Result<(), Self::Error> {
         self.inner_mut().insert_checkpoint_contents(contents);
         Ok(())
     }
 
     fn insert_committee(&self, new_committee: Committee) -> Result<(), Self::Error> {
         self.inner_mut().insert_committee(new_committee);
-        Ok(())
-    }
-
-    fn insert_transaction_and_effects(
-        &self,
-        transaction: VerifiedTransaction,
-        transaction_effects: TransactionEffects,
-    ) -> Result<(), Self::Error> {
-        self.inner_mut()
-            .insert_transaction_and_effects(transaction, transaction_effects);
         Ok(())
     }
 }
