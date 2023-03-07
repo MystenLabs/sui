@@ -239,6 +239,7 @@ impl SuiNode {
         // Create network
         let (p2p_network, discovery_handle, state_sync_handle) = Self::create_p2p_network(
             &config,
+            epoch_store.system_state_object(),
             state_sync_store,
             end_of_epoch_channel.subscribe(),
             &prometheus_registry,
@@ -416,6 +417,7 @@ impl SuiNode {
 
     fn create_p2p_network(
         config: &NodeConfig,
+        sui_system: &SuiSystemState,
         state_sync_store: RocksDbStore,
         reconfig_channel: Receiver<(CommitteeWithNetworkMetadata, ProtocolVersion)>,
         prometheus_registry: &Registry,
@@ -431,14 +433,16 @@ impl SuiNode {
         let mut p2p_config = config.p2p_config.clone();
         let network_kp = config.network_key_pair();
         let our_network_public_key = network_kp.public();
-        let other_validators = config
-            .genesis()?
-            .validator_set()
+        let other_validators = sui_system
+            .get_current_epoch_committee()
+            .network_metadata
             .into_iter()
-            .filter(|validator| &validator.network_key != our_network_public_key)
-            .map(|validator| sui_config::p2p::SeedPeer {
-                peer_id: Some(anemo::PeerId(validator.network_key.0.to_bytes())),
-                address: validator.p2p_address,
+            .filter(|(_name, network_metadata)| {
+                &network_metadata.network_pubkey != our_network_public_key
+            })
+            .map(|(_name, network_metadata)| sui_config::p2p::SeedPeer {
+                peer_id: Some(anemo::PeerId(network_metadata.network_pubkey.0.to_bytes())),
+                address: network_metadata.p2p_address,
             });
         p2p_config.seed_peers.extend(other_validators);
 
