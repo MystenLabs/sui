@@ -169,6 +169,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    recipients (id) {
+        id -> Int8,
+        transaction_digest -> Varchar,
+        checkpoint_sequence_number -> Int8,
+        epoch -> Int8,
+        recipient -> Varchar,
+    }
+}
+
+diesel::table! {
     transactions (id) {
         id -> Int8,
         transaction_digest -> Varchar,
@@ -210,5 +220,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     owner_history,
     package_logs,
     packages,
+    recipients,
     transactions,
 );
