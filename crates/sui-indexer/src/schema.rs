@@ -4,8 +4,8 @@
 
 pub mod sql_types {
     #[derive(diesel::sql_types::SqlType)]
-    #[diesel(postgres_type(name = "change_type"))]
-    pub struct ChangeType;
+    #[diesel(postgres_type(name = "object_status"))]
+    pub struct ObjectStatus;
 
     #[derive(diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "owner_type"))]
@@ -79,6 +79,7 @@ diesel::table! {
 diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::OwnerType;
+    use super::sql_types::ObjectStatus;
 
     objects (object_id) {
         epoch -> Int8,
@@ -90,16 +91,15 @@ diesel::table! {
         owner_address -> Nullable<Varchar>,
         initial_shared_version -> Nullable<Int8>,
         previous_transaction -> Varchar,
-        package_id -> Varchar,
-        transaction_module -> Varchar,
         object_type -> Varchar,
+        object_status -> ObjectStatus,
     }
 }
 
 diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::OwnerType;
-    use super::sql_types::ChangeType;
+    use super::sql_types::ObjectStatus;
 
     objects_history (epoch, object_id, version) {
         epoch -> Int8,
@@ -111,16 +111,15 @@ diesel::table! {
         owner_address -> Nullable<Varchar>,
         initial_shared_version -> Nullable<Int8>,
         previous_transaction -> Varchar,
-        package_id -> Varchar,
-        transaction_module -> Varchar,
         object_type -> Varchar,
-        object_status -> ChangeType,
+        object_status -> ObjectStatus,
     }
 }
 
 diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::OwnerType;
+    use super::sql_types::ObjectStatus;
 
     owner (object_id) {
         epoch -> Int8,
@@ -130,14 +129,14 @@ diesel::table! {
         object_digest -> Varchar,
         owner_type -> OwnerType,
         owner_address -> Nullable<Varchar>,
-        initial_shared_version -> Nullable<Int8>,
+        object_status -> ObjectStatus,
     }
 }
 
 diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::OwnerType;
-    use super::sql_types::ChangeType;
+    use super::sql_types::ObjectStatus;
 
     owner_history (epoch, object_id, version) {
         epoch -> Int8,
@@ -145,10 +144,11 @@ diesel::table! {
         object_id -> Varchar,
         version -> Int8,
         object_digest -> Varchar,
-        owner_type -> OwnerType,
+        owner_type -> Nullable<OwnerType>,
         owner_address -> Nullable<Varchar>,
-        initial_shared_version -> Nullable<Int8>,
-        change_type -> ChangeType,
+        old_owner_type -> Nullable<OwnerType>,
+        old_owner_address -> Nullable<Varchar>,
+        object_status -> ObjectStatus,
     }
 }
 

@@ -462,7 +462,7 @@ impl IndexerStore for PgIndexerStore {
             checkpoint,
             transactions,
             events,
-            objects,
+            objects_changes,
             addresses,
             packages,
             move_calls,
@@ -489,19 +489,37 @@ impl IndexerStore for PgIndexerStore {
                     .values(events)
                     .execute(conn)?;
 
-                diesel::insert_into(objects::table)
-                    .values(objects)
-                    .on_conflict(objects::object_id)
-                    .do_update()
-                    .set((
-                        objects::epoch.eq(excluded(objects::epoch)),
-                        objects::checkpoint.eq(excluded(objects::checkpoint)),
-                        objects::version.eq(excluded(objects::version)),
-                        objects::object_digest.eq(excluded(objects::object_digest)),
-                        objects::owner_address.eq(excluded(objects::owner_address)),
-                        objects::previous_transaction.eq(excluded(objects::previous_transaction)),
-                    ))
-                    .execute(conn)?;
+                // Object need to bulk insert by transaction to prevent same object mutated twice in the same sql call,
+                // which will result in "ON CONFLICT DO UPDATE command cannot affect row a second time" error
+                for changes in objects_changes {
+                    diesel::insert_into(objects::table)
+                        .values(&changes.mutated_objects)
+                        .on_conflict(objects::object_id)
+                        .do_update()
+                        .set((
+                            objects::epoch.eq(excluded(objects::epoch)),
+                            objects::checkpoint.eq(excluded(objects::checkpoint)),
+                            objects::version.eq(excluded(objects::version)),
+                            objects::object_digest.eq(excluded(objects::object_digest)),
+                            objects::owner_address.eq(excluded(objects::owner_address)),
+                            objects::previous_transaction.eq(excluded(objects::previous_transaction)),
+                            objects::object_status.eq(excluded(objects::object_status)),
+                        ))
+                        .execute(conn)?;
+
+                    diesel::insert_into(objects::table)
+                        .values(&changes.deleted_objects)
+                        .on_conflict(objects::object_id)
+                        .do_update()
+                        .set((
+                            objects::epoch.eq(excluded(objects::epoch)),
+                            objects::checkpoint.eq(excluded(objects::checkpoint)),
+                            objects::version.eq(excluded(objects::version)),
+                            objects::previous_transaction.eq(excluded(objects::previous_transaction)),
+                            objects::object_status.eq(excluded(objects::object_status)),
+                        ))
+                        .execute(conn)?;
+                }
 
                 // Only insert once for address, skip if conflict
                 diesel::insert_into(addresses::table)

@@ -168,13 +168,15 @@ impl IndexerStore for InMemoryIndexerStore {
 
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError> {
         let TemporaryCheckpointStore {
-            objects,
+            objects_changes,
             checkpoint,
             ..
         } = data;
 
         let mut tables = self.tables.write().unwrap();
-        tables.objects.extend(objects.clone());
+        for changes in objects_changes {
+            tables.objects.extend(changes.mutated_objects.clone());
+        }
         tables.checkpoints.push(checkpoint.clone());
         Ok(0)
     }
