@@ -85,7 +85,6 @@
 //!
 //! To exit the process on panic, set the `CRASH_ON_PANIC` environment variable.
 
-use span_latency_prom::PrometheusSpanLatencyLayer;
 use std::{
     env,
     io::{stderr, Write},
@@ -94,11 +93,11 @@ use std::{
 use tracing::metadata::LevelFilter;
 use tracing::Level;
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
-use tracing_subscriber::{filter, fmt, layer::SubscriberExt, reload, EnvFilter, Layer, Registry};
+use tracing_subscriber::{
+    fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, EnvFilter, Layer, Registry,
+};
 
 use crossterm::tty::IsTty;
-
-pub mod span_latency_prom;
 
 /// Alias for a type-erased error type.
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
@@ -125,8 +124,6 @@ pub struct TelemetryConfig {
     pub panic_hook: bool,
     /// Crash on panic
     pub crash_on_panic: bool,
-    /// Optional Prometheus registry - if present, all enabled span latencies are measured
-    pub prom_registry: Option<prometheus::Registry>,
 }
 
 #[must_use]
@@ -211,7 +208,6 @@ impl TelemetryConfig {
             span_level: None,
             panic_hook: true,
             crash_on_panic: false,
-            prom_registry: None,
         }
     }
 
@@ -232,11 +228,6 @@ impl TelemetryConfig {
 
     pub fn with_log_file(mut self, filename: &str) -> Self {
         self.log_file = Some(filename.to_owned());
-        self
-    }
-
-    pub fn with_prom_registry(mut self, registry: &prometheus::Registry) -> Self {
-        self.prom_registry = Some(registry.clone());
         self
     }
 
@@ -278,14 +269,6 @@ impl TelemetryConfig {
         let (log_filter, reload_handle) = reload::Layer::new(env_filter);
         let filter_handle = FilterHandle(reload_handle);
 
-        // Separate span level filter.
-        // This is a dumb filter for now - allows all spans that are below a given level.
-        // TODO: implement a sampling filter
-        let span_level = config.span_level.unwrap_or(Level::INFO);
-        let span_filter = filter::filter_fn(move |metadata| {
-            metadata.is_span() && *metadata.level() <= span_level
-        });
-
         let mut layers = Vec::new();
 
         // tokio-console layer
@@ -294,12 +277,6 @@ impl TelemetryConfig {
         #[cfg(feature = "tokio-console")]
         if config.tokio_console {
             layers.push(console_subscriber::spawn().boxed());
-        }
-
-        if let Some(registry) = config.prom_registry {
-            let span_lat_layer = PrometheusSpanLatencyLayer::try_new(&registry, 15)
-                .expect("Could not initialize span latency layer");
-            layers.push(span_lat_layer.with_filter(span_filter.clone()).boxed());
         }
 
         let (nb_output, worker_guard) = get_output(config.log_file.clone());
@@ -364,18 +341,14 @@ pub fn init_for_testing() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use prometheus::proto::MetricType;
     use std::time::Duration;
     use tracing::{debug, debug_span, info, trace_span, warn};
 
     #[test]
     #[should_panic]
     fn test_telemetry_init() {
-        let registry = prometheus::Registry::new();
         // Default logging level is INFO, but here we set the span level to DEBUG.  TRACE spans should be ignored.
-        let config = TelemetryConfig::new()
-            .with_span_level(Level::DEBUG)
-            .with_prom_registry(&registry);
+        let config = TelemetryConfig::new().with_span_level(Level::DEBUG);
         let _guard = config.init();
 
         info!(a = 1, "This will be INFO.");
@@ -393,18 +366,6 @@ mod tests {
             info!("This log appears, but surrounding span is not created");
             std::thread::sleep(Duration::from_millis(100));
         });
-
-        let metrics = registry.gather();
-        // There should be 1 metricFamily and 1 metric
-        assert_eq!(metrics.len(), 1);
-        assert_eq!(metrics[0].get_name(), "tracing_span_latencies");
-        assert_eq!(metrics[0].get_field_type(), MetricType::HISTOGRAM);
-        let inner = metrics[0].get_metric();
-        assert_eq!(inner.len(), 1);
-        let labels = inner[0].get_label();
-        assert_eq!(labels.len(), 1);
-        assert_eq!(labels[0].get_name(), "span_name");
-        assert_eq!(labels[0].get_value(), "yo span yo");
 
         panic!("This should cause error logs to be printed out!");
     }
