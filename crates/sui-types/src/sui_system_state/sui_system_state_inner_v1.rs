@@ -12,7 +12,6 @@ use crate::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartValidatorInfo,
 };
 use anyhow::Result;
-use enum_dispatch::enum_dispatch;
 use fastcrypto::encoding::Base58;
 use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
