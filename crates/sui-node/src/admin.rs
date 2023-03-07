@@ -14,9 +14,24 @@ use std::sync::Arc;
 use telemetry_subscribers::FilterHandle;
 use tracing::info;
 
+// Example commands:
+//
+// Set buffer stake to 1500 basis points:
+//
+//   $ curl -d 1500 -X POST http://127.0.0.1:1337/set-override-buffer-stake
+//
+// Clear buffer stake override, use ProtocolConfig::buffer_stake_for_protocol_upgrade_bps:
+//
+//   $ curl -X POST http://127.0.0.1:1337/clear-override-buffer-stake
+//
+// Vote to the epoch early
+//
+//   $ curl -X POST http://127.0.0.1:1337/force-close-epoch
+
 const LOGGING_ROUTE: &str = "/logging";
 const SET_BUFFER_STAKE_ROUTE: &str = "/set-override-buffer-stake";
 const CLEAR_BUFFER_STAKE_ROUTE: &str = "/clear-override-buffer-stake";
+const FORCE_CLOSE_EPOCH: &str = "/force-close-epoch";
 
 struct AppState {
     node: Arc<SuiNode>,
@@ -42,6 +57,7 @@ pub fn start_admin_server(node: Arc<SuiNode>, port: u16, filter_handle: FilterHa
             CLEAR_BUFFER_STAKE_ROUTE,
             post(clear_override_protocol_upgrade_buffer_stake),
         )
+        .route(FORCE_CLOSE_EPOCH, post(force_close_epoch))
         .with_state(Arc::new(app_state));
 
     let socket_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
@@ -110,6 +126,21 @@ async fn set_override_protocol_upgrade_buffer_stake(
         Ok(()) => (
             StatusCode::OK,
             format!("protocol upgrade buffer stake set to '{}'", buffer_bps),
+        ),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
+    }
+}
+
+async fn force_close_epoch(
+    State(state): State<Arc<AppState>>,
+    _body: String,
+) -> (StatusCode, String) {
+    let epoch_store = state.node.state().load_epoch_store_one_call_per_task();
+
+    match state.node.close_epoch(&epoch_store).await {
+        Ok(()) => (
+            StatusCode::OK,
+            "close_epoch() called successfully".to_string(),
         ),
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
     }
