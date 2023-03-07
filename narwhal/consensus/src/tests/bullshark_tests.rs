@@ -968,8 +968,8 @@ async fn garbage_collection_basic() {
 }
 
 // This test ensures that:
-// * a slow node will never commit anything until it get referred by someone
-// * certificates arriving bellow the gc round will eventually not get committed
+// * a slow node will never commit anything until its certificates get linked by others
+// * certificates arriving bellow the gc round will never get committed
 #[tokio::test]
 async fn slow_node() {
     const GC_DEPTH: Round = 4;
