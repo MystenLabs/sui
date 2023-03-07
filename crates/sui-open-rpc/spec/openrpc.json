@@ -6612,7 +6612,6 @@
           "protocol_pubkey_bytes",
           "rewards_pool",
           "staking_pool_id",
-          "staking_pool_starting_epoch",
           "staking_pool_sui_balance",
           "sui_address",
           "voting_power",
@@ -6818,6 +6817,14 @@
             "format": "uint64",
             "minimum": 0.0
           },
+          "staking_pool_activation_epoch": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          },
           "staking_pool_deactivation_epoch": {
             "type": [
               "integer",
@@ -6828,11 +6835,6 @@
           },
           "staking_pool_id": {
             "$ref": "#/components/schemas/ObjectID"
-          },
-          "staking_pool_starting_epoch": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
           },
           "staking_pool_sui_balance": {
             "type": "integer",

@@ -236,6 +236,18 @@ module sui::governance_test_utils {
         test_scenario::return_shared(system_state);
     }
 
+    public fun remove_validator_candidate(validator: address, scenario: &mut Scenario) {
+        test_scenario::next_tx(scenario, validator);
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        let ctx = test_scenario::ctx(scenario);
+
+        sui_system::request_remove_validator_candidate(
+            &mut system_state,
+            ctx
+        );
+        test_scenario::return_shared(system_state);
+    }
+
     public fun add_validator(validator: address, scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, validator);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);

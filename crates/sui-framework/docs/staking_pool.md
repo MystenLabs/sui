@@ -26,7 +26,8 @@
 -  [Function `pool_id`](#0x2_staking_pool_pool_id)
 -  [Function `staked_sui_amount`](#0x2_staking_pool_staked_sui_amount)
 -  [Function `delegation_activation_epoch`](#0x2_staking_pool_delegation_activation_epoch)
--  [Function `pool_active`](#0x2_staking_pool_pool_active)
+-  [Function `is_preactive`](#0x2_staking_pool_is_preactive)
+-  [Function `is_inactive`](#0x2_staking_pool_is_inactive)
 -  [Function `split`](#0x2_staking_pool_split)
 -  [Function `split_staked_sui`](#0x2_staking_pool_split_staked_sui)
 -  [Function `join_staked_sui`](#0x2_staking_pool_join_staked_sui)
@@ -35,7 +36,6 @@
 -  [Function `pending_stake_amount`](#0x2_staking_pool_pending_stake_amount)
 -  [Function `pending_stake_withdraw_amount`](#0x2_staking_pool_pending_stake_withdraw_amount)
 -  [Function `is_preactive_at_epoch`](#0x2_staking_pool_is_preactive_at_epoch)
--  [Function `is_preactive`](#0x2_staking_pool_is_preactive)
 -  [Function `get_sui_amount`](#0x2_staking_pool_get_sui_amount)
 -  [Function `get_token_amount`](#0x2_staking_pool_get_token_amount)
 -  [Function `initial_exchange_rate`](#0x2_staking_pool_initial_exchange_rate)
@@ -243,11 +243,29 @@ A self-custodial object holding the staked SUI tokens.
 ## Constants
 
 
+<a name="0x2_staking_pool_EActivationOfInactivePool"></a>
+
+
+
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EActivationOfInactivePool">EActivationOfInactivePool</a>: u64 = 16;
+</code></pre>
+
+
+
 <a name="0x2_staking_pool_EDeactivationOfInactivePool"></a>
 
 
 
 <pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EDeactivationOfInactivePool">EDeactivationOfInactivePool</a>: u64 = 11;
+</code></pre>
+
+
+
+<a name="0x2_staking_pool_EDelegationOfZeroSui"></a>
+
+
+
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EDelegationOfZeroSui">EDelegationOfZeroSui</a>: u64 = 17;
 </code></pre>
 
 
@@ -450,8 +468,8 @@ Request to delegate to a staking pool. The delegation starts counting at the beg
     ctx: &<b>mut</b> TxContext
 ) {
     <b>let</b> sui_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&stake);
-    <b>assert</b>!(<a href="staking_pool.md#0x2_staking_pool_pool_active">pool_active</a>(pool), <a href="staking_pool.md#0x2_staking_pool_EDelegationToInactivePool">EDelegationToInactivePool</a>);
-    <b>assert</b>!(sui_amount &gt; 0, 0);
+    <b>assert</b>!(!<a href="staking_pool.md#0x2_staking_pool_is_inactive">is_inactive</a>(pool), <a href="staking_pool.md#0x2_staking_pool_EDelegationToInactivePool">EDelegationToInactivePool</a>);
+    <b>assert</b>!(sui_amount &gt; 0, <a href="staking_pool.md#0x2_staking_pool_EDelegationOfZeroSui">EDelegationOfZeroSui</a>);
     <b>let</b> staked_sui = <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a> {
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
         pool_id: <a href="object.md#0x2_object_id">object::id</a>(pool),
@@ -506,7 +524,7 @@ A proportional amount of pool tokens is burnt.
     pool.pending_pool_token_withdraw = pool.pending_pool_token_withdraw + pool_token_withdraw_amount;
 
     // If the pool is inactive, we immediately process the withdrawal.
-    <b>if</b> (!<a href="staking_pool.md#0x2_staking_pool_pool_active">pool_active</a>(pool)) <a href="staking_pool.md#0x2_staking_pool_process_pending_delegation_withdraw">process_pending_delegation_withdraw</a>(pool);
+    <b>if</b> (<a href="staking_pool.md#0x2_staking_pool_is_inactive">is_inactive</a>(pool)) <a href="staking_pool.md#0x2_staking_pool_process_pending_delegation_withdraw">process_pending_delegation_withdraw</a>(pool);
 
     // TODO: implement withdraw bonding period here.
     <b>if</b> (<a href="_is_some">option::is_some</a>(&time_lock)) {
@@ -793,8 +811,10 @@ portion because the principal portion was already taken out of the delegator's s
         activation_epoch,
         <a href="staking_pool.md#0x2_staking_pool_initial_exchange_rate">initial_exchange_rate</a>()
     );
+    // Check that the pool is preactive and not inactive.
+    <b>assert</b>!(<a href="staking_pool.md#0x2_staking_pool_is_preactive">is_preactive</a>(pool), <a href="staking_pool.md#0x2_staking_pool_EPoolAlreadyActive">EPoolAlreadyActive</a>);
+    <b>assert</b>!(!<a href="staking_pool.md#0x2_staking_pool_is_inactive">is_inactive</a>(pool), <a href="staking_pool.md#0x2_staking_pool_EActivationOfInactivePool">EActivationOfInactivePool</a>);
     // Fill in the active epoch.
-    <b>assert</b>!(<a href="_is_none">option::is_none</a>(&pool.activation_epoch), <a href="staking_pool.md#0x2_staking_pool_EPoolAlreadyActive">EPoolAlreadyActive</a>);
     <a href="_fill">option::fill</a>(&<b>mut</b> pool.activation_epoch, activation_epoch);
 }
 </code></pre>
@@ -835,6 +855,7 @@ portion because the principal portion was already taken out of the delegator's s
     pool.sui_balance = pool.sui_balance - withdraw_amount;
     pool.pool_token_balance = pool.pool_token_balance - withdraw_amount;
 
+    // TODO: consider sharing code <b>with</b> `request_withdraw_delegation`
     <b>if</b> (<a href="_is_some">option::is_some</a>(&time_lock)) {
         <a href="locked_coin.md#0x2_locked_coin_new_from_balance">locked_coin::new_from_balance</a>(principal, <a href="_destroy_some">option::destroy_some</a>(time_lock), delegator, ctx);
     } <b>else</b> {
@@ -869,7 +890,7 @@ withdraws can be made to the pool.
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">deactivate_staking_pool</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, deactivation_epoch: u64) {
     // We can't deactivate an already deactivated pool.
-    <b>assert</b>!(<a href="staking_pool.md#0x2_staking_pool_pool_active">pool_active</a>(pool), <a href="staking_pool.md#0x2_staking_pool_EDeactivationOfInactivePool">EDeactivationOfInactivePool</a>);
+    <b>assert</b>!(!<a href="staking_pool.md#0x2_staking_pool_is_inactive">is_inactive</a>(pool), <a href="staking_pool.md#0x2_staking_pool_EDeactivationOfInactivePool">EDeactivationOfInactivePool</a>);
     pool.deactivation_epoch = <a href="_some">option::some</a>(deactivation_epoch);
 }
 </code></pre>
@@ -968,13 +989,14 @@ withdraws can be made to the pool.
 
 </details>
 
-<a name="0x2_staking_pool_pool_active"></a>
+<a name="0x2_staking_pool_is_preactive"></a>
 
-## Function `pool_active`
+## Function `is_preactive`
+
+Returns true if the input staking pool is preactive.
 
 
-
-<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pool_active">pool_active</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_preactive">is_preactive</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>): bool
 </code></pre>
 
 
@@ -983,8 +1005,33 @@ withdraws can be made to the pool.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pool_active">pool_active</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>): bool {
-    <a href="_is_none">option::is_none</a>(&pool.deactivation_epoch)
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_preactive">is_preactive</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>): bool{
+    <a href="_is_none">option::is_none</a>(&pool.activation_epoch)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_is_inactive"></a>
+
+## Function `is_inactive`
+
+Returns true if the input staking pool is inactive.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_inactive">is_inactive</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_inactive">is_inactive</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>): bool {
+    <a href="_is_some">option::is_some</a>(&pool.deactivation_epoch)
 }
 </code></pre>
 
@@ -1217,9 +1264,10 @@ Calculate the current the total withdrawal from the staking pool this epoch.
 
 ## Function `is_preactive_at_epoch`
 
+Returns true if the provided staking pool is preactive at the provided epoch.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_preactive_at_epoch">is_preactive_at_epoch</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, epoch: u64): bool
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_preactive_at_epoch">is_preactive_at_epoch</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, epoch: u64): bool
 </code></pre>
 
 
@@ -1228,33 +1276,9 @@ Calculate the current the total withdrawal from the staking pool this epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_preactive_at_epoch">is_preactive_at_epoch</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, epoch: u64): bool{
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_preactive_at_epoch">is_preactive_at_epoch</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, epoch: u64): bool{
     // Either the pool is currently preactive or the pool's starting epoch is later than the provided epoch.
     <a href="staking_pool.md#0x2_staking_pool_is_preactive">is_preactive</a>(pool) || (*<a href="_borrow">option::borrow</a>(&pool.activation_epoch) &gt; epoch)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_staking_pool_is_preactive"></a>
-
-## Function `is_preactive`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_preactive">is_preactive</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>): bool
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_preactive">is_preactive</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>): bool{
-    <a href="_is_none">option::is_none</a>(&pool.activation_epoch)
 }
 </code></pre>
 

@@ -12,6 +12,7 @@
 -  [Constants](#@Constants_0)
 -  [Function `create`](#0x2_sui_system_create)
 -  [Function `request_add_validator_candidate`](#0x2_sui_system_request_add_validator_candidate)
+-  [Function `request_remove_validator_candidate`](#0x2_sui_system_request_remove_validator_candidate)
 -  [Function `request_add_validator`](#0x2_sui_system_request_add_validator)
 -  [Function `request_remove_validator`](#0x2_sui_system_request_remove_validator)
 -  [Function `request_set_gas_price`](#0x2_sui_system_request_set_gas_price)
@@ -107,7 +108,7 @@ A list of system config parameters.
 <code>max_validator_count: u64</code>
 </dt>
 <dd>
- Maximum number of validator candidates at any moment.
+ Maximum number of active validators at any moment.
  We do not allow the number of validators in any epoch to go above this.
 </dd>
 <dt>
@@ -533,6 +534,36 @@ Aborts if the caller is already a pending or active validator, or a validator ca
     );
 
     <a href="validator_set.md#0x2_validator_set_request_add_validator_candidate">validator_set::request_add_validator_candidate</a>(&<b>mut</b> self.validators, <a href="validator.md#0x2_validator">validator</a>);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_request_remove_validator_candidate"></a>
+
+## Function `request_remove_validator_candidate`
+
+Called by a validator candidate to remove themselves from the candidacy. After this call
+their staking pool becomes deactive.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_remove_validator_candidate">request_remove_validator_candidate</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_remove_validator_candidate">request_remove_validator_candidate</a>(
+    wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
+    <a href="validator_set.md#0x2_validator_set_request_remove_validator_candidate">validator_set::request_remove_validator_candidate</a>(&<b>mut</b> self.validators, ctx);
 }
 </code></pre>
 

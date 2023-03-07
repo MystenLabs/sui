@@ -11,7 +11,6 @@ module sui::delegation_tests {
     use sui::validator_set;
     use std::vector;
 
-
     use sui::governance_test_utils::{
         Self,
         add_validator,
@@ -22,6 +21,7 @@ module sui::delegation_tests {
         create_sui_system_state_for_testing,
         delegate_to,
         remove_validator,
+        remove_validator_candidate,
         total_sui_balance,
         undelegate,
     };
@@ -446,6 +446,35 @@ module sui::delegation_tests {
 
         undelegate(DELEGATOR_ADDR_1, 0, scenario);
         assert_eq(total_sui_balance(DELEGATOR_ADDR_1, scenario), 100 + 20);
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_add_preactive_candidate_drop_out() {
+        let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(scenario);
+
+        add_validator_candidate(NEW_VALIDATOR_ADDR, NEW_VALIDATOR_PUBKEY, NEW_VALIDATOR_POP, scenario);
+
+        // Delegate 100 MIST to the preactive validator
+        delegate_to(DELEGATOR_ADDR_1, NEW_VALIDATOR_ADDR, 100, scenario);
+
+        // Advance epoch and give out some rewards. The candidate should get nothing, of course.
+        advance_epoch_with_reward_amounts(0, 800, scenario);
+
+        // Now the candidate leaves.
+        remove_validator_candidate(NEW_VALIDATOR_ADDR, scenario);
+
+        // Advance epoch a few times.
+        advance_epoch(scenario);
+        advance_epoch(scenario);
+        advance_epoch(scenario);
+
+        // Undelegate now and the delegator should get no rewards.
+        undelegate(DELEGATOR_ADDR_1, 0, scenario);
+        assert_eq(total_sui_balance(DELEGATOR_ADDR_1, scenario), 100);
 
         test_scenario::end(scenario_val);
     }

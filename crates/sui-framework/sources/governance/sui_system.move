@@ -43,7 +43,7 @@ module sui::sui_system {
         // TODO: use a different threshold for new validator joining vs. validator keeping their
         // spot in the validator set.
         min_validator_stake: u64,
-        /// Maximum number of validator candidates at any moment.
+        /// Maximum number of active validators at any moment.
         /// We do not allow the number of validators in any epoch to go above this.
         max_validator_count: u64,
 
@@ -213,6 +213,16 @@ module sui::sui_system {
         );
 
         validator_set::request_add_validator_candidate(&mut self.validators, validator);
+    }
+
+    /// Called by a validator candidate to remove themselves from the candidacy. After this call
+    /// their staking pool becomes deactive.
+    public entry fun request_remove_validator_candidate(
+        wrapper: &mut SuiSystemState,
+        ctx: &mut TxContext,
+    ) {
+        let self = load_system_state_mut(wrapper);
+        validator_set::request_remove_validator_candidate(&mut self.validators, ctx);
     }
 
     /// Called by a validator candidate to add themselves to the active validator set beginning next epoch.

@@ -6,7 +6,7 @@ module sui::validator_set_tests {
     use sui::balance;
     use sui::coin;
     use sui::tx_context::TxContext;
-    use sui::validator::{Self, Validator};
+    use sui::validator::{Self, Validator, staking_pool_id};
     use sui::validator_set::{Self, ValidatorSet};
     use sui::test_scenario::{Self, Scenario};
     use sui::vec_map;
@@ -215,6 +215,36 @@ module sui::validator_set_tests {
         test_scenario::next_tx(scenario, @0x2);
         // Validator 2 now has 700 MIST in stake and that's just enough.
         validator_set::request_add_validator(&mut validator_set, 700, test_scenario::ctx(scenario));
+
+        test_utils::destroy(validator_set);
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_add_candidate_then_remove() {
+        let scenario_val = test_scenario::begin(@0x1);
+        let scenario = &mut scenario_val;
+        let ctx1 = test_scenario::ctx(scenario);
+
+        // Create 2 validators, with stake 100 and 200.
+        let validator1 = create_validator(@0x1, 1, 1, true, ctx1);
+        let validator2 = create_validator(@0x2, 2, 1, false, ctx1);
+
+        let pool_id_2 = staking_pool_id(&validator2);
+
+        // Create a validator set with only the first validator in it.
+        let validator_set = validator_set::new(vector[validator1], ctx1);
+        assert_eq(validator_set::total_stake(&validator_set), 100);
+
+        // Add the second one as a candidate.
+        validator_set::request_add_validator_candidate(&mut validator_set, validator2);
+        assert!(validator_set::is_validator_candidate(&validator_set, @0x2), 0);
+
+        test_scenario::next_tx(scenario, @0x2);
+        // Then remove its candidacy.
+        validator_set::request_remove_validator_candidate(&mut validator_set, test_scenario::ctx(scenario));
+        assert!(!validator_set::is_validator_candidate(&validator_set, @0x2), 0);
+        assert!(validator_set::is_inactive_validator(&validator_set, pool_id_2), 0);
 
         test_utils::destroy(validator_set);
         test_scenario::end(scenario_val);

@@ -10,6 +10,7 @@
 -  [Constants](#@Constants_0)
 -  [Function `new`](#0x2_validator_set_new)
 -  [Function `request_add_validator_candidate`](#0x2_validator_set_request_add_validator_candidate)
+-  [Function `request_remove_validator_candidate`](#0x2_validator_set_request_remove_validator_candidate)
 -  [Function `request_add_validator`](#0x2_validator_set_request_add_validator)
 -  [Function `request_remove_validator`](#0x2_validator_set_request_remove_validator)
 -  [Function `request_add_delegation`](#0x2_validator_set_request_add_delegation)
@@ -52,6 +53,9 @@
 -  [Function `emit_validator_epoch_events`](#0x2_validator_set_emit_validator_epoch_events)
 -  [Function `sum_voting_power_by_addresses`](#0x2_validator_set_sum_voting_power_by_addresses)
 -  [Function `active_validators`](#0x2_validator_set_active_validators)
+-  [Function `is_validator_candidate`](#0x2_validator_set_is_validator_candidate)
+-  [Function `is_inactive_validator`](#0x2_validator_set_is_inactive_validator)
+-  [Module Specification](#@Module_Specification_1)
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
@@ -364,6 +368,7 @@ each validator, emitted during epoch advancement.
 
 ## Function `request_add_validator_candidate`
 
+Called by <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code> to add a new validator candidate.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_add_validator_candidate">request_add_validator_candidate</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, <a href="validator.md#0x2_validator">validator</a>: <a href="validator.md#0x2_validator_Validator">validator::Validator</a>)
@@ -391,6 +396,48 @@ each validator, emitted during epoch advancement.
     // delegating <b>with</b> this candidate.
     <a href="table.md#0x2_table_add">table::add</a>(&<b>mut</b> self.staking_pool_mappings, staking_pool_id(&<a href="validator.md#0x2_validator">validator</a>), validator_address);
     <a href="table.md#0x2_table_add">table::add</a>(&<b>mut</b> self.validator_candidates, sui_address(&<a href="validator.md#0x2_validator">validator</a>), <a href="validator.md#0x2_validator">validator</a>);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_request_remove_validator_candidate"></a>
+
+## Function `request_remove_validator_candidate`
+
+Called by <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code> to remove a validator candidate, and move them to <code>inactive_validators</code>.
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_remove_validator_candidate">request_remove_validator_candidate</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_remove_validator_candidate">request_remove_validator_candidate</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, ctx: &<b>mut</b> TxContext) {
+    <b>let</b> validator_address = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
+     <b>assert</b>!(
+        <a href="table.md#0x2_table_contains">table::contains</a>(&self.validator_candidates, validator_address),
+        <a href="validator_set.md#0x2_validator_set_ENotValidatorCandidate">ENotValidatorCandidate</a>
+    );
+    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> self.validator_candidates, validator_address);
+    <b>assert</b>!(<a href="validator.md#0x2_validator_is_preactive">validator::is_preactive</a>(&<a href="validator.md#0x2_validator">validator</a>), <a href="validator_set.md#0x2_validator_set_EValidatorNotPreactive">EValidatorNotPreactive</a>);
+
+    <b>let</b> staking_pool_id = staking_pool_id(&<a href="validator.md#0x2_validator">validator</a>);
+
+    // Remove the <a href="validator.md#0x2_validator">validator</a>'s staking pool from mappings.
+    <a href="table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> self.staking_pool_mappings, staking_pool_id);
+
+    // Deactivate the staking pool.
+    <a href="validator.md#0x2_validator_deactivate">validator::deactivate</a>(&<b>mut</b> <a href="validator.md#0x2_validator">validator</a>, <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx));
+
+    // Add <b>to</b> the inactive tables.
+    <a href="table.md#0x2_table_add">table::add</a>(&<b>mut</b> self.inactive_validators, staking_pool_id, <a href="validator.md#0x2_validator">validator</a>);
 }
 </code></pre>
 
@@ -2030,3 +2077,62 @@ Return the active validators in <code>self</code>
 
 
 </details>
+
+<a name="0x2_validator_set_is_validator_candidate"></a>
+
+## Function `is_validator_candidate`
+
+Returns true if the <code>addr</code> is a validator candidate.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_is_validator_candidate">is_validator_candidate</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, addr: <b>address</b>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_is_validator_candidate">is_validator_candidate</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, addr: <b>address</b>): bool {
+    <a href="table.md#0x2_table_contains">table::contains</a>(&self.validator_candidates, addr)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_is_inactive_validator"></a>
+
+## Function `is_inactive_validator`
+
+Returns true if the staking pool identified by <code>staking_pool_id</code> is of an inactive validator.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_is_inactive_validator">is_inactive_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, staking_pool_id: <a href="object.md#0x2_object_ID">object::ID</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_is_inactive_validator">is_inactive_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, staking_pool_id: ID): bool {
+    <a href="table.md#0x2_table_contains">table::contains</a>(&self.inactive_validators, staking_pool_id)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="@Module_Specification_1"></a>
+
+## Module Specification
+
+
+
+<pre><code><b>pragma</b> verify = <b>false</b>;
+</code></pre>
