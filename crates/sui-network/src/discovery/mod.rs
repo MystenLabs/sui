@@ -37,6 +37,7 @@ pub use generated::{
     discovery_server::{Discovery, DiscoveryServer},
 };
 pub use server::GetKnownPeersResponse;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 
 /// The internal discovery state shared between the main event loop and the request handler
 struct State {
@@ -69,7 +70,7 @@ struct DiscoveryEventLoop {
     dial_seed_peers_task: Option<AbortHandle>,
     shutdown_handle: oneshot::Receiver<()>,
     state: Arc<RwLock<State>>,
-    reconfig_receiver: Receiver<(CommitteeWithNetworkMetadata, ProtocolVersion)>,
+    reconfig_receiver: Receiver<EpochStartSystemState>,
 }
 
 impl DiscoveryEventLoop {
@@ -153,9 +154,9 @@ impl DiscoveryEventLoop {
     }
 
     /// Upsert new epoch validators into as high affinity peers.
-    fn upsert_preferred_peers_from_new_committee(
+    fn upsert_preferred_peers_from_new_epoch_state(
         &mut self,
-        committee: CommitteeWithNetworkMetadata,
+        epoch_start_state: EpochStartSystemState,
     ) {
         for (name, metadata) in committee.network_metadata {
             let Some(address) = multiaddr_to_anemo_address(&metadata.p2p_address) else {
@@ -180,13 +181,10 @@ impl DiscoveryEventLoop {
 
     // TODO: we don't boot out old committee member yets, however we may want to do this
     // in the future along with other network management work.
-    fn handle_reconfig_event(
-        &mut self,
-        reconfig_event: Result<(CommitteeWithNetworkMetadata, ProtocolVersion), RecvError>,
-    ) {
+    fn handle_reconfig_event(&mut self, reconfig_event: Result<EpochStartSystemState, RecvError>) {
         match reconfig_event {
-            Ok((new_committee, _)) => {
-                self.upsert_preferred_peers_from_new_committee(new_committee);
+            Ok(state) => {
+                self.upsert_preferred_peers_from_new_epoch_state(state);
             }
             Err(RecvError::Closed) => {
                 panic!("Reconfig channel shouldn't be able to be closed");

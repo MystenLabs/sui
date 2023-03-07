@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::base_types::{AuthorityName, EpochId, SuiAddress};
 use crate::committee::{Committee, StakeUnit};
+use anemo::types::PeerInfo;
 use anemo::PeerId;
 use multiaddr::Multiaddr;
 use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
@@ -18,7 +19,7 @@ use sui_protocol_config::ProtocolVersion;
 /// and fill them with None for older versions. When we absolutely must delete fields, we could
 /// also add new db tables to store the new version. This is OK because we only store one copy of
 /// this as part of EpochStartConfiguration for the most recent epoch in the db.
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct EpochStartSystemState {
     pub epoch: EpochId,
     pub protocol_version: u64,
@@ -63,7 +64,7 @@ impl EpochStartSystemState {
                 let authority = narwhal_config::Authority {
                     stake: validator.voting_power as narwhal_config::Stake,
                     primary_address: validator.narwhal_primary_address.clone(),
-                    network_key: validator.narwhal_network_pubkey.clone(),
+                    network_key: validator.network_pubkey.clone(),
                 };
                 (validator.protocol_pubkey.clone(), authority)
             })
@@ -80,7 +81,7 @@ impl EpochStartSystemState {
             .iter()
             .map(|validator| {
                 let name = validator.authority_name();
-                let peer_id = PeerId(validator.narwhal_network_pubkey.0.to_bytes());
+                let peer_id = PeerId(validator.network_pubkey.0.to_bytes());
 
                 (name, peer_id)
             })
@@ -113,13 +114,24 @@ impl EpochStartSystemState {
             epoch: self.epoch,
         }
     }
+
+    pub fn get_anemo_p2p_peers(&self) -> Vec<PeerInfo> {
+        self.active_validators
+            .iter()
+            .map(|validator| PeerInfo {
+                peer_id: PeerId(validator.network_pubkey.0.to_bytes()),
+                affinity: anemo::types::PeerAffinity::High,
+                address: vec![validator.p2p_address],
+            })
+            .collect()
+    }
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct EpochStartValidatorInfo {
     pub sui_address: SuiAddress,
     pub protocol_pubkey: narwhal_crypto::PublicKey,
-    pub narwhal_network_pubkey: narwhal_crypto::NetworkPublicKey,
+    pub network_pubkey: narwhal_crypto::NetworkPublicKey,
     pub narwhal_worker_pubkey: narwhal_crypto::NetworkPublicKey,
     pub sui_net_address: Multiaddr,
     pub p2p_address: Multiaddr,

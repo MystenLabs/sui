@@ -398,7 +398,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                     EpochStartValidatorInfo {
                         sui_address: metadata.sui_address,
                         protocol_pubkey: metadata.protocol_pubkey,
-                        narwhal_network_pubkey: metadata.network_pubkey,
+                        network_pubkey: metadata.network_pubkey,
                         narwhal_worker_pubkey: metadata.worker_pubkey,
                         sui_net_address: metadata.net_address,
                         p2p_address: metadata.p2p_address,

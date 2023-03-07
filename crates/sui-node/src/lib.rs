@@ -118,8 +118,8 @@ pub struct SuiNode {
     accumulator: Arc<StateAccumulator>,
     connection_monitor_status: Arc<ConnectionMonitorStatus>,
 
-    /// Broadcast channel to send the committee and protocol version for the next epoch.
-    end_of_epoch_channel: broadcast::Sender<(CommitteeWithNetworkMetadata, ProtocolVersion)>,
+    /// Broadcast channel to send the system state of the new epoch.
+    end_of_epoch_channel: broadcast::Sender<EpochStartSystemState>,
 
     #[cfg(msim)]
     sim_node: sui_simulator::runtime::NodeHandle,
@@ -232,7 +232,7 @@ impl SuiNode {
         };
 
         let (end_of_epoch_channel, end_of_epoch_receiver) =
-            broadcast::channel::<(CommitteeWithNetworkMetadata, ProtocolVersion)>(
+            broadcast::channel::<EpochStartSystemState>(
                 config.end_of_epoch_broadcast_channel_capacity,
             );
 
@@ -375,9 +375,7 @@ impl SuiNode {
         Ok(node)
     }
 
-    pub fn subscribe_to_epoch_change(
-        &self,
-    ) -> broadcast::Receiver<(CommitteeWithNetworkMetadata, ProtocolVersion)> {
+    pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<EpochStartSystemState> {
         self.end_of_epoch_channel.subscribe()
     }
 
@@ -417,7 +415,7 @@ impl SuiNode {
     fn create_p2p_network(
         config: &NodeConfig,
         state_sync_store: RocksDbStore,
-        reconfig_channel: Receiver<(CommitteeWithNetworkMetadata, ProtocolVersion)>,
+        reconfig_channel: Receiver<EpochStartSystemState>,
         prometheus_registry: &Registry,
     ) -> Result<(Network, discovery::Handle, state_sync::Handle)> {
         let (state_sync, state_sync_server) = state_sync::Builder::new()

@@ -10,6 +10,7 @@ use std::{
 };
 use sui_config::p2p::P2pConfig;
 use sui_types::committee::{CommitteeWithNetworkMetadata, ProtocolVersion};
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use tap::Pipe;
 use tokio::{
     sync::{broadcast::Receiver, oneshot},
@@ -19,14 +20,12 @@ use tokio::{
 /// Discovery Service Builder.
 pub struct Builder {
     config: Option<P2pConfig>,
-    reconfig_receiver: Receiver<(CommitteeWithNetworkMetadata, ProtocolVersion)>,
+    reconfig_receiver: Receiver<EpochStartSystemState>,
 }
 
 impl Builder {
     #[allow(clippy::new_without_default)]
-    pub fn new(
-        reconfig_receiver: Receiver<(CommitteeWithNetworkMetadata, ProtocolVersion)>,
-    ) -> Self {
+    pub fn new(reconfig_receiver: Receiver<EpochStartSystemState>) -> Self {
         Self {
             config: None,
             reconfig_receiver,
@@ -102,7 +101,7 @@ pub struct UnstartedDiscovery {
     pub(super) config: P2pConfig,
     pub(super) shutdown_handle: oneshot::Receiver<()>,
     pub(super) state: Arc<RwLock<State>>,
-    pub(super) reconfig_receiver: Receiver<(CommitteeWithNetworkMetadata, ProtocolVersion)>,
+    pub(super) reconfig_receiver: Receiver<EpochStartSystemState>,
 }
 
 impl UnstartedDiscovery {
