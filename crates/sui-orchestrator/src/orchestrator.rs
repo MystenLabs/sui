@@ -383,6 +383,7 @@ impl Orchestrator {
             .join(" ");
             ["source $HOME/.cargo/env", &run].join(" && ")
         };
+        println!("{}", command(0));
 
         let repo = self.settings.repository_name();
         let ssh_command = SshCommand::new(command)

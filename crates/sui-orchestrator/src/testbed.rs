@@ -132,7 +132,7 @@ impl<C: ServerProviderClient> Testbed<C> {
         )
         .unwrap();
 
-        match region {
+        let instances = match region {
             Some(x) => {
                 try_join_all((0..quantity).map(|_| self.client.create_instance(x.clone()))).await?
             }
@@ -151,7 +151,7 @@ impl<C: ServerProviderClient> Testbed<C> {
         };
 
         // Wait until the instances are booted.
-        self.ready().await?;
+        self.ready(instances.iter()).await?;
         self.instances = self.client.list_instances().await?;
         Ok(())
     }
@@ -184,16 +184,16 @@ impl<C: ServerProviderClient> Testbed<C> {
                                 == self.settings.specs.to_lowercase().replace(".", "")
                     })
                     .take(quantity)
+                    .cloned()
                     .collect::<Vec<_>>(),
             );
         }
 
         // Start instances.
-        println!("availbe: {available:?}");
-        self.client.start_instances(available.into_iter()).await?;
+        self.client.start_instances(available.iter()).await?;
 
         // Wait until the instances are started.
-        self.ready().await?;
+        self.ready(available.iter()).await?;
         self.instances = self.client.list_instances().await?;
         Ok(())
     }
@@ -215,7 +215,10 @@ impl<C: ServerProviderClient> Testbed<C> {
     }
 
     /// Signal when all instances are ready to accept ssh connections.
-    async fn ready(&self) -> TestbedResult<()> {
+    async fn ready<'a, I>(&self, instances: I) -> TestbedResult<()>
+    where
+        I: Iterator<Item = &'a Instance> + Clone,
+    {
         let mut waiting = 0;
         loop {
             let duration = Duration::from_secs(5);
@@ -229,8 +232,7 @@ impl<C: ServerProviderClient> Testbed<C> {
             )
             .unwrap();
 
-            let instances = self.client.list_instances().await?;
-            if try_join_all(instances.iter().map(|instance| {
+            if try_join_all(instances.clone().map(|instance| {
                 let private_key_file = self.settings.ssh_private_key_file.clone();
                 SshConnection::new(instance.ssh_address(), C::USERNAME, private_key_file)
             }))
