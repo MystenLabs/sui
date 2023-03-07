@@ -6,16 +6,14 @@ use crate::authority::authority_per_epoch_store::{
 };
 use crate::authority::AuthorityMetrics;
 use crate::checkpoints::CheckpointService;
+
+use crate::scoring_decision::update_low_scoring_authorities;
 use crate::transaction_manager::TransactionManager;
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
-<<<<<<< HEAD
 use dashmap::DashMap;
 use lru::LruCache;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
-=======
-use mysten_metrics::monitored_scope;
->>>>>>> 919a4d2ff7 (update type of shared map)
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::{ConsensusOutput, ReputationScores};
 use parking_lot::Mutex;
@@ -33,7 +31,7 @@ use sui_types::messages::{
 };
 use sui_types::storage::ParentSync;
 
-use tracing::{debug, error, instrument, warn};
+use tracing::{debug, error, instrument};
 
 pub struct ConsensusHandler<T> {
     /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
@@ -84,71 +82,6 @@ impl<T> ConsensusHandler<T> {
             transaction_scheduler,
         }
     }
-}
-
-/// Updates list of authorities that are deemed to have low reputation scores by consensus
-/// these may be lagging behind the network, byzantine, or not reliably participating for any reason.
-/// We want to ensure that the remaining set of validators once we exclude the low scoring authorities
-/// is including enough stake for a quorum, at the very least. It is also possible that no authorities
-/// are particularly low scoring, in which case this will result in storing an empty list.
-fn update_low_scoring_authorities(
-    low_scoring_authorities: &ArcSwap<HashMap<AuthorityName, u64>>,
-    committee: Committee,
-    reputation_scores: ReputationScores,
-) {
-    if !reputation_scores.final_of_schedule {
-        return;
-    }
-    let mut score_list = vec![];
-    for val in reputation_scores.scores_per_authority.values() {
-        score_list.push(*val as f64);
-    }
-
-    let median = statistical::median(&score_list);
-    let mut deviations = vec![];
-    let mut abs_deviations = vec![];
-    for (i, _) in score_list.clone().iter().enumerate() {
-        deviations.push((score_list[i] - median) * -1.0);
-        abs_deviations.push((score_list[i] - median).abs());
-    }
-
-    // adjusted median absolute deviation
-    let mad = statistical::median(&abs_deviations) / 0.7;
-    let mut low_scoring = vec![];
-    let mut rest = vec![];
-    for (i, (a, _)) in reputation_scores.scores_per_authority.iter().enumerate() {
-        let temp = deviations[i] / mad;
-        if temp > 2.4 {
-            low_scoring.push(a);
-        } else {
-            rest.push(AuthorityName::from(a));
-        }
-    }
-
-    // make sure the rest have at least quorum
-    let remaining_stake = rest.iter().map(|a| committee.weight(a)).sum::<u64>();
-    let quorum_threshold = committee.threshold::<true>();
-    if remaining_stake < quorum_threshold {
-        warn!(
-            "Too many low reputation-scoring authorities, temporarily disabling scoring mechanism"
-        );
-
-        low_scoring_authorities.swap(Arc::new(HashMap::new()));
-        return;
-    }
-
-    let mut new_inner = HashMap::new();
-    for authority in low_scoring {
-        new_inner.insert(
-            AuthorityName::from(authority),
-            *reputation_scores
-                .scores_per_authority
-                .get(authority)
-                .unwrap_or(&0),
-        );
-    }
-
-    low_scoring_authorities.swap(Arc::new(new_inner));
 }
 
 fn update_hash(
@@ -215,11 +148,10 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                 .consensus_handler_num_low_scoring_authorities
                 .set(self.low_scoring_authorities.load().len() as i64);
 
-            let _ = self
-                .low_scoring_authorities
+            self.low_scoring_authorities
                 .load()
                 .iter()
-                .map(|(key, val)| debug!("low scoring authority {} with score {}", key, val));
+                .for_each(|(key, val)| debug!("low scoring authority {} with score {}", key, val));
         };
 
         for (cert, batches) in consensus_output.batches {
@@ -505,133 +437,4 @@ pub fn test_update_hash() {
     assert!(update_hash(&last_seen, index0, tx).is_none());
     assert!(update_hash(&last_seen, index1, tx).is_none());
     assert!(update_hash(&last_seen, index2, tx).is_some());
-}
-
-#[test]
-pub fn test_update_low_scoring_authorities() {
-    #![allow(clippy::mutable_key_type)]
-    use fastcrypto::traits::KeyPair;
-    use std::collections::BTreeMap;
-    use std::collections::HashMap;
-    use sui_protocol_config::ProtocolVersion;
-    use sui_types::crypto::{get_key_pair, AuthorityKeyPair};
-
-    let (_, sec1): (_, AuthorityKeyPair) = get_key_pair();
-    let (_, sec2): (_, AuthorityKeyPair) = get_key_pair();
-    let (_, sec3): (_, AuthorityKeyPair) = get_key_pair();
-    let (_, sec4): (_, AuthorityKeyPair) = get_key_pair();
-    let a1: AuthorityName = sec1.public().into();
-    let a2: AuthorityName = sec2.public().into();
-    let a3: AuthorityName = sec3.public().into();
-    let a4: AuthorityName = sec4.public().into();
-
-    let mut authorities = BTreeMap::new();
-    authorities.insert(a1, 1);
-    authorities.insert(a2, 1);
-    authorities.insert(a3, 1);
-    authorities.insert(a4, 1);
-    let committee = Committee::new(0, ProtocolVersion::MIN, authorities).unwrap();
-
-    let low_scoring = ArcSwap::new(Arc::new(HashMap::new()));
-
-    let mut inner = HashMap::new();
-    inner.insert(a1, 50);
-    let reputation_scores_1 = ReputationScores {
-        scores_per_authority: Default::default(),
-        final_of_schedule: false,
-    };
-    low_scoring.swap(Arc::new(inner));
-
-    // when final of schedule is false, calling update_low_scoring_authorities will not change the
-    // low_scoring_authorities map
-    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores_1.clone());
-    assert_eq!(*low_scoring.load().get(&a1).unwrap(), 50_u64);
-    assert_eq!(low_scoring.load().len(), 1);
-
-    // there is a clear low outlier in the scores, exclude it
-    let mut scores = HashMap::new();
-    scores.insert(sec1.public().clone(), 45_u64);
-    scores.insert(sec2.public().clone(), 49_u64);
-    scores.insert(sec3.public().clone(), 55_u64);
-    scores.insert(sec4.public().clone(), 25_u64);
-    let reputation_scores = ReputationScores {
-        scores_per_authority: scores,
-        final_of_schedule: true,
-    };
-
-    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores);
-    assert_eq!(*low_scoring.load().get(&a4).unwrap(), 25_u64);
-    assert_eq!(low_scoring.load().len(), 1);
-
-    // a4 has score of 30 which is a bit lower, but not an outlier, so it should not be excluded
-    let mut scores = HashMap::new();
-    scores.insert(sec1.public().clone(), 45_u64);
-    scores.insert(sec2.public().clone(), 49_u64);
-    scores.insert(sec3.public().clone(), 55_u64);
-    scores.insert(sec4.public().clone(), 30_u64);
-    let reputation_scores = ReputationScores {
-        scores_per_authority: scores,
-        final_of_schedule: true,
-    };
-
-    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores);
-    assert_eq!(low_scoring.load().len(), 0);
-
-    // this set of scores has a high performing outlier, we don't exclude it
-    let mut scores = HashMap::new();
-    scores.insert(sec1.public().clone(), 45_u64);
-    scores.insert(sec2.public().clone(), 49_u64);
-    scores.insert(sec3.public().clone(), 55_u64);
-    scores.insert(sec4.public().clone(), 80_u64);
-    let reputation_scores = ReputationScores {
-        scores_per_authority: scores,
-        final_of_schedule: true,
-    };
-
-    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores);
-    assert_eq!(low_scoring.load().len(), 0);
-
-    // if more than the quorum is a low outlier, we don't exclude any authority
-    let mut scores = HashMap::new();
-    scores.insert(sec1.public().clone(), 45_u64);
-    scores.insert(sec2.public().clone(), 49_u64);
-    scores.insert(sec3.public().clone(), 16_u64);
-    scores.insert(sec4.public().clone(), 25_u64);
-    let reputation_scores = ReputationScores {
-        scores_per_authority: scores,
-        final_of_schedule: true,
-    };
-
-    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores);
-    assert_eq!(low_scoring.load().len(), 0);
-
-    // the computation can handle score values at any scale
-    let mut scores = HashMap::new();
-    scores.insert(sec1.public().clone(), 2300_u64);
-    scores.insert(sec2.public().clone(), 3000_u64);
-    scores.insert(sec3.public().clone(), 900_u64);
-    scores.insert(sec4.public().clone(), 1900_u64);
-    let reputation_scores = ReputationScores {
-        scores_per_authority: scores,
-        final_of_schedule: true,
-    };
-
-    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores);
-    assert_eq!(low_scoring.load().len(), 0);
-
-    // the computation can handle score values scaled up or down
-    // (note as we scale up sensitivity to outliers goes slightly down)
-    let mut scores = HashMap::new();
-    scores.insert(sec1.public().clone(), 2300_u64);
-    scores.insert(sec2.public().clone(), 3000_u64);
-    scores.insert(sec3.public().clone(), 210_u64);
-    scores.insert(sec4.public().clone(), 1900_u64);
-    let reputation_scores = ReputationScores {
-        scores_per_authority: scores,
-        final_of_schedule: true,
-    };
-
-    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores);
-    assert_eq!(*low_scoring.load().get(&a3).unwrap(), 210_u64);
-    assert_eq!(low_scoring.load().len(), 1);
 }
