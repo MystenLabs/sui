@@ -132,7 +132,10 @@ export const transferNFT = createAsyncThunk<
             throw new Error('Error, active address is not defined');
         }
         const signer = api.getSignerInstance(activeAddress, background);
-        const txn = await signer.transferObject(data);
+        const txn = await signer.signAndExecuteTransaction({
+            kind: 'transferObject',
+            data,
+        });
         await dispatch(fetchAllOwnedAndRequiredObjects());
         const txnResp = {
             timestampMs: getTimestampFromTransactionResponse(txn),

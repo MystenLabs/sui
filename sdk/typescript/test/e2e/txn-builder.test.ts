@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   getExecutionStatusType,
   getNewlyCreatedCoinRefsAfterSplit,
@@ -23,7 +23,7 @@ describe('Transaction Builders', () => {
   let toolbox: TestToolbox;
   let signer: RawSigner;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     toolbox = await setup();
     signer = new RawSigner(toolbox.keypair, toolbox.provider);
   });
@@ -142,11 +142,14 @@ describe('Transaction Builders', () => {
       );
 
     // get some new coins with small amount
-    const splitTxn = await signer.splitCoin({
-      coinObjectId: getObjectId(coins[0]),
-      splitAmounts: [1, 2, 3],
-      gasBudget: DEFAULT_GAS_BUDGET,
-      gasPayment: getObjectId(coins[1]),
+    const splitTxn = await signer.signAndExecuteTransaction({
+      kind: 'splitCoin',
+      data: {
+        coinObjectId: getObjectId(coins[0]),
+        splitAmounts: [1, 2, 3],
+        gasBudget: DEFAULT_GAS_BUDGET,
+        gasPayment: getObjectId(coins[1]),
+      },
     });
     const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
       getObjectId(c),
@@ -173,11 +176,14 @@ describe('Transaction Builders', () => {
         BigInt(DEFAULT_GAS_BUDGET),
       );
 
-    const splitTxn = await signer.splitCoin({
-      coinObjectId: getObjectId(coins[0]),
-      splitAmounts: [2000, 2000, 2000],
-      gasBudget: gasBudget,
-      gasPayment: getObjectId(coins[1]),
+    const splitTxn = await signer.signAndExecuteTransaction({
+      kind: 'splitCoin',
+      data: {
+        coinObjectId: getObjectId(coins[0]),
+        splitAmounts: [2000, 2000, 2000],
+        gasBudget: gasBudget,
+        gasPayment: getObjectId(coins[1]),
+      },
     });
     const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
       getObjectId(c),
@@ -202,11 +208,14 @@ describe('Transaction Builders', () => {
         BigInt(DEFAULT_GAS_BUDGET),
       );
 
-    const splitTxn = await signer.splitCoin({
-      coinObjectId: getObjectId(coins[0]),
-      splitAmounts: [2000, 2000, 2000],
-      gasBudget: gasBudget,
-      gasPayment: getObjectId(coins[1]),
+    const splitTxn = await signer.signAndExecuteTransaction({
+      kind: 'splitCoin',
+      data: {
+        coinObjectId: getObjectId(coins[0]),
+        splitAmounts: [2000, 2000, 2000],
+        gasBudget: gasBudget,
+        gasPayment: getObjectId(coins[1]),
+      },
     });
     const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
       getObjectId(c),

@@ -37,11 +37,14 @@ describe('Test dev inspect', () => {
         BigInt(DEFAULT_GAS_BUDGET),
       );
 
-    const splitTxn = await signer.splitCoin({
-      coinObjectId: getObjectId(coins[0]),
-      splitAmounts: [2000, 2000, 2000],
-      gasBudget: gasBudget,
-      gasPayment: getObjectId(coins[1]),
+    const splitTxn = await signer.signAndExecuteTransaction({
+      kind: 'splitCoin',
+      data: {
+        coinObjectId: getObjectId(coins[0]),
+        splitAmounts: [2000, 2000, 2000],
+        gasBudget: gasBudget,
+        gasPayment: getObjectId(coins[1]),
+      },
     });
     const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
       getObjectId(c),
