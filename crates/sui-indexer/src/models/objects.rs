@@ -14,7 +14,9 @@ use sui_types::object::Owner;
 #[derive(Queryable, Insertable, Debug, Identifiable, Clone)]
 #[diesel(table_name = objects, primary_key(object_id))]
 pub struct Object {
+    // epoch id in which this object got update.
     pub epoch: i64,
+    // checkpoint seq number in which this object got update.
     pub checkpoint: i64,
     pub object_id: String,
     pub version: i64,
@@ -30,7 +32,9 @@ pub struct Object {
 #[derive(Insertable, Debug, Identifiable, Clone)]
 #[diesel(table_name = objects, primary_key(object_id))]
 pub struct DeletedObject {
+    // epoch id in which this object got deleted.
     pub epoch: i64,
+    // checkpoint seq number in which this object got deleted.
     pub checkpoint: i64,
     pub object_id: String,
     pub version: i64,
