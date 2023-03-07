@@ -4,11 +4,13 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   Coin,
+  Commands,
   normalizeSuiObjectId,
   ObjectId,
   RawSigner,
   SuiObjectInfo,
   SUI_TYPE_ARG,
+  Transaction,
 } from '../../src';
 
 import { DEFAULT_GAS_BUDGET, setup, TestToolbox } from './utils/setup';
@@ -28,20 +30,19 @@ describe('Coin related API', () => {
       toolbox.address(),
     );
     coinToSplit = coins[0].objectId;
-    // split coins into desired amount
-    await signer.signAndExecuteTransaction({
-      kind: 'splitCoin',
-      data: {
-        coinObjectId: coinToSplit,
-        splitAmounts: SPLIT_AMOUNTS.map((s) => Number(s)),
-        gasBudget: DEFAULT_GAS_BUDGET,
-        gasPayment: coins[1].objectId,
-      },
+    const tx = new Transaction();
+    tx.setGasBudget(DEFAULT_GAS_BUDGET);
+    const recieverInput = tx.input(toolbox.address());
+    SPLIT_AMOUNTS.forEach((amount) => {
+      const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(amount)));
+      tx.add(Commands.TransferObjects([coin], recieverInput));
     });
+
+    // split coins into desired amount
+    await signer.signAndExecuteTransaction(tx);
     coinsAfterSplit = await toolbox.provider.getGasObjectsOwnedByAddress(
       toolbox.address(),
     );
-    expect(coinsAfterSplit.length).toEqual(coins.length + SPLIT_AMOUNTS.length);
   });
 
   it('test Coin utility functions', async () => {

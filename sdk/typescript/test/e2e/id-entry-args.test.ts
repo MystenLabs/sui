@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { getExecutionStatusType, ObjectId, RawSigner } from '../../src';
+import {
+  Commands,
+  getExecutionStatusType,
+  ObjectId,
+  RawSigner,
+  Transaction,
+} from '../../src';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test ID as args to entry functions', () => {
@@ -18,19 +24,20 @@ describe('Test ID as args to entry functions', () => {
   });
 
   it('Test ID as arg to entry functions', async () => {
-    const txn = await signer.signAndExecuteTransaction({
-      kind: 'moveCall',
-      data: {
-        packageObjectId: packageId,
-        module: 'test',
-        function: 'test_id',
+    const tx = new Transaction();
+    tx.setGasBudget(2000);
+    tx.add(
+      Commands.MoveCall({
+        target: `${packageId}::test::test_id`,
         typeArguments: [],
         arguments: [
-          '0x000000000000000000000000c2b5625c221264078310a084df0a3137956d20ee',
+          tx.input(
+            '0x000000000000000000000000c2b5625c221264078310a084df0a3137956d20ee',
+          ),
         ],
-        gasBudget: 2000,
-      },
-    });
-    expect(getExecutionStatusType(txn)).toEqual('success');
+      }),
+    );
+    const result = await signer.signAndExecuteTransaction(tx);
+    expect(getExecutionStatusType(result)).toEqual('success');
   });
 });
