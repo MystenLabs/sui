@@ -6,7 +6,7 @@ The next release of Sui, release 0.28, includes the breaking changes described i
 
 New entries added 03/06.
 
-**[Major breaking change]** The `sui_getObject` endpoint now takes an additional configuration parameter of type `SuiObjectDataOptions` to control which fields the endpoint retrieves. By default, the endpoint retrieves only object references unless the client request  explicitly specifies other data, such as `type`, `owner`, or `bcs`. To learn more, see (https://github.com/MystenLabs/sui/pull/8817)
+**[Major breaking change]** The `sui_getObject` endpoint now takes an additional configuration parameter of type `SuiObjectDataOptions` to control which fields the endpoint retrieves. By default, the endpoint retrieves only object references unless the client request  explicitly specifies other data, such as `type`, `owner`, or `bcs`. To learn more, see [PR 8817](https://github.com/MystenLabs/sui/pull/8817)
 
 **[Major breaking change]** - The ID leak verifier that governs usage of `UID`s in Sui Move code has been rewritten and flipped. New objects must now get “fresh” `UID`s created in the function where the object is made, but when the object’s struct destroyed, the UID can be stored as if the object was wrapped (but without it's contents). In contrast, the previous rules stated that the `UID` could come from anywhere, but must have been destroyed when the object was unpacked. We have made this change to make using dynamic fields a bit more ergonomic, so you do not always need a Bag or Table if you want to retain access to dynamic fields after unpacking an object into its constituent fields. See [PR 8026](https://github.com/MystenLabs/sui/pull/8026) for details and a migration example. 
 
