@@ -20,10 +20,11 @@ use sui_types::digests::TransactionEventsDigest;
 use sui_types::error::ExecutionError;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::{
-    Argument, CallArg, Command, ExecutionStatus, GenesisObject, InputObjectKind, ObjectArg, Pay,
-    PayAllSui, PaySui, ProgrammableMoveCall, ProgrammableTransaction, SenderSignedData,
-    SingleTransactionKind, TransactionData, TransactionDataAPI, TransactionEffects,
-    TransactionEffectsAPI, TransactionEvents, TransactionKind, VersionedProtocolMessage,
+    Argument, CallArg, Command, ExecutionStatus, GaslessTransactionData, GenesisObject,
+    InputObjectKind, ObjectArg, Pay, PayAllSui, PaySui, ProgrammableMoveCall,
+    ProgrammableTransaction, SenderSignedData, SingleTransactionKind, TransactionData,
+    TransactionDataAPI, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
+    TransactionKind, VersionedProtocolMessage,
 };
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::disassemble_modules;
@@ -1295,6 +1296,73 @@ impl TransactionBytes {
         bcs::from_bytes::<TransactionData>(&self.tx_bytes.to_vec().map_err(|e| anyhow::anyhow!(e))?)
             .map_err(|e| anyhow::anyhow!(e))
     }
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, JsonSchema, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GaslessTransactionBytes {
+    /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
+    pub tx_bytes: Base64,
+}
+
+impl GaslessTransactionBytes {
+    pub fn from_data(data: GaslessTransactionData) -> Result<Self, anyhow::Error> {
+        Ok(Self {
+            tx_bytes: Base64::from_bytes(bcs::to_bytes(&data)?.as_slice()),
+        })
+    }
+
+    pub fn to_data(self) -> Result<GaslessTransactionData, anyhow::Error> {
+        bcs::from_bytes::<GaslessTransactionData>(
+            &self.tx_bytes.to_vec().map_err(|e| anyhow::anyhow!(e))?,
+        )
+        .map_err(|e| anyhow::anyhow!(e))
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, JsonSchema, Debug)]
+pub struct SponsoredTransactionResponseData {
+    /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
+    #[serde(rename = "txBytes")]
+    pub tx_bytes: Base64,
+    /// Base58 encoded transaction digest
+    #[serde(rename = "txDigest")]
+    pub tx_digest: TransactionDigest,
+    /// Base64 encoded transaction signature, signed by the gas owner
+    pub signature: GenericSignature,
+    /// Expiration time of the assigned gas object
+    #[serde(rename = "expireAt")]
+    pub expire_at: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ErrorData {
+    pub details: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SponsoredTransactionResponseError {
+    pub code: i32,
+    pub message: String,
+    pub data: ErrorData,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "SponsoredTransactionResponse", rename_all = "camelCase")]
+pub struct SponsoredTransactionResponse {
+    pub result: Option<SponsoredTransactionResponseData>,
+    pub error: Option<SponsoredTransactionResponseError>,
+}
+
+// TODO: change this structure too
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(
+    rename = "GetSponsoredTransactionStatusResponse",
+    rename_all = "camelCase"
+)]
+pub struct GetSponsoredTransactionStatusResponse {
+    pub result: Option<String>,
+    pub error: Option<SponsoredTransactionResponseError>,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]

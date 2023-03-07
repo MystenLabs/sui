@@ -7,7 +7,8 @@ use jsonrpsee_proc_macros::rpc;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    RPCTransactionRequestParams, SuiTransactionBuilderMode, SuiTypeTag, TransactionBytes,
+    GaslessTransactionBytes, GetSponsoredTransactionStatusResponse, RPCTransactionRequestParams,
+    SponsoredTransactionResponse, SuiTransactionBuilderMode, SuiTypeTag, TransactionBytes,
 };
 
 use sui_open_rpc_macros::open_rpc;
@@ -250,4 +251,24 @@ pub trait TransactionBuilder {
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
+
+    #[method(name = "sendBytesToSponsor")]
+    async fn send_bytes_to_sponsor(
+        &self,
+        /// endpoint for a gas station
+        gas_station_url: String,
+        /// The transaction bytes
+        transaction_bytes: GaslessTransactionBytes,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget
+        gas_budget: u64,
+    ) -> RpcResult<SponsoredTransactionResponse>;
+
+    #[method(name = "getSponsoredTransactionStatus")]
+    async fn get_sponsored_transaction_status(
+        &self,
+        /// endpoint for a gas station
+        gas_station_url: String,
+        /// The transaction digest we would like to check
+        digest: String,
+    ) -> RpcResult<GetSponsoredTransactionStatusResponse>;
 }

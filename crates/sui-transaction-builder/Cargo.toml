@@ -11,6 +11,10 @@ anyhow = "1.0.64"
 async-trait = "0.1.61"
 futures = "0.3.23"
 bcs = "0.1.4"
+reqwest = { version = "0.11.13", default_features= false, features = ["json", "rustls-tls"] }
+jsonrpsee = { version = "0.16.2", features = ["full"] }
+jsonrpsee-proc-macros = "0.16.2"
+tracing = "0.1.36"
 
 sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-types = { path = "../sui-types" }

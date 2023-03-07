@@ -10,7 +10,8 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc::api::{TransactionBuilderClient, TransactionBuilderServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    RPCTransactionRequestParams, SuiTransactionBuilderMode, SuiTypeTag, TransactionBytes,
+    GaslessTransactionBytes, GetSponsoredTransactionStatusResponse, RPCTransactionRequestParams,
+    SponsoredTransactionResponse, SuiTransactionBuilderMode, SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -209,6 +210,27 @@ impl TransactionBuilderServer for TransactionBuilderApi {
     ) -> RpcResult<TransactionBytes> {
         self.fullnode
             .request_withdraw_delegation(signer, delegation, staked_sui, gas, gas_budget)
+            .await
+    }
+
+    async fn send_bytes_to_sponsor(
+        &self,
+        gas_station_url: String,
+        transaction_bytes: GaslessTransactionBytes,
+        gas_budget: u64,
+    ) -> RpcResult<SponsoredTransactionResponse> {
+        self.fullnode
+            .send_bytes_to_sponsor(gas_station_url, transaction_bytes, gas_budget)
+            .await
+    }
+
+    async fn get_sponsored_transaction_status(
+        &self,
+        gas_station_url: String,
+        digest: String,
+    ) -> RpcResult<GetSponsoredTransactionStatusResponse> {
+        self.fullnode
+            .get_sponsored_transaction_status(gas_station_url, digest)
             .await
     }
 }

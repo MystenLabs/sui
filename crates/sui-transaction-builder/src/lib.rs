@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use futures::future::join_all;
 
 use anyhow::{anyhow, ensure};
+use jsonrpsee::core::__reexports::serde_json;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 
@@ -17,7 +18,8 @@ use sui_adapter::adapter::resolve_and_type_check;
 use sui_adapter::execution_mode::ExecutionMode;
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_json_rpc_types::{
-    RPCTransactionRequestParams, SuiData, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
+    GaslessTransactionBytes, GetSponsoredTransactionStatusResponse, RPCTransactionRequestParams,
+    SponsoredTransactionResponse, SuiData, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
     SuiTypeTag,
 };
 use sui_protocol_config::ProtocolConfig;
@@ -41,6 +43,7 @@ use sui_types::{
     coin, fp_ensure, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
     SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
+use tracing::{debug, info};
 
 #[async_trait]
 pub trait DataReader {
@@ -56,6 +59,106 @@ pub trait DataReader {
     ) -> Result<SuiObjectResponse, anyhow::Error>;
 
     async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error>;
+}
+
+pub struct RemoteGasStationClient {
+    /// endpoint for a gas station
+    pub gas_station_endpoint: String,
+}
+
+/// Current gas client is found https://shinami-public.s3.amazonaws.com/openrpc/gas_station_v0.1.0.json
+impl RemoteGasStationClient {
+    pub fn new(url: String) -> Self {
+        info!("Use remote gas station: {}", url);
+        Self {
+            gas_station_endpoint: url,
+        }
+    }
+}
+
+/// Gas Station Client abstraction
+#[async_trait]
+pub trait GasStationClient {
+    async fn sponsor_transaction(
+        &self,
+        gasless_txn_bytes: GaslessTransactionBytes,
+        gas_budget: u64,
+    ) -> SponsoredTransactionResponse;
+
+    async fn get_sponsored_transaction_status(
+        &self,
+        tx_digest: String,
+    ) -> GetSponsoredTransactionStatusResponse;
+}
+
+#[async_trait]
+impl GasStationClient for RemoteGasStationClient {
+    async fn sponsor_transaction(
+        &self,
+        gasless_txn_bytes: GaslessTransactionBytes,
+        gas_budget: u64,
+    ) -> SponsoredTransactionResponse {
+        let url = format!("{}", self.gas_station_endpoint);
+
+        debug!("Sending gasless tx bytes to {}", url);
+
+        let gasless_bytes = gasless_txn_bytes.tx_bytes.encoded();
+        let text_params = vec![gasless_bytes, gas_budget.to_string()];
+        let text_str = serde_json::to_value(text_params).unwrap();
+
+        let response = reqwest::Client::new()
+            .post(&url)
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "1",
+                "method": "sponsorTransaction",
+                "params": &text_str,
+            }))
+            .send()
+            .await
+            .unwrap_or_else(|e| panic!("Failed to talk to remote gas station {:?}: {:?}", url, e));
+
+        // With the above unwrap or else we should have some bytes.
+        let full_bytes = response.bytes().await.unwrap();
+        let gas_station_response: SponsoredTransactionResponse =
+            serde_json::from_slice(&full_bytes)
+                .map_err(|e| anyhow::anyhow!("json deser failed with bytes {:?}: {e}", full_bytes))
+                .unwrap();
+
+        gas_station_response
+    }
+
+    async fn get_sponsored_transaction_status(
+        &self,
+        tx_digest: String,
+    ) -> GetSponsoredTransactionStatusResponse {
+        let url = format!("{}", self.gas_station_endpoint);
+
+        let text_params = vec![tx_digest];
+        let text_str = serde_json::to_value(text_params).unwrap();
+
+        // TODO: grab headers
+        let response = reqwest::Client::new()
+            .post(&url)
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "1",
+                "method": "getSponsoredTransactionStatus",
+                "params": &text_str,
+            }))
+            .send()
+            .await
+            .unwrap_or_else(|e| panic!("Failed to talk to remote gas station {:?}: {:?}", url, e));
+
+        // With the above unwrap or else we should have some bytes.
+        let full_bytes = response.bytes().await.unwrap();
+        let gas_station_response: GetSponsoredTransactionStatusResponse =
+            serde_json::from_slice(&full_bytes)
+                .map_err(|e| anyhow::anyhow!("json deser failed with bytes {:?}: {e}", full_bytes))
+                .unwrap();
+
+        gas_station_response
+    }
 }
 
 #[derive(Clone)]
@@ -725,6 +828,31 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             gas_budget,
             gas_price,
         ))
+    }
+
+    pub async fn send_bytes_to_sponsor(
+        &self,
+        gas_station_url: String,
+        gasless_txn_bytes: GaslessTransactionBytes,
+        gas_budget: u64,
+    ) -> anyhow::Result<SponsoredTransactionResponse> {
+        let gas_station_client = RemoteGasStationClient::new(gas_station_url);
+
+        Ok(gas_station_client
+            .sponsor_transaction(gasless_txn_bytes, gas_budget)
+            .await)
+    }
+
+    pub async fn get_sponsored_transaction_status(
+        &self,
+        gas_station_url: String,
+        digest: String,
+    ) -> anyhow::Result<GetSponsoredTransactionStatusResponse> {
+        let gas_station_client = RemoteGasStationClient::new(gas_station_url);
+
+        Ok(gas_station_client
+            .get_sponsored_transaction_status(digest)
+            .await)
     }
 
     // TODO: we should add retrial to reduce the transaction building error rate

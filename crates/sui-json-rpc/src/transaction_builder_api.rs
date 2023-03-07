@@ -8,6 +8,7 @@ use jsonrpsee::core::RpcResult;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
+    GaslessTransactionBytes, GetSponsoredTransactionStatusResponse, SponsoredTransactionResponse,
     SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiTransactionBuilderMode, SuiTypeTag,
     TransactionBytes,
 };
@@ -317,6 +318,29 @@ impl TransactionBuilderServer for TransactionBuilderApi {
                 .request_withdraw_delegation(signer, delegation, staked_sui, gas, gas_budget)
                 .await?,
         )?)
+    }
+
+    async fn send_bytes_to_sponsor(
+        &self,
+        gas_station_url: String,
+        gasless_txn_bytes: GaslessTransactionBytes,
+        gas_budget: u64,
+    ) -> RpcResult<SponsoredTransactionResponse> {
+        Ok(self
+            .builder
+            .send_bytes_to_sponsor(gas_station_url, gasless_txn_bytes, gas_budget)
+            .await?)
+    }
+
+    async fn get_sponsored_transaction_status(
+        &self,
+        gas_station_url: String,
+        digest: String,
+    ) -> RpcResult<GetSponsoredTransactionStatusResponse> {
+        Ok(self
+            .builder
+            .get_sponsored_transaction_status(gas_station_url, digest)
+            .await?)
     }
 }
 

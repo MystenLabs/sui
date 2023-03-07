@@ -4046,3 +4046,23 @@ pub struct SystemStateRequest {
     // This is needed to make gRPC happy.
     pub _unused: bool,
 }
+
+// TODO: might not need as shinami revamps API
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct GaslessTransactionData {
+    pub kind: TransactionKind,
+    pub sender: SuiAddress,
+}
+
+impl GaslessTransactionData {
+    pub fn new(kind: TransactionKind, sender: SuiAddress) -> Self {
+        GaslessTransactionData { kind, sender }
+    }
+
+    pub fn from_transaction_data(transaction_data: TransactionData) -> Self {
+        GaslessTransactionData {
+            kind: transaction_data.kind().clone(),
+            sender: transaction_data.sender(),
+        }
+    }
+}
