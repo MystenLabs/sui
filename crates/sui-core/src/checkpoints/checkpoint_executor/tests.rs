@@ -447,7 +447,7 @@ fn sync_checkpoint(
         .insert_verified_checkpoint(checkpoint.clone())
         .unwrap();
     checkpoint_store
-        .insert_checkpoint_contents(empty_contents())
+        .insert_checkpoint_contents(empty_contents().into_inner().into_checkpoint_contents())
         .unwrap();
     checkpoint_store
         .update_highest_synced_checkpoint(checkpoint)
