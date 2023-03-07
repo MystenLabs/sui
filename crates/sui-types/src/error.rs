@@ -450,6 +450,8 @@ pub enum VMMemoryLimitExceededSubStatusCode {
     NEW_ID_COUNT_LIMIT_EXCEEDED = 2,
     DELETED_ID_COUNT_LIMIT_EXCEEDED = 3,
     TRANSFER_ID_COUNT_LIMIT_EXCEEDED = 4,
+    OBJECT_RUNTIME_CACHE_LIMIT_EXCEEDED = 5,
+    OBJECT_RUNTIME_STORE_LIMIT_EXCEEDED = 6,
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;

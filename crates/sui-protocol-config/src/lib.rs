@@ -219,6 +219,13 @@ pub struct ProtocolConfig {
     /// Maximum length of a vector in Move. Enforced by the VM during execution, and for constants, by the verifier.
     max_move_vector_len: Option<u64>,
 
+    // === Object runtime internal operation limits ====
+    /// Maximum number of cached objects in the object runtime ObjectStore. Enforced by object runtime during execution
+    object_runtime_max_num_cached_objects: Option<u64>,
+
+    /// Maximum number of stored objects accessed by object runtime ObjectStore. Enforced by object runtime during execution
+    object_runtime_max_num_store_entries: Option<u64>,
+
     // === Execution gas costs ====
     // note: Option<per-instruction and native function gas costs live in the sui-cost-tables crate
     /// Base cost for any Sui transaction
@@ -424,6 +431,14 @@ impl ProtocolConfig {
     }
     pub fn max_move_vector_len(&self) -> u64 {
         self.max_move_vector_len.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn object_runtime_max_num_cached_objects(&self) -> u64 {
+        self.object_runtime_max_num_cached_objects
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn object_runtime_max_num_store_entries(&self) -> u64 {
+        self.object_runtime_max_num_store_entries
+            .expect(CONSTANT_ERR_MSG)
     }
     pub fn base_tx_cost_fixed(&self) -> u64 {
         self.base_tx_cost_fixed.expect(CONSTANT_ERR_MSG)
@@ -649,6 +664,8 @@ impl ProtocolConfig {
                 max_num_transfered_move_object_ids: Some(2048),
                 max_event_emit_size: Some(250 * 1024),
                 max_move_vector_len: Some(256 * 1024),
+                object_runtime_max_num_cached_objects: Some(1000),
+                object_runtime_max_num_store_entries: Some(1000),
                 base_tx_cost_fixed: Some(110_000),
                 package_publish_cost_fixed: Some(1_000),
                 base_tx_cost_per_byte: Some(0),
