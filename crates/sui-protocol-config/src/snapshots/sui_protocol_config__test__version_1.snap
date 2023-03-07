@@ -6,7 +6,7 @@ version: 1
 max_tx_size: 65536
 max_tx_in_batch: 10
 max_modules_in_publish: 128
-max_arguments: 128
+max_arguments: 512
 max_type_arguments: 16
 max_type_argument_depth: 16
 max_pure_argument_size: 16384

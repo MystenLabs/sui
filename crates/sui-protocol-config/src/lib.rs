@@ -611,7 +611,7 @@ impl ProtocolConfig {
                 max_tx_size: Some(64 * 1024),
                 max_tx_in_batch: Some(10),
                 max_modules_in_publish: Some(128),
-                max_arguments: Some(128),
+                max_arguments: Some(512),
                 max_type_arguments: Some(16),
                 max_type_argument_depth: Some(16),
                 max_pure_argument_size: Some(16 * 1024),
