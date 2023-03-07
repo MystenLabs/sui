@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber, SuiAddress};
-use sui_types::messages::{PaySui, SingleTransactionKind, TransactionData, TransactionKind};
+use sui_types::messages::TransactionData;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 use crate::operations::Operations;
 use crate::types::{ConstructionMetadata, TransactionMetadata};
@@ -17,13 +18,18 @@ async fn test_operation_data_parsing() -> Result<(), anyhow::Error> {
 
     let sender = SuiAddress::random_for_testing_only();
 
-    // TODO figure out an analogous operation for programmable transactions
-    let kind = TransactionKind::Single(SingleTransactionKind::PaySui(PaySui {
-        coins: vec![gas],
-        recipients: vec![SuiAddress::random_for_testing_only()],
-        amounts: vec![10000],
-    }));
-    let data = TransactionData::new_with_dummy_gas_price(kind, sender, gas, 1000);
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .pay(
+                vec![gas],
+                vec![SuiAddress::random_for_testing_only()],
+                vec![10000],
+            )
+            .unwrap();
+        builder.finish()
+    };
+    let data = TransactionData::new_programmable_with_dummy_gas_price(sender, vec![gas], pt, 1000);
 
     let ops: Operations = data.clone().try_into()?;
     let metadata = ConstructionMetadata {

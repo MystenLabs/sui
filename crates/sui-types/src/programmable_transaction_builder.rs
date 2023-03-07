@@ -178,6 +178,23 @@ impl ProgrammableTransactionBuilder {
         Ok(())
     }
 
+    pub fn programmable_move_call(
+        &mut self,
+        package: ObjectID,
+        module: Identifier,
+        function: Identifier,
+        type_arguments: Vec<TypeTag>,
+        arguments: Vec<Argument>,
+    ) -> Argument {
+        self.command(Command::MoveCall(Box::new(ProgrammableMoveCall {
+            package,
+            module,
+            function,
+            type_arguments,
+            arguments,
+        })))
+    }
+
     pub fn publish(&mut self, modules: Vec<Vec<u8>>) {
         self.commands.push(Command::Publish(modules))
     }

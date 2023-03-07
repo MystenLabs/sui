@@ -197,7 +197,8 @@ async fn construct_shared_object_transaction_with_sequence_number(
             CallArg::Pure(16u64.to_le_bytes().to_vec()),
         ],
         MAX_GAS,
-    );
+    )
+    .unwrap();
     (
         validator,
         fullnode,
@@ -1566,7 +1567,7 @@ async fn test_package_size_limit() {
                 object_size: package_size,
                 max_object_size: max_move_package_size
             },
-            command: None,
+            command: Some(0),
         }
     )
 }
@@ -1863,7 +1864,8 @@ async fn test_missing_package() {
         gas_object_ref,
         vec![],
         MAX_GAS,
-    );
+    )
+    .unwrap();
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let result = authority_state
         .handle_transaction(&epoch_store, transaction)
@@ -1907,7 +1909,8 @@ async fn test_type_argument_dependencies() {
         gas1,
         vec![],
         MAX_GAS,
-    );
+    )
+    .unwrap();
     let transaction = to_sender_signed_transaction(data, &s1_key);
     authority_state
         .handle_transaction(&epoch_store, transaction)
@@ -1930,7 +1933,8 @@ async fn test_type_argument_dependencies() {
         gas2,
         vec![],
         MAX_GAS,
-    );
+    )
+    .unwrap();
     let transaction = to_sender_signed_transaction(data, &s2_key);
     authority_state
         .handle_transaction(&epoch_store, transaction)
@@ -1953,7 +1957,8 @@ async fn test_type_argument_dependencies() {
         gas3,
         vec![],
         MAX_GAS,
-    );
+    )
+    .unwrap();
     let transaction = to_sender_signed_transaction(data, &s3_key);
     let result = authority_state
         .handle_transaction(&epoch_store, transaction)
@@ -2902,7 +2907,8 @@ async fn test_invalid_mutable_clock_parameter() {
             mutable: true,
         })],
         MAX_GAS,
-    );
+    )
+    .unwrap();
 
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
 
@@ -2942,7 +2948,8 @@ async fn test_valid_immutable_clock_parameter() {
             mutable: false,
         })],
         MAX_GAS,
-    );
+    )
+    .unwrap();
 
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
     authority_state
@@ -3219,7 +3226,8 @@ async fn test_store_revert_wrap_move_call() {
             create_effects.gas_object().0,
             vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(object_v0))],
             MAX_GAS,
-        ),
+        )
+        .unwrap(),
         &sender_key,
     );
 
@@ -3304,7 +3312,8 @@ async fn test_store_revert_unwrap_move_call() {
             wrap_effects.gas_object().0,
             vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(wrapper_v0))],
             MAX_GAS,
-        ),
+        )
+        .unwrap(),
         &sender_key,
     );
 
@@ -3403,7 +3412,8 @@ async fn create_and_retrieve_df_info(function: &IdentStr) -> (SuiAddress, Vec<Dy
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(inner_v0)),
             ],
             MAX_GAS,
-        ),
+        )
+        .unwrap(),
         &sender_key,
     );
 
@@ -3545,7 +3555,8 @@ async fn test_store_revert_add_ofield() {
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(inner_v0)),
             ],
             MAX_GAS,
-        ),
+        )
+        .unwrap(),
         &sender_key,
     );
 
@@ -3655,7 +3666,8 @@ async fn test_store_revert_remove_ofield() {
             add_effects.gas_object().0,
             vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(outer_v1))],
             MAX_GAS,
-        ),
+        )
+        .unwrap(),
         &sender_key,
     );
 
@@ -4238,6 +4250,52 @@ pub async fn call_move_(
         gas_object_ref,
         args,
         MAX_GAS,
+    )
+    .unwrap();
+
+    let transaction = to_sender_signed_transaction(data, sender_key);
+    let signed_effects =
+        send_and_confirm_transaction_(authority, fullnode, transaction, with_shared)
+            .await?
+            .1;
+    Ok(signed_effects.into_data())
+}
+
+pub async fn execute_programmable_transaction(
+    authority: &AuthorityState,
+    gas_object_id: &ObjectID,
+    sender: &SuiAddress,
+    sender_key: &AccountKeyPair,
+    pt: ProgrammableTransaction,
+) -> SuiResult<TransactionEffects> {
+    execute_programmable_transaction_(
+        authority,
+        None,
+        gas_object_id,
+        sender,
+        sender_key,
+        pt,
+        /* with_shared */ false,
+    )
+    .await
+}
+
+pub async fn execute_programmable_transaction_(
+    authority: &AuthorityState,
+    fullnode: Option<&AuthorityState>,
+    gas_object_id: &ObjectID,
+    sender: &SuiAddress,
+    sender_key: &AccountKeyPair,
+    pt: ProgrammableTransaction,
+    with_shared: bool, // Move call includes shared objects
+) -> SuiResult<TransactionEffects> {
+    let gas_object = authority.get_object(gas_object_id).await.unwrap();
+    let gas_object_ref = gas_object.unwrap().compute_object_reference();
+    let data = TransactionData::new_programmable_with_dummy_gas_price(
+        *sender,
+        vec![gas_object_ref],
+        pt,
+        MAX_GAS,
     );
 
     let transaction = to_sender_signed_transaction(data, sender_key);
@@ -4282,7 +4340,8 @@ pub async fn call_move_with_gas_coins(
         args,
         gas_budget,
         DUMMY_GAS_PRICE,
-    );
+    )
+    .unwrap();
 
     let transaction = to_sender_signed_transaction(data, sender_key);
     let signed_effects =
@@ -4449,7 +4508,8 @@ async fn make_test_transaction(
             CallArg::Pure(arg_value.to_le_bytes().to_vec()),
         ],
         MAX_GAS,
-    );
+    )
+    .unwrap();
 
     let transaction = to_sender_signed_transaction(data, sender_key);
 

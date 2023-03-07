@@ -464,7 +464,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             .select_gas(signer, gas, gas_budget, vec![coin_object_id], gas_price)
             .await?;
 
-        Ok(TransactionData::new_move_call(
+        TransactionData::new_move_call(
             signer,
             SUI_FRAMEWORK_OBJECT_ID,
             coin::PAY_MODULE_NAME.to_owned(),
@@ -477,7 +477,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             ],
             gas_budget,
             gas_price,
-        ))
+        )
     }
 
     // TODO: consolidate this with Pay transactions
@@ -502,7 +502,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             .select_gas(signer, gas, gas_budget, vec![coin_object_id], gas_price)
             .await?;
 
-        Ok(TransactionData::new_move_call(
+        TransactionData::new_move_call(
             signer,
             SUI_FRAMEWORK_OBJECT_ID,
             coin::PAY_MODULE_NAME.to_owned(),
@@ -515,7 +515,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             ],
             gas_budget,
             gas_price,
-        ))
+        )
     }
 
     // TODO: consolidate this with Pay transactions
@@ -547,7 +547,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             )
             .await?;
 
-        Ok(TransactionData::new_move_call(
+        TransactionData::new_move_call(
             signer,
             SUI_FRAMEWORK_OBJECT_ID,
             coin::PAY_MODULE_NAME.to_owned(),
@@ -560,7 +560,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             ],
             gas_budget,
             gas_price,
-        ))
+        )
     }
 
     pub async fn batch_transaction(
@@ -671,7 +671,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         }
         .to_owned();
 
-        Ok(TransactionData::new_move_call(
+        TransactionData::new_move_call(
             signer,
             SUI_FRAMEWORK_OBJECT_ID,
             SUI_SYSTEM_MODULE_NAME.to_owned(),
@@ -690,7 +690,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             ],
             gas_budget,
             gas_price,
-        ))
+        )
     }
 
     pub async fn request_withdraw_delegation(
@@ -706,7 +706,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         let gas = self
             .select_gas(signer, gas, gas_budget, vec![], gas_price)
             .await?;
-        Ok(TransactionData::new_move_call(
+        TransactionData::new_move_call(
             signer,
             SUI_FRAMEWORK_OBJECT_ID,
             SUI_SYSTEM_MODULE_NAME.to_owned(),
@@ -723,7 +723,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             ],
             gas_budget,
             gas_price,
-        ))
+        )
     }
 
     // TODO: we should add retrial to reduce the transaction building error rate
