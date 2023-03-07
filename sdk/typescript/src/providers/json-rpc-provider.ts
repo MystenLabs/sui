@@ -55,6 +55,7 @@ import {
   DryRunTransactionResponse,
   SuiObjectDataOptions,
   SuiSystemStateSummary,
+  CoinStruct,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -439,15 +440,13 @@ export class JsonRpcProvider extends Provider {
     amount: bigint,
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = [],
-  ): Promise<SuiObjectResponse[]> {
+  ): Promise<CoinStruct[]> {
     const coinsStruct = await this.getCoins(address, typeArg);
-    const coinIds = coinsStruct.data.map((c) => c.coinObjectId);
-    const coins = await this.getObjectBatch(coinIds, { showContent: true });
-    return (await Coin.selectCoinsWithBalanceGreaterThanOrEqual(
-      coins,
+    return Coin.selectCoinsWithBalanceGreaterThanOrEqual(
+      coinsStruct.data,
       amount,
       exclude,
-    )) as SuiObjectResponse[];
+    );
   }
 
   async selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
@@ -455,15 +454,15 @@ export class JsonRpcProvider extends Provider {
     amount: bigint,
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = [],
-  ): Promise<SuiObjectResponse[]> {
+  ): Promise<CoinStruct[]> {
     const coinsStruct = await this.getCoins(address, typeArg);
-    const coinIds = coinsStruct.data.map((c) => c.coinObjectId);
-    const coins = await this.getObjectBatch(coinIds, { showContent: true });
-    return (await Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
+    const coins = coinsStruct.data;
+
+    return Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
       coins,
       amount,
       exclude,
-    )) as SuiObjectResponse[];
+    );
   }
 
   async getObject(

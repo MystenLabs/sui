@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { useMutation } from '@tanstack/react-query';
+import { SUI_FRAMEWORK_ADDRESS } from '@mysten/sui.js';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import cl from 'classnames';
 import { useMemo } from 'react';
 import { toast } from 'react-hot-toast';
@@ -13,8 +14,9 @@ import { SuiApp, type DAppEntry } from './SuiApp';
 import { SuiAppEmpty } from './SuiAppEmpty';
 import { Button } from '_app/shared/ButtonUI';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
-import { useAppDispatch, useAppSelector } from '_hooks';
-import { mintDemoNFT } from '_redux/slices/sui-objects';
+import { useAppSelector, useSigner } from '_hooks';
+import { DEFAULT_MINT_NFT_GAS_BUDGET } from '_redux/slices/sui-objects/Coin';
+import { DEFAULT_NFT_IMAGE } from '_src/shared/constants';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { trackEvent } from '_src/shared/plausible';
 import { prepareLinkToCompare } from '_src/shared/utils';
@@ -22,16 +24,35 @@ import { prepareLinkToCompare } from '_src/shared/utils';
 import st from './Playground.module.scss';
 
 function AppsPlayGround() {
-    const dispatch = useAppDispatch();
+    const signer = useSigner();
+    const queryClient = useQueryClient();
     const ecosystemApps =
         useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value ?? [];
     const mintMutation = useMutation({
         mutationKey: ['mint-nft'],
-        mutationFn: async () => {
+        mutationFn: () => {
+            if (!signer) throw new Error('No signer found');
             trackEvent('MintDevnetNFT');
-            await dispatch(mintDemoNFT()).unwrap();
+            return signer.signAndExecuteTransaction({
+                kind: 'moveCall',
+                data: {
+                    packageObjectId: SUI_FRAMEWORK_ADDRESS,
+                    module: 'devnet_nft',
+                    function: 'mint',
+                    typeArguments: [],
+                    arguments: [
+                        'Example NFT',
+                        'An NFT created by Sui Wallet',
+                        DEFAULT_NFT_IMAGE,
+                    ],
+                    gasBudget: DEFAULT_MINT_NFT_GAS_BUDGET,
+                },
+            });
         },
-        onSuccess: () => toast.success('Minted successfully'),
+        onSuccess: () => {
+            queryClient.invalidateQueries(['objects-owned']);
+            toast.success('Minted successfully');
+        },
         onError: () => toast.error('Minting failed. Try again in a bit.'),
     });
     const allPermissions = useAppSelector(permissionsSelectors.selectAll);
