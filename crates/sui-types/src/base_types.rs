@@ -144,7 +144,7 @@ impl ObjectInfo {
         }
     }
 }
-const PACKAGE: &str = "Package";
+const PACKAGE: &str = "package";
 impl ObjectType {
     pub fn is_gas_coin(&self) -> bool {
         match self {
