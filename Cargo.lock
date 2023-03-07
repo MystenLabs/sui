@@ -5583,6 +5583,7 @@ dependencies = [
  "futures",
  "indexmap",
  "mockall",
+ "mysten-metrics",
  "mysten-network",
  "mysten-util-mem",
  "narwhal-config",

@@ -35,7 +35,7 @@ use types::{
 pub mod certificate_fetcher_tests;
 
 // Maximum number of certificates to fetch with one request.
-const MAX_CERTIFICATES_TO_FETCH: usize = 2000;
+const MAX_CERTIFICATES_TO_FETCH: usize = 10000;
 // Seconds to wait for a response before issuing another parallel fetch request.
 const PARALLEL_FETCH_REQUEST_INTERVAL_SECS: Duration = Duration::from_secs(5);
 // The timeout for an iteration of parallel fetch requests over all peers would be
@@ -211,6 +211,11 @@ impl CertificateFetcher {
         // Skip fetching certificates at or below the gc round.
         let gc_round = self.gc_round();
         // Skip fetching certificates that already exist locally.
+        let timer = self
+            .state
+            .metrics
+            .scan_for_written_rounds_latency
+            .start_timer();
         let mut written_rounds = BTreeMap::<PublicKey, BTreeSet<Round>>::new();
         for (origin, _) in self.committee.authorities() {
             // Initialize written_rounds for all authorities, because the handler only sends back
@@ -231,6 +236,8 @@ impl CertificateFetcher {
                 return;
             }
         };
+
+        drop(timer);
 
         self.targets.retain(|origin, target_round| {
             let last_written_round = written_rounds.get(origin).map_or(gc_round, |rounds| {
@@ -424,6 +431,7 @@ async fn process_certificates_helper(
             let sync = synchronizer.clone();
             // Use threads dedicated to computation heavy work.
             spawn_blocking(move || {
+                let _verify_scope = monitored_scope("AK-sanitize-fetched-certificate");
                 for c in &certs {
                     sync.sanitize_certificate(c)?;
                 }

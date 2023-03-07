@@ -310,6 +310,8 @@ pub struct PrimaryMetrics {
     pub proposer_batch_latency: Histogram,
     /// Time it takes for a header to be materialised to a certificate
     pub header_to_certificate_latency: Histogram,
+    /// Time it takes for written rounds to be fetched from local cert store
+    pub scan_for_written_rounds_latency: Histogram,
 }
 
 impl PrimaryMetrics {
@@ -459,6 +461,12 @@ impl PrimaryMetrics {
             header_to_certificate_latency: register_histogram_with_registry!(
                 "header_to_certificate_latency",
                 "Time it takes for a header to be materialised to a certificate",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
+            scan_for_written_rounds_latency: register_histogram_with_registry!(
+                "scan_for_written_rounds_latency",
+                "Time it takes for written rounds to be fetched from local cert store",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             ).unwrap()
