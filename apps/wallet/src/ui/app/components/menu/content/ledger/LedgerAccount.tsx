@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { useFormatCoin } from '@mysten/core';
 import { CheckFill16 } from '@mysten/icons';
 import { formatAddress, type SuiAddress, SUI_TYPE_ARG } from '@mysten/sui.js';
