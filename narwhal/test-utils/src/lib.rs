@@ -527,7 +527,7 @@ pub fn mock_certificate_with_epoch(
         .epoch(epoch)
         .parents(parents)
         .payload(fixture_payload(1))
-        .build(&KeyPair::generate(&mut rand::thread_rng()))
+        .build()
         .unwrap();
     let certificate = Certificate::new_unsigned(committee, header, Vec::new()).unwrap();
     (certificate.digest(), certificate)
@@ -541,15 +541,14 @@ pub fn mock_signed_certificate(
     parents: BTreeSet<CertificateDigest>,
     committee: &Committee,
 ) -> (CertificateDigest, Certificate) {
-    let author = signers.iter().find(|kp| *kp.public() == origin).unwrap();
     let header_builder = HeaderBuilder::default()
-        .author(origin.clone())
+        .author(origin)
         .payload(fixture_payload(1))
         .round(round)
         .epoch(0)
         .parents(parents);
 
-    let header = header_builder.build(author).unwrap();
+    let header = header_builder.build().unwrap();
 
     let cert = Certificate::new_unsigned(committee, header.clone(), Vec::new()).unwrap();
 
@@ -718,7 +717,7 @@ impl CommitteeFixture {
                     .epoch(0)
                     .parents(parents.clone())
                     .with_payload_batch(fixture_batch_with_transactions(10), 0, 0)
-                    .build(a.keypair())
+                    .build()
                     .unwrap()
             })
             .collect();
@@ -833,7 +832,7 @@ impl AuthorityFixture {
     pub fn header(&self, committee: &Committee) -> Header {
         self.header_builder(committee)
             .payload(Default::default())
-            .build(&self.keypair)
+            .build()
             .unwrap()
     }
 
@@ -841,7 +840,7 @@ impl AuthorityFixture {
         self.header_builder(committee)
             .payload(Default::default())
             .round(round)
-            .build(&self.keypair)
+            .build()
             .unwrap()
     }
 
