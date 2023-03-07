@@ -4345,15 +4345,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "prometheus-closure-metric"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "prometheus",
- "protobuf",
-]
-
-[[package]]
 name = "proptest"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

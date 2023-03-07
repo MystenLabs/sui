@@ -4,7 +4,6 @@ members = [
     "crates/mysten-network",
     "crates/mysten-util-mem",
     "crates/mysten-util-mem-derive",
-    "crates/prometheus-closure-metric",
     "crates/sui-protocol-constants",
     "crates/telemetry-subscribers",
     "crates/typed-store",
