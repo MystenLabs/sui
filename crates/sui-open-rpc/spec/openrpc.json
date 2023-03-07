@@ -1656,7 +1656,7 @@
           "name": "Governance Read API"
         }
       ],
-      "description": "Return all validators available for stake delegation.",
+      "description": "Return all validators available for stake delegation. This is now deprecated in favor of extracting it from getLatestSuiSystemState.",
       "params": [],
       "result": {
         "name": "Vec<ValidatorMetadata>",
@@ -1667,7 +1667,8 @@
             "$ref": "#/components/schemas/ValidatorMetadata"
           }
         }
-      }
+      },
+      "deprecated": true
     },
     {
       "name": "sui_mergeCoins",

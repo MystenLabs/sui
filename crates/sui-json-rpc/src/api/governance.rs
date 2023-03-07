@@ -22,7 +22,8 @@ pub trait GovernanceReadApi {
     async fn get_delegated_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>>;
 
     /// Return all validators available for stake delegation.
-    #[method(name = "getValidators")]
+    /// This is now deprecated in favor of extracting it from getLatestSuiSystemState.
+    #[method(name = "getValidators", deprecated)]
     async fn get_validators(&self) -> RpcResult<Vec<ValidatorMetadata>>;
 
     /// Return the committee information for the asked `epoch`.
