@@ -23,7 +23,7 @@ use types::{error::DagError, Certificate, PreSubscribedBroadcastSender};
 async fn accept_certificates() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().last().unwrap();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();
@@ -120,7 +120,7 @@ async fn accept_suspended_certificates() {
         .randomize_ports(true)
         .committee_size(NonZeroUsize::new(NUM_AUTHORITIES).unwrap())
         .build();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
@@ -207,7 +207,7 @@ async fn accept_suspended_certificates() {
 async fn synchronizer_recover_basic() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().last().unwrap();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();
@@ -321,7 +321,7 @@ async fn synchronizer_recover_basic() {
 async fn synchronizer_recover_partial_certs() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().last().unwrap();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();
@@ -429,7 +429,7 @@ async fn synchronizer_recover_partial_certs() {
 async fn synchronizer_recover_previous_round() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().last().unwrap();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();
@@ -539,7 +539,7 @@ async fn deliver_certificate_using_dag() {
     let fixture = CommitteeFixture::builder().build();
     let name = fixture.authorities().next().unwrap().public_key();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let (_, certificates_store, payload_store) = create_db_stores();
@@ -615,7 +615,7 @@ async fn deliver_certificate_using_store() {
     let fixture = CommitteeFixture::builder().build();
     let name = fixture.authorities().next().unwrap().public_key();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let (_, certificates_store, payload_store) = create_db_stores();
@@ -678,7 +678,7 @@ async fn deliver_certificate_not_found_parents() {
     let fixture = CommitteeFixture::builder().build();
     let name = fixture.authorities().next().unwrap().public_key();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let (_, certificates_store, payload_store) = create_db_stores();
@@ -744,7 +744,7 @@ async fn sync_batches_drops_old() {
         .randomize_ports(true)
         .committee_size(NonZeroUsize::new(4).unwrap())
         .build();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
@@ -820,7 +820,7 @@ async fn gc_suspended_certificates() {
         .randomize_ports(true)
         .committee_size(NonZeroUsize::new(NUM_AUTHORITIES).unwrap())
         .build();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();

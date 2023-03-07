@@ -68,6 +68,7 @@ async fn test_recovery() {
 
     let _consensus_handle = Consensus::spawn(
         committee,
+        GC_DEPTH,
         consensus_store.clone(),
         certificate_store.clone(),
         tx_shutdown.subscribe(),

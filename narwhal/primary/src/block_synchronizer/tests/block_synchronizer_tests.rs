@@ -36,7 +36,7 @@ async fn test_successful_headers_synchronization() {
     // AND the necessary keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
@@ -178,7 +178,7 @@ async fn test_successful_payload_synchronization() {
     // AND the necessary keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
@@ -356,7 +356,7 @@ async fn test_timeout_while_waiting_for_certificates() {
     // AND the necessary keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
@@ -464,7 +464,7 @@ async fn test_reply_with_certificates_already_in_storage() {
     // AND the necessary keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
@@ -564,7 +564,7 @@ async fn test_reply_with_payload_already_in_storage() {
     // AND the necessary keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
@@ -666,7 +666,7 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
     // AND the necessary keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
 

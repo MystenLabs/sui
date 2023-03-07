@@ -20,6 +20,7 @@ use std::collections::VecDeque;
 use std::fmt::{self, Debug, Formatter};
 use std::str::FromStr;
 use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::messages::{CallArg, ObjectArg};
 use sui_types::move_package::MovePackage;
 use sui_verifier::entry_points_verifier::{
     is_tx_context, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID,
@@ -301,6 +302,29 @@ impl std::str::FromStr for SuiJsonValue {
     fn from_str(s: &str) -> Result<Self, anyhow::Error> {
         // Wrap input with json! if serde_json fails, the failure usually cause by missing quote escapes.
         SuiJsonValue::new(serde_json::from_str(s).or_else(|_| serde_json::from_value(json!(s)))?)
+    }
+}
+
+impl TryFrom<CallArg> for SuiJsonValue {
+    type Error = anyhow::Error;
+
+    fn try_from(value: CallArg) -> Result<Self, Self::Error> {
+        use serde_json::Value;
+        match value {
+            CallArg::Pure(p) => SuiJsonValue::from_bcs_bytes(&p),
+            CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))
+            | CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
+                SuiJsonValue::new(Value::String(Hex::encode(id)))
+            }
+            CallArg::ObjVec(vec) => SuiJsonValue::new(Value::Array(
+                vec.iter()
+                    .map(|obj_arg| match obj_arg {
+                        ObjectArg::ImmOrOwnedObject((id, _, _))
+                        | ObjectArg::SharedObject { id, .. } => Value::String(Hex::encode(id)),
+                    })
+                    .collect(),
+            )),
+        }
     }
 }
 

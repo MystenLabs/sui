@@ -47,7 +47,7 @@ module sui::tx_context {
     }
 
     /// Return the epoch start time as a unix timestamp in milliseconds.
-    public fun epoch_timestamp(self: &TxContext): u64 {
+    public fun epoch_timestamp_ms(self: &TxContext): u64 {
        self.epoch_timestamp_ms
     }
 

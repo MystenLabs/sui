@@ -22,17 +22,20 @@ export class ExampleNFT {
         description?: string,
         imageUrl?: string
     ): Promise<SuiTransactionResponse> {
-        return await signer.executeMoveCall({
-            packageObjectId: '0x2',
-            module: 'devnet_nft',
-            function: 'mint',
-            typeArguments: [],
-            arguments: [
-                name || 'Example NFT',
-                description || 'An NFT created by Sui Wallet',
-                imageUrl || DEFAULT_NFT_IMAGE,
-            ],
-            gasBudget: 2000,
+        return await signer.signAndExecuteTransaction({
+            kind: 'moveCall',
+            data: {
+                packageObjectId: '0x2',
+                module: 'devnet_nft',
+                function: 'mint',
+                typeArguments: [],
+                arguments: [
+                    name || 'Example NFT',
+                    description || 'An NFT created by Sui Wallet',
+                    imageUrl || DEFAULT_NFT_IMAGE,
+                ],
+                gasBudget: 2000,
+            },
         });
     }
 }

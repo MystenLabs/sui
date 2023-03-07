@@ -20,8 +20,6 @@ use crate::authority::authority_store_types::{
 };
 use typed_store_derive::DBMapUtils;
 
-const CURRENT_EPOCH_KEY: u64 = 0;
-
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
 #[derive(DBMapUtils)]
 pub struct AuthorityPerpetualTables {
@@ -96,11 +94,8 @@ pub struct AuthorityPerpetualTables {
     // and never changed
     pub(crate) root_state_hash_by_epoch: DBMap<EpochId, (CheckpointSequenceNumber, Accumulator)>,
 
-    /// A singleton table that stores the current epoch number. This is used only for the purpose of
-    /// crash recovery so that when we restart we know which epoch we are at. This is needed because
-    /// there will be moments where the on-chain epoch doesn't match with the per-epoch table epoch.
-    /// This number should match the epoch of the per-epoch table in the authority store.
-    current_epoch: DBMap<u64, u64>,
+    /// Parameters of the system fixed at the epoch start
+    pub(crate) epoch_start_configuration: DBMap<(), EpochStartConfiguration>,
 }
 
 impl AuthorityPerpetualTables {
@@ -168,13 +163,22 @@ impl AuthorityPerpetualTables {
 
     pub fn get_recovery_epoch_at_restart(&self) -> SuiResult<EpochId> {
         Ok(self
-            .current_epoch
-            .get(&CURRENT_EPOCH_KEY)?
-            .expect("Must have current epoch."))
+            .epoch_start_configuration
+            .get(&())?
+            .expect("Must have current epoch.")
+            .epoch_id())
     }
 
-    pub fn set_recovery_epoch(&self, epoch: EpochId) -> SuiResult {
-        self.current_epoch.insert(&CURRENT_EPOCH_KEY, &epoch)?;
+    pub async fn set_epoch_start_configuration(
+        &self,
+        epoch_start_configuration: &EpochStartConfiguration,
+    ) -> SuiResult {
+        let mut wb = self.epoch_start_configuration.batch();
+        wb = wb.insert_batch(
+            &self.epoch_start_configuration,
+            std::iter::once(((), epoch_start_configuration)),
+        )?;
+        wb.write()?;
         Ok(())
     }
 

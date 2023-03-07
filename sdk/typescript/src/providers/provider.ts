@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Transaction } from '../builder';
 import { SerializedSignature } from '../cryptography/signature';
 import { HttpHeaders } from '../rpc/client';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
@@ -47,6 +48,7 @@ import {
   DryRunTransactionResponse,
   SuiTransactionResponse,
   SuiObjectDataOptions,
+  SuiSystemStateSummary,
 } from '../types';
 
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
@@ -202,6 +204,11 @@ export abstract class Provider {
    */
   abstract getObjectRef(objectId: string): Promise<SuiObjectRef | undefined>;
 
+  abstract getObjectBatch(
+    objectIds: ObjectId[],
+    options?: SuiObjectDataOptions,
+  ): Promise<SuiObjectResponse[]>;
+
   // Transactions
   /**
    * Get transaction digests for a given range
@@ -315,7 +322,7 @@ export abstract class Provider {
   abstract unsubscribeEvent(id: SubscriptionId): Promise<boolean>;
 
   /**
-   * Runs the transaction in dev-inpsect mode. Which allows for nearly any
+   * Runs the transaction in dev-inspect mode. Which allows for nearly any
    * transaction (or Move call) with any arguments. Detailed results are
    * provided, including both the transaction effects and any return values.
    *
@@ -328,7 +335,7 @@ export abstract class Provider {
    */
   abstract devInspectTransaction(
     sender: SuiAddress,
-    txn: UnserializedSignableTransaction | string | Uint8Array,
+    txn: Transaction | UnserializedSignableTransaction | string | Uint8Array,
     gasPrice: number | null,
     epoch: number | null,
   ): Promise<DevInspectResults>;
@@ -383,6 +390,11 @@ export abstract class Provider {
    * Return the content of `0x5` object
    */
   abstract getSuiSystemState(): Promise<SuiSystemState>;
+
+  /**
+   * Return the latest system state content.
+   */
+  abstract getLatestSuiSystemState(): Promise<SuiSystemStateSummary>;
 
   /**
    * Get the sequence number of the latest checkpoint that has been executed

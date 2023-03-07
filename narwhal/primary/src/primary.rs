@@ -26,7 +26,7 @@ use anemo_tower::{
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
 use async_trait::async_trait;
-use config::{Committee, Parameters, SharedWorkerCache, WorkerId, WorkerInfo};
+use config::{Committee, Parameters, WorkerCache, WorkerId, WorkerInfo};
 use consensus::dag::Dag;
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey, Signature};
 use fastcrypto::{
@@ -101,7 +101,7 @@ impl Primary {
         signer: KeyPair,
         network_signer: NetworkKeyPair,
         committee: Committee,
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         parameters: Parameters,
         header_store: Store<HeaderDigest, Header>,
         certificate_store: CertificateStore,
@@ -203,7 +203,6 @@ impl Primary {
         let signature_service = SignatureService::new(signer);
 
         let our_workers = worker_cache
-            .load()
             .workers
             .get(&name)
             .expect("Our public key is not in the worker cache")
@@ -278,7 +277,6 @@ impl Primary {
         let epoch_string: String = committee.epoch.to_string();
 
         let our_worker_peer_ids = worker_cache
-            .load()
             .our_workers(&name)
             .unwrap()
             .into_iter()
@@ -391,7 +389,7 @@ impl Primary {
         let mut peer_types = HashMap::new();
 
         // Add my workers
-        for worker in worker_cache.load().our_workers(&name).unwrap() {
+        for worker in worker_cache.our_workers(&name).unwrap() {
             let (peer_id, address) =
                 Self::add_peer_in_network(&network, worker.name, &worker.worker_address);
             peer_types.insert(peer_id, "our_worker".to_string());
@@ -402,7 +400,7 @@ impl Primary {
         }
 
         // Add others workers
-        for (_, worker) in worker_cache.load().others_workers(&name) {
+        for (_, worker) in worker_cache.others_workers(&name) {
             let (peer_id, address) =
                 Self::add_peer_in_network(&network, worker.name, &worker.worker_address);
             peer_types.insert(peer_id, "other_worker".to_string());
@@ -643,7 +641,7 @@ struct PrimaryReceiverHandler {
     /// The public key of this primary.
     name: PublicKey,
     committee: Committee,
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
     synchronizer: Arc<Synchronizer>,
     /// Service to sign headers.
     signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
@@ -1014,10 +1012,12 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         );
 
         let mut fetch_queue = BinaryHeap::new();
+        const MAX_SKIP_ROUNDS: usize = 1000;
         for (origin, rounds) in &skip_rounds {
-            if rounds.len() > 50 {
+            if rounds.len() > MAX_SKIP_ROUNDS {
                 warn!(
-                    "{} rounds are available locally for origin {}. elapsed = {}ms",
+                    "Peer has sent {} rounds to skip on origin {}, indicating peer's problem with \
+                    committing or keeping track of GC rounds. elapsed = {}ms",
                     rounds.len(),
                     origin,
                     time_start.elapsed().as_millis(),

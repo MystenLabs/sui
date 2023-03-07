@@ -13,6 +13,7 @@ import {
   record,
   any,
   optional,
+  assign,
 } from 'superstruct';
 import {
   ObjectId,
@@ -119,18 +120,16 @@ export const CheckpointEvent = union([bigint(), number()]);
 export type CheckpointEvent = Infer<typeof EpochChangeEvent>;
 
 export const SuiEvent = union([
-  object({ type: literal('moveEvent'), content: MoveEvent }),
-  object({ type: literal('publish'), content: PublishEvent }),
-  object({
-    type: literal('coinBalanceChange'),
-    content: CoinBalanceChangeEvent,
-  }),
-  object({ type: literal('transferObject'), content: TransferObjectEvent }),
-  object({ type: literal('mutateObject'), content: MutateObjectEvent }),
-  object({ type: literal('deleteObject'), content: DeleteObjectEvent }),
-  object({ type: literal('newObject'), content: NewObjectEvent }),
-  object({ type: literal('epochChange'), content: EpochChangeEvent }),
-  object({ type: literal('checkpoint'), content: CheckpointEvent }),
+  assign(MoveEvent, object({ eventType: literal('moveEvent') })),
+  assign(PublishEvent, object({ eventType: literal('publish') })),
+  assign(CoinBalanceChangeEvent, object({
+    eventType: literal('coinBalanceChange') })),
+  assign(TransferObjectEvent, object({ eventType: literal('transferObject') })),
+  assign(MutateObjectEvent, object({ eventType: literal('mutateObject') })),
+  assign(DeleteObjectEvent, object({ eventType: literal('deleteObject') })),
+  assign(NewObjectEvent, object({ eventType: literal('newObject') })),
+  object({ eventType: literal('epochChange'), ep: EpochChangeEvent }),
+  object({ eventType: literal('checkpoint'), ch: CheckpointEvent }),
 ]);
 export type SuiEvent = Infer<typeof SuiEvent>;
 

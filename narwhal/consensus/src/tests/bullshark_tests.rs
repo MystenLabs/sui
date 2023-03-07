@@ -65,6 +65,7 @@ async fn commit_one() {
 
     let _consensus_handle = Consensus::spawn(
         committee,
+        gc_depth,
         store,
         cert_store,
         tx_shutdown.subscribe(),
@@ -141,6 +142,7 @@ async fn dead_node() {
 
     let _consensus_handle = Consensus::spawn(
         committee,
+        gc_depth,
         store,
         cert_store,
         tx_shutdown.subscribe(),
@@ -284,6 +286,7 @@ async fn not_enough_support() {
 
     let _consensus_handle = Consensus::spawn(
         committee,
+        gc_depth,
         store,
         cert_store,
         tx_shutdown.subscribe(),
@@ -397,6 +400,7 @@ async fn missing_leader() {
 
     let _consensus_handle = Consensus::spawn(
         committee,
+        gc_depth,
         store,
         cert_store,
         tx_shutdown.subscribe(),
@@ -478,6 +482,7 @@ async fn committed_round_after_restart() {
 
         let handle = Consensus::spawn(
             committee.clone(),
+            gc_depth,
             store.clone(),
             cert_store.clone(),
             tx_shutdown.subscribe(),
@@ -753,6 +758,7 @@ async fn restart_with_new_committee() {
 
         let handle = Consensus::spawn(
             committee.clone(),
+            gc_depth,
             store,
             cert_store,
             tx_shutdown.subscribe(),

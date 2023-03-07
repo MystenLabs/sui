@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //# publish
+// allowed, anything can be done with a UID after unpacking, as long as it isn't repacked
 module 0x0.m {
     import 0x2.object;
 

@@ -6,8 +6,8 @@ use crate::models::addresses::Address;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::events::Event;
 use crate::models::move_calls::MoveCall;
-use crate::models::objects::Object;
-use crate::models::owners::OwnerChange;
+use crate::models::objects::{DeletedObject, Object, ObjectStatus};
+use crate::models::owners::ObjectOwner;
 use crate::models::packages::Package;
 use crate::models::transactions::Transaction;
 use async_trait::async_trait;
@@ -98,7 +98,7 @@ pub trait IndexerStore {
 pub struct CheckpointData {
     pub checkpoint: RpcCheckpoint,
     pub transactions: Vec<SuiTransactionResponse>,
-    pub objects: Vec<SuiObjectData>,
+    pub all_mutated_objects: Vec<(ObjectStatus, SuiObjectData)>,
 }
 
 // Per checkpoint indexing
@@ -106,14 +106,18 @@ pub struct TemporaryCheckpointStore {
     pub checkpoint: Checkpoint,
     pub transactions: Vec<Transaction>,
     pub events: Vec<Event>,
-    pub objects: Vec<Object>,
-    pub owner_changes: Vec<OwnerChange>,
+    pub objects_changes: Vec<TransactionObjectChanges>,
     pub addresses: Vec<Address>,
     pub packages: Vec<Package>,
     pub move_calls: Vec<MoveCall>,
 }
 
+pub struct TransactionObjectChanges {
+    pub mutated_objects: Vec<Object>,
+    pub deleted_objects: Vec<DeletedObject>,
+}
+
 // Per epoch indexing
 pub struct TemporaryEpochStore {
-    pub owner_index: Vec<OwnerChange>,
+    pub owner_index: Vec<ObjectOwner>,
 }

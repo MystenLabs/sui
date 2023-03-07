@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{errors::SubscriberResult, metrics::ExecutorMetrics, ExecutionState};
 
-use config::{Committee, SharedWorkerCache, WorkerId};
+use config::{Committee, WorkerCache, WorkerId};
 use crypto::{NetworkPublicKey, PublicKey};
 
 use futures::stream::FuturesOrdered;
@@ -51,7 +51,7 @@ struct Fetcher<Network> {
 pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
     name: PublicKey,
     network: oneshot::Receiver<anemo::Network>,
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
     committee: Committee,
     mut shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
     rx_sequence: metered_channel::Receiver<CommittedSubDag>,
@@ -118,7 +118,7 @@ async fn run_notify<State: ExecutionState + Send + Sync + 'static>(
 async fn create_and_run_subscriber(
     name: PublicKey,
     network: oneshot::Receiver<anemo::Network>,
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
     committee: Committee,
     rx_shutdown: ConditionalBroadcastReceiver,
     rx_sequence: metered_channel::Receiver<CommittedSubDag>,
@@ -425,7 +425,7 @@ pub trait SubscriberNetwork: Send + Sync {
 struct SubscriberNetworkImpl {
     name: PublicKey,
     network: anemo::Network,
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
     committee: Committee,
 }
 
@@ -433,7 +433,6 @@ struct SubscriberNetworkImpl {
 impl SubscriberNetwork for SubscriberNetworkImpl {
     fn my_worker(&self, worker_id: &WorkerId) -> NetworkPublicKey {
         self.worker_cache
-            .load()
             .worker(&self.name, worker_id)
             .expect("Own worker not found in cache")
             .name
@@ -448,7 +447,7 @@ impl SubscriberNetwork for SubscriberNetworkImpl {
         authorities
             .into_iter()
             .filter_map(|authority| {
-                let worker = self.worker_cache.load().worker(&authority, worker_id);
+                let worker = self.worker_cache.worker(&authority, worker_id);
                 match worker {
                     Ok(worker) => Some(worker.name),
                     Err(err) => {

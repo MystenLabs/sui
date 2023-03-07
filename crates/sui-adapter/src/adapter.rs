@@ -29,7 +29,7 @@ use move_core_types::{
 };
 pub use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::{
-    config::VMConfig,
+    config::{VMConfig, VMRuntimeLimitsConfig},
     native_extensions::NativeContextExtensions,
     native_functions::NativeFunctionTable,
     session::{SerializedReturnValues, Session},
@@ -81,9 +81,13 @@ pub fn new_move_vm(
                 max_fields_in_struct: Some(protocol_config.max_fields_in_struct()),
                 max_function_definitions: Some(protocol_config.max_function_definitions()),
                 max_struct_definitions: Some(protocol_config.max_struct_definitions()),
+                max_constant_vector_len: protocol_config.max_move_vector_len(),
             },
             max_binary_format_version: protocol_config.move_binary_format_version(),
             paranoid_type_checks: false,
+            runtime_limits_config: VMRuntimeLimitsConfig {
+                vector_len_max: protocol_config.max_move_vector_len(),
+            },
         },
     )
     .map_err(|_| SuiError::ExecutionInvariantViolation)

@@ -28,7 +28,7 @@ use sui_types::gas_coin::GAS;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
 use sui_types::query::{EventQuery, TransactionQuery};
-use sui_types::sui_system_state::ValidatorMetadata;
+use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadata;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_struct_tag, parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS};
 use test_utils::network::TestClusterBuilder;
@@ -814,6 +814,7 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
                 )
                 .await
                 .unwrap();
+            println!("{:?}", response);
             tx_responses.push(response);
         }
     }

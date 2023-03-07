@@ -1158,3 +1158,83 @@ fn dummy_move_call(
         MAX_GAS,
     )
 }
+
+#[test]
+fn test_unique_input_objects() {
+    let package = ObjectID::random();
+    let p1 = ObjectID::random();
+    let p2 = ObjectID::random();
+    let p3 = ObjectID::random();
+    let p4 = ObjectID::random();
+    let p5 = ObjectID::random();
+    let o1 = random_object_ref();
+    let o2 = random_object_ref();
+    let o3 = random_object_ref();
+    let shared = random_object_ref();
+
+    let mk_st = |package: ObjectID, type_args| {
+        TypeTag::Struct(Box::new(StructTag {
+            address: package.into(),
+            module: Identifier::new("foo").unwrap(),
+            name: Identifier::new("bar").unwrap(),
+            type_params: type_args,
+        }))
+    };
+    let t1 = mk_st(p1, vec![]);
+    let t2 = mk_st(p2, vec![mk_st(p3, vec![]), mk_st(p4, vec![])]);
+    let t3 = TypeTag::Vector(Box::new(mk_st(p5, vec![])));
+    let type_args = vec![t1, t2, t3];
+    let args_1 = vec![
+        CallArg::Object(ObjectArg::ImmOrOwnedObject(o1)),
+        CallArg::ObjVec(vec![
+            ObjectArg::ImmOrOwnedObject(o2),
+            ObjectArg::ImmOrOwnedObject(o3),
+        ]),
+    ];
+    let args_2 = vec![CallArg::Object(ObjectArg::SharedObject {
+        id: shared.0,
+        initial_shared_version: shared.1,
+        mutable: true,
+    })];
+
+    let sender_kp = SuiKeyPair::Ed25519(get_key_pair().1);
+    let sender = (&sender_kp.public()).into();
+
+    let gas_object_ref = random_object_ref();
+    let gas_data = GasData {
+        payment: vec![gas_object_ref],
+        owner: sender,
+        price: DUMMY_GAS_PRICE,
+        budget: 10000,
+    };
+
+    let transaction_data = TransactionData::new_with_gas_data(
+        TransactionKind::Batch(vec![
+            SingleTransactionKind::Call(MoveCall {
+                package,
+                module: Identifier::new("test_module").unwrap(),
+                function: Identifier::new("test_function").unwrap(),
+                type_arguments: type_args.clone(),
+                arguments: args_1,
+            }),
+            SingleTransactionKind::Call(MoveCall {
+                package,
+                module: Identifier::new("test_module").unwrap(),
+                function: Identifier::new("test_function").unwrap(),
+                type_arguments: type_args,
+                arguments: args_2,
+            }),
+        ]),
+        sender,
+        gas_data,
+    );
+
+    let input_objects = transaction_data.input_objects().unwrap();
+    let input_objects_map: BTreeSet<_> = input_objects.iter().cloned().collect();
+    assert_eq!(
+        input_objects.len(),
+        input_objects_map.len(),
+        "Duplicates in {:?}",
+        input_objects
+    );
+}

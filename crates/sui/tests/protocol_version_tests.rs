@@ -362,8 +362,12 @@ mod sim_only_tests {
 
         timeout(Duration::from_secs(60), async move {
             while let Ok((committee, protocol_version)) = epoch_rx.recv().await {
-                info!("received epoch {} {:?}", committee.epoch, protocol_version);
-                match committee.epoch {
+                info!(
+                    "received epoch {} {:?}",
+                    committee.epoch(),
+                    protocol_version
+                );
+                match committee.epoch() {
                     0 => assert_eq!(protocol_version, ProtocolVersion::new(1)),
                     1 => assert_eq!(protocol_version, ProtocolVersion::new(final_version)),
                     2 => break,

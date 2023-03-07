@@ -60,7 +60,7 @@ impl CommittedSubDag {
             .map_or_else(|| false, |x| x == output)
     }
 
-    pub fn round(&self) -> Round {
+    pub fn leader_round(&self) -> Round {
         self.leader.round()
     }
 }
@@ -97,6 +97,8 @@ pub struct CommittedSubDagShell {
     pub certificates: Vec<CertificateDigest>,
     /// The leader certificate's digest responsible of committing this sub-dag.
     pub leader: CertificateDigest,
+    // The round of the leader
+    pub leader_round: Round,
     /// Sequence number of the CommittedSubDag
     pub sub_dag_index: SequenceNumber,
     /// The so far calculated reputation score for nodes
@@ -108,6 +110,7 @@ impl CommittedSubDagShell {
         Self {
             certificates: sub_dag.certificates.iter().map(|x| x.digest()).collect(),
             leader: sub_dag.leader.digest(),
+            leader_round: sub_dag.leader.round(),
             sub_dag_index: sub_dag.sub_dag_index,
             reputation_score: sub_dag.reputation_score.clone(),
         }

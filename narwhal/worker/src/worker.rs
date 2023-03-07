@@ -18,7 +18,7 @@ use anemo_tower::{
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
 use anemo_tower::{rate_limit, set_header::SetResponseHeaderLayer};
-use config::{Committee, Parameters, SharedWorkerCache, WorkerId};
+use config::{Committee, Parameters, WorkerCache, WorkerId};
 use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey, PublicKey};
 use multiaddr::{Multiaddr, Protocol};
 use mysten_metrics::spawn_logged_monitored_task;
@@ -59,7 +59,7 @@ pub struct Worker {
     /// The committee information.
     committee: Committee,
     /// The worker information cache.
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
     /// The configuration parameters
     parameters: Parameters,
     /// The persistent storage.
@@ -72,7 +72,7 @@ impl Worker {
         keypair: NetworkKeyPair,
         id: WorkerId,
         committee: Committee,
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         parameters: Parameters,
         validator: impl TransactionValidator,
         store: Store<BatchDigest, Batch>,
@@ -155,7 +155,6 @@ impl Worker {
         // Receive incoming messages from other workers.
         let address = worker
             .worker_cache
-            .load()
             .worker(&primary_name, &id)
             .expect("Our public key or worker id is not in the worker cache")
             .worker_address;
@@ -277,7 +276,6 @@ impl Worker {
 
         let other_workers = worker
             .worker_cache
-            .load()
             .others_workers_by_id(&primary_name, &id)
             .into_iter()
             .map(|(_, info)| (info.name, info.worker_address));
@@ -372,7 +370,6 @@ impl Worker {
             id,
             worker
                 .worker_cache
-                .load()
                 .worker(&worker.primary_name, &worker.id)
                 .expect("Our public key or worker id is not in the worker cache")
                 .transactions
@@ -455,7 +452,6 @@ impl Worker {
         // We first receive clients' transactions from the network.
         let address = self
             .worker_cache
-            .load()
             .worker(&self.primary_name, &self.id)
             .expect("Our public key or worker id is not in the worker cache")
             .transactions;

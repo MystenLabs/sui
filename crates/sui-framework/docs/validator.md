@@ -613,7 +613,7 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
 Deactivate this validator's staking pool
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_deactivate">deactivate</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_deactivate">deactivate</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, deactivation_epoch: u64)
 </code></pre>
 
 
@@ -622,8 +622,8 @@ Deactivate this validator's staking pool
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_deactivate">deactivate</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, ctx: &<b>mut</b> TxContext) {
-    <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">staking_pool::deactivate_staking_pool</a>(&<b>mut</b> self.<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>, ctx)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_deactivate">deactivate</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, deactivation_epoch: u64) {
+    <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">staking_pool::deactivate_staking_pool</a>(&<b>mut</b> self.<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>, deactivation_epoch)
 }
 </code></pre>
 

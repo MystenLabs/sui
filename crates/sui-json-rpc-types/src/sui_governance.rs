@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use sui_types::base_types::{AuthorityName, EpochId};
 use sui_types::committee::{Committee, StakeUnit};
-use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateInnerV1};
+use sui_types::sui_system_state::sui_system_state_inner_v1::SuiSystemStateInnerV1;
+use sui_types::sui_system_state::SuiSystemState;
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 #[serde(untagged, rename = "SuiSystemState")]

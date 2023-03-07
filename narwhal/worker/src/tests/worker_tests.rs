@@ -43,7 +43,7 @@ impl TransactionValidator for NilTxValidator {
 async fn reject_invalid_clients_transactions() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
 
     let worker_id = 0;
     let my_primary = fixture.authorities().next().unwrap();
@@ -88,11 +88,7 @@ async fn reject_invalid_clients_transactions() {
     // Wait till other services have been able to start up
     tokio::task::yield_now().await;
     // Send enough transactions to create a batch.
-    let address = worker_cache
-        .load()
-        .worker(&name, &worker_id)
-        .unwrap()
-        .transactions;
+    let address = worker_cache.worker(&name, &worker_id).unwrap().transactions;
     let config = mysten_network::config::Config::new();
     let channel = config.connect_lazy(&address).unwrap();
     let mut client = TransactionsClient::new(channel);
@@ -105,7 +101,7 @@ async fn reject_invalid_clients_transactions() {
     let res = client.submit_transaction(txn).await;
     assert!(res.is_err());
 
-    let worker_pk = worker_cache.load().worker(&name, &worker_id).unwrap().name;
+    let worker_pk = worker_cache.worker(&name, &worker_id).unwrap().name;
 
     let batch = batch();
     let batch_message = WorkerBatchMessage {
@@ -137,7 +133,7 @@ async fn reject_invalid_clients_transactions() {
 async fn handle_clients_transactions() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
 
     let worker_id = 0;
     let my_primary = fixture.authorities().next().unwrap();
@@ -215,11 +211,7 @@ async fn handle_clients_transactions() {
     // Wait till other services have been able to start up
     tokio::task::yield_now().await;
     // Send enough transactions to create a batch.
-    let address = worker_cache
-        .load()
-        .worker(&name, &worker_id)
-        .unwrap()
-        .transactions;
+    let address = worker_cache.worker(&name, &worker_id).unwrap().transactions;
     let config = mysten_network::config::Config::new();
     let channel = config.connect_lazy(&address).unwrap();
     let client = TransactionsClient::new(channel);
@@ -259,7 +251,7 @@ async fn get_network_peers_from_admin_server() {
     };
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let authority_1 = fixture.authorities().next().unwrap();
     let name_1 = authority_1.public_key();
     let signer_1 = authority_1.keypair().copy();

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::batch_maker::MAX_PARALLEL_BATCH;
-use config::{Committee, SharedWorkerCache, Stake, WorkerId};
+use config::{Committee, Stake, WorkerCache, WorkerId};
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
@@ -27,7 +27,7 @@ pub struct QuorumWaiter {
     /// The committee information.
     committee: Committee,
     /// The worker information cache.
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
     /// Receiver for shutdown.
     rx_shutdown: ConditionalBroadcastReceiver,
     /// Input Channel to receive commands.
@@ -43,7 +43,7 @@ impl QuorumWaiter {
         name: PublicKey,
         id: WorkerId,
         committee: Committee,
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_quorum_waiter: Receiver<(Batch, tokio::sync::oneshot::Sender<()>)>,
         network: anemo::Network,
@@ -91,7 +91,6 @@ impl QuorumWaiter {
                     // Broadcast the batch to the other workers.
                     let workers: Vec<_> = self
                         .worker_cache
-                        .load()
                         .others_workers_by_id(&self.name, &self.id)
                         .into_iter()
                         .map(|(name, info)| (name, info.name))

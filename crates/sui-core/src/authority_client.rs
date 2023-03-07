@@ -12,7 +12,7 @@ use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
 use sui_network::{api::ValidatorClient, tonic};
 use sui_types::base_types::AuthorityName;
-use sui_types::committee::CommitteeWithNetAddresses;
+use sui_types::committee::CommitteeWithNetworkMetadata;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::sui_system_state::SuiSystemStateInnerBenchmark;
@@ -163,17 +163,20 @@ impl AuthorityAPI for NetworkAuthorityClient {
 }
 
 pub fn make_network_authority_client_sets_from_committee(
-    committee: &CommitteeWithNetAddresses,
+    committee: &CommitteeWithNetworkMetadata,
     network_config: &Config,
 ) -> anyhow::Result<BTreeMap<AuthorityName, NetworkAuthorityClient>> {
     let mut authority_clients = BTreeMap::new();
     for (name, _stakes) in &committee.committee.voting_rights {
-        let address = committee.net_addresses.get(name).ok_or_else(|| {
-            SuiError::from("Missing network address in CommitteeWithNetAddresses")
-        })?;
-        let address = Multiaddr::try_from(address.clone())?;
+        let address = &committee
+            .network_metadata
+            .get(name)
+            .ok_or_else(|| {
+                SuiError::from("Missing network metadata in CommitteeWithNetworkMetadata")
+            })?
+            .network_address;
         let channel = network_config
-            .connect_lazy(&address)
+            .connect_lazy(address)
             .map_err(|err| anyhow!(err.to_string()))?;
         let client = NetworkAuthorityClient::new(channel);
         authority_clients.insert(*name, client);

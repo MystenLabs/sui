@@ -247,8 +247,8 @@ module sui::validator {
     }
 
     /// Deactivate this validator's staking pool
-    public(friend) fun deactivate(self: &mut Validator, ctx: &mut TxContext) {
-        staking_pool::deactivate_staking_pool(&mut self.staking_pool, ctx)
+    public(friend) fun deactivate(self: &mut Validator, deactivation_epoch: u64) {
+        staking_pool::deactivate_staking_pool(&mut self.staking_pool, deactivation_epoch)
     }
 
     /// Process pending stake and pending withdraws, and update the gas price.

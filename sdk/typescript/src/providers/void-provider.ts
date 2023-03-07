@@ -45,11 +45,14 @@ import {
   Checkpoint,
   DryRunTransactionResponse,
   SuiTransactionResponse,
+  SuiObjectDataOptions,
+  SuiSystemStateSummary,
 } from '../types';
 import { Provider } from './provider';
 
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import { SerializedSignature } from '../cryptography/signature';
+import { Transaction } from '../builder';
 
 export class VoidProvider extends Provider {
   // API Version
@@ -64,6 +67,10 @@ export class VoidProvider extends Provider {
 
   async getSuiSystemState(): Promise<SuiSystemState> {
     throw this.newError('getSuiSystemState');
+  }
+
+  async getLatestSuiSystemState(): Promise<SuiSystemStateSummary> {
+    throw this.newError('getLatestSuiSystemState');
   }
 
   async getDelegatedStakes(_address: SuiAddress): Promise<DelegatedStake[]> {
@@ -164,6 +171,13 @@ export class VoidProvider extends Provider {
     throw this.newError('getObjectRef');
   }
 
+  async getObjectBatch(
+    _objectIds: ObjectId[],
+    _options?: SuiObjectDataOptions,
+  ): Promise<SuiObjectResponse[]> {
+    throw this.newError('getObjectBatch');
+  }
+
   // Transactions
   async getTransaction(
     _digest: TransactionDigest,
@@ -181,7 +195,7 @@ export class VoidProvider extends Provider {
 
   devInspectTransaction(
     _sender: SuiAddress,
-    _txn: UnserializedSignableTransaction | string | Uint8Array,
+    _txn: Transaction | UnserializedSignableTransaction | string | Uint8Array,
     _gasPrice: number | null = null,
     _epoch: number | null = null,
   ): Promise<DevInspectResults> {
