@@ -211,15 +211,11 @@ export type SubscriptionEvent = Infer<typeof SubscriptionEvent>;
 
 /* ------------------------------- EventData ------------------------------ */
 
-export function getMoveEvent(
-  data: SuiEvent,
-): MoveEvent | undefined {
+export function getMoveEvent(data: SuiEvent): MoveEvent | undefined {
   return data.type === 'moveEvent' ? data.content : undefined;
 }
 
-export function getPublishEvent(
-  data: SuiEvent,
-): PublishEvent | undefined {
+export function getPublishEvent(data: SuiEvent): PublishEvent | undefined {
   return data.type === 'publish' ? data.content : undefined;
 }
 
@@ -247,9 +243,7 @@ export function getDeletObjectEvent(
   return data.type === 'deleteObject' ? data.content : undefined;
 }
 
-export function getNewObjectEvent(
-  data: SuiEvent,
-): NewObjectEvent | undefined {
+export function getNewObjectEvent(data: SuiEvent): NewObjectEvent | undefined {
   return data.type === 'newObject' ? data.content : undefined;
 }
 
