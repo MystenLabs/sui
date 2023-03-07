@@ -67,7 +67,7 @@ module sui::tx_context {
 
 The preceding function returns the point in time when the current epoch started, as a millisecond granularity unix timestamp in a `u64`.  **This value changes roughly once every 24 hours**, when the epoch changes.
 
-Tests based on `sui::test_scenario` can use `later_epoch` (below), to exercise time-sensitive code that uses `epoch_timestamp_ms` (above):
+Tests based on `sui::test_scenario` can use `later_epoch` (following code), to exercise time-sensitive code that uses `epoch_timestamp_ms` (previous code):
 
 ```
 module sui::test_scenario {
