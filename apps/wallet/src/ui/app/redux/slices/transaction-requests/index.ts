@@ -4,6 +4,7 @@
 import {
     fromB64,
     LocalTxnDataSerializer,
+    type SignedMessage,
     type SignedTransaction,
     type SuiAddress,
 } from '@mysten/sui.js';
@@ -21,11 +22,11 @@ import type {
     UnserializedSignableTransaction,
 } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
-import type { TransactionRequest } from '_payloads/transactions';
+import type { ApprovalRequest } from '_payloads/transactions/ApprovalRequest';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
-const txRequestsAdapter = createEntityAdapter<TransactionRequest>({
+const txRequestsAdapter = createEntityAdapter<ApprovalRequest>({
     sortComparer: (a, b) => {
         const aDate = new Date(a.createdDate);
         const bDate = new Date(b.createdDate);
@@ -141,7 +142,8 @@ export const respondToTransactionRequest = createAsyncThunk<
             throw new Error(`TransactionRequest ${txRequestID} not found`);
         }
         let txSigned: SignedTransaction | undefined = undefined;
-        let txResult: SuiTransactionResponse | undefined = undefined;
+        let txResult: SuiTransactionResponse | SignedMessage | undefined =
+            undefined;
         let tsResultError: string | undefined;
         if (approved) {
             const signer = api.getSignerInstance(
@@ -153,6 +155,10 @@ export const respondToTransactionRequest = createAsyncThunk<
                     // TODO: Try / catch
                     // Just a signing request, do not submit
                     txSigned = await signer.signTransaction(txRequest.tx.data);
+                } else if (txRequest.tx.type === 'sign-message') {
+                    txResult = await signer.signMessage(
+                        fromB64(txRequest.tx.message)
+                    );
                 } else {
                     let response: SuiTransactionResponse;
                     if (
@@ -211,7 +217,7 @@ const slice = createSlice({
     reducers: {
         setTransactionRequests: (
             state,
-            { payload }: PayloadAction<TransactionRequest[]>
+            { payload }: PayloadAction<ApprovalRequest[]>
         ) => {
             // eslint-disable-next-line @typescript-eslint/ban-ts-comment
             // @ts-ignore

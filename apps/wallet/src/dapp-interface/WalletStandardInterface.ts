@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress } from '@mysten/sui.js';
+import { type SuiAddress, toB64 } from '@mysten/sui.js';
 import {
     SUI_CHAINS,
     ReadonlyWalletAccount,
@@ -17,6 +17,7 @@ import {
     type EventsOnMethod,
     type EventsListeners,
     type SuiSignTransactionMethod,
+    type SuiSignMessageMethod,
 } from '@mysten/wallet-standard';
 import mitt, { type Emitter } from 'mitt';
 import { filter, map, type Observable } from 'rxjs';
@@ -32,6 +33,7 @@ import {
     ALL_PERMISSION_TYPES,
 } from '_payloads/permissions';
 import { API_ENV } from '_src/shared/api-env';
+import { type SignMessageRequest } from '_src/shared/messaging/messages/payloads/transactions/SignMessage';
 import { isWalletStatusChangePayload } from '_src/shared/messaging/messages/payloads/wallet-status-change';
 
 import type { BasePayload, Payload } from '_payloads';
@@ -98,8 +100,7 @@ export class SuiWallet implements Wallet {
 
     get features(): ConnectFeature &
         EventsFeature &
-        // TODO: Support SignMessage:
-        Omit<SuiFeatures, 'sui:signMessage'> &
+        SuiFeatures &
         SuiWalletStakeFeature {
         return {
             'standard:connect': {
@@ -121,6 +122,10 @@ export class SuiWallet implements Wallet {
             'suiWallet:stake': {
                 version: '0.0.1',
                 stake: this.#stake,
+            },
+            'sui:signMessage': {
+                version: '1.0.0',
+                signMessage: this.#signMessage,
             },
         };
     }
@@ -271,6 +276,29 @@ export class SuiWallet implements Wallet {
             type: 'stake-request',
             validatorAddress: input.validatorAddress,
         });
+    };
+
+    #signMessage: SuiSignMessageMethod = async ({
+        message,
+        account,
+        options,
+    }) => {
+        return mapToPromise(
+            this.#send<SignMessageRequest, SignMessageRequest>({
+                type: 'sign-message-request',
+                args: {
+                    message: toB64(message),
+                    accountAddress: account.address,
+                    options,
+                },
+            }),
+            (response) => {
+                if (!response.return) {
+                    throw new Error('Invalid sign message response');
+                }
+                return response.return;
+            }
+        );
     };
 
     #hasPermissions(permissions: HasPermissionsRequest['permissions']) {

@@ -4,7 +4,7 @@ import cl from 'classnames';
 
 import type { ReactNode } from 'react';
 
-import st from './DappTxApprovalPage.module.scss';
+import st from './TransactionRequest.module.scss';
 
 type SummaryCardProps = {
     header?: ReactNode;

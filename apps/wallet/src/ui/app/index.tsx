@@ -9,7 +9,7 @@ import { Staking } from './staking/home';
 import ForgotPasswordPage from '_app/wallet/forgot-password-page';
 import LockedPage from '_app/wallet/locked-page';
 import { useAppDispatch, useAppSelector } from '_hooks';
-import { DappTxApprovalPage } from '_pages/dapp-tx-approval';
+import { ApprovalRequestPage } from '_pages/approval-request';
 import HomePage, {
     NftsPage,
     TokensPage,
@@ -89,8 +89,8 @@ const App = () => {
                     element={<SiteConnectPage />}
                 />
                 <Route
-                    path="tx-approval/:txID"
-                    element={<DappTxApprovalPage />}
+                    path="approve/:requestID"
+                    element={<ApprovalRequestPage />}
                 />
             </Route>
 
