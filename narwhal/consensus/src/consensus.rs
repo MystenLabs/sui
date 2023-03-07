@@ -52,6 +52,7 @@ pub struct ConsensusState {
     pub dag: Dag,
 }
 
+#[allow(clippy::new_without_default)]
 impl ConsensusState {
     pub fn new() -> Self {
         Self {
