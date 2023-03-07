@@ -41,10 +41,13 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
             if (!to || !signer || isInsufficientGas) {
                 throw new Error('Missing data');
             }
-            return signer.transferObject({
-                recipient: to,
-                objectId,
-                gasBudget: DEFAULT_NFT_TRANSFER_GAS_FEE,
+            return signer.signAndExecuteTransaction({
+                kind: 'transferObject',
+                data: {
+                    recipient: to,
+                    objectId,
+                    gasBudget: DEFAULT_NFT_TRANSFER_GAS_FEE,
+                },
             });
         },
         onSuccess: (response) => {

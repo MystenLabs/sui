@@ -187,8 +187,8 @@ export class Coin {
                     // NOTE: We reverse the order here so that the highest coin is in the front
                     // so that it is used as the gas coin.
                     inputCoins: [...inputCoins]
-                        .reverse()
-                        .map((coin) => Coin.getID(coin as SuiMoveObject)),
+                        .sort((a, b) => b.balance - a.balance)
+                        .map(({ coinObjectId }) => coinObjectId),
                     recipients: [address, address],
                     // TODO: Update SDK to accept bigint
                     amounts: [Number(amount), Number(gasFee)],

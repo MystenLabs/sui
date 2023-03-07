@@ -33,17 +33,20 @@ function AppsPlayGround() {
         mutationFn: () => {
             if (!signer) throw new Error('No signer found');
             trackEvent('MintDevnetNFT');
-            return signer.executeMoveCall({
-                packageObjectId: SUI_FRAMEWORK_ADDRESS,
-                module: 'devnet_nft',
-                function: 'mint',
-                typeArguments: [],
-                arguments: [
-                    'Example NFT',
-                    'An NFT created by Sui Wallet',
-                    DEFAULT_NFT_IMAGE,
-                ],
-                gasBudget: DEFAULT_MINT_NFT_GAS_BUDGET,
+            return signer.signAndExecuteTransaction({
+                kind: 'moveCall',
+                data: {
+                    packageObjectId: SUI_FRAMEWORK_ADDRESS,
+                    module: 'devnet_nft',
+                    function: 'mint',
+                    typeArguments: [],
+                    arguments: [
+                        'Example NFT',
+                        'An NFT created by Sui Wallet',
+                        DEFAULT_NFT_IMAGE,
+                    ],
+                    gasBudget: DEFAULT_MINT_NFT_GAS_BUDGET,
+                },
             });
         },
         onSuccess: () => {
