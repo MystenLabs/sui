@@ -112,7 +112,7 @@ impl FromStr for ObjectType {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == PACKAGE {
+        if s.to_lowercase() == PACKAGE {
             Ok(ObjectType::Package)
         } else {
             let tag = parse_sui_struct_tag(s)?;
