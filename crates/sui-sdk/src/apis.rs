@@ -27,7 +27,7 @@ use sui_types::committee::EpochId;
 use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use sui_types::event::EventID;
 use sui_types::messages::{ExecuteTransactionRequestType, TransactionData, VerifiedTransaction};
-use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary};
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadata;
 
@@ -137,14 +137,6 @@ impl ReadApi {
     /// Return a checkpoint
     pub async fn get_checkpoint(&self, id: CheckpointId) -> SuiRpcResult<Checkpoint> {
         Ok(self.api.http.get_checkpoint(id).await?)
-    }
-
-    /// Return a checkpoint summary based on a checkpoint sequence number
-    pub async fn get_checkpoint_summary(
-        &self,
-        seq_number: CheckpointSequenceNumber,
-    ) -> SuiRpcResult<CheckpointSummary> {
-        Ok(self.api.http.get_checkpoint_summary(seq_number).await?)
     }
 
     /// Return the sequence number of the latest checkpoint that has been executed

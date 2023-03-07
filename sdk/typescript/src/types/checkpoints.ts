@@ -36,27 +36,9 @@ export const EndOfEpochData = object({
 });
 export type EndOfEpochData = Infer<typeof EndOfEpochData>;
 
-export const CheckpointSummary = object({
-  epoch: number(),
-  sequence_number: number(),
-  network_total_transactions: number(),
-  content_digest: CheckPointContentsDigest,
-  previous_digest: union([CheckpointDigest, literal(null)]),
-  epoch_rolling_gas_cost_summary: GasCostSummary,
-  end_of_epoch_data: union([EndOfEpochData, literal(null)]),
-  timestamp_ms: union([number(), literal(null)]),
-  version_specific_data: optional(array(number())),
-});
-export type CheckpointSummary = Infer<typeof CheckpointSummary>;
-
 export const ExecutionDigests = object({
   transaction: TransactionDigest,
   effects: TransactionEffectsDigest,
-});
-
-export const CheckpointContents = object({
-  transactions: array(ExecutionDigests),
-  user_signatures: array(array(string())),
 });
 
 export const Checkpoint = object({
@@ -71,5 +53,3 @@ export const Checkpoint = object({
   transactions: array(TransactionDigest),
 });
 export type Checkpoint = Infer<typeof Checkpoint>;
-
-export type CheckpointContents = Infer<typeof CheckpointContents>;

@@ -18,11 +18,9 @@ use sui_json_rpc_types::{
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TxSequenceNumber};
-use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest, TransactionDigest};
+use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::DynamicFieldName;
-use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
-};
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::query::TransactionQuery;
 
 pub(crate) struct ReadApi<S> {
@@ -343,38 +341,6 @@ where
             return self.fullnode.get_checkpoint(id).await;
         }
         Ok(self.get_checkpoint(id).await?)
-    }
-
-    // NOTE: checkpoint APIs below will be deprecated,
-    // thus skipping them regarding indexer native implementations.
-    async fn get_checkpoint_summary_by_digest(
-        &self,
-        digest: CheckpointDigest,
-    ) -> RpcResult<CheckpointSummary> {
-        self.fullnode.get_checkpoint_summary_by_digest(digest).await
-    }
-
-    async fn get_checkpoint_summary(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> RpcResult<CheckpointSummary> {
-        self.fullnode.get_checkpoint_summary(sequence_number).await
-    }
-
-    async fn get_checkpoint_contents_by_digest(
-        &self,
-        digest: CheckpointContentsDigest,
-    ) -> RpcResult<CheckpointContents> {
-        self.fullnode
-            .get_checkpoint_contents_by_digest(digest)
-            .await
-    }
-
-    async fn get_checkpoint_contents(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> RpcResult<CheckpointContents> {
-        self.fullnode.get_checkpoint_contents(sequence_number).await
     }
 }
 

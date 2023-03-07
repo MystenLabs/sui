@@ -13,11 +13,8 @@ use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{
     ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
 };
-use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
 use sui_types::dynamic_field::DynamicFieldName;
-use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
-};
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::query::TransactionQuery;
 
 #[open_rpc(namespace = "sui", tag = "Read API")]
@@ -174,32 +171,4 @@ pub trait ReadApi {
         /// Checkpoint identifier, can use either checkpoint digest, or checkpoint sequence number as input.
         id: CheckpointId,
     ) -> RpcResult<Checkpoint>;
-
-    /// Return a checkpoint summary based on a checkpoint sequence number
-    #[method(name = "getCheckpointSummary")]
-    async fn get_checkpoint_summary(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> RpcResult<CheckpointSummary>;
-
-    /// Return a checkpoint summary based on checkpoint digest
-    #[method(name = "getCheckpointSummaryByDigest")]
-    async fn get_checkpoint_summary_by_digest(
-        &self,
-        digest: CheckpointDigest,
-    ) -> RpcResult<CheckpointSummary>;
-
-    /// Return contents of a checkpoint, namely a list of execution digests
-    #[method(name = "getCheckpointContents")]
-    async fn get_checkpoint_contents(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> RpcResult<CheckpointContents>;
-
-    /// Return contents of a checkpoint based on checkpoint content digest
-    #[method(name = "getCheckpointContentsByDigest")]
-    async fn get_checkpoint_contents_by_digest(
-        &self,
-        digest: CheckpointContentsDigest,
-    ) -> RpcResult<CheckpointContents>;
 }
