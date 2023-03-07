@@ -7,6 +7,9 @@ export CARGO_INCREMENTAL=0
 export CARGO_NET_RETRY=10
 export RUSTUP_MAX_RETRIES=10
 export RUST_BACKTRACE=short
+export RUST_LOG=off
+# Runs tests much faster - disables signing and verification
+export USE_MOCK_CRYPTO=1
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 

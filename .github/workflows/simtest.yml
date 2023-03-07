@@ -33,7 +33,7 @@ jobs:
           # valid for. This is optional and defaults to "1h"
           certificate-ttl: 2h
 
-      - name: Get latest sui.git
+      - name: Checkout sui repo
         run: |
           tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest '[ ! -d ~/sui ] && git clone https://github.com/MystenLabs/sui.git'
           tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest 'cd sui && git fetch origin && git rebase origin/main'
