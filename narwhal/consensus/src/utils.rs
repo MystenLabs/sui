@@ -62,6 +62,9 @@ pub fn order_dag(
     state: &ConsensusState,
 ) -> Vec<Certificate> {
     debug!("Processing sub-dag of {:?}", leader);
+    assert!(leader.round() > 0);
+    let gc_round = leader.round().saturating_sub(gc_depth);
+
     let mut ordered = Vec::new();
     let mut already_ordered = HashSet::new();
 
@@ -69,6 +72,9 @@ pub fn order_dag(
     while let Some(x) = buffer.pop() {
         debug!("Sequencing {:?}", x);
         ordered.push(x.clone());
+        if x.round() == gc_round + 1 {
+            continue;
+        }
         for parent in &x.header.parents {
             let (digest, certificate) = match state
                 .dag
@@ -76,7 +82,7 @@ pub fn order_dag(
                 .and_then(|x| x.values().find(|(x, _)| x == parent))
             {
                 Some(x) => x,
-                None => continue, // We already ordered or GC up to here.
+                None => continue, // We already ordered this certificate or a higher round for the origin.
             };
 
             // We skip the certificate if we (1) already processed it or (2) we reached a round that we already
@@ -94,7 +100,7 @@ pub fn order_dag(
     }
 
     // Ensure we do not commit garbage collected certificates.
-    ordered.retain(|x| x.round() + gc_depth >= state.last_committed_round);
+    ordered.retain(|x| x.round() + gc_depth > state.last_committed_round);
 
     // Ordering the output by round is not really necessary but it makes the commit sequence prettier.
     ordered.sort_by_key(|x| x.round());
