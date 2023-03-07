@@ -1,15 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { LockUnlocked16 as UnlockedLockIcon } from '@mysten/icons';
 import { useNavigate } from 'react-router-dom';
 
 import { SummaryCard } from '../../../SummaryCard';
 import Overlay from '../../../overlay';
 import { useNextMenuUrl } from '../../hooks';
-import { Button } from '_src/ui/app/shared/ButtonUI';
-import { LockUnlocked16 as UnlockedLockIcon } from '@mysten/icons';
-import { Link } from '_src/ui/app/shared/Link';
 import { LedgerAccount } from './LedgerAccount';
+import { Button } from '_src/ui/app/shared/ButtonUI';
+import { Link } from '_src/ui/app/shared/Link';
 
 const mockAccounts = [
     {
