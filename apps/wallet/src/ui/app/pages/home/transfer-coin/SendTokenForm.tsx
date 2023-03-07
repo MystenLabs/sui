@@ -19,7 +19,7 @@ import { IconTooltip } from '_app/shared/tooltip';
 import { AddressInput } from '_components/address-input';
 import Loading from '_components/loading';
 import { parseAmount } from '_helpers';
-import { useIndividualCoinMaxBalance, useGetCoins } from '_hooks';
+import { useGetCoins } from '_hooks';
 import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { useGasBudgetInMist } from '_src/ui/app/hooks/useGasBudgetInMist';
 import { InputWithAction } from '_src/ui/app/shared/InputWithAction';
@@ -138,7 +138,17 @@ export function SendTokenForm({
     const coinSymbol = (coinType && CoinAPI.getCoinSymbol(coinType)) || '';
     const [coinDecimals, coinDecimalsQueryResult] = useCoinDecimals(coinType);
     const [gasDecimals, gasQueryResult] = useCoinDecimals(SUI_TYPE_ARG);
-    const maxSuiSingleCoinBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
+    const maxSuiSingleCoinBalance = useMemo(
+        () =>
+            suiCoins?.reduce(
+                (max, c) =>
+                    max < CoinAPI.getBalanceFromCoinStruct(c)
+                        ? CoinAPI.getBalanceFromCoinStruct(c)
+                        : max,
+                BigInt(0)
+            ) || BigInt(0),
+        [suiCoins]
+    );
 
     const validationSchemaStepOne = useMemo(
         () =>
