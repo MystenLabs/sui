@@ -102,11 +102,17 @@ pub struct StateSyncConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint_content_download_concurrency: Option<usize>,
 
-    /// Set the timeout that should be used when sending state-sync RPC requests.
+    /// Set the timeout that should be used when sending most state-sync RPC requests.
     ///
     /// If unspecified, this will default to `10,000` milliseconds.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout_ms: Option<u64>,
+
+    /// Set the timeout that should be used when sending RPC requests to sync checkpoint contents.
+    ///
+    /// If unspecified, this will default to `10,000` milliseconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint_content_timeout_ms: Option<u64>,
 
     /// Per-peer rate-limit (in requests/sec) for the PushCheckpointSummary RPC.
     ///
@@ -165,6 +171,14 @@ impl StateSyncConfig {
         const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
         self.timeout_ms
+            .map(Duration::from_millis)
+            .unwrap_or(DEFAULT_TIMEOUT)
+    }
+
+    pub fn checkpoint_content_timeout(&self) -> Duration {
+        const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
+
+        self.checkpoint_content_timeout_ms
             .map(Duration::from_millis)
             .unwrap_or(DEFAULT_TIMEOUT)
     }

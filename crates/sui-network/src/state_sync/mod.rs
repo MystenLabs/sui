@@ -567,7 +567,7 @@ where
                 self.checkpoint_event_sender.clone(),
                 self.metrics.clone(),
                 self.config.checkpoint_content_download_concurrency(),
-                self.config.timeout(),
+                self.config.checkpoint_content_timeout(),
                 highest_verified_checkpoint,
             );
 
