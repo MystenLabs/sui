@@ -12,6 +12,14 @@ DATE=$(date +%s)
 
 export MSIM_TEST_NUM=30
 export SIM_STRESS_TEST_DURATION_SECS=300
+export CARGO_TERM_COLOR=always
+export CARGO_INCREMENTAL=0
+export CARGO_NET_RETRY=10
+export RUSTUP_MAX_RETRIES=10
+export RUST_BACKTRACE=short
+export RUST_LOG=off
+# Runs tests much faster - disables signing and verification
+export USE_MOCK_CRYPTO=1
 
 SEED="$DATE"
 # LOG_FILE="log-$SEED"
