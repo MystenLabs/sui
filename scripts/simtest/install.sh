@@ -2,6 +2,12 @@
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+export CARGO_TERM_COLOR=always
+export CARGO_INCREMENTAL=0
+export CARGO_NET_RETRY=10
+export RUSTUP_MAX_RETRIES=10
+export RUST_BACKTRACE=short
+
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
 BIN_DIR="$HOME/.cargo/bin"

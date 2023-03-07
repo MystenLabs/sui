@@ -6,18 +6,21 @@ on:
   workflow_dispatch:
 
 jobs:
-  run-simtest:
+  simtest:
+    timeout-minutes: 120
+    runs-on: [ self-hosted, self-hosted-arc ]
     permissions:
       # The "id-token: write" permission is required or Machine ID will not be
       # able to authenticate with the cluster.
       id-token: write
       contents: read
-    runs-on: [ self-hosted, self-hosted-arc ]
+
     steps:
       - name: Install Teleport
         uses: teleport-actions/setup@75c810ac63a7e9b28ca4795c6111619f2a13ac71 # pin@v1
         with:
           version: 11.3.1
+
       - name: Authorize against Teleport
         id: auth
         uses: teleport-actions/auth@6e73aa03a98e781ca6692817fbb6e554640a56b3 # pin@v1
@@ -29,5 +32,85 @@ jobs:
           # Specify the length of time that the generated credentials should be
           # valid for. This is optional and defaults to "1h"
           certificate-ttl: 2h
+
+      - name: Get latest sui.git
+        run: |
+          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest '[ ! -d ~/sui ] && git clone https://github.com/MystenLabs/sui.git'
+          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest 'cd sui && git fetch origin && git rebase origin/main'
+
+      - name: Install simtest
+        run: |
+          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest 'cd sui && ./scripts/simtest/install.sh'        
+
+      - name: Build simtest
+        run: |
+          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest 'cd sui && ./scripts/simtest/cargo-simtest simtest build'
+      
       - name: Run simtest
-        run: tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest ls -al # running a test command
+        run: |
+          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest 'cd sui && ./scripts/simtest/simtest-run.sh'
+
+  notify:
+    name: Notify
+    needs: [simtest]
+    runs-on: [self-hosted, self-hosted-arc]
+    if: always() # always notify
+
+    steps:
+    - uses: technote-space/workflow-conclusion-action@v3
+
+    - name: Checkout sui repo main branch
+      uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
+    
+    - name: Get sui commit
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        export sui_sha=$(git rev-parse HEAD)
+        echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
+
+    - name: Get link to logs
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
+        echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV        
+
+    - name: Post to slack
+      uses: slackapi/slack-github-action@936158bbe252e9a6062e793ea4609642c966e302 # pin@v1.21.0
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        SUI_SHA: ${{ env.sui_sha }}
+        GH_JOB_LINK: ${{ env.gh_job_link }}
+      with:
+        channel-id: 'simtest-nightly'
+        payload: |
+          {
+            "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`"
+                }
+              },
+              {
+                "type": "divider"
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \n"
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "<${{ env.GH_JOB_LINK }}|logs>"
+                }
+              }
+            ]
+          }
