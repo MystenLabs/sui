@@ -13,7 +13,6 @@ import {
   record,
   any,
   optional,
-  assign,
 } from 'superstruct';
 import {
   ObjectId,
@@ -120,16 +119,18 @@ export const CheckpointEvent = union([bigint(), number()]);
 export type CheckpointEvent = Infer<typeof EpochChangeEvent>;
 
 export const SuiEvent = union([
-  assign(MoveEvent, object({ eventType: literal('moveEvent') })),
-  assign(PublishEvent, object({ eventType: literal('publish') })),
-  assign(CoinBalanceChangeEvent, object({
-    eventType: literal('coinBalanceChange') })),
-  assign(TransferObjectEvent, object({ eventType: literal('transferObject') })),
-  assign(MutateObjectEvent, object({ eventType: literal('mutateObject') })),
-  assign(DeleteObjectEvent, object({ eventType: literal('deleteObject') })),
-  assign(NewObjectEvent, object({ eventType: literal('newObject') })),
-  object({ eventType: literal('epochChange'), ep: EpochChangeEvent }),
-  object({ eventType: literal('checkpoint'), ch: CheckpointEvent }),
+  object({ type: literal('moveEvent'), content: MoveEvent }),
+  object({ type: literal('publish'), content: PublishEvent }),
+  object({
+    type: literal('coinBalanceChange'),
+    content: CoinBalanceChangeEvent,
+  }),
+  object({ type: literal('transferObject'), content: TransferObjectEvent }),
+  object({ type: literal('mutateObject'), content: MutateObjectEvent }),
+  object({ type: literal('deleteObject'), content: DeleteObjectEvent }),
+  object({ type: literal('newObject'), content: NewObjectEvent }),
+  object({ type: literal('epochChange'), content: EpochChangeEvent }),
+  object({ type: literal('checkpoint'), content: CheckpointEvent }),
 ]);
 export type SuiEvent = Infer<typeof SuiEvent>;
 
@@ -207,3 +208,59 @@ export const SubscriptionEvent = object({
 });
 
 export type SubscriptionEvent = Infer<typeof SubscriptionEvent>;
+
+/* ------------------------------- EventData ------------------------------ */
+
+export function getMoveEvent(
+  data: SuiEvent,
+): MoveEvent | undefined {
+  return data.type === 'moveEvent' ? data.content : undefined;
+}
+
+export function getPublishEvent(
+  data: SuiEvent,
+): PublishEvent | undefined {
+  return data.type === 'publish' ? data.content : undefined;
+}
+
+export function getCoinBalanceChangeEvent(
+  data: SuiEvent,
+): CoinBalanceChangeEvent | undefined {
+  return data.type === 'coinBalanceChange' ? data.content : undefined;
+}
+
+export function getTransferObjectEvent(
+  data: SuiEvent,
+): TransferObjectEvent | undefined {
+  return data.type === 'transferObject' ? data.content : undefined;
+}
+
+export function getMutateObjectEvent(
+  data: SuiEvent,
+): MutateObjectEvent | undefined {
+  return data.type === 'mutateObject' ? data.content : undefined;
+}
+
+export function getDeletObjectEvent(
+  data: SuiEvent,
+): DeleteObjectEvent | undefined {
+  return data.type === 'deleteObject' ? data.content : undefined;
+}
+
+export function getNewObjectEvent(
+  data: SuiEvent,
+): NewObjectEvent | undefined {
+  return data.type === 'newObject' ? data.content : undefined;
+}
+
+export function getEpochChangeEvent(
+  data: SuiEvent,
+): EpochChangeEvent | undefined {
+  return data.type === 'epochChange' ? data.content : undefined;
+}
+
+export function getCheckpointEvent(
+  data: SuiEvent,
+): CheckpointEvent | undefined {
+  return data.type === 'checkpoint' ? data.content : undefined;
+}

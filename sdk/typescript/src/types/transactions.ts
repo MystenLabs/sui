@@ -14,8 +14,8 @@ import {
   unknown,
   boolean,
   tuple,
-  any,
   assign,
+  any,
 } from 'superstruct';
 import { SuiEvent } from './events';
 import { SuiGasData, SuiMovePackage, SuiObjectRef } from './objects';
@@ -95,6 +95,14 @@ export const Genesis = object({
 });
 export type Genesis = Infer<typeof Genesis>;
 
+// TODO: Refine object type
+export const ProgrammableTransaction = object({
+  inputs: array(SuiJsonValue),
+  commands: array(any()),
+});
+
+export type ProgrammableTransaction = Infer<typeof ProgrammableTransaction>;
+
 export type ExecuteTransactionRequestType =
   | 'WaitForEffectsCert'
   | 'WaitForLocalExecution';
@@ -124,8 +132,8 @@ export const SuiTransactionKind = union([
   assign(PaySui, object({ type: literal('PaySui') })),
   assign(PayAllSui, object({ type: literal('PayAllSui') })),
   assign(Genesis, object({ type: literal('Genesis') })),
-   // TODO: Refine object type
-   object({ ProgrammableTransaction: any() }),
+  // TODO: Refine object type
+  assign(ProgrammableTransaction, object({ type: literal('ProgrammableTransaction') })),
 ]);
 export type SuiTransactionKind = Infer<typeof SuiTransactionKind>;
 
@@ -412,6 +420,12 @@ export function getTransactionKindName(
   data: SuiTransactionKind,
 ): TransactionKindName {
   return Object.keys(data)[0] as TransactionKindName;
+}
+
+export function getProgrammableTransaction(
+  data: SuiTransactionKind,
+): ProgrammableTransaction | undefined {
+  return data.type === 'ProgrammableTransaction' ? data as ProgrammableTransaction : undefined;
 }
 
 /* ----------------------------- ExecutionStatus ---------------------------- */

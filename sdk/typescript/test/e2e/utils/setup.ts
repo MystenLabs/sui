@@ -21,7 +21,7 @@ const DEFAULT_FAUCET_URL =
   import.meta.env.VITE_FAUCET_URL ?? TEST_ENDPOINTS.faucet;
 const DEFAULT_FULLNODE_URL =
   import.meta.env.VITE_FULLNODE_URL ?? TEST_ENDPOINTS.fullnode;
-const SUI_BIN = import.meta.env.VITE_SUI_BIN ?? 'cargo run --release --bin sui';
+const SUI_BIN = import.meta.env.VITE_SUI_BIN ?? 'cargo run --bin sui';
 
 export const DEFAULT_RECIPIENT =
   '0x0c567ffdf8162cb6d51af74be0199443b92e823d4ba6ced24de5c6c463797d46';
@@ -98,10 +98,10 @@ export async function publishPackage(
   });
   expect(getExecutionStatusType(publishTxn)).toEqual('success');
 
-  const publishEvent = getEvents(publishTxn)?.find((e) => e.eventType === 'publish');
+  const publishEvent = getEvents(publishTxn)?.find((e) => e.type === 'publish');
 
   // @ts-ignore: Publish not narrowed:
-  const packageId = publishEvent?.packageId.replace(/^(0x)(0+)/, '0x');
+  const packageId = publishEvent?.content.packageId.replace(/^(0x)(0+)/, '0x');
   console.info(
     `Published package ${packageId} from address ${await signer.getAddress()}}`,
   );
