@@ -1,18 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFormatCoin } from '@mysten/core';
-import { CheckFill16, LockUnlocked16 as UnlockedLockIcon } from '@mysten/icons';
-import { formatAddress, SUI_TYPE_ARG, type SuiAddress } from '@mysten/sui.js';
-import cl from 'classnames';
 import { useNavigate } from 'react-router-dom';
 
 import { SummaryCard } from '../../../SummaryCard';
 import Overlay from '../../../overlay';
 import { useNextMenuUrl } from '../../hooks';
 import { Button } from '_src/ui/app/shared/ButtonUI';
+import { LockUnlocked16 as UnlockedLockIcon } from '@mysten/icons';
 import { Link } from '_src/ui/app/shared/Link';
-import { Text } from '_src/ui/app/shared/text';
+import { LedgerAccount } from './LedgerAccount';
 
 const mockAccounts = [
     {
@@ -92,37 +89,5 @@ export function ImportLedgerAccounts() {
                 </div>
             </div>
         </Overlay>
-    );
-}
-
-type LedgerAccountProps = {
-    isSelected: boolean;
-    address: SuiAddress;
-    balance: number;
-};
-
-function LedgerAccount({ isSelected, address, balance }: LedgerAccountProps) {
-    const [totalAmount, totalAmountSymbol] = useFormatCoin(
-        balance,
-        SUI_TYPE_ARG
-    );
-
-    return (
-        <div className="flex items-center gap-3">
-            <CheckFill16
-                className={cl('w-4 h-4', {
-                    'text-gray-50': !isSelected,
-                    'text-success': isSelected,
-                })}
-            />
-            <Text mono variant="bodySmall" weight="bold" color="steel-dark">
-                {formatAddress(address)}
-            </Text>
-            <div className="ml-auto">
-                <Text variant="bodySmall" color="steel" weight="bold">
-                    {totalAmount} {totalAmountSymbol}
-                </Text>
-            </div>
-        </div>
     );
 }
