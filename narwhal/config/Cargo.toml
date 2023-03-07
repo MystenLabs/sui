@@ -20,6 +20,7 @@ rand = "0.8.5"
 [dev-dependencies]
 insta = { version = "1.21.1", features = ["json"] }
 rand = "0.8.5"
-tempfile = "3.3.0"
+tempfile = "3.4.0"
+tracing-test = "0.2.3"
 
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }

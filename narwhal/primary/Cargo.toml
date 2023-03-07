@@ -54,7 +54,7 @@ itertools = "0.10.5"
 mockall = "0.11.2"
 node = { path = "../node", package = "narwhal-node" }
 proptest = "1.0.0"
-tempfile = "3.3.0"
+tempfile = "3.4.0"
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 thiserror = "1.0.35"
 tracing = "0.1.36"

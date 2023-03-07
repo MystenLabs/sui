@@ -8,7 +8,7 @@ publish = false
 
 
 [dependencies]
-tempfile = "3.3.0"
+tempfile = "3.4.0"
 dashmap = "5.4.0"
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e" }
 futures = "0.3.24"

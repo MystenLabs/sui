@@ -42,7 +42,7 @@ anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "0e0ef705
 
 [dev-dependencies]
 indexmap = { version = "1.9.2", features = ["serde"] }
-tempfile = "3.3.0"
+tempfile = "3.4.0"
 primary = { path = "../primary", package = "narwhal-primary" }
 node = { path = "../node", package = "narwhal-node" }
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
