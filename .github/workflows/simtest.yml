@@ -63,8 +63,6 @@ jobs:
       uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
     
     - name: Get sui commit
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         export sui_sha=$(git rev-parse HEAD)
         echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
@@ -102,15 +100,8 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \n"
+                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \nLogs: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>"
                 }
               },
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "<${{ env.GH_JOB_LINK }}|logs>"
-                }
-              }
             ]
           }
