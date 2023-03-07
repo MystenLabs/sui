@@ -88,12 +88,8 @@ impl GovernanceReadApiServer for GovernanceReadApi {
     }
 
     async fn get_reference_gas_price(&self) -> RpcResult<u64> {
-        Ok(self
-            .state
-            .database
-            .get_sui_system_state_object()
-            .map_err(Error::from)?
-            .reference_gas_price())
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        Ok(epoch_store.reference_gas_price())
     }
 }
 
