@@ -9,7 +9,7 @@ use crypto::{NetworkPublicKey, PublicKey};
 use fastcrypto::hash::Hash as _;
 use futures::{stream::FuturesOrdered, StreamExt};
 use mysten_common::notify_once::NotifyOnce;
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use network::{
     anemo_ext::{NetworkExt, WaitingPeer},
     RetryConfig,
@@ -98,6 +98,7 @@ struct Inner {
 
 impl Inner {
     async fn append_certificate_in_aggregator(&self, certificate: Certificate) -> DagResult<()> {
+        let _scope = monitored_scope("AK-Synchronizer::append_certificate_in_aggregator");
         // Check if we have enough certificates to enter a new dag round and propose a header.
         let Some(parents) = self
             .certificates_aggregators
@@ -137,6 +138,7 @@ impl Inner {
         _lock: &MutexGuard<'_, State>,
         certificate: Certificate,
     ) -> DagResult<()> {
+        let _scope = monitored_scope("AK-Synchronizer::accept_certificate_internal");
         let digest = certificate.digest();
 
         // TODO: remove this validation later to reduce rocksdb access.
@@ -558,6 +560,7 @@ impl Synchronizer {
         sanitize: bool,
         early_suspend: bool,
     ) -> DagResult<()> {
+        let _scope = monitored_scope("AK-process_certificate_internal");
         let digest = certificate.digest();
         if self.inner.certificate_store.contains(&digest)? {
             trace!("Certificate {digest:?} has already been processed. Skip processing.");
@@ -980,6 +983,7 @@ impl Synchronizer {
         &self,
         certificate: &Certificate,
     ) -> DagResult<Vec<CertificateDigest>> {
+        let _scope = monitored_scope("AK-Synchronizer::get_missing_parents");
         self.inner.get_missing_parents(certificate).await
     }
 }
@@ -1082,6 +1086,7 @@ impl State {
         round: Round,
         digest: CertificateDigest,
     ) -> Vec<SuspendedCertificate> {
+        let _scope = monitored_scope("AK-Synchronizer::accept_children");
         // This validation is only triggered for fetched and own certificates.
         // Certificates from other sources will find the suspended certificate and wait on its
         // accept notification, so no parent check or validation is done.

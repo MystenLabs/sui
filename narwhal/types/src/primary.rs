@@ -33,6 +33,8 @@ use std::{
 };
 use tracing::warn;
 
+use mysten_metrics::monitored_scope;
+
 /// The round number.
 pub type Round = u64;
 
@@ -227,6 +229,7 @@ impl Header {
     }
 
     pub fn validate(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
+        let _scope = monitored_scope("AK-Header::verify");
         // Ensure the header is from the correct epoch.
         ensure!(
             self.epoch == committee.epoch(),
@@ -643,6 +646,7 @@ impl Certificate {
     /// Verifies the validity of the certificate.
     /// TODO: Output a different type, similar to Sui VerifiedCertificate.
     pub fn verify(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
+        let _scope = monitored_scope("AK-Certificate::verify");
         // Ensure the header is from the correct epoch.
         ensure!(
             self.epoch() == committee.epoch(),
@@ -667,11 +671,14 @@ impl Certificate {
             DagError::CertificateRequiresQuorum
         );
 
+        let aggregated_signature_verification_scope =
+            monitored_scope("AK-Certificate::aggregated_signature.verify");
         // Verify the signatures
         let certificate_digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.digest());
         self.aggregated_signature
             .verify_secure(&to_intent_message(certificate_digest), &pks[..])
             .map_err(|_| DagError::InvalidSignature)?;
+        drop(aggregated_signature_verification_scope);
 
         Ok(())
     }

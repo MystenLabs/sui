@@ -40,6 +40,8 @@ anemo.workspace = true
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 once_cell = "1.16.0"
 
+mysten-metrics = { path = "../../crates/mysten-metrics" }
+
 store = { path = "../../crates/typed-store", package = "typed-store" }
 mysten-common.workspace = true
 mysten-network.workspace = true
