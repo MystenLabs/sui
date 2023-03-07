@@ -11,7 +11,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::committee::EpochId;
 use sui_types::governance::DelegatedStake;
 
-use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadata;
+use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadataV1;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
 #[open_rpc(namespace = "sui", tag = "Governance Read API")]
@@ -23,7 +23,7 @@ pub trait GovernanceReadApi {
 
     /// Return all validators available for stake delegation.
     #[method(name = "getValidators")]
-    async fn get_validators(&self) -> RpcResult<Vec<ValidatorMetadata>>;
+    async fn get_validators(&self) -> RpcResult<Vec<ValidatorMetadataV1>>;
 
     /// Return the committee information for the asked `epoch`.
     #[method(name = "getCommitteeInfo")]

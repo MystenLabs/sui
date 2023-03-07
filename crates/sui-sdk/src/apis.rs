@@ -29,7 +29,7 @@ use sui_types::event::EventID;
 use sui_types::messages::{ExecuteTransactionRequestType, TransactionData, VerifiedTransaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::query::{EventQuery, TransactionQuery};
-use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadata;
+use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadataV1;
 
 use futures::StreamExt;
 use sui_json_rpc::api::{CoinReadApiClient, EventReadApiClient, ReadApiClient, WriteApiClient};
@@ -482,7 +482,7 @@ impl GovernanceApi {
     }
 
     /// Return all validators available for stake delegation.
-    pub async fn get_validators(&self) -> SuiRpcResult<Vec<ValidatorMetadata>> {
+    pub async fn get_validators(&self) -> SuiRpcResult<Vec<ValidatorMetadataV1>> {
         Ok(self.api.http.get_validators().await?)
     }
 

@@ -1659,7 +1659,7 @@
       "description": "Return all validators available for stake delegation.",
       "params": [],
       "result": {
-        "name": "Vec<ValidatorMetadata>",
+        "name": "Vec<ValidatorMetadataV1>",
         "required": true,
         "schema": {
           "type": "array",
