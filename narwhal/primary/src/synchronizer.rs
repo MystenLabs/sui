@@ -22,7 +22,7 @@ use std::{
 use storage::{CertificateStore, PayloadToken};
 use store::Store;
 use tokio::{
-    sync::{broadcast, oneshot, watch},
+    sync::{broadcast, oneshot, watch, MutexGuard},
     task::JoinSet,
     time::timeout,
 };
@@ -103,8 +103,12 @@ impl Inner {
             .map_err(|_| DagError::ShuttingDown)
     }
 
-    async fn accept_suspended_certificate(&self, suspended: SuspendedCertificate) -> DagResult<()> {
-        self.accept_certificate_internal(suspended.certificate)
+    async fn accept_suspended_certificate(
+        &self,
+        lock: &MutexGuard<'_, State>,
+        suspended: SuspendedCertificate,
+    ) -> DagResult<()> {
+        self.accept_certificate_internal(lock, suspended.certificate)
             .await?;
         // Notify waiters that the certificate is no longer suspended.
         // Must be after certificate acceptance.
@@ -113,7 +117,12 @@ impl Inner {
         Ok(())
     }
 
-    async fn accept_certificate_internal(&self, certificate: Certificate) -> DagResult<()> {
+    // State lock must be held when calling this function.
+    async fn accept_certificate_internal(
+        &self,
+        _lock: &MutexGuard<'_, State>,
+        certificate: Certificate,
+    ) -> DagResult<()> {
         let digest = certificate.digest();
 
         // Store the certificate. After this, the certificate must be sent to consensus
@@ -275,7 +284,7 @@ impl Synchronizer {
                     );
                     // Iteration must be in causal order.
                     for suspended in iter::once(suspended_cert).chain(suspended_certs.into_iter()) {
-                        match inner.accept_suspended_certificate(suspended).await {
+                        match inner.accept_suspended_certificate(&state, suspended).await {
                             Ok(()) => {}
                             Err(DagError::ShuttingDown) => return,
                             Err(e) => {
@@ -583,9 +592,13 @@ impl Synchronizer {
 
         let suspended_certs = state.accept_children(certificate.round(), certificate.digest());
         // Accept in causal order.
-        self.inner.accept_certificate_internal(certificate).await?;
+        self.inner
+            .accept_certificate_internal(&state, certificate)
+            .await?;
         for suspended in suspended_certs {
-            self.inner.accept_suspended_certificate(suspended).await?;
+            self.inner
+                .accept_suspended_certificate(&state, suspended)
+                .await?;
         }
 
         self.inner
