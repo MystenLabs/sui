@@ -15,6 +15,7 @@
 -  [Function `size`](#0x2_vec_set_size)
 -  [Function `is_empty`](#0x2_vec_set_is_empty)
 -  [Function `into_keys`](#0x2_vec_set_into_keys)
+-  [Function `as_keys`](#0x2_vec_set_as_keys)
 -  [Function `get_idx_opt`](#0x2_vec_set_get_idx_opt)
 -  [Function `get_idx`](#0x2_vec_set_get_idx)
 
@@ -279,6 +280,32 @@ The output keys are stored in insertion order, *not* sorted.
 <pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_into_keys">into_keys</a>&lt;K: <b>copy</b> + drop&gt;(self: <a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;): <a href="">vector</a>&lt;K&gt; {
     <b>let</b> <a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a> { contents } = self;
     contents
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_vec_set_as_keys"></a>
+
+## Function `as_keys`
+
+Return a reference to the underlying vector of keys without destroying the <code><a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a></code>.
+The output keys are stored in insertion order, *not* sorted.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_as_keys">as_keys</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;): &<a href="">vector</a>&lt;K&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_as_keys">as_keys</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;): &<a href="">vector</a>&lt;K&gt; {
+    &self.contents
 }
 </code></pre>
 

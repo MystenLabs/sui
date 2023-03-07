@@ -1,6 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// ~~~~~~~~~~~ To Implement ~~~~~~~~~~
+// * Add validator
+//   - Delegation + withdrawals
+// * Remove validator
+//   - Withdrawals, need to guard against delegations at this stage.
+// * Request set gas price
+// * Request commission rate
+// * Various metadata setters
 #[test_only]
 module sui::delegation_stress_tests {
     use sui::test_random::{
@@ -33,6 +41,7 @@ module sui::delegation_stress_tests {
         delegation_withdraws_this_epoch: u64,
         cancelled_requests: VecSet<ID>,
         delegations: VecMap<ID, address>, // `StakedSui` objects and their owners that are active.
+        reports: VecMap<address, VecSet<address>>,
         random: Random,
     }
 
@@ -53,11 +62,12 @@ module sui::delegation_stress_tests {
     const NUM_VALIDATORS: u64 = 40;
     const BASIS_POINT_DENOMINATOR: u64 = 10_000;
 
-    const NUM_OPERATIONS: u8 = 4;
+    const NUM_OPERATIONS: u8 = 5;
     const ADD_DELEGATION: u8 = 0;
     const WITHDRAW_DELEGATION: u8 = 1;
     const SET_GAS_PRICE: u8 = 2;
     const REPORT_VALIDATOR: u8 = 3;
+    const UNREPORT_VALIDATOR: u8 = 4;
 
     #[test]
     fun smoke_test() {
@@ -79,7 +89,7 @@ module sui::delegation_stress_tests {
     }
 
     // Takes too long for CI
-    //#[test]
+    // #[test]
     fun stress_test() {
         let state = begin(vector[42], NUM_VALIDATORS);
         let num_epochs = 50;
@@ -110,6 +120,8 @@ module sui::delegation_stress_tests {
             request_set_gas_price_random(state)
         } else if (operation_num == REPORT_VALIDATOR) {
             report_validator_random(state)
+        } else if (operation_num == UNREPORT_VALIDATOR) {
+            unreport_validator_random(state)
         } else {
             false
         }
@@ -136,8 +148,33 @@ module sui::delegation_stress_tests {
         test_scenario::next_tx(scenario, validator);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         let ctx = test_scenario::ctx(scenario);
-        sui_system::report_validator(
-            &mut system_state, other, ctx);
+        sui_system::report_validator(&mut system_state, other, ctx);
+        // Register this report.
+        if (!vec_map::contains(&state.reports, &validator)) vec_map::insert(&mut state.reports, validator, vec_set::empty());
+        let reports = vec_map::get_mut(&mut state.reports, &validator);
+        if (!vec_set::contains(reports, &other)) vec_set::insert(reports, other);
+        test_scenario::return_shared(system_state);
+        test_scenario::next_tx(scenario, validator);
+        true
+    }
+
+    fun unreport_validator_random(state: &mut TestState): bool {
+        let (validator, validator_reports_mut) =  {
+            let len = vec_map::size(&state.reports);
+            if (len < 1) return false;
+            let idx = next_u64_in_range(&mut state.random, len);
+            let (k, v) = vec_map::get_entry_by_idx_mut(&mut state.reports, idx);
+            (*k, v)
+        };
+        let other = *pick_random(&mut state.random, vec_set::as_keys(validator_reports_mut));
+        // Remove the report.
+        vec_set::remove(validator_reports_mut, &other);
+        if (vec_set::is_empty(validator_reports_mut)) { vec_map::remove(&mut state.reports, &validator); };
+        let scenario = &mut state.scenario;
+        test_scenario::next_tx(scenario, validator);
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        let ctx = test_scenario::ctx(scenario);
+        sui_system::undo_report_validator(&mut system_state, other, ctx);
         test_scenario::return_shared(system_state);
         test_scenario::next_tx(scenario, validator);
         true
@@ -269,6 +306,7 @@ module sui::delegation_stress_tests {
             cancelled_requests: vec_set::empty(),
             delegation_withdraws_this_epoch: 0,
             delegations: vec_map::empty(),
+            reports: vec_map::empty(),
             random,
         }
     }
@@ -281,7 +319,8 @@ module sui::delegation_stress_tests {
             delegation_withdraws_this_epoch: _,
             cancelled_requests: _,
             delegations: _,
-            random: _
+            random: _,
+            reports: _,
         } = state;
         test_scenario::end(scenario);
     }
@@ -303,9 +342,13 @@ module sui::delegation_stress_tests {
     }
 
     fun random_validator(state: &mut TestState): address {
-        let num_validators = vector::length(&state.validators);
-        assert!(num_validators >= 1, 0);
-        let idx = next_u64_in_range(&mut state.random, num_validators);
-        *vector::borrow(&state.validators, idx)
+        *pick_random(&mut state.random, &state.validators)
+    }
+
+    fun pick_random<K>(random: &mut Random, selection: &vector<K>): &K {
+        let len = vector::length(selection);
+        assert!(len >= 1, 0);
+        let idx = next_u64_in_range(random, len);
+        vector::borrow(selection, idx)
     }
 }

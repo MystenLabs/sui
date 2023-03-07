@@ -64,6 +64,12 @@ module sui::vec_set {
         contents
     }
 
+    /// Return a reference to the underlying vector of keys without destroying the `VecSet`.
+    /// The output keys are stored in insertion order, *not* sorted.
+    public fun as_keys<K: copy + drop>(self: &VecSet<K>): &vector<K> {
+        &self.contents
+    }
+
     // == Helper functions ==
 
     /// Find the index of `key` in `self`. Return `None` if `key` is not in `self`.
