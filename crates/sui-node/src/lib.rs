@@ -239,7 +239,7 @@ impl SuiNode {
         // Create network
         let (p2p_network, discovery_handle, state_sync_handle) = Self::create_p2p_network(
             &config,
-            epoch_store.system_state_object(),
+            epoch_store.epoch_start_state(),
             state_sync_store,
             end_of_epoch_channel.subscribe(),
             &prometheus_registry,
@@ -417,7 +417,7 @@ impl SuiNode {
 
     fn create_p2p_network(
         config: &NodeConfig,
-        sui_system: &SuiSystemState,
+        sui_system: &EpochStartSystemState,
         state_sync_store: RocksDbStore,
         reconfig_channel: Receiver<(CommitteeWithNetworkMetadata, ProtocolVersion)>,
         prometheus_registry: &Registry,
@@ -434,7 +434,7 @@ impl SuiNode {
         let network_kp = config.network_key_pair();
         let our_network_public_key = network_kp.public();
         let other_validators = sui_system
-            .get_current_epoch_committee()
+            .get_sui_committee()
             .network_metadata
             .into_iter()
             .filter(|(_name, network_metadata)| {

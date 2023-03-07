@@ -451,6 +451,10 @@ impl AuthorityPerEpochStore {
         &self.epoch_start_configuration
     }
 
+    pub fn epoch_start_state(&self) -> &EpochStartSystemState {
+        self.epoch_start_configuration.epoch_start_state()
+    }
+
     pub fn new_at_next_epoch(
         &self,
         name: AuthorityName,
