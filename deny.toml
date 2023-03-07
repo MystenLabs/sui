@@ -49,10 +49,11 @@ notice = "warn"
 # output a note when they are encountered.
 ignore = [
     # "RUSTSEC-0000-0000",
-    # potential segfault in the time crate, brought by chrono et al.
-    "RUSTSEC-2020-0071",
-    # potential segfault in localtime_r, brought by chrono et al.
-    "RUSTSEC-2020-0159"
+    # ansi-term is unmaintained, but it's only used by `clap`
+    "RUSTSEC-2021-0139",
+    # potentially unaligned pointer deref in `atty` crate,
+    # but only when custom global allocator is used.
+    "RUSTSEC-2021-0145",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
@@ -78,7 +79,6 @@ allow = [
     "BSD-2-Clause",
     "BSD-3-Clause",
     "Apache-2.0",
-    "MPL-2.0",
     "ISC",
     "CC0-1.0",
     "LicenseRef-ring",

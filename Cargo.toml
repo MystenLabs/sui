@@ -52,7 +52,7 @@ strip = 'none'
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
 
-tokio = "1.24.1"
+tokio = "1.25.0"
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e" }
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", package = "fastcrypto-zkp" }
 fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", package = "fastcrypto-tbls" }

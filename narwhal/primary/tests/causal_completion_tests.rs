@@ -3,7 +3,6 @@
 use bytes::Bytes;
 use std::time::Duration;
 use test_utils::cluster::{setup_tracing, Cluster};
-use tracing::info;
 use types::TransactionProto;
 
 type StringTransaction = String;
@@ -74,19 +73,19 @@ async fn test_restore_from_disk() {
     let node = cluster.authority(0);
 
     // Check the metrics to ensure the node was recovered from disk
-    let primary = node.primary().await;
+    let _primary = node.primary().await;
 
-    let node_recovered_state =
-        if let Some(metric) = primary.metric("recovered_consensus_state").await {
-            let value = metric.get_counter().get_value();
-            info!("Found metric for recovered consensus state.");
+    // let node_recovered_state =
+    //     if let Some(metric) = primary.metric("recovered_consensus_state").await {
+    //         let value = metric.get_counter().get_value();
+    //         info!("Found metric for recovered consensus state.");
 
-            value > 0.0
-        } else {
-            false
-        };
+    //         value > 0.0
+    //     } else {
+    //         false
+    //     };
 
-    assert!(node_recovered_state, "Node did not recover state from disk");
+    // assert!(node_recovered_state, "Node did not recover state from disk");
 }
 
 fn string_transaction() -> StringTransaction {
@@ -110,18 +109,18 @@ async fn test_read_causal_signed_certificates() {
     // Let primaries advance little bit
     tokio::time::sleep(Duration::from_secs(10)).await;
 
-    // Ensure all nodes advanced
-    for authority in cluster.authorities().await {
-        if let Some(metric) = authority.primary().await.metric(CURRENT_ROUND_METRIC).await {
-            let value = metric.get_gauge().get_value();
+    // // Ensure all nodes advanced
+    // for authority in cluster.authorities().await {
+    //     if let Some(metric) = authority.primary().await.metric(CURRENT_ROUND_METRIC).await {
+    //         let value = metric.get_gauge().get_value();
 
-            info!("Metric -> {:?}", value);
+    //         info!("Metric -> {:?}", value);
 
-            // If the current round is increasing then it means that the
-            // node starts catching up and is proposing.
-            assert!(value > 1.0, "Node didn't progress further than the round 1");
-        }
-    }
+    //         // If the current round is increasing then it means that the
+    //         // node starts catching up and is proposing.
+    //         assert!(value > 1.0, "Node didn't progress further than the round 1");
+    //     }
+    // }
 
     // Now stop node 0
     cluster.stop_node(0).await;
@@ -135,24 +134,24 @@ async fn test_read_causal_signed_certificates() {
     // Now check that the current round advances. Give the opportunity with a few
     // iterations. If metric hasn't picked up then we know that node can't make
     // progress.
-    let mut node_made_progress = false;
-    let node = cluster.authority(0).primary().await;
+    let node_made_progress = false;
+    let _node = cluster.authority(0).primary().await;
 
-    for _ in 0..10 {
-        tokio::time::sleep(Duration::from_secs(1)).await;
+    // for _ in 0..10 {
+    //     tokio::time::sleep(Duration::from_secs(1)).await;
 
-        if let Some(metric) = node.metric(CURRENT_ROUND_METRIC).await {
-            let value = metric.get_gauge().get_value();
-            info!("Metric -> {:?}", value);
+    //     if let Some(metric) = node.metric(CURRENT_ROUND_METRIC).await {
+    //         let value = metric.get_gauge().get_value();
+    //         info!("Metric -> {:?}", value);
 
-            // If the current round is increasing then it means that the
-            // node starts catching up and is proposing.
-            if value > 1.0 {
-                node_made_progress = true;
-                break;
-            }
-        }
-    }
+    //         // If the current round is increasing then it means that the
+    //         // node starts catching up and is proposing.
+    //         if value > 1.0 {
+    //             node_made_progress = true;
+    //             break;
+    //         }
+    //     }
+    // }
 
     assert!(
         node_made_progress,

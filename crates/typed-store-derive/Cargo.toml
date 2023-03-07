@@ -20,6 +20,6 @@ syn = { version = "1.0.104", features = ["full"] }
 [dev-dependencies]
 eyre = "0.6.8"
 rocksdb = { version = "0.19.0", features = ["lz4", "multi-threaded-cf"], default-features = false }
-tempfile = "3.3.0"
+tempfile = "3.4.0"
 tokio = { version = "1", features = ["test-util"] }
 typed-store = { path = "../typed-store" }
