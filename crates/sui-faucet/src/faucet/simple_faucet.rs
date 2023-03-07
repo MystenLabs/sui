@@ -430,7 +430,13 @@ impl SimpleFaucet {
         let client = self.wallet.get_client().await?;
         client
             .transaction_builder()
-            .pay_sui(signer, vec![coin_id], recipients, amounts.to_vec(), budget)
+            .pay_sui_legacy_for_faucet_do_not_use_will_be_removed(
+                signer,
+                vec![coin_id],
+                recipients,
+                amounts.to_vec(),
+                budget,
+            )
             .await
             .map_err(|e| {
                 anyhow::anyhow!(
