@@ -107,12 +107,12 @@ fn update_low_scoring_authorities(
     }
 
     // adjusted median absolute deviation
-    let mad = statistical::median(&abs_deviations) / 0.5;
+    let mad = statistical::median(&abs_deviations) / 0.7;
     let mut low_scoring = vec![];
     let mut rest = vec![];
     for (i, (a, _)) in reputation_scores.scores_per_authority.iter().enumerate() {
         let temp = deviations[i] / mad;
-        if temp > 2.5 {
+        if temp > 2.4 {
             low_scoring.push(a);
         } else {
             rest.push(AuthorityName::from(a));
