@@ -63,7 +63,6 @@ pub fn order_dag(
 ) -> Vec<Certificate> {
     debug!("Processing sub-dag of {:?}", leader);
     assert!(leader.round() > 0);
-    let gc_round = leader.round().saturating_sub(gc_depth);
 
     let mut ordered = Vec::new();
     let mut already_ordered = HashSet::new();
@@ -72,9 +71,6 @@ pub fn order_dag(
     while let Some(x) = buffer.pop() {
         debug!("Sequencing {:?}", x);
         ordered.push(x.clone());
-        if x.round() == gc_round + 1 {
-            continue;
-        }
         for parent in &x.header.parents {
             let (digest, certificate) = match state
                 .dag
