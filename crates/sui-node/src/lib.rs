@@ -631,16 +631,16 @@ impl SuiNode {
         // create a new map that gets injected into both the consensus handler and the consensus adapter
         // the consensus handler will write values forwarded from consensus, and the consensus adapter
         // will read the values to make decisions about which validator submits a transaction to consensus
-        let scores_per_authority = Arc::new(DashMap::new());
+        let low_scoring_authorities = ArcSwap::new(Arc::new(HashMap::new()));
 
-        consensus_adapter.swap_low_scoring_authorities(scores_per_authority.clone());
+        consensus_adapter.swap_low_scoring_authorities(low_scoring_authorities.load().clone());
 
         let consensus_handler = Arc::new(ConsensusHandler::new(
             epoch_store.clone(),
             checkpoint_service.clone(),
             state.transaction_manager().clone(),
             state.db(),
-            scores_per_authority,
+            low_scoring_authorities,
             committee,
             state.metrics.clone(),
         ));

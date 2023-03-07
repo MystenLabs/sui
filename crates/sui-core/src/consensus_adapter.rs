@@ -204,7 +204,7 @@ pub struct ConsensusAdapter {
     /// A structure to check the connection statuses populated by the Connection Monitor Listener
     connection_monitor_status: Box<Arc<dyn CheckConnection>>,
     /// A structure to check the reputation scores populated by Consensus
-    low_scoring_authorities: ArcSwap<Arc<DashMap<AuthorityName, u64>>>,
+    low_scoring_authorities: ArcSwap<HashMap<AuthorityName, u64>>,
     /// A structure to register metrics
     metrics: ConsensusAdapterMetrics,
     /// Semaphore limiting parallel submissions to narwhal
@@ -246,8 +246,7 @@ impl ConsensusAdapter {
         metrics: ConsensusAdapterMetrics,
     ) -> Arc<Self> {
         let num_inflight_transactions = Default::default();
-        let low_scoring_authorities: ArcSwap<Arc<DashMap<AuthorityName, u64>>> =
-            ArcSwap::from_pointee(Arc::new(DashMap::new()));
+        let low_scoring_authorities = ArcSwap::new(Arc::new(HashMap::new()));
         Arc::new(Self {
             consensus_client,
             authority,
@@ -262,10 +261,9 @@ impl ConsensusAdapter {
 
     pub fn swap_low_scoring_authorities(
         &self,
-        low_scoring_authorities: Arc<DashMap<AuthorityName, u64>>,
+        low_scoring_authorities: Arc<HashMap<AuthorityName, u64>>,
     ) {
-        self.low_scoring_authorities
-            .swap(Arc::from(low_scoring_authorities));
+        self.low_scoring_authorities.swap(low_scoring_authorities);
     }
 
     // todo - this probably need to hold some kind of lock to make sure epoch does not change while we are recovering
@@ -390,10 +388,7 @@ impl ConsensusAdapter {
     }
 
     fn authority_is_low_scoring(&self, authority: &AuthorityName) -> bool {
-        matches!(
-            self.low_scoring_authorities.load().try_get(authority),
-            TryResult::Present(_)
-        )
+        matches!(self.low_scoring_authorities.load().get(authority), Some(_))
     }
 
     /// This method blocks until transaction is persisted in local database
