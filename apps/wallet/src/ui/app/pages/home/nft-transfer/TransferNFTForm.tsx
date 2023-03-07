@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowRight16 } from '@mysten/icons';
-import { getTransactionDigest, SUI_TYPE_ARG } from '@mysten/sui.js';
+import {
+    getTransactionDigest,
+    SUI_TYPE_ARG,
+    Transaction,
+} from '@mysten/sui.js';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Form, Field, Formik } from 'formik';
 import { toast } from 'react-hot-toast';
@@ -41,14 +45,15 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
             if (!to || !signer || isInsufficientGas) {
                 throw new Error('Missing data');
             }
-            return signer.signAndExecuteTransaction({
-                kind: 'transferObject',
-                data: {
-                    recipient: to,
-                    objectId,
-                    gasBudget: DEFAULT_NFT_TRANSFER_GAS_FEE,
-                },
-            });
+            const tx = new Transaction();
+            tx.setGasBudget(DEFAULT_NFT_TRANSFER_GAS_FEE);
+            tx.add(
+                Transaction.Commands.TransferObjects(
+                    [tx.input(objectId)],
+                    tx.input(to)
+                )
+            );
+            return signer.signAndExecuteTransaction(tx);
         },
         onSuccess: (response) => {
             queryClient.invalidateQueries(['object', objectId]);
