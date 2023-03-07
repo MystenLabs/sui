@@ -8,6 +8,7 @@ use crate::models::events::Event;
 use crate::models::move_calls::MoveCall;
 use crate::models::objects::{DeletedObject, Object, ObjectStatus};
 use crate::models::packages::Package;
+use crate::models::recipients::Recipient;
 use crate::models::transactions::Transaction;
 use crate::store::{
     CheckpointData, IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore,
@@ -26,6 +27,7 @@ use sui_json_rpc_types::{
 use sui_sdk::error::Error;
 use sui_sdk::SuiClient;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::object::Owner;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
@@ -326,6 +328,28 @@ where
             )
             .collect();
 
+        let recipients: Vec<Recipient> = transactions
+            .iter()
+            .flat_map(|tx| {
+                tx.effects
+                    .created()
+                    .iter()
+                    .cloned()
+                    .chain(tx.effects.mutated().iter().cloned())
+                    .chain(tx.effects.unwrapped().iter().cloned())
+                    .filter_map(|obj_ref| match obj_ref.owner {
+                        Owner::AddressOwner(address) => Some(Recipient {
+                            id: None,
+                            transaction_digest: tx.effects.transaction_digest().to_string(),
+                            checkpoint_sequence_number: checkpoint.sequence_number as i64,
+                            epoch: checkpoint.epoch as i64,
+                            recipient: address.to_string(),
+                        }),
+                        _ => None,
+                    })
+            })
+            .collect();
+
         // Index epoch
         // TODO: Aggregate all object owner changes into owner index at epoch change.
         let epoch_index =
@@ -345,6 +369,7 @@ where
                 addresses,
                 packages,
                 move_calls,
+                recipients,
             },
             epoch_index,
         ))
