@@ -46,7 +46,6 @@ mysten-network = { path = "../../crates/mysten-network" }
 telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
 
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "0e0ef7054082a6f5a8921688e3d568761bc3be21" }
-reqwest = { version = "0.11.13", features = ["json"] }
 once_cell = "1.16.0"
 fail = "0.5.1"
 
@@ -56,6 +55,7 @@ serde-reflection = "0.3.6"
 serde_yaml = "0.8.26"
 structopt = "0.3.26"
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
+reqwest = { version = "0.11.13", features = ["json"] }
 
 [features]
 trace_transaction = ["worker/trace_transaction"]
