@@ -589,7 +589,8 @@
               "endOfEpochData": null,
               "transactions": [
                 "BhbWpBeESxuRWvmvLMyb2JNUuFa6j4aG1T4WUiPgKAHm"
-              ]
+              ],
+              "checkpointCommitments": []
             }
           }
         }
@@ -2855,6 +2856,7 @@
       "Checkpoint": {
         "type": "object",
         "required": [
+          "checkpointCommitments",
           "digest",
           "epoch",
           "epochRollingGasCostSummary",
@@ -2864,6 +2866,13 @@
           "transactions"
         ],
         "properties": {
+          "checkpointCommitments": {
+            "description": "Commitments to checkpoint state",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckpointCommitment"
+            }
+          },
           "digest": {
             "description": "Checkpoint digest",
             "allOf": [
@@ -2934,6 +2943,22 @@
             }
           }
         }
+      },
+      "CheckpointCommitment": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "ECMHLiveObjectSetDigest"
+            ],
+            "properties": {
+              "ECMHLiveObjectSetDigest": {
+                "$ref": "#/components/schemas/ECMHLiveObjectSetDigest"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
       },
       "CheckpointDigest": {
         "description": "Representation of a Checkpoint's digest",
@@ -3284,6 +3309,25 @@
           "DynamicObject"
         ]
       },
+      "ECMHLiveObjectSetDigest": {
+        "description": "The Sha256 digest of an EllipticCurveMultisetHash committing to the live object set.",
+        "type": "object",
+        "required": [
+          "digest"
+        ],
+        "properties": {
+          "digest": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            },
+            "maxItems": 32,
+            "minItems": 32
+          }
+        }
+      },
       "Ed25519SuiSignature": {
         "$ref": "#/components/schemas/Base64"
       },
@@ -3332,11 +3376,18 @@
       "EndOfEpochData": {
         "type": "object",
         "required": [
+          "epoch_commitments",
           "next_epoch_committee",
-          "next_epoch_protocol_version",
-          "root_state_digest"
+          "next_epoch_protocol_version"
         ],
         "properties": {
+          "epoch_commitments": {
+            "description": "Commitments to epoch specific state (e.g. live object set)",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckpointCommitment"
+            }
+          },
           "next_epoch_committee": {
             "description": "next_epoch_committee is `Some` if and only if the current checkpoint is the last checkpoint of an epoch. Therefore next_epoch_committee can be used to pick the last checkpoint of an epoch, which is often useful to get epoch level summary stats like total gas cost of an epoch, or the total number of transactions from genesis to the end of an epoch. The committee is stored as a vector of validator pub key and stake pairs. The vector should be sorted based on the Committee data structure.",
             "type": "array",
@@ -3363,17 +3414,6 @@
                 "$ref": "#/components/schemas/ProtocolVersion"
               }
             ]
-          },
-          "root_state_digest": {
-            "description": "The digest of the union of all checkpoint accumulators, representing the state of the system at the end of the epoch.",
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            },
-            "maxItems": 32,
-            "minItems": 32
           }
         }
       },

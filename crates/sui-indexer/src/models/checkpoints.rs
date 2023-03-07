@@ -101,6 +101,7 @@ impl TryFrom<Checkpoint> for RpcCheckpoint {
             network_total_transactions: checkpoint.total_transactions_from_genesis as u64,
             timestamp_ms: checkpoint.timestamp_ms as u64,
             transactions: parsed_txn_digests,
+            checkpoint_commitments: vec![],
         })
     }
 }
