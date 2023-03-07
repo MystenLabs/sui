@@ -5,11 +5,6 @@ import { useRpcClient } from '@mysten/core';
 import { type SuiObjectResponse, normalizeSuiAddress } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
-export function useGetValidators() {
-    const rpc = useRpcClient();
-    return useQuery(['system', 'validators'], () => rpc.getValidators());
-}
-
 export function useGetSystemObject() {
     const rpc = useRpcClient();
     return useQuery(['system', 'state'], () => rpc.getSuiSystemState());

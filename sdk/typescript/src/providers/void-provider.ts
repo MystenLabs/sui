@@ -33,7 +33,6 @@ import {
   DevInspectResults,
   SuiSystemState,
   DelegatedStake,
-  ValidatorMetaData,
   PaginatedCoins,
   CoinBalance,
   CoinSupply,
@@ -73,10 +72,6 @@ export class VoidProvider extends Provider {
 
   async getDelegatedStakes(_address: SuiAddress): Promise<DelegatedStake[]> {
     throw this.newError('getDelegatedStakes');
-  }
-
-  async getValidators(): Promise<ValidatorMetaData[]> {
-    throw this.newError('getValidators');
   }
 
   // Faucet

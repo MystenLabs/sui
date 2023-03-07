@@ -5,7 +5,7 @@ import { formatAddress, type SuiAddress } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useMemo } from 'react';
 
-import { useGetValidatorMetaData } from '../useGetDelegatedStake';
+import { useSystemState } from '../useSystemState';
 import { Heading } from '_app/shared/heading';
 import { ImageIcon } from '_app/shared/image-icon';
 import { Text } from '_app/shared/text';
@@ -29,23 +29,21 @@ export function ValidatorLogo({
     size,
     stacked,
 }: ValidatorLogoProps) {
-    const { data: validatorsData, isLoading } = useGetValidatorMetaData();
+    const { data, isLoading } = useSystemState();
 
     const validatorMeta = useMemo(() => {
-        if (!validatorsData) return null;
+        if (!data) return null;
 
-        const validator = validatorsData.find(
-            ({ sui_address }) => sui_address === validatorAddress
+        const validator = data.validators.active_validators.find(
+            ({ metadata }) => metadata.sui_address === validatorAddress
         );
         if (!validator) return null;
 
-        const logo = validator.image_url;
-
         return {
-            name: validator.name,
-            logo: logo,
+            name: validator.metadata.name,
+            logo: validator.metadata.image_url,
         };
-    }, [validatorAddress, validatorsData]);
+    }, [validatorAddress, data]);
 
     if (isLoading) {
         return <div className="flex justify-center items-center">...</div>;

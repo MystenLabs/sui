@@ -45,7 +45,6 @@ import {
   SuiObjectResponse,
   GetOwnedObjectsResponse,
   DelegatedStake,
-  ValidatorMetaData,
   SuiSystemState,
   CoinBalance,
   CoinSupply,
@@ -719,20 +718,6 @@ export class JsonRpcProvider extends Provider {
       return resp;
     } catch (err) {
       throw new Error(`Error in getDelegatedStake: ${err}`);
-    }
-  }
-
-  async getValidators(): Promise<ValidatorMetaData[]> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getValidators',
-        [],
-        array(ValidatorMetaData),
-        this.options.skipDataValidation,
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(`Error in getValidators: ${err}`);
     }
   }
 

@@ -49,7 +49,8 @@ export class TestToolbox {
   }
 
   public async getActiveValidators() {
-    return this.provider.getValidators();
+    return (await this.provider.getSuiSystemState()).validators
+      .active_validators;
   }
 }
 
