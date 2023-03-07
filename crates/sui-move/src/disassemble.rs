@@ -17,6 +17,10 @@ pub struct Disassemble {
     /// Path to a .mv file to disassemble
     #[clap(name = "module_path")]
     module_path: PathBuf,
+
+    /// Whether to display the disassembly in raw Debug format
+    #[clap(long = "Xdebug")]
+    debug: bool,
 }
 
 impl Disassemble {
@@ -38,23 +42,31 @@ impl Disassemble {
                 interactive: false,
                 package_name: None,
                 module_or_script_name: module_name,
-                debug: false,
+                debug: self.debug,
             }
-            .execute(package_path, build_config)?
+            .execute(package_path, build_config)?;
+            return Ok(());
+        }
+
+        // disassembling a bytecode file with no source info
+        assert!(
+            Path::new(&self.module_path).exists(),
+            "Bath path to .mv file"
+        );
+
+        let mut bytes = Vec::new();
+        let mut file = BufReader::new(File::open(self.module_path)?);
+        file.read_to_end(&mut bytes)?;
+        let module = CompiledModule::deserialize(&bytes)?;
+
+        if self.debug {
+            println!("{module:#?}");
         } else {
-            // disassembling a bytecode file with no source info
-            assert!(
-                Path::new(&self.module_path).exists(),
-                "Bath path to .mv file"
-            );
-            let mut bytes = Vec::new();
-            let mut file = BufReader::new(File::open(self.module_path)?);
-            file.read_to_end(&mut bytes)?;
-            let module = CompiledModule::deserialize(&bytes)?;
             let view = BinaryIndexedView::Module(&module);
             let d = Disassembler::from_view(view, Spanned::unsafe_no_loc(()).loc)?;
             println!("{}", d.disassemble()?);
         }
+
         Ok(())
     }
 }
