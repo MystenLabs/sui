@@ -67,9 +67,7 @@ describe.skip('Test Move call with a vector of objects as input (skipped due to 
   });
 
   it('Test regular arg mixed with object vector arg', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
     const coinIDs = coins.map((coin) => Coin.getID(coin));
     const txn = await signer.signAndExecuteTransaction({
       kind: 'moveCall',

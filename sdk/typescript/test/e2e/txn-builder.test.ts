@@ -29,9 +29,7 @@ describe('Transaction Builders', () => {
   });
 
   it('Split coin', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
     await validateTransaction(signer, {
       kind: 'splitCoin',
       data: {
@@ -43,9 +41,7 @@ describe('Transaction Builders', () => {
   });
 
   it('Merge coin', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
     await validateTransaction(signer, {
       kind: 'mergeCoin',
       data: {
@@ -57,9 +53,7 @@ describe('Transaction Builders', () => {
   });
 
   it('Move Call', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
     await validateTransaction(signer, {
       kind: 'moveCall',
       data: {
@@ -79,9 +73,7 @@ describe('Transaction Builders', () => {
   });
 
   it('Move Shared Object Call', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
 
     const [{ sui_address: validator_address }] =
       await toolbox.getActiveValidators();
@@ -105,9 +97,7 @@ describe('Transaction Builders', () => {
   });
 
   it('Transfer Sui', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
     await validateTransaction(signer, {
       kind: 'transferSui',
       data: {
@@ -120,9 +110,7 @@ describe('Transaction Builders', () => {
   });
 
   it('Transfer Object', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
     await validateTransaction(signer, {
       kind: 'transferObject',
       data: {

@@ -88,9 +88,7 @@ describe('Transaction Serialization and deserialization', () => {
   }
 
   it('Move Call', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
     const moveCall = {
       packageObjectId:
         '0000000000000000000000000000000000000000000000000000000000000002',
@@ -112,9 +110,7 @@ describe('Transaction Serialization and deserialization', () => {
   });
 
   it('Move Call With Type Tags', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
     const moveCall = {
       packageObjectId: packageId,
       module: 'serializer_tests',
@@ -127,9 +123,7 @@ describe('Transaction Serialization and deserialization', () => {
   });
 
   it('Move Shared Object Call', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
 
     const [{ sui_address: validator_address }] =
       await toolbox.getActiveValidators();
@@ -159,9 +153,7 @@ describe('Transaction Serialization and deserialization', () => {
   });
 
   it('Move Call with Pure Arg', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
     const moveCallExpected = {
       packageObjectId: '0x2',
       module: 'devnet_nft',
