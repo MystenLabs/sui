@@ -300,7 +300,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         gas_budget: Option<u64>,
         extra: Self::ExtraPublishArgs,
     ) -> anyhow::Result<(Option<String>, CompiledModule)> {
-        let SuiPublishArgs { sender } = extra;
+        let SuiPublishArgs {
+            sender,
+            upgradeable,
+        } = extra;
         let module_name = module.self_id().name().to_string();
         let module_bytes = {
             let mut buf = vec![];
@@ -310,7 +313,12 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
         let data = |sender, gas| {
             let mut builder = ProgrammableTransactionBuilder::new();
-            builder.publish(vec![module_bytes]);
+            if upgradeable {
+                let cap = builder.publish_upgradeable(vec![module_bytes]);
+                builder.transfer_arg(sender, cap);
+            } else {
+                builder.publish(vec![module_bytes]);
+            };
             let pt = builder.finish();
             TransactionData::new_programmable_with_dummy_gas_price(sender, gas, pt, gas_budget)
         };
