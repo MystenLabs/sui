@@ -29,7 +29,6 @@ use itertools::izip;
 use mysten_metrics::{spawn_monitored_task, MonitoredFutureExt};
 use prometheus::Registry;
 use sui_config::node::CheckpointExecutorConfig;
-use sui_types::error::SuiResult;
 use sui_types::message_envelope::Message;
 use sui_types::messages::VerifiedExecutableTransaction;
 use sui_types::{
@@ -37,6 +36,7 @@ use sui_types::{
     messages::{TransactionEffects, TransactionEffectsAPI},
     messages_checkpoint::{CheckpointSequenceNumber, EndOfEpochData, VerifiedCheckpoint},
 };
+use sui_types::{error::SuiResult, messages::TransactionDataAPI};
 use tap::TapFallible;
 use tokio::{
     sync::broadcast::{self, error::RecvError},
@@ -331,7 +331,9 @@ impl CheckpointExecutor {
         }));
     }
 
-    /// Check whether `checkpoint` is the last checkpoint of the current epoch. If so, return true.
+    /// Check whether `checkpoint` is the last checkpoint of the current epoch. If so,
+    /// perform special case logic (execute change_epoch tx, accumulate epoch,
+    /// finalize transactions), then return true.
     pub async fn check_epoch_last_checkpoint(
         &self,
         epoch_store: Arc<AuthorityPerEpochStore>,
@@ -346,12 +348,69 @@ impl CheckpointExecutor {
                     ..
                 }) = &checkpoint.end_of_epoch_data
                 {
+                    let (execution_digests, all_tx_digests, executable_txns) = extract_tx_data(
+                        checkpoint.clone(),
+                        self.authority_store.clone(),
+                        self.checkpoint_store.clone(),
+                        epoch_store.clone(),
+                    );
+
+                    let change_epoch_tx_index = executable_txns
+                        .iter()
+                        .position(|tx| tx.transaction_data().is_change_epoch_tx())
+                        .expect("Change epoch tx expected to exist");
+                    let change_epoch_tx = executable_txns[change_epoch_tx_index].clone();
+                    let change_epoch_tx_digest = all_tx_digests[change_epoch_tx_index];
+                    let change_epoch_execution_digest = execution_digests[change_epoch_tx_index];
+
                     info!(
                         ended_epoch = cur_epoch,
                         ?next_epoch_protocol_version,
                         last_checkpoint = checkpoint.sequence_number(),
-                        "Reached end of epoch",
+                        "Reached end of epoch, executing change_epoch transaction",
                     );
+
+                    let change_epoch_effects = execute_transactions(
+                        vec![change_epoch_execution_digest],
+                        vec![change_epoch_tx_digest],
+                        vec![change_epoch_tx],
+                        self.authority_store.clone(),
+                        epoch_store.clone(),
+                        self.tx_manager.clone(),
+                        self.config.local_execution_timeout_sec,
+                        checkpoint.clone(),
+                    )
+                    .await
+                    .expect("Executing change_epoch tx cannot fail");
+                    assert_eq!(change_epoch_effects.len(), 1);
+
+                    // verify change_epoch tx effects digest
+                    assert_eq!(
+                        change_epoch_execution_digest.effects,
+                        change_epoch_effects[0].digest(),
+                        "change_epoch tx effects digest mismatch"
+                    );
+
+                    // For finalizing the checkpoint, we need to pass in all checkpoint
+                    // transaction effects, not just the change_epoch tx effects. However,
+                    // we have already notify awaited all tx effects separately (once
+                    // for change_epoch tx, and once for all other txes). Therefore this
+                    // should be a fast operation
+                    let effects = self
+                        .authority_store
+                        .notify_read_executed_effects(all_tx_digests.clone())
+                        .await
+                        .expect("Failed to get executed effects for finalizing checkpoint");
+
+                    finalize_checkpoint(
+                        self.authority_store.clone(),
+                        all_tx_digests,
+                        epoch_store.clone(),
+                        *checkpoint.sequence_number(),
+                        self.accumulator.clone(),
+                        effects,
+                    )
+                    .expect("Finalizing checkpoint cannot fail");
 
                     self.accumulator
                         .accumulate_epoch(
@@ -382,21 +441,19 @@ pub async fn execute_checkpoint(
     local_execution_timeout_sec: u64,
     metrics: &Arc<CheckpointExecutorMetrics>,
 ) -> SuiResult {
+    let checkpoint_sequence = *checkpoint.sequence_number();
     debug!(
         "Scheduling checkpoint {:?} for execution",
-        checkpoint.sequence_number(),
+        checkpoint_sequence,
     );
-    let txes = checkpoint_store
-        .get_checkpoint_contents(&checkpoint.content_digest)?
-        .unwrap_or_else(|| {
-            panic!(
-                "Checkpoint contents for digest {:?} does not exist",
-                checkpoint.content_digest
-            )
-        })
-        .into_inner();
+    let (mut execution_digests, mut all_tx_digests, mut executable_txns) = extract_tx_data(
+        checkpoint.clone(),
+        authority_store.clone(),
+        checkpoint_store.clone(),
+        epoch_store.clone(),
+    );
 
-    let tx_count = txes.len();
+    let tx_count = execution_digests.len();
     debug!(
         epoch=?epoch_store.epoch(),
         checkpoint_sequence=?checkpoint.sequence_number(),
@@ -405,43 +462,96 @@ pub async fn execute_checkpoint(
     );
     metrics.checkpoint_transaction_count.report(tx_count as u64);
 
-    execute_transactions(
-        txes,
-        authority_store,
-        epoch_store,
+    // Pull out change_epoch tx (if exists) so that we can special case its execution last
+    let end_of_epoch = if let Some(index) = executable_txns
+        .iter()
+        .position(|tx| tx.transaction_data().is_change_epoch_tx())
+    {
+        executable_txns.remove(index);
+        all_tx_digests.remove(index);
+        execution_digests.remove(index);
+        true
+    } else {
+        false
+    };
+
+    let effects = execute_transactions(
+        execution_digests,
+        all_tx_digests.clone(),
+        executable_txns,
+        authority_store.clone(),
+        epoch_store.clone(),
         transaction_manager,
         local_execution_timeout_sec,
         checkpoint,
-        accumulator,
     )
-    .await
+    .await?;
+
+    // if end of epoch checkpoint, we must finalize the checkpoint after executing
+    // the change epoch tx, which is done after all other checkpoint execution
+    if !end_of_epoch {
+        finalize_checkpoint(
+            authority_store,
+            all_tx_digests,
+            epoch_store,
+            checkpoint_sequence,
+            accumulator,
+            effects,
+        )?;
+    }
+    Ok(())
 }
 
-async fn execute_transactions(
-    execution_digests: Vec<ExecutionDigests>,
-    authority_store: Arc<AuthorityStore>,
-    epoch_store: Arc<AuthorityPerEpochStore>,
-    transaction_manager: Arc<TransactionManager>,
-    log_timeout_sec: u64,
+fn extract_tx_data(
     checkpoint: VerifiedCheckpoint,
-    accumulator: Arc<StateAccumulator>,
-) -> SuiResult {
-    let checkpoint_sequence = *checkpoint.sequence_number();
+    authority_store: Arc<AuthorityStore>,
+    checkpoint_store: Arc<CheckpointStore>,
+    epoch_store: Arc<AuthorityPerEpochStore>,
+) -> (
+    Vec<ExecutionDigests>,
+    Vec<TransactionDigest>,
+    Vec<VerifiedExecutableTransaction>,
+) {
+    let checkpoint_sequence = checkpoint.sequence_number();
+    let execution_digests = checkpoint_store
+        .get_checkpoint_contents(&checkpoint.content_digest)
+        .expect("Failed to get checkpoint contents from store")
+        .unwrap_or_else(|| {
+            panic!(
+                "Checkpoint contents for digest {:?} does not exist",
+                checkpoint.content_digest
+            )
+        })
+        .into_inner();
     let all_tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();
 
     let executable_txns: Vec<_> = authority_store
-        .multi_get_transactions(&all_tx_digests)?
+        .multi_get_transactions(&all_tx_digests)
+        .expect("Failed to get checkpoint txes from store")
         .into_iter()
         .map(|tx| {
             VerifiedExecutableTransaction::new_from_checkpoint(
                 tx.expect("state-sync should have ensured that the transaction exists"),
                 epoch_store.epoch(),
-                checkpoint_sequence,
+                *checkpoint_sequence,
             )
         })
         .collect();
 
+    (execution_digests, all_tx_digests, executable_txns)
+}
+
+async fn execute_transactions(
+    execution_digests: Vec<ExecutionDigests>,
+    all_tx_digests: Vec<TransactionDigest>,
+    executable_txns: Vec<VerifiedExecutableTransaction>,
+    authority_store: Arc<AuthorityStore>,
+    epoch_store: Arc<AuthorityPerEpochStore>,
+    transaction_manager: Arc<TransactionManager>,
+    log_timeout_sec: u64,
+    checkpoint: VerifiedCheckpoint,
+) -> SuiResult<Vec<TransactionEffects>> {
     let effects_digests: Vec<_> = execution_digests
         .iter()
         .map(|digest| digest.effects)
@@ -514,19 +624,31 @@ async fn execute_transactions(
                 {
                     let expected_effects_digest = expected_digest.effects;
                     if expected_effects_digest != actual_effects.digest() {
-                        panic!("When executing checkpoint {checkpoint_sequence}, transaction {tx_digest} is expected to have effects digest {expected_effects_digest}, but got {}!", actual_effects.digest());
+                        panic!(
+                            "When executing checkpoint {checkpoint_sequence}, transaction {tx_digest} is expected to have effects digest {expected_effects_digest}, but got {}!", 
+                            actual_effects.digest(),
+                        );
                     }
                 }
-
-                authority_store.insert_finalized_transactions(
-                    &all_tx_digests,
-                    epoch_store.epoch(),
-                    checkpoint_sequence,
-                )?;
-                accumulator.accumulate_checkpoint(effects, checkpoint_sequence, epoch_store)?;
-
-                return Ok(());
+                return Ok(effects);
             }
         }
     }
+}
+
+fn finalize_checkpoint(
+    authority_store: Arc<AuthorityStore>,
+    tx_digests: Vec<TransactionDigest>,
+    epoch_store: Arc<AuthorityPerEpochStore>,
+    checkpoint_sequence: u64,
+    accumulator: Arc<StateAccumulator>,
+    effects: Vec<TransactionEffects>,
+) -> SuiResult {
+    authority_store.insert_finalized_transactions(
+        &tx_digests,
+        epoch_store.epoch(),
+        checkpoint_sequence,
+    )?;
+    accumulator.accumulate_checkpoint(effects, checkpoint_sequence, epoch_store)?;
+    Ok(())
 }
