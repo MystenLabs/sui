@@ -10,11 +10,15 @@
 
 use fastcrypto::{
     bls12381, ed25519,
+    error::FastCryptoError,
     hash::{Blake2b256, HashFunction},
+    traits::{AggregateAuthenticator, Signer, VerifyingKey},
 };
 
 // This re-export allows using the trait-defined APIs
 pub use fastcrypto::traits;
+use serde::Serialize;
+use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, INTENT_PREFIX_LENGTH};
 
 ////////////////////////////////////////////////////////////////////////
 /// Type aliases selecting the signature algorithm for the code base.
@@ -43,3 +47,77 @@ pub type NetworkKeyPair = ed25519::Ed25519KeyPair;
 // Type alias selecting the default hash function for the code base.
 pub type DefaultHashFunction = Blake2b256;
 pub const DIGEST_LENGTH: usize = DefaultHashFunction::OUTPUT_SIZE;
+pub const INTENT_MESSAGE_LENGTH: usize = DIGEST_LENGTH + INTENT_PREFIX_LENGTH;
+
+/// A trait for sign and verify over an intent message, instead of the message itself. See more at [struct IntentMessage].
+pub trait NarwhalAuthoritySignature {
+    /// Create a new signature over an intent message.
+    fn new_secure<T>(value: &IntentMessage<T>, secret: &dyn Signer<Self>) -> Self
+    where
+        T: Serialize;
+
+    /// Verify the signature on an intent message against the public key.
+    fn verify_secure<T>(
+        &self,
+        value: &IntentMessage<T>,
+        author: &PublicKey,
+    ) -> Result<(), FastCryptoError>
+    where
+        T: Serialize;
+}
+
+impl NarwhalAuthoritySignature for Signature {
+    fn new_secure<T>(value: &IntentMessage<T>, secret: &dyn Signer<Self>) -> Self
+    where
+        T: Serialize,
+    {
+        let message = bcs::to_bytes(&value).expect("Message serialization should not fail");
+        secret.sign(&message)
+    }
+
+    fn verify_secure<T>(
+        &self,
+        value: &IntentMessage<T>,
+        public_key: &PublicKey,
+    ) -> Result<(), FastCryptoError>
+    where
+        T: Serialize,
+    {
+        let message = bcs::to_bytes(&value).expect("Message serialization should not fail");
+        public_key.verify(&message, self)
+    }
+}
+
+pub trait NarwhalAuthorityAggregateSignature {
+    fn verify_secure<T>(
+        &self,
+        value: &IntentMessage<T>,
+        pks: &[PublicKey],
+    ) -> Result<(), FastCryptoError>
+    where
+        T: Serialize;
+}
+
+impl NarwhalAuthorityAggregateSignature for AggregateSignature {
+    fn verify_secure<T>(
+        &self,
+        value: &IntentMessage<T>,
+        pks: &[PublicKey],
+    ) -> Result<(), FastCryptoError>
+    where
+        T: Serialize,
+    {
+        let message = bcs::to_bytes(&value).expect("Message serialization should not fail");
+        self.verify(pks, &message)
+    }
+}
+
+/// Wrap a message in an intent message. Currently in Narwhal, the scope is always IntentScope::HeaderDigest and the app id is AppId::Narwhal.
+pub fn to_intent_message<T>(value: T) -> IntentMessage<T> {
+    IntentMessage::new(
+        Intent::default()
+            .with_scope(IntentScope::HeaderDigest)
+            .with_app_id(AppId::Narwhal),
+        value,
+    )
+}
