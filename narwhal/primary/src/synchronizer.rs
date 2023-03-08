@@ -22,7 +22,7 @@ use std::{
 use storage::{CertificateStore, PayloadToken};
 use store::Store;
 use tokio::{
-    sync::{broadcast, oneshot, watch, MutexGuard},
+    sync::{broadcast, oneshot, watch, MutexGuard, Notify},
     task::JoinSet,
     time::timeout,
 };
@@ -79,6 +79,8 @@ struct Inner {
     batch_tasks: Mutex<JoinSet<DagResult<()>>>,
     /// Background tasks broadcasting newly formed certificates.
     certificate_senders: Mutex<JoinSet<()>>,
+    // An ordered buffer for certificates waiting to be sent to Consensus.
+    certificates_buffer: OrderedBuffer,
     /// Aggregates certificates to use as parents for new headers.
     certificates_aggregators: Mutex<BTreeMap<Round, Box<CertificatesAggregator>>>,
     /// State for tracking suspended certificates and when they can be accepted.
@@ -173,14 +175,8 @@ impl Inner {
             return Err(DagError::ShuttingDown);
         }
 
-        // Send the accepted certificate to the consensus layer.
-        if let Err(e) = self.tx_new_certificates.send(certificate).await {
-            warn!(
-                "Failed to deliver certificate {} to the consensus: {}",
-                digest, e
-            );
-            return Err(DagError::ShuttingDown);
-        }
+        // Buffer the accepted certificate, to be sent to the consensus layer.
+        self.certificates_buffer.push_back(certificate);
 
         Ok(())
     }
@@ -241,6 +237,7 @@ impl Synchronizer {
             metrics,
             batch_tasks: Mutex::new(JoinSet::new()),
             certificate_senders: Mutex::new(JoinSet::new()),
+            certificates_buffer: OrderedBuffer::default(),
             certificates_aggregators: Mutex::new(BTreeMap::new()),
             state: tokio::sync::Mutex::new(State::default()),
         });
@@ -329,6 +326,22 @@ impl Synchronizer {
                 // Error can be ignored.
                 if tx_own_certificate_broadcast.send(cert).is_err() {
                     error!("Failed to populate initial certificate to send to peers!");
+                }
+            }
+        });
+
+        // Start a task to send causally ordered certificates to consensus.
+        let weak_inner = Arc::downgrade(&inner);
+        spawn_monitored_task!(async move {
+            loop {
+                let Some(inner) = weak_inner.upgrade() else {
+                    // this happens if Narwhal is shutting down.
+                    return;
+                };
+                let certificate = inner.certificates_buffer.pop_front().await;
+                if let Err(e) = inner.tx_new_certificates.send(certificate).await {
+                    warn!("Failed to deliver certificate to the consensus: {}", e);
+                    return;
                 }
             }
         });
@@ -1068,5 +1081,27 @@ impl State {
 
     fn num_suspended(&self) -> usize {
         self.suspended.len()
+    }
+}
+
+#[derive(Default)]
+struct OrderedBuffer {
+    certificates: Mutex<VecDeque<Certificate>>,
+    notify: Notify,
+}
+
+impl OrderedBuffer {
+    pub fn push_back(&self, certificate: Certificate) {
+        self.certificates.lock().push_back(certificate);
+        self.notify.notify_one();
+    }
+
+    pub async fn pop_front(&self) -> Certificate {
+        loop {
+            if let Some(cert) = self.certificates.lock().pop_front() {
+                return cert;
+            }
+            self.notify.notified().await;
+        }
     }
 }
