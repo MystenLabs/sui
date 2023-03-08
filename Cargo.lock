@@ -8533,6 +8533,7 @@ dependencies = [
  "fs_extra",
  "futures",
  "itertools",
+ "lazy_static 1.4.0",
  "more-asserts",
  "move-binary-format",
  "move-bytecode-utils",
