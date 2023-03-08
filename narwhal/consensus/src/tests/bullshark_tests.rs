@@ -1155,7 +1155,8 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
         round_4_certificates.push(certificate);
     }
 
-    // now from round 5 to 7 create all certificates, except for node 1 which is now a slow node
+    // now from round 5 to 7 create all certificates. Node 1 is now a slow node and won't create
+    // referrencies to the certificates of that one.
     let slow_node = keys[0].clone();
     let slow_nodes = vec![(slow_node, 0.0_f64)];
 
@@ -1176,7 +1177,7 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
     // Create Bullshark consensus engine
     let store = make_consensus_store(&test_utils::temp_dir());
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let mut state = ConsensusState::new(metrics.clone());
+    let mut state = ConsensusState::new(metrics.clone(), &committee);
     let mut bullshark = Bullshark::new(
         committee,
         store,
@@ -1226,17 +1227,18 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
                     assert_eq!(sub_dags[1].leader.round(), 6);
 
                     assert_eq!(sub_dags[0].certificates.len(), 4);
-                    assert_eq!(sub_dags[1].certificates.len(), 11);
+                    assert_eq!(sub_dags[1].certificates.len(), 9);
 
                     // And GC has collected everything up to round 5.
-                    assert_eq!(state.dag.len(), 4);
-                    for (round, entries) in state.dag.iter() {
-                        assert!(*round >= 4, "{}", format!("Round detected: {}", round));
+                    assert_eq!(state.dag.len(), 5);
 
-                        if *round == 4 || *round == 5 {
-                            assert_eq!(entries.len(), 1);
-                        } else if *round == 6 {
+                    for (round, entries) in state.dag.iter() {
+                        assert!(*round >= 3, "{}", format!("Round detected: {}", round));
+
+                        if *round == 3 || *round == 4 {
                             assert_eq!(entries.len(), 3);
+                        } else if *round == 5 || *round == 6 {
+                            assert_eq!(entries.len(), 4);
                         } else {
                             assert_eq!(entries.len(), 2);
                         }
