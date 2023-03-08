@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { fromB64 } from '@mysten/bcs';
 import { Provider } from '../providers/provider';
-import { LocalTxnDataSerializer } from '../signers/txn-data-serializers/local-txn-data-serializer';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import { TypeTagSerializer } from '../signers/txn-data-serializers/type-tag-serializer';
 import { getObjectReference, getObjectType, SUI_TYPE_ARG } from '../types';
@@ -127,20 +127,13 @@ export async function convertToTransactionBuilder(
       );
       break;
     case 'publish': {
-      // TODO: Fix publish transactions:
-      const serializer = new LocalTxnDataSerializer(provider);
-      return await serializer.serializeToBytes(
-        sender,
-        { kind: 'publish', data },
-        'Commit',
+      const modules = Array.from(data.compiledModules as ArrayLike<any>).map(
+        (data: string | ArrayLike<number>) => [
+          ...(typeof data === 'string' ? fromB64(data) : Array.from(data)),
+        ],
       );
-      // const modules = Array.from(data.compiledModules as ArrayLike<any>).map(
-      //   (data: string | ArrayLike<number>) => [
-      //     ...(typeof data === 'string' ? fromB64(data) : Array.from(data)),
-      //   ],
-      // );
-      // tx.add(Commands.Publish(modules));
-      // break;
+      tx.add(Commands.Publish(modules));
+      break;
     }
     case 'pay': {
       const [coin, ...coins] = data.inputCoins;

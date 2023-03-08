@@ -2,20 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { RawSigner } from '../../src';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Dynamic Fields Reading API', () => {
   let toolbox: TestToolbox;
-  let signer: RawSigner;
   let packageId: string;
   let parentObjectId: string;
 
   beforeAll(async () => {
     toolbox = await setup();
-    signer = new RawSigner(toolbox.keypair, toolbox.provider);
     const packagePath = __dirname + '/./data/dynamic_fields';
-    packageId = await publishPackage(signer, packagePath);
+    packageId = await publishPackage(packagePath, toolbox);
 
     await toolbox.provider
       .getObjectsOwnedByAddress(toolbox.address())

@@ -7,7 +7,6 @@ import {
   Commands,
   normalizeSuiObjectId,
   ObjectId,
-  RawSigner,
   SuiObjectInfo,
   SUI_TYPE_ARG,
   Transaction,
@@ -19,13 +18,11 @@ const SPLIT_AMOUNTS = [BigInt(1), BigInt(2), BigInt(3)];
 
 describe('Coin related API', () => {
   let toolbox: TestToolbox;
-  let signer: RawSigner;
   let coinToSplit: ObjectId;
   let coinsAfterSplit: SuiObjectInfo[];
 
   beforeAll(async () => {
     toolbox = await setup();
-    signer = new RawSigner(toolbox.keypair, toolbox.provider);
     const coins = await toolbox.getGasObjectsOwnedByAddress();
     coinToSplit = coins[0].objectId;
     const tx = new Transaction();
@@ -37,7 +34,7 @@ describe('Coin related API', () => {
     });
 
     // split coins into desired amount
-    await signer.signAndExecuteTransaction(tx);
+    await toolbox.signer.signAndExecuteTransaction(tx);
     coinsAfterSplit = await toolbox.getGasObjectsOwnedByAddress();
   });
 
