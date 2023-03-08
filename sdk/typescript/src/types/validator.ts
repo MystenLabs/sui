@@ -164,6 +164,8 @@ export const SuiValidatorSummary = object({
   pending_delegation: number(),
   pending_pool_token_withdraw: number(),
   pending_total_sui_withdraw: number(),
+  exchange_rates_id: string(),
+  exchange_rates_size: number(),
 });
 
 export type SuiValidatorSummary = Infer<typeof SuiValidatorSummary>;
@@ -176,13 +178,23 @@ export const SuiSystemStateSummary = object({
   safe_mode: boolean(),
   epoch_start_timestamp_ms: number(),
   min_validator_stake: number(),
-  max_validator_candidate_count: number(),
+  max_validator_count: number(),
   governance_start_epoch: number(),
   stake_subsidy_epoch_counter: number(),
   stake_subsidy_balance: number(),
   stake_subsidy_current_epoch_amount: number(),
   total_stake: number(),
   active_validators: array(SuiValidatorSummary),
+  pending_active_validators_id: string(),
+  pending_active_validators_size: number(),
+  pending_removals: array(number()),
+  staking_pool_mappings_id: string(),
+  staking_pool_mappings_size: number(),
+  inactive_pools_id: string(),
+  inactive_pools_size: number(),
+  validator_candidates_id: string(),
+  validator_candidates_size: number(),
+  validator_report_records: array(tuple([SuiAddress, array(SuiAddress)])),
 });
 
 export type SuiSystemStateSummary = Infer<typeof SuiSystemStateSummary>;

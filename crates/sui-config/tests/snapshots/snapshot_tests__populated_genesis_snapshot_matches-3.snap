@@ -241,11 +241,8 @@ validators:
       gas_price: 1
       staking_pool:
         id: "0xd5d9aa879b78dc1f516d71ab979189086eff752f65e4b0dea15829e3157962e1"
-        activation_epoch:
-          vec:
-            - 0
-        deactivation_epoch:
-          vec: []
+        activation_epoch: 0
+        deactivation_epoch: ~
         sui_balance: 25000000000000000
         rewards_pool:
           value: 0
