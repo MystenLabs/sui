@@ -8,9 +8,10 @@ use move_binary_format::CompiledModule;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_vm_runtime::move_vm::MoveVM;
 use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use tracing::{debug, info, instrument};
 
-use crate::{adapter, programmable_transactions};
+use crate::programmable_transactions;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::coin::{check_coins, transfer_coin, update_input_coins, Coin};
 use sui_types::epoch_data::EpochData;
@@ -39,8 +40,8 @@ use sui_types::{
     base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
     gas::SuiGasStatus,
     messages::{
-        CallArg, ChangeEpoch, ExecutionStatus, MoveCall, MoveModulePublish, SingleTransactionKind,
-        TransactionEffects, TransferObject, TransferSui,
+        CallArg, ChangeEpoch, ExecutionStatus, SingleTransactionKind, TransactionEffects,
+        TransferObject, TransferSui,
     },
     object::Object,
     storage::BackingPackageStore,
@@ -209,7 +210,7 @@ fn execution_loop<
     let mut results = Mode::empty_results();
     // TODO: Since we require all mutable objects to not show up more than
     // once across single tx, we should be able to run them in parallel.
-    for (idx, single_tx) in transaction_kind.into_single_transactions().enumerate() {
+    for single_tx in transaction_kind.into_single_transactions() {
         match single_tx {
             SingleTransactionKind::TransferObject(TransferObject {
                 recipient,
@@ -267,43 +268,8 @@ fn execution_loop<
                     recipient,
                 )?;
             }
-            SingleTransactionKind::Call(MoveCall {
-                package,
-                module,
-                function,
-                type_arguments,
-                arguments,
-            }) => {
-                // Charge gas for this VM execution
-                gas_status.charge_vm_gas()?;
-
-                let module_id = ModuleId::new(package.into(), module);
-                let result = adapter::execute::<Mode, _, _>(
-                    move_vm,
-                    temporary_store,
-                    module_id,
-                    &function,
-                    type_arguments,
-                    arguments,
-                    gas_status.create_move_gas_status(),
-                    tx_ctx,
-                    protocol_config,
-                )?;
-                Mode::add_result(&mut results, idx, result);
-            }
-            SingleTransactionKind::Publish(MoveModulePublish { modules }) => {
-                // Charge gas for this VM execution
-                gas_status.charge_vm_gas()?;
-                // Charge gas for this publish
-                gas_status.charge_publish_package(modules.iter().map(|v| v.len()).sum())?;
-                adapter::publish(
-                    temporary_store,
-                    move_vm,
-                    modules,
-                    tx_ctx,
-                    gas_status.create_move_gas_status(),
-                    protocol_config,
-                )?;
+            SingleTransactionKind::Call(_) | SingleTransactionKind::Publish(_) => {
+                panic!("actively being migrated to programmable transactions")
             }
             SingleTransactionKind::Pay(Pay {
                 coins,
@@ -359,14 +325,13 @@ fn execution_loop<
                 protocol_config,
             )?,
             SingleTransactionKind::ProgrammableTransaction(pt) => {
-                // TODO use Mode
-                programmable_transactions::execution::execute(
+                results = programmable_transactions::execution::execute::<_, _, Mode>(
                     protocol_config,
                     move_vm,
                     temporary_store,
                     tx_ctx,
                     gas_status,
-                    gas_object_id,
+                    Some(gas_object_id),
                     pt,
                 )?
             }
@@ -390,30 +355,42 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
         mutable: true,
     });
-    let result = adapter::execute::<execution_mode::Normal, _, _>(
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let res = builder.move_call(
+            (*module_id.address()).into(),
+            module_id.name().to_owned(),
+            function,
+            vec![],
+            vec![
+                system_object_arg.clone(),
+                CallArg::Pure(bcs::to_bytes(&change_epoch.epoch).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&change_epoch.protocol_version.as_u64()).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&change_epoch.storage_charge).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&change_epoch.computation_charge).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&change_epoch.storage_rebate).unwrap()),
+                CallArg::Pure(
+                    bcs::to_bytes(&protocol_config.storage_fund_reinvest_rate()).unwrap(),
+                ),
+                CallArg::Pure(bcs::to_bytes(&protocol_config.reward_slashing_rate()).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&change_epoch.epoch_start_timestamp_ms).unwrap()),
+                CallArg::Pure(
+                    bcs::to_bytes(&get_sui_system_state_version(change_epoch.protocol_version))
+                        .unwrap(),
+                ),
+            ],
+        );
+        assert_invariant!(res.is_ok(), "Unable to generate advance_epoch transaction!");
+        builder.finish()
+    };
+    let result = programmable_transactions::execution::execute::<_, _, execution_mode::Normal>(
+        protocol_config,
         move_vm,
         temporary_store,
-        module_id.clone(),
-        &function,
-        vec![],
-        vec![
-            system_object_arg.clone(),
-            CallArg::Pure(bcs::to_bytes(&change_epoch.epoch).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&change_epoch.protocol_version.as_u64()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&change_epoch.storage_charge).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&change_epoch.computation_charge).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&change_epoch.storage_rebate).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&protocol_config.storage_fund_reinvest_rate()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&protocol_config.reward_slashing_rate()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&change_epoch.epoch_start_timestamp_ms).unwrap()),
-            CallArg::Pure(
-                bcs::to_bytes(&get_sui_system_state_version(change_epoch.protocol_version))
-                    .unwrap(),
-            ),
-        ],
-        gas_status.create_move_gas_status(),
         tx_ctx,
-        protocol_config,
+        gas_status,
+        None,
+        pt,
     );
 
     if result.is_err() {
@@ -425,20 +402,33 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         );
         temporary_store.reset();
         let function = ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME.to_owned();
-        adapter::execute::<execution_mode::Normal, _, _>(
+        let safe_mode_pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            let res = builder.move_call(
+                (*module_id.address()).into(),
+                module_id.name().to_owned(),
+                function,
+                vec![],
+                vec![
+                    system_object_arg,
+                    CallArg::Pure(bcs::to_bytes(&change_epoch.epoch).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&change_epoch.protocol_version).unwrap()),
+                ],
+            );
+            assert_invariant!(
+                res.is_ok(),
+                "Unable to generate advance_epoch_safe_mode transaction!"
+            );
+            builder.finish()
+        };
+        programmable_transactions::execution::execute::<_, _, execution_mode::Normal>(
+            protocol_config,
             move_vm,
             temporary_store,
-            module_id,
-            &function,
-            vec![],
-            vec![
-                system_object_arg,
-                CallArg::Pure(bcs::to_bytes(&change_epoch.epoch).unwrap()),
-                CallArg::Pure(bcs::to_bytes(&change_epoch.protocol_version).unwrap()),
-            ],
-            gas_status.create_move_gas_status(),
             tx_ctx,
-            protocol_config,
+            gas_status,
+            None,
+            safe_mode_pt,
         )?;
     }
 
@@ -476,26 +466,37 @@ fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResol
     gas_status: &mut SuiGasStatus,
     protocol_config: &ProtocolConfig,
 ) -> Result<(), ExecutionError> {
-    adapter::execute::<execution_mode::Normal, _, _>(
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let res = builder.move_call(
+            SUI_FRAMEWORK_ADDRESS.into(),
+            SUI_SYSTEM_MODULE_NAME.to_owned(),
+            CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME.to_owned(),
+            vec![],
+            vec![
+                CallArg::Object(ObjectArg::SharedObject {
+                    id: SUI_CLOCK_OBJECT_ID,
+                    initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+                    mutable: true,
+                }),
+                CallArg::Pure(bcs::to_bytes(&prologue.commit_timestamp_ms).unwrap()),
+            ],
+        );
+        assert_invariant!(
+            res.is_ok(),
+            "Unable to generate consensus_commit_prologue transaction!"
+        );
+        builder.finish()
+    };
+    programmable_transactions::execution::execute::<_, _, execution_mode::Normal>(
+        protocol_config,
         move_vm,
         temporary_store,
-        ModuleId::new(SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_MODULE_NAME.to_owned()),
-        &CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME.to_owned(),
-        vec![],
-        vec![
-            CallArg::Object(ObjectArg::SharedObject {
-                id: SUI_CLOCK_OBJECT_ID,
-                initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-                mutable: true,
-            }),
-            CallArg::Pure(bcs::to_bytes(&prologue.commit_timestamp_ms).unwrap()),
-        ],
-        gas_status.create_move_gas_status(),
         tx_ctx,
-        protocol_config,
-    )?;
-
-    Ok(())
+        gas_status,
+        None,
+        pt,
+    )
 }
 
 fn transfer_object<S>(

@@ -104,26 +104,28 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
         [sender; TOTAL].into_iter().zip(all_ids.clone().into_iter()),
     )
     .await;
-    let mut transactions = vec![];
+    let mut builder = ProgrammableTransactionBuilder::new();
     for obj_id in all_ids.iter().take(N) {
-        transactions.push(SingleTransactionKind::TransferObject(TransferObject {
+        builder.transfer_object(
             recipient,
-            object_ref: authority_state
+            authority_state
                 .get_object(obj_id)
                 .await?
                 .unwrap()
                 .compute_object_reference(),
-        }));
+        )
     }
-    transactions.push(SingleTransactionKind::Call(MoveCall {
-        package: package.0,
-        module: ident_str!("object_basics").to_owned(),
-        function: ident_str!("create").to_owned(),
-        type_arguments: vec![],
-        arguments: vec![],
-    }));
+    builder
+        .move_call(
+            package.0,
+            ident_str!("object_basics").to_owned(),
+            ident_str!("create").to_owned(),
+            vec![],
+            vec![],
+        )
+        .unwrap();
     let data = TransactionData::new_with_dummy_gas_price(
-        TransactionKind::Batch(transactions),
+        TransactionKind::programmable(builder.finish()),
         sender,
         authority_state
             .get_object(&all_ids[N])

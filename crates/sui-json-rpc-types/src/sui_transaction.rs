@@ -626,7 +626,7 @@ impl SuiTransactionEvents {
 }
 
 /// The response from processing a dev inspect transaction
-#[derive(Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "DevInspectResults", rename_all = "camelCase")]
 pub struct DevInspectResults {
     /// Summary of effects that likely would be generated if the transaction is actually run.
@@ -635,25 +635,24 @@ pub struct DevInspectResults {
     pub effects: SuiTransactionEffects,
     /// Events that likely would be generated if the transaction is actually run.
     pub events: SuiTransactionEvents,
-    /// Execution results (including return values) from executing the transactions
-    /// Currently contains only return values from Move calls
-    pub results: Result<Vec<(usize, SuiExecutionResult)>, String>,
+    /// Execution results (including return values) from executing the transaction commands
+    pub results: Result<Vec<SuiExecutionResult>, String>,
 }
 
-#[derive(Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "SuiExecutionResult", rename_all = "camelCase")]
 pub struct SuiExecutionResult {
     /// The value of any arguments that were mutably borrowed.
     /// Non-mut borrowed values are not included
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub mutable_reference_outputs: Vec<(/* local index */ u8, Vec<u8>, SuiTypeTag)>,
-    /// The return values from the function
+    pub mutable_reference_outputs: Vec<(/* argument */ SuiArgument, Vec<u8>, SuiTypeTag)>,
+    /// The return values from the command
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub return_values: Vec<(Vec<u8>, SuiTypeTag)>,
 }
 
 type ExecutionResult = (
-    /*  mutable_reference_outputs */ Vec<(u8, Vec<u8>, TypeTag)>,
+    /*  mutable_reference_outputs */ Vec<(Argument, Vec<u8>, TypeTag)>,
     /*  return_values */ Vec<(Vec<u8>, TypeTag)>,
 );
 
@@ -661,28 +660,27 @@ impl DevInspectResults {
     pub fn new(
         effects: TransactionEffects,
         events: TransactionEvents,
-        return_values: Result<Vec<(usize, ExecutionResult)>, ExecutionError>,
+        return_values: Result<Vec<ExecutionResult>, ExecutionError>,
         resolver: &impl GetModule,
     ) -> Result<Self, anyhow::Error> {
         let results = match return_values {
             Err(e) => Err(format!("{}", e)),
             Ok(srvs) => Ok(srvs
                 .into_iter()
-                .map(|(idx, srv)| {
+                .map(|srv| {
                     let (mutable_reference_outputs, return_values) = srv;
                     let mutable_reference_outputs = mutable_reference_outputs
                         .into_iter()
-                        .map(|(i, bytes, tag)| (i, bytes, SuiTypeTag::from(tag)))
+                        .map(|(a, bytes, tag)| (a.into(), bytes, SuiTypeTag::from(tag)))
                         .collect();
                     let return_values = return_values
                         .into_iter()
                         .map(|(bytes, tag)| (bytes, SuiTypeTag::from(tag)))
                         .collect();
-                    let res = SuiExecutionResult {
+                    SuiExecutionResult {
                         mutable_reference_outputs,
                         return_values,
-                    };
-                    (idx, res)
+                    }
                 })
                 .collect()),
         };
@@ -1307,7 +1305,7 @@ impl From<InputObjectKind> for SuiInputObjectKind {
     }
 }
 
-#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Clone)]
 #[serde(rename = "TypeTag", rename_all = "camelCase")]
 pub struct SuiTypeTag(String);
 
