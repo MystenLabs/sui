@@ -110,12 +110,25 @@ pub struct ValidatorGenesisInfo {
     pub network_address: Multiaddr,
     pub p2p_address: Multiaddr,
     pub p2p_listen_address: Option<SocketAddr>,
+    #[serde(default = "default_socket_address")]
     pub metrics_address: SocketAddr,
+    #[serde(default = "default_multiaddr_address")]
     pub narwhal_metrics_address: Multiaddr,
     pub gas_price: u64,
     pub commission_rate: u64,
     pub narwhal_primary_address: Multiaddr,
     pub narwhal_worker_address: Multiaddr,
+}
+
+fn default_socket_address() -> SocketAddr {
+    utils::available_local_socket_address()
+}
+
+fn default_multiaddr_address() -> Multiaddr {
+    let addr = utils::available_local_socket_address();
+    format!("/ip4/{:?}/tcp/{}/http", addr.ip(), addr.port())
+        .parse()
+        .unwrap()
 }
 
 impl ValidatorGenesisInfo {
