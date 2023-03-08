@@ -10,7 +10,6 @@ import {
   PaySuiTx,
   PureArg,
   RawSigner,
-  RpcTxnDataSerializer,
   SUI_SYSTEM_STATE_OBJECT_ID,
   UnserializedSignableTransaction,
   TransactionData,
@@ -32,15 +31,11 @@ import {
 describe('Transaction Serialization and deserialization', () => {
   let toolbox: TestToolbox;
   let localSerializer: LocalTxnDataSerializer;
-  let rpcSerializer: RpcTxnDataSerializer;
   let packageId: string;
 
   beforeAll(async () => {
     toolbox = await setup();
     localSerializer = new LocalTxnDataSerializer(toolbox.provider);
-    rpcSerializer = new RpcTxnDataSerializer(
-      toolbox.provider.connection.fullnode,
-    );
     const signer = new RawSigner(toolbox.keypair, toolbox.provider);
     const packagePath = __dirname + '/./data/serializer';
     packageId = await publishPackage(signer, packagePath);
@@ -49,16 +44,10 @@ describe('Transaction Serialization and deserialization', () => {
   async function serializeAndDeserialize(
     moveCall: MoveCallTransaction,
   ): Promise<MoveCallTransaction> {
-    const rpcTxnBytes = await rpcSerializer.serializeToBytes(
-      toolbox.address(),
-      { kind: 'moveCall', data: moveCall },
-    );
     const localTxnBytes = await localSerializer.serializeToBytes(
       toolbox.address(),
       { kind: 'moveCall', data: moveCall },
     );
-
-    expect(rpcTxnBytes).toEqual(localTxnBytes);
 
     const deserialized =
       (await localSerializer.deserializeTransactionBytesToSignableTransaction(

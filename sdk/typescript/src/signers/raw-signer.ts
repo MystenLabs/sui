@@ -9,17 +9,12 @@ import {
 import { Provider } from '../providers/provider';
 import { SuiAddress } from '../types';
 import { SignerWithProvider } from './signer-with-provider';
-import { TxnDataSerializer } from './txn-data-serializers/txn-data-serializer';
 
 export class RawSigner extends SignerWithProvider {
   private readonly keypair: Keypair;
 
-  constructor(
-    keypair: Keypair,
-    provider?: Provider,
-    serializer?: TxnDataSerializer,
-  ) {
-    super(provider, serializer);
+  constructor(keypair: Keypair, provider?: Provider) {
+    super(provider);
     this.keypair = keypair;
   }
 
