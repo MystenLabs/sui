@@ -125,6 +125,9 @@ pub struct ProtocolConfig {
     /// Maximum number of individual transactions in a Batch transaction.
     max_tx_in_batch: Option<u32>,
 
+    /// Maximum size of serialized transaction effects.
+    max_serialized_tx_effects_size: Option<usize>,
+
     /// Maximum number of modules in a Publish transaction.
     max_modules_in_publish: Option<u32>,
 
@@ -331,6 +334,9 @@ impl ProtocolConfig {
     }
     pub fn max_tx_in_batch(&self) -> u32 {
         self.max_tx_in_batch.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_serialized_tx_effects_size(&self) -> usize {
+        self.max_serialized_tx_effects_size.expect(CONSTANT_ERR_MSG)
     }
     pub fn max_modules_in_publish(&self) -> u32 {
         self.max_modules_in_publish.expect(CONSTANT_ERR_MSG)
@@ -619,6 +625,7 @@ impl ProtocolConfig {
                 version, // will be overwitten before being returned
                 max_tx_size: Some(64 * 1024),
                 max_tx_in_batch: Some(10),
+                max_serialized_tx_effects_size: Some(64 * 1024),
                 max_modules_in_publish: Some(128),
                 max_arguments: Some(128),
                 max_type_arguments: Some(16),

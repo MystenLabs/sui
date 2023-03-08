@@ -2624,6 +2624,15 @@ pub enum ExecutionFailureStatus {
         idx: u16,
     },
     ArityMismatch,
+
+    //
+    // Post-execution errors
+    //
+    // Indicates the effects from the transaction are too large
+    EffectsTooLarge {
+        current_size: usize,
+        max_size: usize,
+    },
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }
@@ -2955,6 +2964,14 @@ impl Display for ExecutionFailureStatus {
                     The number of arguments does not match the number of parameters"
                 )
             }
+            ExecutionFailureStatus::EffectsTooLarge {
+                current_size,
+                max_size,
+            } => write!(
+                f,
+                "Effects of size {current_size} bytes too large. \
+                Limit is {max_size} bytes"
+            ),
         }
     }
 }

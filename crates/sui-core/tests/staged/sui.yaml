@@ -315,6 +315,11 @@ ExecutionFailureStatus:
           - idx: U16
     40:
       ArityMismatch: UNIT
+    41:
+      EffectsTooLarge:
+        STRUCT:
+          - current_size: U64
+          - max_size: U64
 ExecutionStatus:
   ENUM:
     0:

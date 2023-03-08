@@ -970,7 +970,7 @@ fn process_package(
 
     let InnerTemporaryStore {
         written, deleted, ..
-    } = temporary_store.into_inner();
+    } = temporary_store.inner();
 
     store.finish(written, deleted);
 
@@ -1068,7 +1068,7 @@ pub fn generate_genesis_system_object(
 
     let InnerTemporaryStore {
         written, deleted, ..
-    } = temporary_store.into_inner();
+    } = temporary_store.inner();
 
     store.finish(written, deleted);
 
