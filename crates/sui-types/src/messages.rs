@@ -1918,7 +1918,15 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
-        self.kind().validity_check(config, self.gas())?;
+        let gas = self.gas();
+        fp_ensure!(
+            gas.len() < config.max_gas_payment_objects() as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum number of gas payment objects".to_string(),
+                value: config.max_gas_payment_objects().to_string()
+            }
+        );
+        self.kind().validity_check(config, gas)?;
         self.check_sponsorship()
     }
 
