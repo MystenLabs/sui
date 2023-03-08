@@ -35,11 +35,8 @@ pub struct Committee {
     pub epoch: EpochId,
     pub voting_rights: Vec<(AuthorityName, StakeUnit)>,
     pub total_votes: StakeUnit,
-    #[serde(skip)]
     expanded_keys: HashMap<AuthorityName, AuthorityPublicKey>,
-    #[serde(skip)]
     index_map: HashMap<AuthorityName, usize>,
-    #[serde(skip)]
     loaded: bool,
 }
 
