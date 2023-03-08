@@ -15,7 +15,9 @@ use crate::{
 };
 use fastcrypto::encoding::{Encoding, Hex};
 use multiaddr::Multiaddr;
-use narwhal_config::{NetworkAdminServerParameters, Parameters as ConsensusParameters};
+use narwhal_config::{
+    NetworkAdminServerParameters, Parameters as ConsensusParameters, PrometheusMetricsParameters,
+};
 use rand::rngs::OsRng;
 use std::{
     num::NonZeroUsize,
@@ -265,6 +267,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                         worker_key_pair,
                         account_key_pair,
                         network_key_pair,
+                        None,
                         ip.clone(),
                         index,
                     ),
@@ -388,15 +391,22 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                                 ),
                             },
                         },
+                        prometheus_metrics: PrometheusMetricsParameters {
+                            socket_addr: validator.genesis_info.narwhal_metrics_address,
+                        },
                         ..Default::default()
                     },
                 };
 
                 let p2p_config = P2pConfig {
-                    listen_address: utils::udp_multiaddr_to_listen_address(
-                        &validator.genesis_info.p2p_address,
-                    )
-                    .unwrap(),
+                    listen_address: validator.genesis_info.p2p_listen_address.unwrap_or_else(
+                        || {
+                            utils::udp_multiaddr_to_listen_address(
+                                &validator.genesis_info.p2p_address,
+                            )
+                            .unwrap()
+                        },
+                    ),
                     external_address: Some(validator.genesis_info.p2p_address),
                     ..Default::default()
                 };
@@ -420,7 +430,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     )),
                     db_path,
                     network_address,
-                    metrics_address: utils::available_local_socket_address(),
+                    metrics_address: validator.genesis_info.metrics_address,
                     // TODO: admin server is hard coded to start on 127.0.0.1 - we should probably
                     // provide the entire socket address here to avoid confusion.
                     admin_interface_port: match self.validator_ip_sel {
