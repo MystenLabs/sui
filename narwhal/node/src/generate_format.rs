@@ -1,3 +1,4 @@
+use clap::{clap_derive::ValueEnum, Parser};
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::{CommitteeBuilder, Epoch, WorkerIndex, WorkerInfo};
@@ -10,7 +11,6 @@ use mysten_network::Multiaddr;
 use rand::{prelude::StdRng, SeedableRng};
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
-use structopt::{clap::arg_enum, StructOpt};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, HeaderV1Builder,
     Metadata, WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerSynchronizeMessage,
@@ -138,22 +138,21 @@ fn get_registry() -> Result<Registry> {
     tracer.registry()
 }
 
-arg_enum! {
-#[derive(Debug, StructOpt, Clone, Copy)]
+#[derive(Debug, ValueEnum, Clone, Copy)]
 enum Action {
     Print,
     Test,
     Record,
 }
-}
 
-#[derive(Debug, StructOpt)]
-#[structopt(
+#[derive(Debug, Parser)]
+#[clap(
     name = "Narwhal format generator",
     about = "Trace serde (de)serialization to generate format descriptions for Narwhal types"
 )]
 struct Options {
-    #[structopt(possible_values = &Action::variants(), default_value = "Print", case_insensitive = true)]
+    #[clap(default_value = "Print", case_insensitive = true)]
+    #[clap(value_enum)]
     action: Action,
 }
 
