@@ -82,6 +82,25 @@ After receiving 2 SUI coins, Anna sent it immediately to Tom. Now Tom has 6 SUI 
 
 Finally, Tom sends all of his SUI coins to John. For this transaction, the input is actually two objects (Object A and Object B). Object B is destroyed, and its value is added to Object A. As a result, the transaction's output is only Object A with a value of 6 SUI.
 
+```mermaid
+flowchart LR
+    id1(Object A\nfa:fa-coins 5 SUI\n fa:fa-person Tom):::object-a
+    id2(Object C\nfa:fa-coins 1 SUI\n fa:fa-person Alice)
+    id3(Object A\nfa:fa-coins 4 SUI\n fa:fa-person Tom):::object-a
+    id4(Object B\nfa:fa-coins 2 SUI\n fa:fa-person John):::object-b
+    id5(Object B\nfa:fa-coins 2 SUI\n fa:fa-person Anna):::object-b
+    id6(Object B\nfa:fa-coins 2 SUI\n fa:fa-person Tom):::object-b
+    id7(Object A\nfa:fa-coins 6 SUI\n fa:fa-person John):::object-a
+    id1-->|tx-1|id2
+    id1-->|tx-1|id3
+    id4-->|tx-2|id5
+    id5-->|tx-3|id6
+    id3-->|tx-4|id7
+    id6-->|tx-4|id7
+    classDef object-a fill:#f225
+    classDef object-b fill:#ff43
+```
+
 ## Further reading
 
 * See the [Move tutorial](move/index.md) to develop Sui smart contracts.
