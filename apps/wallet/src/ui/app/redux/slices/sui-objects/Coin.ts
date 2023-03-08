@@ -5,8 +5,6 @@ import {
     Coin as CoinAPI,
     SUI_SYSTEM_STATE_OBJECT_ID,
     getObjectType,
-    getCoinBalanceChangeEvent,
-    isEventType,
     Transaction,
 } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
