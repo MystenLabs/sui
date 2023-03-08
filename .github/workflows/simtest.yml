@@ -35,7 +35,7 @@ jobs:
 
       - name: Checkout sui repo
         run: |
-          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest "cd sui && git fetch origin && git rebase origin/main"
+          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest "cd sui && git fetch origin && git rebase origin/main && cargo clean"
 
       - name: Install simtest
         run: |
