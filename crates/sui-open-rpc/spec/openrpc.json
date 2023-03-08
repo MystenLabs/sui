@@ -5342,7 +5342,8 @@
             "required": [
               "dataType",
               "id",
-              "moduleMap"
+              "moduleMap",
+              "version"
             ],
             "properties": {
               "dataType": {
@@ -5359,6 +5360,9 @@
                 "additionalProperties": {
                   "$ref": "#/components/schemas/Base64"
                 }
+              },
+              "version": {
+                "$ref": "#/components/schemas/SequenceNumber"
               }
             }
           }

@@ -740,6 +740,7 @@ impl SuiRawMoveObject {
 #[serde(rename = "RawMovePackage", rename_all = "camelCase")]
 pub struct SuiRawMovePackage {
     pub id: ObjectID,
+    pub version: SequenceNumber,
     #[schemars(with = "BTreeMap<String, Base64>")]
     #[serde_as(as = "BTreeMap<_, Base64>")]
     pub module_map: BTreeMap<String, Vec<u8>>,
@@ -749,6 +750,7 @@ impl From<MovePackage> for SuiRawMovePackage {
     fn from(p: MovePackage) -> Self {
         Self {
             id: p.id(),
+            version: p.version(),
             module_map: p.serialized_module_map().clone(),
         }
     }

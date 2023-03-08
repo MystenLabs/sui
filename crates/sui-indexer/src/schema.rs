@@ -4,6 +4,10 @@
 
 pub mod sql_types {
     #[derive(diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "bcs_bytes"))]
+    pub struct BcsBytes;
+
+    #[derive(diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "object_status"))]
     pub struct ObjectStatus;
 
@@ -80,6 +84,7 @@ diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::OwnerType;
     use super::sql_types::ObjectStatus;
+    use super::sql_types::BcsBytes;
 
     objects (object_id) {
         epoch -> Int8,
@@ -93,6 +98,7 @@ diesel::table! {
         previous_transaction -> Varchar,
         object_type -> Varchar,
         object_status -> ObjectStatus,
+        bcs -> Array<Nullable<BcsBytes>>,
     }
 }
 
@@ -100,6 +106,7 @@ diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::OwnerType;
     use super::sql_types::ObjectStatus;
+    use super::sql_types::BcsBytes;
 
     objects_history (epoch, object_id, version) {
         epoch -> Int8,
@@ -113,6 +120,7 @@ diesel::table! {
         previous_transaction -> Varchar,
         object_type -> Varchar,
         object_status -> ObjectStatus,
+        bcs -> Array<Nullable<BcsBytes>>,
     }
 }
 
@@ -153,18 +161,14 @@ diesel::table! {
 }
 
 diesel::table! {
-    package_logs (last_processed_id) {
-        last_processed_id -> Int8,
-    }
-}
+    use diesel::sql_types::*;
+    use super::sql_types::BcsBytes;
 
-diesel::table! {
-    packages (id) {
-        id -> Int8,
-        package_id -> Text,
-        author -> Text,
-        module_names -> Array<Nullable<Text>>,
-        package_content -> Text,
+    packages (package_id, version) {
+        package_id -> Varchar,
+        version -> Int8,
+        author -> Varchar,
+        data -> Array<Nullable<BcsBytes>>,
     }
 }
 
@@ -218,7 +222,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     objects_history,
     owner,
     owner_history,
-    package_logs,
     packages,
     recipients,
     transactions,

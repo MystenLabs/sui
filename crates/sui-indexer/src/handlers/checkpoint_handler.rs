@@ -21,7 +21,7 @@ use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use std::collections::BTreeMap;
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiObjectData, SuiObjectDataOptions, SuiParsedData, SuiTransactionDataAPI,
+    OwnedObjectRef, SuiObjectData, SuiObjectDataOptions, SuiRawData, SuiTransactionDataAPI,
     SuiTransactionEffectsAPI, SuiTransactionKind, SuiTransactionResponse,
 };
 use sui_sdk::error::Error;
@@ -170,7 +170,7 @@ where
         let rpc = self.rpc_client.clone();
         let all_mutated_objects = join_all(all_mutated.into_iter().map(|(id, version, status)| {
             rpc.read_api()
-                .try_get_parsed_past_object(id, version, SuiObjectDataOptions::full_content())
+                .try_get_parsed_past_object(id, version, SuiObjectDataOptions::bcs_lossless())
                 .map(move |resp| (resp, status))
         }))
         .await
@@ -382,8 +382,8 @@ where
         let object_map = all_mutated_objects
             .iter()
             .filter_map(|(_, o)| {
-                if let SuiParsedData::Package(p) = &o
-                    .content
+                if let SuiRawData::Package(p) = &o
+                    .bcs
                     .as_ref()
                     .expect("Expect the content field to be non-empty from data fetching")
                 {
@@ -398,13 +398,9 @@ where
             .iter()
             .flat_map(|tx| {
                 tx.effects.created().iter().map(|oref| {
-                    object_map.get(&oref.reference.object_id).map(|o| {
-                        Package::try_from(
-                            oref.reference.object_id,
-                            *tx.transaction.data.sender(),
-                            o,
-                        )
-                    })
+                    object_map
+                        .get(&oref.reference.object_id)
+                        .map(|o| Package::try_from(*tx.transaction.data.sender(), o))
                 })
             })
             .flatten()

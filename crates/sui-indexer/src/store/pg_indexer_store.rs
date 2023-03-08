@@ -9,7 +9,6 @@ use crate::schema::addresses::account_address;
 use crate::schema::checkpoints::dsl::checkpoints as checkpoints_table;
 use crate::schema::checkpoints::{checkpoint_digest, sequence_number};
 use crate::schema::move_calls::dsl as move_calls_dsl;
-use crate::schema::packages::{author, module_names, package_content, package_id};
 use crate::schema::recipients::dsl as recipients_dsl;
 use crate::schema::transactions::{dsl, transaction_digest};
 use crate::schema::{addresses, events, move_calls, objects, packages, recipients, transactions};
@@ -554,13 +553,9 @@ impl IndexerStore for PgIndexerStore {
 
                 diesel::insert_into(packages::table)
                     .values(packages)
-                    .on_conflict(package_id)
-                    .do_update()
-                    .set((
-                        author.eq(excluded(author)),
-                        module_names.eq(excluded(module_names)),
-                        package_content.eq(excluded(package_content)),
-                    ))
+                    // We need to keep multiple version of the object in the database because of package upgrade.
+                    // Package with the same version number will not change, ignoring conflicts.
+                    .on_conflict_do_nothing()
                     .execute(conn)?;
 
                 diesel::insert_into(move_calls::table)
