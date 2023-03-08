@@ -52,6 +52,20 @@ module sui::test_random {
         output
     }
 
+    /// Use the given pseudorandom generator to generate a vector with `l` random
+    /// bytes where each byte is a valid ascii character.
+    public fun next_ascii_bytes(random: &mut Random, l: u64): vector<u8> {
+        let vec = next_bytes(random, l);
+        let i = 0;
+        let len = vector::length(&vec);
+        while (i < len) {
+            let char = vector::borrow_mut(&mut vec, i);
+            *char = *char % 0x7F;
+            i = i + 1;
+        };
+        vec
+    }
+
     /// Use the given pseudorandom generator to generate a random `u256` integer.
     public fun next_u256(random: &mut Random): u256 {
         let bytes = next_digest(random);

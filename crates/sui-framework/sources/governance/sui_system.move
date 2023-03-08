@@ -835,4 +835,13 @@ module sui::sui_system {
         let self = load_system_state_mut(wrapper);
         self.epoch = epoch_num
     }
+
+    #[test_only]
+    public fun request_add_validator_candidate_for_testing(
+        wrapper: &mut SuiSystemState,
+        testing_validator: Validator,
+    ) {
+        let self = load_system_state_mut(wrapper);
+        validator_set::request_add_validator_candidate(&mut self.validators, testing_validator);
+    }
 }

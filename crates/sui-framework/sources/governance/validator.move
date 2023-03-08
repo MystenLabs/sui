@@ -32,6 +32,8 @@ module sui::validator {
     friend sui::sui_system_tests;
     #[test_only]
     friend sui::governance_test_utils;
+    #[test_only]
+    friend sui::delegation_stress_tests;
 
     /// Invalid proof_of_possesion field in ValidatorMetadata
     const EInvalidProofOfPossession: u64 = 0;

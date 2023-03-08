@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // ~~~~~~~~~~~ To Implement ~~~~~~~~~~
-// * Add validator
-//   - Delegation + withdrawals
+// * Move from candidate validator to pending validator
+//   - support pending state (so no delegations)
 // * Remove validator
 //   - Withdrawals, need to guard against delegations at this stage.
-// * Request set gas price
-// * Request commission rate
+// * Request set commission rate
 // * Various metadata setters
 #[test_only]
 module sui::delegation_stress_tests {
@@ -28,7 +27,8 @@ module sui::delegation_stress_tests {
     use std::option;
     use sui::object::ID;
     use sui::sui_system::{Self, SuiSystemState, storage_fund_balance};
-    use sui::tx_context;
+    use sui::tx_context::{Self, TxContext};
+    use sui::validator::{Self, Validator};
     use sui::governance_test_utils::{
         create_validators_with_stakes, create_sui_system_state_for_testing
     };
@@ -36,7 +36,9 @@ module sui::delegation_stress_tests {
 
     struct TestState {
         scenario: Scenario,
-        validators: vector<address>,
+        active_validators: vector<address>,
+        preactive_validators: VecMap<address, u64>,
+        removed_validators: vector<address>,
         delegation_requests_this_epoch: VecMap<ID, address>,
         delegation_withdraws_this_epoch: u64,
         cancelled_requests: VecSet<ID>,
@@ -50,6 +52,9 @@ module sui::delegation_stress_tests {
         delegator: address
     }
 
+    // Set this to true if you want to see the sequence of operations that are performed/attempted.
+    const TRACE: bool = false;
+
     const MAX_COMPUTATION_REWARD_AMOUNT_PER_EPOCH: u64 = 1_000_000_000;
     const MAX_STORAGE_REWARD_AMOUNT_PER_EPOCH: u64 = 1_000_000_000;
 
@@ -62,12 +67,13 @@ module sui::delegation_stress_tests {
     const NUM_VALIDATORS: u64 = 40;
     const BASIS_POINT_DENOMINATOR: u64 = 10_000;
 
-    const NUM_OPERATIONS: u8 = 5;
+    const NUM_OPERATIONS: u8 = 6;
     const ADD_DELEGATION: u8 = 0;
     const WITHDRAW_DELEGATION: u8 = 1;
     const SET_GAS_PRICE: u8 = 2;
     const REPORT_VALIDATOR: u8 = 3;
     const UNREPORT_VALIDATOR: u8 = 4;
+    const ADD_VALIDATOR_CANDIDATE: u8 = 5;
 
     #[test]
     fun smoke_test() {
@@ -89,10 +95,10 @@ module sui::delegation_stress_tests {
     }
 
     // Takes too long for CI
-    // #[test]
+     //#[test]
     fun stress_test() {
         let state = begin(vector[42], NUM_VALIDATORS);
-        let num_epochs = 50;
+        let num_epochs = 5;
         let i = 0;
         while (i < num_epochs) {
             i = i + 1;
@@ -122,12 +128,15 @@ module sui::delegation_stress_tests {
             report_validator_random(state)
         } else if (operation_num == UNREPORT_VALIDATOR) {
             unreport_validator_random(state)
+        } else if (operation_num == ADD_VALIDATOR_CANDIDATE) {
+            add_validator_candidate_random(state)
         } else {
             false
         }
     }
 
     fun request_set_gas_price_random(state: &mut TestState): bool {
+        trace(b"set gas price");
         let validator = random_validator(state);
         let scenario = &mut state.scenario;
         test_scenario::next_tx(scenario, validator);
@@ -142,6 +151,7 @@ module sui::delegation_stress_tests {
     }
 
     fun report_validator_random(state: &mut TestState): bool {
+        trace(b"report validator");
         let validator = random_validator(state);
         let other = random_validator_except(validator, state);
         let scenario = &mut state.scenario;
@@ -159,6 +169,7 @@ module sui::delegation_stress_tests {
     }
 
     fun unreport_validator_random(state: &mut TestState): bool {
+        trace(b"unreport validator");
         let (validator, validator_reports_mut) =  {
             let len = vec_map::size(&state.reports);
             if (len < 1) return false;
@@ -182,14 +193,24 @@ module sui::delegation_stress_tests {
 
     /// Pick a random address, delegate a random amount to a random validator.
     fun request_add_delegation_random(state: &mut TestState): bool {
+        trace(b"add delegation");
         let scenario = &mut state.scenario;
 
         let delegator = next_address(&mut state.random);
         // let delegator = @0x42;
         let delegate_amount = next_u64_in_range(&mut state.random, MAX_DELEGATION_AMOUNT) + 1;
 
-        let validator_idx = next_u64_in_range(&mut state.random, vector::length(&state.validators));
-        let validator_address = *vector::borrow(&state.validators, validator_idx);
+        // Randomly pick if we should delegate to a pre-active or acive validator.
+        let validator_address = if (test_random::next_bool(&mut state.random) && !vec_map::is_empty(&state.preactive_validators)) {
+            let validator_idx = next_u64_in_range(&mut state.random, vec_map::size(&state.preactive_validators));
+            let (validator_address, stake_amount) = vec_map::get_entry_by_idx_mut(&mut state.preactive_validators, validator_idx);
+            *stake_amount = *stake_amount + delegate_amount;
+            *validator_address
+        } else {
+            let validator_idx = next_u64_in_range(&mut state.random, vector::length(&state.active_validators));
+            *vector::borrow(&state.active_validators, validator_idx)
+        };
+
         test_scenario::next_tx(scenario, delegator);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         let ctx = test_scenario::ctx(scenario);
@@ -199,14 +220,33 @@ module sui::delegation_stress_tests {
         test_scenario::next_tx(scenario, delegator);
 
         let staked_sui_id = option::destroy_some(most_recent_id_for_address<StakedSui>(delegator));
-        // vector::push_back(&mut state.delegation_requests_this_epoch, StakedSuiInfo { delegator, staked_sui_id });
         vec_map::insert(&mut state.delegation_requests_this_epoch, staked_sui_id, delegator);
+        true
+    }
+
+    fun add_validator_candidate_random(state: &mut TestState): bool {
+        trace(b"add candidate");
+        let validator_candidate = next_address(&mut state.random);
+        let scenario = &mut state.scenario;
+
+        test_scenario::next_tx(scenario, validator_candidate);
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        let ctx = test_scenario::ctx(scenario);
+        let validator = create_random_validator_candidate_for_testing(
+            &mut state.random, validator_candidate, ctx
+        );
+            //governance_test_utils::create_validator_for_testing(validator_candidate, 1, ctx);
+        sui_system::request_add_validator_candidate_for_testing(&mut system_state, validator);
+        vec_map::insert(&mut state.preactive_validators, validator_candidate, 0);
+        test_scenario::return_shared(system_state);
+        //test_scenario::next_tx(scenario, validator_candidate);
         true
     }
 
     /// Pick a random existing delegation and withdraw it.
     /// Return false if no delegation is left in the state.
     fun request_withdraw_delegation_random(state: &mut TestState): bool {
+        trace(b"withdraw delegation");
         if (vec_map::is_empty(&mut state.delegations)) {
             return false
         };
@@ -226,6 +266,7 @@ module sui::delegation_stress_tests {
     }
 
     fun advance_epoch_with_random_rewards(state: &mut TestState) {
+        trace(b"advance epoch");
         let scenario = &mut state.scenario;
         let rand = &mut state.random;
 
@@ -278,7 +319,7 @@ module sui::delegation_stress_tests {
 
     fun begin(seed: vector<u8>, num_validators: u64): TestState {
         let scenario = test_scenario::begin(@0x0);
-        let validators = vector[];
+        let active_validators = vector[];
         let validator_stakes = vector[];
         let random = test_random::new(seed);
         let supply_amount = 0;
@@ -286,7 +327,7 @@ module sui::delegation_stress_tests {
         while (i < num_validators) {
             let stake = next_u64_in_range(&mut random, MAX_INIT_VALIDATOR_STAKE);
             vector::push_back(&mut validator_stakes, stake);
-            vector::push_back(&mut validators, address::from_u256((i as u256)));
+            vector::push_back(&mut active_validators, address::from_u256((i as u256)));
             supply_amount = supply_amount + stake;
             i = i + 1;
         };
@@ -301,7 +342,9 @@ module sui::delegation_stress_tests {
         );
         TestState {
             scenario,
-            validators,
+            active_validators,
+            preactive_validators: vec_map::empty(),
+            removed_validators: vector::empty(),
             delegation_requests_this_epoch: vec_map::empty(),
             cancelled_requests: vec_set::empty(),
             delegation_withdraws_this_epoch: 0,
@@ -314,7 +357,9 @@ module sui::delegation_stress_tests {
     fun end(state: TestState) {
         let TestState {
             scenario,
-            validators: _,
+            active_validators: _,
+            preactive_validators: _,
+            removed_validators: _,
             delegation_requests_this_epoch: _,
             delegation_withdraws_this_epoch: _,
             cancelled_requests: _,
@@ -325,24 +370,28 @@ module sui::delegation_stress_tests {
         test_scenario::end(scenario);
     }
 
+    fun trace(name: vector<u8>) {
+        if (TRACE) sui::test_utils::print(name)
+    }
+
     fun random_rate_basis_point(rand: &mut Random): u64 {
         next_u64_in_range(rand, BASIS_POINT_DENOMINATOR)
     }
 
     fun random_validator_except(excluded_validator: address, state: &mut TestState): address {
-        let num_validators = vector::length(&state.validators);
+        let num_validators = vector::length(&state.active_validators);
         assert!(num_validators >= 2, 0);
         let idx = next_u64_in_range(&mut state.random, num_validators - 1);
-        let chosen_validator = *vector::borrow(&state.validators, idx);
+        let chosen_validator = *vector::borrow(&state.active_validators, idx);
         if (chosen_validator == excluded_validator) {
-            *vector::borrow(&state.validators, num_validators - 1)
+            *vector::borrow(&state.active_validators, num_validators - 1)
         } else {
             chosen_validator
         }
     }
 
     fun random_validator(state: &mut TestState): address {
-        *pick_random(&mut state.random, &state.validators)
+        *pick_random(&mut state.random, &state.active_validators)
     }
 
     fun pick_random<K>(random: &mut Random, selection: &vector<K>): &K {
@@ -350,5 +399,31 @@ module sui::delegation_stress_tests {
         assert!(len >= 1, 0);
         let idx = next_u64_in_range(random, len);
         vector::borrow(selection, idx)
+    }
+
+    fun create_random_validator_candidate_for_testing(
+        random: &mut Random, addr: address, ctx: &mut TxContext
+    ): Validator {
+        validator::new_for_testing(
+            addr, // THIS
+            test_random::next_bytes(random, 8),
+            test_random::next_bytes(random, 8),
+            test_random::next_bytes(random, 8),
+            test_random::next_bytes(random, 8),
+            test_random::next_ascii_bytes(random, 8),
+            b"description",
+            b"image_url",
+            b"project_url",
+            test_random::next_bytes(random, 8),
+            test_random::next_bytes(random, 8),
+            test_random::next_bytes(random, 8),
+            test_random::next_bytes(random, 8),
+            option::none(),
+            option::none(),
+            1,
+            0,
+            false,
+            ctx
+        )
     }
 }
