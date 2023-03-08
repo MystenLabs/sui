@@ -20,6 +20,7 @@ adler = { version = "1", default-features = false }
 aead = { version = "0.5", default-features = false, features = ["alloc", "getrandom"] }
 aes = { version = "0.8", default-features = false }
 aes-gcm = { version = "0.10" }
+ahash-c38e5c1d305a1b54 = { package = "ahash", version = "0.8", default-features = false }
 ahash-ca01ad9e24f5d932 = { package = "ahash", version = "0.7" }
 aho-corasick = { version = "0.7" }
 aliasable = { version = "0.1" }
@@ -33,16 +34,21 @@ ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
 ark-bls12-377 = { version = "0.3", features = ["std"] }
-ark-bls12-381 = { version = "0.3" }
-ark-crypto-primitives = { version = "0.3", default-features = false, features = ["parallel"] }
-ark-ec = { version = "0.3", features = ["parallel"] }
-ark-ff = { version = "0.3", features = ["asm", "parallel"] }
-ark-groth16 = { version = "0.3" }
-ark-poly = { version = "0.3", default-features = false, features = ["parallel"] }
-ark-relations = { version = "0.3", features = ["std"] }
-ark-serialize = { version = "0.3", features = ["derive", "std"] }
-ark-snark = { version = "0.3", default-features = false }
-ark-std = { version = "0.3", default-features = false, features = ["parallel"] }
+ark-bls12-381 = { version = "0.4" }
+ark-crypto-primitives = { version = "0.4", features = ["parallel", "prf", "r1cs", "snark"] }
+ark-ec-468e82937335b1c9 = { package = "ark-ec", version = "0.3", default-features = false, features = ["std"] }
+ark-ec-9fbad63c4bcf4a8f = { package = "ark-ec", version = "0.4", features = ["parallel"] }
+ark-ff-468e82937335b1c9 = { package = "ark-ff", version = "0.3", default-features = false, features = ["std"] }
+ark-ff-9fbad63c4bcf4a8f = { package = "ark-ff", version = "0.4", features = ["asm", "parallel"] }
+ark-groth16 = { version = "0.4" }
+ark-poly = { version = "0.4", default-features = false, features = ["parallel"] }
+ark-r1cs-std = { version = "0.4", default-features = false }
+ark-relations = { version = "0.4", features = ["std"] }
+ark-serialize-468e82937335b1c9 = { package = "ark-serialize", version = "0.3", default-features = false, features = ["std"] }
+ark-serialize-9fbad63c4bcf4a8f = { package = "ark-serialize", version = "0.4", features = ["derive", "std"] }
+ark-snark = { version = "0.4", default-features = false }
+ark-std-468e82937335b1c9 = { package = "ark-std", version = "0.3", default-features = false, features = ["std"] }
+ark-std-9fbad63c4bcf4a8f = { package = "ark-std", version = "0.4", default-features = false, features = ["parallel"] }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7" }
 arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = ["array-sizes-33-128"] }
@@ -78,8 +84,7 @@ bitflags = { version = "1" }
 bitmaps = { version = "2" }
 bitvec-56bd22fc3884b12 = { package = "bitvec", version = "0.20", default-features = false, features = ["std"] }
 bitvec-cdcf2f9584511fe6 = { package = "bitvec", version = "0.19", default-features = false, features = ["std"] }
-blake2-274715c4dabd11b0 = { package = "blake2", version = "0.9", default-features = false }
-blake2-93f6ce9d446188ac = { package = "blake2", version = "0.10" }
+blake2 = { version = "0.10" }
 blake3 = { version = "1" }
 block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", default-features = false, features = ["block-padding"] }
 block-buffer-93f6ce9d446188ac = { package = "block-buffer", version = "0.10", default-features = false }
@@ -145,7 +150,6 @@ crossterm = { version = "0.25" }
 crunchy = { version = "0.2", default-features = false, features = ["std"] }
 crypto-bigint = { version = "0.4", default-features = false, features = ["generic-array", "rand_core", "zeroize"] }
 crypto-common = { version = "0.1", default-features = false, features = ["getrandom", "std"] }
-crypto-mac = { version = "0.8", default-features = false }
 csv = { version = "1", default-features = false }
 csv-core = { version = "0.1" }
 ctr = { version = "0.9", default-features = false }
@@ -193,9 +197,9 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
 fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b80210ccf9832bbabfeb3d444ebd2638a9c72dd6", features = ["copy_key"] }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b80210ccf9832bbabfeb3d444ebd2638a9c72dd6", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b80210ccf9832bbabfeb3d444ebd2638a9c72dd6", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d3d83bd3430be17b9311bcca45f120d7b1c279be", features = ["copy_key"] }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d3d83bd3430be17b9311bcca45f120d7b1c279be", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d3d83bd3430be17b9311bcca45f120d7b1c279be", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -243,8 +247,8 @@ guppy-workspace-hack = { version = "0.1", default-features = false }
 h2 = { version = "0.3", default-features = false }
 hakari = { version = "0.13", default-features = false, features = ["cli-support"] }
 half = { version = "1", default-features = false }
+hashbrown-594e8ee84c453af0 = { package = "hashbrown", version = "0.13" }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["raw"] }
-hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11" }
 hashlink = { version = "0.8", default-features = false }
 hdrhistogram = { version = "7" }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
@@ -640,6 +644,7 @@ adler = { version = "1", default-features = false }
 aead = { version = "0.5", default-features = false, features = ["alloc", "getrandom"] }
 aes = { version = "0.8", default-features = false }
 aes-gcm = { version = "0.10" }
+ahash-c38e5c1d305a1b54 = { package = "ahash", version = "0.8", default-features = false }
 ahash-ca01ad9e24f5d932 = { package = "ahash", version = "0.7" }
 aho-corasick = { version = "0.7" }
 aliasable = { version = "0.1" }
@@ -654,19 +659,26 @@ ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
 ark-bls12-377 = { version = "0.3", features = ["std"] }
-ark-bls12-381 = { version = "0.3" }
-ark-crypto-primitives = { version = "0.3", default-features = false, features = ["parallel"] }
-ark-ec = { version = "0.3", features = ["parallel"] }
-ark-ff = { version = "0.3", features = ["asm", "parallel"] }
-ark-ff-asm = { version = "0.3", default-features = false }
-ark-ff-macros = { version = "0.3", default-features = false }
-ark-groth16 = { version = "0.3" }
-ark-poly = { version = "0.3", default-features = false, features = ["parallel"] }
-ark-relations = { version = "0.3", features = ["std"] }
-ark-serialize = { version = "0.3", features = ["derive", "std"] }
-ark-serialize-derive = { version = "0.3", default-features = false }
-ark-snark = { version = "0.3", default-features = false }
-ark-std = { version = "0.3", default-features = false, features = ["parallel"] }
+ark-bls12-381 = { version = "0.4" }
+ark-crypto-primitives = { version = "0.4", features = ["parallel", "prf", "r1cs", "snark"] }
+ark-ec-468e82937335b1c9 = { package = "ark-ec", version = "0.3", default-features = false, features = ["std"] }
+ark-ec-9fbad63c4bcf4a8f = { package = "ark-ec", version = "0.4", features = ["parallel"] }
+ark-ff-468e82937335b1c9 = { package = "ark-ff", version = "0.3", default-features = false, features = ["std"] }
+ark-ff-9fbad63c4bcf4a8f = { package = "ark-ff", version = "0.4", features = ["asm", "parallel"] }
+ark-ff-asm-468e82937335b1c9 = { package = "ark-ff-asm", version = "0.3", default-features = false }
+ark-ff-asm-9fbad63c4bcf4a8f = { package = "ark-ff-asm", version = "0.4", default-features = false }
+ark-ff-macros-468e82937335b1c9 = { package = "ark-ff-macros", version = "0.3", default-features = false }
+ark-ff-macros-9fbad63c4bcf4a8f = { package = "ark-ff-macros", version = "0.4", default-features = false }
+ark-groth16 = { version = "0.4" }
+ark-poly = { version = "0.4", default-features = false, features = ["parallel"] }
+ark-r1cs-std = { version = "0.4", default-features = false }
+ark-relations = { version = "0.4", features = ["std"] }
+ark-serialize-468e82937335b1c9 = { package = "ark-serialize", version = "0.3", default-features = false, features = ["std"] }
+ark-serialize-9fbad63c4bcf4a8f = { package = "ark-serialize", version = "0.4", features = ["derive", "std"] }
+ark-serialize-derive = { version = "0.4", default-features = false }
+ark-snark = { version = "0.4", default-features = false }
+ark-std-468e82937335b1c9 = { package = "ark-std", version = "0.3", default-features = false, features = ["std"] }
+ark-std-9fbad63c4bcf4a8f = { package = "ark-std", version = "0.4", default-features = false, features = ["parallel"] }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7" }
 arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = ["array-sizes-33-128"] }
@@ -710,8 +722,7 @@ bitflags = { version = "1" }
 bitmaps = { version = "2" }
 bitvec-56bd22fc3884b12 = { package = "bitvec", version = "0.20", default-features = false, features = ["std"] }
 bitvec-cdcf2f9584511fe6 = { package = "bitvec", version = "0.19", default-features = false, features = ["std"] }
-blake2-274715c4dabd11b0 = { package = "blake2", version = "0.9", default-features = false }
-blake2-93f6ce9d446188ac = { package = "blake2", version = "0.10" }
+blake2 = { version = "0.10" }
 blake3 = { version = "1" }
 block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", default-features = false, features = ["block-padding"] }
 block-buffer-93f6ce9d446188ac = { package = "block-buffer", version = "0.10", default-features = false }
@@ -786,7 +797,6 @@ crossterm = { version = "0.25" }
 crunchy = { version = "0.2", default-features = false, features = ["std"] }
 crypto-bigint = { version = "0.4", default-features = false, features = ["generic-array", "rand_core", "zeroize"] }
 crypto-common = { version = "0.1", default-features = false, features = ["getrandom", "std"] }
-crypto-mac = { version = "0.8", default-features = false }
 csv = { version = "1", default-features = false }
 csv-core = { version = "0.1" }
 ctr = { version = "0.9", default-features = false }
@@ -847,10 +857,10 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
 fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b80210ccf9832bbabfeb3d444ebd2638a9c72dd6", features = ["copy_key"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b80210ccf9832bbabfeb3d444ebd2638a9c72dd6", default-features = false }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b80210ccf9832bbabfeb3d444ebd2638a9c72dd6", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b80210ccf9832bbabfeb3d444ebd2638a9c72dd6", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d3d83bd3430be17b9311bcca45f120d7b1c279be", features = ["copy_key"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d3d83bd3430be17b9311bcca45f120d7b1c279be", default-features = false }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d3d83bd3430be17b9311bcca45f120d7b1c279be", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d3d83bd3430be17b9311bcca45f120d7b1c279be", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -900,8 +910,8 @@ guppy-workspace-hack = { version = "0.1", default-features = false }
 h2 = { version = "0.3", default-features = false }
 hakari = { version = "0.13", default-features = false, features = ["cli-support"] }
 half = { version = "1", default-features = false }
+hashbrown-594e8ee84c453af0 = { package = "hashbrown", version = "0.13" }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["raw"] }
-hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11" }
 hashlink = { version = "0.8", default-features = false }
 hdrhistogram = { version = "7" }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
@@ -1525,6 +1535,7 @@ encoding_rs = { version = "0.8" }
 error-code = { version = "2", default-features = false }
 ipnet = { version = "2" }
 ntapi = { version = "0.4" }
+once_cell = { version = "1", default-features = false, features = ["unstable"] }
 output_vt100 = { version = "0.1", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 raw-cpuid = { version = "10", default-features = false }
@@ -1549,6 +1560,7 @@ encoding_rs = { version = "0.8" }
 error-code = { version = "2", default-features = false }
 ipnet = { version = "2" }
 ntapi = { version = "0.4" }
+once_cell = { version = "1", default-features = false, features = ["unstable"] }
 output_vt100 = { version = "0.1", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 raw-cpuid = { version = "10", default-features = false }
