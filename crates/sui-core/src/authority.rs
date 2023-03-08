@@ -142,6 +142,10 @@ pub(crate) mod authority_store;
 
 pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
 
+// Reject a transaction if the number of certificates pending execution is above this threshold.
+// 20000 = 10k TPS * 2s resident time in transaction manager.
+pub(crate) const MAX_EXECUTION_QUEUE_LENGTH: usize = 20_000;
+
 // Reject a transaction if the number of pending transactions depending on the object
 // is above the threshold.
 pub(crate) const MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH: usize = 1000;
@@ -481,6 +485,13 @@ impl AuthorityState {
         transaction: VerifiedTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<VerifiedSignedTransaction> {
+        let execution_queue_len = self.transaction_manager.execution_queue_len();
+        if execution_queue_len >= MAX_EXECUTION_QUEUE_LENGTH {
+            return Err(SuiError::TooManyTransactionsPendingExecution {
+                queue_len: execution_queue_len,
+                threshold: MAX_EXECUTION_QUEUE_LENGTH,
+            });
+        }
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
             epoch_store.as_ref(),
