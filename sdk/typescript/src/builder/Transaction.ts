@@ -85,6 +85,8 @@ function expectProvider(provider: Provider | undefined): Provider {
   return provider;
 }
 
+const TRANSACTION_BRAND = Symbol.for('@mysten/transaction');
+
 /**
  * Transaction Builder
  * @experimental
@@ -92,7 +94,11 @@ function expectProvider(provider: Provider | undefined): Provider {
 export class Transaction {
   /** Returns `true` if the object is an instance of the Transaction builder class. */
   static is(obj: unknown): obj is Transaction {
-    return obj instanceof Transaction;
+    return (
+      !!obj &&
+      typeof obj === 'object' &&
+      (obj as any)[TRANSACTION_BRAND] === true
+    );
   }
 
   /**
@@ -144,6 +150,12 @@ export class Transaction {
   /** Get a snapshot of the transaction data, in JSON form: */
   get transactionData() {
     return this.#transactionData.snapshot();
+  }
+
+  // Used to brand transaction classes so that they can be identified, even between multiple copies
+  // of the builder.
+  get [TRANSACTION_BRAND]() {
+    return true;
   }
 
   constructor(transaction?: Transaction) {
