@@ -201,6 +201,17 @@ where
             .await
     }
 
+    async fn multi_get_object_with_options(
+        &self,
+        object_ids: Vec<ObjectID>,
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<Vec<SuiObjectResponse>> {
+        return self
+            .fullnode
+            .multi_get_object_with_options(object_ids, options)
+            .await;
+    }
+
     async fn get_dynamic_field_object(
         &self,
         parent_object_id: ObjectID,
@@ -273,7 +284,7 @@ where
     ) -> RpcResult<Vec<SuiTransactionResponse>> {
         if self
             .method_to_be_forwarded
-            .contains(&"muti_get_transactions".to_string())
+            .contains(&"multi_get_transactions".to_string())
         {
             return self
                 .fullnode

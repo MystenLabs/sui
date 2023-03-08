@@ -46,6 +46,14 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
 
     let objects = http_client.get_objects_owned_by_address(*address).await?;
     assert_eq!(5, objects.len());
+
+    // Multiget objectIDs test
+    let object_digests = objects.iter().map(|o| o.object_id).collect();
+
+    let object_resp = http_client
+        .multi_get_object_with_options(object_digests, None)
+        .await?;
+    assert_eq!(5, object_resp.len());
     Ok(())
 }
 

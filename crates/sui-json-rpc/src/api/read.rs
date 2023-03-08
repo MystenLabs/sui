@@ -75,6 +75,16 @@ pub trait ReadApi {
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse>;
 
+    /// Return the object data for a list of objects
+    #[method(name = "multiGetObjects")]
+    async fn multi_get_object_with_options(
+        &self,
+        /// the IDs of the queried objects
+        object_ids: Vec<ObjectID>,
+        /// options for specifying the content to be returned
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<Vec<SuiObjectResponse>>;
+
     /// Return the dynamic field object information for a specified object
     #[method(name = "getDynamicFieldObject")]
     async fn get_dynamic_field_object(
