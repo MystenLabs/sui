@@ -80,7 +80,7 @@ export function useTimeAgo(
         [now, timeFrom, shortedTimeLabel]
     );
 
-    const intervalEnabled = !!timeFrom && now - timeFrom < ONE_HOUR;
+    const intervalEnabled = !!timeFrom && Math.abs(now - timeFrom) < ONE_HOUR;
 
     useEffect(() => {
         if (!timeFrom || !intervalEnabled) return;
@@ -101,11 +101,10 @@ export const timeAgo = (
     if (!epochMilliSecs) return '';
 
     timeNow = timeNow ? timeNow : Date.now();
-
     const dateKeyType = shortenTimeLabel ? 'short' : 'full';
 
     let timeUnit: [string, number][];
-    let timeCol = timeNow - epochMilliSecs;
+    let timeCol = Math.abs(timeNow - epochMilliSecs);
 
     if (timeCol >= ONE_DAY) {
         timeUnit = [
