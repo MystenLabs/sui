@@ -4,7 +4,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::base_types::SuiAddress;
+use crate::base_types::{ObjectID, SuiAddress};
 
 /// This is the JSON-RPC type for the SUI system state object.
 /// It flatterns all fields to make them top-level fields such that it as minimum
@@ -68,7 +68,8 @@ pub struct SuiValidatorSummary {
     pub next_epoch_commission_rate: u64,
 
     // Staking pool information
-    pub staking_pool_starting_epoch: u64,
+    pub staking_pool_id: ObjectID,
+    pub staking_pool_activation_epoch: Option<u64>,
     pub staking_pool_deactivation_epoch: Option<u64>,
     pub staking_pool_sui_balance: u64,
     pub rewards_pool: u64,

@@ -61,7 +61,7 @@ async fn test_successful_headers_synchronization() {
             .header_builder(&committee)
             .with_payload_batch(batch_1.clone(), worker_id_0, 0)
             .with_payload_batch(batch_2.clone(), worker_id_1, 0)
-            .build(author.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -202,7 +202,7 @@ async fn test_successful_payload_synchronization() {
             .header_builder(&committee)
             .with_payload_batch(batch_1.clone(), worker_id_0, 0)
             .with_payload_batch(batch_2.clone(), worker_id_1, 0)
-            .build(author.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -372,7 +372,7 @@ async fn test_timeout_while_waiting_for_certificates() {
             let header = author
                 .header_builder(&committee)
                 .with_payload_batch(fixture_batch_with_transactions(10), 0, 0)
-                .build(author.keypair())
+                .build()
                 .unwrap();
 
             fixture.certificate(&header).digest()
@@ -507,7 +507,7 @@ async fn test_reply_with_certificates_already_in_storage() {
         let header = author
             .header_builder(&committee)
             .with_payload_batch(batch.clone(), 0, 0)
-            .build(author.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -606,7 +606,7 @@ async fn test_reply_with_payload_already_in_storage() {
         let header = author
             .header_builder(&committee)
             .with_payload_batch(batch.clone(), 0, 0)
-            .build(author.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -709,7 +709,7 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
         let header = primary
             .header_builder(&committee)
             .with_payload_batch(batch.clone(), 0, 0)
-            .build(primary.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);

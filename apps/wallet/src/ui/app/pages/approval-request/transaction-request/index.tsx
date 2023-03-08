@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
 
 import { Permissions } from './Permissions';
 import { SummaryCard } from './SummaryCard';
@@ -11,10 +10,10 @@ import { TransactionTypeCard } from './TransactionTypeCard';
 import Loading from '_components/loading';
 import { UserApproveContainer } from '_components/user-approve-container';
 import { useAppDispatch, useAppSelector } from '_hooks';
+import { type TransactionApprovalRequest } from '_payloads/transactions/ApprovalRequest';
 import {
     loadTransactionResponseMetadata,
     respondToTransactionRequest,
-    txRequestsSelectors,
     deserializeTxn,
 } from '_redux/slices/transaction-requests';
 
@@ -22,9 +21,8 @@ import type {
     SuiMoveNormalizedType,
     MoveCallTransaction,
 } from '@mysten/sui.js';
-import type { RootState } from '_redux/RootReducer';
 
-import st from './DappTxApprovalPage.module.scss';
+import st from './TransactionRequest.module.scss';
 
 interface MetadataGroup {
     name: string;
@@ -61,46 +59,31 @@ function unwrapTypeReference(
     return null;
 }
 
-export function DappTxApprovalPage() {
-    const { txID } = useParams();
+export type TransactionRequestProps = {
+    txRequest: TransactionApprovalRequest;
+};
 
-    const [txRequestsLoading, deserializeTxnFailed] = useAppSelector(
-        ({ transactionRequests }) => [
-            !transactionRequests.initialized,
-            transactionRequests.deserializeTxnFailed,
-        ]
+export function TransactionRequest({ txRequest }: TransactionRequestProps) {
+    const deserializeTxnFailed = useAppSelector(
+        ({ transactionRequests }) => transactionRequests.deserializeTxnFailed
     );
-
-    const txRequestSelector = useMemo(
-        () => (state: RootState) =>
-            (txID && txRequestsSelectors.selectById(state, txID)) || null,
-        [txID]
-    );
-
-    const txRequest = useAppSelector(txRequestSelector);
-    const loading = txRequestsLoading;
     const dispatch = useAppDispatch();
-    const addressForTransaction = txRequest?.tx.account;
+    const addressForTransaction = txRequest.tx.account;
     const handleOnSubmit = useCallback(
         async (approved: boolean) => {
-            if (txRequest && addressForTransaction) {
-                await dispatch(
-                    respondToTransactionRequest({
-                        approved,
-                        txRequestID: txRequest.id,
-                        addressForTransaction,
-                    })
-                );
-            }
+            await dispatch(
+                respondToTransactionRequest({
+                    approved,
+                    txRequestID: txRequest.id,
+                    addressForTransaction,
+                })
+            );
         },
         [dispatch, txRequest, addressForTransaction]
     );
 
     useEffect(() => {
-        if (!addressForTransaction) {
-            return;
-        }
-        if (txRequest?.tx?.type === 'move-call' && !txRequest.metadata) {
+        if (txRequest.tx.type === 'move-call' && !txRequest.metadata) {
             dispatch(
                 loadTransactionResponseMetadata({
                     txRequestID: txRequest.id,
@@ -111,7 +94,7 @@ export function DappTxApprovalPage() {
             );
         }
 
-        if (txRequest?.tx?.type === 'v2' && !txRequest.metadata) {
+        if (txRequest.tx.type === 'v2' && !txRequest.metadata) {
             const reqData = txRequest.tx.data.data as MoveCallTransaction;
             dispatch(
                 loadTransactionResponseMetadata({
@@ -124,13 +107,13 @@ export function DappTxApprovalPage() {
         }
 
         if (
-            txRequest?.tx?.type === 'serialized-move-call' &&
+            txRequest.tx.type === 'serialized-move-call' &&
             !txRequest.unSerializedTxn &&
-            txRequest?.tx.data
+            txRequest.tx.data
         ) {
             dispatch(
                 deserializeTxn({
-                    serializedTxn: txRequest?.tx.data,
+                    serializedTxn: txRequest.tx.data,
                     id: txRequest.id,
                     addressForTransaction,
                 })
@@ -140,20 +123,20 @@ export function DappTxApprovalPage() {
 
     const metadata = useMemo(() => {
         if (
-            (txRequest?.tx?.type !== 'move-call' &&
-                txRequest?.tx?.type !== 'v2' &&
-                txRequest?.tx?.type !== 'serialized-move-call' &&
-                !txRequest?.unSerializedTxn) ||
-            !txRequest?.metadata
+            (txRequest.tx.type !== 'move-call' &&
+                txRequest.tx.type !== 'v2' &&
+                txRequest.tx.type !== 'serialized-move-call' &&
+                !txRequest.unSerializedTxn) ||
+            !txRequest.metadata
         ) {
             return null;
         }
         const moveTxData =
-            txRequest?.tx?.type === 'v2'
+            txRequest.tx.type === 'v2'
                 ? txRequest.tx.data.data
                 : txRequest.tx.data;
         const txData =
-            (txRequest?.unSerializedTxn?.data as MoveCallTransaction) ??
+            (txRequest.unSerializedTxn?.data as MoveCallTransaction) ??
             moveTxData;
 
         const transfer: MetadataGroup = { name: 'Transfer', children: [] };
@@ -202,34 +185,24 @@ export function DappTxApprovalPage() {
         };
     }, [txRequest]);
 
-    useEffect(() => {
-        if (
-            !loading &&
-            (!txRequest || (txRequest && txRequest.approved !== null))
-        ) {
-            window.close();
-        }
-    }, [loading, txRequest]);
-
     // prevent serialized-move-call from being rendered while deserializing move-call
     const [loadingState, setLoadingState] = useState<boolean>(true);
     useEffect(() => {
         if (
-            (!loading && txRequest?.tx.type !== 'serialized-move-call') ||
-            (!loading &&
-                txRequest?.tx.type === 'serialized-move-call' &&
-                (txRequest?.metadata || deserializeTxnFailed))
+            txRequest.tx.type !== 'serialized-move-call' ||
+            (txRequest.tx.type === 'serialized-move-call' &&
+                (txRequest.metadata || deserializeTxnFailed))
         ) {
             setLoadingState(false);
         }
-    }, [deserializeTxnFailed, loading, txRequest]);
+    }, [deserializeTxnFailed, txRequest]);
 
     const valuesContent: {
         label: string;
         content: string | number | null;
         loading?: boolean;
     }[] = useMemo(() => {
-        switch (txRequest?.tx.type) {
+        switch (txRequest.tx.type) {
             case 'v2': {
                 const moveCallTxn = txRequest.tx.data
                     .data as MoveCallTransaction;
@@ -262,7 +235,7 @@ export function DappTxApprovalPage() {
                 ];
             case 'serialized-move-call':
                 return [
-                    ...(txRequest?.unSerializedTxn
+                    ...(txRequest.unSerializedTxn
                         ? [
                               {
                                   label: 'Transaction Type',
@@ -272,7 +245,7 @@ export function DappTxApprovalPage() {
                                   label: 'Function',
                                   content:
                                       (
-                                          txRequest?.unSerializedTxn
+                                          txRequest.unSerializedTxn
                                               ?.data as MoveCallTransaction
                                       )?.function.replace(/_/g, ' ') ?? '',
                               },
@@ -280,7 +253,7 @@ export function DappTxApprovalPage() {
                                   label: 'Module',
                                   content:
                                       (
-                                          txRequest?.unSerializedTxn
+                                          txRequest.unSerializedTxn
                                               ?.data as MoveCallTransaction
                                       )?.module.replace(/_/g, ' ') ?? '',
                               },
@@ -288,7 +261,7 @@ export function DappTxApprovalPage() {
                         : [
                               {
                                   label: 'Content',
-                                  content: txRequest?.tx.data,
+                                  content: txRequest.tx.data,
                               },
                           ]),
                 ];
@@ -299,59 +272,49 @@ export function DappTxApprovalPage() {
 
     return (
         <Loading loading={loadingState}>
-            {txRequest && addressForTransaction ? (
-                <UserApproveContainer
-                    origin={txRequest.origin}
-                    originFavIcon={txRequest.originFavIcon}
-                    approveTitle="Approve"
-                    rejectTitle="Reject"
-                    onSubmit={handleOnSubmit}
-                    address={addressForTransaction}
-                >
-                    <section className={st.txInfo}>
-                        {txRequest?.tx && (
-                            <TransactionSummaryCard
-                                txRequest={txRequest}
-                                address={addressForTransaction}
-                            />
-                        )}
-                        <Permissions metadata={metadata} />
-                        <SummaryCard
-                            transparentHeader
-                            header={
-                                <>
-                                    <div className="font-medium text-sui-steel-darker">
-                                        Transaction Type
+            <UserApproveContainer
+                origin={txRequest.origin}
+                originFavIcon={txRequest.originFavIcon}
+                approveTitle="Approve"
+                rejectTitle="Reject"
+                onSubmit={handleOnSubmit}
+                address={addressForTransaction}
+            >
+                <section className={st.txInfo}>
+                    <TransactionSummaryCard
+                        txRequest={txRequest}
+                        address={addressForTransaction}
+                    />
+                    <Permissions metadata={metadata} />
+                    <SummaryCard
+                        transparentHeader
+                        header={
+                            <>
+                                <div className="font-medium text-sui-steel-darker">
+                                    Transaction Type
+                                </div>
+                                <div className="font-semibold text-sui-steel-darker">
+                                    {valuesContent[0].content}
+                                </div>
+                            </>
+                        }
+                    >
+                        <div className={st.content}>
+                            {valuesContent
+                                .slice(1)
+                                .map(({ label, content, loading = false }) => (
+                                    <div key={label} className={st.row}>
+                                        <TransactionTypeCard
+                                            label={label}
+                                            content={content}
+                                            loading={loading}
+                                        />
                                     </div>
-                                    <div className="font-semibold text-sui-steel-darker">
-                                        {valuesContent[0].content}
-                                    </div>
-                                </>
-                            }
-                        >
-                            <div className={st.content}>
-                                {valuesContent
-                                    .slice(1)
-                                    .map(
-                                        ({
-                                            label,
-                                            content,
-                                            loading = false,
-                                        }) => (
-                                            <div key={label} className={st.row}>
-                                                <TransactionTypeCard
-                                                    label={label}
-                                                    content={content}
-                                                    loading={loading}
-                                                />
-                                            </div>
-                                        )
-                                    )}
-                            </div>
-                        </SummaryCard>
-                    </section>
-                </UserApproveContainer>
-            ) : null}
+                                ))}
+                        </div>
+                    </SummaryCard>
+                </section>
+            </UserApproveContainer>
         </Loading>
     );
 }

@@ -22,7 +22,6 @@ pub use move_vm_runtime::move_vm::MoveVM;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Debug};
 use strum_macros::{AsRefStr, IntoStaticStr};
-use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
 use thiserror::Error;
 use tonic::Status;
 use typed_store::rocks::TypedStoreError;
@@ -427,14 +426,8 @@ pub enum SuiError {
     #[error("Found the sui system state object but it has an unexpected version")]
     SuiSystemStateUnexpectedVersion,
 
-    #[error("Message version is not supported at the current protocol version")]
-    WrongMessageVersion {
-        message_version: u64,
-        // the range in which the given message version is supported
-        supported: SupportedProtocolVersions,
-        // the current protocol version which is outside of that range
-        current_protocol_version: ProtocolVersion,
-    },
+    #[error("Message version is not supported at the current protocol version: {error}")]
+    WrongMessageVersion { error: String },
 
     #[error("unknown error: {0}")]
     Unknown(String),
@@ -450,10 +443,18 @@ pub enum VMMemoryLimitExceededSubStatusCode {
     NEW_ID_COUNT_LIMIT_EXCEEDED = 2,
     DELETED_ID_COUNT_LIMIT_EXCEEDED = 3,
     TRANSFER_ID_COUNT_LIMIT_EXCEEDED = 4,
+    OBJECT_RUNTIME_CACHE_LIMIT_EXCEEDED = 5,
+    OBJECT_RUNTIME_STORE_LIMIT_EXCEEDED = 6,
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
 pub type UserInputResult<T = ()> = Result<T, UserInputError>;
+
+impl From<sui_protocol_config::Error> for SuiError {
+    fn from(error: sui_protocol_config::Error) -> Self {
+        SuiError::WrongMessageVersion { error: error.0 }
+    }
+}
 
 // TODO these are both horribly wrong, categorization needs to be considered
 impl From<PartialVMError> for SuiError {
@@ -579,6 +580,19 @@ impl SuiError {
                 (false, true)
             }
             _ => (false, false),
+        }
+    }
+
+    pub fn is_object_or_package_not_found(&self) -> bool {
+        match self {
+            SuiError::UserInputError { error } => {
+                matches!(
+                    error,
+                    UserInputError::ObjectNotFound { .. }
+                        | UserInputError::DependentPackageNotFound { .. }
+                )
+            }
+            _ => false,
         }
     }
 }

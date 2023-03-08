@@ -7,11 +7,13 @@
 
 -  [Struct `ValidatorMetadata`](#0x2_validator_ValidatorMetadata)
 -  [Struct `Validator`](#0x2_validator_Validator)
+-  [Struct `DelegationRequestEvent`](#0x2_validator_DelegationRequestEvent)
 -  [Constants](#@Constants_0)
 -  [Function `verify_proof_of_possession`](#0x2_validator_verify_proof_of_possession)
 -  [Function `new_metadata`](#0x2_validator_new_metadata)
 -  [Function `new`](#0x2_validator_new)
 -  [Function `deactivate`](#0x2_validator_deactivate)
+-  [Function `activate`](#0x2_validator_activate)
 -  [Function `adjust_stake_and_gas_price`](#0x2_validator_adjust_stake_and_gas_price)
 -  [Function `request_add_delegation`](#0x2_validator_request_add_delegation)
 -  [Function `request_withdraw_delegation`](#0x2_validator_request_withdraw_delegation)
@@ -19,7 +21,7 @@
 -  [Function `request_set_commission_rate`](#0x2_validator_request_set_commission_rate)
 -  [Function `deposit_delegation_rewards`](#0x2_validator_deposit_delegation_rewards)
 -  [Function `process_pending_delegations_and_withdraws`](#0x2_validator_process_pending_delegations_and_withdraws)
--  [Function `get_staking_pool_mut_ref`](#0x2_validator_get_staking_pool_mut_ref)
+-  [Function `is_preactive`](#0x2_validator_is_preactive)
 -  [Function `metadata`](#0x2_validator_metadata)
 -  [Function `sui_address`](#0x2_validator_sui_address)
 -  [Function `name`](#0x2_validator_name)
@@ -80,6 +82,7 @@
 <b>use</b> <a href="bcs.md#0x2_bcs">0x2::bcs</a>;
 <b>use</b> <a href="bls12381.md#0x2_bls12381">0x2::bls12381</a>;
 <b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
+<b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="staking_pool.md#0x2_staking_pool">0x2::staking_pool</a>;
 <b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
@@ -310,6 +313,58 @@
 
 </details>
 
+<a name="0x2_validator_DelegationRequestEvent"></a>
+
+## Struct `DelegationRequestEvent`
+
+Event emitted when a new delegation request is received.
+
+
+<pre><code><b>struct</b> <a href="validator.md#0x2_validator_DelegationRequestEvent">DelegationRequestEvent</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>pool_id: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>validator_address: <b>address</b></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>delegator_address: <b>address</b></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>epoch: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>amount: u64</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
 <a name="@Constants_0"></a>
 
 ## Constants
@@ -325,8 +380,19 @@ Commission rate set by the validator is higher than the threshold
 
 
 
+<a name="0x2_validator_EEmptyStakeWithNonEmptyTimeLock"></a>
+
+No stake balance is provided but an epoch time lock for the stake is provided.
+
+
+<pre><code><b>const</b> <a href="validator.md#0x2_validator_EEmptyStakeWithNonEmptyTimeLock">EEmptyStakeWithNonEmptyTimeLock</a>: u64 = 9;
+</code></pre>
+
+
+
 <a name="0x2_validator_EInvalidProofOfPossession"></a>
 
+Invalid proof_of_possesion field in ValidatorMetadata
 
 
 <pre><code><b>const</b> <a href="validator.md#0x2_validator_EInvalidProofOfPossession">EInvalidProofOfPossession</a>: u64 = 0;
@@ -374,12 +440,12 @@ Invalid primary_address field in ValidatorMetadata
 
 
 
-<a name="0x2_validator_EMetadataInvalidPubKey"></a>
+<a name="0x2_validator_EMetadataInvalidPubkey"></a>
 
 Invalid pubkey_bytes field in ValidatorMetadata
 
 
-<pre><code><b>const</b> <a href="validator.md#0x2_validator_EMetadataInvalidPubKey">EMetadataInvalidPubKey</a>: u64 = 1;
+<pre><code><b>const</b> <a href="validator.md#0x2_validator_EMetadataInvalidPubkey">EMetadataInvalidPubkey</a>: u64 = 1;
 </code></pre>
 
 
@@ -394,12 +460,12 @@ Invalidworker_address field in ValidatorMetadata
 
 
 
-<a name="0x2_validator_EMetadataInvalidWorkerPubKey"></a>
+<a name="0x2_validator_EMetadataInvalidWorkerPubkey"></a>
 
 Invalid worker_pubkey_bytes field in ValidatorMetadata
 
 
-<pre><code><b>const</b> <a href="validator.md#0x2_validator_EMetadataInvalidWorkerPubKey">EMetadataInvalidWorkerPubKey</a>: u64 = 3;
+<pre><code><b>const</b> <a href="validator.md#0x2_validator_EMetadataInvalidWorkerPubkey">EMetadataInvalidWorkerPubkey</a>: u64 = 3;
 </code></pre>
 
 
@@ -526,7 +592,7 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new">new</a>(sui_address: <b>address</b>, protocol_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, description: <a href="">vector</a>&lt;u8&gt;, image_url: <a href="">vector</a>&lt;u8&gt;, project_url: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, p2p_address: <a href="">vector</a>&lt;u8&gt;, primary_address: <a href="">vector</a>&lt;u8&gt;, worker_address: <a href="">vector</a>&lt;u8&gt;, stake: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, coin_locked_until_epoch: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;, gas_price: u64, commission_rate: u64, starting_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new">new</a>(sui_address: <b>address</b>, protocol_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, description: <a href="">vector</a>&lt;u8&gt;, image_url: <a href="">vector</a>&lt;u8&gt;, project_url: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, p2p_address: <a href="">vector</a>&lt;u8&gt;, primary_address: <a href="">vector</a>&lt;u8&gt;, worker_address: <a href="">vector</a>&lt;u8&gt;, initial_stake_option: <a href="_Option">option::Option</a>&lt;<a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;&gt;, coin_locked_until_epoch: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;, gas_price: u64, commission_rate: u64, is_active_at_genesis: bool, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
 </code></pre>
 
 
@@ -549,11 +615,11 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
     p2p_address: <a href="">vector</a>&lt;u8&gt;,
     primary_address: <a href="">vector</a>&lt;u8&gt;,
     worker_address: <a href="">vector</a>&lt;u8&gt;,
-    stake: Balance&lt;SUI&gt;,
+    initial_stake_option: Option&lt;Balance&lt;SUI&gt;&gt;,
     coin_locked_until_epoch: Option&lt;EpochTimeLock&gt;,
     gas_price: u64,
     commission_rate: u64,
-    starting_epoch: u64,
+    is_active_at_genesis: bool,
     ctx: &<b>mut</b> TxContext
 ): <a href="validator.md#0x2_validator_Validator">Validator</a> {
     <b>assert</b>!(
@@ -592,11 +658,11 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
 
     <a href="validator.md#0x2_validator_new_from_metadata">new_from_metadata</a>(
         metadata,
-        stake,
+        initial_stake_option,
         coin_locked_until_epoch,
         gas_price,
         commission_rate,
-        starting_epoch,
+        is_active_at_genesis,
         ctx
     )
 }
@@ -624,6 +690,30 @@ Deactivate this validator's staking pool
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_deactivate">deactivate</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, deactivation_epoch: u64) {
     <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">staking_pool::deactivate_staking_pool</a>(&<b>mut</b> self.<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>, deactivation_epoch)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_activate"></a>
+
+## Function `activate`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_activate">activate</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, activation_epoch: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_activate">activate</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, activation_epoch: u64) {
+    <a href="staking_pool.md#0x2_staking_pool_activate_staking_pool">staking_pool::activate_staking_pool</a>(&<b>mut</b> self.<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>, activation_epoch);
 }
 </code></pre>
 
@@ -664,7 +754,7 @@ Process pending stake and pending withdraws, and update the gas price.
 Request to add delegation to the validator's staking pool, processed at the end of the epoch.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_request_add_delegation">request_add_delegation</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, delegated_stake: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, locking_period: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;, delegator: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_request_add_delegation">request_add_delegation</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, delegated_stake: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, locking_period: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;, delegator_address: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -677,16 +767,29 @@ Request to add delegation to the validator's staking pool, processed at the end 
     self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>,
     delegated_stake: Balance&lt;SUI&gt;,
     locking_period: Option&lt;EpochTimeLock&gt;,
-    delegator: <b>address</b>,
+    delegator_address: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> delegate_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&delegated_stake);
     <b>assert</b>!(delegate_amount &gt; 0, 0);
     <b>let</b> delegation_epoch = <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) + 1;
     <a href="staking_pool.md#0x2_staking_pool_request_add_delegation">staking_pool::request_add_delegation</a>(
-        &<b>mut</b> self.<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>, delegated_stake, locking_period, self.metadata.sui_address, delegator, delegation_epoch, ctx
+        &<b>mut</b> self.<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>, delegated_stake, locking_period, self.metadata.sui_address, delegator_address, delegation_epoch, ctx
     );
+    // Process delegation right away <b>if</b> staking pool is preactive.
+    <b>if</b> (<a href="staking_pool.md#0x2_staking_pool_is_preactive">staking_pool::is_preactive</a>(&self.<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>)) {
+        <a href="staking_pool.md#0x2_staking_pool_process_pending_delegation">staking_pool::process_pending_delegation</a>(&<b>mut</b> self.<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>);
+    };
     self.next_epoch_stake = self.next_epoch_stake + delegate_amount;
+    <a href="event.md#0x2_event_emit">event::emit</a>(
+        <a href="validator.md#0x2_validator_DelegationRequestEvent">DelegationRequestEvent</a> {
+            pool_id: <a href="validator.md#0x2_validator_staking_pool_id">staking_pool_id</a>(self),
+            validator_address: self.metadata.sui_address,
+            delegator_address,
+            epoch: <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx),
+            amount: delegate_amount,
+        }
+    );
 }
 </code></pre>
 
@@ -827,14 +930,14 @@ Process pending delegations and withdraws, called at the end of the epoch.
 
 </details>
 
-<a name="0x2_validator_get_staking_pool_mut_ref"></a>
+<a name="0x2_validator_is_preactive"></a>
 
-## Function `get_staking_pool_mut_ref`
+## Function `is_preactive`
 
-Called by <code><a href="validator_set.md#0x2_validator_set">validator_set</a></code> for handling delegation switches.
+Returns true if the validator is preactive.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_get_staking_pool_mut_ref">get_staking_pool_mut_ref</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_is_preactive">is_preactive</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): bool
 </code></pre>
 
 
@@ -843,8 +946,8 @@ Called by <code><a href="validator_set.md#0x2_validator_set">validator_set</a></
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_get_staking_pool_mut_ref">get_staking_pool_mut_ref</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>) : &<b>mut</b> StakingPool {
-    &<b>mut</b> self.<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_is_preactive">is_preactive</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): bool {
+    <a href="staking_pool.md#0x2_staking_pool_is_preactive">staking_pool::is_preactive</a>(&self.<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>)
 }
 </code></pre>
 
@@ -2105,7 +2208,7 @@ Aborts if validator metadata is valid
 Create a new validator from the given <code><a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a></code>, called by both <code>new</code> and <code>new_for_testing</code>.
 
 
-<pre><code><b>fun</b> <a href="validator.md#0x2_validator_new_from_metadata">new_from_metadata</a>(metadata: <a href="validator.md#0x2_validator_ValidatorMetadata">validator::ValidatorMetadata</a>, stake: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, coin_locked_until_epoch: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;, gas_price: u64, commission_rate: u64, starting_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+<pre><code><b>fun</b> <a href="validator.md#0x2_validator_new_from_metadata">new_from_metadata</a>(metadata: <a href="validator.md#0x2_validator_ValidatorMetadata">validator::ValidatorMetadata</a>, initial_stake_option: <a href="_Option">option::Option</a>&lt;<a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;&gt;, coin_locked_until_epoch: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;, gas_price: u64, commission_rate: u64, is_active_at_genesis: bool, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
 </code></pre>
 
 
@@ -2116,21 +2219,44 @@ Create a new validator from the given <code><a href="validator.md#0x2_validator_
 
 <pre><code><b>fun</b> <a href="validator.md#0x2_validator_new_from_metadata">new_from_metadata</a>(
     metadata: <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a>,
-    stake: Balance&lt;SUI&gt;,
+    initial_stake_option: Option&lt;Balance&lt;SUI&gt;&gt;,
     coin_locked_until_epoch: Option&lt;EpochTimeLock&gt;,
     gas_price: u64,
     commission_rate: u64,
-    starting_epoch: u64,
+    is_active_at_genesis: bool,
     ctx: &<b>mut</b> TxContext
 ): <a href="validator.md#0x2_validator_Validator">Validator</a> {
     <b>let</b> sui_address = metadata.sui_address;
-    <b>let</b> stake_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&stake);
 
-    <b>let</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a> = <a href="staking_pool.md#0x2_staking_pool_new">staking_pool::new</a>(starting_epoch, ctx);
-    // Add the <a href="validator.md#0x2_validator">validator</a>'s starting stake <b>to</b> the staking pool.
-    <a href="staking_pool.md#0x2_staking_pool_request_add_delegation">staking_pool::request_add_delegation</a>(&<b>mut</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>, stake, coin_locked_until_epoch, sui_address, sui_address, starting_epoch, ctx);
-    // We immediately process this delegation <b>as</b> they are at <a href="validator.md#0x2_validator">validator</a> setup time and this is the <a href="validator.md#0x2_validator">validator</a> staking <b>with</b> itself.
-    <a href="staking_pool.md#0x2_staking_pool_process_pending_delegation">staking_pool::process_pending_delegation</a>(&<b>mut</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>);
+    <b>let</b> stake_amount =
+        <b>if</b> (<a href="_is_some">option::is_some</a>(&initial_stake_option)) <a href="balance.md#0x2_balance_value">balance::value</a>(<a href="_borrow">option::borrow</a>(&initial_stake_option))
+        <b>else</b> 0;
+
+    <b>let</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a> = <a href="staking_pool.md#0x2_staking_pool_new">staking_pool::new</a>(ctx);
+
+    <b>if</b> (is_active_at_genesis) {
+        <a href="staking_pool.md#0x2_staking_pool_activate_staking_pool">staking_pool::activate_staking_pool</a>(&<b>mut</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>, 0);
+    };
+
+    // Add the <a href="validator.md#0x2_validator">validator</a>'s starting stake <b>to</b> the staking pool <b>if</b> there <b>exists</b> one.
+    <b>if</b> (<a href="_is_some">option::is_some</a>(&initial_stake_option)) {
+        <a href="staking_pool.md#0x2_staking_pool_request_add_delegation">staking_pool::request_add_delegation</a>(
+            &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>,
+            <a href="_destroy_some">option::destroy_some</a>(initial_stake_option),
+            coin_locked_until_epoch,
+            sui_address,
+            sui_address,
+            <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx),
+            ctx
+        );
+        // We immediately process this delegation <b>as</b> they are at <a href="validator.md#0x2_validator">validator</a> setup time and this is the <a href="validator.md#0x2_validator">validator</a> staking <b>with</b> itself.
+        <a href="staking_pool.md#0x2_staking_pool_process_pending_delegation">staking_pool::process_pending_delegation</a>(&<b>mut</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>);
+    } <b>else</b> {
+        <b>assert</b>!(<a href="_is_none">option::is_none</a>(&coin_locked_until_epoch), <a href="validator.md#0x2_validator_EEmptyStakeWithNonEmptyTimeLock">EEmptyStakeWithNonEmptyTimeLock</a>);
+        <a href="_destroy_none">option::destroy_none</a>(coin_locked_until_epoch);
+        <a href="_destroy_none">option::destroy_none</a>(initial_stake_option);
+    };
+
     <a href="validator.md#0x2_validator_Validator">Validator</a> {
         metadata,
         // Initialize the voting power <b>to</b> be the same <b>as</b> the stake amount.

@@ -11,12 +11,12 @@ import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { useGetNFTMeta, useTransactionSummary } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import { type CoinsMetaProps } from '_src/ui/app/helpers/getEventsSummary';
+import { type TransactionDryRun } from '_src/ui/app/hooks/useTransactionDryRun';
 
-import type { CoinsMetaProps } from '../../helpers/getEventsSummary';
-import type { TransactionDryRun } from '../../hooks/useTransactionDryRun';
-import type { TransactionRequest } from '_payloads/transactions';
+import type { TransactionApprovalRequest } from '_payloads/transactions/ApprovalRequest';
 
-import st from './DappTxApprovalPage.module.scss';
+import st from './TransactionRequest.module.scss';
 
 type TransferSummerCardProps = {
     coinsMeta: CoinsMetaProps[];
@@ -26,7 +26,7 @@ type TransferSummerCardProps = {
 };
 
 function MiniNFTLink({ id }: { id: string }) {
-    const nftMeta = useGetNFTMeta(id);
+    const { data: nftMeta } = useGetNFTMeta(id);
     return (
         <>
             {nftMeta && (
@@ -151,7 +151,7 @@ export function TransactionSummaryCard({
     txRequest,
     address,
 }: {
-    txRequest: TransactionRequest;
+    txRequest: TransactionApprovalRequest;
     address: string;
 }) {
     const txData: TransactionDryRun = (

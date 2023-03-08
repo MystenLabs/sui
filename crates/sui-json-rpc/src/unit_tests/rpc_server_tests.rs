@@ -28,7 +28,7 @@ use sui_types::gas_coin::GAS;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
 use sui_types::query::{EventQuery, TransactionQuery};
-use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadata;
+use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadataV1;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_struct_tag, parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS};
 use test_utils::network::TestClusterBuilder;
@@ -1002,7 +1002,7 @@ async fn test_delegation() -> Result<(), anyhow::Error> {
     let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
     assert!(staked_sui.is_empty());
 
-    let validators: Vec<ValidatorMetadata> = http_client.get_validators().await?;
+    let validators: Vec<ValidatorMetadataV1> = http_client.get_validators().await?;
 
     // Delegate some SUI
     let transaction_bytes: TransactionBytes = http_client
@@ -1057,7 +1057,7 @@ async fn test_delegation_multiple_coins() -> Result<(), anyhow::Error> {
     let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
     assert!(staked_sui.is_empty());
 
-    let validators: Vec<ValidatorMetadata> = http_client.get_validators().await?;
+    let validators: Vec<ValidatorMetadataV1> = http_client.get_validators().await?;
 
     // Delegate some SUI
     let transaction_bytes: TransactionBytes = http_client
@@ -1155,7 +1155,7 @@ async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let validators: Vec<ValidatorMetadata> = http_client.get_validators().await?;
+    let validators: Vec<ValidatorMetadataV1> = http_client.get_validators().await?;
 
     // Delegate some locked SUI
     let coins: CoinPage = http_client.get_coins(*address, None, None, None).await?;

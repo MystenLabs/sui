@@ -9,15 +9,14 @@
 module sui::sui_system_tests {
     use sui::test_scenario::{Self, Scenario};
     use sui::sui::SUI;
-    use sui::governance_test_utils::{add_validator, advance_epoch, remove_validator, set_up_sui_system_state, create_sui_system_state_for_testing};
+    use sui::governance_test_utils::{add_validator_full_flow, advance_epoch, remove_validator, set_up_sui_system_state, create_sui_system_state_for_testing};
     use sui::sui_system::{Self, SuiSystemState};
-    use sui::validator::Self;
+    use sui::validator::{Self, Validator};
+    use sui::validator_set;
     use sui::vec_set;
     use sui::table;
     use std::vector;
-    use sui::coin;
     use sui::balance;
-    use sui::validator::Validator;
     use sui::test_utils::assert_eq;
     use std::option::Self;
     use sui::url;
@@ -124,9 +123,9 @@ module sui::sui_system_tests {
         test_scenario::next_tx(scenario, new_validator_addr);
         // This is generated using https://github.com/MystenLabs/sui/blob/375dfb8c56bb422aca8f1592da09a246999bdf4c/crates/sui-types/src/unit_tests/crypto_tests.rs#L38
         let pop = x"8080980b89554e7f03b625ba4104d05d19b523a737e2d09a69d4498a1bcac154fcb29f6334b7e8b99b8f3aa95153232d";
-        
+
         // Add a validator
-        add_validator(new_validator_addr, 100, pop, scenario);
+        add_validator_full_flow(new_validator_addr, 100, pop, scenario);
         advance_epoch(scenario);
 
         test_scenario::next_tx(scenario, @0x1);
@@ -313,11 +312,11 @@ module sui::sui_system_tests {
             vector[4, 127, 0, 0, 1],
             vector[4, 127, 0, 0, 1],
             vector[4, 127, 0, 0, 1],
-            balance::create_for_testing<SUI>(100),
+            option::some(balance::create_for_testing<SUI>(100)),
             option::none(),
             1,
             0,
-            0,
+            true,
             ctx
         );
         vector::push_back(&mut validators, validator);
@@ -328,7 +327,7 @@ module sui::sui_system_tests {
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
 
         // Test active validator metadata changes
-        test_scenario::next_tx(scenario, validator_addr); 
+        test_scenario::next_tx(scenario, validator_addr);
         {
             update_metadata(
                 scenario,
@@ -367,7 +366,7 @@ module sui::sui_system_tests {
         test_scenario::next_tx(scenario, new_validator_addr);
         {
             let ctx = test_scenario::ctx(scenario);
-            sui_system::request_add_validator(
+            sui_system::request_add_validator_candidate(
                 &mut system_state,
                 vector[153, 21, 95, 72, 205, 126, 148, 249, 194, 129, 121, 224, 137, 171, 173, 206, 207, 69, 3, 142, 106, 91, 158, 244, 0, 234, 14, 134, 130, 255, 173, 137, 125, 109, 44, 193, 187, 107, 78, 227, 84, 147, 66, 54, 92, 53, 208, 76, 10, 110, 217, 188, 125, 75, 58, 1, 143, 160, 113, 62, 239, 45, 154, 163, 105, 227, 253, 87, 44, 156, 5, 211, 41, 8, 35, 13, 197, 240, 203, 104, 222, 70, 62, 189, 63, 228, 214, 32, 82, 119, 148, 170, 155, 82, 223, 127],
                 vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
@@ -381,14 +380,14 @@ module sui::sui_system_tests {
                 vector[4, 127, 0, 0, 2],
                 vector[4, 127, 0, 0, 1],
                 vector[4, 127, 0, 0, 1],
-                coin::mint_for_testing(100, ctx),
                 1,
                 0,
                 ctx,
             );
+            sui_system::request_add_validator(&mut system_state, ctx);
         };
 
-        test_scenario::next_tx(scenario, new_validator_addr); 
+        test_scenario::next_tx(scenario, new_validator_addr);
         {
             update_metadata(
                 scenario,
@@ -445,6 +444,152 @@ module sui::sui_system_tests {
             vector[4, 77, 77, 77, 77],
         );
 
+        test_scenario::return_shared(system_state);
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = validator::EMetadataInvalidWorkerPubkey)]
+    fun test_add_validator_candidate_failure_invalid_metadata() {
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        let new_validator_addr = @0x8e3446145b0c7768839d71840df389ffa3b9742d0baaff326a3d453b595f87d7;
+
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3], scenario);
+        test_scenario::next_tx(scenario, new_validator_addr);
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        sui_system::request_add_validator_candidate(
+            &mut system_state,
+            vector[153, 21, 95, 72, 205, 126, 148, 249, 194, 129, 121, 224, 137, 171, 173, 206, 207, 69, 3, 142, 106, 91, 158, 244, 0, 234, 14, 134, 130, 255, 173, 137, 125, 109, 44, 193, 187, 107, 78, 227, 84, 147, 66, 54, 92, 53, 208, 76, 10, 110, 217, 188, 125, 75, 58, 1, 143, 160, 113, 62, 239, 45, 154, 163, 105, 227, 253, 87, 44, 156, 5, 211, 41, 8, 35, 13, 197, 240, 203, 104, 222, 70, 62, 189, 63, 228, 214, 32, 82, 119, 148, 170, 155, 82, 223, 127],
+            vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
+            vector[42], // invalid
+            // vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
+            vector[131, 170, 51, 121, 46, 85, 50, 42, 110, 180, 220, 186, 24, 12, 168, 180, 66, 63, 129, 111, 6, 94, 250, 52, 137, 174, 6, 184, 181, 148, 15, 5, 129, 14, 8, 206, 163, 32, 239, 20, 141, 242, 195, 80, 179, 142, 35, 13],
+            b"ValidatorName2",
+            b"description2",
+            b"image_url2",
+            b"project_url2",
+            vector[4, 127, 0, 0, 2],
+            vector[4, 127, 0, 0, 2],
+            vector[4, 127, 0, 0, 1],
+            vector[4, 127, 0, 0, 1],
+            1,
+            0,
+            test_scenario::ctx(scenario),
+        );
+        test_scenario::return_shared(system_state);
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = validator_set::EAlreadyValidatorCandidate)]
+    fun test_add_validator_candidate_failure_double_register() {
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        let new_validator_addr = @0x8e3446145b0c7768839d71840df389ffa3b9742d0baaff326a3d453b595f87d7;
+
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3], scenario);
+        test_scenario::next_tx(scenario, new_validator_addr);
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        sui_system::request_add_validator_candidate(
+            &mut system_state,
+            vector[153, 21, 95, 72, 205, 126, 148, 249, 194, 129, 121, 224, 137, 171, 173, 206, 207, 69, 3, 142, 106, 91, 158, 244, 0, 234, 14, 134, 130, 255, 173, 137, 125, 109, 44, 193, 187, 107, 78, 227, 84, 147, 66, 54, 92, 53, 208, 76, 10, 110, 217, 188, 125, 75, 58, 1, 143, 160, 113, 62, 239, 45, 154, 163, 105, 227, 253, 87, 44, 156, 5, 211, 41, 8, 35, 13, 197, 240, 203, 104, 222, 70, 62, 189, 63, 228, 214, 32, 82, 119, 148, 170, 155, 82, 223, 127],
+            vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
+            vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
+            vector[131, 170, 51, 121, 46, 85, 50, 42, 110, 180, 220, 186, 24, 12, 168, 180, 66, 63, 129, 111, 6, 94, 250, 52, 137, 174, 6, 184, 181, 148, 15, 5, 129, 14, 8, 206, 163, 32, 239, 20, 141, 242, 195, 80, 179, 142, 35, 13],
+            b"ValidatorName2",
+            b"description2",
+            b"image_url2",
+            b"project_url2",
+            vector[4, 127, 0, 0, 2],
+            vector[4, 127, 0, 0, 2],
+            vector[4, 127, 0, 0, 1],
+            vector[4, 127, 0, 0, 1],
+            1,
+            0,
+            test_scenario::ctx(scenario),
+        );
+
+        // Add the same address as candidate again, should fail this time.
+        sui_system::request_add_validator_candidate(
+            &mut system_state,
+            vector[153, 21, 95, 72, 205, 126, 148, 249, 194, 129, 121, 224, 137, 171, 173, 206, 207, 69, 3, 142, 106, 91, 158, 244, 0, 234, 14, 134, 130, 255, 173, 137, 125, 109, 44, 193, 187, 107, 78, 227, 84, 147, 66, 54, 92, 53, 208, 76, 10, 110, 217, 188, 125, 75, 58, 1, 143, 160, 113, 62, 239, 45, 154, 163, 105, 227, 253, 87, 44, 156, 5, 211, 41, 8, 35, 13, 197, 240, 203, 104, 222, 70, 62, 189, 63, 228, 214, 32, 82, 119, 148, 170, 155, 82, 223, 127],
+            vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
+            vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
+            vector[131, 170, 51, 121, 46, 85, 50, 42, 110, 180, 220, 186, 24, 12, 168, 180, 66, 63, 129, 111, 6, 94, 250, 52, 137, 174, 6, 184, 181, 148, 15, 5, 129, 14, 8, 206, 163, 32, 239, 20, 141, 242, 195, 80, 179, 142, 35, 13],
+            b"ValidatorName2",
+            b"description2",
+            b"image_url2",
+            b"project_url2",
+            vector[4, 127, 0, 0, 2],
+            vector[4, 127, 0, 0, 2],
+            vector[4, 127, 0, 0, 1],
+            vector[4, 127, 0, 0, 1],
+            1,
+            0,
+            test_scenario::ctx(scenario),
+        );
+        test_scenario::return_shared(system_state);
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = validator_set::EDuplicateValidator)]
+    fun test_add_validator_candidate_failure_duplicate_with_active() {
+        let validator_addr = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+        let scenario_val = test_scenario::begin(validator_addr);
+        let scenario = &mut scenario_val;
+
+        // Set up SuiSystemState with an active validator
+        let ctx = test_scenario::ctx(scenario);
+        let validator = validator::new_for_testing(
+            validator_addr,
+            x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10",
+            vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
+            vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
+            x"8080980b89554e7f03b625ba4104d05d19b523a737e2d09a69d4498a1bcac154fcb29f6334b7e8b99b8f3aa95153232d",
+            b"ValidatorName",
+            b"description",
+            b"image_url",
+            b"project_url",
+            vector[4, 127, 0, 0, 1],
+            vector[4, 127, 0, 0, 1],
+            vector[4, 127, 0, 0, 1],
+            vector[4, 127, 0, 0, 1],
+            option::some(balance::create_for_testing<SUI>(100)),
+            option::none(),
+            1,
+            0,
+            true,
+            ctx
+        );
+        create_sui_system_state_for_testing(vector[validator], 1000, 0, ctx);
+
+        test_scenario::next_tx(scenario, @0x1a4623343cd42be47d67314fce0ad042f3c82685544bc91d8c11d24e74ba7357);
+
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+
+        // Add a candidate with the same name. Fails due to duplicating with an already active validator.
+        sui_system::request_add_validator_candidate(
+            &mut system_state,
+            // different pubkeys
+            x"96d19c53f1bee2158c3fcfb5bb2f06d3a8237667529d2d8f0fbb22fe5c3b3e64748420b4103674490476d98530d063271222d2a59b0f7932909cc455a30f00c69380e6885375e94243f7468e9563aad29330aca7ab431927540e9508888f0e1c",
+            vector[115, 220, 238, 151, 134, 159, 173, 41, 80, 2, 66, 196, 61, 17, 191, 76, 103, 39, 246, 127, 171, 85, 19, 235, 210, 106, 97, 97, 116, 48, 244, 191],
+            vector[149, 128, 161, 13, 11, 183, 96, 45, 89, 20, 188, 205, 26, 127, 147, 254, 184, 229, 184, 102, 64, 170, 104, 29, 191, 171, 91, 99, 58, 178, 41, 156],
+            x"8c89c98aa6c8e79c231cb5f05be57ded8689ba282a757fb5191661d21d4d71fc9bb1754cceb27a9aef151b40ff4dddee",
+            // same name
+            b"ValidatorName",
+            b"description2",
+            b"image_url2",
+            b"project_url2",
+            vector[4, 127, 0, 0, 2],
+            vector[4, 127, 0, 0, 2],
+            vector[4, 127, 0, 0, 1],
+            vector[4, 127, 0, 0, 1],
+            1,
+            0,
+            test_scenario::ctx(scenario),
+        );
         test_scenario::return_shared(system_state);
         test_scenario::end(scenario_val);
     }

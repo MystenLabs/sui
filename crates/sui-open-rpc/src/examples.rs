@@ -228,7 +228,7 @@ impl RpcExampleProvider {
             object_id,
             version: SequenceNumber::from_u64(1),
             digest: ObjectDigest::new(self.rng.gen()),
-            type_: Some(GasCoin::type_().to_string()),
+            type_: Some(ObjectType::Struct(GasCoin::type_())),
             bcs: None,
             display: None,
         });
@@ -267,7 +267,7 @@ impl RpcExampleProvider {
             object_id,
             version: SequenceNumber::from_u64(4),
             digest: ObjectDigest::new(self.rng.gen()),
-            type_: Some(GasCoin::type_().to_string()),
+            type_: Some(ObjectType::Struct(GasCoin::type_())),
             bcs: None,
             display: None,
         });
@@ -297,6 +297,7 @@ impl RpcExampleProvider {
             timestamp_ms: 1676911928,
             end_of_epoch_data: None,
             transactions: vec![TransactionDigest::new(self.rng.gen())],
+            checkpoint_commitments: vec![],
         };
 
         Examples::new(

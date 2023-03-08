@@ -12,6 +12,10 @@ use tracing::{info, warn};
 const MIN_PROTOCOL_VERSION: u64 = 1;
 const MAX_PROTOCOL_VERSION: u64 = 1;
 
+// Record history of protocol version allocations here:
+//
+// Version 1: Original version.
+
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
 )]
@@ -31,13 +35,13 @@ impl ProtocolVersion {
 
     // We create one additional "fake" version in simulator builds so that we can test upgrades.
     #[cfg(msim)]
-    const MAX_ALLOWED: Self = Self(MAX_PROTOCOL_VERSION + 1);
+    pub const MAX_ALLOWED: Self = Self(MAX_PROTOCOL_VERSION + 1);
 
     pub fn new(v: u64) -> Self {
         Self(v)
     }
 
-    pub fn as_u64(&self) -> u64 {
+    pub const fn as_u64(&self) -> u64 {
         self.0
     }
 
@@ -45,6 +49,12 @@ impl ProtocolVersion {
     // universally appropriate default value.
     pub fn max() -> Self {
         Self::MAX
+    }
+}
+
+impl From<u64> for ProtocolVersion {
+    fn from(v: u64) -> Self {
+        Self::new(v)
     }
 }
 
@@ -67,8 +77,8 @@ impl std::ops::Add<u64> for ProtocolVersion {
 /// to be able to inject arbitrary versions into SuiNode.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct SupportedProtocolVersions {
-    min: ProtocolVersion,
-    max: ProtocolVersion,
+    pub min: ProtocolVersion,
+    pub max: ProtocolVersion,
 }
 
 impl SupportedProtocolVersions {
@@ -86,14 +96,23 @@ impl SupportedProtocolVersions {
     }
 
     pub fn new_for_testing(min: u64, max: u64) -> Self {
-        let min = ProtocolVersion::new(min);
-        let max = ProtocolVersion::new(max);
+        let min = min.into();
+        let max = max.into();
         Self { min, max }
     }
 
     pub fn is_version_supported(&self, v: ProtocolVersion) -> bool {
         v.0 >= self.min.0 && v.0 <= self.max.0
     }
+}
+
+pub struct Error(pub String);
+
+/// Records on/off feature flags that may vary at each protocol version.
+#[derive(Default, Clone, Serialize)]
+struct FeatureFlags {
+    // Add feature flags here, e.g.:
+    // new_protocol_feature: bool,
 }
 
 /// Constants that change the behavior of the protocol.
@@ -117,6 +136,8 @@ impl SupportedProtocolVersions {
 #[derive(Clone, Serialize)]
 pub struct ProtocolConfig {
     pub version: ProtocolVersion,
+
+    feature_flags: FeatureFlags,
 
     // ==== Transaction input limits ====
     /// Maximum serialized size of a transaction (in bytes).
@@ -218,6 +239,13 @@ pub struct ProtocolConfig {
 
     /// Maximum length of a vector in Move. Enforced by the VM during execution, and for constants, by the verifier.
     max_move_vector_len: Option<u64>,
+
+    // === Object runtime internal operation limits ====
+    /// Maximum number of cached objects in the object runtime ObjectStore. Enforced by object runtime during execution
+    object_runtime_max_num_cached_objects: Option<u64>,
+
+    /// Maximum number of stored objects accessed by object runtime ObjectStore. Enforced by object runtime during execution
+    object_runtime_max_num_store_entries: Option<u64>,
 
     // === Execution gas costs ====
     // note: Option<per-instruction and native function gas costs live in the sui-cost-tables crate
@@ -324,6 +352,21 @@ pub struct ProtocolConfig {
 
 const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protocol version";
 
+// feature flags
+impl ProtocolConfig {
+    // Add checks for feature flag support here, e.g.:
+    // pub fn check_new_protocol_feature_supported(&self) -> Result<(), Error> {
+    //     if self.feature_flags.new_protocol_feature_supported {
+    //         Ok(())
+    //     } else {
+    //         Err(Error(format!(
+    //             "new_protocol_feature is not supported at {:?}",
+    //             self.version
+    //         )))
+    //     }
+    // }
+}
+
 // getters
 impl ProtocolConfig {
     pub fn max_tx_size(&self) -> usize {
@@ -424,6 +467,14 @@ impl ProtocolConfig {
     }
     pub fn max_move_vector_len(&self) -> u64 {
         self.max_move_vector_len.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn object_runtime_max_num_cached_objects(&self) -> u64 {
+        self.object_runtime_max_num_cached_objects
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn object_runtime_max_num_store_entries(&self) -> u64 {
+        self.object_runtime_max_num_store_entries
+            .expect(CONSTANT_ERR_MSG)
     }
     pub fn base_tx_cost_fixed(&self) -> u64 {
         self.base_tx_cost_fixed.expect(CONSTANT_ERR_MSG)
@@ -616,7 +667,12 @@ impl ProtocolConfig {
         // To change the values here you must create a new protocol version with the new values!
         match version.0 {
             1 => Self {
-                version, // will be overwitten before being returned
+                // will be overwitten before being returned
+                version,
+
+                // All flags are disabled in V1
+                feature_flags: Default::default(),
+
                 max_tx_size: Some(64 * 1024),
                 max_tx_in_batch: Some(10),
                 max_modules_in_publish: Some(128),
@@ -649,6 +705,8 @@ impl ProtocolConfig {
                 max_num_transfered_move_object_ids: Some(2048),
                 max_event_emit_size: Some(250 * 1024),
                 max_move_vector_len: Some(256 * 1024),
+                object_runtime_max_num_cached_objects: Some(1000),
+                object_runtime_max_num_store_entries: Some(1000),
                 base_tx_cost_fixed: Some(110_000),
                 package_publish_cost_fixed: Some(1_000),
                 base_tx_cost_per_byte: Some(0),
@@ -709,7 +767,7 @@ impl ProtocolConfig {
             //
             //     // Pull in everything else from the previous version to avoid unintentional
             //     // changes.
-            //     ..get_for_version_impl(version - 1)
+            //     ..Self::get_for_version_impl(version - 1)
             // },
             _ => panic!("unsupported version {:?}", version),
         }

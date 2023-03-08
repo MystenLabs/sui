@@ -589,115 +589,12 @@
               "endOfEpochData": null,
               "transactions": [
                 "BhbWpBeESxuRWvmvLMyb2JNUuFa6j4aG1T4WUiPgKAHm"
-              ]
+              ],
+              "checkpointCommitments": []
             }
           }
         }
       ]
-    },
-    {
-      "name": "sui_getCheckpointContents",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "description": "Return contents of a checkpoint, namely a list of execution digests",
-      "params": [
-        {
-          "name": "sequence_number",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "CheckpointContents",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/CheckpointContents"
-        }
-      }
-    },
-    {
-      "name": "sui_getCheckpointContentsByDigest",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "description": "Return contents of a checkpoint based on checkpoint content digest",
-      "params": [
-        {
-          "name": "digest",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/CheckpointContentsDigest"
-          }
-        }
-      ],
-      "result": {
-        "name": "CheckpointContents",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/CheckpointContents"
-        }
-      }
-    },
-    {
-      "name": "sui_getCheckpointSummary",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "description": "Return a checkpoint summary based on a checkpoint sequence number",
-      "params": [
-        {
-          "name": "sequence_number",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "CheckpointSummary",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/CheckpointSummary"
-        }
-      }
-    },
-    {
-      "name": "sui_getCheckpointSummaryByDigest",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "description": "Return a checkpoint summary based on checkpoint digest",
-      "params": [
-        {
-          "name": "digest",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/CheckpointDigest"
-          }
-        }
-      ],
-      "result": {
-        "name": "CheckpointSummary",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/CheckpointSummary"
-        }
-      }
     },
     {
       "name": "sui_getCoinMetadata",
@@ -1763,7 +1660,7 @@
       "description": "Return all validators available for stake delegation.",
       "params": [],
       "result": {
-        "name": "Vec<ValidatorMetadata>",
+        "name": "Vec<ValidatorMetadataV1>",
         "required": true,
         "schema": {
           "type": "array",
@@ -2959,6 +2856,7 @@
       "Checkpoint": {
         "type": "object",
         "required": [
+          "checkpointCommitments",
           "digest",
           "epoch",
           "epochRollingGasCostSummary",
@@ -2968,6 +2866,13 @@
           "transactions"
         ],
         "properties": {
+          "checkpointCommitments": {
+            "description": "Commitments to checkpoint state",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckpointCommitment"
+            }
+          },
           "digest": {
             "description": "Checkpoint digest",
             "allOf": [
@@ -3039,34 +2944,21 @@
           }
         }
       },
-      "CheckpointContents": {
-        "description": "CheckpointContents are the transactions included in an upcoming checkpoint. They must have already been causally ordered. Since the causal order algorithm is the same among validators, we expect all honest validators to come up with the same order for each checkpoint content.",
-        "type": "object",
-        "required": [
-          "transactions",
-          "user_signatures"
-        ],
-        "properties": {
-          "transactions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ExecutionDigests"
-            }
-          },
-          "user_signatures": {
-            "description": "This field 'pins' user signatures for the checkpoint The length of this vector is same as length of transactions vector System transactions has empty signatures",
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": {
-                "$ref": "#/components/schemas/GenericSignature"
+      "CheckpointCommitment": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "ECMHLiveObjectSetDigest"
+            ],
+            "properties": {
+              "ECMHLiveObjectSetDigest": {
+                "$ref": "#/components/schemas/ECMHLiveObjectSetDigest"
               }
-            }
+            },
+            "additionalProperties": false
           }
-        }
-      },
-      "CheckpointContentsDigest": {
-        "$ref": "#/components/schemas/Sha3Digest"
+        ]
       },
       "CheckpointDigest": {
         "description": "Representation of a Checkpoint's digest",
@@ -3087,83 +2979,6 @@
             "$ref": "#/components/schemas/CheckpointDigest"
           }
         ]
-      },
-      "CheckpointSummary": {
-        "type": "object",
-        "required": [
-          "content_digest",
-          "epoch",
-          "epoch_rolling_gas_cost_summary",
-          "network_total_transactions",
-          "sequence_number",
-          "timestamp_ms",
-          "version_specific_data"
-        ],
-        "properties": {
-          "content_digest": {
-            "$ref": "#/components/schemas/CheckpointContentsDigest"
-          },
-          "end_of_epoch_data": {
-            "description": "Present only on the final checkpoint of the epoch.",
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/EndOfEpochData"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "epoch": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "epoch_rolling_gas_cost_summary": {
-            "description": "The running total gas costs of all transactions included in the current epoch so far until this checkpoint.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/GasCostSummary"
-              }
-            ]
-          },
-          "network_total_transactions": {
-            "description": "Total number of transactions committed since genesis, including those in this checkpoint.",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "previous_digest": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CheckpointDigest"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sequence_number": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "timestamp_ms": {
-            "description": "Timestamp of the checkpoint - number of milliseconds from the Unix epoch Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent checkpoints can have same timestamp if they originate from the same underlining consensus commit",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "version_specific_data": {
-            "description": "CheckpointSummary is not an evolvable structure - it must be readable by any version of the code. Therefore, in order to allow extensions to be added to CheckpointSummary, we allow opaque data to be added to checkpoints which can be deserialized based on the current protocol version.",
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
-          }
-        }
       },
       "Coin": {
         "type": "object",
@@ -3494,6 +3309,25 @@
           "DynamicObject"
         ]
       },
+      "ECMHLiveObjectSetDigest": {
+        "description": "The Sha256 digest of an EllipticCurveMultisetHash committing to the live object set.",
+        "type": "object",
+        "required": [
+          "digest"
+        ],
+        "properties": {
+          "digest": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            },
+            "maxItems": 32,
+            "minItems": 32
+          }
+        }
+      },
       "Ed25519SuiSignature": {
         "$ref": "#/components/schemas/Base64"
       },
@@ -3542,11 +3376,18 @@
       "EndOfEpochData": {
         "type": "object",
         "required": [
+          "epoch_commitments",
           "next_epoch_committee",
-          "next_epoch_protocol_version",
-          "root_state_digest"
+          "next_epoch_protocol_version"
         ],
         "properties": {
+          "epoch_commitments": {
+            "description": "Commitments to epoch specific state (e.g. live object set)",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckpointCommitment"
+            }
+          },
           "next_epoch_committee": {
             "description": "next_epoch_committee is `Some` if and only if the current checkpoint is the last checkpoint of an epoch. Therefore next_epoch_committee can be used to pick the last checkpoint of an epoch, which is often useful to get epoch level summary stats like total gas cost of an epoch, or the total number of transactions from genesis to the end of an epoch. The committee is stored as a vector of validator pub key and stake pairs. The vector should be sorted based on the Committee data structure.",
             "type": "array",
@@ -3573,17 +3414,6 @@
                 "$ref": "#/components/schemas/ProtocolVersion"
               }
             ]
-          },
-          "root_state_digest": {
-            "description": "The digest of the union of all checkpoint accumulators, representing the state of the system at the end of the epoch.",
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            },
-            "maxItems": 32,
-            "minItems": 32
           }
         }
       },
@@ -4394,21 +4224,6 @@
           "WaitForEffectsCert",
           "WaitForLocalExecution"
         ]
-      },
-      "ExecutionDigests": {
-        "type": "object",
-        "required": [
-          "effects",
-          "transaction"
-        ],
-        "properties": {
-          "effects": {
-            "$ref": "#/components/schemas/TransactionEffectsDigest"
-          },
-          "transaction": {
-            "$ref": "#/components/schemas/TransactionDigest"
-          }
-        }
       },
       "ExecutionStatus": {
         "oneOf": [
@@ -5709,6 +5524,7 @@
         "description": "Rust version of the Move sui::staking_pool::StakingPool type",
         "type": "object",
         "required": [
+          "activation_epoch",
           "deactivation_epoch",
           "exchange_rates",
           "id",
@@ -5717,10 +5533,12 @@
           "pending_total_sui_withdraw",
           "pool_token_balance",
           "rewards_pool",
-          "starting_epoch",
           "sui_balance"
         ],
         "properties": {
+          "activation_epoch": {
+            "$ref": "#/components/schemas/MoveOption_for_uint64"
+          },
           "deactivation_epoch": {
             "$ref": "#/components/schemas/MoveOption_for_uint64"
           },
@@ -5752,11 +5570,6 @@
           },
           "rewards_pool": {
             "$ref": "#/components/schemas/Balance"
-          },
-          "starting_epoch": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
           },
           "sui_balance": {
             "type": "integer",
@@ -6794,7 +6607,7 @@
           "proof_of_possession_bytes",
           "protocol_pubkey_bytes",
           "rewards_pool",
-          "staking_pool_starting_epoch",
+          "staking_pool_id",
           "staking_pool_sui_balance",
           "sui_address",
           "voting_power",
@@ -7000,6 +6813,14 @@
             "format": "uint64",
             "minimum": 0.0
           },
+          "staking_pool_activation_epoch": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          },
           "staking_pool_deactivation_epoch": {
             "type": [
               "integer",
@@ -7008,10 +6829,8 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "staking_pool_starting_epoch": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+          "staking_pool_id": {
+            "$ref": "#/components/schemas/ObjectID"
           },
           "staking_pool_sui_balance": {
             "type": "integer",
@@ -7062,7 +6881,7 @@
         "type": "object",
         "required": [
           "governance_start_epoch",
-          "max_validator_candidate_count",
+          "max_validator_count",
           "min_validator_stake"
         ],
         "properties": {
@@ -7071,7 +6890,7 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "max_validator_candidate_count": {
+          "max_validator_count": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -7886,10 +7705,11 @@
         "required": [
           "active_validators",
           "inactive_pools",
+          "pending_active_validators",
           "pending_removals",
-          "pending_validators",
           "staking_pool_mappings",
-          "total_stake"
+          "total_stake",
+          "validator_candidates"
         ],
         "properties": {
           "active_validators": {
@@ -7901,6 +7721,9 @@
           "inactive_pools": {
             "$ref": "#/components/schemas/Table"
           },
+          "pending_active_validators": {
+            "$ref": "#/components/schemas/TableVec"
+          },
           "pending_removals": {
             "type": "array",
             "items": {
@@ -7909,9 +7732,6 @@
               "minimum": 0.0
             }
           },
-          "pending_validators": {
-            "$ref": "#/components/schemas/TableVec"
-          },
           "staking_pool_mappings": {
             "$ref": "#/components/schemas/Table"
           },
@@ -7919,6 +7739,9 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          },
+          "validator_candidates": {
+            "$ref": "#/components/schemas/Table"
           }
         }
       },

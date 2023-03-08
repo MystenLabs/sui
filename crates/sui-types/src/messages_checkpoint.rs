@@ -1,24 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::hash::Digest;
+use fastcrypto::hash::{Digest, MultisetHash};
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use crate::base_types::ExecutionDigests;
+use crate::accumulator::Accumulator;
+use crate::base_types::{ExecutionData, ExecutionDigests, VerifiedExecutionData};
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
 use crate::intent::{Intent, IntentScope};
+use crate::messages::TransactionEffectsAPI;
 use crate::signature::GenericSignature;
+use crate::storage::ReadStore;
 use crate::{
     base_types::AuthorityName,
     committee::Committee,
     crypto::{sha3_hash, AuthoritySignature, VerificationObligation},
     error::SuiError,
 };
+use anyhow::Result;
 use fastcrypto::traits::Signer;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
@@ -49,6 +53,39 @@ pub struct CheckpointResponse {
 
 // The constituent parts of checkpoints, signed and certified
 
+/// The Sha256 digest of an EllipticCurveMultisetHash committing to the live object set.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+pub struct ECMHLiveObjectSetDigest {
+    #[schemars(with = "[u8; 32]")]
+    pub digest: Digest<32>,
+}
+
+impl From<Digest<32>> for ECMHLiveObjectSetDigest {
+    fn from(digest: Digest<32>) -> Self {
+        Self { digest }
+    }
+}
+
+impl Default for ECMHLiveObjectSetDigest {
+    fn default() -> Self {
+        Self {
+            digest: Accumulator::default().digest(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+pub enum CheckpointCommitment {
+    ECMHLiveObjectSetDigest(ECMHLiveObjectSetDigest),
+    // Other commitment types (e.g. merkle roots) go here.
+}
+
+impl From<ECMHLiveObjectSetDigest> for CheckpointCommitment {
+    fn from(d: ECMHLiveObjectSetDigest) -> Self {
+        Self::ECMHLiveObjectSetDigest(d)
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 pub struct EndOfEpochData {
     /// next_epoch_committee is `Some` if and only if the current checkpoint is
@@ -64,10 +101,8 @@ pub struct EndOfEpochData {
     /// checkpoint.
     pub next_epoch_protocol_version: ProtocolVersion,
 
-    /// The digest of the union of all checkpoint accumulators,
-    /// representing the state of the system at the end of the epoch.
-    #[schemars(with = "[u8; 32]")]
-    pub root_state_digest: Digest<32>,
+    /// Commitments to epoch specific state (e.g. live object set)
+    pub epoch_commitments: Vec<CheckpointCommitment>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
@@ -87,6 +122,10 @@ pub struct CheckpointSummary {
     /// Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent
     /// checkpoints can have same timestamp if they originate from the same underlining consensus commit
     pub timestamp_ms: CheckpointTimestamp,
+
+    /// Commitments to checkpoint-specific state (e.g. txns in checkpoint, objects read/written in
+    /// checkpoint).
+    pub checkpoint_commitments: Vec<CheckpointCommitment>,
 
     /// Present only on the final checkpoint of the epoch.
     pub end_of_epoch_data: Option<EndOfEpochData>,
@@ -121,6 +160,7 @@ impl CheckpointSummary {
             end_of_epoch_data,
             timestamp_ms,
             version_specific_data: Vec::new(),
+            checkpoint_commitments: Default::default(),
         }
     }
 
@@ -410,6 +450,12 @@ pub struct CheckpointSignatureMessage {
     pub summary: SignedCheckpointSummary,
 }
 
+impl CheckpointSignatureMessage {
+    pub fn verify(&self, committee: &Committee) -> SuiResult {
+        self.summary.verify(committee, None)
+    }
+}
+
 /// CheckpointContents are the transactions included in an upcoming checkpoint.
 /// They must have already been causally ordered. Since the causal order algorithm
 /// is the same among validators, we expect all honest validators to come up with
@@ -421,12 +467,6 @@ pub struct CheckpointContents {
     /// The length of this vector is same as length of transactions vector
     /// System transactions has empty signatures
     user_signatures: Vec<Vec<GenericSignature>>,
-}
-
-impl CheckpointSignatureMessage {
-    pub fn verify(&self, committee: &Committee) -> SuiResult {
-        self.summary.verify(committee, None)
-    }
 }
 
 impl CheckpointContents {
@@ -461,6 +501,14 @@ impl CheckpointContents {
         self.transactions.iter()
     }
 
+    pub fn into_iter_with_signatures(
+        self,
+    ) -> impl Iterator<Item = (ExecutionDigests, Vec<GenericSignature>)> {
+        self.transactions
+            .into_iter()
+            .zip(self.user_signatures.into_iter())
+    }
+
     /// Return an iterator that enumerates the transactions in the contents.
     /// The iterator item is a tuple of (sequence_number, &ExecutionDigests),
     /// where the sequence_number indicates the index of the transaction in the
@@ -486,6 +534,140 @@ impl CheckpointContents {
 
     pub fn digest(&self) -> CheckpointContentsDigest {
         CheckpointContentsDigest::new(sha3_hash(self))
+    }
+}
+
+/// Same as CheckpointContents, but contains full contents of all Transactions and
+/// TransactionEffects associated with the checkpoint.
+// NOTE: This data structure is used for state sync of checkpoints. Therefore we attempt
+// to estimate its size in CheckpointBuilder in order to limit the maximum serialized
+// size of a checkpoint sent over the network. If this struct is modified,
+// CheckpointBuilder::split_checkpoint_chunks should also be updated accordingly.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FullCheckpointContents {
+    transactions: Vec<ExecutionData>,
+    /// This field 'pins' user signatures for the checkpoint
+    /// The length of this vector is same as length of transactions vector
+    /// System transactions has empty signatures
+    user_signatures: Vec<Vec<GenericSignature>>,
+}
+
+impl FullCheckpointContents {
+    pub fn new_with_causally_ordered_transactions<T>(contents: T) -> Self
+    where
+        T: IntoIterator<Item = ExecutionData>,
+    {
+        let transactions: Vec<_> = contents.into_iter().collect();
+        let user_signatures = transactions.iter().map(|_| vec![]).collect();
+        Self {
+            transactions,
+            user_signatures,
+        }
+    }
+
+    pub fn from_checkpoint_contents<S>(
+        store: S,
+        contents: CheckpointContents,
+    ) -> Result<Self, <S as ReadStore>::Error>
+    where
+        S: ReadStore,
+    {
+        let mut transactions = Vec::with_capacity(contents.size());
+        for tx in contents.transactions {
+            let t = store.get_transaction(&tx.transaction)?.unwrap();
+            let e = store.get_transaction_effects(&tx.effects)?.unwrap();
+            transactions.push(ExecutionData::new(t.into_inner(), e))
+        }
+        Ok(Self {
+            transactions,
+            user_signatures: contents.user_signatures,
+        })
+    }
+
+    pub fn iter(&self) -> Iter<'_, ExecutionData> {
+        self.transactions.iter()
+    }
+
+    /// Verifies that this checkpoint's digest matches the given digest, and that all internal
+    /// Transaction and TransactionEffects digests are consistent.
+    pub fn verify_digests(&self, digest: CheckpointContentsDigest) -> Result<()> {
+        let self_digest = self.checkpoint_contents().digest();
+        fp_ensure!(
+            digest == self_digest,
+            anyhow::anyhow!(
+                "checkpoint contents digest {self_digest} does not match expected digest {digest}"
+            )
+        );
+        for tx in self.iter() {
+            let transaction_digest = tx.transaction.digest();
+            fp_ensure!(
+                tx.effects.transaction_digest() == transaction_digest,
+                anyhow::anyhow!(
+                    "transaction digest {transaction_digest} does not match expected digest {}",
+                    tx.effects.transaction_digest()
+                )
+            );
+        }
+        Ok(())
+    }
+
+    pub fn checkpoint_contents(&self) -> CheckpointContents {
+        CheckpointContents {
+            transactions: self.transactions.iter().map(|tx| tx.digests()).collect(),
+            user_signatures: self.user_signatures.clone(),
+        }
+    }
+
+    pub fn into_checkpoint_contents(self) -> CheckpointContents {
+        CheckpointContents {
+            transactions: self
+                .transactions
+                .into_iter()
+                .map(|tx| tx.digests())
+                .collect(),
+            user_signatures: self.user_signatures,
+        }
+    }
+
+    pub fn size(&self) -> usize {
+        self.transactions.len()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VerifiedCheckpointContents {
+    transactions: Vec<VerifiedExecutionData>,
+    /// This field 'pins' user signatures for the checkpoint
+    /// The length of this vector is same as length of transactions vector
+    /// System transactions has empty signatures
+    user_signatures: Vec<Vec<GenericSignature>>,
+}
+
+impl VerifiedCheckpointContents {
+    pub fn new_unchecked(contents: FullCheckpointContents) -> Self {
+        Self {
+            transactions: contents
+                .transactions
+                .into_iter()
+                .map(VerifiedExecutionData::new_unchecked)
+                .collect(),
+            user_signatures: contents.user_signatures,
+        }
+    }
+
+    pub fn iter(&self) -> Iter<'_, VerifiedExecutionData> {
+        self.transactions.iter()
+    }
+
+    pub fn into_inner(self) -> FullCheckpointContents {
+        FullCheckpointContents {
+            transactions: self
+                .transactions
+                .into_iter()
+                .map(|tx| tx.into_inner())
+                .collect(),
+            user_signatures: self.user_signatures,
+        }
     }
 }
 

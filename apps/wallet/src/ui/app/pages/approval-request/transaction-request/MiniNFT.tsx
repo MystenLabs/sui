@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import st from './DappTxApprovalPage.module.scss';
+import st from './TransactionRequest.module.scss';
 
 export type MiniNFTProps = {
     size?: 'xs' | 'sm';

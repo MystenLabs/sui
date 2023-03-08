@@ -11,7 +11,7 @@ import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { useGetNFTMeta } from '_hooks';
 
-import st from './DappTxApprovalPage.module.scss';
+import st from './TransactionRequest.module.scss';
 
 type TabType = 'transfer' | 'modify' | 'read';
 
@@ -21,7 +21,7 @@ interface MetadataGroup {
 }
 
 export function PassedObject({ id, module }: { id: string; module: string }) {
-    const nftMeta = useGetNFTMeta(id);
+    const { data: nftMeta } = useGetNFTMeta(id);
 
     return (
         <div className={st.permissionsContent}>

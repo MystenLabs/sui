@@ -145,10 +145,10 @@ describe('Transaction Builders', () => {
     const splitTxn = await signer.signAndExecuteTransaction({
       kind: 'splitCoin',
       data: {
-        coinObjectId: getObjectId(coins[0]),
+        coinObjectId: coins[0].coinObjectId,
         splitAmounts: [1, 2, 3],
         gasBudget: DEFAULT_GAS_BUDGET,
-        gasPayment: getObjectId(coins[1]),
+        gasPayment: coins[1].coinObjectId,
       },
     });
     const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
@@ -162,8 +162,8 @@ describe('Transaction Builders', () => {
         inputCoins: splitCoins,
         gasBudget: DEFAULT_GAS_BUDGET,
         recipients: [DEFAULT_RECIPIENT, DEFAULT_RECIPIENT_2],
-        amounts: ['4', '2'],
-        gasPayment: getObjectId(coins[2]),
+        amounts: [4, 2],
+        gasPayment: coins[2].coinObjectId,
       },
     });
   });
@@ -179,10 +179,10 @@ describe('Transaction Builders', () => {
     const splitTxn = await signer.signAndExecuteTransaction({
       kind: 'splitCoin',
       data: {
-        coinObjectId: getObjectId(coins[0]),
+        coinObjectId: coins[0].coinObjectId,
         splitAmounts: [2000, 2000, 2000],
         gasBudget: gasBudget,
-        gasPayment: getObjectId(coins[1]),
+        gasPayment: coins[1].coinObjectId,
       },
     });
     const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
@@ -211,10 +211,10 @@ describe('Transaction Builders', () => {
     const splitTxn = await signer.signAndExecuteTransaction({
       kind: 'splitCoin',
       data: {
-        coinObjectId: getObjectId(coins[0]),
+        coinObjectId: coins[0].coinObjectId,
         splitAmounts: [2000, 2000, 2000],
         gasBudget: gasBudget,
-        gasPayment: getObjectId(coins[1]),
+        gasPayment: coins[1].coinObjectId,
       },
     });
     const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>

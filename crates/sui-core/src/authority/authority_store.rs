@@ -71,10 +71,10 @@ impl AuthorityStore {
     ) -> SuiResult<Self> {
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
         if perpetual_tables.database_is_empty()? {
-            let epoch_start_configuration = EpochStartConfiguration {
-                system_state: SuiSystemState::new_genesis(genesis.sui_system_object()),
-                epoch_digest: genesis.checkpoint().digest(),
-            };
+            let epoch_start_configuration = EpochStartConfiguration::new(
+                genesis.sui_system_object().into_epoch_start_state(),
+                genesis.checkpoint().digest(),
+            );
             perpetual_tables
                 .set_epoch_start_configuration(&epoch_start_configuration)
                 .await?;
@@ -1201,6 +1201,27 @@ impl AuthorityStore {
                 &self.perpetual_tables.effects,
                 [(transaction_effects.digest(), transaction_effects)],
             )?;
+
+        write_batch.write()?;
+        Ok(())
+    }
+
+    pub fn multi_insert_transaction_and_effects<'a>(
+        &self,
+        transactions: impl Iterator<Item = &'a VerifiedExecutionData>,
+    ) -> Result<(), TypedStoreError> {
+        let mut write_batch = self.perpetual_tables.transactions.batch();
+        for tx in transactions {
+            write_batch = write_batch
+                .insert_batch(
+                    &self.perpetual_tables.transactions,
+                    [(tx.transaction.digest(), tx.transaction.serializable_ref())],
+                )?
+                .insert_batch(
+                    &self.perpetual_tables.effects,
+                    [(tx.effects.digest(), &tx.effects)],
+                )?;
+        }
 
         write_batch.write()?;
         Ok(())

@@ -1,6 +1,4 @@
-DROP TABLE owner_changes;
-DROP TABLE owner_index;
+DROP TABLE IF EXISTS owner;
+DROP TABLE IF EXISTS owner_history;
 
-DROP TYPE owner_change_type;
-
-
+DROP FUNCTION object_owned_at_checkpoint(BIGINT, owner_type, address)
